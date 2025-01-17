@@ -24,11 +24,12 @@ object HentaiNexusUtils {
             primeIdx = primeIdx xor keyStream[i]
 
             for (j in 0 until 8) {
-                primeIdx = if (primeIdx and 1 != 0) {
-                    primeIdx ushr 1 xor 12
-                } else {
-                    primeIdx ushr 1
-                }
+                primeIdx =
+                    if (primeIdx and 1 != 0) {
+                        primeIdx ushr 1 xor 12
+                    } else {
+                        primeIdx ushr 1
+                    }
             }
         }
         primeIdx = primeIdx and 7

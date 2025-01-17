@@ -17,7 +17,6 @@ import rx.Observable
 import java.util.Calendar
 
 class Latisbooks : HttpSource() {
-
     override val name = "Latis Books"
 
     override val baseUrl = "https://www.latisbooks.com"
@@ -32,28 +31,26 @@ class Latisbooks : HttpSource() {
 
     private fun String.image() = textToImageURL + "&text=" + encode(this)
 
-    private fun createManga(response: Response): SManga {
-        return SManga.create().apply {
+    private fun createManga(response: Response): SManga =
+        SManga.create().apply {
             initialized = true
             title = "Bodysuit 23"
             url = "/archive/"
-            thumbnail_url = "https://images.squarespace-cdn.com/content/v1/56595108e4b01110e1cf8735/1511856223610-NSB8O5OJ1F6KPQL0ZGBH/image-asset.jpeg"
+            thumbnail_url =
+                "https://images.squarespace-cdn.com/content/v1/56595108e4b01110e1cf8735/1511856223610-NSB8O5OJ1F6KPQL0ZGBH/image-asset.jpeg"
         }
-    }
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return client.newCall(popularMangaRequest(page))
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        client
+            .newCall(popularMangaRequest(page))
             .asObservableSuccess()
             .map { response ->
                 MangasPage(listOf(createManga(response)), false)
             }
-    }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return (GET("$baseUrl/archive/", headers))
-    }
+    override fun popularMangaRequest(page: Int): Request = (GET("$baseUrl/archive/", headers))
 
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
@@ -65,21 +62,29 @@ class Latisbooks : HttpSource() {
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        client
+            .newCall(mangaDetailsRequest(manga))
             .asObservableSuccess()
             .map { response ->
                 createManga(response)
             }
-    }
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
@@ -103,17 +108,18 @@ class Latisbooks : HttpSource() {
     // Pages
 
     // Adapted from the xkcd source's wordWrap function
-    private fun wordWrap(text: String) = buildString {
-        var charCount = 0
-        text.replace("\r\n", " ").split(' ').forEach { w ->
-            if (charCount > 25) {
-                append("\n")
-                charCount = 0
+    private fun wordWrap(text: String) =
+        buildString {
+            var charCount = 0
+            text.replace("\r\n", " ").split(' ').forEach { w ->
+                if (charCount > 25) {
+                    append("\n")
+                    charCount = 0
+                }
+                append(w).append(' ')
+                charCount += w.length + 1
             }
-            append(w).append(' ')
-            charCount += w.length + 1
         }
-    }
 
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
@@ -121,15 +127,18 @@ class Latisbooks : HttpSource() {
         val blocks = response.asJsoup().select("div.content-wrapper div.row div.col")
 
         // Handle multiple images per page (e.g. Page 23+24)
-        val pages = blocks.select("div.image-block-wrapper img")
-            .mapIndexed { i, it -> Page(i, "", it.attr("abs:data-src")) }
-            .toMutableList()
+        val pages =
+            blocks
+                .select("div.image-block-wrapper img")
+                .mapIndexed { i, it -> Page(i, "", it.attr("abs:data-src")) }
+                .toMutableList()
 
         val numImages = pages.size
 
         // Add text above/below the image as xkcd-esque text pages after the image itself
         pages.addAll(
-            blocks.select("div.html-block")
+            blocks
+                .select("div.html-block")
                 .map { it.select("div.sqs-block-content").first()!! }
                 // Some pages have empty html blocks (e.g. Page 1), so ignore them
                 .filter { it.childrenSize() > 0 }

@@ -12,9 +12,7 @@ const val PREFIX_ID_SEARCH = "id:"
 
 val json: Json by injectLazy()
 
-inline fun <reified T> Response.parseAs(): T {
-    return json.decodeFromString(body.string())
-}
+inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
 fun getMangaUrl(id: String) = "/comic/comic_$id.json?version=2.7.019"
 
@@ -25,11 +23,12 @@ fun String.extractMangaId(): String {
 
 fun String.formatList() = replace("/", ", ")
 
-fun parseStatus(status: String): Int = when (status) {
-    "连载中" -> SManga.ONGOING
-    "已完结" -> SManga.COMPLETED
-    else -> SManga.UNKNOWN
-}
+fun parseStatus(status: String): Int =
+    when (status) {
+        "连载中" -> SManga.ONGOING
+        "已完结" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
 private val chapterNameRegex = Regex("""(?:连载版?)?(\d[.\d]*)([话卷])?""")
 

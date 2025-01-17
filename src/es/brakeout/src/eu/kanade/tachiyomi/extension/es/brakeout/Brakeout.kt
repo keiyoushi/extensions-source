@@ -23,7 +23,6 @@ import uy.kohesive.injekt.injectLazy
 import java.util.Calendar
 
 class Brakeout : ParsedHttpSource() {
-
     override val name = "Brakeout"
 
     override val baseUrl = "https://brakeout.xyz"
@@ -32,17 +31,20 @@ class Brakeout : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", baseUrl)
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", baseUrl)
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/top", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/top", headers)
 
     override fun popularMangaSelector(): String = throw UnsupportedOperationException()
 
@@ -62,11 +64,12 @@ class Brakeout : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst("a > img")!!.attr("abs:src")
-        title = element.selectFirst("a > h1")!!.text()
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        SManga.create().apply {
+            thumbnail_url = element.selectFirst("a > img")!!.attr("abs:src")
+            title = element.selectFirst("a > h1")!!.text()
+            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        }
 
     var mangaList = listOf<SeriesDto>()
 
@@ -74,18 +77,21 @@ class Brakeout : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (mangaList.isEmpty()) {
-            client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess().map { response -> searchMangaParse(response, query) }
+    ): Observable<MangasPage> =
+        if (mangaList.isEmpty()) {
+            client
+                .newCall(searchMangaRequest(page, query, filters))
+                .asObservableSuccess()
+                .map { response -> searchMangaParse(response, query) }
         } else {
             Observable.just(parseMangaList(query))
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/comics", headers)
-    }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = GET("$baseUrl/comics", headers)
 
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 
@@ -93,47 +99,58 @@ class Brakeout : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    private fun searchMangaParse(response: Response, query: String): MangasPage {
+    private fun searchMangaParse(
+        response: Response,
+        query: String,
+    ): MangasPage {
         val docString = response.body.string()
-        val jsonString = JSON_PROJECT_LIST.find(docString)?.destructured?.toList()?.get(0).orEmpty()
+        val jsonString =
+            JSON_PROJECT_LIST
+                .find(docString)
+                ?.destructured
+                ?.toList()
+                ?.get(0)
+                .orEmpty()
         mangaList = json.decodeFromString<List<SeriesDto>>(jsonString)
         return parseMangaList(query)
     }
 
     private fun parseMangaList(query: String): MangasPage {
-        val mangas = mangaList.filter { it.name.contains(query, ignoreCase = true) || query.isBlank() }
-            .map { it.toSManga() }
+        val mangas =
+            mangaList
+                .filter { it.name.contains(query, ignoreCase = true) || query.isBlank() }
+                .map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        with(document.select("section#section-sinopsis")) {
-            description = select("p").text()
-            genre = select("div.flex:has(div:containsOwn(Géneros)) > div > a > span").joinToString { it.text() }
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            with(document.select("section#section-sinopsis")) {
+                description = select("p").text()
+                genre = select("div.flex:has(div:containsOwn(Géneros)) > div > a > span").joinToString { it.text() }
+            }
         }
-    }
 
     override fun chapterListSelector(): String = "div#chapters-container a"
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        name = element.selectFirst("h1")!!.text()
-        date_upload = parseRelativeDate(element.selectFirst("p")!!.text())
-    }
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            name = element.selectFirst("h1")!!.text()
+            date_upload = parseRelativeDate(element.selectFirst("p")!!.text())
+        }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("section > div > img.readImg").mapIndexed { i, element ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("section > div > img.readImg").mapIndexed { i, element ->
             Page(i, "", element.attr("abs:src"))
         }
-    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
+    override fun getFilterList(): FilterList =
+        FilterList(
             Filter.Header("Limpie la barra de búsqueda y haga click en 'Filtrar' para mostrar todas las series."),
         )
-    }
 
     private fun parseRelativeDate(date: String): Long {
         val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0
@@ -151,7 +168,9 @@ class Brakeout : ParsedHttpSource() {
         }
     }
 
-    class WordSet(private vararg val words: String) {
+    class WordSet(
+        private vararg val words: String,
+    ) {
         fun anyWordIn(dateString: String): Boolean = words.any { dateString.contains(it, ignoreCase = true) }
     }
 

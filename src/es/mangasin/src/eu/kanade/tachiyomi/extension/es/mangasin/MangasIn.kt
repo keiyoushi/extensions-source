@@ -21,19 +21,24 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangasIn : MMRCMS(
-    "Mangas.in",
-    "https://m440.in",
-    "es",
-    supportsAdvancedSearch = false,
-    dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
-) {
-    override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
-        .build()
+class MangasIn :
+    MMRCMS(
+        "Mangas.in",
+        "https://m440.in",
+        "es",
+        supportsAdvancedSearch = false,
+        dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/lasted?p=$page", headers)
 
@@ -41,32 +46,46 @@ class MangasIn : MMRCMS(
         runCatching { fetchFilterOptions() }
 
         val data = json.decodeFromString<LatestUpdateResponse>(response.body.string())
-        val manga = data.data.map {
-            SManga.create().apply {
-                url = "/$itemPath/${it.slug}"
-                title = it.name
-                thumbnail_url = guessCover(url, null)
+        val manga =
+            data.data.map {
+                SManga.create().apply {
+                    url = "/$itemPath/${it.slug}"
+                    title = it.name
+                    thumbnail_url = guessCover(url, null)
+                }
             }
-        }
-        val hasNextPage = response.request.url.queryParameter("p")!!.toInt() < data.totalPages
+        val hasNextPage =
+            response.request.url
+                .queryParameter("p")!!
+                .toInt() < data.totalPages
 
         return MangasPage(manga, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isEmpty()) {
             return super.searchMangaRequest(page, query, filters)
         }
 
-        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
-            addQueryParameter("q", query)
-        }.build()
+        val url =
+            "$baseUrl/search"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("q", query)
+                }.build()
 
         return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val searchType = response.request.url.pathSegments.last()
+        val searchType =
+            response.request.url.pathSegments
+                .last()
 
         if (searchType != "search") {
             return super.searchMangaParse(response)
@@ -77,24 +96,33 @@ class MangasIn : MMRCMS(
         return parseSearchDirectory(1)
     }
 
-    override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
-        status = when (document.selectFirst("div.manga-name span.label")?.text()?.lowercase()) {
-            in detailStatusComplete -> SManga.COMPLETED
-            in detailStatusOngoing -> SManga.ONGOING
-            in detailStatusDropped -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(document: Document) =
+        super.mangaDetailsParse(document).apply {
+            status =
+                when (document.selectFirst("div.manga-name span.label")?.text()?.lowercase()) {
+                    in detailStatusComplete -> SManga.COMPLETED
+                    in detailStatusOngoing -> SManga.ONGOING
+                    in detailStatusDropped -> SManga.CANCELLED
+                    else -> SManga.UNKNOWN
+                }
         }
-    }
 
     private var key = ""
 
     private fun getKey(): String {
-        val script = client.newCall(GET("$baseUrl/js/ads2.js")).execute().body.string()
-        val deobfuscatedScript = Deobfuscator.deobfuscateScript(script)
-            ?: throw Exception("No se pudo desofuscar el script")
+        val script =
+            client
+                .newCall(GET("$baseUrl/js/ads2.js"))
+                .execute()
+                .body
+                .string()
+        val deobfuscatedScript =
+            Deobfuscator.deobfuscateScript(script)
+                ?: throw Exception("No se pudo desofuscar el script")
 
-        val variable = KEY_REGEX.find(deobfuscatedScript)?.groupValues?.get(1)
-            ?: throw Exception("No se pudo encontrar la clave")
+        val variable =
+            KEY_REGEX.find(deobfuscatedScript)?.groupValues?.get(1)
+                ?: throw Exception("No se pudo encontrar la clave")
 
         if (variable.startsWith("'")) return variable.removeSurrounding("'")
         if (variable.startsWith("\"")) return variable.removeSurrounding("\"")
@@ -107,7 +135,8 @@ class MangasIn : MMRCMS(
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val mangaUrl = document.location().removeSuffix("/")
-        val encodeChapterData = CHAPTER_DATA_REGEX.find(document.html())?.value ?: throw Exception("No se pudo encontrar la lista de capítulos")
+        val encodeChapterData =
+            CHAPTER_DATA_REGEX.find(document.html())?.value ?: throw Exception("No se pudo encontrar la lista de capítulos")
         val unescapedChapterData = encodeChapterData.unescape()
         val chapterData = json.decodeFromString<CDT>(unescapedChapterData)
         val salt = chapterData.s.decodeHex()
@@ -115,10 +144,13 @@ class MangasIn : MMRCMS(
         val unsaltedCipherText = Base64.decode(chapterData.ct, Base64.DEFAULT)
         val cipherText = SALTED + salt + unsaltedCipherText
 
-        val decrypted = CryptoAES.decrypt(Base64.encodeToString(cipherText, Base64.DEFAULT), key).ifEmpty {
-            key = getKey()
-            CryptoAES.decrypt(Base64.encodeToString(cipherText, Base64.DEFAULT), key)
-        }.ifEmpty { throw Exception("No se pudo desencriptar los capítulos") }
+        val decrypted =
+            CryptoAES
+                .decrypt(Base64.encodeToString(cipherText, Base64.DEFAULT), key)
+                .ifEmpty {
+                    key = getKey()
+                    CryptoAES.decrypt(Base64.encodeToString(cipherText, Base64.DEFAULT), key)
+                }.ifEmpty { throw Exception("No se pudo desencriptar los capítulos") }
 
         val unescaped = decrypted.unescapeJava().removeSurrounding("\"").unescape()
 
@@ -126,26 +158,26 @@ class MangasIn : MMRCMS(
 
         return chapters.map {
             SChapter.create().apply {
-                name = if (it.name == "Capítulo ${it.number}") {
-                    it.name
-                } else {
-                    "Capítulo ${it.number}: ${it.name}"
-                }
+                name =
+                    if (it.name == "Capítulo ${it.number}") {
+                        it.name
+                    } else {
+                        "Capítulo ${it.number}: ${it.name}"
+                    }
 
-                date_upload = try {
-                    dateFormat.parse(it.createdAt)!!.time
-                } catch (_: ParseException) {
-                    0L
-                }
+                date_upload =
+                    try {
+                        dateFormat.parse(it.createdAt)!!.time
+                    } catch (_: ParseException) {
+                        0L
+                    }
 
                 setUrlWithoutDomain("$mangaUrl/${it.slug}")
             }
         }
     }
 
-    private fun String.unescape(): String {
-        return UNESCAPE_REGEX.replace(this, "$1")
-    }
+    private fun String.unescape(): String = UNESCAPE_REGEX.replace(this, "$1")
 
     private fun String.unescapeJava(): String {
         var escaped = this

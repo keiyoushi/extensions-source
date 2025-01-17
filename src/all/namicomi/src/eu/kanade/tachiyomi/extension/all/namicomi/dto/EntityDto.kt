@@ -13,4 +13,6 @@ sealed class EntityDto {
 sealed interface AttributesDto
 
 @Serializable
-class UnknownEntity(override val attributes: AttributesDto? = null) : EntityDto()
+class UnknownEntity(
+    override val attributes: AttributesDto? = null,
+) : EntityDto()

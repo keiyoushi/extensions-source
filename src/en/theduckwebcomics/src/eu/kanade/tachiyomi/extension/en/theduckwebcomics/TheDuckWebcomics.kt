@@ -25,33 +25,32 @@ class TheDuckWebcomics : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/search/?page=$page&last_update=today", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/search/?page=$page&last_update=today", headers)
 
-    override fun latestUpdatesFromElement(element: Element) =
-        searchMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
 
     override fun popularMangaSelector() = searchMangaSelector()
 
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/search/?page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/search/?page=$page", headers)
 
-    override fun popularMangaFromElement(element: Element) =
-        searchMangaFromElement(element)
+    override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
 
     override fun searchMangaSelector() = ".breadcrumb ~ div[style]"
 
     override fun searchMangaNextPageSelector() = "a.next"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        "$baseUrl/search".toHttpUrl().newBuilder().run {
-            addQueryParameter("search", query)
-            addQueryParameter("page", page.toString())
-            filters.forEach { (it as QueryParam).encode(this) }
-            GET(build(), headers)
-        }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = "$baseUrl/search".toHttpUrl().newBuilder().run {
+        addQueryParameter("search", query)
+        addQueryParameter("page", page.toString())
+        filters.forEach { (it as QueryParam).encode(this) }
+        GET(build(), headers)
+    }
 
     override fun searchMangaFromElement(element: Element) =
         SManga.create().apply {
@@ -67,8 +66,7 @@ class TheDuckWebcomics : ParsedHttpSource() {
         }
 
     // The details are only available in search
-    override fun fetchMangaDetails(manga: SManga) =
-        rx.Observable.just(manga.apply { initialized = true })!!
+    override fun fetchMangaDetails(manga: SManga) = rx.Observable.just(manga.apply { initialized = true })!!
 
     override fun chapterListSelector() = "#page_dropdown > option"
 
@@ -84,24 +82,21 @@ class TheDuckWebcomics : ParsedHttpSource() {
             }
         }
 
-    override fun pageListParse(document: Document) =
-        listOf(Page(0, "", document.selectFirst(".page-image")!!.absUrl("src")))
+    override fun pageListParse(document: Document) = listOf(Page(0, "", document.selectFirst(".page-image")!!.absUrl("src")))
 
-    override fun mangaDetailsParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element) =
-        throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() = FilterList(
-        TypeFilter(),
-        ToneFilter(),
-        StyleFilter(),
-        GenreFilter(),
-        RatingFilter(),
-        UpdateFilter(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            TypeFilter(),
+            ToneFilter(),
+            StyleFilter(),
+            GenreFilter(),
+            RatingFilter(),
+            UpdateFilter(),
+        )
 }

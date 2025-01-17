@@ -7,12 +7,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class GolgeBahcesi : MangaThemesia(
-    "Gölge Bahçesi",
-    "https://golgebahcesi.com",
-    "tr",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
-) {
+class GolgeBahcesi :
+    MangaThemesia(
+        "Gölge Bahçesi",
+        "https://golgebahcesi.com",
+        "tr",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
+    ) {
     private var captchaUrl: String? = null
 
     override fun getMangaUrl(manga: SManga): String =
@@ -21,7 +22,8 @@ class GolgeBahcesi : MangaThemesia(
 
     override fun pageListParse(document: Document): List<Page> {
         if (document.selectFirst("#readerarea form, #readerarea input[value=Doğrula]") != null) {
-            captchaUrl = document.selectFirst("#readerarea form")
+            captchaUrl = document
+                .selectFirst("#readerarea form")
                 ?.attr("abs:action")
                 ?: "$baseUrl/kontrol/"
             throw Exception("WebView'da captcha çözün.")

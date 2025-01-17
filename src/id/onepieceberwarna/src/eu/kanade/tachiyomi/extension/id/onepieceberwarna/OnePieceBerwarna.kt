@@ -14,7 +14,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class OnePieceBerwarna : ParsedHttpSource() {
-
     override val name = "One Piece Berwarna"
 
     override val baseUrl = "https://onepieceberwarna.com"
@@ -44,8 +43,10 @@ class OnePieceBerwarna : ParsedHttpSource() {
                     return@loop
                 }
 
-                element.select(".elementor-col-100:not(:has(div[data-element_type=icon.default])) h1")
-                    .first()?.let {
+                element
+                    .select(".elementor-col-100:not(:has(div[data-element_type=icon.default])) h1")
+                    .first()
+                    ?.let {
                         saga = it.text()
                     }
 
@@ -73,11 +74,13 @@ class OnePieceBerwarna : ParsedHttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl, headers)
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        author = "Eiichiro Oda"
-        description = "Bercerita tentang seorang laki-laki bernama Monkey D. Luffy, yang menentang arti dari gelar bajak laut. Daripada kesan nama besar, kejahatan, kekerasan, dia lebih terlihat seperti bajak laut rendahan yang suka bersenang-senang, alasan Luffy menjadi bajak laut adalah tekadnya untuk berpetualang di lautan yang menyenangkan dan bertemu orang-orang baru dan menarik, serta bersama-sama mencari One Piece."
-        genre = "Action, Adventure, Comedy, Fantasy, Martial Arts, Mystery, Shounen, Supernatural"
-    }
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            author = "Eiichiro Oda"
+            description =
+                "Bercerita tentang seorang laki-laki bernama Monkey D. Luffy, yang menentang arti dari gelar bajak laut. Daripada kesan nama besar, kejahatan, kekerasan, dia lebih terlihat seperti bajak laut rendahan yang suka bersenang-senang, alasan Luffy menjadi bajak laut adalah tekadnya untuk berpetualang di lautan yang menyenangkan dan bertemu orang-orang baru dan menarik, serta bersama-sama mencari One Piece."
+            genre = "Action, Adventure, Comedy, Fantasy, Martial Arts, Mystery, Shounen, Supernatural"
+        }
 
     override fun chapterListSelector(): String = "section[data-id=%s] .elementor-text-editor strong > a"
 
@@ -89,22 +92,24 @@ class OnePieceBerwarna : ParsedHttpSource() {
         val dataId = response.request.url.fragment!!
         val selector = chapterListSelector().format(dataId)
 
-        return document.select(selector)
+        return document
+            .select(selector)
             .map(::chapterFromElement)
             .reversed()
     }
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        name = element.text()
-        setUrlWithoutDomain(element.attr("href"))
-    }
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            name = element.text()
+            setUrlWithoutDomain(element.attr("href"))
+        }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".entry-content img[data-src]:not(a img)")
+    override fun pageListParse(document: Document): List<Page> =
+        document
+            .select(".entry-content img[data-src]:not(a img)")
             .mapIndexed { index, img ->
                 Page(index, "", img.attr("data-src"))
             }
-    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
@@ -121,7 +126,11 @@ class OnePieceBerwarna : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 }

@@ -17,35 +17,34 @@ const val NEWTOKI_PREFIX = "newtoki"
 val manaTokiPreferences = getSharedPreferences(MANATOKI_ID).migrate()
 val newTokiPreferences = getSharedPreferences(NEWTOKI_ID).migrate()
 
-fun getPreferencesInternal(context: Context) = arrayOf(
-
-    EditTextPreference(context).apply {
-        key = DOMAIN_NUMBER_PREF
-        title = domainNumberTitle()
-        summary = domainNumberSummary()
-        setOnPreferenceChangeListener { _, newValue ->
-            val value = newValue as String
-            if (value.isEmpty() || value != value.trim()) {
-                false
-            } else {
-                domainNumber = value
-                true
+fun getPreferencesInternal(context: Context) =
+    arrayOf(
+        EditTextPreference(context).apply {
+            key = DOMAIN_NUMBER_PREF
+            title = domainNumberTitle()
+            summary = domainNumberSummary()
+            setOnPreferenceChangeListener { _, newValue ->
+                val value = newValue as String
+                if (value.isEmpty() || value != value.trim()) {
+                    false
+                } else {
+                    domainNumber = value
+                    true
+                }
             }
-        }
-    },
+        },
+        ListPreference(context).apply {
+            key = RATE_LIMIT_PERIOD_PREF
+            title = rateLimitTitle()
+            summary = "%s\n" + requiresAppRestart()
 
-    ListPreference(context).apply {
-        key = RATE_LIMIT_PERIOD_PREF
-        title = rateLimitTitle()
-        summary = "%s\n" + requiresAppRestart()
+            val values = Array(RATE_LIMIT_PERIOD_MAX) { (it + 1).toString() }
+            entries = Array(RATE_LIMIT_PERIOD_MAX) { rateLimitEntry(values[it]) }
+            entryValues = values
 
-        val values = Array(RATE_LIMIT_PERIOD_MAX) { (it + 1).toString() }
-        entries = Array(RATE_LIMIT_PERIOD_MAX) { rateLimitEntry(values[it]) }
-        entryValues = values
-
-        setDefaultValue(RATE_LIMIT_PERIOD_DEFAULT)
-    },
-)
+            setDefaultValue(RATE_LIMIT_PERIOD_DEFAULT)
+        },
+    )
 
 var SharedPreferences.domainNumber: String
     get() = getString(DOMAIN_NUMBER_PREF, "")!!
@@ -57,11 +56,13 @@ val SharedPreferences.rateLimitPeriod: Int
 private fun SharedPreferences.migrate(): SharedPreferences {
     if ("Override BaseUrl" !in this) return this // already migrated
     val editor = edit().clear() // clear all legacy preferences listed below
-    val oldValue = try { // this was a long
-        getLong(RATE_LIMIT_PERIOD_PREF, -1).toInt()
-    } catch (_: ClassCastException) {
-        -1
-    }
+    val oldValue =
+        try {
+            // this was a long
+            getLong(RATE_LIMIT_PERIOD_PREF, -1).toInt()
+        } catch (_: ClassCastException) {
+            -1
+        }
     if (oldValue != -1) { // convert to string
         val newValue = oldValue.coerceIn(1, RATE_LIMIT_PERIOD_MAX)
         editor.putString(RATE_LIMIT_PERIOD_PREF, newValue.toString())
@@ -86,5 +87,4 @@ private const val RATE_LIMIT_PERIOD_PREF = "rateLimitPeriod"
 private const val RATE_LIMIT_PERIOD_DEFAULT = 2.toString()
 private const val RATE_LIMIT_PERIOD_MAX = 9
 
-private fun getSharedPreferences(id: Long): SharedPreferences =
-    Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+private fun getSharedPreferences(id: Long): SharedPreferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)

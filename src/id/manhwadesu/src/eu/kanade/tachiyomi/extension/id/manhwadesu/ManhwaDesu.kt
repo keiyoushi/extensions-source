@@ -7,17 +7,19 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhwaDesu : MangaThemesia(
-    "ManhwaDesu",
-    "https://manhwadesu.my",
-    "id",
-    "/komik",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(4)
-        .build()
+class ManhwaDesu :
+    MangaThemesia(
+        "ManhwaDesu",
+        "https://manhwadesu.my",
+        "id",
+        "/komik",
+        SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(4)
+            .build()
 
     override fun Element.imgAttr(): String {
         attributes()

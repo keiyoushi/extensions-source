@@ -8,17 +8,17 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class MangaThemesiaUrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
 
         if (pathSegments != null && pathSegments.size >= 1) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${MangaThemesia.URL_SEARCH_PREFIX}${intent?.data?.toString()}")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${MangaThemesia.URL_SEARCH_PREFIX}${intent?.data?.toString()}")
+                    putExtra("filter", packageName)
+                }
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {

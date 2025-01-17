@@ -46,15 +46,18 @@ abstract class HentaiHand(
     override val lang: String,
     private val chapters: Boolean,
     private val hhLangId: List<Int> = emptyList(),
-) : ConfigurableSource, HttpSource() {
-
+) : HttpSource(),
+    ConfigurableSource {
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
     private fun slugToUrl(json: JsonObject) = json["slug"]!!.jsonPrimitive.content.prependIndent("/en/comic/")
 
-    private fun jsonArrayToString(arrayKey: String, obj: JsonObject): String? {
+    private fun jsonArrayToString(
+        arrayKey: String,
+        obj: JsonObject,
+    ): String? {
         val array = obj[arrayKey]!!.jsonArray
         if (array.isEmpty()) return null
         return array.joinToString(", ") {
@@ -66,24 +69,31 @@ abstract class HentaiHand(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val jsonResponse = json.parseToJsonElement(response.body.string())
-        val mangaList = jsonResponse.jsonObject["data"]!!.jsonArray.map {
-            val obj = it.jsonObject
-            SManga.create().apply {
-                url = slugToUrl(obj)
-                title = obj["title"]!!.jsonPrimitive.content
-                thumbnail_url = obj["image_url"]!!.jsonPrimitive.content
+        val mangaList =
+            jsonResponse.jsonObject["data"]!!.jsonArray.map {
+                val obj = it.jsonObject
+                SManga.create().apply {
+                    url = slugToUrl(obj)
+                    title = obj["title"]!!.jsonPrimitive.content
+                    thumbnail_url = obj["image_url"]!!.jsonPrimitive.content
+                }
             }
-        }
-        val hasNextPage = jsonResponse.jsonObject["next_page_url"]!!.jsonPrimitive.content.isNotEmpty()
+        val hasNextPage =
+            jsonResponse.jsonObject["next_page_url"]!!
+                .jsonPrimitive.content
+                .isNotEmpty()
         return MangasPage(mangaList, hasNextPage)
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("sort", "popularity")
-            .addQueryParameter("order", "desc")
-            .addQueryParameter("duration", "all")
+        val url =
+            "$baseUrl/api/comics"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("sort", "popularity")
+                .addQueryParameter("order", "desc")
+                .addQueryParameter("duration", "all")
         hhLangId.forEachIndexed { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
@@ -96,11 +106,14 @@ abstract class HentaiHand(
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("sort", "uploaded_at")
-            .addQueryParameter("order", "desc")
-            .addQueryParameter("duration", "all")
+        val url =
+            "$baseUrl/api/comics"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("sort", "uploaded_at")
+                .addQueryParameter("order", "desc")
+                .addQueryParameter("duration", "all")
         hhLangId.forEachIndexed { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
         }
@@ -111,28 +124,41 @@ abstract class HentaiHand(
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    private fun lookupFilterId(query: String, uri: String): Int? {
+    private fun lookupFilterId(
+        query: String,
+        uri: String,
+    ): Int? {
         // filter query needs to be resolved to an ID
-        return client.newCall(GET("$baseUrl/api/$uri?q=$query"))
+        return client
+            .newCall(GET("$baseUrl/api/$uri?q=$query"))
             .asObservableSuccess()
             .subscribeOn(Schedulers.io())
             .map { response ->
                 // Returns the first matched id, or null if there are no results
-                val idList = json.parseToJsonElement(response.body.string()).jsonObject["data"]!!.jsonArray.map {
-                    it.jsonObject["id"]!!.jsonPrimitive.content
-                }
+                val idList =
+                    json.parseToJsonElement(response.body.string()).jsonObject["data"]!!.jsonArray.map {
+                        it.jsonObject["id"]!!.jsonPrimitive.content
+                    }
                 if (idList.isEmpty()) {
                     return@map null
                 } else {
                     idList.first().toInt()
                 }
-            }.toBlocking().first()
+            }.toBlocking()
+            .first()
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/comics".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("q", query)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/api/comics"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("q", query)
 
         hhLangId.forEachIndexed { index, it ->
             url.addQueryParameter("languages[${-index - 1}]", it.toString())
@@ -143,20 +169,26 @@ abstract class HentaiHand(
                 is SortFilter -> url.addQueryParameter("sort", getSortPairs()[filter.state].second)
                 is OrderFilter -> url.addQueryParameter("order", getOrderPairs()[filter.state].second)
                 is DurationFilter -> url.addQueryParameter("duration", getDurationPairs()[filter.state].second)
-                is AttributesGroupFilter -> filter.state.forEach {
-                    if (it.state) url.addQueryParameter("attributes", it.value)
-                }
-                is StatusGroupFilter -> filter.state.forEach {
-                    if (it.state) url.addQueryParameter("statuses", it.value)
-                }
-                is LookupFilter -> {
-                    filter.state.split(",").map { it.trim() }.filter { it.isNotBlank() }.map {
-                        lookupFilterId(it, filter.uri) ?: throw Exception("No ${filter.singularName} \"$it\" was found")
-                    }.forEachIndexed { index, it ->
-                        if (!(filter.uri == "languages" && hhLangId.contains(it))) {
-                            url.addQueryParameter(filter.uri + "[$index]", it.toString())
-                        }
+                is AttributesGroupFilter ->
+                    filter.state.forEach {
+                        if (it.state) url.addQueryParameter("attributes", it.value)
                     }
+                is StatusGroupFilter ->
+                    filter.state.forEach {
+                        if (it.state) url.addQueryParameter("statuses", it.value)
+                    }
+                is LookupFilter -> {
+                    filter.state
+                        .split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotBlank() }
+                        .map {
+                            lookupFilterId(it, filter.uri) ?: throw Exception("No ${filter.singularName} \"$it\" was found")
+                        }.forEachIndexed { index, it ->
+                            if (!(filter.uri == "languages" && hhLangId.contains(it))) {
+                                url.addQueryParameter(filter.uri + "[$index]", it.toString())
+                            }
+                        }
                 }
                 else -> {}
             }
@@ -172,11 +204,11 @@ abstract class HentaiHand(
         return GET("$baseUrl/api/comics/$slug")
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsApiRequest(manga))
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        client
+            .newCall(mangaDetailsApiRequest(manga))
             .asObservableSuccess()
             .map { mangaDetailsParse(it).apply { initialized = true } }
-    }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val obj = json.parseToJsonElement(response.body.string()).jsonObject
@@ -187,24 +219,40 @@ abstract class HentaiHand(
             artist = jsonArrayToString("artists", obj)
             author = jsonArrayToString("authors", obj) ?: artist
             genre = listOfNotNull(jsonArrayToString("tags", obj), jsonArrayToString("relationships", obj)).joinToString(", ")
-            status = when (obj["status"]!!.jsonPrimitive.content) {
-                "complete" -> SManga.COMPLETED
-                "ongoing" -> SManga.ONGOING
-                "onhold" -> SManga.ONGOING
-                "canceled" -> SManga.COMPLETED
-                else -> SManga.COMPLETED
-            }
+            status =
+                when (obj["status"]!!.jsonPrimitive.content) {
+                    "complete" -> SManga.COMPLETED
+                    "ongoing" -> SManga.ONGOING
+                    "onhold" -> SManga.ONGOING
+                    "canceled" -> SManga.COMPLETED
+                    else -> SManga.COMPLETED
+                }
 
-            description = listOf(
-                Pair("Alternative Title", obj["alternative_title"]!!.jsonPrimitive.content),
-                Pair("Groups", jsonArrayToString("groups", obj)),
-                Pair("Description", obj["description"]!!.jsonPrimitive.content),
-                Pair("Pages", obj["pages"]!!.jsonPrimitive.content),
-                Pair("Category", try { obj["category"]!!.jsonObject["name"]!!.jsonPrimitive.content } catch (_: Exception) { null }),
-                Pair("Language", try { obj["language"]!!.jsonObject["name"]!!.jsonPrimitive.content } catch (_: Exception) { null }),
-                Pair("Parodies", jsonArrayToString("parodies", obj)),
-                Pair("Characters", jsonArrayToString("characters", obj)),
-            ).filter { !it.second.isNullOrEmpty() }.joinToString("\n\n") { "${it.first}: ${it.second}" }
+            description =
+                listOf(
+                    Pair("Alternative Title", obj["alternative_title"]!!.jsonPrimitive.content),
+                    Pair("Groups", jsonArrayToString("groups", obj)),
+                    Pair("Description", obj["description"]!!.jsonPrimitive.content),
+                    Pair("Pages", obj["pages"]!!.jsonPrimitive.content),
+                    Pair(
+                        "Category",
+                        try {
+                            obj["category"]!!.jsonObject["name"]!!.jsonPrimitive.content
+                        } catch (_: Exception) {
+                            null
+                        },
+                    ),
+                    Pair(
+                        "Language",
+                        try {
+                            obj["language"]!!.jsonObject["name"]!!.jsonPrimitive.content
+                        } catch (_: Exception) {
+                            null
+                        },
+                    ),
+                    Pair("Parodies", jsonArrayToString("parodies", obj)),
+                    Pair("Characters", jsonArrayToString("characters", obj)),
+                ).filter { !it.second.isNullOrEmpty() }.joinToString("\n\n") { "${it.first}: ${it.second}" }
         }
     }
 
@@ -222,7 +270,11 @@ abstract class HentaiHand(
     override fun chapterListRequest(manga: SManga): Request = chapterListApiRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val slug = response.request.url.toString().substringAfter("/api/comics/").removeSuffix("/chapters")
+        val slug =
+            response.request.url
+                .toString()
+                .substringAfter("/api/comics/")
+                .removeSuffix("/chapters")
         return if (chapters) {
             val array = json.parseToJsonElement(response.body.string()).jsonArray
             array.map {
@@ -230,13 +282,16 @@ abstract class HentaiHand(
                     url = "$slug/${it.jsonObject["slug"]!!.jsonPrimitive.content}"
                     name = it.jsonObject["name"]!!.jsonPrimitive.content
                     val date = it.jsonObject["added_at"]!!.jsonPrimitive.content
-                    date_upload = if (date.contains("day")) {
-                        Calendar.getInstance().apply {
-                            add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
-                        }.timeInMillis
-                    } else {
-                        DATE_FORMAT.parse(it.jsonObject["added_at"]!!.jsonPrimitive.content)?.time ?: 0
-                    }
+                    date_upload =
+                        if (date.contains("day")) {
+                            Calendar
+                                .getInstance()
+                                .apply {
+                                    add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
+                                }.timeInMillis
+                        } else {
+                            DATE_FORMAT.parse(it.jsonObject["added_at"]!!.jsonPrimitive.content)?.time ?: 0
+                        }
                 }
             }
         } else {
@@ -246,13 +301,16 @@ abstract class HentaiHand(
                     url = obj["slug"]!!.jsonPrimitive.content
                     name = "Chapter"
                     val date = obj.jsonObject["uploaded_at"]!!.jsonPrimitive.content
-                    date_upload = if (date.contains("day")) {
-                        Calendar.getInstance().apply {
-                            add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
-                        }.timeInMillis
-                    } else {
-                        DATE_FORMAT.parse(obj.jsonObject["uploaded_at"]!!.jsonPrimitive.content)?.time ?: 0
-                    }
+                    date_upload =
+                        if (date.contains("day")) {
+                            Calendar
+                                .getInstance()
+                                .apply {
+                                    add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
+                                }.timeInMillis
+                        } else {
+                            DATE_FORMAT.parse(obj.jsonObject["uploaded_at"]!!.jsonPrimitive.content)?.time ?: 0
+                        }
                     chapter_number = 1f
                 },
             )
@@ -287,18 +345,25 @@ abstract class HentaiHand(
         if (token.isEmpty()) {
             token = this.login(chain, username, password)
         }
-        val authRequest = request.newBuilder()
-            .addHeader("Authorization", "Bearer $token")
-            .build()
+        val authRequest =
+            request
+                .newBuilder()
+                .addHeader("Authorization", "Bearer $token")
+                .build()
         return chain.proceed(authRequest)
     }
 
-    private fun login(chain: Interceptor.Chain, username: String, password: String): String {
-        val jsonObject = buildJsonObject {
-            put("username", username)
-            put("password", password)
-            put("remember_me", true)
-        }
+    private fun login(
+        chain: Interceptor.Chain,
+        username: String,
+        password: String,
+    ): String {
+        val jsonObject =
+            buildJsonObject {
+                put("username", username)
+                put("password", password)
+                put("remember_me", true)
+            }
         val body = jsonObject.toString().toRequestBody(MEDIA_TYPE)
         val response = chain.proceed(POST("$baseUrl/api/login", headers, body))
         if (response.code == 401) {
@@ -306,7 +371,11 @@ abstract class HentaiHand(
         }
         try {
             // Returns access token as a string, unless unparseable
-            return json.parseToJsonElement(response.body.string()).jsonObject["auth"]!!.jsonObject["access-token"]!!.jsonPrimitive.content
+            return json
+                .parseToJsonElement(response.body.string())
+                .jsonObject["auth"]!!
+                .jsonObject["access-token"]!!
+                .jsonPrimitive.content
         } catch (e: IllegalArgumentException) {
             throw IOException("Cannot parse login response body")
         }
@@ -327,8 +396,13 @@ abstract class HentaiHand(
         screen.addPreference(screen.editTextPreference(PASSWORD_TITLE, PASSWORD_DEFAULT, password, true))
     }
 
-    private fun PreferenceScreen.editTextPreference(title: String, default: String, value: String, isPassword: Boolean = false): androidx.preference.EditTextPreference {
-        return androidx.preference.EditTextPreference(context).apply {
+    private fun PreferenceScreen.editTextPreference(
+        title: String,
+        default: String,
+        value: String,
+        isPassword: Boolean = false,
+    ): androidx.preference.EditTextPreference =
+        androidx.preference.EditTextPreference(context).apply {
             key = title
             this.title = title
             summary = value
@@ -351,79 +425,146 @@ abstract class HentaiHand(
                 }
             }
         }
-    }
 
     private fun getPrefUsername(): String = preferences.getString(USERNAME_TITLE, USERNAME_DEFAULT)!!
+
     private fun getPrefPassword(): String = preferences.getString(PASSWORD_TITLE, PASSWORD_DEFAULT)!!
 
     // Filters
 
-    private class SortFilter(sortPairs: List<Pair<String, String>>) : Filter.Select<String>("Sort By", sortPairs.map { it.first }.toTypedArray())
-    private class OrderFilter(orderPairs: List<Pair<String, String>>) : Filter.Select<String>("Order By", orderPairs.map { it.first }.toTypedArray())
-    private class DurationFilter(durationPairs: List<Pair<String, String>>) : Filter.Select<String>("Duration", durationPairs.map { it.first }.toTypedArray())
-    private class AttributeFilter(name: String, val value: String) : Filter.CheckBox(name)
-    private class AttributesGroupFilter(attributePairs: List<Pair<String, String>>) : Filter.Group<AttributeFilter>("Attributes", attributePairs.map { AttributeFilter(it.first, it.second) })
-    private class StatusFilter(name: String, val value: String) : Filter.CheckBox(name)
-    private class StatusGroupFilter(attributePairs: List<Pair<String, String>>) : Filter.Group<StatusFilter>("Status", attributePairs.map { StatusFilter(it.first, it.second) })
+    private class SortFilter(
+        sortPairs: List<Pair<String, String>>,
+    ) : Filter.Select<String>(
+            "Sort By",
+            sortPairs
+                .map {
+                    it.first
+                }.toTypedArray(),
+        )
+
+    private class OrderFilter(
+        orderPairs: List<Pair<String, String>>,
+    ) : Filter.Select<String>(
+            "Order By",
+            orderPairs
+                .map {
+                    it.first
+                }.toTypedArray(),
+        )
+
+    private class DurationFilter(
+        durationPairs: List<Pair<String, String>>,
+    ) : Filter.Select<String>(
+            "Duration",
+            durationPairs
+                .map {
+                    it.first
+                }.toTypedArray(),
+        )
+
+    private class AttributeFilter(
+        name: String,
+        val value: String,
+    ) : Filter.CheckBox(name)
+
+    private class AttributesGroupFilter(
+        attributePairs: List<Pair<String, String>>,
+    ) : Filter.Group<AttributeFilter>(
+            "Attributes",
+            attributePairs.map {
+                AttributeFilter(it.first, it.second)
+            },
+        )
+
+    private class StatusFilter(
+        name: String,
+        val value: String,
+    ) : Filter.CheckBox(name)
+
+    private class StatusGroupFilter(
+        attributePairs: List<Pair<String, String>>,
+    ) : Filter.Group<StatusFilter>(
+            "Status",
+            attributePairs.map {
+                StatusFilter(it.first, it.second)
+            },
+        )
 
     private class CategoriesFilter : LookupFilter("Categories", "categories", "category")
+
     private class TagsFilter : LookupFilter("Tags", "tags", "tag")
+
     private class ArtistsFilter : LookupFilter("Artists", "artists", "artist")
+
     private class GroupsFilter : LookupFilter("Groups", "groups", "group")
+
     private class CharactersFilter : LookupFilter("Characters", "characters", "character")
+
     private class ParodiesFilter : LookupFilter("Parodies", "parodies", "parody")
+
     private class LanguagesFilter : LookupFilter("Other Languages", "languages", "language")
-    open class LookupFilter(name: String, val uri: String, val singularName: String) : Filter.Text(name)
 
-    override fun getFilterList() = FilterList(
-        SortFilter(getSortPairs()),
-        OrderFilter(getOrderPairs()),
-        DurationFilter(getDurationPairs()),
-        Filter.Header("Separate terms with commas (,)"),
-        CategoriesFilter(),
-        TagsFilter(),
-        ArtistsFilter(),
-        GroupsFilter(),
-        CharactersFilter(),
-        ParodiesFilter(),
-        LanguagesFilter(),
-        AttributesGroupFilter(getAttributePairs()),
-        StatusGroupFilter(getStatusPairs()),
-    )
+    open class LookupFilter(
+        name: String,
+        val uri: String,
+        val singularName: String,
+    ) : Filter.Text(name)
 
-    private fun getSortPairs() = listOf(
-        Pair("Upload Date", "uploaded_at"),
-        Pair("Title", "title"),
-        Pair("Pages", "pages"),
-        Pair("Favorites", "favorites"),
-        Pair("Popularity", "popularity"),
-    )
+    override fun getFilterList() =
+        FilterList(
+            SortFilter(getSortPairs()),
+            OrderFilter(getOrderPairs()),
+            DurationFilter(getDurationPairs()),
+            Filter.Header("Separate terms with commas (,)"),
+            CategoriesFilter(),
+            TagsFilter(),
+            ArtistsFilter(),
+            GroupsFilter(),
+            CharactersFilter(),
+            ParodiesFilter(),
+            LanguagesFilter(),
+            AttributesGroupFilter(getAttributePairs()),
+            StatusGroupFilter(getStatusPairs()),
+        )
 
-    private fun getOrderPairs() = listOf(
-        Pair("Descending", "desc"),
-        Pair("Ascending", "asc"),
-    )
+    private fun getSortPairs() =
+        listOf(
+            Pair("Upload Date", "uploaded_at"),
+            Pair("Title", "title"),
+            Pair("Pages", "pages"),
+            Pair("Favorites", "favorites"),
+            Pair("Popularity", "popularity"),
+        )
 
-    private fun getDurationPairs() = listOf(
-        Pair("Today", "day"),
-        Pair("This Week", "week"),
-        Pair("This Month", "month"),
-        Pair("This Year", "year"),
-        Pair("All Time", "all"),
-    )
+    private fun getOrderPairs() =
+        listOf(
+            Pair("Descending", "desc"),
+            Pair("Ascending", "asc"),
+        )
 
-    private fun getAttributePairs() = listOf(
-        Pair("Translated", "translated"),
-        Pair("Speechless", "speechless"),
-        Pair("Rewritten", "rewritten"),
-    )
+    private fun getDurationPairs() =
+        listOf(
+            Pair("Today", "day"),
+            Pair("This Week", "week"),
+            Pair("This Month", "month"),
+            Pair("This Year", "year"),
+            Pair("All Time", "all"),
+        )
 
-    private fun getStatusPairs() = listOf(
-        Pair("Ongoing", "ongoing"),
-        Pair("Complete", "complete"),
-        Pair("On Hold", "onhold"),
-        Pair("Canceled", "canceled"),
-    )
+    private fun getAttributePairs() =
+        listOf(
+            Pair("Translated", "translated"),
+            Pair("Speechless", "speechless"),
+            Pair("Rewritten", "rewritten"),
+        )
+
+    private fun getStatusPairs() =
+        listOf(
+            Pair("Ongoing", "ongoing"),
+            Pair("Complete", "complete"),
+            Pair("On Hold", "onhold"),
+            Pair("Canceled", "canceled"),
+        )
 
     companion object {
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.US)

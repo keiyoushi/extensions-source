@@ -13,11 +13,12 @@ class HeanCmsUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
 
         if (pathSegments != null && pathSegments.size >= 2) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", createQuery(pathSegments))
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", createQuery(pathSegments))
+                    putExtra("filter", packageName)
+                }
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
@@ -31,12 +32,11 @@ class HeanCmsUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun createQuery(pathSegments: MutableList<String>): String? {
-        return if (pathSegments.size >= 2) {
+    private fun createQuery(pathSegments: MutableList<String>): String? =
+        if (pathSegments.size >= 2) {
             val slug = pathSegments[1]
             "${HeanCms.SEARCH_PREFIX}$slug"
         } else {
             null
         }
-    }
 }

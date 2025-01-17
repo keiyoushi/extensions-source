@@ -21,7 +21,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class HentaiCosplay : HttpSource() {
-
     override val name = "Hentai Cosplay"
 
     override val baseUrl = "https://hentai-cosplay-xxx.com"
@@ -32,8 +31,10 @@ class HentaiCosplay : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .set("Referer", "$baseUrl/")
 
     private val dateCache = mutableMapOf<String, String>()
 
@@ -42,9 +43,7 @@ class HentaiCosplay : HttpSource() {
         return super.fetchPopularManga(page)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/ranking/page/$page/", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking/page/$page/", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -57,36 +56,48 @@ class HentaiCosplay : HttpSource() {
     }
 
     private fun parseMobileListing(document: Document): MangasPage {
-        val entries = document.select("#entry_list > li > a[href*=/image/]")
-            .map { element ->
-                SManga.create().apply {
-                    setUrlWithoutDomain(element.absUrl("href"))
-                    thumbnail_url = element.selectFirst("img")
-                        ?.absUrl("data-original")
-                        ?.replace("http://", "https://")
-                    title = element.selectFirst("span:not(.posted)")!!.text()
-                    element.selectFirst("span.posted")
-                        ?.text()?.also { dateCache[url] = it }
+        val entries =
+            document
+                .select("#entry_list > li > a[href*=/image/]")
+                .map { element ->
+                    SManga.create().apply {
+                        setUrlWithoutDomain(element.absUrl("href"))
+                        thumbnail_url =
+                            element
+                                .selectFirst("img")
+                                ?.absUrl("data-original")
+                                ?.replace("http://", "https://")
+                        title = element.selectFirst("span:not(.posted)")!!.text()
+                        element
+                            .selectFirst("span.posted")
+                            ?.text()
+                            ?.also { dateCache[url] = it }
+                    }
                 }
-            }
         val hasNextPage = document.selectFirst("a.paginator_page[rel=next]") != null
 
         return MangasPage(entries, hasNextPage)
     }
 
     private fun parseDesktopListing(document: Document): MangasPage {
-        val entries = document.select("div.image-list-item:has(a[href*=/image/])")
-            .map { element ->
-                SManga.create().apply {
-                    setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-                    thumbnail_url = element.selectFirst("img")
-                        ?.absUrl("src")
-                        ?.replace("http://", "https://")
-                    title = element.select(".image-list-item-title").text()
-                    element.selectFirst(".image-list-item-regist-date")
-                        ?.text()?.also { dateCache[url] = it }
+        val entries =
+            document
+                .select("div.image-list-item:has(a[href*=/image/])")
+                .map { element ->
+                    SManga.create().apply {
+                        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+                        thumbnail_url =
+                            element
+                                .selectFirst("img")
+                                ?.absUrl("src")
+                                ?.replace("http://", "https://")
+                        title = element.select(".image-list-item-title").text()
+                        element
+                            .selectFirst(".image-list-item-regist-date")
+                            ?.text()
+                            ?.also { dateCache[url] = it }
+                    }
                 }
-            }
         val hasNextPage = document.selectFirst("div.wp-pagenavi > a[rel=next]") != null
 
         return MangasPage(entries, hasNextPage)
@@ -97,18 +108,24 @@ class HentaiCosplay : HttpSource() {
         return super.fetchLatestUpdates(page)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/recently/page/$page/", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/recently/page/$page/", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         fetchFilters()
         return super.fetchSearchManga(page, query, filters)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isNotEmpty()) {
             val keyword = query.trim().replace(" ", "+")
             return GET("$baseUrl/search/keyword/$keyword/page/$page/", headers)
@@ -137,26 +154,30 @@ class HentaiCosplay : HttpSource() {
     }
 
     private fun fetchTags() {
-        Single.fromCallable {
-            runCatching {
-                client.newCall(GET("$baseUrl/ranking-tag/", headers))
-                    .execute().asJsoup()
-                    .run {
-                        tagCache = buildList {
-                            add(Pair("", ""))
-                            select("#tags a").map {
-                                Pair(
-                                    it.text()
-                                        .replace(tagNumRegex, "")
-                                        .trim(),
-                                    it.attr("href"),
-                                ).let(::add)
-                            }
+        Single
+            .fromCallable {
+                runCatching {
+                    client
+                        .newCall(GET("$baseUrl/ranking-tag/", headers))
+                        .execute()
+                        .asJsoup()
+                        .run {
+                            tagCache =
+                                buildList {
+                                    add(Pair("", ""))
+                                    select("#tags a").map {
+                                        Pair(
+                                            it
+                                                .text()
+                                                .replace(tagNumRegex, "")
+                                                .trim(),
+                                            it.attr("href"),
+                                        ).let(::add)
+                                    }
+                                }
                         }
-                    }
-            }
-        }
-            .subscribeOn(Schedulers.io())
+                }
+            }.subscribeOn(Schedulers.io())
             .observeOn(Schedulers.io())
             .subscribe()
     }
@@ -165,16 +186,19 @@ class HentaiCosplay : HttpSource() {
         name: String,
         private val options: List<Pair<String, String>>,
     ) : Filter.Select<String>(
-        name,
-        options.map { it.first }.toTypedArray(),
-    ) {
+            name,
+            options.map { it.first }.toTypedArray(),
+        ) {
         val selected get() = options[state].second
     }
 
-    private class TagFilter(name: String, options: List<Pair<String, String>>) : SelectFilter(name, options)
+    private class TagFilter(
+        name: String,
+        options: List<Pair<String, String>>,
+    ) : SelectFilter(name, options)
 
-    override fun getFilterList(): FilterList {
-        return if (tagCache.isEmpty()) {
+    override fun getFilterList(): FilterList =
+        if (tagCache.isEmpty()) {
             FilterList(Filter.Header("Press reset to attempt to load filters"))
         } else {
             FilterList(
@@ -183,7 +207,6 @@ class HentaiCosplay : HttpSource() {
                 TagFilter("Ranked Tags", tagCache),
             )
         }
-    }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -195,15 +218,19 @@ class HentaiCosplay : HttpSource() {
         }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        SChapter.create().apply {
-            name = "Gallery"
-            url = manga.url.removeSuffix("/").plus("/attachment/1/")
-            date_upload = runCatching {
-                dateFormat.parse(dateCache[manga.url]!!)!!.time
-            }.getOrDefault(0L)
-        }.let(::listOf)
-    }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        Observable.fromCallable {
+            SChapter
+                .create()
+                .apply {
+                    name = "Gallery"
+                    url = manga.url.removeSuffix("/").plus("/attachment/1/")
+                    date_upload =
+                        runCatching {
+                            dateFormat.parse(dateCache[manga.url]!!)!!.time
+                        }.getOrDefault(0L)
+                }.let(::listOf)
+        }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
@@ -211,15 +238,19 @@ class HentaiCosplay : HttpSource() {
         val document = response.asJsoup()
         val pageUrl = document.location().substringBeforeLast("/1/")
 
-        val totalPages = document.selectFirst("#right_sidebar > h3, #title > h2")
-            ?.text()?.trim()
-            ?.run { pagesRegex.find(this)?.groupValues?.get(1) }
-            ?.toIntOrNull()
-            ?: return emptyList()
+        val totalPages =
+            document
+                .selectFirst("#right_sidebar > h3, #title > h2")
+                ?.text()
+                ?.trim()
+                ?.run { pagesRegex.find(this)?.groupValues?.get(1) }
+                ?.toIntOrNull()
+                ?: return emptyList()
 
-        val pages = (1..totalPages).map {
-            Page(it, "$pageUrl/$it/")
-        }
+        val pages =
+            (1..totalPages).map {
+                Page(it, "$pageUrl/$it/")
+            }
 
         pages[0].imageUrl = imageUrlParse(document)
 
@@ -228,12 +259,12 @@ class HentaiCosplay : HttpSource() {
 
     override fun imageUrlParse(response: Response) = imageUrlParse(response.asJsoup())
 
-    private fun imageUrlParse(document: Document): String {
-        return document.selectFirst("#display_image_detail img, #detail_list img")!!
+    private fun imageUrlParse(document: Document): String =
+        document
+            .selectFirst("#display_image_detail img, #detail_list img")!!
             .absUrl("src")
             .replace("http://", "https://")
             .replace(hdRegex, "/")
-    }
 
     companion object {
         private val tagNumRegex = Regex("""(\(\d+\))""")

@@ -15,8 +15,10 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class BingTranslator(private val client: OkHttpClient, private val headers: Headers) : TranslatorEngine {
-
+class BingTranslator(
+    private val client: OkHttpClient,
+    private val headers: Headers,
+) : TranslatorEngine {
     private val baseUrl = "https://www.bing.com"
 
     private val translatorUrl = "$baseUrl/translator"
@@ -29,17 +31,22 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
 
     private val attempts = 3
 
-    override fun translate(from: String, to: String, text: String): String {
+    override fun translate(
+        from: String,
+        to: String,
+        text: String,
+    ): String {
         if (tokens.isNotValid() && refreshTokens().not()) {
             return text
         }
 
         repeat(attempts) {
             try {
-                val dto = client
-                    .newCall(translatorRequest(from, to, text))
-                    .execute()
-                    .parseAs<List<TranslateDto>>()
+                val dto =
+                    client
+                        .newCall(translatorRequest(from, to, text))
+                        .execute()
+                        .parseAs<List<TranslateDto>>()
 
                 return dto.firstOrNull()?.text ?: text
             } catch (e: Exception) {
@@ -54,29 +61,40 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
         return tokens.isValid()
     }
 
-    private fun translatorRequest(from: String, to: String, text: String): Request {
-        val url = "$baseUrl/ttranslatev3".toHttpUrl().newBuilder()
-            .addQueryParameter("isVertical", "1")
-            .addQueryParameter("", "") // Present in Bing URL
-            .addQueryParameter("IG", tokens.ig)
-            .addQueryParameter("IID", tokens.iid)
-            .build()
+    private fun translatorRequest(
+        from: String,
+        to: String,
+        text: String,
+    ): Request {
+        val url =
+            "$baseUrl/ttranslatev3"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("isVertical", "1")
+                .addQueryParameter("", "") // Present in Bing URL
+                .addQueryParameter("IG", tokens.ig)
+                .addQueryParameter("IID", tokens.iid)
+                .build()
 
-        val headersApi = headers.newBuilder()
-            .set("Accept", "*/*")
-            .set("Origin", baseUrl)
-            .set("Referer", translatorUrl)
-            .set("Alt-Used", baseUrl)
-            .build()
+        val headersApi =
+            headers
+                .newBuilder()
+                .set("Accept", "*/*")
+                .set("Origin", baseUrl)
+                .set("Referer", translatorUrl)
+                .set("Alt-Used", baseUrl)
+                .build()
 
-        val payload = FormBody.Builder()
-            .add("fromLang", from)
-            .add("to", to)
-            .add("text", text)
-            .add("tryFetchingGenderDebiasedTranslations", "true")
-            .add("token", tokens.token)
-            .add("key", tokens.key)
-            .build()
+        val payload =
+            FormBody
+                .Builder()
+                .add("fromLang", from)
+                .add("to", to)
+                .add("text", text)
+                .add("tryFetchingGenderDebiasedTranslations", "true")
+                .add("token", tokens.token)
+                .add("key", tokens.key)
+                .build()
 
         return POST(url.toString(), headersApi, payload)
     }
@@ -84,14 +102,18 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
     private fun loadTokens(): TokenGroup {
         val document = client.newCall(GET(translatorUrl, headers)).execute().asJsoup()
 
-        val scripts = document.select("script")
-            .map(Element::data)
+        val scripts =
+            document
+                .select("script")
+                .map(Element::data)
 
-        val scriptOne: String = scripts.firstOrNull(TOKENS_REGEX::containsMatchIn)
-            ?: return TokenGroup()
+        val scriptOne: String =
+            scripts.firstOrNull(TOKENS_REGEX::containsMatchIn)
+                ?: return TokenGroup()
 
-        val scriptTwo: String = scripts.firstOrNull(IG_PARAM_REGEX::containsMatchIn)
-            ?: return TokenGroup()
+        val scriptTwo: String =
+            scripts.firstOrNull(IG_PARAM_REGEX::containsMatchIn)
+                ?: return TokenGroup()
 
         val matchOne = TOKENS_REGEX.find(scriptOne)?.groups
         val matchTwo = IG_PARAM_REGEX.find(scriptTwo)?.groups
@@ -104,9 +126,7 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
         )
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromStream(body.byteStream())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromStream(body.byteStream())
 
     companion object {
         val TOKENS_REGEX = """params_AbusePreventionHelper(\s+)?=(\s+)?[^\[]\[(?<key>\d+),"(?<token>[^"]+)""".toRegex()

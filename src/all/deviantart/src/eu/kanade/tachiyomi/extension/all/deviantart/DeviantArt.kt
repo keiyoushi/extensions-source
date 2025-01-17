@@ -25,37 +25,39 @@ class DeviantArt : HttpSource() {
     override val lang = "all"
     override val supportsLatest = false
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
-    }
+    override fun headersBuilder() =
+        Headers.Builder().apply {
+            add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")
+        }
 
     private val backendBaseUrl = "https://backend.deviantart.com"
+
     private fun backendBuilder() = backendBaseUrl.toHttpUrl().newBuilder()
 
     private val dateFormat by lazy {
         SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH)
     }
 
-    private fun parseDate(dateStr: String?): Long {
-        return try {
+    private fun parseDate(dateStr: String?): Long =
+        try {
             dateFormat.parse(dateStr ?: "")!!.time
         } catch (_: ParseException) {
             0L
         }
-    }
 
-    override fun popularMangaRequest(page: Int): Request {
-        throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
-    }
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException(SEARCH_FORMAT_MSG)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val matchGroups = requireNotNull(
-            Regex("""gallery:([\w-]+)(?:/(\d+))?""").matchEntire(query)?.groupValues,
-        ) { SEARCH_FORMAT_MSG }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val matchGroups =
+            requireNotNull(
+                Regex("""gallery:([\w-]+)(?:/(\d+))?""").matchEntire(query)?.groupValues,
+            ) { SEARCH_FORMAT_MSG }
         val username = matchGroups[1]
         val folderId = matchGroups[2].ifEmpty { "all" }
         return GET("$baseUrl/$username/gallery/$folderId", headers)
@@ -66,25 +68,22 @@ class DeviantArt : HttpSource() {
         return MangasPage(listOf(manga), false)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         val subFolderGallery = document.selectFirst("#sub-folder-gallery")
-        val manga = SManga.create().apply {
-            // If manga is sub-gallery then use sub-gallery name, else use gallery name
-            title = subFolderGallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
-                ?: subFolderGallery?.selectFirst("[aria-haspopup=listbox] > div")!!.ownText()
-            author = document.title().substringBefore(" ")
-            description = subFolderGallery?.selectFirst(".legacy-journal")?.wholeText()
-            thumbnail_url = subFolderGallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
-        }
+        val manga =
+            SManga.create().apply {
+                // If manga is sub-gallery then use sub-gallery name, else use gallery name
+                title = subFolderGallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
+                    ?: subFolderGallery?.selectFirst("[aria-haspopup=listbox] > div")!!.ownText()
+                author = document.title().substringBefore(" ")
+                description = subFolderGallery?.selectFirst(".legacy-journal")?.wholeText()
+                thumbnail_url = subFolderGallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
+            }
         manga.setUrlWithoutDomain(response.request.url.toString())
         return manga
     }
@@ -94,16 +93,18 @@ class DeviantArt : HttpSource() {
         val username = pathSegments[0]
         val folderId = pathSegments[2]
 
-        val query = if (folderId == "all") {
-            "gallery:$username"
-        } else {
-            "gallery:$username/$folderId"
-        }
+        val query =
+            if (folderId == "all") {
+                "gallery:$username"
+            } else {
+                "gallery:$username/$folderId"
+            }
 
-        val url = backendBuilder()
-            .addPathSegment("rss.xml")
-            .addQueryParameter("q", query)
-            .build()
+        val url =
+            backendBuilder()
+                .addPathSegment("rss.xml")
+                .addQueryParameter("q", query)
+                .build()
 
         return GET(url, headers)
     }
@@ -159,13 +160,9 @@ class DeviantArt : HttpSource() {
         return listOf(Page(0, imageUrl = imageUrl))
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun Response.asJsoupXml(): Document {
-        return Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
-    }
+    private fun Response.asJsoupXml(): Document = Jsoup.parse(body.string(), request.url.toString(), Parser.xmlParser())
 
     companion object {
         const val SEARCH_FORMAT_MSG = "Please enter a query in the format of gallery:{username} or gallery:{username}/{folderId}"

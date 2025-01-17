@@ -19,7 +19,6 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 class Supermega : ParsedHttpSource() {
-
     override val name = "SUPER MEGA"
 
     override val baseUrl = "https://www.supermegacomics.com"
@@ -43,11 +42,24 @@ class Supermega : ParsedHttpSource() {
         return Observable.just(MangasPage(arrayListOf(manga), false))
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
-        .map { it.mangas.first().apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        fetchPopularManga(1)
+            .map { it.mangas.first().apply { initialized = true } }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val latestComicNumber = client.newCall(GET(baseUrl)).execute().asJsoup().select("[name='bigbuttonprevious']").first()!!.parent()!!.attr("href").substringAfter("?i=").toInt() + 1
+        val latestComicNumber =
+            client
+                .newCall(
+                    GET(baseUrl),
+                ).execute()
+                .asJsoup()
+                .select("[name='bigbuttonprevious']")
+                .first()!!
+                .parent()!!
+                .attr("href")
+                .substringAfter("?i=")
+                .toInt() +
+                1
         return Observable.just(
             IntRange(1, latestComicNumber).reversed().map { it ->
                 SChapter.create().apply {
@@ -60,7 +72,8 @@ class Supermega : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document) =
-        document.select("img[border='4']")
+        document
+            .select("img[border='4']")
             .mapIndexed { i, element ->
                 Page(i, "", element.attr("src"))
             }
@@ -69,16 +82,24 @@ class Supermega : ParsedHttpSource() {
     // certificate wasn't trusted for some reason so trusted all certificates
     private fun getUnsafeOkHttpClient(): OkHttpClient {
         // Create a trust manager that does not validate certificate chains
-        val trustAllCerts = arrayOf<TrustManager>(
-            object : X509TrustManager {
-                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                }
-                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                }
+        val trustAllCerts =
+            arrayOf<TrustManager>(
+                object : X509TrustManager {
+                    override fun checkClientTrusted(
+                        chain: Array<out X509Certificate>?,
+                        authType: String?,
+                    ) {
+                    }
 
-                override fun getAcceptedIssuers() = arrayOf<X509Certificate>()
-            },
-        )
+                    override fun checkServerTrusted(
+                        chain: Array<out X509Certificate>?,
+                        authType: String?,
+                    ) {
+                    }
+
+                    override fun getAcceptedIssuers() = arrayOf<X509Certificate>()
+                },
+            )
 
         // Install the all-trusting trust manager
         val sslContext = SSLContext.getInstance("SSL")
@@ -86,15 +107,22 @@ class Supermega : ParsedHttpSource() {
         // Create an ssl socket factory with our all-trusting manager
         val sslSocketFactory = sslContext.socketFactory
 
-        return OkHttpClient.Builder()
+        return OkHttpClient
+            .Builder()
             .sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
-            .hostnameVerifier { _, _ -> true }.build()
+            .hostnameVerifier { _, _ -> true }
+            .build()
     }
 
     override fun chapterListSelector(): String = throw UnsupportedOperationException()
+
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = throw UnsupportedOperationException()
 
     override fun imageUrlRequest(page: Page) = GET(page.url)
 
@@ -110,8 +138,11 @@ class Supermega : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException()
 

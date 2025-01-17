@@ -2,8 +2,9 @@ package eu.kanade.tachiyomi.extension.en.voyceme
 
 fun buildQuery(queryAction: () -> String) = queryAction().replace("%", "$")
 
-val POPULAR_QUERY: String = buildQuery {
-    """
+val POPULAR_QUERY: String =
+    buildQuery {
+        """
         query(%limit: Int, %offset: Int) {
             voyce_series(
                 where: {
@@ -20,11 +21,12 @@ val POPULAR_QUERY: String = buildQuery {
                 title
             }
         }
-    """.trimIndent()
-}
+        """.trimIndent()
+    }
 
-val LATEST_QUERY: String = buildQuery {
-    """
+val LATEST_QUERY: String =
+    buildQuery {
+        """
         query(%limit: Int, %offset: Int) {
             voyce_series(
                 where: {
@@ -41,11 +43,12 @@ val LATEST_QUERY: String = buildQuery {
                 title
             }
         }
-    """.trimIndent()
-}
+        """.trimIndent()
+    }
 
-val SEARCH_QUERY: String = buildQuery {
-    """
+val SEARCH_QUERY: String =
+    buildQuery {
+        """
         query(%searchTerm: String!, %limit: Int, %offset: Int) {
             voyce_series(
                 where: {
@@ -63,11 +66,12 @@ val SEARCH_QUERY: String = buildQuery {
                 title
             }
         }
-    """.trimIndent()
-}
+        """.trimIndent()
+    }
 
-val DETAILS_QUERY: String = buildQuery {
-    """
+val DETAILS_QUERY: String =
+    buildQuery {
+        """
         query(%slug: String!) {
             voyce_series(
                 where: {
@@ -89,11 +93,12 @@ val DETAILS_QUERY: String = buildQuery {
                 }
             }
         }
-    """.trimIndent()
-}
+        """.trimIndent()
+    }
 
-val CHAPTERS_QUERY: String = buildQuery {
-    """
+val CHAPTERS_QUERY: String =
+    buildQuery {
+        """
         query(%slug: String!) {
             voyce_series(
                 where: {
@@ -111,11 +116,12 @@ val CHAPTERS_QUERY: String = buildQuery {
                 }
             }
         }
-    """.trimIndent()
-}
+        """.trimIndent()
+    }
 
-val PAGES_QUERY: String = buildQuery {
-    """
+val PAGES_QUERY: String =
+    buildQuery {
+        """
         query(%chapterId: Int!) {
             voyce_chapter_images(
                 where: { chapter_id: { _eq: %chapterId } },
@@ -124,5 +130,5 @@ val PAGES_QUERY: String = buildQuery {
                 image
             }
         }
-    """.trimIndent()
-}
+        """.trimIndent()
+    }

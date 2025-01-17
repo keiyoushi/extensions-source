@@ -27,30 +27,36 @@ class MangaCross : HttpSource() {
 
     // Pagination does not work. 9999 is a dummy large number.
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/comics.json?count=9999", headers)
-    override fun popularMangaParse(response: Response) =
-        MangasPage(response.parseAs<MCComicList>().comics.map { it.toSManga() }, false)
+
+    override fun popularMangaParse(response: Response) = MangasPage(response.parseAs<MCComicList>().comics.map { it.toSManga() }, false)
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/episodes.json?page=$page", headers)
+
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result: MCEpisodeList = response.parseAs()
         return MangasPage(result.episodes.map { it.comic!!.toSManga() }, result.current_page < result.total_pages)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        if (query.isNotEmpty()) {
-            GET("$baseUrl/api/comics/keywords/$query.json", headers)
-        } else {
-            when (val tag = filters.filterIsInstance<TagFilter>().firstOrNull()?.getTag()) {
-                null -> popularMangaRequest(page)
-                is MCComicCategory -> GET("$baseUrl/api/comics/categories/${tag.name}.json", headers)
-                is MCComicGenre -> GET("$baseUrl/api/comics/tags/${tag.name}.json", headers)
-            }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = if (query.isNotEmpty()) {
+        GET("$baseUrl/api/comics/keywords/$query.json", headers)
+    } else {
+        when (val tag = filters.filterIsInstance<TagFilter>().firstOrNull()?.getTag()) {
+            null -> popularMangaRequest(page)
+            is MCComicCategory -> GET("$baseUrl/api/comics/categories/${tag.name}.json", headers)
+            is MCComicGenre -> GET("$baseUrl/api/comics/tags/${tag.name}.json", headers)
         }
+    }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client.newCall(chapterListRequest(manga)).asObservableSuccess()
+        client
+            .newCall(chapterListRequest(manga))
+            .asObservableSuccess()
             .map { mangaDetailsParse(it).apply { initialized = true } }
 
     // mangaDetailsRequest untouched in order to let WebView open web page instead of json
@@ -61,15 +67,14 @@ class MangaCross : HttpSource() {
 
     override fun chapterListParse(response: Response) = response.parseAs<MCComicDetails>().comic.toSChapterList()
 
-    override fun pageListParse(response: Response): List<Page> {
-        return try {
+    override fun pageListParse(response: Response): List<Page> =
+        try {
             response.parseAs<MCViewer>().episode_pages.mapIndexed { i, it ->
                 Page(i, imageUrl = it.image.original_url)
             }
         } catch (e: SerializationException) {
             throw Exception("Chapter is no longer available!")
         }
-    }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
@@ -106,8 +111,10 @@ class MangaCross : HttpSource() {
             )
         }
 
-    private class TagFilter(name: String, private val tags: List<Pair<String, MCComicTag?>>) :
-        Filter.Select<String>(name, tags.map { it.first }.toTypedArray()) {
+    private class TagFilter(
+        name: String,
+        private val tags: List<Pair<String, MCComicTag?>>,
+    ) : Filter.Select<String>(name, tags.map { it.first }.toTypedArray()) {
         fun getTag() = tags[state].second
     }
 

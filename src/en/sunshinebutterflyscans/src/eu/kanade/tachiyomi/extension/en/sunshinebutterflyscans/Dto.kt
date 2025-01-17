@@ -21,39 +21,43 @@ class EntryDto(
     @SerialName("projectstatus") val projectStatus: String,
     @SerialName("projecttags") val projectTags: String,
 ) {
-    fun toSManga(cdnUrl: String): SManga = SManga.create().apply {
-        title = series
-        thumbnail_url = cdnUrl + projectThumb
-        url = "/projects?n=$projectName"
-        description = buildString {
-            projectDesc.nonEmpty()?.let { append(it) }
-            if (altName.isNotEmpty()) {
-                append("\n\n")
-                append("Alternative name: ")
-                append(altName)
-            }
+    fun toSManga(cdnUrl: String): SManga =
+        SManga.create().apply {
+            title = series
+            thumbnail_url = cdnUrl + projectThumb
+            url = "/projects?n=$projectName"
+            description =
+                buildString {
+                    projectDesc.nonEmpty()?.let { append(it) }
+                    if (altName.isNotEmpty()) {
+                        append("\n\n")
+                        append("Alternative name: ")
+                        append(altName)
+                    }
+                }
+            genre = projectTags.nonEmpty()?.replace(",", ", ")
+            status = projectStatus.toStatus()
+            author = projectAuthor.nonEmpty()
+            artist = projectArtist.nonEmpty()
+            initialized = true
         }
-        genre = projectTags.nonEmpty()?.replace(",", ", ")
-        status = projectStatus.toStatus()
-        author = projectAuthor.nonEmpty()
-        artist = projectArtist.nonEmpty()
-        initialized = true
-    }
 
-    private fun String.toStatus(): Int = when (this) {
-        "current" -> SManga.ONGOING
-        "complete" -> SManga.COMPLETED
-        "dropped" -> SManga.CANCELLED
-        "licensed" -> SManga.LICENSED
-        else -> SManga.UNKNOWN
-    }
+    private fun String.toStatus(): Int =
+        when (this) {
+            "current" -> SManga.ONGOING
+            "complete" -> SManga.COMPLETED
+            "dropped" -> SManga.CANCELLED
+            "licensed" -> SManga.LICENSED
+            else -> SManga.UNKNOWN
+        }
 
-    fun toSChapter(): SChapter = SChapter.create().apply {
-        name = chapterName
-        chapter_number = num.toFloat()
-        date_upload = timestamp.nonEmpty()?.toLong()?.times(1000) ?: 0L
-        url = "/read?series=$projectName&num=$num"
-    }
+    fun toSChapter(): SChapter =
+        SChapter.create().apply {
+            name = chapterName
+            chapter_number = num.toFloat()
+            date_upload = timestamp.nonEmpty()?.toLong()?.times(1000) ?: 0L
+            url = "/read?series=$projectName&num=$num"
+        }
 }
 
 @Serializable

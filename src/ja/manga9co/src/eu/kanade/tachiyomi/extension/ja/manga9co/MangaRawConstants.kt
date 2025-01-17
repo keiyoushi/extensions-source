@@ -11,25 +11,29 @@ internal val PROMPT get() = "Note: 'manga1001.in' is not recommended because it 
 internal const val RANDOM_MIRROR_FROM = 1
 internal const val RANDOM_MIRROR_UNTIL = 4
 
-internal fun getSelectors(mirrorIndex: Int) = when (mirrorIndex) {
-    0, 1, 2 -> Selectors(
-        listMangaSelector = ".card",
-        detailsSelector = "div:has(> main)",
-        recommendClass = "container",
-    )
-    else -> Selectors(
-        listMangaSelector = ".post-list:not(.last-hidden) > .item",
-        detailsSelector = "#post-data",
-        recommendClass = "post-list",
-    )
-}
+internal fun getSelectors(mirrorIndex: Int) =
+    when (mirrorIndex) {
+        0, 1, 2 ->
+            Selectors(
+                listMangaSelector = ".card",
+                detailsSelector = "div:has(> main)",
+                recommendClass = "container",
+            )
+        else ->
+            Selectors(
+                listMangaSelector = ".post-list:not(.last-hidden) > .item",
+                detailsSelector = "#post-data",
+                recommendClass = "post-list",
+            )
+    }
 
 internal fun needUrlSanitize(mirrorIndex: Int) = mirrorIndex == 2
 
-internal fun isPagesShuffled(mirrorIndex: Int) = when (mirrorIndex) {
-    0 -> false
-    else -> true
-}
+internal fun isPagesShuffled(mirrorIndex: Int) =
+    when (mirrorIndex) {
+        0 -> false
+        else -> true
+    }
 
 internal val mangaSlugRegex = Regex("""^/mz[a-z]{4}-""")
 

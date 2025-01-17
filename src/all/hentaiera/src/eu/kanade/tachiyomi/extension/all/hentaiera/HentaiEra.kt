@@ -15,10 +15,10 @@ class HentaiEra(
     lang: String = "all",
     override val mangaLang: String = LANGUAGE_MULTI,
 ) : GalleryAdults(
-    "HentaiEra",
-    "https://hentaiera.com",
-    lang = lang,
-) {
+        "HentaiEra",
+        "https://hentaiera.com",
+        lang = lang,
+    ) {
     override val supportsLatest = true
     override val useIntermediateSearch: Boolean = true
     override val supportSpeechless: Boolean = true
@@ -29,8 +29,10 @@ class HentaiEra(
         }
 
     override fun Element.mangaLang() =
-        select("a:has(.g_flag)").attr("href")
-            .removeSuffix("/").substringAfterLast("/")
+        select("a:has(.g_flag)")
+            .attr("href")
+            .removeSuffix("/")
+            .substringAfterLast("/")
             .let {
                 // Include Speechless in search results
                 if (it == LANGUAGE_SPEECHLESS) mangaLang else it
@@ -38,68 +40,75 @@ class HentaiEra(
 
     override fun popularMangaRequest(page: Int): Request {
         // Only for query string or multiple tags
-        val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
-            addQueryParameter("pp", "1")
+        val url =
+            "$baseUrl/search/".toHttpUrl().newBuilder().apply {
+                addQueryParameter("pp", "1")
 
-            getLanguageURIs().forEach { pair ->
-                addQueryParameter(
-                    pair.second,
-                    toBinary(mangaLang == pair.first || mangaLang == LANGUAGE_MULTI),
-                )
+                getLanguageURIs().forEach { pair ->
+                    addQueryParameter(
+                        pair.second,
+                        toBinary(mangaLang == pair.first || mangaLang == LANGUAGE_MULTI),
+                    )
+                }
+
+                addPageUri(page)
             }
-
-            addPageUri(page)
-        }
 
         return GET(url.build(), headers)
     }
 
-    /* Details */
-    override fun Element.getInfo(tag: String): String {
-        return select("li:has(.tags_text:contains($tag)) .tag .item_name")
+    // Details
+    override fun Element.getInfo(tag: String): String =
+        select("li:has(.tags_text:contains($tag)) .tag .item_name")
             .joinToString {
                 val name = it.ownText()
                 if (tag.contains(regexTag)) {
-                    genres[name] = it.parent()!!.attr("href")
-                        .removeSuffix("/").substringAfterLast('/')
+                    genres[name] =
+                        it
+                            .parent()!!
+                            .attr("href")
+                            .removeSuffix("/")
+                            .substringAfterLast('/')
                 }
                 listOf(
                     name,
-                    it.select(".split_tag").text()
+                    it
+                        .select(".split_tag")
+                        .text()
                         .trim()
                         .removePrefix("| "),
-                )
-                    .filter { s -> s.isNotBlank() }
+                ).filter { s -> s.isNotBlank() }
                     .joinToString()
             }
-    }
 
-    override fun Element.getCover() =
-        selectFirst(".left_cover img")?.imgAttr()
+    override fun Element.getCover() = selectFirst(".left_cover img")?.imgAttr()
 
-    override fun tagsParser(document: Document): List<Genre> {
-        return document.select("h2.gallery_title a")
+    override fun tagsParser(document: Document): List<Genre> =
+        document
+            .select("h2.gallery_title a")
             .mapNotNull {
                 Genre(
                     it.text(),
-                    it.attr("href")
-                        .removeSuffix("/").substringAfterLast('/'),
+                    it
+                        .attr("href")
+                        .removeSuffix("/")
+                        .substringAfterLast('/'),
                 )
             }
-    }
 
     override val mangaDetailInfoSelector = ".gallery_first"
 
-    /* Pages */
+    // Pages
     override val thumbnailSelector = ".gthumb"
     override val pageUri = "view"
 
-    override fun getCategoryURIs() = listOf(
-        SearchFlagFilter("Manga", "mg"),
-        SearchFlagFilter("Doujinshi", "dj"),
-        SearchFlagFilter("Western", "ws"),
-        SearchFlagFilter("Image Set", "is"),
-        SearchFlagFilter("Artist CG", "ac"),
-        SearchFlagFilter("Game CG", "gc"),
-    )
+    override fun getCategoryURIs() =
+        listOf(
+            SearchFlagFilter("Manga", "mg"),
+            SearchFlagFilter("Doujinshi", "dj"),
+            SearchFlagFilter("Western", "ws"),
+            SearchFlagFilter("Image Set", "is"),
+            SearchFlagFilter("Artist CG", "ac"),
+            SearchFlagFilter("Game CG", "gc"),
+        )
 }

@@ -8,7 +8,9 @@ typealias CoverArtListDto = PaginatedResponseDto<CoverArtDto>
 
 @Serializable
 @SerialName(MDConstants.coverArt)
-data class CoverArtDto(override val attributes: CoverArtAttributesDto? = null) : EntityDto()
+data class CoverArtDto(
+    override val attributes: CoverArtAttributesDto? = null,
+) : EntityDto()
 
 @Serializable
 data class CoverArtAttributesDto(

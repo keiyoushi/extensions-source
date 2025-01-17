@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.all.hentai3
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList {
-    return FilterList(
+fun getFilters(): FilterList =
+    FilterList(
         SelectFilter("Sort by", getSortsList),
         Filter.Separator(),
         Filter.Header("Separate tags with commas (,)"),
@@ -22,18 +22,25 @@ fun getFilters(): FilterList {
         Filter.Header("Filter by pages, for example: (>20)"),
         TextFilter("Pages", "page"),
     )
-}
 
-internal open class TextFilter(name: String, val type: String, val specific: String = "") : Filter.Text(name)
+internal open class TextFilter(
+    name: String,
+    val type: String,
+    val specific: String = "",
+) : Filter.Text(name)
 
-internal open class SelectFilter(name: String, private val vals: List<Pair<String, String>>, state: Int = 0) :
-    Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+internal open class SelectFilter(
+    name: String,
+    private val vals: List<Pair<String, String>>,
+    state: Int = 0,
+) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
     fun getValue() = vals[state].second
 }
 
-private val getSortsList: List<Pair<String, String>> = listOf(
-    Pair("Recent", ""),
-    Pair("Popular: All Time", "popular"),
-    Pair("Popular: Week", "popular-7d"),
-    Pair("Popular: Today", "popular-24h"),
-)
+private val getSortsList: List<Pair<String, String>> =
+    listOf(
+        Pair("Recent", ""),
+        Pair("Popular: All Time", "popular"),
+        Pair("Popular: Week", "popular-7d"),
+        Pair("Popular: Today", "popular-24h"),
+    )

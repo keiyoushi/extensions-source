@@ -19,7 +19,6 @@ import org.jsoup.select.Evaluator
 abstract class MangabzTheme(
     override val name: String,
 ) : HttpSource() {
-
     override val lang = "zh"
 
     override val supportsLatest = true
@@ -32,29 +31,41 @@ abstract class MangabzTheme(
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        if (query.isEmpty()) {
-            popularMangaRequest(page)
-        } else {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = if (query.isEmpty()) {
+        popularMangaRequest(page)
+    } else {
+        val url =
+            "$baseUrl/search"
+                .toHttpUrl()
+                .newBuilder()
                 .addQueryParameter("title", query)
                 .addQueryParameter("page", page.toString())
-            Request.Builder().url(url.build()).headers(headers).build()
-        }
+        Request
+            .Builder()
+            .url(url.build())
+            .headers(headers)
+            .build()
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup().also(::parseFilters)
-        val mangas = document.selectFirst(Evaluator.Class("mh-list"))!!.children().map { element ->
-            SManga.create().apply {
-                title = element.selectFirst(Evaluator.Tag("h2"))!!.text()
-                url = element.selectFirst(Evaluator.Tag("a"))!!.attr("href")
-                thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.attr("src")
+        val mangas =
+            document.selectFirst(Evaluator.Class("mh-list"))!!.children().map { element ->
+                SManga.create().apply {
+                    title = element.selectFirst(Evaluator.Tag("h2"))!!.text()
+                    url = element.selectFirst(Evaluator.Tag("a"))!!.attr("href")
+                    thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.attr("src")
+                }
             }
-        }
-        val hasNextPage = document.run {
-            val pagination = selectFirst(Evaluator.Class("page-pagination"))
-            pagination != null && pagination.select(Evaluator.Tag("a")).last()!!.text() == ">"
-        }
+        val hasNextPage =
+            document.run {
+                val pagination = selectFirst(Evaluator.Class("page-pagination"))
+                pagination != null && pagination.select(Evaluator.Tag("a")).last()!!.text() == ">"
+            }
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -65,13 +76,14 @@ abstract class MangabzTheme(
             url = document.location().removePrefix(baseUrl)
             title = document.selectFirst(Evaluator.Class("detail-info-title"))!!.ownText()
             thumbnail_url = document.selectFirst(Evaluator.Class("detail-info-cover"))!!.attr("src")
-            status = when (details[1].child(0).ownText()) {
-                "连载中" -> SManga.ONGOING
-                "已完结" -> SManga.COMPLETED
-                "連載中" -> SManga.ONGOING
-                "已完結" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+            status =
+                when (details[1].child(0).ownText()) {
+                    "连载中" -> SManga.ONGOING
+                    "已完结" -> SManga.COMPLETED
+                    "連載中" -> SManga.ONGOING
+                    "已完結" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
             author = details[0].children().joinToString { it.ownText() }
             genre = details[2].children().joinToString { it.ownText() }
             description = parseDescription(document.selectFirst(Evaluator.Class("detail-info-content"))!!, title, details)
@@ -79,26 +91,32 @@ abstract class MangabzTheme(
         }
     }
 
-    abstract fun parseDescription(element: Element, title: String, details: Elements): String
+    abstract fun parseDescription(
+        element: Element,
+        title: String,
+        details: Elements,
+    ): String
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val needPageCount = needPageCount
-        val list = getChapterElements(document).map { element ->
-            val chapterName = element.ownText()
-            SChapter.create().apply {
-                url = element.attr("href")
-                if (needPageCount) {
-                    name = chapterName + element.child(0).ownText()
-                    chapter_number = when (val result = floatRegex.find(chapterName)) {
-                        null -> -2f
-                        else -> result.value.toFloat()
+        val list =
+            getChapterElements(document).map { element ->
+                val chapterName = element.ownText()
+                SChapter.create().apply {
+                    url = element.attr("href")
+                    if (needPageCount) {
+                        name = chapterName + element.child(0).ownText()
+                        chapter_number =
+                            when (val result = floatRegex.find(chapterName)) {
+                                null -> -2f
+                                else -> result.value.toFloat()
+                            }
+                    } else {
+                        name = chapterName
                     }
-                } else {
-                    name = chapterName
                 }
             }
-        }
         if (list.isEmpty()) return emptyList()
 
         val listTitle = document.selectFirst(Evaluator.Class("detail-list-form-title"))!!.ownText()
@@ -110,8 +128,7 @@ abstract class MangabzTheme(
         return list
     }
 
-    protected open fun getChapterElements(document: Document): Elements =
-        document.selectFirst(Evaluator.Id("chapterlistload"))!!.children()
+    protected open fun getChapterElements(document: Document): Elements = document.selectFirst(Evaluator.Id("chapterlistload"))!!.children()
 
     protected open val needPageCount = true
 

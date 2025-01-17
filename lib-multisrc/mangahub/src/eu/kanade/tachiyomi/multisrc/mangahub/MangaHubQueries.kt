@@ -4,15 +4,16 @@ import kotlinx.serialization.Serializable
 
 private fun buildQuery(queryAction: () -> String) = queryAction().replace("%", "$")
 
-val PAGES_QUERY = buildQuery {
-    """
-            query(%mangaSource: MangaSource, %slug: String!, %number: Float!) {
-                chapter(x: %mangaSource, slug: %slug, number: %number) {
-                    pages
-                }
+val PAGES_QUERY =
+    buildQuery {
+        """
+        query(%mangaSource: MangaSource, %slug: String!, %number: Float!) {
+            chapter(x: %mangaSource, slug: %slug, number: %number) {
+                pages
             }
-    """.trimIndent()
-}
+        }
+        """.trimIndent()
+    }
 
 @Serializable
 data class ApiErrorMessages(

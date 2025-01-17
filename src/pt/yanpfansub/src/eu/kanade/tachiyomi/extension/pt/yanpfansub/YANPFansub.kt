@@ -10,20 +10,22 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class YANPFansub : Madara(
-    "YANP Fansub",
-    "https://trisalyanp.com",
-    "pt-BR",
-    SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("pt", "BR")),
-) {
-
+class YANPFansub :
+    Madara(
+        "YANP Fansub",
+        "https://trisalyanp.com",
+        "pt-BR",
+        SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("pt", "BR")),
+    ) {
     // Scanlator changed the theme from WpMangaReader to Madara.
     override val versionId: Int = 2
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .addInterceptor(::checkPasswordProtectedIntercept)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .addInterceptor(::checkPasswordProtectedIntercept)
+            .build()
 
     private fun checkPasswordProtectedIntercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())

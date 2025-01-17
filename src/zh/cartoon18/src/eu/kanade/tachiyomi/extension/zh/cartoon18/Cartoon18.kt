@@ -24,7 +24,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.net.URLDecoder
 
-class Cartoon18 : HttpSource(), ConfigurableSource {
+class Cartoon18 :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Cartoon18"
     override val lang = "zh"
     override val supportsLatest = true
@@ -33,29 +35,37 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
 
     private val baseUrlWithLang get() = if (useTrad) baseUrl else "$baseUrl/zh-hans"
 
-    override val client = network.client.newBuilder().followRedirects(false).build()
+    override val client =
+        network.client
+            .newBuilder()
+            .followRedirects(false)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrlWithLang?sort=hits&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("#videos div.card").map { card ->
-            val cardBody = card.select(".card-body")
-            val link = cardBody.select("a")
-            val genres = cardBody.select("div a.badge")
-            SManga.create().apply {
-                url = link.attr("href")
-                title = link.text()
-                thumbnail_url = card.select("img").attr("data-src")
-                genre = genres.joinToString { elm -> elm.text() }
+        val mangas =
+            document.select("#videos div.card").map { card ->
+                val cardBody = card.select(".card-body")
+                val link = cardBody.select("a")
+                val genres = cardBody.select("div a.badge")
+                SManga.create().apply {
+                    url = link.attr("href")
+                    title = link.text()
+                    thumbnail_url = card.select("img").attr("data-src")
+                    genre = genres.joinToString { elm -> elm.text() }
+                }
             }
-        }
-        val isLastPage = document.selectFirst("nav .pagination .next").run {
-            this == null || hasClass("disabled")
-        }
+        val isLastPage =
+            document.selectFirst("nav .pagination .next").run {
+                this == null || hasClass("disabled")
+            }
         return MangasPage(mangas, !isLastPage)
     }
 
@@ -63,7 +73,11 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = baseUrlWithLang.toHttpUrl().newBuilder()
         if (query.isNotBlank()) {
             url.addQueryParameter("q", query.trim())
@@ -104,12 +118,13 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val chapters = document.select("div.content h1.title + div a")
-        return chapters.map {
-            SChapter.create().apply {
-                url = it.attr("href")
-                name = it.text()
-            }
-        }.reversed()
+        return chapters
+            .map {
+                SChapter.create().apply {
+                    url = it.attr("href")
+                    name = it.text()
+                }
+            }.reversed()
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -141,28 +156,33 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
         private val queryValues: Array<String>,
         state: Int = 0,
     ) : Filter.Select<String>(name, values, state) {
-        fun addQueryTo(builder: HttpUrl.Builder) =
-            builder.addQueryParameter(queryName, queryValues[state])
+        fun addQueryTo(builder: HttpUrl.Builder) = builder.addQueryParameter(queryName, queryValues[state])
     }
 
-    private class SortFilter : QueryFilter(
-        "Sort by",
-        arrayOf("Latest", "Popular", "Recommended", "Best"),
-        "sort",
-        arrayOf("created", "hits", "score", "likes"),
-        state = 2,
-    )
+    private class SortFilter :
+        QueryFilter(
+            "Sort by",
+            arrayOf("Latest", "Popular", "Recommended", "Best"),
+            "sort",
+            arrayOf("created", "hits", "score", "likes"),
+            state = 2,
+        )
 
-    class Keyword(val name: String, val value: String)
+    class Keyword(
+        val name: String,
+        val value: String,
+    )
 
     private var keywordsList: List<Keyword> = emptyList()
 
-    private class KeywordFilter(keywords: List<Keyword>) : QueryFilter(
-        "Keyword",
-        keywords.map { it.name }.toTypedArray(),
-        "q",
-        keywords.map { it.value }.toTypedArray(),
-    )
+    private class KeywordFilter(
+        keywords: List<Keyword>,
+    ) : QueryFilter(
+            "Keyword",
+            keywords.map { it.name }.toTypedArray(),
+            "q",
+            keywords.map { it.value }.toTypedArray(),
+        )
 
     /**
      * Inner variable to control how much tries the keywords request was called.
@@ -175,22 +195,27 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
     private fun fetchKeywords() {
         if (fetchKeywordsAttempts < 3 && keywordsList.isEmpty()) {
             try {
-                keywordsList = client.newCall(GET("$baseUrlWithLang/category", headers)).execute()
-                    .use { response ->
-                        val document = response.asJsoup()
-                        val items = document.select("div.content a.btn")
-                        buildList(items.size + 1) {
-                            add(Keyword("None", ""))
-                            items.mapTo(this) { keyword ->
-                                val queryValue = URLDecoder.decode(
-                                    keyword.attr("href")
-                                        .substringAfterLast('/'),
-                                    "UTF-8",
-                                )
-                                Keyword(keyword.text(), queryValue)
+                keywordsList =
+                    client
+                        .newCall(GET("$baseUrlWithLang/category", headers))
+                        .execute()
+                        .use { response ->
+                            val document = response.asJsoup()
+                            val items = document.select("div.content a.btn")
+                            buildList(items.size + 1) {
+                                add(Keyword("None", ""))
+                                items.mapTo(this) { keyword ->
+                                    val queryValue =
+                                        URLDecoder.decode(
+                                            keyword
+                                                .attr("href")
+                                                .substringAfterLast('/'),
+                                            "UTF-8",
+                                        )
+                                    Keyword(keyword.text(), queryValue)
+                                }
                             }
                         }
-                    }
             } catch (_: Exception) {
             } finally {
                 fetchKeywordsAttempts++
@@ -208,10 +233,11 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
     private val useTrad get() = preferences.getBoolean("ZH_HANT", false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = "ZH_HANT"
-            title = "Use Traditional Chinese"
-            setDefaultValue(false)
-        }.let(screen::addPreference)
+        SwitchPreferenceCompat(screen.context)
+            .apply {
+                key = "ZH_HANT"
+                title = "Use Traditional Chinese"
+                setDefaultValue(false)
+            }.let(screen::addPreference)
     }
 }

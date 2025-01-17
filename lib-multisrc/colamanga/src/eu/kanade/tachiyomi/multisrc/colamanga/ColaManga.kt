@@ -38,8 +38,8 @@ abstract class ColaManga(
     final override val name: String,
     final override val baseUrl: String,
     final override val lang: String,
-) : ParsedHttpSource(), ConfigurableSource {
-
+) : ParsedHttpSource(),
+    ConfigurableSource {
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
@@ -50,35 +50,37 @@ abstract class ColaManga(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(
-            baseUrl.toHttpUrl(),
-            preferences.getString(RATE_LIMIT_PREF_KEY, RATE_LIMIT_PREF_DEFAULT)!!.toInt(),
-            preferences.getString(RATE_LIMIT_PERIOD_PREF_KEY, RATE_LIMIT_PERIOD_PREF_DEFAULT)!!.toLong(),
-            TimeUnit.MILLISECONDS,
-        )
-        .addInterceptor(ColaMangaImageInterceptor())
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimitHost(
+                baseUrl.toHttpUrl(),
+                preferences.getString(RATE_LIMIT_PREF_KEY, RATE_LIMIT_PREF_DEFAULT)!!.toInt(),
+                preferences.getString(RATE_LIMIT_PERIOD_PREF_KEY, RATE_LIMIT_PERIOD_PREF_DEFAULT)!!.toLong(),
+                TimeUnit.MILLISECONDS,
+            ).addInterceptor(ColaMangaImageInterceptor())
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Origin", baseUrl)
+            .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/show?orderBy=dailyCount&page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/show?orderBy=dailyCount&page=$page", headers)
 
     override fun popularMangaSelector() = "li.fed-list-item"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("a.fed-list-title")!!.let {
-            setUrlWithoutDomain(it.attr("href"))
-            title = it.text()
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            element.selectFirst("a.fed-list-title")!!.let {
+                setUrlWithoutDomain(it.attr("href"))
+                title = it.text()
+            }
+            thumbnail_url = element.selectFirst("a.fed-list-pics")?.absUrl("data-original")
         }
-        thumbnail_url = element.selectFirst("a.fed-list-pics")?.absUrl("data-original")
-    }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/show?orderBy=update&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/show?orderBy=update&page=$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -86,26 +88,39 @@ abstract class ColaManga(
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = if (query.isNotEmpty()) {
-            "$baseUrl/search".toHttpUrl().newBuilder().apply {
-                filters.ifEmpty { getFilterList() }
-                    .firstOrNull { it is SearchTypeFilter }
-                    ?.let { (it as SearchTypeFilter).addToUri(this) }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            if (query.isNotEmpty()) {
+                "$baseUrl/search"
+                    .toHttpUrl()
+                    .newBuilder()
+                    .apply {
+                        filters
+                            .ifEmpty { getFilterList() }
+                            .firstOrNull { it is SearchTypeFilter }
+                            ?.let { (it as SearchTypeFilter).addToUri(this) }
 
-                addQueryParameter("searchString", query)
-                addQueryParameter("page", page.toString())
-            }.build()
-        } else {
-            "$baseUrl/show".toHttpUrl().newBuilder().apply {
-                filters.ifEmpty { getFilterList() }
-                    .filterIsInstance<UriFilter>()
-                    .filterNot { it is SearchTypeFilter }
-                    .forEach { it.addToUri(this) }
+                        addQueryParameter("searchString", query)
+                        addQueryParameter("page", page.toString())
+                    }.build()
+            } else {
+                "$baseUrl/show"
+                    .toHttpUrl()
+                    .newBuilder()
+                    .apply {
+                        filters
+                            .ifEmpty { getFilterList() }
+                            .filterIsInstance<UriFilter>()
+                            .filterNot { it is SearchTypeFilter }
+                            .forEach { it.addToUri(this) }
 
-                addQueryParameter("page", page.toString())
-            }.build()
-        }
+                        addQueryParameter("page", page.toString())
+                    }.build()
+            }
 
         return GET(url, headers)
     }
@@ -114,8 +129,8 @@ abstract class ColaManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+    ): Observable<MangasPage> =
+        if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
             val url = "/$slug/"
 
@@ -124,7 +139,6 @@ abstract class ColaManga(
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
     override fun searchMangaSelector() = "dl.fed-deta-info, ${popularMangaSelector()}"
 
@@ -151,27 +165,31 @@ abstract class ColaManga(
     protected abstract val statusOngoing: String
     protected abstract val statusCompleted: String
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1.fed-part-eone")!!.text()
-        thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-original")
-        author = document.selectFirst("span.fed-text-muted:contains($authorTitle) + a")?.text()
-        genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a").joinToString { it.text() }
-        description = document
-            .selectFirst("ul.fed-part-rows li.fed-col-xs12.fed-show-md-block .fed-part-esan")
-            ?.ownText()
-        status = when (document.selectFirst("span.fed-text-muted:contains($statusTitle) + a")?.text()) {
-            statusOngoing -> SManga.ONGOING
-            statusCompleted -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = document.selectFirst("h1.fed-part-eone")!!.text()
+            thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-original")
+            author = document.selectFirst("span.fed-text-muted:contains($authorTitle) + a")?.text()
+            genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a").joinToString { it.text() }
+            description =
+                document
+                    .selectFirst("ul.fed-part-rows li.fed-col-xs12.fed-show-md-block .fed-part-esan")
+                    ?.ownText()
+            status =
+                when (document.selectFirst("span.fed-text-muted:contains($statusTitle) + a")?.text()) {
+                    statusOngoing -> SManga.ONGOING
+                    statusCompleted -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
-    }
 
     override fun chapterListSelector(): String = "div:not(.fed-hidden) > div.all_data_list > ul.fed-part-rows a"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        name = element.attr("title")
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            name = element.attr("title")
+        }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(document: Document): List<Page> {
@@ -222,27 +240,29 @@ abstract class ColaManga(
             throw Exception(intl.timedOutDecryptingImageLinks)
         }
 
-        val key = if (jsInterface.keyType.isNotEmpty()) {
-            keyMapping[jsInterface.keyType]
-                ?: throw Exception(intl.couldNotFindKey(jsInterface.keyType))
-        } else {
-            jsInterface.key
-        }
+        val key =
+            if (jsInterface.keyType.isNotEmpty()) {
+                keyMapping[jsInterface.keyType]
+                    ?: throw Exception(intl.couldNotFindKey(jsInterface.keyType))
+            } else {
+                jsInterface.key
+            }
 
         return jsInterface.images.mapIndexed { i, it ->
-            val imageUrl = buildString(it.length + 6) {
-                if (it.startsWith("//")) {
-                    append("https:")
-                }
+            val imageUrl =
+                buildString(it.length + 6) {
+                    if (it.startsWith("//")) {
+                        append("https:")
+                    }
 
-                append(it)
+                    append(it)
 
-                if (key.isNotEmpty()) {
-                    append("#")
-                    append(ColaMangaImageInterceptor.KEY_PREFIX)
-                    append(key)
+                    if (key.isNotEmpty()) {
+                        append("#")
+                        append(ColaMangaImageInterceptor.KEY_PREFIX)
+                        append(key)
+                    }
                 }
-            }
 
             Page(i, imageUrl = imageUrl)
         }
@@ -250,52 +270,66 @@ abstract class ColaManga(
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun getFilterList() = FilterList(
-        SearchTypeFilter(intl),
-    )
+    override fun getFilterList() =
+        FilterList(
+            SearchTypeFilter(intl),
+        )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = RATE_LIMIT_PREF_KEY
-            title = intl.rateLimitPrefTitle
-            summary = intl.rateLimitPrefSummary(RATE_LIMIT_PREF_DEFAULT)
-            entries = RATE_LIMIT_PREF_ENTRIES
-            entryValues = RATE_LIMIT_PREF_ENTRIES
+        ListPreference(screen.context)
+            .apply {
+                key = RATE_LIMIT_PREF_KEY
+                title = intl.rateLimitPrefTitle
+                summary = intl.rateLimitPrefSummary(RATE_LIMIT_PREF_DEFAULT)
+                entries = RATE_LIMIT_PREF_ENTRIES
+                entryValues = RATE_LIMIT_PREF_ENTRIES
 
-            setDefaultValue(RATE_LIMIT_PREF_DEFAULT)
-        }.also(screen::addPreference)
+                setDefaultValue(RATE_LIMIT_PREF_DEFAULT)
+            }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
-            key = RATE_LIMIT_PERIOD_PREF_KEY
-            title = intl.rateLimitPeriodPrefTitle
-            summary = intl.rateLimitPeriodPrefSummary(RATE_LIMIT_PERIOD_PREF_DEFAULT)
-            entries = RATE_LIMIT_PERIOD_PREF_ENTRIES
-            entryValues = RATE_LIMIT_PERIOD_PREF_ENTRIES
+        ListPreference(screen.context)
+            .apply {
+                key = RATE_LIMIT_PERIOD_PREF_KEY
+                title = intl.rateLimitPeriodPrefTitle
+                summary = intl.rateLimitPeriodPrefSummary(RATE_LIMIT_PERIOD_PREF_DEFAULT)
+                entries = RATE_LIMIT_PERIOD_PREF_ENTRIES
+                entryValues = RATE_LIMIT_PERIOD_PREF_ENTRIES
 
-            setDefaultValue(RATE_LIMIT_PERIOD_PREF_DEFAULT)
-        }.also(screen::addPreference)
+                setDefaultValue(RATE_LIMIT_PERIOD_PREF_DEFAULT)
+            }.also(screen::addPreference)
     }
 
-    private val keyMappingRegex = Regex("""if\s*\(\s*([a-zA-Z0-9_]+)\s*==\s*(?<keyType>\d+)\s*\)\s*\{\s*return\s*'(?<key>[a-zA-Z0-9_]+)'\s*;""")
+    private val keyMappingRegex =
+        Regex("""if\s*\(\s*([a-zA-Z0-9_]+)\s*==\s*(?<keyType>\d+)\s*\)\s*\{\s*return\s*'(?<key>[a-zA-Z0-9_]+)'\s*;""")
 
     private val keyMapping by lazy {
-        val obfuscatedReadJs = client.newCall(GET("$baseUrl/js/manga.read.js")).execute().body.string()
-        val readJs = Deobfuscator.deobfuscateScript(obfuscatedReadJs)
-            ?: throw Exception(intl.couldNotDeobufscateScript)
+        val obfuscatedReadJs =
+            client
+                .newCall(GET("$baseUrl/js/manga.read.js"))
+                .execute()
+                .body
+                .string()
+        val readJs =
+            Deobfuscator.deobfuscateScript(obfuscatedReadJs)
+                ?: throw Exception(intl.couldNotDeobufscateScript)
 
         keyMappingRegex.findAll(readJs).associate { it.groups["keyType"]!!.value to it.groups["key"]!!.value }
     }
 
-    private fun randomString() = buildString(15) {
-        val charPool = ('a'..'z') + ('A'..'Z')
+    private fun randomString() =
+        buildString(15) {
+            val charPool = ('a'..'z') + ('A'..'Z')
 
-        for (i in 0 until 15) {
-            append(charPool.random())
+            for (i in 0 until 15) {
+                append(charPool.random())
+            }
         }
-    }
 
     @Suppress("UNUSED")
-    private class JsInterface(private val latch: CountDownLatch, private val json: Json) {
+    private class JsInterface(
+        private val latch: CountDownLatch,
+        private val json: Json,
+    ) {
         var images: List<String> = listOf()
             private set
 
@@ -306,7 +340,10 @@ abstract class ColaManga(
             private set
 
         @JavascriptInterface
-        fun passData(rawData: String, keyType: String) {
+        fun passData(
+            rawData: String,
+            keyType: String,
+        ) {
             val data = json.parseToJsonElement(rawData).jsonObject
 
             images = data["images"]!!.jsonArray.map { it.jsonPrimitive.content }

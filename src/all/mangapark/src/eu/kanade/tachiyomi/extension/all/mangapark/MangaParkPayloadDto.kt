@@ -10,7 +10,9 @@ class GraphQL<T>(
 )
 
 @Serializable
-class SearchVariables(private val select: SearchPayload)
+class SearchVariables(
+    private val select: SearchPayload,
+)
 
 @Serializable
 class SearchPayload(
@@ -28,4 +30,6 @@ class SearchPayload(
 )
 
 @Serializable
-class IdVariables(private val id: String)
+class IdVariables(
+    private val id: String,
+)

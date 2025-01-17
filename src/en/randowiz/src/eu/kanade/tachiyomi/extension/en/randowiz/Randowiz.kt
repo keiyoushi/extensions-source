@@ -17,7 +17,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Randowiz : ParsedHttpSource() {
-
     override val name = "Randowiz"
 
     override val baseUrl = "https://randowis.com"
@@ -26,8 +25,8 @@ class Randowiz : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        Observable.just(
             MangasPage(
                 listOf(
                     SManga.create().apply {
@@ -67,38 +66,42 @@ class Randowiz : ParsedHttpSource() {
                 false,
             ),
         )
-    }
 
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> = fetchPopularManga(page).map {
-        MangasPage(
-            it.mangas.filter { manga ->
-                manga.title.contains(
-                    query,
-                    ignoreCase = true,
-                )
-            },
-            false,
-        )
-    }
+    ): Observable<MangasPage> =
+        fetchPopularManga(page).map {
+            MangasPage(
+                it.mangas.filter { manga ->
+                    manga.title.contains(
+                        query,
+                        ignoreCase = true,
+                    )
+                },
+                false,
+            )
+        }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val chapters = document.select(chapterListSelector())
-            .map { chapterFromElement(it) }
-            .toMutableList()
+        val chapters =
+            document
+                .select(chapterListSelector())
+                .map { chapterFromElement(it) }
+                .toMutableList()
         var next = document.selectFirst(".next")?.attr("href") ?: ""
 
         while (next.isNotEmpty()) {
             val nextDocument = client.newCall(GET(next, headers)).execute().asJsoup()
 
-            chapters += nextDocument.select(chapterListSelector())
-                .map { chapterFromElement(it) }
+            chapters +=
+                nextDocument
+                    .select(chapterListSelector())
+                    .map { chapterFromElement(it) }
             next = nextDocument.selectFirst(".next")?.attr("href") ?: ""
         }
 
@@ -137,8 +140,11 @@ class Randowiz : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
@@ -154,9 +160,7 @@ class Randowiz : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    private fun parseDate(dateStr: String): Long {
-        return runCatching { DATE_FORMATTER.parse(dateStr)?.time }.getOrNull() ?: 0L
-    }
+    private fun parseDate(dateStr: String): Long = runCatching { DATE_FORMATTER.parse(dateStr)?.time }.getOrNull() ?: 0L
 
     companion object {
         private val DATE_FORMATTER by lazy {

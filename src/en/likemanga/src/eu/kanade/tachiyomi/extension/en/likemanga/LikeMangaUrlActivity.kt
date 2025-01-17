@@ -14,11 +14,12 @@ class LikeMangaUrlActivity : Activity() {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 0) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${LikeManga.URL_SEARCH_PREFIX}${pathSegments[0]}")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${LikeManga.URL_SEARCH_PREFIX}${pathSegments[0]}")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

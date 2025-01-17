@@ -14,7 +14,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class MangaPlex : ParsedHttpSource() {
-
     override val name = "MangaPlex"
     override val baseUrl = "https://mangaplex.com"
     override val lang = "en"
@@ -22,9 +21,7 @@ class MangaPlex : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/mangas/page/$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/mangas/page/$page", headers)
 
     override fun latestUpdatesNextPageSelector() = ".pages-nav a:contains(Next)"
 
@@ -35,10 +32,25 @@ class MangaPlex : ParsedHttpSource() {
 
         manga.thumbnail_url = element.select(".post-thumb img").attr("src")
         // using search for manga page and chapter list
-        manga.url = element.select("h3.post-title a").attr("href").substringBeforeLast("-chapter").replace("$baseUrl/", "/search/").replace("-", "+")
-        val mangaTitleSelector = element.select(".post-details p.post-excerpt").text().substringAfter("Read ").substringBefore(" Chapter")
+        manga.url =
+            element
+                .select(
+                    "h3.post-title a",
+                ).attr("href")
+                .substringBeforeLast("-chapter")
+                .replace("$baseUrl/", "/search/")
+                .replace("-", "+")
+        val mangaTitleSelector =
+            element
+                .select(".post-details p.post-excerpt")
+                .text()
+                .substringAfter("Read ")
+                .substringBefore(" Chapter")
         manga.title =
-            if (mangaTitleSelector.contains("manga", true) || mangaTitleSelector.contains("manhwa", true) || mangaTitleSelector.contains("manhua", true)) {
+            if (mangaTitleSelector.contains("manga", true) ||
+                mangaTitleSelector.contains("manhwa", true) ||
+                mangaTitleSelector.contains("manhua", true)
+            ) {
                 mangaTitleSelector.substringBeforeLast(" ")
             } else {
                 mangaTitleSelector
@@ -56,9 +68,11 @@ class MangaPlex : ParsedHttpSource() {
     override fun popularMangaNextPageSelector(): String = latestUpdatesNextPageSelector()
 
     // search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search/$query/page/$page")
-    }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = GET("$baseUrl/search/$query/page/$page")
 
     override fun searchMangaSelector() = "#posts-container li:has(h5:contains(Manga)):has(p:contains(Chapter))"
 
@@ -72,23 +86,30 @@ class MangaPlex : ParsedHttpSource() {
     // chapters
     override fun chapterListRequest(manga: SManga) = chapterListRequest(manga.url, 1)
 
-    private fun chapterListRequest(mangaUrl: String, page: Int): Request {
+    private fun chapterListRequest(
+        mangaUrl: String,
+        page: Int,
+    ): Request {
         val mangaUrlClean = mangaUrl.removePrefix(baseUrl)
         return GET("$baseUrl$mangaUrlClean/page/$page", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         var document = response.asJsoup()
-        val chapters = document.select(chapterListSelector())
-            .map(::chapterFromElement)
-            .toMutableList()
+        val chapters =
+            document
+                .select(chapterListSelector())
+                .map(::chapterFromElement)
+                .toMutableList()
         var nextPage = 2
 
         while (document.select(paginationNextPageSelector).isNotEmpty()) {
             val currentPage = document.select("meta[property=\"og:url\"]").attr("content")
             document = client.newCall(chapterListRequest(currentPage, nextPage)).execute().asJsoup()
-            chapters += document.select(chapterListSelector())
-                .map(::chapterFromElement)
+            chapters +=
+                document
+                    .select(chapterListSelector())
+                    .map(::chapterFromElement)
             nextPage++
         }
 
@@ -114,11 +135,12 @@ class MangaPlex : ParsedHttpSource() {
     }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#the-post .entry-content > img").toList()
+    override fun pageListParse(document: Document): List<Page> =
+        document
+            .select("#the-post .entry-content > img")
+            .toList()
             .filter { it.attr("src").isNotEmpty() }
             .mapIndexed { i, el -> Page(i, "", el.attr("src")) }
-    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

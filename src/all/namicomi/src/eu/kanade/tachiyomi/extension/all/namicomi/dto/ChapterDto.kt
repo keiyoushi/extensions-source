@@ -8,7 +8,9 @@ typealias ChapterListDto = PaginatedResponseDto<ChapterDataDto>
 
 @Serializable
 @SerialName(NamiComiConstants.chapter)
-class ChapterDataDto(override val attributes: ChapterAttributesDto? = null) : EntityDto()
+class ChapterDataDto(
+    override val attributes: ChapterAttributesDto? = null,
+) : EntityDto()
 
 @Serializable
 class ChapterAttributesDto(

@@ -8,7 +8,6 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class MangaUpUrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -17,11 +16,12 @@ class MangaUpUrlActivity : Activity() {
             val query = pathSegments[1]
 
             if (query != null) {
-                val mainIntent = Intent().apply {
-                    action = "eu.kanade.tachiyomi.SEARCH"
-                    putExtra("query", MangaUp.PREFIX_ID_SEARCH + query)
-                    putExtra("filter", packageName)
-                }
+                val mainIntent =
+                    Intent().apply {
+                        action = "eu.kanade.tachiyomi.SEARCH"
+                        putExtra("query", MangaUp.PREFIX_ID_SEARCH + query)
+                        putExtra("filter", packageName)
+                    }
 
                 try {
                     startActivity(mainIntent)

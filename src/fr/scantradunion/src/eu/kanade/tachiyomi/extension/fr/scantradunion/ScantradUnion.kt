@@ -27,7 +27,13 @@ class ScantradUnion : ParsedHttpSource() {
         val chapterNumberStr = element.select(".chapter-number").text()
         // We don't have a css selector to select the date directly, but we know that it will always
         // be the third child of a .name-chapter.
-        val dateUploadStr = element.select(".name-chapter").first()!!.children().elementAt(2).text()
+        val dateUploadStr =
+            element
+                .select(".name-chapter")
+                .first()!!
+                .children()
+                .elementAt(2)
+                .text()
         val chapterName = element.select(".chapter-name").text()
         // The only way to get the chapter url is to check all .btnlel and take the one starting with https://...
         val url = element.select(".btnlel").map { it.attr("href") }.first { it.startsWith("https://scantrad-union.com/read/") }
@@ -64,9 +70,7 @@ class ScantradUnion : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesSelector() = ".dernieresmaj .colonne"
 
@@ -78,8 +82,10 @@ class ScantradUnion : ParsedHttpSource() {
         manga.title = formatMangaTitle(title)
         manga.thumbnail_url = document.select(".projet-image img").attr("src")
         manga.description = document.select(".sContent").text()
-        manga.author = document.select("div.project-details a[href*=auteur]")
-            .joinToString(", ") { teamElem -> teamElem.text() }
+        manga.author =
+            document
+                .select("div.project-details a[href*=auteur]")
+                .joinToString(", ") { teamElem -> teamElem.text() }
         // Cannot distinguish authors and artists because they are in the same section.
         manga.artist = manga.author
         manga.status = mapMangaStatusStringToConst(statusStr)
@@ -87,8 +93,9 @@ class ScantradUnion : ParsedHttpSource() {
         return manga
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#webtoon a img")
+    override fun pageListParse(document: Document): List<Page> =
+        document
+            .select("#webtoon a img")
             .map { imgElem: Element ->
                 // In webtoon mode, images have an src attribute only.
                 // In manga mode, images have a data-src attribute that contains the src
@@ -105,20 +112,21 @@ class ScantradUnion : ParsedHttpSource() {
             .mapIndexed { index: Int, imgUrl: String ->
                 Page(index, "", imgUrl)
             }
-    }
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         manga.title = formatMangaTitle(element.select(".index-top3-title").text())
         manga.setUrlWithoutDomain(element.attr("href"))
-        manga.thumbnail_url = element.select(".index-top3-bg").attr("style")
-            .substringAfter("background:url('").substringBefore("')")
+        manga.thumbnail_url =
+            element
+                .select(".index-top3-bg")
+                .attr("style")
+                .substringAfter("background:url('")
+                .substringBefore("')")
         return manga
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/projets/", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/projets/", headers)
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -136,36 +144,36 @@ class ScantradUnion : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val searchUrl = "$baseUrl/?s=$query$searchUrlSuffix"
         return GET(searchUrl, headers)
     }
 
     override fun searchMangaSelector(): String = "article.post-outer"
 
-    private fun formatMangaNumber(value: String): String {
-        return value.removePrefix("#").trim()
-    }
+    private fun formatMangaNumber(value: String): String = value.removePrefix("#").trim()
 
     private fun formatMangaTitle(value: String): String {
         // Translations produced by Scantrad Union partners are prefixed with "[Partenaire] ".
         return value.removePrefix("[Partenaire]").trim()
     }
 
-    private fun parseFrenchDateFromString(value: String): Long {
-        return try {
+    private fun parseFrenchDateFromString(value: String): Long =
+        try {
             frenchDateFormat.parse(value)?.time ?: 0L
         } catch (ex: ParseException) {
             0L
         }
-    }
 
-    private fun mapMangaStatusStringToConst(status: String): Int {
-        return when (status.trim().lowercase(Locale.FRENCH)) {
+    private fun mapMangaStatusStringToConst(status: String): Int =
+        when (status.trim().lowercase(Locale.FRENCH)) {
             "en cours" -> SManga.ONGOING
             "terminé" -> SManga.COMPLETED
             "licencié" -> SManga.LICENSED
             else -> SManga.UNKNOWN
         }
-    }
 }

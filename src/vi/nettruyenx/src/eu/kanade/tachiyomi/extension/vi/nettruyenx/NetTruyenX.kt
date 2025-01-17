@@ -6,18 +6,19 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NetTruyenX : WPComics(
-    "NetTruyenX (unoriginal)",
-    "https://nettruyenx.com",
-    "vi",
-    dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
-    gmtOffset = null,
-) {
+class NetTruyenX :
+    WPComics(
+        "NetTruyenX (unoriginal)",
+        "https://nettruyenx.com",
+        "vi",
+        dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
+        gmtOffset = null,
+    ) {
     override val popularPath = "truyen-tranh-hot"
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
             document.select("article#item-detail").let { info ->
                 author = info.select("li.author p.col-xs-8").text()
                 status = info.select("li.status p.col-xs-8").text().toStatus()
@@ -28,5 +29,4 @@ class NetTruyenX : WPComics(
                 thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
             }
         }
-    }
 }

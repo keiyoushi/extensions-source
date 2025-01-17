@@ -26,7 +26,6 @@ data class SimpleMangaDto(
 data class CompleteMangaDto(
     val id: Int,
     @SerialName("url") val slug: String,
-
     val title: String,
     val poster: String? = null,
     val cover: String? = null,
@@ -41,14 +40,20 @@ data class CompleteMangaDto(
     val imagePath = "/img/imgs/${poster ?: cover ?: "nobackground.jpg"}"
 
     @Serializable
-    data class Genre(val genre: String)
+    data class Genre(
+        val genre: String,
+    )
 
     @Serializable
-    data class Title(val title: String)
+    data class Title(
+        val title: String,
+    )
 }
 
 @Serializable
-data class ChapterListDto(val chapters: List<ChapterDto>)
+data class ChapterListDto(
+    val chapters: List<ChapterDto>,
+)
 
 @Serializable
 data class ChapterDto(
@@ -58,13 +63,19 @@ data class ChapterDto(
     private val versions: List<Version>,
 ) {
     @Serializable
-    data class Version(val id: Int)
+    data class Version(
+        val id: Int,
+    )
 
     val versionId = versions.first().id
 }
 
 @Serializable
-data class PageListDto(val pages: List<PageDto>)
+data class PageListDto(
+    val pages: List<PageDto>,
+)
 
 @Serializable
-data class PageDto(val url: String)
+data class PageDto(
+    val url: String,
+)

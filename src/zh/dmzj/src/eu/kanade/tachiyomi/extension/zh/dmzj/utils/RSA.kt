@@ -23,7 +23,10 @@ object RSA {
     }
 
     @Synchronized // because Cipher is not thread-safe
-    fun decrypt(encrypted: String, key: PrivateKey): ByteArray {
+    fun decrypt(
+        encrypted: String,
+        key: PrivateKey,
+    ): ByteArray {
         val cipher = this.cipher
         cipher.init(Cipher.DECRYPT_MODE, key) // always reset in case of illegal state
         val encryptedData = Base64.decode(encrypted, Base64.DEFAULT)

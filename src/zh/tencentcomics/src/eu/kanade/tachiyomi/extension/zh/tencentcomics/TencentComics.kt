@@ -26,7 +26,6 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 class TencentComics : ParsedHttpSource() {
-
     override val name = "腾讯动漫"
 
     // its easier to parse the mobile version of the website
@@ -44,38 +43,31 @@ class TencentComics : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$desktopUrl/Comic/comicInfo/" + manga.url.substringAfter("/index/"), headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request =
+        GET("$desktopUrl/Comic/comicInfo/" + manga.url.substringAfter("/index/"), headers)
 
     override fun chapterListSelector(): String = ".works-chapter-item"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
             setUrlWithoutDomain(element.select("a").attr("abs:href"))
             name = (if (element.isLockedChapter()) "\uD83D\uDD12 " else "") + element.text().trim()
         }
-    }
 
-    private fun Element.isLockedChapter(): Boolean {
-        return this.selectFirst(".ui-icon-pay") != null
-    }
+    private fun Element.isLockedChapter(): Boolean = this.selectFirst(".ui-icon-pay") != null
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun popularMangaSelector(): String = "ul.ret-search-list.clearfix > li"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             url = "/comic/index/" + element.select("div > a").attr("href").substringAfter("/Comic/comicInfo/")
             title = element.select("div > a").attr("title").trim()
             thumbnail_url = element.select("div > a > img").attr("data-original")
             author = element.select("div > p.ret-works-author").text().trim()
             description = element.select("div > p.ret-works-decs").text().trim()
         }
-    }
 
     override fun popularMangaNextPageSelector() = throw java.lang.UnsupportedOperationException("Not used.")
 
@@ -83,9 +75,10 @@ class TencentComics : ParsedHttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
-        }
+        val mangas =
+            document.select(popularMangaSelector()).map { element ->
+                popularMangaFromElement(element)
+            }
         // next page buttons do not exist
         // even if the total searches happen to be 12 the website fills the next page anyway
         return MangasPage(mangas, mangas.size == 12)
@@ -93,36 +86,33 @@ class TencentComics : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = "ul.ret-search-list.clearfix > li"
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector() = throw java.lang.UnsupportedOperationException("Not used.")
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$desktopUrl/Comic/all/search/time/page/$page", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // desktop version of the site has more info
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$desktopUrl/Comic/comicInfo/" + manga.url.substringAfter("/index/"), headers)
+    override fun mangaDetailsRequest(manga: SManga): Request =
+        GET("$desktopUrl/Comic/comicInfo/" + manga.url.substringAfter("/index/"), headers)
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
             thumbnail_url = document.select("div.works-cover.ui-left > a > img").attr("src")
             title = document.select("h2.works-intro-title.ui-left > strong").text().trim()
             description = document.select("p.works-intro-short").text().trim()
             author = document.select("p.works-intro-digi > span > em").text().trim()
-            status = when (document.select("label.works-intro-status").text().trim()) {
-                "连载中" -> SManga.ONGOING
-                "已完结" -> SManga.COMPLETED
-                "連載中" -> SManga.ONGOING
-                "已完結" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+            status =
+                when (document.select("label.works-intro-status").text().trim()) {
+                    "连载中" -> SManga.ONGOING
+                    "已完结" -> SManga.COMPLETED
+                    "連載中" -> SManga.ONGOING
+                    "已完結" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
-    }
 
     // convert url to desktop since some chapters are blocked on mobile
     override fun pageListRequest(chapter: SChapter): Request = GET(desktopUrl + chapter.url, headers)
@@ -144,14 +134,34 @@ class TencentComics : ParsedHttpSource() {
         var html = document.html()
 
         // Sometimes the nonce has commands that are unrunnable, just reload and hope
-        var nonce = html.substringAfterLast("window[").substringAfter("] = ").substringBefore("</script>").trim()
+        var nonce =
+            html
+                .substringAfterLast("window[")
+                .substringAfter("] = ")
+                .substringBefore("</script>")
+                .trim()
 
         while (nonce.contains("document") || nonce.contains("window")) {
-            html = client.newCall(GET(desktopUrl + document.select("li.now-reading > a").attr("href"), headers)).execute().body.string()
-            nonce = html.substringAfterLast("window[").substringAfter("] = ").substringBefore("</script>").trim()
+            html =
+                client
+                    .newCall(GET(desktopUrl + document.select("li.now-reading > a").attr("href"), headers))
+                    .execute()
+                    .body
+                    .string()
+            nonce =
+                html
+                    .substringAfterLast("window[")
+                    .substringAfter("] = ")
+                    .substringBefore("</script>")
+                    .trim()
         }
 
-        val raw = html.substringAfterLast("var DATA =").substringBefore("PRELOAD_NUM").trim().replace(Regex("^\'|\',$"), "")
+        val raw =
+            html
+                .substringAfterLast("var DATA =")
+                .substringBefore("PRELOAD_NUM")
+                .trim()
+                .replace(Regex("^\'|\',$"), "")
         val decodePrefix = "var raw = \"$raw\"; var nonce = $nonce"
         val full = QuickJs.create().use { it.evaluate(decodePrefix + jsDecodeFunction).toString() }
         val chapterData = json.parseToJsonElement(String(Base64.decode(full, Base64.DEFAULT))).jsonObject
@@ -169,38 +179,53 @@ class TencentComics : ParsedHttpSource() {
 
     override fun searchMangaSelector() = "ul > li.comic-item > a"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun searchMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             url = element.attr("href")
             title = element.select("div > strong").text().trim()
             thumbnail_url = element.select("div > img").attr("src")
             description = element.select("div > small.comic-desc").text().trim()
-            genre = element.select("div > small.comic-tag").text().trim().replace(" ", ", ")
+            genre =
+                element
+                    .select("div > small.comic-tag")
+                    .text()
+                    .trim()
+                    .replace(" ", ", ")
         }
-    }
 
     override fun searchMangaNextPageSelector() = throw java.lang.UnsupportedOperationException("Not used.")
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(ID_SEARCH_PREFIX)) {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        if (query.startsWith(ID_SEARCH_PREFIX)) {
             val id = query.removePrefix(ID_SEARCH_PREFIX)
-            client.newCall(searchMangaByIdRequest(id))
+            client
+                .newCall(searchMangaByIdRequest(id))
                 .asObservableSuccess()
                 .map { response -> searchMangaByIdParse(response, id) }
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/comic/index/id/$id", headers)
 
-    private fun searchMangaByIdParse(response: Response, id: String): MangasPage {
+    private fun searchMangaByIdParse(
+        response: Response,
+        id: String,
+    ): MangasPage {
         val sManga = mangaDetailsParse(response)
         sManga.url = "/comic/index/id/$id"
         return MangasPage(listOf(sManga), false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         // impossible to search a manga use the filters
         return if (query.isNotEmpty()) {
             GET("$baseUrl/search/result?word=$query&page=$page", headers)
@@ -234,83 +259,94 @@ class TencentComics : ParsedHttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         // Normal search
-        return if (response.request.url.host.contains("m.ac.qq.com")) {
-            val mangas = document.select(searchMangaSelector()).map { element ->
-                searchMangaFromElement(element)
-            }
+        return if (response.request.url.host
+                .contains("m.ac.qq.com")
+        ) {
+            val mangas =
+                document.select(searchMangaSelector()).map { element ->
+                    searchMangaFromElement(element)
+                }
             MangasPage(mangas, mangas.size == 10)
             // Filter search
         } else {
-            val mangas = document.select(popularMangaSelector()).map { element ->
-                popularMangaFromElement(element)
-            }
+            val mangas =
+                document.select(popularMangaSelector()).map { element ->
+                    popularMangaFromElement(element)
+                }
             // next page buttons do not exist
             // even if the total searches happen to be 12 the website fills the next page anyway
             MangasPage(mangas, mangas.size == 12)
         }
     }
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("注意：不影響按標題搜索"),
-        PopularityFilter(),
-        VipFilter(),
-        StatusFilter(),
-        GenreFilter(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            Filter.Header("注意：不影響按標題搜索"),
+            PopularityFilter(),
+            VipFilter(),
+            StatusFilter(),
+            GenreFilter(),
+        )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(
+        displayName: String,
+        val vals: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
-    private class PopularityFilter : UriPartFilter(
-        "热门人气/更新时间",
-        arrayOf(
-            Pair("热门人气", "hot/"),
-            Pair("更新时间", "time/"),
-        ),
-    )
+    private class PopularityFilter :
+        UriPartFilter(
+            "热门人气/更新时间",
+            arrayOf(
+                Pair("热门人气", "hot/"),
+                Pair("更新时间", "time/"),
+            ),
+        )
 
-    private class VipFilter : UriPartFilter(
-        "属性",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("付费", "vip/2/"),
-            Pair("免费", "vip/1/"),
-        ),
-    )
+    private class VipFilter :
+        UriPartFilter(
+            "属性",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("付费", "vip/2/"),
+                Pair("免费", "vip/1/"),
+            ),
+        )
 
-    private class StatusFilter : UriPartFilter(
-        "进度",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("连载中", "finish/1/"),
-            Pair("已完结", "finish/2/"),
-        ),
-    )
+    private class StatusFilter :
+        UriPartFilter(
+            "进度",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("连载中", "finish/1/"),
+                Pair("已完结", "finish/2/"),
+            ),
+        )
 
-    private class GenreFilter : UriPartFilter(
-        "标签",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("恋爱", "105"),
-            Pair("玄幻", "101"),
-            Pair("异能", "103"),
-            Pair("恐怖", "110"),
-            Pair("剧情", "106"),
-            Pair("科幻", "108"),
-            Pair("悬疑", "112"),
-            Pair("奇幻", "102"),
-            Pair("冒险", "104"),
-            Pair("犯罪", "111"),
-            Pair("动作", "109"),
-            Pair("日常", "113"),
-            Pair("竞技", "114"),
-            Pair("武侠", "115"),
-            Pair("历史", "116"),
-            Pair("战争", "117"),
-        ),
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "标签",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("恋爱", "105"),
+                Pair("玄幻", "101"),
+                Pair("异能", "103"),
+                Pair("恐怖", "110"),
+                Pair("剧情", "106"),
+                Pair("科幻", "108"),
+                Pair("悬疑", "112"),
+                Pair("奇幻", "102"),
+                Pair("冒险", "104"),
+                Pair("犯罪", "111"),
+                Pair("动作", "109"),
+                Pair("日常", "113"),
+                Pair("竞技", "114"),
+                Pair("武侠", "115"),
+                Pair("历史", "116"),
+                Pair("战争", "117"),
+            ),
+        )
 
     companion object {
         const val ID_SEARCH_PREFIX = "id:"

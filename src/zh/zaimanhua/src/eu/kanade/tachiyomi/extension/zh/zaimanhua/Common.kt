@@ -9,19 +9,16 @@ import uy.kohesive.injekt.injectLazy
 
 val json: Json by injectLazy()
 
-inline fun <reified T> Response.parseAs(): T {
-    return json.decodeFromString(body.string())
-}
+inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-inline fun <reified T> ResponseBody.parseAs(): T {
-    return json.decodeFromString(this.string())
-}
+inline fun <reified T> ResponseBody.parseAs(): T = json.decodeFromString(this.string())
 
-fun parseStatus(status: String): Int = when (status) {
-    "连载中" -> SManga.ONGOING
-    "已完结" -> SManga.COMPLETED
-    else -> SManga.UNKNOWN
-}
+fun parseStatus(status: String): Int =
+    when (status) {
+        "连载中" -> SManga.ONGOING
+        "已完结" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
+    }
 
 private val chapterNameRegex = Regex("""(?:连载版?)?(\d[.\d]*)([话卷])?""")
 

@@ -15,7 +15,6 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.math.min
 
 object ImageInterceptor : Interceptor {
-
     private val memo = hashMapOf<Int, IntArray>()
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -26,7 +25,8 @@ object ImageInterceptor : Interceptor {
 
         val image = response.body.byteStream().use(::descramble)
         val body = image.toResponseBody("image/jpeg".toMediaType())
-        return response.newBuilder()
+        return response
+            .newBuilder()
             .body(body)
             .build()
     }
@@ -56,15 +56,16 @@ object ImageInterceptor : Interceptor {
         for (group in groups.values) {
             val size = group.size
 
-            val permutation = memo.getOrPut(size) {
-                // The key is actually "stay", but it's padded here in case the code is run in
-                // Oracle's JDK, where RC4 key is required to be at least 5 bytes
-                val random = SeedRandom("staystay")
+            val permutation =
+                memo.getOrPut(size) {
+                    // The key is actually "stay", but it's padded here in case the code is run in
+                    // Oracle's JDK, where RC4 key is required to be at least 5 bytes
+                    val random = SeedRandom("staystay")
 
-                // https://github.com/webcaetano/shuffle-seed
-                val indices = (0 until size).toMutableList()
-                IntArray(size) { indices.removeAt((random.nextDouble() * indices.size).toInt()) }
-            }
+                    // https://github.com/webcaetano/shuffle-seed
+                    val indices = (0 until size).toMutableList()
+                    IntArray(size) { indices.removeAt((random.nextDouble() * indices.size).toInt()) }
+                }
 
             for ((i, original) in permutation.withIndex()) {
                 val src = group[i]
@@ -82,18 +83,26 @@ object ImageInterceptor : Interceptor {
         return output.toByteArray()
     }
 
-    private class Piece(val x: Int, val y: Int, val w: Int, val h: Int)
+    private class Piece(
+        val x: Int,
+        val y: Int,
+        val w: Int,
+        val h: Int,
+    )
 
     // https://github.com/davidbau/seedrandom
-    private class SeedRandom(key: String) {
+    private class SeedRandom(
+        key: String,
+    ) {
         private val input = ByteArray(RC4_WIDTH)
         private val buffer = ByteArray(RC4_WIDTH)
         private var pos = RC4_WIDTH
 
-        private val rc4 = Cipher.getInstance("RC4").apply {
-            init(Cipher.ENCRYPT_MODE, SecretKeySpec(key.toByteArray(), "RC4"))
-            update(input, 0, RC4_WIDTH, buffer) // RC4-drop[256]
-        }
+        private val rc4 =
+            Cipher.getInstance("RC4").apply {
+                init(Cipher.ENCRYPT_MODE, SecretKeySpec(key.toByteArray(), "RC4"))
+                update(input, 0, RC4_WIDTH, buffer) // RC4-drop[256]
+            }
 
         fun nextDouble(): Double {
             var num = nextByte()

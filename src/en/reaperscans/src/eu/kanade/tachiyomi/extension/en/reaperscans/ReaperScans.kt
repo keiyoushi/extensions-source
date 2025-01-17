@@ -13,30 +13,38 @@ import java.util.Locale
 import java.util.TimeZone
 
 class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
-
     override val versionId = 3
 
-    override val client = super.client.newBuilder()
-        .rateLimit(1)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(1)
+            .build()
 
     override val useNewChapterEndpoint = true
     override val useNewQueryEndpoint = true
     override val enableLogin = true
-    override val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { this.timeZone = TimeZone.getTimeZone("UTC") }
+    override val dateFormat =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            this.timeZone =
+                TimeZone.getTimeZone("UTC")
+        }
     override val cdnUrl = "https://media.reaperscans.com/file/4SRBHm"
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/query".toHttpUrl().newBuilder()
-            .addQueryParameter("query_string", "")
-            .addQueryParameter(if (useNewQueryEndpoint) "status" else "series_status", "All")
-            .addQueryParameter("order", "desc")
-            .addQueryParameter("orderBy", "updated_at")
-            .addQueryParameter("series_type", "Comic")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("perPage", "12")
-            .addQueryParameter("tags_ids", "[]")
-            .addQueryParameter("adult", "true")
+        val url =
+            "$apiUrl/query"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("query_string", "")
+                .addQueryParameter(if (useNewQueryEndpoint) "status" else "series_status", "All")
+                .addQueryParameter("order", "desc")
+                .addQueryParameter("orderBy", "updated_at")
+                .addQueryParameter("series_type", "Comic")
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("perPage", "12")
+                .addQueryParameter("tags_ids", "[]")
+                .addQueryParameter("adult", "true")
 
         return GET(url.build(), headers)
     }
@@ -59,10 +67,11 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
         }
     }
 
-    override fun getSortProperties(): List<SortProperty> = listOf(
-        SortProperty(intl["sort_by_title"], "title"),
-        SortProperty(intl["sort_by_views"], "total_views"),
-        SortProperty(intl["sort_by_latest"], "updated_at"),
-        SortProperty(intl["sort_by_created_at"], "created_at"),
-    )
+    override fun getSortProperties(): List<SortProperty> =
+        listOf(
+            SortProperty(intl["sort_by_title"], "title"),
+            SortProperty(intl["sort_by_views"], "total_views"),
+            SortProperty(intl["sort_by_latest"], "updated_at"),
+            SortProperty(intl["sort_by_created_at"], "created_at"),
+        )
 }

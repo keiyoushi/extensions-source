@@ -29,7 +29,8 @@ class Hanime1 : ParsedHttpSource() {
         val requestUrl = response.request.url.toString()
         val document = response.asJsoup()
         val chapterList =
-            document.select("h3:containsOwn(相關集數列表) ~ div.comic-rows-videos-div")
+            document
+                .select("h3:containsOwn(相關集數列表) ~ div.comic-rows-videos-div")
                 .map { element ->
                     SChapter.create().apply {
                         val comicUrl = element.select("a").attr("href")
@@ -70,17 +71,26 @@ class Hanime1 : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga {
         val brief = document.select("h3.title.comics-metadata-top-row").first()?.parent()
         return SManga.create().apply {
-            brief?.select(".title.comics-metadata-top-row")?.first()?.text()?.let { title = it }
+            brief
+                ?.select(".title.comics-metadata-top-row")
+                ?.first()
+                ?.text()
+                ?.let { title = it }
             thumbnail_url =
-                brief?.parent()?.select("div.col-md-4 img")?.attr("data-srcset")?.extraSrc()
+                brief
+                    ?.parent()
+                    ?.select("div.col-md-4 img")
+                    ?.attr("data-srcset")
+                    ?.extraSrc()
             author = selectInfo("作者：", brief) ?: selectInfo("社團：", brief)
             genre = selectInfo("分類：", brief)
         }
     }
 
-    private fun selectInfo(key: String, brief: Element?): String? {
-        return brief?.select(":containsOwn($key)")?.select("div.no-select")?.text()
-    }
+    private fun selectInfo(
+        key: String,
+        brief: Element?,
+    ): String? = brief?.select(":containsOwn($key)")?.select("div.no-select")?.text()
 
     override fun pageListParse(document: Document): List<Page> {
         val currentImage = document.select("img#current-page-image")
@@ -104,11 +114,18 @@ class Hanime1 : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = "ul.pagination a[rel=next]"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchUrl = comicHomepage.toHttpUrl().newBuilder()
-            .addPathSegment("search")
-            .addQueryParameter("query", query)
-            .addQueryParameter("page", "$page")
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val searchUrl =
+            comicHomepage
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment("search")
+                .addQueryParameter("query", query)
+                .addQueryParameter("page", "$page")
         filters.filterIsInstance<SortFilter>().firstOrNull()?.selected?.let {
             searchUrl.addQueryParameter("sort", it)
         }
@@ -117,19 +134,17 @@ class Hanime1 : ParsedHttpSource() {
 
     override fun searchMangaSelector() = "div#comics-search-tag-top-row + div div.comic-rows-videos-div"
 
-    private fun comicDivToManga(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a").attr("href"))
-        title = element.select("div.comic-rows-videos-title").text()
-        thumbnail_url = element.select("img").attr("data-srcset").extraSrc()
-    }
+    private fun comicDivToManga(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.select("a").attr("href"))
+            title = element.select("div.comic-rows-videos-title").text()
+            thumbnail_url = element.select("img").attr("data-srcset").extraSrc()
+        }
 
-    private fun String.extraSrc(): String {
-        return split(",").first()
-    }
+    private fun String.extraSrc(): String = split(",").first()
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
+    override fun getFilterList(): FilterList =
+        FilterList(
             SortFilter(),
         )
-    }
 }

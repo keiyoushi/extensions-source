@@ -14,8 +14,9 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class WebviewInterceptor(private val baseUrl: String) : Interceptor {
-
+class WebviewInterceptor(
+    private val baseUrl: String,
+) : Interceptor {
     private val context: Application by injectLazy()
     private val handler by lazy { Handler(Looper.getMainLooper()) }
 
@@ -53,16 +54,20 @@ class WebviewInterceptor(private val baseUrl: String) : Interceptor {
                 loadWithOverviewMode = false
             }
 
-            webview.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                    if (request?.url.toString().contains("$baseUrl/api/verification")) {
-                        hasSetCookies = true
-                    } else if (request?.url.toString().contains(baseUrl) && hasSetCookies) {
-                        latch.countDown()
+            webview.webViewClient =
+                object : WebViewClient() {
+                    override fun shouldInterceptRequest(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                    ): WebResourceResponse? {
+                        if (request?.url.toString().contains("$baseUrl/api/verification")) {
+                            hasSetCookies = true
+                        } else if (request?.url.toString().contains(baseUrl) && hasSetCookies) {
+                            latch.countDown()
+                        }
+                        return super.shouldInterceptRequest(view, request)
                     }
-                    return super.shouldInterceptRequest(view, request)
                 }
-            }
 
             webview.loadUrl("$baseUrl/")
         }

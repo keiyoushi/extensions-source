@@ -22,7 +22,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
-class NoyAcg : HttpSource(), ConfigurableSource {
+class NoyAcg :
+    HttpSource(),
+    ConfigurableSource {
     override val name get() = "NoyAcg"
     override val lang get() = "zh"
     override val supportsLatest get() = true
@@ -32,14 +34,18 @@ class NoyAcg : HttpSource(), ConfigurableSource {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).imageCdn
     }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
-        val body = FormBody.Builder()
-            .addEncoded("page", page.toString())
-            .addEncoded("type", "day")
-            .build()
+        val body =
+            FormBody
+                .Builder()
+                .addEncoded("page", page.toString())
+                .addEncoded("type", "day")
+                .build()
         return POST("$baseUrl/api/readLeaderboard", headers, body)
     }
 
@@ -53,9 +59,11 @@ class NoyAcg : HttpSource(), ConfigurableSource {
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val body = FormBody.Builder()
-            .addEncoded("page", page.toString())
-            .build()
+        val body =
+            FormBody
+                .Builder()
+                .addEncoded("page", page.toString())
+                .build()
         return POST("$baseUrl/api/booklist_v2", headers, body)
     }
 
@@ -63,20 +71,28 @@ class NoyAcg : HttpSource(), ConfigurableSource {
 
     override fun getFilterList() = getFilterListInternal()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val filters = filters.ifEmpty { getFilterListInternal() }
-        val builder = FormBody.Builder()
-            .addEncoded("page", page.toString())
+        val builder =
+            FormBody
+                .Builder()
+                .addEncoded("page", page.toString())
         return if (query.isNotBlank()) {
             builder.add("info", query)
             for (filter in filters) if (filter is SearchFilter) filter.addTo(builder)
             POST("$baseUrl/api/search_v2", headers, builder.build())
         } else {
             var path: String? = null
-            for (filter in filters) when (filter) {
-                is RankingFilter -> path = filter.path
-                is RankingRangeFilter -> filter.addTo(builder)
-                else -> {}
+            for (filter in filters) {
+                when (filter) {
+                    is RankingFilter -> path = filter.path
+                    is RankingRangeFilter -> filter.addTo(builder)
+                    else -> {}
+                }
             }
             POST("$baseUrl/api/${path!!}", headers, builder.build())
         }
@@ -90,9 +106,11 @@ class NoyAcg : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val body = FormBody.Builder()
-            .addEncoded("bid", manga.url)
-            .build()
+        val body =
+            FormBody
+                .Builder()
+                .addEncoded("bid", manga.url)
+                .build()
         val request = POST("$baseUrl/api/getbookinfo", headers, body)
         return client.newCall(request).asObservableSuccess().map {
             it.parseAs<MangaDto>().toSManga(imageCdn)
@@ -104,12 +122,13 @@ class NoyAcg : HttpSource(), ConfigurableSource {
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val pageCount = manga.pageCount
         if (pageCount <= 0) return Observable.just(emptyList())
-        val chapter = SChapter.create().apply {
-            url = "${manga.url}#$pageCount"
-            name = "单章节"
-            date_upload = manga.timestamp
-            chapter_number = -2f
-        }
+        val chapter =
+            SChapter.create().apply {
+                url = "${manga.url}#$pageCount"
+                name = "单章节"
+                date_upload = manga.timestamp
+                chapter_number = -2f
+            }
         return Observable.just(listOf(chapter))
     }
 
@@ -122,9 +141,10 @@ class NoyAcg : HttpSource(), ConfigurableSource {
         val mangaId = chapter.url.substringBefore('#')
         val pageCount = chapter.url.substringAfter('#').toInt()
         val imageCdn = imageCdn
-        val pageList = List(pageCount) {
-            Page(it, imageUrl = "$imageCdn/$mangaId/${it + 1}.webp")
-        }
+        val pageList =
+            List(pageCount) {
+                Page(it, imageUrl = "$imageCdn/$mangaId/${it + 1}.webp")
+            }
         return Observable.just(pageList)
     }
 
@@ -132,13 +152,14 @@ class NoyAcg : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    private inline fun <reified T> Response.parseAs(): T = try {
-        json.decodeFromStream(body.byteStream())
-    } catch (e: Throwable) {
-        throw Exception("请在 WebView 中登录")
-    } finally {
-        close()
-    }
+    private inline fun <reified T> Response.parseAs(): T =
+        try {
+            json.decodeFromStream(body.byteStream())
+        } catch (e: Throwable) {
+            throw Exception("请在 WebView 中登录")
+        } finally {
+            close()
+        }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         getPreferencesInternal(screen.context).forEach(screen::addPreference)

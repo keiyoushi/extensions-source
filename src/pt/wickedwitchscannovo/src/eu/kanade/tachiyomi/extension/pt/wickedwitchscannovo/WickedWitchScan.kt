@@ -8,7 +8,9 @@ class WickedWitchScan : PeachScan("Wicked Witch Scan", "https://wicked-witch-sca
     // Source changed from Madara to PeachScan
     override val versionId = 2
 
-    override val client = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 }

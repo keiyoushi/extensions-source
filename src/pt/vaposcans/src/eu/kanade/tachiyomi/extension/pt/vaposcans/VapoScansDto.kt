@@ -19,7 +19,9 @@ class LatestMangaDto(
 }
 
 @Serializable
-class MangaCode(val code: String)
+class MangaCode(
+    val code: String,
+)
 
 @Serializable
 class MangaDetailsDto(

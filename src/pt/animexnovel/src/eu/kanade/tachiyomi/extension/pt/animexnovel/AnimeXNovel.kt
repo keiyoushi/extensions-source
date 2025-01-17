@@ -11,49 +11,50 @@ import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 
-class AnimeXNovel : ZeistManga(
-    "AnimeXNovel",
-    "https://www.animexnovel.com",
-    "pt-BR",
-) {
-
+class AnimeXNovel :
+    ZeistManga(
+        "AnimeXNovel",
+        "https://www.animexnovel.com",
+        "pt-BR",
+    ) {
     // ============================== Popular ===============================
 
     override val popularMangaSelector = "#PopularPosts2 article"
     override val popularMangaSelectorTitle = "h3 > a"
     override val popularMangaSelectorUrl = popularMangaSelectorTitle
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return super.popularMangaParse(response).let { mangaPage ->
+    override fun popularMangaParse(response: Response): MangasPage =
+        super.popularMangaParse(response).let { mangaPage ->
             mangaPage.mangas.filter { it.title.contains("[Mangá]") }.let {
                 mangaPage.copy(it)
             }
         }
-    }
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return super.latestUpdatesParse(response).let {
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        super.latestUpdatesParse(response).let {
             it.copy(it.mangas.filter { it.title.contains("[Mangá]") })
         }
-    }
 
     // ============================== Details ===============================
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
-        title = document.selectFirst("h1")!!.text()
-        thumbnail_url = document.selectFirst(".thumb")?.absUrl("src")
-        description = document.selectFirst("#synopsis")?.text()
-        document.selectFirst("span[data-status]")?.let {
-            status = parseStatus(it.text())
-        }
-        genre = document.select("dl:has(dt:contains(Gênero)) dd a")
-            .joinToString { it.text() }
+    override fun mangaDetailsParse(response: Response) =
+        SManga.create().apply {
+            val document = response.asJsoup()
+            title = document.selectFirst("h1")!!.text()
+            thumbnail_url = document.selectFirst(".thumb")?.absUrl("src")
+            description = document.selectFirst("#synopsis")?.text()
+            document.selectFirst("span[data-status]")?.let {
+                status = parseStatus(it.text())
+            }
+            genre =
+                document
+                    .select("dl:has(dt:contains(Gênero)) dd a")
+                    .joinToString { it.text() }
 
-        setUrlWithoutDomain(document.location())
-    }
+            setUrlWithoutDomain(document.location())
+        }
 
     // ============================== Chapters ===============================
 
@@ -62,17 +63,24 @@ class AnimeXNovel : ZeistManga(
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        val url = getChapterFeedUrl(document).toHttpUrl().newBuilder()
-            .setQueryParameter("start-index", "1")
+        val url =
+            getChapterFeedUrl(document)
+                .toHttpUrl()
+                .newBuilder()
+                .setQueryParameter("start-index", "1")
 
         val chapters = mutableListOf<SChapter>()
         do {
             val res = client.newCall(GET(url.build(), headers)).execute()
 
-            val page = json.decodeFromString<ZeistMangaDto>(res.body.string()).feed?.entry
-                ?.filter { it.category.orEmpty().any { category -> category.term == chapterCategory } }
-                ?.map { it.toSChapter(baseUrl) }
-                ?: emptyList()
+            val page =
+                json
+                    .decodeFromString<ZeistMangaDto>(res.body.string())
+                    .feed
+                    ?.entry
+                    ?.filter { it.category.orEmpty().any { category -> category.term == chapterCategory } }
+                    ?.map { it.toSChapter(baseUrl) }
+                    ?: emptyList()
 
             chapters += page
             url.setQueryParameter("start-index", "${chapters.size + 1}")

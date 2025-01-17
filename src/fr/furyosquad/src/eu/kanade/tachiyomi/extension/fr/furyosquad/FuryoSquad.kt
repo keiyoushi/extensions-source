@@ -22,7 +22,6 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class FuryoSquad : ParsedHttpSource() {
-
     override val name = "FuryoSquad"
 
     override val baseUrl = "https://www.furyosociety.com/"
@@ -31,17 +30,17 @@ class FuryoSquad : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(1)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .rateLimit(1)
+            .build()
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/mangas", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangas", headers)
 
     override fun popularMangaSelector() = "div#fs-tous div.fs-card-body"
 
@@ -62,9 +61,7 @@ class FuryoSquad : ParsedHttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -94,19 +91,34 @@ class FuryoSquad : ParsedHttpSource() {
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        client
+            .newCall(searchMangaRequest(page, query, filters))
             .asObservableSuccess()
             .map { response ->
                 searchMangaParse(response, query)
             }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(1)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = popularMangaRequest(1)
 
-    private fun searchMangaParse(response: Response, query: String): MangasPage {
-        return MangasPage(popularMangaParse(response).mangas.filter { it.title.contains(query, ignoreCase = true) }, false)
-    }
+    private fun searchMangaParse(
+        response: Response,
+        query: String,
+    ): MangasPage =
+        MangasPage(
+            popularMangaParse(response).mangas.filter {
+                it.title.contains(query, ignoreCase = true)
+            },
+            false,
+        )
 
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 
@@ -191,36 +203,54 @@ class FuryoSquad : ParsedHttpSource() {
 
         return if (value != null) {
             when (date.split(" ")[4]) {
-                "minute", "minutes" -> Calendar.getInstance().apply {
-                    add(Calendar.MINUTE, -value)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-                "heure", "heures" -> Calendar.getInstance().apply {
-                    add(Calendar.HOUR_OF_DAY, -value)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-                "jour", "jours" -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, -value)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-                "semaine", "semaines" -> Calendar.getInstance().apply {
-                    add(Calendar.DATE, -value * 7)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-                "mois" -> Calendar.getInstance().apply {
-                    add(Calendar.MONTH, -value)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-                "an", "ans", "année", "années" -> Calendar.getInstance().apply {
-                    add(Calendar.YEAR, -value)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
+                "minute", "minutes" ->
+                    Calendar
+                        .getInstance()
+                        .apply {
+                            add(Calendar.MINUTE, -value)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
+                "heure", "heures" ->
+                    Calendar
+                        .getInstance()
+                        .apply {
+                            add(Calendar.HOUR_OF_DAY, -value)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
+                "jour", "jours" ->
+                    Calendar
+                        .getInstance()
+                        .apply {
+                            add(Calendar.DATE, -value)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
+                "semaine", "semaines" ->
+                    Calendar
+                        .getInstance()
+                        .apply {
+                            add(Calendar.DATE, -value * 7)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
+                "mois" ->
+                    Calendar
+                        .getInstance()
+                        .apply {
+                            add(Calendar.MONTH, -value)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
+                "an", "ans", "année", "années" ->
+                    Calendar
+                        .getInstance()
+                        .apply {
+                            add(Calendar.YEAR, -value)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
                 else -> {
                     return 0L
                 }

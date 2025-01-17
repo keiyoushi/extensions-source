@@ -23,23 +23,26 @@ class MangaDto(
 ) {
     fun toSMangaOrNull() = if (title.isEmpty()) null else toSManga()
 
-    private fun toSManga() = SManga.create().apply {
-        url = "/${mid}_c/"
-        title = this@MangaDto.title
-        thumbnail_url = cover_img_url
-    }
-
-    fun toSMangaDetails() = toSManga().apply {
-        author = authors_name!!.joinToString()
-        description = "站点：" + site + "\n\n" + this@MangaDto.description
-        genre = categories!!.jsonArray.joinToString { it.jsonPrimitive.content }
-        status = when (this@MangaDto.status!!) {
-            "连载中" -> SManga.ONGOING
-            "已完结" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    private fun toSManga() =
+        SManga.create().apply {
+            url = "/${mid}_c/"
+            title = this@MangaDto.title
+            thumbnail_url = cover_img_url
         }
-        initialized = true
-    }
+
+    fun toSMangaDetails() =
+        toSManga().apply {
+            author = authors_name!!.joinToString()
+            description = "站点：" + site + "\n\n" + this@MangaDto.description
+            genre = categories!!.jsonArray.joinToString { it.jsonPrimitive.content }
+            status =
+                when (this@MangaDto.status!!) {
+                    "连载中" -> SManga.ONGOING
+                    "已完结" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+            initialized = true
+        }
 }
 
 @Serializable
@@ -65,7 +68,10 @@ class ChapterDto(
     private val cid: String,
     private val update_time: String,
 ) {
-    fun toSChapter(mangaId: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(
+        mangaId: String,
+        dateFormat: SimpleDateFormat,
+    ) = SChapter.create().apply {
         url = "/m_$cid/chapterimage.ashx?mid=$mangaId"
         name = title
         date_upload = dateFormat.parse(update_time)!!.time
@@ -83,7 +89,11 @@ class MangaListDto(
 }
 
 @Serializable
-class RankingDto(val result: List<MangaDto>)
+class RankingDto(
+    val result: List<MangaDto>,
+)
 
 @Serializable
-class ResponseDto<T>(val data: T)
+class ResponseDto<T>(
+    val data: T,
+)

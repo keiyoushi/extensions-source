@@ -27,7 +27,10 @@ import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
+class Izneo(
+    override val lang: String,
+) : HttpSource(),
+    ConfigurableSource {
     override val name = "izneo"
 
     override val baseUrl = "$ORIGIN/$lang/webtoon"
@@ -36,8 +39,11 @@ class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
 
     override val versionId = 2
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(ImageInterceptor).build()
+    override val client =
+        network.client
+            .newBuilder()
+            .addInterceptor(ImageInterceptor)
+            .build()
 
     private val apiUrl = "$ORIGIN/$lang/api/catalog/detail/webtoon"
 
@@ -54,63 +60,70 @@ class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
         get() = preferences.getString("password", "")!!
 
     private val apiHeaders by lazy {
-        headers.newBuilder().apply {
-            set("X-Requested-With", "XMLHttpRequest")
-            if (username.isNotEmpty() && password.isNotEmpty()) {
-                set("Authorization", "Basic " + "$username:$password".btoa())
-            }
-        }.build()
+        headers
+            .newBuilder()
+            .apply {
+                set("X-Requested-With", "XMLHttpRequest")
+                if (username.isNotEmpty() && password.isNotEmpty()) {
+                    set("Authorization", "Basic " + "$username:$password".btoa())
+                }
+            }.build()
     }
 
     private var seriesCount = 0
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Cookie", "lang=$lang;").set("Referer", baseUrl)
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .set("Cookie", "lang=$lang;")
+            .set("Referer", baseUrl)
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$apiUrl/new?offset=${page - 1}&order=1&abo=0", apiHeaders)
+    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/new?offset=${page - 1}&order=1&abo=0", apiHeaders)
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$apiUrl/topSales?offset=${page - 1}&order=0&abo=0", apiHeaders)
+    override fun popularMangaRequest(page: Int) = GET("$apiUrl/topSales?offset=${page - 1}&order=0&abo=0", apiHeaders)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$apiUrl/free?offset=${page - 1}&order=3&abo=0", apiHeaders)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = GET("$apiUrl/free?offset=${page - 1}&order=3&abo=0", apiHeaders)
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET(ORIGIN + "/book/" + chapter.id, apiHeaders)
+    override fun pageListRequest(chapter: SChapter) = GET(ORIGIN + "/book/" + chapter.id, apiHeaders)
 
-    override fun imageRequest(page: Page) =
-        GET(ORIGIN + "/book/" + page.imageUrl!!, apiHeaders)
+    override fun imageRequest(page: Page) = GET(ORIGIN + "/book/" + page.imageUrl!!, apiHeaders)
 
     override fun latestUpdatesParse(response: Response) =
         response.parse().run {
-            val count = try {
-                get("series_count")!!.jsonPrimitive.int
-            } catch (_: IllegalArgumentException) {
-                return@run MangasPage(emptyList(), false)
-            }
-            val series = get("series")!!.jsonObject.values.flatMap {
-                json.decodeFromJsonElement<List<Series>>(it)
-            }.also { seriesCount += it.size }
-            if (count == seriesCount) seriesCount = 0
-            series.map {
-                SManga.create().apply {
-                    url = it.url
-                    title = it.name
-                    genre = it.genres
-                    author = it.authors.joinToString()
-                    artist = it.authors.joinToString()
-                    thumbnail_url = "$ORIGIN/$lang${it.cover}"
-                    description = it.toString()
+            val count =
+                try {
+                    get("series_count")!!.jsonPrimitive.int
+                } catch (_: IllegalArgumentException) {
+                    return@run MangasPage(emptyList(), false)
                 }
-            }.let { MangasPage(it, seriesCount != 0) }
+            val series =
+                get("series")!!
+                    .jsonObject.values
+                    .flatMap {
+                        json.decodeFromJsonElement<List<Series>>(it)
+                    }.also { seriesCount += it.size }
+            if (count == seriesCount) seriesCount = 0
+            series
+                .map {
+                    SManga.create().apply {
+                        url = it.url
+                        title = it.name
+                        genre = it.genres
+                        author = it.authors.joinToString()
+                        artist = it.authors.joinToString()
+                        thumbnail_url = "$ORIGIN/$lang${it.cover}"
+                        description = it.toString()
+                    }
+                }.let { MangasPage(it, seriesCount != 0) }
         }
 
-    override fun popularMangaParse(response: Response) =
-        latestUpdatesParse(response)
+    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
 
-    override fun searchMangaParse(response: Response) =
-        latestUpdatesParse(response)
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
     override fun pageListParse(response: Response) =
         response.parse()["data"]!!.jsonObject.run {
@@ -121,13 +134,15 @@ class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
             }
         }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        super.fetchSearchManga(page, query, filters).map { mp ->
-            mp.copy(mp.mangas.filter { it.title.contains(query, true) })
-        }!!
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = super.fetchSearchManga(page, query, filters).map { mp ->
+        mp.copy(mp.mangas.filter { it.title.contains(query, true) })
+    }!!
 
-    override fun fetchMangaDetails(manga: SManga) =
-        Observable.just(manga.apply { initialized = true })!!
+    override fun fetchMangaDetails(manga: SManga) = Observable.just(manga.apply { initialized = true })!!
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val id = manga.url.substringAfterLast('-')
@@ -136,8 +151,12 @@ class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
         var cutoff = 0
         var current = LIMIT
         while (current == LIMIT) {
-            val albums = client.newCall(GET("$url/$cutoff/$LIMIT", apiHeaders))
-                .execute().parse()["albums"]!!.jsonArray
+            val albums =
+                client
+                    .newCall(GET("$url/$cutoff/$LIMIT", apiHeaders))
+                    .execute()
+                    .parse()["albums"]!!
+                    .jsonArray
             albums.forEach {
                 val album = json.decodeFromJsonElement<Album>(it)
                 val chapter = SChapter.create()
@@ -158,27 +177,29 @@ class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
     override fun getChapterUrl(chapter: SChapter) = ORIGIN + chapter.url
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = "username"
-            title = "Username"
+        EditTextPreference(screen.context)
+            .apply {
+                key = "username"
+                title = "Username"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(key, newValue as String).commit()
-            }
-        }.let(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    preferences.edit().putString(key, newValue as String).commit()
+                }
+            }.let(screen::addPreference)
 
-        EditTextPreference(screen.context).apply {
-            key = "password"
-            title = "Password"
+        EditTextPreference(screen.context)
+            .apply {
+                key = "password"
+                title = "Password"
 
-            setOnBindEditTextListener {
-                it.inputType = TYPE_CLASS_TEXT or TYPE_TEXT_VARIATION_PASSWORD
-            }
+                setOnBindEditTextListener {
+                    it.inputType = TYPE_CLASS_TEXT or TYPE_TEXT_VARIATION_PASSWORD
+                }
 
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(key, newValue as String).commit()
-            }
-        }.let(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    preferences.edit().putString(key, newValue as String).commit()
+                }
+            }.let(screen::addPreference)
     }
 
     private inline val Album.timestamp: Long
@@ -190,29 +211,26 @@ class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
     private fun String.btoa() = Base64.encode(toByteArray(), Base64.DEFAULT)
 
     private fun Response.parse() =
-        json.parseToJsonElement(body.string()).apply {
-            if (jsonObject["status"]?.jsonPrimitive?.content == "error") {
-                when (jsonObject["code"]?.jsonPrimitive?.content) {
-                    "4" -> throw Error("You are not authorized to view this")
-                    else -> throw Error(jsonObject["data"]?.jsonPrimitive?.content)
+        json
+            .parseToJsonElement(body.string())
+            .apply {
+                if (jsonObject["status"]?.jsonPrimitive?.content == "error") {
+                    when (jsonObject["code"]?.jsonPrimitive?.content) {
+                        "4" -> throw Error("You are not authorized to view this")
+                        else -> throw Error(jsonObject["data"]?.jsonPrimitive?.content)
+                    }
                 }
-            }
-        }.jsonObject
+            }.jsonObject
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
 
-    override fun chapterListRequest(manga: SManga) =
-        throw UnsupportedOperationException()
+    override fun chapterListRequest(manga: SManga) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private const val ORIGIN = "https://www.izneo.com"

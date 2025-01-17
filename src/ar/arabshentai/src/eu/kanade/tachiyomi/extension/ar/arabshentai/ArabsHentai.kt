@@ -31,12 +31,14 @@ class ArabsHentai : ParsedHttpSource() {
     override val supportsLatest = true
 
     override val client =
-        network.cloudflareClient.newBuilder()
+        network.cloudflareClient
+            .newBuilder()
             .rateLimit(2)
             .build()
 
     override fun headersBuilder() =
-        super.headersBuilder()
+        super
+            .headersBuilder()
             .set("Referer", "$baseUrl/")
             .set("Origin", baseUrl)
 
@@ -66,7 +68,11 @@ class ArabsHentai : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
         url.addQueryParameter("s", query)
         filters.forEach { filter ->
@@ -157,16 +163,15 @@ class ArabsHentai : ParsedHttpSource() {
     }
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".chapter_image img.wp-manga-chapter-img").mapIndexed { index, item ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select(".chapter_image img.wp-manga-chapter-img").mapIndexed { index, item ->
             Page(index = index, imageUrl = item.imgAttr())
         }
-    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    private fun Element.imgAttr(): String? {
-        return when {
+    private fun Element.imgAttr(): String? =
+        when {
             hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
             hasAttr("data-cfsrc") -> attr("abs:data-cfsrc")
             hasAttr("data-src") -> attr("abs:data-src")
@@ -174,7 +179,6 @@ class ArabsHentai : ParsedHttpSource() {
             hasAttr("bv-data-src") -> attr("bv-data-src")
             else -> attr("abs:src")
         }
-    }
 
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
@@ -194,9 +198,12 @@ class ArabsHentai : ParsedHttpSource() {
     private fun fetchGenres() {
         if (fetchGenresAttempts < 3 && genreList.isEmpty()) {
             try {
-                genreList = client.newCall(genresRequest()).execute()
-                    .asJsoup()
-                    .let(::parseGenres)
+                genreList =
+                    client
+                        .newCall(genresRequest())
+                        .execute()
+                        .asJsoup()
+                        .let(::parseGenres)
             } catch (_: Exception) {
             } finally {
                 fetchGenresAttempts++
@@ -204,9 +211,7 @@ class ArabsHentai : ParsedHttpSource() {
         }
     }
 
-    private fun genresRequest(): Request {
-        return GET("$baseUrl/%d8%aa%d8%b5%d9%86%d9%8a%d9%81%d8%a7%d8%aa", headers)
-    }
+    private fun genresRequest(): Request = GET("$baseUrl/%d8%aa%d8%b5%d9%86%d9%8a%d9%81%d8%a7%d8%aa", headers)
 
     private fun parseGenres(document: Document): List<Pair<String, String>> {
         val items = document.select("#archive-content ul.genre-list li.item-genre .genre-data a")

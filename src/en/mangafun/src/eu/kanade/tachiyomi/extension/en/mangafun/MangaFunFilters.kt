@@ -6,18 +6,23 @@ class GenreFilter : Filter.Group<Genre>("Genre", genreList)
 
 class TypeFilter : Filter.Group<Genre>("Type", titleTypeList)
 
-class StatusFilter : Filter.Group<Genre>(
-    "Status",
-    listOf("Ongoing", "Completed", "Hiatus", "Cancelled").mapIndexed { i, it -> Genre(it, i) },
-)
+class StatusFilter :
+    Filter.Group<Genre>(
+        "Status",
+        listOf("Ongoing", "Completed", "Hiatus", "Cancelled").mapIndexed { i, it -> Genre(it, i) },
+    )
 
-class SortFilter : Filter.Sort(
-    "Order by",
-    arrayOf("Name", "Rank", "Newest", "Update"),
-    Selection(1, false),
-)
+class SortFilter :
+    Filter.Sort(
+        "Order by",
+        arrayOf("Name", "Rank", "Newest", "Update"),
+        Selection(1, false),
+    )
 
-class Genre(name: String, val id: Int) : Filter.TriState(name)
+class Genre(
+    name: String,
+    val id: Int,
+) : Filter.TriState(name)
 
 val genresMap by lazy {
     genreList.associate { it.id to it.name }

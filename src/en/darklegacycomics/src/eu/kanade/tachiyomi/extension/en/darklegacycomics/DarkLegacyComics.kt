@@ -34,10 +34,11 @@ class DarkLegacyComics : HttpSource() {
                 // Not actually scanlators but whatever
                 scanlator = characters.replace(" ", ", ")
                 // One of the dates is missing the year
-                date_upload = when (date) {
-                    "Sep 20" -> 1442696400000L // Sep 20, 2015
-                    else -> dateFormat.parse(date)?.time ?: 0L
-                }
+                date_upload =
+                    when (date) {
+                        "Sep 20" -> 1442696400000L // Sep 20, 2015
+                        else -> dateFormat.parse(date)?.time ?: 0L
+                    }
             }
         }
 
@@ -66,49 +67,48 @@ class DarkLegacyComics : HttpSource() {
             },
         ).let { Observable.just(MangasPage(it, false))!! }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        fetchPopularManga(page)
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = fetchPopularManga(page)
 
-    override fun fetchMangaDetails(manga: SManga) =
-        Observable.just(manga.apply { initialized = true })!!
+    override fun fetchMangaDetails(manga: SManga) = Observable.just(manga.apply { initialized = true })!!
 
     override fun fetchChapterList(manga: SManga) =
         if (manga.url == "/archive") {
             super.fetchChapterList(manga)
         } else {
-            specials.map {
-                SChapter.create().apply {
-                    name = it.value
-                    url = "/specials/${it.key}"
-                    chapter_number = it.key.toFloat()
-                    date_upload = SPECIALS_DATE
-                }
-            }.let { Observable.just(it)!! }
+            specials
+                .map {
+                    SChapter.create().apply {
+                        name = it.value
+                        url = "/specials/${it.key}"
+                        chapter_number = it.key.toFloat()
+                        date_upload = SPECIALS_DATE
+                    }
+                }.let { Observable.just(it)!! }
         }
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {
         private const val THUMB_URL = "https://images2.imgbox.com/5d/d8/BVxRdljH_o.png"
@@ -117,11 +117,12 @@ class DarkLegacyComics : HttpSource() {
 
         private const val SPECIALS_DATE = 1399926480000L // 2014-05-12 23:28
 
-        private val specials = mapOf(
-            1 to "Looking For Group",
-            2 to "Rover",
-            3 to "Fan Comic",
-        )
+        private val specials =
+            mapOf(
+                1 to "Looking For Group",
+                2 to "Rover",
+                3 to "Fan Comic",
+            )
 
         private val dateFormat by lazy {
             SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)

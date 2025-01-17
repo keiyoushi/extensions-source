@@ -4,12 +4,16 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Element
 
-class CatTranslator : Madara(
-    "CAT-translator",
-    "https://cats-translator.com/manga",
-    "th",
-) {
-    private fun parseMangaFromElement(element: Element, isSearch: Boolean): SManga {
+class CatTranslator :
+    Madara(
+        "CAT-translator",
+        "https://cats-translator.com/manga",
+        "th",
+    ) {
+    private fun parseMangaFromElement(
+        element: Element,
+        isSearch: Boolean,
+    ): SManga {
         val manga = SManga.create()
 
         with(element) {

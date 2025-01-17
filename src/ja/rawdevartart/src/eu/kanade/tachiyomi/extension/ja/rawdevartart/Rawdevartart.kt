@@ -19,7 +19,6 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
 class Rawdevartart : HttpSource() {
-
     override val name = "Rawdevart.art"
 
     override val lang = "ja"
@@ -30,52 +29,64 @@ class Rawdevartart : HttpSource() {
 
     override val supportsLatest = true
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(
-        page,
-        "",
-        FilterList(
-            SortFilter(1),
-            GenreFilter(genres),
-        ),
-    )
+    override fun popularMangaRequest(page: Int) =
+        searchMangaRequest(
+            page,
+            "",
+            FilterList(
+                SortFilter(1),
+                GenreFilter(genres),
+            ),
+        )
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(
-        page,
-        "",
-        FilterList(
-            SortFilter(0),
-            GenreFilter(genres),
-        ),
-    )
+    override fun latestUpdatesRequest(page: Int) =
+        searchMangaRequest(
+            page,
+            "",
+            FilterList(
+                SortFilter(0),
+                GenreFilter(genres),
+            ),
+        )
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/spa".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/spa"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("page", page.toString())
 
-            if (query.isNotEmpty()) {
-                addPathSegment("search")
-                addQueryParameter("query", query)
+                    if (query.isNotEmpty()) {
+                        addPathSegment("search")
+                        addQueryParameter("query", query)
 
-                return@apply
-            }
+                        return@apply
+                    }
 
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { f ->
-                when (f) {
-                    is UriFilter -> f.addToUri(this)
-                    is GenreFilter -> addPathSegments(f.values[f.state].path)
-                    else -> {}
-                }
-            }
-        }.build()
+                    (if (filters.isEmpty()) getFilterList() else filters).forEach { f ->
+                        when (f) {
+                            is UriFilter -> f.addToUri(this)
+                            is GenreFilter -> addPathSegments(f.values[f.state].path)
+                            else -> {}
+                        }
+                    }
+                }.build()
 
         return GET(url, headers)
     }
@@ -106,13 +117,13 @@ class Rawdevartart : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("Filters are ignored when using text search."),
-        StatusFilter(),
-        SortFilter(),
-        GenreFilter(genres),
-    )
+    override fun getFilterList() =
+        FilterList(
+            Filter.Header("Filters are ignored when using text search."),
+            StatusFilter(),
+            SortFilter(),
+            GenreFilter(genres),
+        )
 
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }

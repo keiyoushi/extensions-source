@@ -5,26 +5,26 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.SwitchPreferenceCompat
 
-fun getPreferencesInternal(context: Context) = arrayOf(
-    ListPreference(context).apply {
-        val mirrors = MIRRORS
-        val size = mirrors.size
+fun getPreferencesInternal(context: Context) =
+    arrayOf(
+        ListPreference(context).apply {
+            val mirrors = MIRRORS
+            val size = mirrors.size
 
-        key = MIRROR_PREF
-        title = "镜像站点"
-        summary = "%s\n重启生效，不同站点的数据有细微差异"
-        entries = Array(size) { mirrors[it].domain }
-        entryValues = Array(size) { it.toString() }
-        setDefaultValue("0")
-    },
-
-    SwitchPreferenceCompat(context).apply {
-        key = ZH_HANT_PREF
-        title = "使用繁体中文"
-        summary = "重启生效，已添加的漫画需要迁移才能更新标题"
-        setDefaultValue(false)
-    },
-)
+            key = MIRROR_PREF
+            title = "镜像站点"
+            summary = "%s\n重启生效，不同站点的数据有细微差异"
+            entries = Array(size) { mirrors[it].domain }
+            entryValues = Array(size) { it.toString() }
+            setDefaultValue("0")
+        },
+        SwitchPreferenceCompat(context).apply {
+            key = ZH_HANT_PREF
+            title = "使用繁体中文"
+            summary = "重启生效，已添加的漫画需要迁移才能更新标题"
+            setDefaultValue(false)
+        },
+    )
 
 val SharedPreferences.mirror: Mirror
     get() {
@@ -44,11 +44,12 @@ const val MIRROR_PREF = "mirror"
 const val ZH_HANT_PREF = "showZhHantWebsite"
 
 val MIRRORS
-    get() = arrayOf(
-        Mirror("mangabz.com", "bz/", "mangabz_lang"),
-        Mirror("xmanhua.com", "xm/", "xmanhua_lang"),
-        Mirror("yymanhua.com", "yy/", "yymanhua_lang"),
-    )
+    get() =
+        arrayOf(
+            Mirror("mangabz.com", "bz/", "mangabz_lang"),
+            Mirror("xmanhua.com", "xm/", "xmanhua_lang"),
+            Mirror("yymanhua.com", "yy/", "yymanhua_lang"),
+        )
 
 class Mirror(
     val domain: String,

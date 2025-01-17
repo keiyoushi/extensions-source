@@ -30,7 +30,6 @@ import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 class SpyFakku : HttpSource() {
-
     override val name = "SpyFakku"
 
     override val baseUrl = "https://hentalk.pw"
@@ -45,19 +44,21 @@ class SpyFakku : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2, 1, TimeUnit.SECONDS)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(2, 1, TimeUnit.SECONDS)
+            .build()
 
     private val charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl)
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .set("Referer", "$baseUrl/")
+            .set("Origin", baseUrl)
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseApiUrl/library?sort=released_at&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseApiUrl/library?sort=released_at&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val library = response.parseAs<HentaiLib>()
@@ -71,37 +72,46 @@ class SpyFakku : HttpSource() {
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseApiUrl/library".toHttpUrl().newBuilder().apply {
-            val terms = mutableListOf(query.trim())
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseApiUrl/library"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    val terms = mutableListOf(query.trim())
 
-            filters.forEach { filter ->
-                when (filter) {
-                    is SortFilter -> {
-                        addQueryParameter("sort", filter.getValue())
-                        if (filter.getValue() == "random") addQueryParameter("seed", generateSeed())
-                        addQueryParameter("order", if (filter.state!!.ascending) "asc" else "desc")
-                    }
-
-                    is SelectFilter -> {
-                        addQueryParameter("limit", filter.vals[filter.state])
-                    }
-
-                    is TextFilter -> {
-                        if (filter.state.isNotEmpty()) {
-                            terms += filter.state.split(",").filter { it.isNotBlank() }.map { tag ->
-                                val trimmed = tag.trim().replace(" ", "_")
-                                (if (trimmed.startsWith("-")) "-" else "") + filter.type + ":" + trimmed.removePrefix("-")
+                    filters.forEach { filter ->
+                        when (filter) {
+                            is SortFilter -> {
+                                addQueryParameter("sort", filter.getValue())
+                                if (filter.getValue() == "random") addQueryParameter("seed", generateSeed())
+                                addQueryParameter("order", if (filter.state!!.ascending) "asc" else "desc")
                             }
+
+                            is SelectFilter -> {
+                                addQueryParameter("limit", filter.vals[filter.state])
+                            }
+
+                            is TextFilter -> {
+                                if (filter.state.isNotEmpty()) {
+                                    terms +=
+                                        filter.state.split(",").filter { it.isNotBlank() }.map { tag ->
+                                            val trimmed = tag.trim().replace(" ", "_")
+                                            (if (trimmed.startsWith("-")) "-" else "") + filter.type + ":" + trimmed.removePrefix("-")
+                                        }
+                                }
+                            }
+
+                            else -> {}
                         }
                     }
-
-                    else -> {}
-                }
-            }
-            addQueryParameter("q", terms.joinToString(" "))
-            addQueryParameter("page", page.toString())
-        }.build()
+                    addQueryParameter("q", terms.joinToString(" "))
+                    addQueryParameter("page", page.toString())
+                }.build()
         return GET(url, headers)
     }
 
@@ -109,17 +119,20 @@ class SpyFakku : HttpSource() {
 
     // Details
     private val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
-    private val releasedAtFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-    private val createdAtFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val releasedAtFormat =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+    private val createdAtFormat =
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
 
     private fun getAdditionals(data: List<JsonElement>): ShortHentai {
-        fun Collection<JsonElement>.getTags(): List<Name> = this.map {
-            Name(data[it.jsonPrimitive.int + 2].jsonPrimitive.content, data[it.jsonPrimitive.int + 3].jsonPrimitive.content)
-        }
+        fun Collection<JsonElement>.getTags(): List<Name> =
+            this.map {
+                Name(data[it.jsonPrimitive.int + 2].jsonPrimitive.content, data[it.jsonPrimitive.int + 3].jsonPrimitive.content)
+            }
         val hentaiIndexes = json.decodeFromJsonElement<HentaiIndexes>(data[1])
 
         val hash = data[hentaiIndexes.hash].jsonPrimitive.content
@@ -143,19 +156,19 @@ class SpyFakku : HttpSource() {
             pages = pages,
         )
     }
-    private fun <T> Collection<T>.emptyToNull(): Collection<T>? {
-        return this.ifEmpty { null }
-    }
 
-    private fun Hentai.toSManga() = SManga.create().apply {
-        title = this@toSManga.title
-        url = "/g/$id?$pages&hash=$hash"
-        author = tags?.filter { it.namespace == "circle" }?.joinToString { it.name }
-        artist = tags?.filter { it.namespace == "artist" }?.joinToString { it.name }
-        genre = tags?.filter { it.namespace == "tag" }?.joinToString { it.name }
-        thumbnail_url = "$baseImageUrl/$hash/$thumbnail?type=cover"
-        status = SManga.COMPLETED
-    }
+    private fun <T> Collection<T>.emptyToNull(): Collection<T>? = this.ifEmpty { null }
+
+    private fun Hentai.toSManga() =
+        SManga.create().apply {
+            title = this@toSManga.title
+            url = "/g/$id?$pages&hash=$hash"
+            author = tags?.filter { it.namespace == "circle" }?.joinToString { it.name }
+            artist = tags?.filter { it.namespace == "artist" }?.joinToString { it.name }
+            genre = tags?.filter { it.namespace == "tag" }?.joinToString { it.name }
+            thumbnail_url = "$baseImageUrl/$hash/$thumbnail?type=cover"
+            status = SManga.COMPLETED
+        }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         val response1: Response = client.newCall(mangaDetailsRequest(manga)).execute()
@@ -174,7 +187,14 @@ class SpyFakku : HttpSource() {
                     attempts++
                 }
             }
-            add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+            add =
+                getAdditionals(
+                    response
+                        .parseAs<Nodes>()
+                        .nodes
+                        .last()
+                        .data,
+                )
         }
 
         return Observable.just(
@@ -187,56 +207,57 @@ class SpyFakku : HttpSource() {
                     artist = tags?.get("artist")?.joinToString { it.name }
                     thumbnail_url = "$baseImageUrl/$hash/$thumbnail?type=cover"
                     genre = tags?.get("tag")?.joinToString { it.name }
-                    this@apply.description = buildString {
-                        description?.let {
-                            append(it, "\n\n")
-                        }
-
-                        tags?.get("circle")?.emptyToNull()?.joinToString { it.name }?.let {
-                            append("Circles: ", it, "\n")
-                        }
-                        tags?.get("publisher")?.emptyToNull()?.joinToString { it.name }?.let {
-                            append("Publishers: ", it, "\n")
-                        }
-                        tags?.get("magazine")?.emptyToNull()?.joinToString { it.name }?.let {
-                            append("Magazines: ", it, "\n")
-                        }
-                        tags?.get("event")?.emptyToNull()?.joinToString { it.name }?.let {
-                            append("Events: ", it, "\n\n")
-                        }
-                        tags?.get("parody")?.emptyToNull()?.joinToString { it.name }?.let {
-                            append("Parodies: ", it, "\n")
-                        }
-                        append("Pages: ", pages, "\n\n")
-
-                        try {
-                            releasedAt?.let {
-                                releasedAtFormat.parse(it)?.let {
-                                    append("Released: ", dateReformat.format(it.time), "\n")
-                                }
+                    this@apply.description =
+                        buildString {
+                            description?.let {
+                                append(it, "\n\n")
                             }
-                        } catch (_: Exception) {
-                        }
 
-                        try {
-                            createdAt?.let {
-                                createdAtFormat.parse(it)?.let {
-                                    append("Added: ", dateReformat.format(it.time), "\n")
-                                }
+                            tags?.get("circle")?.emptyToNull()?.joinToString { it.name }?.let {
+                                append("Circles: ", it, "\n")
                             }
-                        } catch (_: Exception) {
-                        }
+                            tags?.get("publisher")?.emptyToNull()?.joinToString { it.name }?.let {
+                                append("Publishers: ", it, "\n")
+                            }
+                            tags?.get("magazine")?.emptyToNull()?.joinToString { it.name }?.let {
+                                append("Magazines: ", it, "\n")
+                            }
+                            tags?.get("event")?.emptyToNull()?.joinToString { it.name }?.let {
+                                append("Events: ", it, "\n\n")
+                            }
+                            tags?.get("parody")?.emptyToNull()?.joinToString { it.name }?.let {
+                                append("Parodies: ", it, "\n")
+                            }
+                            append("Pages: ", pages, "\n\n")
 
-                        append(
-                            "Size: ",
-                            when {
-                                size >= 300 * 1000 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0 * 1000.0))} GB"
-                                size >= 100 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0))} MB"
-                                size >= 1000 -> "${"%.2f".format(size / (1000.0))} kB"
-                                else -> "$size B"
-                            },
-                        )
-                    }
+                            try {
+                                releasedAt?.let {
+                                    releasedAtFormat.parse(it)?.let {
+                                        append("Released: ", dateReformat.format(it.time), "\n")
+                                    }
+                                }
+                            } catch (_: Exception) {
+                            }
+
+                            try {
+                                createdAt?.let {
+                                    createdAtFormat.parse(it)?.let {
+                                        append("Added: ", dateReformat.format(it.time), "\n")
+                                    }
+                                }
+                            } catch (_: Exception) {
+                            }
+
+                            append(
+                                "Size: ",
+                                when {
+                                    size >= 300 * 1000 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0 * 1000.0))} GB"
+                                    size >= 100 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0))} MB"
+                                    size >= 1000 -> "${"%.2f".format(size / (1000.0))} kB"
+                                    else -> "$size B"
+                                },
+                            )
+                        }
                     update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
                     initialized = true
                 }
@@ -248,12 +269,14 @@ class SpyFakku : HttpSource() {
         manga.url = Regex("^/archive/(\\d+)/.*").replace(manga.url) { "/g/${it.groupValues[1]}" }
         return GET(baseApiUrl + manga.url.substringBefore("?"), headers)
     }
+
     private fun mangaDetailsRequest2(manga: SManga): Request {
         manga.url = Regex("^/archive/(\\d+)/.*").replace(manga.url) { "/g/${it.groupValues[1]}" }
         return GET(baseUrl + manga.url.substringBefore("?") + "/__data.json", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBefore("?")
 
     // Chapters
@@ -274,18 +297,26 @@ class SpyFakku : HttpSource() {
                     attempts++
                 }
             }
-            add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+            add =
+                getAdditionals(
+                    response
+                        .parseAs<Nodes>()
+                        .nodes
+                        .last()
+                        .data,
+                )
         }
         return Observable.just(
             listOf(
                 SChapter.create().apply {
                     name = "Chapter"
                     url = manga.url
-                    date_upload = try {
-                        releasedAtFormat.parse(add.released_at)!!.time
-                    } catch (e: Exception) {
-                        0L
-                    }
+                    date_upload =
+                        try {
+                            releasedAtFormat.parse(add.released_at)!!.time
+                        } catch (e: Exception) {
+                            0L
+                        }
                 },
             ),
         )
@@ -294,6 +325,7 @@ class SpyFakku : HttpSource() {
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBefore("?")
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+
     private fun chapterListRequest2(manga: SManga) = mangaDetailsRequest2(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
@@ -311,7 +343,14 @@ class SpyFakku : HttpSource() {
                 )
             }
             val response = client.newCall(pageListRequest2(chapter)).execute()
-            val add = getAdditionals(response.parseAs<Nodes>().nodes.last().data)
+            val add =
+                getAdditionals(
+                    response
+                        .parseAs<Nodes>()
+                        .nodes
+                        .last()
+                        .data,
+                )
             return Observable.just(
                 List(add.pages) { index ->
                     Page(index, imageUrl = "$baseImageUrl/${add.hash}/${index + 1}")
@@ -319,7 +358,11 @@ class SpyFakku : HttpSource() {
             )
         }
         val hash: String = chapter.url.substringAfter("hash=")
-        val pages: Int = chapter.url.substringAfter("?").substringBefore("&").toInt()
+        val pages: Int =
+            chapter.url
+                .substringAfter("?")
+                .substringBefore("&")
+                .toInt()
 
         return Observable.just(
             List(pages) { index ->
@@ -332,6 +375,7 @@ class SpyFakku : HttpSource() {
         chapter.url = Regex("^/archive/(\\d+)/.*").replace(chapter.url) { "/g/${it.groupValues[1]}" }
         return GET(baseApiUrl + chapter.url.substringBefore("?"), headers)
     }
+
     private fun pageListRequest2(chapter: SChapter): Request {
         chapter.url = Regex("^/archive/(\\d+)/.*").replace(chapter.url) { "/g/${it.groupValues[1]}" }
         return GET(baseUrl + chapter.url.substringBefore("?") + "/__data.json", headers)
@@ -340,9 +384,7 @@ class SpyFakku : HttpSource() {
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     // Others
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     private fun generateSeed(): String {
         val length = Random.nextInt(4, 9)
@@ -356,6 +398,8 @@ class SpyFakku : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 }

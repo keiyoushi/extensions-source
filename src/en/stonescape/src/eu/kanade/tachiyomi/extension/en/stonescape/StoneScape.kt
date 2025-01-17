@@ -4,12 +4,13 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class StoneScape : Madara(
-    "StoneScape",
-    "https://stonescape.xyz",
-    "en",
-    SimpleDateFormat("MMMM dd, yyyy", Locale.ENGLISH),
-) {
+class StoneScape :
+    Madara(
+        "StoneScape",
+        "https://stonescape.xyz",
+        "en",
+        SimpleDateFormat("MMMM dd, yyyy", Locale.ENGLISH),
+    ) {
     override val mangaSubString = "series"
 
     override val chapterUrlSelector = "li > a"

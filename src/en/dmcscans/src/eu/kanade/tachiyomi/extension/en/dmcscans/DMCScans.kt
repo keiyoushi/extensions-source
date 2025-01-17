@@ -11,9 +11,11 @@ import org.jsoup.nodes.Document
 import java.util.concurrent.TimeUnit
 
 class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en") {
-    override val client = super.client.newBuilder()
-        .rateLimit(1, 3, TimeUnit.SECONDS)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 3, TimeUnit.SECONDS)
+            .build()
 
     // ============================== Popular ===============================
 
@@ -37,15 +39,18 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
     override val chapterFeedRegex = """.run\(["'](.*?)["']\)""".toRegex()
 
     override fun getChapterFeedUrl(doc: Document): String {
-        val feed = chapterFeedRegex
-            .find(doc.html())
-            ?.groupValues?.get(1)
-            ?: throw Exception("Failed to find chapter feed")
+        val feed =
+            chapterFeedRegex
+                .find(doc.html())
+                ?.groupValues
+                ?.get(1)
+                ?: throw Exception("Failed to find chapter feed")
 
         return apiUrl(chapterCategory)
             .addPathSegments(feed)
             .addQueryParameter("max-results", maxChapterResults.toString())
-            .build().toString()
+            .build()
+            .toString()
     }
 
     // =============================== Filters ==============================
@@ -54,36 +59,39 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
     override val hasTypeFilter = false
     override val hasLanguageFilter = false
 
-    override fun getGenreList(): List<Genre> = listOf(
-        Genre("Adaptation", "Adaptation"),
-        Genre("Drama", "Drama"),
-        Genre("Historical", "Historical"),
-        Genre("Josei(W)", "Josei(W)"),
-        Genre("Regression", "Regression"),
-        Genre("Romance", "Romance"),
-        Genre("Shojo(G)", "Shojo(G)"),
-        Genre("Slice of Life", "Slice of Life"),
-        Genre("Transmigration", "Transmigration"),
-    )
+    override fun getGenreList(): List<Genre> =
+        listOf(
+            Genre("Adaptation", "Adaptation"),
+            Genre("Drama", "Drama"),
+            Genre("Historical", "Historical"),
+            Genre("Josei(W)", "Josei(W)"),
+            Genre("Regression", "Regression"),
+            Genre("Romance", "Romance"),
+            Genre("Shojo(G)", "Shojo(G)"),
+            Genre("Slice of Life", "Slice of Life"),
+            Genre("Transmigration", "Transmigration"),
+        )
 
     // =============================== Pages ================================
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        val imgData = document.selectFirst("script:containsData(imgTag)")
-            ?.data()
-            ?.substringAfter("imgTag")
-            ?.substringAfter("`")
-            ?.substringBefore("`")
-            ?.replace("\\\"", "\"")
-            ?.replace("\\\\", "\\")
-            ?.replace("\\/", "/")
-            ?.replace("\\:", ":")
-            ?.let(Jsoup::parseBodyFragment)
-            ?: return document.select(pageListSelector).select("img[src]").mapIndexed { i, img ->
-                Page(i, "", img.attr("abs:src"))
-            }
+        val imgData =
+            document
+                .selectFirst("script:containsData(imgTag)")
+                ?.data()
+                ?.substringAfter("imgTag")
+                ?.substringAfter("`")
+                ?.substringBefore("`")
+                ?.replace("\\\"", "\"")
+                ?.replace("\\\\", "\\")
+                ?.replace("\\/", "/")
+                ?.replace("\\:", ":")
+                ?.let(Jsoup::parseBodyFragment)
+                ?: return document.select(pageListSelector).select("img[src]").mapIndexed { i, img ->
+                    Page(i, "", img.attr("abs:src"))
+                }
 
         return imgData.select("img[src]").mapIndexed { i, img ->
             Page(i, imageUrl = img.attr("abs:src"))

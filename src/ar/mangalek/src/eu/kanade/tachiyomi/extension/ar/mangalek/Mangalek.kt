@@ -24,13 +24,14 @@ import java.util.Locale
 
 private const val MIRROR_PREF_KEY = "MIRROR"
 private const val MIRROR_PREF_TITLE = "تعديل رابط مانجا ليك"
-internal val MIRROR_PREF_ENTRY_VALUES = arrayOf(
-    "https://lekmanga.net",
-    "https://lekmanga.org",
-    "https://like-manga.net",
-    "https://lekmanga.com",
-    "https://manga-leko.org",
-)
+internal val MIRROR_PREF_ENTRY_VALUES =
+    arrayOf(
+        "https://lekmanga.net",
+        "https://lekmanga.org",
+        "https://like-manga.net",
+        "https://lekmanga.com",
+        "https://manga-leko.org",
+    )
 private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
 
@@ -42,7 +43,6 @@ class Mangalek :
         SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
     ConfigurableSource {
-
     override val fetchGenres = false
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val chapterUrlSuffix = ""
@@ -59,19 +59,20 @@ class Mangalek :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val mirrorPref = ListPreference(screen.context).apply {
-            key = MIRROR_PREF_KEY
-            title = MIRROR_PREF_TITLE
-            entries = MIRROR_PREF_ENTRY_VALUES
-            entryValues = MIRROR_PREF_ENTRY_VALUES
-            setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
-            summary = "%s"
+        val mirrorPref =
+            ListPreference(screen.context).apply {
+                key = MIRROR_PREF_KEY
+                title = MIRROR_PREF_TITLE
+                entries = MIRROR_PREF_ENTRY_VALUES
+                entryValues = MIRROR_PREF_ENTRY_VALUES
+                setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
-                true
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
+                    true
+                }
             }
-        }
         screen.addPreference(mirrorPref)
     }
 
@@ -92,19 +93,22 @@ class Mangalek :
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request =
         POST(
             "$baseUrl/wp-admin/admin-ajax.php",
             headers,
-            FormBody.Builder()
+            FormBody
+                .Builder()
                 .add("action", "wp-manga-search-manga")
                 .add("title", query)
                 .build(),
         )
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     @Serializable
     data class SearchResponseDto(
@@ -125,12 +129,13 @@ class Mangalek :
             return MangasPage(emptyList(), false)
         }
 
-        val manga = dto.data.map {
-            SManga.create().apply {
-                setUrlWithoutDomain(it.url)
-                title = it.title
+        val manga =
+            dto.data.map {
+                SManga.create().apply {
+                    setUrlWithoutDomain(it.url)
+                    title = it.title
+                }
             }
-        }
 
         return MangasPage(manga, false)
     }

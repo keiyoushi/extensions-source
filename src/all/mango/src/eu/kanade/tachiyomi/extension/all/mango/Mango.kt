@@ -39,19 +39,21 @@ import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 
-class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
-
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/api/library?depth=0", headersBuilder().build())
+class Mango :
+    HttpSource(),
+    ConfigurableSource,
+    UnmeteredSource {
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/library?depth=0", headersBuilder().build())
 
     // Our popular manga are just our library of manga
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = try {
-            json.decodeFromString<JsonObject>(response.body.string())
-        } catch (e: Exception) {
-            apiCookies = ""
-            throw Exception("Login Likely Failed. Try Refreshing.")
-        }
+        val result =
+            try {
+                json.decodeFromString<JsonObject>(response.body.string())
+            } catch (e: Exception) {
+                apiCookies = ""
+                throw Exception("Login Likely Failed. Try Refreshing.")
+            }
         val mangas = result["titles"]!!.jsonArray
         return MangasPage(
             mangas.jsonArray.map {
@@ -65,26 +67,35 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
         )
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Default is to just return the whole library for searching
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(1)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = popularMangaRequest(1)
 
     // Overridden fetch so that we use our overloaded method instead
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        client
+            .newCall(searchMangaRequest(page, query, filters))
             .asObservableSuccess()
             .map { response ->
                 searchMangaParse(response, query)
             }
-    }
 
     // Here the best we can do is just match manga based on their titles
-    private fun searchMangaParse(response: Response, query: String): MangasPage {
+    private fun searchMangaParse(
+        response: Response,
+        query: String,
+    ): MangasPage {
         val queryLower = query.lowercase()
         val mangas = popularMangaParse(response).mangas
         val exactMatch = mangas.firstOrNull { it.title.lowercase() == queryLower }
@@ -97,15 +108,21 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
         val textDistance2 = JaroWinkler()
 
         // Take results that potentially start the same
-        val results = mangas.filter {
-            val title = it.title.lowercase()
-            val query2 = queryLower.take(7)
-            (title.startsWith(query2, true) || title.contains(query2, true))
-        }.sortedBy { textDistance.distance(queryLower, it.title.lowercase()) }
+        val results =
+            mangas
+                .filter {
+                    val title = it.title.lowercase()
+                    val query2 = queryLower.take(7)
+                    (title.startsWith(query2, true) || title.contains(query2, true))
+                }.sortedBy { textDistance.distance(queryLower, it.title.lowercase()) }
 
         // Take similar results
-        val results2 = mangas.map { Pair(textDistance2.distance(it.title.lowercase(), query), it) }
-            .filter { it.first < 0.3 }.sortedBy { it.first }.map { it.second }
+        val results2 =
+            mangas
+                .map { Pair(textDistance2.distance(it.title.lowercase(), query), it) }
+                .filter { it.first < 0.3 }
+                .sortedBy { it.first }
+                .map { it.second }
         val combinedResults = results.union(results2)
 
         // Finally return the list
@@ -113,20 +130,19 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     }
 
     // Stub
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET(baseUrl + "/api" + manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + "/api" + manga.url, headers)
 
     // This will just return the same thing as the main library endpoint
     override fun mangaDetailsParse(response: Response): SManga {
-        val result = try {
-            json.decodeFromString<JsonObject>(response.body.string())
-        } catch (e: Exception) {
-            apiCookies = ""
-            throw Exception("Login Likely Failed. Try Refreshing.")
-        }
+        val result =
+            try {
+                json.decodeFromString<JsonObject>(response.body.string())
+            } catch (e: Exception) {
+                apiCookies = ""
+                throw Exception("Login Likely Failed. Try Refreshing.")
+            }
         return SManga.create().apply {
             url = "/book/" + result.jsonObject["id"]!!.jsonPrimitive.content
             title = result.jsonObject["display_name"]!!.jsonPrimitive.content
@@ -134,46 +150,49 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET(baseUrl + "/api" + manga.url + "?sort=auto", headers)
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + "/api" + manga.url + "?sort=auto", headers)
 
     // The chapter url will contain how many pages the chapter contains for our page list endpoint
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = try {
-            json.decodeFromString<JsonObject>(response.body.string())
-        } catch (e: Exception) {
-            apiCookies = ""
-            throw Exception("Login Likely Failed. Try Refreshing.")
-        }
+        val result =
+            try {
+                json.decodeFromString<JsonObject>(response.body.string())
+            } catch (e: Exception) {
+                apiCookies = ""
+                throw Exception("Login Likely Failed. Try Refreshing.")
+            }
         return listChapters(result)
     }
 
     // Helper function for listing chapters and chapters in nested titles recursively
     private fun listChapters(titleObj: JsonObject): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
-        val topChapters = titleObj["entries"]?.jsonArray?.map { obj ->
-            SChapter.create().apply {
-                name = obj.jsonObject["display_name"]!!.jsonPrimitive.content
-                url =
-                    "/page/${obj.jsonObject["title_id"]!!.jsonPrimitive.content}/${obj.jsonObject["id"]!!.jsonPrimitive.content}/${obj.jsonObject["pages"]!!.jsonPrimitive.content}/"
-                date_upload = 1000L * obj.jsonObject["mtime"]!!.jsonPrimitive.long
+        val topChapters =
+            titleObj["entries"]?.jsonArray?.map { obj ->
+                SChapter.create().apply {
+                    name = obj.jsonObject["display_name"]!!.jsonPrimitive.content
+                    url =
+                        "/page/${obj.jsonObject["title_id"]!!.jsonPrimitive.content}/${obj.jsonObject["id"]!!.jsonPrimitive.content}/${obj.jsonObject["pages"]!!.jsonPrimitive.content}/"
+                    date_upload = 1000L * obj.jsonObject["mtime"]!!.jsonPrimitive.long
+                }
             }
-        }
-        val subChapters = titleObj["titles"]?.jsonArray?.map { obj ->
-            val name = obj.jsonObject["display_name"]!!.jsonPrimitive.content
-            listChapters(obj.jsonObject).map { chp ->
-                chp.name = "$name / ${chp.name}"
-                chp
-            }
-        }?.flatten()
+        val subChapters =
+            titleObj["titles"]
+                ?.jsonArray
+                ?.map { obj ->
+                    val name = obj.jsonObject["display_name"]!!.jsonPrimitive.content
+                    listChapters(obj.jsonObject).map { chp ->
+                        chp.name = "$name / ${chp.name}"
+                        chp
+                    }
+                }?.flatten()
         if (topChapters !== null) chapters += topChapters
         if (subChapters !== null) chapters += subChapters
         return chapters
     }
 
     // Stub
-    override fun pageListRequest(chapter: SChapter): Request =
-        throw UnsupportedOperationException()
+    override fun pageListRequest(chapter: SChapter): Request = throw UnsupportedOperationException()
 
     // Overridden fetch so that we use our overloaded method instead
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
@@ -193,10 +212,10 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     }
 
     // Stub
-    override fun pageListParse(response: Response): List<Page> =
-        throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(response: Response): String = ""
+
     override fun getFilterList(): FilterList = FilterList()
 
     override val name = "Mango"
@@ -211,7 +230,8 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     private var apiCookies: String = ""
 
     override fun headersBuilder(): Headers.Builder =
-        Headers.Builder()
+        Headers
+            .Builder()
             .add("User-Agent", "Tachiyomi Mango v${AppInfo.getVersionName()}")
 
     private val preferences: SharedPreferences by lazy {
@@ -219,7 +239,8 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     }
 
     override val client: OkHttpClient =
-        network.client.newBuilder()
+        network.client
+            .newBuilder()
             .dns(Dns.SYSTEM)
             .addInterceptor { authIntercept(it) }
             .build()
@@ -237,22 +258,27 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
         }
 
         // Append the new cookie from the api
-        val authRequest = request.newBuilder()
-            .addHeader("Cookie", apiCookies)
-            .build()
+        val authRequest =
+            request
+                .newBuilder()
+                .addHeader("Cookie", apiCookies)
+                .build()
 
         return chain.proceed(authRequest)
     }
 
     private fun doLogin(chain: Interceptor.Chain) {
         // Try to login
-        val formHeaders: Headers = headersBuilder()
-            .add("ContentType", "application/x-www-form-urlencoded")
-            .build()
-        val formBody: RequestBody = FormBody.Builder()
-            .addEncoded("username", username)
-            .addEncoded("password", password)
-            .build()
+        val formHeaders: Headers =
+            headersBuilder()
+                .add("ContentType", "application/x-www-form-urlencoded")
+                .build()
+        val formBody: RequestBody =
+            FormBody
+                .Builder()
+                .addEncoded("username", username)
+                .addEncoded("password", password)
+                .build()
         val loginRequest = POST("$baseUrl/login", formHeaders, formBody)
         val response = chain.proceed(loginRequest)
         if (response.code != 200 || response.header("Set-Cookie") == null) {
@@ -264,14 +290,25 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        screen.addPreference(screen.editTextPreference(ADDRESS_TITLE, ADDRESS_DEFAULT, "The URL to access your Mango instance. Please include the port number if you didn't set up a reverse proxy"))
+        screen.addPreference(
+            screen.editTextPreference(
+                ADDRESS_TITLE,
+                ADDRESS_DEFAULT,
+                "The URL to access your Mango instance. Please include the port number if you didn't set up a reverse proxy",
+            ),
+        )
         screen.addPreference(screen.editTextPreference(PORT_TITLE, PORT_DEFAULT, "The port number to use if it's not the default 9000"))
         screen.addPreference(screen.editTextPreference(USERNAME_TITLE, USERNAME_DEFAULT, "Your login username"))
         screen.addPreference(screen.editTextPreference(PASSWORD_TITLE, PASSWORD_DEFAULT, "Your login password", true))
     }
 
-    private fun androidx.preference.PreferenceScreen.editTextPreference(title: String, default: String, summary: String, isPassword: Boolean = false): androidx.preference.EditTextPreference {
-        return androidx.preference.EditTextPreference(context).apply {
+    private fun androidx.preference.PreferenceScreen.editTextPreference(
+        title: String,
+        default: String,
+        summary: String,
+        isPassword: Boolean = false,
+    ): androidx.preference.EditTextPreference =
+        androidx.preference.EditTextPreference(context).apply {
             key = title
             this.title = title
             val input = preferences.getString(title, null)
@@ -296,7 +333,6 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
                 }
             }
         }
-    }
 
     // We strip the last slash since we will append it above
     private fun getPrefBaseUrl(): String {
@@ -306,8 +342,11 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
         }
         return path
     }
+
     private fun getPrefPort(): String = preferences.getString(PORT_TITLE, PORT_DEFAULT)!!
+
     private fun getPrefUsername(): String = preferences.getString(USERNAME_TITLE, USERNAME_DEFAULT)!!
+
     private fun getPrefPassword(): String = preferences.getString(PASSWORD_TITLE, PASSWORD_DEFAULT)!!
 
     companion object {

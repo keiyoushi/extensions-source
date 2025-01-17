@@ -32,18 +32,19 @@ abstract class Guya(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-) : ConfigurableSource, HttpSource() {
-
+) : HttpSource(),
+    ConfigurableSource {
     override val supportsLatest = true
 
     private val scanlatorCacheUrl by lazy { "$baseUrl/api/get_all_groups/" }
 
-    override fun headersBuilder() = Headers.Builder().add(
-        "User-Agent",
-        "(Android ${Build.VERSION.RELEASE}; " +
-            "${Build.MANUFACTURER} ${Build.MODEL}) " +
-            "Tachiyomi/${AppInfo.getVersionName()} ${Build.ID}",
-    )
+    override fun headersBuilder() =
+        Headers.Builder().add(
+            "User-Agent",
+            "(Android ${Build.VERSION.RELEASE}; " +
+                "${Build.MANUFACTURER} ${Build.MODEL}) " +
+                "Tachiyomi/${AppInfo.getVersionName()} ${Build.ID}",
+        )
 
     private val scanlators: ScanlatorStore = ScanlatorStore()
 
@@ -53,9 +54,7 @@ abstract class Guya(
     }
 
     // Request builder for the "browse" page of the manga
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/api/get_all_series/", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/api/get_all_series/", headers)
 
     // Gets the response object from the request
     override fun popularMangaParse(response: Response): MangasPage {
@@ -63,9 +62,7 @@ abstract class Guya(
         return parseManga(JSONObject(res))
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return popularMangaRequest(page)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val payload = JSONObject(response.body.string())
@@ -81,70 +78,69 @@ abstract class Guya(
     }
 
     // Overridden to use our overload
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        client
+            .newCall(mangaDetailsRequest(manga))
             .asObservableSuccess()
             .map { response ->
                 mangaDetailsParse(response, manga)
             }
-    }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/series/${manga.url}/", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/api/series/${manga.url}/", headers)
 
-    private fun mangaDetailsParse(response: Response, manga: SManga): SManga {
+    private fun mangaDetailsParse(
+        response: Response,
+        manga: SManga,
+    ): SManga {
         val res = response.body.string()
         return parseMangaFromJson(JSONObject(res), manga.title)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/reader/series/${manga.url}/"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/reader/series/${manga.url}/"
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        client
+            .newCall(chapterListRequest(manga))
             .asObservableSuccess()
             .map { response ->
                 chapterListParse(response, manga)
             }
-    }
 
     // Gets the chapter list based on the series being viewed
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/series/${manga.url}/", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api/series/${manga.url}/", headers)
 
     // Called after the request
-    private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
-        return parseChapterList(response.body.string(), manga)
-    }
+    private fun chapterListParse(
+        response: Response,
+        manga: SManga,
+    ): List<SChapter> = parseChapterList(response.body.string(), manga)
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/read/manga/${chapter.url.replace('.', '-')}/1/"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/read/manga/${chapter.url.replace('.', '-')}/1/"
 
     // Overridden fetch so that we use our overloaded method instead
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return client.newCall(pageListRequest(chapter))
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
+        client
+            .newCall(pageListRequest(chapter))
             .asObservableSuccess()
             .map { response ->
                 pageListParse(response, chapter)
             }
-    }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$baseUrl/api/series/${chapter.url.split("/")[0]}/", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl/api/series/${chapter.url.split("/")[0]}/", headers)
 
-    private fun pageListParse(response: Response, chapter: SChapter): List<Page> {
+    private fun pageListParse(
+        response: Response,
+        chapter: SChapter,
+    ): List<Page> {
         val res = response.body.string()
 
         val json = JSONObject(res)
         val chapterNum = chapter.name.split(" - ")[0]
-        val pages = json.getJSONObject("chapters")
-            .getJSONObject(chapterNum)
-            .getJSONObject("groups")
+        val pages =
+            json
+                .getJSONObject("chapters")
+                .getJSONObject(chapterNum)
+                .getJSONObject("groups")
         val metadata = JSONObject()
 
         metadata.put("chapter", chapterNum)
@@ -152,7 +148,8 @@ abstract class Guya(
         metadata.put("slug", json.getString("slug"))
         metadata.put(
             "folder",
-            json.getJSONObject("chapters")
+            json
+                .getJSONObject("chapters")
                 .getJSONObject(chapterNum)
                 .getString("folder"),
         )
@@ -160,31 +157,41 @@ abstract class Guya(
         return parsePageFromJson(pages, metadata)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return when {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        when {
             query.startsWith(SLUG_PREFIX) -> {
                 val slug = query.removePrefix(SLUG_PREFIX)
-                client.newCall(searchMangaRequest(page, query, filters))
+                client
+                    .newCall(searchMangaRequest(page, query, filters))
                     .asObservableSuccess()
                     .map { response ->
                         searchMangaParseWithSlug(response, slug)
                     }
             }
             else -> {
-                client.newCall(searchMangaRequest(page, query, filters))
+                client
+                    .newCall(searchMangaRequest(page, query, filters))
                     .asObservableSuccess()
                     .map { response ->
                         searchMangaParse(response, query)
                     }
             }
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/api/get_all_series/", headers)
-    }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = GET("$baseUrl/api/get_all_series/", headers)
 
-    protected open fun searchMangaParseWithSlug(response: Response, slug: String): MangasPage {
+    protected open fun searchMangaParseWithSlug(
+        response: Response,
+        slug: String,
+    ): MangasPage {
         val results = JSONObject(response.body.string())
         val truncatedJSON = JSONObject()
 
@@ -199,7 +206,10 @@ abstract class Guya(
         return parseManga(truncatedJSON)
     }
 
-    protected open fun searchMangaParse(response: Response, query: String): MangasPage {
+    protected open fun searchMangaParse(
+        response: Response,
+        query: String,
+    ): MangasPage {
         val res = response.body.string()
         val json = JSONObject(res)
         val truncatedJSON = JSONObject()
@@ -216,30 +226,34 @@ abstract class Guya(
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val scanlatorKeys = scanlators.keys().toTypedArray()
 
-        val preference = ListPreference(screen.context).apply {
-            key = "preferred_scanlator"
-            title = "Preferred scanlator"
-            entries = Array(scanlatorKeys.size) { scanlators.getValueFromKey(scanlatorKeys[it]) }
-            entryValues = scanlatorKeys
-            summary = "Current: %s\n\n" +
-                "This setting sets the scanlation group to prioritize " +
-                "on chapter refresh/update. It will get the next available if " +
-                "your preferred scanlator isn't an option (yet)."
+        val preference =
+            ListPreference(screen.context).apply {
+                key = "preferred_scanlator"
+                title = "Preferred scanlator"
+                entries = Array(scanlatorKeys.size) { scanlators.getValueFromKey(scanlatorKeys[it]) }
+                entryValues = scanlatorKeys
+                summary = "Current: %s\n\n" +
+                    "This setting sets the scanlation group to prioritize " +
+                    "on chapter refresh/update. It will get the next available if " +
+                    "your preferred scanlator isn't an option (yet)."
 
-            setDefaultValue("1")
+                setDefaultValue("1")
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue.toString()
-                preferences.edit().putString(scanlatorPreference, selected).commit()
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue.toString()
+                    preferences.edit().putString(scanlatorPreference, selected).commit()
+                }
             }
-        }
 
         screen.addPreference(preference)
     }
 
     // ------------- Helpers and whatnot ---------------
 
-    private fun parseChapterList(payload: String, manga: SManga): List<SChapter> {
+    private fun parseChapterList(
+        payload: String,
+        manga: SManga,
+    ): List<SChapter> {
         val sortKey = "preferred_sort"
         val response = JSONObject(payload)
         val chapters = response.getJSONObject("chapters")
@@ -311,31 +325,41 @@ abstract class Guya(
     }
 
     // Takes a json of the manga to parse
-    private fun parseMangaFromJson(json: JSONObject, title: String = ""): SManga {
+    private fun parseMangaFromJson(
+        json: JSONObject,
+        title: String = "",
+    ): SManga {
         val manga = SManga.create()
         manga.title = title.ifEmpty { json.getString("title") }
         manga.artist = json.optString("artist")
         manga.author = json.optString("author")
-        manga.description = json.optString("description").let {
-            if ('<' !in it) return@let it // no HTML
-            Jsoup.parseBodyFragment(it).body().run {
-                select(Evaluator.Tag("a")).remove()
-                text()
+        manga.description =
+            json.optString("description").let {
+                if ('<' !in it) return@let it // no HTML
+                Jsoup.parseBodyFragment(it).body().run {
+                    select(Evaluator.Tag("a")).remove()
+                    text()
+                }
             }
-        }
         manga.url = json.getString("slug")
 
         val cover = json.optString("cover")
-        manga.thumbnail_url = when {
-            cover.startsWith("http") -> cover
-            cover.isNotEmpty() -> "$baseUrl/$cover"
-            else -> null
-        }
+        manga.thumbnail_url =
+            when {
+                cover.startsWith("http") -> cover
+                cover.isNotEmpty() -> "$baseUrl/$cover"
+                else -> null
+            }
 
         return manga
     }
 
-    private fun parseChapterFromJson(json: JSONObject, num: String, sort: JSONArray, slug: String): SChapter {
+    private fun parseChapterFromJson(
+        json: JSONObject,
+        num: String,
+        sort: JSONArray,
+        slug: String,
+    ): SChapter {
         val chapter = SChapter.create()
 
         // Get the scanlator info based on group ranking; do it first since we need it later
@@ -349,7 +373,10 @@ abstract class Guya(
         return chapter
     }
 
-    private fun parsePageFromJson(json: JSONObject, metadata: JSONObject): List<Page> {
+    private fun parsePageFromJson(
+        json: JSONObject,
+        metadata: JSONObject,
+    ): List<Page> {
         val pages = json.getJSONArray(metadata.getString("scanlator"))
         return List(pages.length()) {
             Page(
@@ -365,7 +392,10 @@ abstract class Guya(
         }
     }
 
-    private fun getBestScanlator(json: JSONObject, sort: JSONArray): String {
+    private fun getBestScanlator(
+        json: JSONObject,
+        sort: JSONArray,
+    ): String {
         val preferred = preferences.getString(scanlatorPreference, null)
 
         if (preferred != null && json.has(preferred)) {
@@ -381,9 +411,12 @@ abstract class Guya(
         }
     }
 
-    private fun pageBuilder(slug: String, folder: String, filename: String, groupId: String): String {
-        return "$baseUrl/media/manga/$slug/chapters/$folder/$groupId/$filename"
-    }
+    private fun pageBuilder(
+        slug: String,
+        folder: String,
+        filename: String,
+        groupId: String,
+    ): String = "$baseUrl/media/manga/$slug/chapters/$folder/$groupId/$filename"
 
     inner class ScanlatorStore {
         private val scanlatorMap = mutableMapOf<String, String>()
@@ -435,14 +468,18 @@ abstract class Guya(
         private fun update(blocking: Boolean = true) {
             if (scanlatorMap.isEmpty() && retryCount < totalRetries) {
                 try {
-                    val call = client.newCall(GET(scanlatorCacheUrl, headers))
-                        .asObservable()
+                    val call =
+                        client
+                            .newCall(GET(scanlatorCacheUrl, headers))
+                            .asObservable()
 
                     if (blocking) {
-                        call.toBlocking()
+                        call
+                            .toBlocking()
                             .subscribe(::onResponse, ::onError)
                     } else {
-                        call.subscribeOn(Schedulers.io())
+                        call
+                            .subscribeOn(Schedulers.io())
                             .subscribe(::onResponse, ::onError)
                     }
                 } catch (e: Exception) {
@@ -454,25 +491,15 @@ abstract class Guya(
 
     // ----------------- Things we aren't supporting -----------------
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        throw UnsupportedOperationException("Unused")
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException("Unused")
 
-    override fun pageListParse(response: Response): List<Page> {
-        throw UnsupportedOperationException("Unused")
-    }
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException("Unused")
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         const val SLUG_PREFIX = "slug:"

@@ -15,7 +15,8 @@ class MangaHubFr : Madara("MangaHub.fr", "https://mangahub.fr", "fr", dateFormat
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
-        return document.select(pageListParseSelector)
+        return document
+            .select(pageListParseSelector)
             .mapIndexed { index, element ->
                 // Had to add trim because of white space in source.
                 val imageUrl = element.select("img").attr("abs:src").trim()

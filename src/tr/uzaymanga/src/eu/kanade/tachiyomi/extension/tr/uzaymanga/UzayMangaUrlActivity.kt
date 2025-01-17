@@ -8,7 +8,6 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class UzayMangaUrlActivity : Activity() {
-
     private val tag = javaClass.simpleName
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,11 +15,12 @@ class UzayMangaUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 2) {
             val item = "${pathSegments[1]}/${pathSegments[2]}"
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${UzayManga.URL_SEARCH_PREFIX}$item")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${UzayManga.URL_SEARCH_PREFIX}$item")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

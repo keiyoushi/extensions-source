@@ -13,48 +13,49 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
 import okhttp3.Headers
 
-class MangamoHelper(headers: Headers) {
-
+class MangamoHelper(
+    headers: Headers,
+) {
     companion object {
+        val json =
+            Json {
+                isLenient = true
+                ignoreUnknownKeys = true
+                explicitNulls = false
 
-        val json = Json {
-            isLenient = true
-            ignoreUnknownKeys = true
-            explicitNulls = false
-
-            serializersModule = SerializersModule {
-                contextual(DocumentDto::class) { DocumentSerializer(DocumentDtoInternal.serializer(it[0])) }
+                serializersModule =
+                    SerializersModule {
+                        contextual(DocumentDto::class) { DocumentSerializer(DocumentDtoInternal.serializer(it[0])) }
+                    }
             }
-        }
 
         @Suppress("UNCHECKED_CAST")
-        inline fun <reified T> String.parseJson(): T {
-            return when (T::class) {
-                DocumentDto::class -> json.decodeFromString<T>(
-                    DocumentSerializer(serializer<T>() as KSerializer<out DocumentDto<out Any?>>) as KSerializer<T>,
-                    this,
-                )
+        inline fun <reified T> String.parseJson(): T =
+            when (T::class) {
+                DocumentDto::class ->
+                    json.decodeFromString<T>(
+                        DocumentSerializer(serializer<T>() as KSerializer<out DocumentDto<out Any?>>) as KSerializer<T>,
+                        this,
+                    )
                 else -> json.decodeFromString<T>(this)
             }
-        }
     }
 
-    val jsonHeaders = headers.newBuilder()
-        .set("Content-Type", "application/json")
-        .build()
+    val jsonHeaders =
+        headers
+            .newBuilder()
+            .set("Content-Type", "application/json")
+            .build()
 
     private fun getCatalogUrl(series: SeriesDto): String {
         val lowercaseHyphenated = series.name_lowercase!!.replace(' ', '-')
         return "/catalog/$lowercaseHyphenated"
     }
 
-    fun getSeriesUrl(series: SeriesDto): String {
-        return "${getCatalogUrl(series)}?${MangamoConstants.SERIES_QUERY_PARAM}=${series.id}"
-    }
+    fun getSeriesUrl(series: SeriesDto): String = "${getCatalogUrl(series)}?${MangamoConstants.SERIES_QUERY_PARAM}=${series.id}"
 
-    fun getChapterUrl(chapter: ChapterDto): String {
-        return "?${MangamoConstants.SERIES_QUERY_PARAM}=${chapter.seriesId}&${MangamoConstants.CHAPTER_QUERY_PARAM}=${chapter.id}"
-    }
+    fun getChapterUrl(chapter: ChapterDto): String =
+        "?${MangamoConstants.SERIES_QUERY_PARAM}=${chapter.seriesId}&${MangamoConstants.CHAPTER_QUERY_PARAM}=${chapter.id}"
 
     fun getSeriesStatus(series: SeriesDto): Int =
         when (series.releaseStatusTag) {

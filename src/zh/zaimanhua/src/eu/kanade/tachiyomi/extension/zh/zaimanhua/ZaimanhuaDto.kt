@@ -23,16 +23,17 @@ class MangaDto(
     @SerialName("last_updatetime")
     private val lastUpdateTime: Long = 0,
 ) {
-    fun toSManga() = SManga.create().apply {
-        url = id.toString()
-        title = this@MangaDto.title
-        author = authors?.joinToString { it.name }
-        description = this@MangaDto.description
-        genre = types.joinToString { it.name }
-        status = parseStatus(this@MangaDto.status[0].name)
-        thumbnail_url = cover
-        initialized = true
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            url = id.toString()
+            title = this@MangaDto.title
+            author = authors?.joinToString { it.name }
+            description = this@MangaDto.description
+            genre = types.joinToString { it.name }
+            status = parseStatus(this@MangaDto.status[0].name)
+            thumbnail_url = cover
+            initialized = true
+        }
 
     fun parseChapterList(): List<SChapter> {
         val mangaId = id.toString()
@@ -49,7 +50,11 @@ class ChapterGroupDto(
     private val title: String,
     private val data: List<ChapterDto>,
 ) {
-    fun toSChapterList(mangaId: String, lastUpdateChapter: String, lastUpdateTime: Long): List<SChapter> {
+    fun toSChapterList(
+        mangaId: String,
+        lastUpdateChapter: String,
+        lastUpdateTime: Long,
+    ): List<SChapter> {
         val groupName = title
         val isDefaultGroup = groupName == "连载"
         val current = System.currentTimeMillis()
@@ -60,11 +65,12 @@ class ChapterGroupDto(
                 // Therefore upload times that differ too little from the current time will be ignored
                 // When the chapter is the latest chapter, use the last update time as the upload time
                 if ((current - date_upload) < 10000) {
-                    date_upload = if (url == lastUpdateChapter) {
-                        lastUpdateTime * 1000
-                    } else {
-                        0L
-                    }
+                    date_upload =
+                        if (url == lastUpdateChapter) {
+                            lastUpdateTime * 1000
+                        } else {
+                            0L
+                        }
                 }
                 url = "$mangaId/$url"
             }
@@ -83,11 +89,12 @@ class ChapterDto(
     @SerialName("updatetime")
     private val updateTime: Long = 0,
 ) {
-    fun toSChapterInternal() = SChapter.create().apply {
-        url = id.toString()
-        name = this@ChapterDto.name.formatChapterName()
-        date_upload = updateTime * 1000
-    }
+    fun toSChapterInternal() =
+        SChapter.create().apply {
+            url = id.toString()
+            name = this@ChapterDto.name.formatChapterName()
+            date_upload = updateTime * 1000
+        }
 }
 
 @Serializable
@@ -120,14 +127,15 @@ class PageItemDto(
     private val cover: String,
     private val types: String,
 ) {
-    fun toSManga() = SManga.create().apply {
-        url = this@PageItemDto.id.toString()
-        title = this@PageItemDto.title
-        author = authors.formatList()
-        genre = types.formatList()
-        status = parseStatus(this@PageItemDto.status)
-        thumbnail_url = cover
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            url = this@PageItemDto.id.toString()
+            title = this@PageItemDto.title
+            author = authors.formatList()
+            genre = types.formatList()
+            status = parseStatus(this@PageItemDto.status)
+            thumbnail_url = cover
+        }
 }
 
 @Serializable

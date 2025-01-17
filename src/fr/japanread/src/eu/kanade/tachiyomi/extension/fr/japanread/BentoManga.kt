@@ -33,8 +33,9 @@ import uy.kohesive.injekt.injectLazy
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
-class BentoManga : ParsedHttpSource(), ConfigurableSource {
-
+class BentoManga :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "Bento Manga"
 
     override val id: Long = 4697148576707003393
@@ -47,25 +48,28 @@ class BentoManga : ParsedHttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(2, 1)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .rateLimit(2, 1)
+            .build()
 
     override fun headersBuilder(): Headers.Builder {
-        val builder = super.headersBuilder().apply {
-            set("Referer", "$baseUrl/")
+        val builder =
+            super.headersBuilder().apply {
+                set("Referer", "$baseUrl/")
 
-            // Headers for homepage + serie page
-            set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-            set("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
-            set("Connection", "keep-alive")
-            set("Sec-Fetch-Dest", "document")
-            set("Sec-Fetch-Mode", "navigate")
-            set("Sec-Fetch-Site", "same-origin")
-            set("Sec-Fetch-User", "?1")
-        }
+                // Headers for homepage + serie page
+                set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+                set("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
+                set("Connection", "keep-alive")
+                set("Sec-Fetch-Dest", "document")
+                set("Sec-Fetch-Mode", "navigate")
+                set("Sec-Fetch-Site", "same-origin")
+                set("Sec-Fetch-User", "?1")
+            }
 
         val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
         val userAgent = preferences.getString(USER_AGENT_PREF, "")!!
@@ -77,74 +81,93 @@ class BentoManga : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Generic (used by popular/latest/search)
-    private fun mangaListFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            title = element.select("div").select("div.manga_header h1")
-                .text()
+    private fun mangaListFromElement(element: Element): SManga =
+        SManga.create().apply {
+            title =
+                element
+                    .select("div")
+                    .select("div.manga_header h1")
+                    .text()
             setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("div").select("img[alt=couverture manga]")
-                .attr("src")
+            thumbnail_url =
+                element
+                    .select("div")
+                    .select("img[alt=couverture manga]")
+                    .attr("src")
         }
-    }
 
     private fun mangaListSelector() = "div#mangas_content div.manga"
+
     private fun mangaListNextPageSelector() = ".paginator button:contains(>)"
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga_list?withoutTypes=5&order_by=views&limit=" + (page - 1), headers)
-    }
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseUrl/manga_list?withoutTypes=5&order_by=views&limit=" + (page - 1), headers)
 
     override fun popularMangaSelector() = mangaListSelector()
+
     override fun popularMangaFromElement(element: Element) = mangaListFromElement(element)
+
     override fun popularMangaNextPageSelector() = mangaListNextPageSelector()
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/manga_list?withoutTypes=5&limit=" + (page - 1), headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga_list?withoutTypes=5&limit=" + (page - 1), headers)
 
     override fun latestUpdatesSelector() = mangaListSelector()
+
     override fun latestUpdatesFromElement(element: Element) = mangaListFromElement(element)
+
     override fun latestUpdatesNextPageSelector() = mangaListNextPageSelector()
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         // If there is any search text, use text search, otherwise use filter search
-        val uri = if (query.isNotBlank()) {
-            Uri.parse("$baseUrl/manga_list?withoutTypes=5")
-                .buildUpon()
-                .appendQueryParameter("search", query)
-        } else {
-            val uri = Uri.parse("$baseUrl/manga_list?withoutTypes=5").buildUpon()
-            // Append uri filters
-            filters.forEach {
-                if (it is UriFilter) {
-                    it.addToUri(uri)
+        val uri =
+            if (query.isNotBlank()) {
+                Uri
+                    .parse("$baseUrl/manga_list?withoutTypes=5")
+                    .buildUpon()
+                    .appendQueryParameter("search", query)
+            } else {
+                val uri = Uri.parse("$baseUrl/manga_list?withoutTypes=5").buildUpon()
+                // Append uri filters
+                filters.forEach {
+                    if (it is UriFilter) {
+                        it.addToUri(uri)
+                    }
                 }
+                uri
             }
-            uri
-        }
         // Append page number
         uri.appendQueryParameter("limit", (page - 1).toString())
         return GET(uri.toString())
     }
 
     override fun searchMangaSelector() = mangaListSelector()
+
     override fun searchMangaFromElement(element: Element) = mangaListFromElement(element)
+
     override fun searchMangaNextPageSelector() = mangaListNextPageSelector()
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
-            title = document.select("div.manga div.manga-infos div.component-manga-title div.component-manga-title_main h1 ")
-                .text()
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            title =
+                document
+                    .select("div.manga div.manga-infos div.component-manga-title div.component-manga-title_main h1 ")
+                    .text()
             artist = document.select("div.datas div.datas_more-artists div.datas_more-artists-people a").text()
             author = document.select("div.datas div.datas_more-authors div.datas_more-authors-peoples div a").text()
             description = document.select("div.datas div.datas_synopsis").text()
-            genre = document.select("div.manga div.manga-infos div.component-manga-categories a")
-                .joinToString(" , ") { it.text() }
+            genre =
+                document
+                    .select("div.manga div.manga-infos div.component-manga-categories a")
+                    .joinToString(" , ") { it.text() }
             status = document.select("div.datas div.datas_more div.datas_more-status div.datas_more-status-data")?.first()?.text()?.let {
                 when {
                     it.contains("En cours") -> SManga.ONGOING
@@ -158,15 +181,17 @@ class BentoManga : ParsedHttpSource(), ConfigurableSource {
 
             thumbnail_url = document.select("img[alt=couverture manga]").attr("src")
         }
-    }
 
-    private fun apiHeaders(refererURL: String) = headers.newBuilder().apply {
-        set("Referer", refererURL)
-        set("x-requested-with", "XMLHttpRequest")
-        // without this we get 404 but I don't know why, I cannot find any information about this 'a' header.
-        // In chrome the value is constantly changing on each request, but giving this fixed value seems to work
-        set("a", "1df19bce590b")
-    }.build()
+    private fun apiHeaders(refererURL: String) =
+        headers
+            .newBuilder()
+            .apply {
+                set("Referer", refererURL)
+                set("x-requested-with", "XMLHttpRequest")
+                // without this we get 404 but I don't know why, I cannot find any information about this 'a' header.
+                // In chrome the value is constantly changing on each request, but giving this fixed value seems to work
+                set("a", "1df19bce590b")
+            }.build()
 
     // Chapters
     // Subtract relative date
@@ -190,39 +215,49 @@ class BentoManga : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterListSelector() = "div.page_content div.chapters_content div.div-item"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
             name = element.select("div.component-chapter-title a span.chapter_volume").text()
             setUrlWithoutDomain(element.select("div.component-chapter-title a:not([style*='display:none'])").attr("href"))
             date_upload = parseRelativeDate(element.select("div.component-chapter-date").text())
             scanlator = element.select("div.component-chapter-teams a span").joinToString(" + ") { it.text() }
         }
-    }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val requestUrl = if (manga.url.startsWith("http")) {
-            "${manga.url}"
-        } else {
-            "$baseUrl${manga.url}"
-        }
-        return client.newCall(GET(requestUrl, headers))
+        val requestUrl =
+            if (manga.url.startsWith("http")) {
+                "${manga.url}"
+            } else {
+                "$baseUrl${manga.url}"
+            }
+        return client
+            .newCall(GET(requestUrl, headers))
             .asObservableSuccess()
             .map { response ->
                 chapterListParse(response, requestUrl)
             }
     }
 
-    private fun chapterListParse(response: Response, requestUrl: String): List<SChapter> {
+    private fun chapterListParse(
+        response: Response,
+        requestUrl: String,
+    ): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
         var document = response.asJsoup()
         var moreChapters = true
         var nextPage = 1
-        val pagemax = if (!document.select(".paginator button:contains(>>)").isNullOrEmpty()) {
-            document.select(".paginator button:contains(>>)")?.first()?.attr("data-limit")?.toInt()?.plus(1)
-                ?: 1
-        } else {
-            1
-        }
+        val pagemax =
+            if (!document.select(".paginator button:contains(>>)").isNullOrEmpty()) {
+                document
+                    .select(".paginator button:contains(>>)")
+                    ?.first()
+                    ?.attr("data-limit")
+                    ?.toInt()
+                    ?.plus(1)
+                    ?: 1
+            } else {
+                1
+            }
         // chapters are paginated
         while (moreChapters && nextPage <= pagemax) {
             document.select(chapterListSelector()).map { chapters.add(chapterFromElement(it)) }
@@ -304,112 +339,120 @@ class BentoManga : ParsedHttpSource(), ConfigurableSource {
     override fun imageUrlParse(document: Document) = ""
 
     override fun imageRequest(page: Page): Request {
-        val newHeaders = headers.newBuilder().apply {
-            set("Referer", page.url)
-            set("Accept", "image/avif,image/webp,*/*")
-            set("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
-            set("Connection", "keep-alive")
-            set("Sec-Fetch-Dest", "document")
-            set("Sec-Fetch-Mode", "navigate")
-            set("Sec-Fetch-Site", "same-origin")
-            set("Sec-Fetch-User", "?1")
-        }.build()
+        val newHeaders =
+            headers
+                .newBuilder()
+                .apply {
+                    set("Referer", page.url)
+                    set("Accept", "image/avif,image/webp,*/*")
+                    set("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
+                    set("Connection", "keep-alive")
+                    set("Sec-Fetch-Dest", "document")
+                    set("Sec-Fetch-Mode", "navigate")
+                    set("Sec-Fetch-Site", "same-origin")
+                    set("Sec-Fetch-User", "?1")
+                }.build()
 
         return GET(page.imageUrl!!, newHeaders)
     }
 
     // Filters
-    override fun getFilterList() = FilterList(
-        SortFilter(),
-        TypeFilter(),
-        StatusFilter(),
-        GenreFilter(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            SortFilter(),
+            TypeFilter(),
+            StatusFilter(),
+            GenreFilter(),
+        )
 
-    private class SortFilter : UriSelectFilter(
-        "Tri",
-        "order_by",
-        arrayOf(
-            Pair("views", "Les + vus"),
-            Pair("top", "Les mieux notés"),
-            Pair("name", "A - Z"),
-            Pair("comment", "Les + commentés"),
-            Pair("update", "Les + récents"),
-            Pair("create", "Par date de sortie"),
-        ),
-        firstIsUnspecified = false,
-    )
+    private class SortFilter :
+        UriSelectFilter(
+            "Tri",
+            "order_by",
+            arrayOf(
+                Pair("views", "Les + vus"),
+                Pair("top", "Les mieux notés"),
+                Pair("name", "A - Z"),
+                Pair("comment", "Les + commentés"),
+                Pair("update", "Les + récents"),
+                Pair("create", "Par date de sortie"),
+            ),
+            firstIsUnspecified = false,
+        )
 
-    private class TypeFilter : UriSelectFilter(
-        "Type",
-        "withTypes",
-        arrayOf(
-            Pair("0", "Tous"),
-            Pair("2", "Manga"),
-            Pair("3", "Manhwa"),
-            Pair("4", "Manhua"),
-            Pair("5", "Novel"),
-            Pair("6", "Doujinshi"),
-        ),
-    )
+    private class TypeFilter :
+        UriSelectFilter(
+            "Type",
+            "withTypes",
+            arrayOf(
+                Pair("0", "Tous"),
+                Pair("2", "Manga"),
+                Pair("3", "Manhwa"),
+                Pair("4", "Manhua"),
+                Pair("5", "Novel"),
+                Pair("6", "Doujinshi"),
+            ),
+        )
 
-    private class StatusFilter : UriSelectFilter(
-        "Statut",
-        "status",
-        arrayOf(
-            Pair("0", "Tous"),
-            Pair("1", "En cours"),
-            Pair("2", "Terminé"),
-            Pair("3", "En pause"),
-            Pair("4", "Licencié"),
-            Pair("5", "Abandonné"),
-        ),
-    )
+    private class StatusFilter :
+        UriSelectFilter(
+            "Statut",
+            "status",
+            arrayOf(
+                Pair("0", "Tous"),
+                Pair("1", "En cours"),
+                Pair("2", "Terminé"),
+                Pair("3", "En pause"),
+                Pair("4", "Licencié"),
+                Pair("5", "Abandonné"),
+            ),
+        )
 
-    private class GenreFilter : UriSelectFilter(
-        "Genre",
-        "withCategories",
-        arrayOf(
-            Pair("0", "Tous"),
-            Pair("1", "Action"),
-            Pair("27", "Adulte"),
-            Pair("20", "Amitié"),
-            Pair("21", "Amour"),
-            Pair("7", "Arts martiaux"),
-            Pair("3", "Aventure"),
-            Pair("6", "Combat"),
-            Pair("5", "Comédie"),
-            Pair("4", "Drame"),
-            Pair("12", "Ecchi"),
-            Pair("16", "Fantastique"),
-            Pair("29", "Gender Bender"),
-            Pair("8", "Guerre"),
-            Pair("22", "Harem"),
-            Pair("23", "Hentai"),
-            Pair("15", "Historique"),
-            Pair("19", "Horreur"),
-            Pair("13", "Josei"),
-            Pair("30", "Mature"),
-            Pair("18", "Mecha"),
-            Pair("32", "One-shot"),
-            Pair("42", "Parodie"),
-            Pair("17", "Policier"),
-            Pair("25", "Science-fiction"),
-            Pair("31", "Seinen"),
-            Pair("10", "Shojo"),
-            Pair("26", "Shojo Ai"),
-            Pair("2", "Shonen"),
-            Pair("35", "Shonen Ai"),
-            Pair("37", "Smut"),
-            Pair("14", "Sports"),
-            Pair("38", "Surnaturel"),
-            Pair("39", "Tragédie"),
-            Pair("36", "Tranches de vie"),
-            Pair("34", "Vie scolaire"),
-            Pair("24", "Yaoi"),
-            Pair("41", "Yuri"),
-        ),
-    )
+    private class GenreFilter :
+        UriSelectFilter(
+            "Genre",
+            "withCategories",
+            arrayOf(
+                Pair("0", "Tous"),
+                Pair("1", "Action"),
+                Pair("27", "Adulte"),
+                Pair("20", "Amitié"),
+                Pair("21", "Amour"),
+                Pair("7", "Arts martiaux"),
+                Pair("3", "Aventure"),
+                Pair("6", "Combat"),
+                Pair("5", "Comédie"),
+                Pair("4", "Drame"),
+                Pair("12", "Ecchi"),
+                Pair("16", "Fantastique"),
+                Pair("29", "Gender Bender"),
+                Pair("8", "Guerre"),
+                Pair("22", "Harem"),
+                Pair("23", "Hentai"),
+                Pair("15", "Historique"),
+                Pair("19", "Horreur"),
+                Pair("13", "Josei"),
+                Pair("30", "Mature"),
+                Pair("18", "Mecha"),
+                Pair("32", "One-shot"),
+                Pair("42", "Parodie"),
+                Pair("17", "Policier"),
+                Pair("25", "Science-fiction"),
+                Pair("31", "Seinen"),
+                Pair("10", "Shojo"),
+                Pair("26", "Shojo Ai"),
+                Pair("2", "Shonen"),
+                Pair("35", "Shonen Ai"),
+                Pair("37", "Smut"),
+                Pair("14", "Sports"),
+                Pair("38", "Surnaturel"),
+                Pair("39", "Tragédie"),
+                Pair("36", "Tranches de vie"),
+                Pair("34", "Vie scolaire"),
+                Pair("24", "Yaoi"),
+                Pair("41", "Yuri"),
+            ),
+        )
 
     /**
      * Class that creates a select filter. Each entry in the dropdown has a name and a display name.
@@ -423,8 +466,7 @@ class BentoManga : ParsedHttpSource(), ConfigurableSource {
         val vals: Array<Pair<String, String>>,
         val firstIsUnspecified: Boolean = true,
         defaultValue: Int = 0,
-    ) :
-        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray(), defaultValue),
+    ) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray(), defaultValue),
         UriFilter {
         override fun addToUri(uri: Uri.Builder) {
             if (state != 0 || !firstIsUnspecified) {
@@ -444,29 +486,30 @@ class BentoManga : ParsedHttpSource(), ConfigurableSource {
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         // Maybe add the choice of a random UA ? (Like Mangathemesia)
 
-        EditTextPreference(screen.context).apply {
-            key = USER_AGENT_PREF
-            title = TITLE_RANDOM_UA
-            summary = USER_AGENT_PREF
-            dialogMessage =
-                "\n\nPermet d'indiquer un User-Agent custom\n" +
-                "Après l'ajout + restart de l'application, il faudra charger la page en webview et valider le captcha Cloudflare." +
-                "\n\nValeur par défaut:\n$DEFAULT_UA"
+        EditTextPreference(screen.context)
+            .apply {
+                key = USER_AGENT_PREF
+                title = TITLE_RANDOM_UA
+                summary = USER_AGENT_PREF
+                dialogMessage =
+                    "\n\nPermet d'indiquer un User-Agent custom\n" +
+                    "Après l'ajout + restart de l'application, il faudra charger la page en webview et valider le captcha Cloudflare." +
+                    "\n\nValeur par défaut:\n$DEFAULT_UA"
 
-            setDefaultValue(DEFAULT_UA)
+                setDefaultValue(DEFAULT_UA)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    Headers.Builder().add("User-Agent", newValue as String)
-                    Toast.makeText(screen.context, RESTART_APP_STRING, Toast.LENGTH_LONG).show()
-                    summary = newValue
-                    true
-                } catch (e: Throwable) {
-                    Toast.makeText(screen.context, "$ERROR_USER_AGENT_SETUP ${e.message}", Toast.LENGTH_LONG).show()
-                    false
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        Headers.Builder().add("User-Agent", newValue as String)
+                        Toast.makeText(screen.context, RESTART_APP_STRING, Toast.LENGTH_LONG).show()
+                        summary = newValue
+                        true
+                    } catch (e: Throwable) {
+                        Toast.makeText(screen.context, "$ERROR_USER_AGENT_SETUP ${e.message}", Toast.LENGTH_LONG).show()
+                        false
+                    }
                 }
-            }
-        }.let(screen::addPreference)
+            }.let(screen::addPreference)
     }
 
     companion object {

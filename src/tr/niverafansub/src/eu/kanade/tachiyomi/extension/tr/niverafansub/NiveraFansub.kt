@@ -6,12 +6,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NiveraFansub : Madara(
-    "Nivera Fansub",
-    "https://niverafansub.org",
-    "tr",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-) {
+class NiveraFansub :
+    Madara(
+        "Nivera Fansub",
+        "https://niverafansub.org",
+        "tr",
+        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
+    ) {
     override val chapterUrlSelector = "li > a"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

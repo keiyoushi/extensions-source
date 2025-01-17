@@ -19,7 +19,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class AnimeSama : ParsedHttpSource() {
-
     override val name = "AnimeSama"
 
     override val baseUrl = "https://anime-sama.fr"
@@ -32,23 +31,22 @@ class AnimeSama : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept-Language", "fr-FR")
+    override fun headersBuilder(): Headers.Builder =
+        super
+            .headersBuilder()
+            .add("Accept-Language", "fr-FR")
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/catalogue/", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/catalogue/", headers)
 
     override fun popularMangaSelector() = ".cardListAnime.Scans"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             title = element.select("h1").text()
             setUrlWithoutDomain(element.select("a").attr("href"))
             thumbnail_url = element.select("img").attr("src")
         }
-    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -62,32 +60,40 @@ class AnimeSama : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$baseUrl/catalogue/searchbar.php"
-        val formBody = FormBody.Builder()
-            .add("query", query)
-            .build()
+        val formBody =
+            FormBody
+                .Builder()
+                .add("query", query)
+                .build()
 
         return POST(url, headers, formBody)
     }
 
     override fun searchMangaSelector() = ".cardListAnime.Scans"
+
     override fun searchMangaNextPageSelector(): String? = null
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+
+    override fun searchMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             title = element.select("h1").text()
             setUrlWithoutDomain(element.select("a").attr("href"))
             thumbnail_url = element.select("img").attr("src")
         }
-    }
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        description = document.select("#sousBlocMilieu > div h2:contains(Synopsis)+p").text()
-        genre = document.select("#sousBlocMilieu > div h2:contains(Genres)+a").text()
-        title = document.select("#titreOeuvre").text()
-        thumbnail_url = document.select("#coverOeuvre").attr("src")
-    }
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            description = document.select("#sousBlocMilieu > div h2:contains(Synopsis)+p").text()
+            genre = document.select("#sousBlocMilieu > div h2:contains(Genres)+a").text()
+            title = document.select("#titreOeuvre").text()
+            thumbnail_url = document.select("#coverOeuvre").attr("src")
+        }
 
     // Chapters
     override fun chapterListSelector() = throw UnsupportedOperationException()
@@ -101,27 +107,34 @@ class AnimeSama : ParsedHttpSource() {
         return count > 1
     }
 
-    private fun parseChapterFromResponse(response: Response, translation_name: String): List<SChapter> {
+    private fun parseChapterFromResponse(
+        response: Response,
+        translation_name: String,
+    ): List<SChapter> {
         val document = response.asJsoup()
 
-        val chapterUrl = document.baseUri().toHttpUrl()
-            .newBuilder()
-            .query(null)
-            .addPathSegment("episodes.js")
-            .addQueryParameter("title", document.select("#titreOeuvre").text())
-            .build()
+        val chapterUrl =
+            document
+                .baseUri()
+                .toHttpUrl()
+                .newBuilder()
+                .query(null)
+                .addPathSegment("episodes.js")
+                .addQueryParameter("title", document.select("#titreOeuvre").text())
+                .build()
 
         val requestToFetchChapters = GET(chapterUrl, headers)
         val javascriptFile = client.newCall(requestToFetchChapters).execute()
         val javascriptFileContent = javascriptFile.body.string()
 
-        val parsedJavascriptFileToJson = javascriptFileContent
-            .split(" ", ",")
-            .filter { it.contains("eps") && !it.contains("drive.google.com") }
-            .mapNotNull { it.replace("=", "").replace("eps", "").toIntOrNull() }
-            .sorted()
-            .asReversed()
-            .toSet() // Remove duplicate episodes
+        val parsedJavascriptFileToJson =
+            javascriptFileContent
+                .split(" ", ",")
+                .filter { it.contains("eps") && !it.contains("drive.google.com") }
+                .mapNotNull { it.replace("=", "").replace("eps", "").toIntOrNull() }
+                .sorted()
+                .asReversed()
+                .toSet() // Remove duplicate episodes
         val parsedChapterList: MutableList<SChapter> = ArrayList()
         var chapterDelay = 0
 
@@ -141,7 +154,15 @@ class AnimeSama : ParsedHttpSource() {
                             parsedChapterList.add(
                                 SChapter.create().apply {
                                     name = "Chapitre $i"
-                                    setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
+                                    setUrlWithoutDomain(
+                                        chapterUrl
+                                            .newBuilder()
+                                            .addQueryParameter(
+                                                "id",
+                                                (parsedChapterList.size + 1).toString(),
+                                            ).build()
+                                            .toString(),
+                                    )
                                     scanlator = translation_name
                                 },
                             )
@@ -152,13 +173,21 @@ class AnimeSama : ParsedHttpSource() {
                         parsedChapterList.add(
                             SChapter.create().apply {
                                 name = "Chapitre $title"
-                                setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
+                                setUrlWithoutDomain(
+                                    chapterUrl
+                                        .newBuilder()
+                                        .addQueryParameter(
+                                            "id",
+                                            (parsedChapterList.size + 1).toString(),
+                                        ).build()
+                                        .toString(),
+                                )
                                 scanlator = translation_name
                             },
                         )
                         chapterDelay++
                     }
-                    /* The site contains an as-yet unused command called "newSPE", and as I have no concrete examples of its use, I haven't implemented it yet. */
+                    // The site contains an as-yet unused command called "newSPE", and as I have no concrete examples of its use, I haven't implemented it yet.
                 }
             }
         }
@@ -166,7 +195,13 @@ class AnimeSama : ParsedHttpSource() {
             parsedChapterList.add(
                 SChapter.create().apply {
                     name = "Chapitre " + (parsedChapterList.size + 1 - chapterDelay)
-                    setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
+                    setUrlWithoutDomain(
+                        chapterUrl
+                            .newBuilder()
+                            .addQueryParameter("id", (parsedChapterList.size + 1).toString())
+                            .build()
+                            .toString(),
+                    )
                     scanlator = translation_name
                 },
             )
@@ -175,7 +210,10 @@ class AnimeSama : ParsedHttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val url = response.request.url.toUrl().toHttpUrlOrNull()!!
+        val url =
+            response.request.url
+                .toUrl()
+                .toHttpUrlOrNull()!!
         val document = response.asJsoup()
         val scriptContent = document.select("script:containsData(panneauScan(\"nom\", \"url\"))").toString()
         val splitedContent = scriptContent.split(";").toMutableList()
@@ -191,13 +229,15 @@ class AnimeSama : ParsedHttpSource() {
                 val (scanTitle, scanUrl) = matchResult.destructured
                 if (!scanUrl.contains("va")) {
                     val scanlatorGroup = scanTitle.replace(Regex("""(Scans|\(|\))"""), "").trim()
-                    val fetchExistentSubMangas = GET(
-                        url.newBuilder()
-                            .addPathSegments(
-                                scanUrl,
-                            ).build(),
-                        headers,
-                    )
+                    val fetchExistentSubMangas =
+                        GET(
+                            url
+                                .newBuilder()
+                                .addPathSegments(
+                                    scanUrl,
+                                ).build(),
+                            headers,
+                        )
                     val res = client.newCall(fetchExistentSubMangas).execute()
                     parsedChapterList.addAll(parseChapterFromResponse(res, scanlatorGroup))
                 }
@@ -218,13 +258,15 @@ class AnimeSama : ParsedHttpSource() {
 
         val allChapters = document.body().toString().split("var")
 
-        val chapterImageListString = allChapters.firstOrNull { it.contains("eps$chapter=") }
-            ?: return emptyList()
+        val chapterImageListString =
+            allChapters.firstOrNull { it.contains("eps$chapter=") }
+                ?: return emptyList()
 
-        val chapterImageListParsed = chapterImageListString
-            .substringAfter("[")
-            .substringBefore("]")
-            .split(",")
+        val chapterImageListParsed =
+            chapterImageListString
+                .substringAfter("[")
+                .substringBefore("]")
+                .split(",")
 
         val image_list = mutableListOf<Page>()
 
@@ -240,9 +282,10 @@ class AnimeSama : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
-        val imgHeaders = headersBuilder()
-            .add("Referer", baseUrl)
-            .build()
+        val imgHeaders =
+            headersBuilder()
+                .add("Referer", baseUrl)
+                .build()
 
         return GET(page.imageUrl!!, imgHeaders)
     }

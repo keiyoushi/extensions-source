@@ -28,14 +28,15 @@ open class MonochromeCMS(
 
     private val json by injectLazy<Json>()
 
-    override fun headersBuilder() =
-        Headers.Builder().set("Referer", "$baseUrl/")
+    override fun headersBuilder() = Headers.Builder().set("Referer", "$baseUrl/")
 
-    override fun fetchPopularManga(page: Int) =
-        fetchSearchManga(page, "", FilterList())
+    override fun fetchPopularManga(page: Int) = fetchSearchManga(page, "", FilterList())
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$apiUrl/manga?limit=10&offset=${10 * (page - 1)}&title=$query", headers)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = GET("$apiUrl/manga?limit=10&offset=${10 * (page - 1)}&title=$query", headers)
 
     override fun searchMangaParse(response: Response) =
         response.decode<Results>().let {
@@ -56,11 +57,9 @@ open class MonochromeCMS(
         }
     }
 
-    override fun fetchMangaDetails(manga: SManga) =
-        Observable.just(manga.apply { initialized = true })!!
+    override fun fetchMangaDetails(manga: SManga) = Observable.just(manga.apply { initialized = true })!!
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$apiUrl/manga/${manga.url}/chapters", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$apiUrl/manga/${manga.url}/chapters", headers)
 
     override fun fetchChapterList(manga: SManga) =
         client.newCall(chapterListRequest(manga)).asObservableSuccess().map {
@@ -77,16 +76,16 @@ open class MonochromeCMS(
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val (uuid, version, length) = chapter.url.split('|')
-        val pages = IntRange(1, length.toInt()).map {
-            Page(it, "", "$apiUrl/media/$uuid/$it.jpg?version=$version")
-        }
+        val pages =
+            IntRange(1, length.toInt()).map {
+                Page(it, "", "$apiUrl/media/$uuid/$it.jpg?version=$version")
+            }
         return Observable.just(pages)
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
-    override fun getChapterUrl(chapter: SChapter) =
-        "$baseUrl/chapters/${chapter.url.subSequence(37, 73)}"
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/chapters/${chapter.url.subSequence(37, 73)}"
 
     private fun mangaFromAPI(manga: Manga) =
         SManga.create().apply {
@@ -96,43 +95,33 @@ open class MonochromeCMS(
             artist = manga.artist
             description = manga.description
             thumbnail_url = apiUrl + manga.cover
-            status = when (manga.status) {
-                "ongoing", "hiatus" -> SManga.ONGOING
-                "completed", "cancelled" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+            status =
+                when (manga.status) {
+                    "ongoing", "hiatus" -> SManga.ONGOING
+                    "completed", "cancelled" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
 
-    private inline fun <reified T> Response.decode() =
-        json.decodeFromString<T>(body.string())
+    private inline fun <reified T> Response.decode() = json.decodeFromString<T>(body.string())
 
-    override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun pageListRequest(chapter: SChapter) =
-        throw UnsupportedOperationException()
+    override fun pageListRequest(chapter: SChapter) = throw UnsupportedOperationException()
 
-    override fun pageListParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

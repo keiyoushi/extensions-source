@@ -30,43 +30,53 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ClownCorps : ConfigurableSource, HttpSource() {
+class ClownCorps :
+    HttpSource(),
+    ConfigurableSource {
     override val baseUrl = "https://clowncorps.net"
     override val lang = "en"
     override val name = "Clown Corps"
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(TextInterceptor())
-        .build()
+    override val client =
+        network.client
+            .newBuilder()
+            .addInterceptor(TextInterceptor())
+            .build()
 
-    private fun getManga() = SManga.create().apply {
-        title = name
-        artist = CREATOR
-        author = CREATOR
-        status = SManga.ONGOING
-        initialized = true
-        // Image and description from: https://clowncorps.net/about/
-        thumbnail_url = "$baseUrl/wp-content/uploads/2022/11/clowns41.jpg"
-        description = "Clown Corps is a comic about crime-fighting clowns.\n" +
-            "It's pronounced \"core.\" Like marine corps."
-        url = "/comic"
-    }
+    private fun getManga() =
+        SManga.create().apply {
+            title = name
+            artist = CREATOR
+            author = CREATOR
+            status = SManga.ONGOING
+            initialized = true
+            // Image and description from: https://clowncorps.net/about/
+            thumbnail_url = "$baseUrl/wp-content/uploads/2022/11/clowns41.jpg"
+            description = "Clown Corps is a comic about crime-fighting clowns.\n" +
+                "It's pronounced \"core.\" Like marine corps."
+            url = "/comic"
+        }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        Observable.just(MangasPage(listOf(getManga()), hasNextPage = false))
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(getManga()), hasNextPage = false))
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        fetchPopularManga(page)
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = fetchPopularManga(page)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        Observable.just(getManga())
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(getManga())
 
     @Serializable
-    class SerializableChapter(val fullLink: String, val name: String, val dateUpload: Long) {
+    class SerializableChapter(
+        val fullLink: String,
+        val name: String,
+        val dateUpload: Long,
+    ) {
         override fun hashCode() = fullLink.hashCode()
-        override fun equals(other: Any?) =
-            other is SerializableChapter && fullLink == other.fullLink
+
+        override fun equals(other: Any?) = other is SerializableChapter && fullLink == other.fullLink
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -121,13 +131,12 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         }
     }
 
-    private fun parseDate(dateStr: String): Long {
-        return try {
+    private fun parseDate(dateStr: String): Long =
+        try {
             dateFormat.parse(dateStr)!!.time
         } catch (_: ParseException) {
             0L
         }
-    }
 
     private val dateFormat by lazy {
         SimpleDateFormat("MMMM dd, yyyy hh:mm aa", Locale.ENGLISH)
@@ -157,78 +166,73 @@ class ClownCorps : ConfigurableSource, HttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private fun getShowAuthorsNotesPref() =
-        preferences.getBoolean(SETTING_KEY_SHOW_AUTHORS_NOTES, false)
+    private fun getShowAuthorsNotesPref() = preferences.getBoolean(SETTING_KEY_SHOW_AUTHORS_NOTES, false)
 
-    private fun getChapterCache() =
-        preferences.getString(CACHE_KEY_CHAPTERS, null)
+    private fun getChapterCache() = preferences.getString(CACHE_KEY_CHAPTERS, null)
 
-    private fun setChapterCache(json: String) =
-        preferences.edit().putString(CACHE_KEY_CHAPTERS, json).apply()
+    private fun setChapterCache(json: String) = preferences.edit().putString(CACHE_KEY_CHAPTERS, json).apply()
 
-    private fun clearChapterCache() =
-        preferences.edit().remove(CACHE_KEY_CHAPTERS).apply()
+    private fun clearChapterCache() = preferences.edit().remove(CACHE_KEY_CHAPTERS).apply()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
-            key = SETTING_KEY_SHOW_AUTHORS_NOTES
-            title = "Show author's notes"
-            summary =
-                "Enable to see the author's notes at the end of chapters (if they're there)."
-            setDefaultValue(false)
-        }
+        val authorsNotesPref =
+            SwitchPreferenceCompat(screen.context).apply {
+                key = SETTING_KEY_SHOW_AUTHORS_NOTES
+                title = "Show author's notes"
+                summary =
+                    "Enable to see the author's notes at the end of chapters (if they're there)."
+                setDefaultValue(false)
+            }
         screen.addPreference(authorsNotesPref)
 
         // I couldn't find a way to create a simple button, so here's a workaround that uses
         // a MultiSelectListPreference with a single option as a kind of confirmation window.
-        val clearCachePref = MultiSelectListPreference(screen.context).apply {
-            key = SETTING_KEY_CLEAR_CHAPTER_CACHE
-            title = "Clear chapter cache"
-            summary = "Clears the chapter cache, forcing a full re-fetch from the website."
-            dialogTitle = "Are you sure you want to clear the chapter cache?"
-            entries = arrayOf("Yes, I'm sure")
-            entryValues = arrayOf(VALUE_CONFIRM)
-            setDefaultValue(emptySet<String>())
+        val clearCachePref =
+            MultiSelectListPreference(screen.context).apply {
+                key = SETTING_KEY_CLEAR_CHAPTER_CACHE
+                title = "Clear chapter cache"
+                summary = "Clears the chapter cache, forcing a full re-fetch from the website."
+                dialogTitle = "Are you sure you want to clear the chapter cache?"
+                entries = arrayOf("Yes, I'm sure")
+                entryValues = arrayOf(VALUE_CONFIRM)
+                setDefaultValue(emptySet<String>())
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Set<*>
-                if (checkValue.contains(VALUE_CONFIRM)) {
-                    clearChapterCache()
-                    Toast.makeText(screen.context, "Cleared chapter cache", Toast.LENGTH_SHORT)
-                        .show()
+                setOnPreferenceChangeListener { _, newValue ->
+                    val checkValue = newValue as Set<*>
+                    if (checkValue.contains(VALUE_CONFIRM)) {
+                        clearChapterCache()
+                        Toast
+                            .makeText(screen.context, "Cleared chapter cache", Toast.LENGTH_SHORT)
+                            .show()
+                    }
+
+                    false // Don't actually save the "yes"
                 }
-
-                false // Don't actually save the "yes"
             }
-        }
         screen.addPreference(clearCachePref)
     }
 

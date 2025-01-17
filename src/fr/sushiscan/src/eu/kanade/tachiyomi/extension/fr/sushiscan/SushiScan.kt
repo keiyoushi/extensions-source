@@ -35,41 +35,52 @@ class SushiScan :
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.FRENCH),
     ),
     ConfigurableSource {
-
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
     }
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .rateLimit(2, 1, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).rateLimit(2, 1, TimeUnit.SECONDS)
+            .build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .addCustomUA()
-        .set("Referer", "$baseUrl$mangaUrlDirectory")
+    override fun headersBuilder(): Headers.Builder =
+        super
+            .headersBuilder()
+            .addCustomUA()
+            .set("Referer", "$baseUrl$mangaUrlDirectory")
 
     override val altNamePrefix = "Nom alternatif : "
     override val seriesAuthorSelector = ".infotable tr:contains(Auteur) td:last-child"
     override val seriesStatusSelector = ".infotable tr:contains(Statut) td:last-child"
-    override fun String?.parseStatus(): Int = when {
-        this == null -> SManga.UNKNOWN
-        this.contains("En Cours", ignoreCase = true) -> SManga.ONGOING
-        this.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
-        this.contains("Abandonné", ignoreCase = true) -> SManga.CANCELLED
-        this.contains("En Pause", ignoreCase = true) -> SManga.ON_HIATUS
-        else -> SManga.UNKNOWN
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/page/$page".toHttpUrl().newBuilder()
-            .addQueryParameter("s", query)
-            .build()
+    override fun String?.parseStatus(): Int =
+        when {
+            this == null -> SManga.UNKNOWN
+            this.contains("En Cours", ignoreCase = true) -> SManga.ONGOING
+            this.contains("Terminé", ignoreCase = true) -> SManga.COMPLETED
+            this.contains("Abandonné", ignoreCase = true) -> SManga.CANCELLED
+            this.contains("En Pause", ignoreCase = true) -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/page/$page"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("s", query)
+                .build()
 
         return GET(url, headers)
     }
@@ -80,8 +91,9 @@ class SushiScan :
         }
 
     override fun pageListParse(document: Document): List<Page> {
-        val scriptContent = document.selectFirst("script:containsData(ts_reader)")?.data()
-            ?: return super.pageListParse(document)
+        val scriptContent =
+            document.selectFirst("script:containsData(ts_reader)")?.data()
+                ?: return super.pageListParse(document)
         val jsonString = scriptContent.substringAfter("ts_reader.run(").substringBefore(");")
         val tsReader = json.decodeFromString<TSReader>(jsonString)
         val imageUrls = tsReader.sources.firstOrNull()?.images ?: return emptyList()
@@ -89,7 +101,8 @@ class SushiScan :
     }
 
     private fun Headers.Builder.addCustomUA(): Headers.Builder {
-        preferences.getPrefCustomUA()
+        preferences
+            .getPrefCustomUA()
             .takeIf { !it.isNullOrBlank() }
             ?.let { set("User-Agent", it) }
         return this

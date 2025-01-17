@@ -4,17 +4,20 @@ import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.util.concurrent.TimeUnit
 
-class AiYuManhua : ZeistManga(
-    "AiYuManhua",
-    "https://www.aiyumanhua.com",
-    "es",
-) {
+class AiYuManhua :
+    ZeistManga(
+        "AiYuManhua",
+        "https://www.aiyumanhua.com",
+        "es",
+    ) {
     // Site moved from MangaThemesia to ZeistManga (again)
     override val versionId = 4
 
-    override val client = super.client.newBuilder()
-        .rateLimit(2, 1, TimeUnit.SECONDS)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(2, 1, TimeUnit.SECONDS)
+            .build()
 
     override val popularMangaSelector = "div#PopularPosts2 article"
     override val popularMangaSelectorTitle = ".post-title a"

@@ -18,7 +18,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class AralosBD : HttpSource() {
-
     companion object {
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.FRANCE)
 
@@ -29,15 +28,15 @@ class AralosBD : HttpSource() {
         val PAGE_REGEX = "page:([0-9]+)".toRegex()
     }
 
-    private fun cleanString(string: String): String {
-        return Parser.unescapeEntities(string, false)
+    private fun cleanString(string: String): String =
+        Parser
+            .unescapeEntities(string, false)
             .substringBefore("---")
             .replace(LINK_REGEX, "$2")
             .replace(BOLD_REGEX, "$1")
             .replace(ITALIC_REGEX, "$1")
             .replace(ICON_REGEX, "")
             .trim()
-    }
 
     override val name = "AralosBD"
     override val baseUrl = "https://aralosbd.fr"
@@ -85,7 +84,11 @@ class AralosBD : HttpSource() {
         return GET("$baseUrl/manga/search?s=sort:id;limit:24;-id:3;page:${page - 1};order:desc", headers)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         // For a basic search, we call the appropriate endpoint
         return GET("$baseUrl/manga/search?s=page:${page - 1};sort:id;order:desc;text:$query", headers)
     }
@@ -110,7 +113,17 @@ class AralosBD : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val responseBody = client.newCall(GET(response.request.url.toString().replace("display?", "api?get=manga&"), headers)).execute().body
+        val responseBody =
+            client
+                .newCall(
+                    GET(
+                        response.request.url
+                            .toString()
+                            .replace("display?", "api?get=manga&"),
+                        headers,
+                    ),
+                ).execute()
+                .body
 
         val manga = json.decodeFromString<AralosBDManga>(responseBody.string())
 
@@ -126,9 +139,7 @@ class AralosBD : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(manga.url.replace("display?id", "api?get=chapters&manga"), headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(manga.url.replace("display?id", "api?get=chapters&manga"), headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val searchResult = json.decodeFromString<List<AralosBDChapter>>(response.body.string())
@@ -139,12 +150,20 @@ class AralosBD : HttpSource() {
         return validSearchResults.map(::chapterToSChapter)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
-        val responseBody = client.newCall(GET(response.request.url.toString().replace("chapter?id", "api?get=pages&chapter"), headers)).execute().body
+        val responseBody =
+            client
+                .newCall(
+                    GET(
+                        response.request.url
+                            .toString()
+                            .replace("chapter?id", "api?get=pages&chapter"),
+                        headers,
+                    ),
+                ).execute()
+                .body
 
         val pageResult = json.decodeFromString<AralosBDPages>(responseBody.string())
 
@@ -160,10 +179,11 @@ class AralosBD : HttpSource() {
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     private fun authorToString(author: AralosBDAuthor) = author.name
+
     private fun tagToString(tag: AralosBDTag) = tag.tag
 
-    private fun searchMangaToSManga(manga: AralosBDSearchManga): SManga {
-        return SManga.create().apply {
+    private fun searchMangaToSManga(manga: AralosBDSearchManga): SManga =
+        SManga.create().apply {
             // No need to trim, it's already done by the server
             title = manga.title
 
@@ -173,17 +193,20 @@ class AralosBD : HttpSource() {
             // The url of the manga is simply based on the manga ID for now
             url = "$baseUrl/manga/display?id=${manga.id}"
         }
-    }
 
-    private fun chapterToSChapter(chapter: AralosBDChapter): SChapter {
-        return SChapter.create().apply {
+    private fun chapterToSChapter(chapter: AralosBDChapter): SChapter =
+        SChapter.create().apply {
             url = "$baseUrl/manga/chapter?id=${chapter.chapter_id}"
             name = chapter.chapter_number + " - " + chapter.chapter_title
-            date_upload = try { DATE_FORMAT.parse(chapter.chapter_release_time)!!.time } catch (e: Exception) { System.currentTimeMillis() }
+            date_upload =
+                try {
+                    DATE_FORMAT.parse(chapter.chapter_release_time)!!.time
+                } catch (e: Exception) {
+                    System.currentTimeMillis()
+                }
             // chapter_number = // This is a string and it can be 2.5.1 for example
             scanlator = chapter.chapter_translator
         }
-    }
 }
 
 @Serializable

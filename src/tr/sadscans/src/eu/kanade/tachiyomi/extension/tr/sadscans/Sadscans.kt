@@ -16,7 +16,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Sadscans : ParsedHttpSource() {
-
     override val name = "Sadscans"
 
     override val baseUrl = "https://sadscans.com"
@@ -27,23 +26,28 @@ class Sadscans : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(DataImageInterceptor())
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(DataImageInterceptor())
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     // popular
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/series", headers)
 
     override fun popularMangaSelector() = "div.series-list"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("div > a")!!.absUrl("href"))
-        title = element.selectFirst("div > h2")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
-    }
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.selectFirst("div > a")!!.absUrl("href"))
+            title = element.selectFirst("div > h2")!!.text()
+            thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
+        }
 
     // TODO: add page selectors & url parameters when site have enough series for pagination
     override fun popularMangaNextPageSelector() = null
@@ -53,18 +57,23 @@ class Sadscans : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = "div.chap"
 
-    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("div.chap-title a")!!.let {
-            setUrlWithoutDomain(it.absUrl("href"))
-            title = it.text()
+    override fun latestUpdatesFromElement(element: Element) =
+        SManga.create().apply {
+            element.selectFirst("div.chap-title a")!!.let {
+                setUrlWithoutDomain(it.absUrl("href"))
+                title = it.text()
+            }
+            thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
         }
-        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
-    }
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (!query.startsWith(SLUG_SEARCH_PREFIX)) {
             return super.fetchSearchManga(page, query, filters)
         }
@@ -77,8 +86,11 @@ class Sadscans : ParsedHttpSource() {
             }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/series?search=$query", headers)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = GET("$baseUrl/series?search=$query", headers)
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -87,8 +99,8 @@ class Sadscans : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // manga details
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
             title = document.selectFirst(".title")!!.text()
             author = document.select(".author > span:nth-child(2)").text()
             artist = author
@@ -96,18 +108,18 @@ class Sadscans : ParsedHttpSource() {
             description = document.select(".summary p").text()
             thumbnail_url = document.select("div.series-image img").attr("abs:src")
         }
-    }
 
     // chapter list
     override fun chapterListSelector() = "div.chap"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        element.selectFirst("a")!!.let {
-            setUrlWithoutDomain(it.absUrl("href"))
-            name = it.text()
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            element.selectFirst("a")!!.let {
+                setUrlWithoutDomain(it.absUrl("href"))
+                name = it.text()
+            }
+            date_upload = parseDate(element.select("div > div > span:nth-child(2)").text())
         }
-        date_upload = parseDate(element.select("div > div > span:nth-child(2)").text())
-    }
 
     // page list
     override fun pageListParse(document: Document) =
@@ -120,19 +132,19 @@ class Sadscans : ParsedHttpSource() {
     private val statusOngoing = listOf("ongoing", "devam ediyor")
     private val statusCompleted = listOf("complete", "tamamlandı", "bitti")
 
-    private fun String.parseStatus(): Int {
-        return when (this.lowercase()) {
+    private fun String.parseStatus(): Int =
+        when (this.lowercase()) {
             in statusOngoing -> SManga.ONGOING
             in statusCompleted -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-    }
 
-    private fun Element.imgAttr(): String = when {
-        hasAttr("data-pagespeed-high-res-src") -> dataImageAsUrl("data-pagespeed-high-res-src")
-        hasAttr("data-pagespeed-lazy-src") -> dataImageAsUrl("data-pagespeed-lazy-src")
-        else -> dataImageAsUrl("src")
-    }
+    private fun Element.imgAttr(): String =
+        when {
+            hasAttr("data-pagespeed-high-res-src") -> dataImageAsUrl("data-pagespeed-high-res-src")
+            hasAttr("data-pagespeed-lazy-src") -> dataImageAsUrl("data-pagespeed-lazy-src")
+            else -> dataImageAsUrl("src")
+        }
 
     private fun parseDate(dateStr: String) =
         runCatching { dateFormat.parse(dateStr)!!.time }

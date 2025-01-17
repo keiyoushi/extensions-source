@@ -5,10 +5,15 @@ import kotlinx.serialization.Serializable
 
 // Popular / Latest / Search pages
 @Serializable
-data class PopularResponseDto(val data: PopularData)
+data class PopularResponseDto(
+    val data: PopularData,
+)
 
 @Serializable
-data class PopularData(val items: List<MangaDto>, val isEnd: Boolean)
+data class PopularData(
+    val items: List<MangaDto>,
+    val isEnd: Boolean,
+)
 
 @Serializable
 data class MangaDto(
@@ -41,10 +46,17 @@ class ChapterByPageResponse(
 
 // Pages
 @Serializable
-data class PageListResponseDto(val data: PageListData)
+data class PageListResponseDto(
+    val data: PageListData,
+)
 
 @Serializable
-data class PageListData(val scans: List<PageDto>) {
+data class PageListData(
+    val scans: List<PageDto>,
+) {
     @Serializable
-    data class PageDto(val n: Int, val url: String)
+    data class PageDto(
+        val n: Int,
+        val url: String,
+    )
 }

@@ -21,7 +21,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Hentaidexy : HttpSource() {
-
     override val name = "Hentaidexy"
 
     override val baseUrl = "https://hentaidexy.net"
@@ -36,18 +35,19 @@ class Hentaidexy : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimitHost(apiUrl.toHttpUrl(), 1)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimitHost(apiUrl.toHttpUrl(), 1)
+            .build()
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("Referer", "$baseUrl/")
-    }
+    override fun headersBuilder() =
+        Headers.Builder().apply {
+            add("Referer", "$baseUrl/")
+        }
 
     // popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/api/v1/mangas?page=$page&limit=100&sort=-views", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/api/v1/mangas?page=$page&limit=100&sort=-views", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<ApiMangaResponse>(response.body.string())
@@ -62,14 +62,16 @@ class Hentaidexy : HttpSource() {
     }
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/api/v1/mangas?page=$page&limit=100&sort=-updatedAt", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/api/v1/mangas?page=$page&limit=100&sort=-updatedAt", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (!query.startsWith(ID_SEARCH_PREFIX)) {
             return super.fetchSearchManga(page, query, filters)
         }
@@ -80,16 +82,16 @@ class Hentaidexy : HttpSource() {
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$apiUrl/api/v1/mangas?page=$page&altTitles=$query&sort=createdAt", headers)
-    }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = GET("$apiUrl/api/v1/mangas?page=$page&altTitles=$query&sort=createdAt", headers)
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // manga details
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiUrl/api/v1/mangas/${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/api/v1/mangas/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val mangaDetails = json.decodeFromString<MangaDetails>(response.body.string())
@@ -103,20 +105,21 @@ class Hentaidexy : HttpSource() {
     }
 
     // chapter list
-    override fun chapterListRequest(manga: SManga): Request {
-        return paginatedChapterListRequest(manga.url, 1)
-    }
+    override fun chapterListRequest(manga: SManga): Request = paginatedChapterListRequest(manga.url, 1)
 
-    private fun paginatedChapterListRequest(mangaID: String, page: Int): Request {
-        return GET("$apiUrl/api/v1/mangas/$mangaID/chapters?sort=-serialNumber&limit=100&page=$page", headers)
-    }
+    private fun paginatedChapterListRequest(
+        mangaID: String,
+        page: Int,
+    ): Request = GET("$apiUrl/api/v1/mangas/$mangaID/chapters?sort=-serialNumber&limit=100&page=$page", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterListResponse = json.decodeFromString<ApiChapterResponse>(response.body.string())
 
-        val mangaId = response.request.url.toString()
-            .substringAfter("/mangas/")
-            .substringBefore("/chapters")
+        val mangaId =
+            response.request.url
+                .toString()
+                .substringAfter("/mangas/")
+                .substringBefore("/chapters")
 
         val totalPages = chapterListResponse.totalPages
         var currentPage = 1
@@ -139,9 +142,7 @@ class Hentaidexy : HttpSource() {
         }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     // page list
     override fun pageListRequest(chapter: SChapter): Request {
@@ -157,13 +158,11 @@ class Hentaidexy : HttpSource() {
     }
 
     // unused
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Helpers
-    private fun toSManga(manga: Manga): SManga {
-        return SManga.create().apply {
+    private fun toSManga(manga: Manga): SManga =
+        SManga.create().apply {
             url = manga._id
             title = manga.title
             author = manga.authors?.joinToString { it.trim() }
@@ -173,28 +172,24 @@ class Hentaidexy : HttpSource() {
             status = manga.status.parseStatus()
             thumbnail_url = manga.coverImage
         }
-    }
 
-    private fun String.parseStatus(): Int {
-        return when {
+    private fun String.parseStatus(): Int =
+        when {
             this.contains("ongoing", true) -> SManga.ONGOING
             this.contains("complete", true) -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-    }
 
-    private fun Float.parseChapterNumber(): String {
-        return if (this.toInt().toFloat() == this) {
+    private fun Float.parseChapterNumber(): String =
+        if (this.toInt().toFloat() == this) {
             this.toInt().toString()
         } else {
             this.toString()
         }
-    }
 
-    private fun String.parseDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(this)?.time }
+    private fun String.parseDate(): Long =
+        runCatching { DATE_FORMATTER.parse(this)?.time }
             .getOrNull() ?: 0L
-    }
 
     companion object {
         private val DATE_FORMATTER by lazy {

@@ -47,17 +47,18 @@ import java.util.Locale
 class Manhuagui(
     override val name: String = "漫画柜",
     override val lang: String = "zh",
-) : ConfigurableSource, ParsedHttpSource() {
-
+) : ParsedHttpSource(),
+    ConfigurableSource {
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    private val baseHost = if (preferences.getBoolean(USE_MIRROR_URL_PREF, false)) {
-        "mhgui.com"
-    } else {
-        "manhuagui.com"
-    }
+    private val baseHost =
+        if (preferences.getBoolean(USE_MIRROR_URL_PREF, false)) {
+            "mhgui.com"
+        } else {
+            "manhuagui.com"
+        }
 
     override val baseUrl =
         if (preferences.getBoolean(SHOW_ZH_HANT_WEBSITE_PREF, false)) {
@@ -75,28 +76,42 @@ class Manhuagui(
     // Add rate limit to fix manga thumbnail load failure
     override val client: OkHttpClient =
         if (getShowR18()) {
-            network.client.newBuilder()
+            network.client
+                .newBuilder()
                 .rateLimitHost(baseHttpUrl, preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(), 10)
-                .rateLimitHost(imageServer[0].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
-                .rateLimitHost(imageServer[1].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
-                .addNetworkInterceptor(AddCookieHeaderInterceptor(baseHttpUrl.host))
+                .rateLimitHost(
+                    imageServer[0].toHttpUrl(),
+                    preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
+                ).rateLimitHost(
+                    imageServer[1].toHttpUrl(),
+                    preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
+                ).addNetworkInterceptor(AddCookieHeaderInterceptor(baseHttpUrl.host))
                 .build()
         } else {
-            network.client.newBuilder()
+            network.client
+                .newBuilder()
                 .rateLimitHost(baseHttpUrl, preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(), 10)
-                .rateLimitHost(imageServer[0].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
-                .rateLimitHost(imageServer[1].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
-                .build()
+                .rateLimitHost(
+                    imageServer[0].toHttpUrl(),
+                    preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
+                ).rateLimitHost(
+                    imageServer[1].toHttpUrl(),
+                    preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt(),
+                ).build()
         }
 
     // Add R18 verification cookie
-    class AddCookieHeaderInterceptor(private val baseHost: String) : Interceptor {
+    class AddCookieHeaderInterceptor(
+        private val baseHost: String,
+    ) : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
             if (chain.request().url.host == baseHost) {
                 val originalCookies = chain.request().header("Cookie") ?: ""
                 if (originalCookies != "" && !originalCookies.contains("isAdult=1")) {
                     return chain.proceed(
-                        chain.request().newBuilder()
+                        chain
+                            .request()
+                            .newBuilder()
                             .header("Cookie", "$originalCookies; isAdult=1")
                             .build(),
                     )
@@ -107,26 +122,36 @@ class Manhuagui(
     }
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/list/view_p$page.html", headers)
+
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list/update_p$page.html", headers)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query != "") {
             // Normal search
             return GET("$baseUrl/s/${query}_p$page.html", headers)
         } else {
             // Filters search
-            val params = filters.map {
-                if (it !is SortFilter && it is UriPartFilter) {
-                    it.toUriPart()
-                } else {
-                    ""
-                }
-            }.filter { it != "" }.joinToString("_")
+            val params =
+                filters
+                    .map {
+                        if (it !is SortFilter && it is UriPartFilter) {
+                            it.toUriPart()
+                        } else {
+                            ""
+                        }
+                    }.filter { it != "" }
+                    .joinToString("_")
 
-            val sortOrder = filters.filterIsInstance<SortFilter>()
-                .joinToString("") {
-                    (it as UriPartFilter).toUriPart()
-                }
+            val sortOrder =
+                filters
+                    .filterIsInstance<SortFilter>()
+                    .joinToString("") {
+                        (it as UriPartFilter).toUriPart()
+                    }
 
             // Example: https://www.manhuagui.com/list/japan_maoxian_qingnian_2020_b/update_p1.html
             //                                        /$params                      /$sortOrder $page
@@ -134,19 +159,18 @@ class Manhuagui(
             if (params != "") {
                 url += "/$params"
             }
-            url += if (sortOrder == "") {
-                "/index_p$page.html"
-            } else {
-                "/${sortOrder}_p$page.html"
-            }
+            url +=
+                if (sortOrder == "") {
+                    "/index_p$page.html"
+                } else {
+                    "/${sortOrder}_p$page.html"
+                }
             return GET(url, headers)
         }
     }
 
     // Return mobile webpage url to "Open in browser" and "Share manga".
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(mobileWebsiteUrl + manga.url)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(mobileWebsiteUrl + manga.url)
 
     // Bypass mangaDetailsRequest
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
@@ -161,34 +185,51 @@ class Manhuagui(
                 withContext(Dispatchers.IO) {
                     // Delay 1 second to wait main manga details request complete
                     delay(1000L)
-                    client.newCall(
-                        POST(
-                            "$baseUrl/tools/submit_ajax.ashx?action=user_check_login",
-                            headersBuilder()
-                                .set("Referer", manga.url)
-                                .set("X-Requested-With", "XMLHttpRequest")
-                                .build(),
-                        ),
-                    ).enqueue(
-                        object : Callback {
-                            override fun onFailure(call: Call, e: IOException) = e.printStackTrace()
-                            override fun onResponse(call: Call, response: Response) = response.close()
-                        },
-                    )
+                    client
+                        .newCall(
+                            POST(
+                                "$baseUrl/tools/submit_ajax.ashx?action=user_check_login",
+                                headersBuilder()
+                                    .set("Referer", manga.url)
+                                    .set("X-Requested-With", "XMLHttpRequest")
+                                    .build(),
+                            ),
+                        ).enqueue(
+                            object : Callback {
+                                override fun onFailure(
+                                    call: Call,
+                                    e: IOException,
+                                ) = e.printStackTrace()
 
-                    client.newCall(
-                        GET(
-                            "$baseUrl/tools/vote.ashx?act=get&bid=$bid",
-                            headersBuilder()
-                                .set("Referer", manga.url)
-                                .set("X-Requested-With", "XMLHttpRequest").build(),
-                        ),
-                    ).enqueue(
-                        object : Callback {
-                            override fun onFailure(call: Call, e: IOException) = e.printStackTrace()
-                            override fun onResponse(call: Call, response: Response) = response.close()
-                        },
-                    )
+                                override fun onResponse(
+                                    call: Call,
+                                    response: Response,
+                                ) = response.close()
+                            },
+                        )
+
+                    client
+                        .newCall(
+                            GET(
+                                "$baseUrl/tools/vote.ashx?act=get&bid=$bid",
+                                headersBuilder()
+                                    .set("Referer", manga.url)
+                                    .set("X-Requested-With", "XMLHttpRequest")
+                                    .build(),
+                            ),
+                        ).enqueue(
+                            object : Callback {
+                                override fun onFailure(
+                                    call: Call,
+                                    e: IOException,
+                                ) = e.printStackTrace()
+
+                                override fun onResponse(
+                                    call: Call,
+                                    response: Response,
+                                ) = response.close()
+                            },
+                        )
                 }
             }
         }
@@ -202,61 +243,85 @@ class Manhuagui(
     // For ManhuaguiUrlActivity
     private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/comic/$id", headers)
 
-    private fun searchMangaByIdParse(response: Response, id: String): MangasPage {
+    private fun searchMangaByIdParse(
+        response: Response,
+        id: String,
+    ): MangasPage {
         val sManga = mangaDetailsParse(response)
         sManga.url = "/comic/$id/"
         return MangasPage(listOf(sManga), false)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        if (query.startsWith(PREFIX_ID_SEARCH)) {
             val id = query.removePrefix(PREFIX_ID_SEARCH)
-            client.newCall(searchMangaByIdRequest(id))
+            client
+                .newCall(searchMangaByIdRequest(id))
                 .asObservableSuccess()
                 .map { response -> searchMangaByIdParse(response, id) }
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        if (response.request.url.encodedPath.startsWith("/s/")) {
+        if (response.request.url.encodedPath
+                .startsWith("/s/")
+        ) {
             // Normal search
-            val mangas = document.select(searchMangaSelector()).map { element ->
-                searchMangaFromElement(element)
-            }
-            val hasNextPage = searchMangaNextPageSelector().let { selector ->
-                document.select(selector).first()
-            } != null
+            val mangas =
+                document.select(searchMangaSelector()).map { element ->
+                    searchMangaFromElement(element)
+                }
+            val hasNextPage =
+                searchMangaNextPageSelector().let { selector ->
+                    document.select(selector).first()
+                } != null
 
             return MangasPage(mangas, hasNextPage)
         } else {
             // Filters search
-            val mangas = document.select(popularMangaSelector()).map { element ->
-                popularMangaFromElement(element)
-            }
+            val mangas =
+                document.select(popularMangaSelector()).map { element ->
+                    popularMangaFromElement(element)
+                }
             val hasNextPage = document.select(popularMangaNextPageSelector()).first() != null
             return MangasPage(mangas, hasNextPage)
         }
     }
 
     override fun popularMangaSelector() = "ul#contList > li"
+
     override fun latestUpdatesSelector() = popularMangaSelector()
+
     override fun searchMangaSelector() = "div.book-result > ul > li"
+
     override fun chapterListSelector() = "ul > li > a.status0"
 
-    override fun searchMangaNextPageSelector() = "span.current + a" // "a.prev" contain 2~4 elements: first, previous, next and last page, "span.current + a" is a better choice.
+    override fun searchMangaNextPageSelector() =
+        "span.current + a" // "a.prev" contain 2~4 elements: first, previous, next and last page, "span.current + a" is a better choice.
+
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
+
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("Referer", baseUrl)
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36")
-        .set("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
+    override fun headersBuilder(): Headers.Builder =
+        super
+            .headersBuilder()
+            .set("Referer", baseUrl)
+            .set(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36",
+            ).set("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
 
     override fun popularMangaFromElement(element: Element) = mangaFromElement(element)
+
     override fun latestUpdatesFromElement(element: Element) = mangaFromElement(element)
+
     private fun mangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         element.select("a.bcover").first()!!.let {
@@ -265,11 +330,12 @@ class Manhuagui(
 
             // Fix thumbnail lazy load
             val thumbnailElement = it.select("img").first()!!
-            manga.thumbnail_url = if (thumbnailElement.hasAttr("src")) {
-                thumbnailElement.attr("abs:src")
-            } else {
-                thumbnailElement.attr("abs:data-src")
-            }
+            manga.thumbnail_url =
+                if (thumbnailElement.hasAttr("src")) {
+                    thumbnailElement.attr("abs:src")
+                } else {
+                    thumbnailElement.attr("abs:data-src")
+                }
         }
         return manga
     }
@@ -279,7 +345,12 @@ class Manhuagui(
 
         element.select("div.book-detail").first()!!.let {
             manga.url = it.select("dl > dt > a").first()!!.attr("href")
-            manga.title = it.select("dl > dt > a").first()!!.attr("title").trim()
+            manga.title =
+                it
+                    .select("dl > dt > a")
+                    .first()!!
+                    .attr("title")
+                    .trim()
             manga.thumbnail_url = element.select("div.book-cover > a.bcover > img").first()!!.attr("abs:src")
         }
 
@@ -287,6 +358,7 @@ class Manhuagui(
     }
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val chapters = mutableListOf<SChapter>()
@@ -326,7 +398,8 @@ class Manhuagui(
 
                     // Manhuagui only provide upload date for latest chapter
                     if (currentChapter.url == latestChapterHref) {
-                        currentChapter.date_upload = parseDate(document.select("div.book-detail > ul.detail-list > li.status > span > span.red").last()!!)
+                        currentChapter.date_upload =
+                            parseDate(document.select("div.book-detail > ul.detail-list > li.status > span > span.red").last()!!)
                     }
                     pageChapters.add(currentChapter)
                 }
@@ -354,15 +427,26 @@ class Manhuagui(
         manga.title = document.select("div.book-title > h1:nth-child(1)").text().trim()
         manga.description = document.select("div#intro-all").text().trim()
         manga.thumbnail_url = document.select("p.hcover > img").attr("abs:src")
-        manga.author = document.select("span:contains(漫画作者) > a , span:contains(漫畫作者) > a").text().trim().replace(" ", ", ")
-        manga.genre = document.select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a").text().trim().replace(" ", ", ")
-        manga.status = when (document.select("div.book-detail > ul.detail-list > li.status > span > span").first()!!.text()) {
-            "连载中" -> SManga.ONGOING
-            "已完结" -> SManga.COMPLETED
-            "連載中" -> SManga.ONGOING
-            "已完結" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+        manga.author =
+            document
+                .select("span:contains(漫画作者) > a , span:contains(漫畫作者) > a")
+                .text()
+                .trim()
+                .replace(" ", ", ")
+        manga.genre =
+            document
+                .select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a")
+                .text()
+                .trim()
+                .replace(" ", ", ")
+        manga.status =
+            when (document.select("div.book-detail > ul.detail-list > li.status > span > span").first()!!.text()) {
+                "连载中" -> SManga.ONGOING
+                "已完结" -> SManga.COMPLETED
+                "連載中" -> SManga.ONGOING
+                "已完結" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
 
         return manga
     }
@@ -389,15 +473,16 @@ class Manhuagui(
         }
 
         val html = document.html()
-        val imgCode = packedRegex.find(html)!!.groupValues[1].let {
-            // Make the packed content normal again so :lib:unpacker can do its job
-            it.replace(packedContentRegex) { match ->
-                val lzs = match.groupValues[1]
-                val decoded = LZString.decompressFromBase64(lzs).replace("'", "\\'")
+        val imgCode =
+            packedRegex.find(html)!!.groupValues[1].let {
+                // Make the packed content normal again so :lib:unpacker can do its job
+                it.replace(packedContentRegex) { match ->
+                    val lzs = match.groupValues[1]
+                    val decoded = LZString.decompressFromBase64(lzs).replace("'", "\\'")
 
-                "'$decoded'.split('|')"
+                    "'$decoded'.split('|')"
+                }
             }
-        }
         val imgDecode = Unpacker.unpack(imgCode)
 
         val imgJsonStr = blockCcArgRegex.find(imgDecode)!!.groupValues[0]
@@ -412,94 +497,99 @@ class Manhuagui(
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val mainSiteRateLimitPreference = androidx.preference.ListPreference(screen.context).apply {
-            key = MAINSITE_RATELIMIT_PREF
-            title = MAINSITE_RATELIMIT_PREF_TITLE
-            entries = ENTRIES_ARRAY
-            entryValues = ENTRIES_ARRAY
-            summary = MAINSITE_RATELIMIT_PREF_SUMMARY
+        val mainSiteRateLimitPreference =
+            androidx.preference.ListPreference(screen.context).apply {
+                key = MAINSITE_RATELIMIT_PREF
+                title = MAINSITE_RATELIMIT_PREF_TITLE
+                entries = ENTRIES_ARRAY
+                entryValues = ENTRIES_ARRAY
+                summary = MAINSITE_RATELIMIT_PREF_SUMMARY
 
-            setDefaultValue(MAINSITE_RATELIMIT_DEFAULT_VALUE)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(MAINSITE_RATELIMIT_PREF, newValue as String).commit()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
+                setDefaultValue(MAINSITE_RATELIMIT_DEFAULT_VALUE)
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        val setting = preferences.edit().putString(MAINSITE_RATELIMIT_PREF, newValue as String).commit()
+                        setting
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
                 }
             }
-        }
 
-        val imgCDNRateLimitPreference = androidx.preference.ListPreference(screen.context).apply {
-            key = IMAGE_CDN_RATELIMIT_PREF
-            title = IMAGE_CDN_RATELIMIT_PREF_TITLE
-            entries = ENTRIES_ARRAY
-            entryValues = ENTRIES_ARRAY
-            summary = IMAGE_CDN_RATELIMIT_PREF_SUMMARY
+        val imgCDNRateLimitPreference =
+            androidx.preference.ListPreference(screen.context).apply {
+                key = IMAGE_CDN_RATELIMIT_PREF
+                title = IMAGE_CDN_RATELIMIT_PREF_TITLE
+                entries = ENTRIES_ARRAY
+                entryValues = ENTRIES_ARRAY
+                summary = IMAGE_CDN_RATELIMIT_PREF_SUMMARY
 
-            setDefaultValue(IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(IMAGE_CDN_RATELIMIT_PREF, newValue as String).commit()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
+                setDefaultValue(IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        val setting = preferences.edit().putString(IMAGE_CDN_RATELIMIT_PREF, newValue as String).commit()
+                        setting
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
                 }
             }
-        }
 
         // Simplified/Traditional Chinese version website switch
-        val zhHantPreference = androidx.preference.CheckBoxPreference(screen.context).apply {
-            key = SHOW_ZH_HANT_WEBSITE_PREF
-            title = SHOW_ZH_HANT_WEBSITE_PREF_TITLE
-            summary = SHOW_ZH_HANT_WEBSITE_PREF_SUMMARY
+        val zhHantPreference =
+            androidx.preference.CheckBoxPreference(screen.context).apply {
+                key = SHOW_ZH_HANT_WEBSITE_PREF
+                title = SHOW_ZH_HANT_WEBSITE_PREF_TITLE
+                summary = SHOW_ZH_HANT_WEBSITE_PREF_SUMMARY
 
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putBoolean(SHOW_ZH_HANT_WEBSITE_PREF, newValue as Boolean).commit()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        val setting = preferences.edit().putBoolean(SHOW_ZH_HANT_WEBSITE_PREF, newValue as Boolean).commit()
+                        setting
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
                 }
             }
-        }
 
         // R18+ switch
-        val r18Preference = androidx.preference.CheckBoxPreference(screen.context).apply {
-            key = SHOW_R18_PREF
-            title = SHOW_R18_PREF_TITLE
-            summary = SHOW_R18_PREF_SUMMARY
+        val r18Preference =
+            androidx.preference.CheckBoxPreference(screen.context).apply {
+                key = SHOW_R18_PREF
+                title = SHOW_R18_PREF_TITLE
+                summary = SHOW_R18_PREF_SUMMARY
 
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val newSetting = preferences.edit().putBoolean(SHOW_R18_PREF, newValue as Boolean).commit()
-                    newSetting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        val newSetting = preferences.edit().putBoolean(SHOW_R18_PREF, newValue as Boolean).commit()
+                        newSetting
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
                 }
             }
-        }
 
-        val mirrorURLPreference = androidx.preference.CheckBoxPreference(screen.context).apply {
-            key = USE_MIRROR_URL_PREF
-            title = USE_MIRROR_URL_PREF_TITLE
-            summary = USE_MIRROR_URL_PREF_SUMMARY
+        val mirrorURLPreference =
+            androidx.preference.CheckBoxPreference(screen.context).apply {
+                key = USE_MIRROR_URL_PREF
+                title = USE_MIRROR_URL_PREF_TITLE
+                summary = USE_MIRROR_URL_PREF_SUMMARY
 
-            setDefaultValue(false)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val newSetting = preferences.edit().putBoolean(USE_MIRROR_URL_PREF, newValue as Boolean).commit()
-                    newSetting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
+                setDefaultValue(false)
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        val newSetting = preferences.edit().putBoolean(USE_MIRROR_URL_PREF, newValue as Boolean).commit()
+                        newSetting
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
                 }
             }
-        }
 
         screen.addPreference(mainSiteRateLimitPreference)
         screen.addPreference(imgCDNRateLimitPreference)
@@ -518,160 +608,168 @@ class Manhuagui(
         open fun toUriPart() = pair[state].second
     }
 
-    override fun getFilterList() = FilterList(
-        SortFilter(),
-        LocaleFilter(),
-        GenreFilter(),
-        ReaderFilter(),
-        PublishDateFilter(),
-        FirstLetterFilter(),
-        StatusFilter(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            SortFilter(),
+            LocaleFilter(),
+            GenreFilter(),
+            ReaderFilter(),
+            PublishDateFilter(),
+            FirstLetterFilter(),
+            StatusFilter(),
+        )
 
-    private class SortFilter : UriPartFilter(
-        "排序方式",
-        arrayOf(
-            Pair("人气最旺", "view"), // Same to popularMangaRequest()
-            Pair("最新发布", ""), // Publish date
-            Pair("最新更新", "update"),
-            Pair("评分最高", "rate"),
-        ),
-    )
+    private class SortFilter :
+        UriPartFilter(
+            "排序方式",
+            arrayOf(
+                Pair("人气最旺", "view"), // Same to popularMangaRequest()
+                Pair("最新发布", ""), // Publish date
+                Pair("最新更新", "update"),
+                Pair("评分最高", "rate"),
+            ),
+        )
 
-    private class LocaleFilter : UriPartFilter(
-        "按地区",
-        arrayOf(
-            Pair("全部", ""), // all
-            Pair("日本", "japan"),
-            Pair("港台", "hongkong"),
-            Pair("其它", "other"),
-            Pair("欧美", "europe"),
-            Pair("内地", "china"),
-            Pair("韩国", "korea"),
-        ),
-    )
+    private class LocaleFilter :
+        UriPartFilter(
+            "按地区",
+            arrayOf(
+                Pair("全部", ""), // all
+                Pair("日本", "japan"),
+                Pair("港台", "hongkong"),
+                Pair("其它", "other"),
+                Pair("欧美", "europe"),
+                Pair("内地", "china"),
+                Pair("韩国", "korea"),
+            ),
+        )
 
-    private class GenreFilter : UriPartFilter(
-        "按剧情",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("热血", "rexue"),
-            Pair("冒险", "maoxian"),
-            Pair("魔幻", "mohuan"),
-            Pair("神鬼", "shengui"),
-            Pair("搞笑", "gaoxiao"),
-            Pair("萌系", "mengxi"),
-            Pair("爱情", "aiqing"),
-            Pair("科幻", "kehuan"),
-            Pair("魔法", "mofa"),
-            Pair("格斗", "gedou"),
-            Pair("武侠", "wuxia"),
-            Pair("机战", "jizhan"),
-            Pair("战争", "zhanzheng"),
-            Pair("竞技", "jingji"),
-            Pair("体育", "tiyu"),
-            Pair("校园", "xiaoyuan"),
-            Pair("生活", "shenghuo"),
-            Pair("励志", "lizhi"),
-            Pair("历史", "lishi"),
-            Pair("伪娘", "weiniang"),
-            Pair("宅男", "zhainan"),
-            Pair("腐女", "funv"),
-            Pair("耽美", "danmei"),
-            Pair("百合", "baihe"),
-            Pair("后宫", "hougong"),
-            Pair("治愈", "zhiyu"),
-            Pair("美食", "meishi"),
-            Pair("推理", "tuili"),
-            Pair("悬疑", "xuanyi"),
-            Pair("恐怖", "kongbu"),
-            Pair("四格", "sige"),
-            Pair("职场", "zhichang"),
-            Pair("侦探", "zhentan"),
-            Pair("社会", "shehui"),
-            Pair("音乐", "yinyue"),
-            Pair("舞蹈", "wudao"),
-            Pair("杂志", "zazhi"),
-            Pair("黑道", "heidao"),
-        ),
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "按剧情",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("热血", "rexue"),
+                Pair("冒险", "maoxian"),
+                Pair("魔幻", "mohuan"),
+                Pair("神鬼", "shengui"),
+                Pair("搞笑", "gaoxiao"),
+                Pair("萌系", "mengxi"),
+                Pair("爱情", "aiqing"),
+                Pair("科幻", "kehuan"),
+                Pair("魔法", "mofa"),
+                Pair("格斗", "gedou"),
+                Pair("武侠", "wuxia"),
+                Pair("机战", "jizhan"),
+                Pair("战争", "zhanzheng"),
+                Pair("竞技", "jingji"),
+                Pair("体育", "tiyu"),
+                Pair("校园", "xiaoyuan"),
+                Pair("生活", "shenghuo"),
+                Pair("励志", "lizhi"),
+                Pair("历史", "lishi"),
+                Pair("伪娘", "weiniang"),
+                Pair("宅男", "zhainan"),
+                Pair("腐女", "funv"),
+                Pair("耽美", "danmei"),
+                Pair("百合", "baihe"),
+                Pair("后宫", "hougong"),
+                Pair("治愈", "zhiyu"),
+                Pair("美食", "meishi"),
+                Pair("推理", "tuili"),
+                Pair("悬疑", "xuanyi"),
+                Pair("恐怖", "kongbu"),
+                Pair("四格", "sige"),
+                Pair("职场", "zhichang"),
+                Pair("侦探", "zhentan"),
+                Pair("社会", "shehui"),
+                Pair("音乐", "yinyue"),
+                Pair("舞蹈", "wudao"),
+                Pair("杂志", "zazhi"),
+                Pair("黑道", "heidao"),
+            ),
+        )
 
-    private class ReaderFilter : UriPartFilter(
-        "按受众",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("少女", "shaonv"),
-            Pair("少年", "shaonian"),
-            Pair("青年", "qingnian"),
-            Pair("儿童", "ertong"),
-            Pair("通用", "tongyong"),
-        ),
-    )
+    private class ReaderFilter :
+        UriPartFilter(
+            "按受众",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("少女", "shaonv"),
+                Pair("少年", "shaonian"),
+                Pair("青年", "qingnian"),
+                Pair("儿童", "ertong"),
+                Pair("通用", "tongyong"),
+            ),
+        )
 
-    private class PublishDateFilter : UriPartFilter(
-        "按年份",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("2020年", "2020"),
-            Pair("2019年", "2019"),
-            Pair("2018年", "2018"),
-            Pair("2017年", "2017"),
-            Pair("2016年", "2016"),
-            Pair("2015年", "2015"),
-            Pair("2014年", "2014"),
-            Pair("2013年", "2013"),
-            Pair("2012年", "2012"),
-            Pair("2011年", "2011"),
-            Pair("2010年", "2010"),
-            Pair("00年代", "200x"),
-            Pair("90年代", "199x"),
-            Pair("80年代", "198x"),
-            Pair("更早", "197x"),
-        ),
-    )
+    private class PublishDateFilter :
+        UriPartFilter(
+            "按年份",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("2020年", "2020"),
+                Pair("2019年", "2019"),
+                Pair("2018年", "2018"),
+                Pair("2017年", "2017"),
+                Pair("2016年", "2016"),
+                Pair("2015年", "2015"),
+                Pair("2014年", "2014"),
+                Pair("2013年", "2013"),
+                Pair("2012年", "2012"),
+                Pair("2011年", "2011"),
+                Pair("2010年", "2010"),
+                Pair("00年代", "200x"),
+                Pair("90年代", "199x"),
+                Pair("80年代", "198x"),
+                Pair("更早", "197x"),
+            ),
+        )
 
-    private class FirstLetterFilter : UriPartFilter(
-        "按字母",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("A", "a"),
-            Pair("B", "b"),
-            Pair("C", "c"),
-            Pair("D", "d"),
-            Pair("E", "e"),
-            Pair("F", "f"),
-            Pair("G", "g"),
-            Pair("H", "h"),
-            Pair("I", "i"),
-            Pair("J", "j"),
-            Pair("K", "k"),
-            Pair("L", "l"),
-            Pair("M", "m"),
-            Pair("N", "n"),
-            Pair("O", "o"),
-            Pair("P", "p"),
-            Pair("Q", "q"),
-            Pair("R", "r"),
-            Pair("S", "s"),
-            Pair("T", "t"),
-            Pair("U", "u"),
-            Pair("V", "v"),
-            Pair("W", "w"),
-            Pair("X", "x"),
-            Pair("Y", "y"),
-            Pair("Z", "z"),
-            Pair("0-9", "0-9"),
-        ),
-    )
+    private class FirstLetterFilter :
+        UriPartFilter(
+            "按字母",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("A", "a"),
+                Pair("B", "b"),
+                Pair("C", "c"),
+                Pair("D", "d"),
+                Pair("E", "e"),
+                Pair("F", "f"),
+                Pair("G", "g"),
+                Pair("H", "h"),
+                Pair("I", "i"),
+                Pair("J", "j"),
+                Pair("K", "k"),
+                Pair("L", "l"),
+                Pair("M", "m"),
+                Pair("N", "n"),
+                Pair("O", "o"),
+                Pair("P", "p"),
+                Pair("Q", "q"),
+                Pair("R", "r"),
+                Pair("S", "s"),
+                Pair("T", "t"),
+                Pair("U", "u"),
+                Pair("V", "v"),
+                Pair("W", "w"),
+                Pair("X", "x"),
+                Pair("Y", "y"),
+                Pair("Z", "z"),
+                Pair("0-9", "0-9"),
+            ),
+        )
 
-    private class StatusFilter : UriPartFilter(
-        "按进度",
-        arrayOf(
-            Pair("全部", ""),
-            Pair("连载", "lianzai"),
-            Pair("完结", "wanjie"),
-        ),
-    )
+    private class StatusFilter :
+        UriPartFilter(
+            "按进度",
+            arrayOf(
+                Pair("全部", ""),
+                Pair("连载", "lianzai"),
+                Pair("完结", "wanjie"),
+            ),
+        )
 
     companion object {
         private const val SHOW_R18_PREF = "showR18Default"

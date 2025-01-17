@@ -7,16 +7,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class KakuseiProject : Madara(
-    "Kakusei Project",
-    "https://kakuseiproject.com",
-    "pt-BR",
-    SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+class KakuseiProject :
+    Madara(
+        "Kakusei Project",
+        "https://kakuseiproject.com",
+        "pt-BR",
+        SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     override val useNewChapterEndpoint = true
 

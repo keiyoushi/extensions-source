@@ -25,22 +25,26 @@ abstract class LectorMoe(
     private val organizationDomain: String = baseUrl.substringAfter("://"),
     private val apiBaseUrl: String = "https://api.lector.moe",
 ) : HttpSource() {
-
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3)
-        .rateLimitHost(apiBaseUrl.toHttpUrl(), 3)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimitHost(baseUrl.toHttpUrl(), 3)
+            .rateLimitHost(apiBaseUrl.toHttpUrl(), 3)
+            .build()
 
-    final override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    final override fun headersBuilder(): Headers.Builder =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
-    private val apiHeaders: Headers = headersBuilder()
-        .add("Organization-Domain", organizationDomain)
-        .build()
+    private val apiHeaders: Headers =
+        headersBuilder()
+            .add("Organization-Domain", organizationDomain)
+            .build()
 
     override fun popularMangaRequest(page: Int): Request =
         GET("$apiBaseUrl/api/manga-custom?page=$page&limit=$PAGE_LIMIT&order=popular", apiHeaders)
@@ -52,7 +56,11 @@ abstract class LectorMoe(
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$apiBaseUrl/api/manga-custom".toHttpUrl().newBuilder()
 
         url.setQueryParameter("page", page.toString())
@@ -71,7 +79,10 @@ abstract class LectorMoe(
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val page = response.request.url.queryParameter("page")!!.toInt()
+        val page =
+            response.request.url
+                .queryParameter("page")!!
+                .toInt()
         val result = json.decodeFromString<Data<SeriesListDataDto>>(response.body.string())
 
         val mangas = result.data.series.map { it.toSManga() }
@@ -80,19 +91,20 @@ abstract class LectorMoe(
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun getFilterList() = FilterList(
-        SortByFilter("Ordenar por", getSortList()),
-    )
+    override fun getFilterList() =
+        FilterList(
+            SortByFilter("Ordenar por", getSortList()),
+        )
 
-    private fun getSortList() = arrayOf(
-        Pair("Popularidad", "popular"),
-        Pair("Recientes", "latest"),
-    )
+    private fun getSortList() =
+        arrayOf(
+            Pair("Popularidad", "popular"),
+            Pair("Recientes", "latest"),
+        )
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$apiBaseUrl/api/manga-custom/${manga.url}", apiHeaders)
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiBaseUrl/api/manga-custom/${manga.url}", apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = json.decodeFromString<Data<SeriesDto>>(response.body.string())
@@ -130,10 +142,15 @@ abstract class LectorMoe(
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    class SortByFilter(title: String, list: Array<Pair<String, String>>) : UriPartFilter(title, list)
+    class SortByFilter(
+        title: String,
+        list: Array<Pair<String, String>>,
+    ) : UriPartFilter(title, list)
 
-    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(
+        displayName: String,
+        val vals: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 

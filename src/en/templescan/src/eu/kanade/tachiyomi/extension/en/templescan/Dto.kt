@@ -26,11 +26,12 @@ class BrowseSeries(
         dateFormat.tryParse(createdAt)
     }
 
-    fun toSManga() = SManga.create().apply {
-        url = "/comic/$slug"
-        title = this@BrowseSeries.title
-        thumbnail_url = thumbnail
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            url = "/comic/$slug"
+            title = this@BrowseSeries.title
+            thumbnail_url = thumbnail
+        }
 }
 
 @Serializable

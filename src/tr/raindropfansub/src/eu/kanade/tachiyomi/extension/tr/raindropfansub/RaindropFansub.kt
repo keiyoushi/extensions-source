@@ -7,12 +7,13 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RaindropFansub : MangaThemesia(
-    "Raindrop Fansub",
-    "https://www.raindropteamfan.com",
-    "tr",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
-) {
+class RaindropFansub :
+    MangaThemesia(
+        "Raindrop Fansub",
+        "https://www.raindropteamfan.com",
+        "tr",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
+    ) {
     override val seriesTypeSelector = ".tsinfo .imptdt:contains(Tür) a"
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -21,14 +22,15 @@ class RaindropFansub : MangaThemesia(
         val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
         val chapters = super.chapterListParse(response)
 
-        val lastChapterUrl = document
-            .selectFirst("a:has(.epcurlast)")
-            ?.attr("href")
-            ?.let {
-                val dummyChapter = SChapter.create()
-                dummyChapter.setUrlWithoutDomain(it)
-                dummyChapter.url
-            }
+        val lastChapterUrl =
+            document
+                .selectFirst("a:has(.epcurlast)")
+                ?.attr("href")
+                ?.let {
+                    val dummyChapter = SChapter.create()
+                    dummyChapter.setUrlWithoutDomain(it)
+                    dummyChapter.url
+                }
 
         return when (lastChapterUrl) {
             chapters.first().url -> chapters

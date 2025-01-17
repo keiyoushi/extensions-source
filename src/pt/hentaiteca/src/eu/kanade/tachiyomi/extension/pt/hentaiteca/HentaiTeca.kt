@@ -25,19 +25,21 @@ class HentaiTeca :
         SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
     ),
     ConfigurableSource {
-
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .addCustomUA()
+    override fun headersBuilder(): Headers.Builder =
+        super
+            .headersBuilder()
+            .addCustomUA()
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
@@ -49,7 +51,8 @@ class HentaiTeca :
      * Using Custom UA also in WebView
      * */
     private fun Headers.Builder.addCustomUA(): Headers.Builder {
-        preferences.getPrefCustomUA()
+        preferences
+            .getPrefCustomUA()
             .takeIf { !it.isNullOrBlank() }
             ?.let { set(UA_KEY, it) }
         return this

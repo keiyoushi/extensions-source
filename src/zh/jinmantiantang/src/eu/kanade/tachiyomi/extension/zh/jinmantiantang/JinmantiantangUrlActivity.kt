@@ -14,17 +14,17 @@ import kotlin.system.exitProcess
  * things.
  */
 class JinmantiantangUrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
             val titleid = pathSegments[1]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Jinmantiantang.PREFIX_ID_SEARCH}$titleid")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${Jinmantiantang.PREFIX_ID_SEARCH}$titleid")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

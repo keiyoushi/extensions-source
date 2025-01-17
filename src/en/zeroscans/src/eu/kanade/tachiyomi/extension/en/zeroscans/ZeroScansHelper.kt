@@ -5,7 +5,6 @@ import java.util.Calendar
 import java.util.Locale
 
 class ZeroScansHelper {
-
     // Search Related
     fun checkStatusFilter(
         filter: ZeroScans.StatusFilter,
@@ -40,14 +39,15 @@ class ZeroScansHelper {
         ascending: Boolean,
         comics: List<ZeroScansComicDto>,
     ): List<ZeroScansComicDto> {
-        var sortedList = when (type) {
-            "alphabetic" -> comics.sortedBy { it.name.lowercase(Locale.ROOT) }
-            "rating" -> comics.sortedBy { it.getRating() }
-            "chapter_count" -> comics.sortedBy { it.chapterCount }
-            "bookmark_count" -> comics.sortedBy { it.bookmarkCount }
-            "view_count" -> comics.sortedBy { it.viewCount }
-            else -> comics
-        }
+        var sortedList =
+            when (type) {
+                "alphabetic" -> comics.sortedBy { it.name.lowercase(Locale.ROOT) }
+                "rating" -> comics.sortedBy { it.getRating() }
+                "chapter_count" -> comics.sortedBy { it.chapterCount }
+                "bookmark_count" -> comics.sortedBy { it.bookmarkCount }
+                "view_count" -> comics.sortedBy { it.viewCount }
+                else -> comics
+            }
 
         if (!ascending) {
             sortedList = sortedList.reversed()
@@ -61,27 +61,48 @@ class ZeroScansHelper {
         val value = date.split(' ')[0].toInt()
 
         return when (date.split(' ')[1].removeSuffix("s")) {
-            "sec" -> Calendar.getInstance().apply {
-                add(Calendar.SECOND, -value)
-            }.timeInMillis
-            "min" -> Calendar.getInstance().apply {
-                add(Calendar.MINUTE, -value)
-            }.timeInMillis
-            "hour" -> Calendar.getInstance().apply {
-                add(Calendar.HOUR_OF_DAY, -value)
-            }.timeInMillis
-            "day" -> Calendar.getInstance().apply {
-                add(Calendar.DATE, -value)
-            }.timeInMillis
-            "week" -> Calendar.getInstance().apply {
-                add(Calendar.DATE, -value * 7)
-            }.timeInMillis
-            "month" -> Calendar.getInstance().apply {
-                add(Calendar.MONTH, -value)
-            }.timeInMillis
-            "year" -> Calendar.getInstance().apply {
-                add(Calendar.YEAR, -value)
-            }.timeInMillis
+            "sec" ->
+                Calendar
+                    .getInstance()
+                    .apply {
+                        add(Calendar.SECOND, -value)
+                    }.timeInMillis
+            "min" ->
+                Calendar
+                    .getInstance()
+                    .apply {
+                        add(Calendar.MINUTE, -value)
+                    }.timeInMillis
+            "hour" ->
+                Calendar
+                    .getInstance()
+                    .apply {
+                        add(Calendar.HOUR_OF_DAY, -value)
+                    }.timeInMillis
+            "day" ->
+                Calendar
+                    .getInstance()
+                    .apply {
+                        add(Calendar.DATE, -value)
+                    }.timeInMillis
+            "week" ->
+                Calendar
+                    .getInstance()
+                    .apply {
+                        add(Calendar.DATE, -value * 7)
+                    }.timeInMillis
+            "month" ->
+                Calendar
+                    .getInstance()
+                    .apply {
+                        add(Calendar.MONTH, -value)
+                    }.timeInMillis
+            "year" ->
+                Calendar
+                    .getInstance()
+                    .apply {
+                        add(Calendar.YEAR, -value)
+                    }.timeInMillis
             else -> {
                 return 0
             }
@@ -110,10 +131,12 @@ class ZeroScansHelper {
         val compatibleStatus = statuses.filterNot { it.id in listOf(1, 4) }
 
         // TODO Apply 6 to ON_HIATUS after ext-lib 1.3 merge
-        compatibleStatus.firstOrNull { it.id in listOf(5, 6) }
+        compatibleStatus
+            .firstOrNull { it.id in listOf(5, 6) }
             ?.also { return SManga.ONGOING }
 
-        compatibleStatus.firstOrNull { it.id == 3 }
+        compatibleStatus
+            .firstOrNull { it.id == 3 }
             ?.also { return SManga.COMPLETED }
 
         // Nothing Matched

@@ -17,16 +17,19 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.random.Random
 
-class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
+class MangaRaw :
+    MangaRawTheme("MangaRaw", ""),
+    ConfigurableSource {
     // See https://github.com/tachiyomiorg/tachiyomi-extensions/commits/master/src/ja/mangaraw
     override val versionId = 2
     override val id = 4572869149806246133
 
     private val isCi = System.getenv("CI") == "true"
-    override val baseUrl get() = when {
-        isCi -> MIRRORS.joinToString("#, ") { "https://$it" }
-        else -> _baseUrl
-    }
+    override val baseUrl get() =
+        when {
+            isCi -> MIRRORS.joinToString("#, ") { "https://$it" }
+            else -> _baseUrl
+        }
 
     override val supportsLatest = true
     private val _baseUrl: String
@@ -53,15 +56,21 @@ class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
     override fun String.sanitizeTitle() = substringBeforeLast('(').trimEnd()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/top/?page=$page", headers)
+
     override fun popularMangaSelector() = selectors.listMangaSelector
+
     override fun popularMangaNextPageSelector() = ".nextpostslink"
 
-    override fun popularMangaFromElement(element: Element) = super.popularMangaFromElement(element).apply {
-        if (needUrlSanitize) url = mangaSlugRegex.replaceFirst(url, "/")
-    }
+    override fun popularMangaFromElement(element: Element) =
+        super.popularMangaFromElement(element).apply {
+            if (needUrlSanitize) url = mangaSlugRegex.replaceFirst(url, "/")
+        }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/?s=$query&page=$page", headers)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = GET("$baseUrl/?s=$query&page=$page", headers)
 
     override fun Document.getSanitizedDetails(): Element =
         selectFirst(selectors.detailsSelector)!!.apply {
@@ -71,6 +80,7 @@ class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
         }
 
     override fun chapterListSelector() = ".list-scoll a"
+
     override fun String.sanitizeChapter() = substring(lastIndexOf('【') + 1, length - 1)
 
     override fun pageSelector() = Evaluator.Class("card-wrap")
@@ -85,15 +95,16 @@ class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = MIRROR_PREF
-            title = "Mirror"
-            summary = "%s\n" +
-                "Requires app restart to take effect\n" +
-                PROMPT
-            entries = MIRRORS
-            entryValues = MIRRORS.indices.map { it.toString() }.toTypedArray()
-            setDefaultValue("0")
-        }.let { screen.addPreference(it) }
+        ListPreference(screen.context)
+            .apply {
+                key = MIRROR_PREF
+                title = "Mirror"
+                summary = "%s\n" +
+                    "Requires app restart to take effect\n" +
+                    PROMPT
+                entries = MIRRORS
+                entryValues = MIRRORS.indices.map { it.toString() }.toTypedArray()
+                setDefaultValue("0")
+            }.let { screen.addPreference(it) }
     }
 }

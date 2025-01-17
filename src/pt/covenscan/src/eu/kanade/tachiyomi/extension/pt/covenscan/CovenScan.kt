@@ -7,16 +7,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class CovenScan : Madara(
-    "Coven Scan",
-    "https://cvnscan.com",
-    "pt-BR",
-    SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+class CovenScan :
+    Madara(
+        "Coven Scan",
+        "https://cvnscan.com",
+        "pt-BR",
+        SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     override val useNewChapterEndpoint = true
 }

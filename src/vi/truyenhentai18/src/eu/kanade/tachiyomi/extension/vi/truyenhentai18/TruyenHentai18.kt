@@ -15,7 +15,6 @@ import rx.Observable
 import java.util.Calendar
 
 class TruyenHentai18 : ParsedHttpSource() {
-
     override val name = "Truyện Hentai 18+"
 
     override val baseUrl = "https://truyenhentai18.pro"
@@ -26,27 +25,28 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/truyen-de-xuat" + if (page > 1) "/page/$page" else "", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/truyen-de-xuat" + if (page > 1) "/page/$page" else "", headers)
 
     override fun popularMangaSelector() = "div.row > div[class^=item-] > div.card"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("a.item-title")!!.let {
-            setUrlWithoutDomain(it.attr("href"))
-            title = it.text()
-        }
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            element.selectFirst("a.item-title")!!.let {
+                setUrlWithoutDomain(it.attr("href"))
+                title = it.text()
+            }
 
-        thumbnail_url = element.selectFirst("a.item-cover img")?.absUrl("data-src")
-    }
+            thumbnail_url = element.selectFirst("a.item-cover img")?.absUrl("data-src")
+        }
 
     override fun popularMangaNextPageSelector() = "ul.pagination li.page-item.active:not(:last-child)"
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/truyen-moi" + if (page > 1) "/page/$page" else "", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/truyen-moi" + if (page > 1) "/page/$page" else "", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -58,8 +58,8 @@ class TruyenHentai18 : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
+    ): Observable<MangasPage> =
+        if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
             val url = "/$slug"
 
@@ -68,17 +68,24 @@ class TruyenHentai18 : ParsedHttpSource() {
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (page > 1) {
-                addPathSegment("page")
-                addPathSegment(page.toString())
-            }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    if (page > 1) {
+                        addPathSegment("page")
+                        addPathSegment(page.toString())
+                    }
 
-            addQueryParameter("s", query)
-        }.build()
+                    addQueryParameter("s", query)
+                }.build()
 
         return GET(url, headers)
     }
@@ -89,34 +96,38 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val statusClassName = document.selectFirst("em.eflag.item-flag")!!.className()
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            val statusClassName = document.selectFirst("em.eflag.item-flag")!!.className()
 
-        title = document.selectFirst("span[itemprop=name]")!!.text()
-        author = document.select("div.attr-item b:contains(Tác giả) ~ span a, span[itemprop=author]").joinToString { it.text() }
-        description = document.selectFirst("div[itemprop=about]")?.text()
-        genre = document.select("ul.post-categories li a").joinToString { it.text() }
-        thumbnail_url = document.selectFirst("div.attr-cover img")?.absUrl("src")
-        status = when {
-            statusClassName.contains("flag-completed") -> SManga.COMPLETED
-            statusClassName.contains("flag-ongoing") -> SManga.ONGOING
-            else -> SManga.UNKNOWN
+            title = document.selectFirst("span[itemprop=name]")!!.text()
+            author = document.select("div.attr-item b:contains(Tác giả) ~ span a, span[itemprop=author]").joinToString { it.text() }
+            description = document.selectFirst("div[itemprop=about]")?.text()
+            genre = document.select("ul.post-categories li a").joinToString { it.text() }
+            thumbnail_url = document.selectFirst("div.attr-cover img")?.absUrl("src")
+            status =
+                when {
+                    statusClassName.contains("flag-completed") -> SManga.COMPLETED
+                    statusClassName.contains("flag-ongoing") -> SManga.ONGOING
+                    else -> SManga.UNKNOWN
+                }
         }
-    }
 
     override fun chapterListSelector() = "#chaptersbox > div"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        element.selectFirst("a")!!.let {
-            setUrlWithoutDomain(it.attr("href"))
-            name = it.selectFirst("b")!!.text()
-        }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            element.selectFirst("a")!!.let {
+                setUrlWithoutDomain(it.attr("href"))
+                name = it.selectFirst("b")!!.text()
+            }
 
-        date_upload = element.selectFirst("div.extra > i.ps-3")
-            ?.text()
-            ?.let { parseRelativeDate(it) }
-            ?: 0L
-    }
+            date_upload = element
+                .selectFirst("div.extra > i.ps-3")
+                ?.text()
+                ?.let { parseRelativeDate(it) }
+                ?: 0L
+        }
 
     override fun pageListParse(document: Document) =
         document.select("#viewer img").mapIndexed { i, it ->
@@ -129,17 +140,18 @@ class TruyenHentai18 : ParsedHttpSource() {
         val (valueString, unit) = date.substringBefore(" trước").split(" ")
         val value = valueString.toInt()
 
-        val calendar = Calendar.getInstance().apply {
-            when (unit) {
-                "giây" -> add(Calendar.SECOND, -value)
-                "phút" -> add(Calendar.MINUTE, -value)
-                "giờ" -> add(Calendar.HOUR_OF_DAY, -value)
-                "ngày" -> add(Calendar.DAY_OF_MONTH, -value)
-                "tuần" -> add(Calendar.WEEK_OF_MONTH, -value)
-                "tháng" -> add(Calendar.MONTH, -value)
-                "năm" -> add(Calendar.YEAR, -value)
+        val calendar =
+            Calendar.getInstance().apply {
+                when (unit) {
+                    "giây" -> add(Calendar.SECOND, -value)
+                    "phút" -> add(Calendar.MINUTE, -value)
+                    "giờ" -> add(Calendar.HOUR_OF_DAY, -value)
+                    "ngày" -> add(Calendar.DAY_OF_MONTH, -value)
+                    "tuần" -> add(Calendar.WEEK_OF_MONTH, -value)
+                    "tháng" -> add(Calendar.MONTH, -value)
+                    "năm" -> add(Calendar.YEAR, -value)
+                }
             }
-        }
 
         return calendar.timeInMillis
     }

@@ -12,13 +12,16 @@ object TaddyUtils {
         val name = comicObj.name
         val sssUrl = comicObj.url
         val sssDescription = comicObj.description
-        val genres = comicObj.genres.orEmpty()
-            .mapNotNull { genreMap[it] }
-            .joinToString()
+        val genres =
+            comicObj.genres
+                .orEmpty()
+                .mapNotNull { genreMap[it] }
+                .joinToString()
 
-        val creators = comicObj.creators
-            ?.mapNotNull { it.name }
-            ?.joinToString()
+        val creators =
+            comicObj.creators
+                ?.mapNotNull { it.name }
+                ?.joinToString()
 
         val thumbnailBaseUrl = comicObj.coverImage?.base_url ?: ""
         val thumbnail = comicObj.coverImage?.cover_sm ?: ""
@@ -36,39 +39,39 @@ object TaddyUtils {
         }
     }
 
-    fun getTime(timeString: String): Long {
-        return runCatching { formatter.parse(timeString)?.time }
+    fun getTime(timeString: String): Long =
+        runCatching { formatter.parse(timeString)?.time }
             .getOrNull() ?: 0L
-    }
 
-    val genrePairs: List<Pair<String, String>> = listOf(
-        Pair("", ""),
-        Pair("Action", "COMICSERIES_ACTION"),
-        Pair("Comedy", "COMICSERIES_COMEDY"),
-        Pair("Drama", "COMICSERIES_DRAMA"),
-        Pair("Educational", "COMICSERIES_EDUCATIONAL"),
-        Pair("Fantasy", "COMICSERIES_FANTASY"),
-        Pair("Historical", "COMICSERIES_HISTORICAL"),
-        Pair("Horror", "COMICSERIES_HORROR"),
-        Pair("Inspirational", "COMICSERIES_INSPIRATIONAL"),
-        Pair("Mystery", "COMICSERIES_MYSTERY"),
-        Pair("Romance", "COMICSERIES_ROMANCE"),
-        Pair("Sci-Fi", "COMICSERIES_SCI_FI"),
-        Pair("Slice Of Life", "COMICSERIES_SLICE_OF_LIFE"),
-        Pair("Superhero", "COMICSERIES_SUPERHERO"),
-        Pair("Supernatural", "COMICSERIES_SUPERNATURAL"),
-        Pair("Wholesome", "COMICSERIES_WHOLESOME"),
-        Pair("BL (Boy Love)", "COMICSERIES_BL"),
-        Pair("GL (Girl Love)", "COMICSERIES_GL"),
-        Pair("LGBTQ+", "COMICSERIES_LGBTQ"),
-        Pair("Thriller", "COMICSERIES_THRILLER"),
-        Pair("Zombies", "COMICSERIES_ZOMBIES"),
-        Pair("Post Apocalyptic", "COMICSERIES_POST_APOCALYPTIC"),
-        Pair("School", "COMICSERIES_SCHOOL"),
-        Pair("Sports", "COMICSERIES_SPORTS"),
-        Pair("Animals", "COMICSERIES_ANIMALS"),
-        Pair("Gaming", "COMICSERIES_GAMING"),
-    )
+    val genrePairs: List<Pair<String, String>> =
+        listOf(
+            Pair("", ""),
+            Pair("Action", "COMICSERIES_ACTION"),
+            Pair("Comedy", "COMICSERIES_COMEDY"),
+            Pair("Drama", "COMICSERIES_DRAMA"),
+            Pair("Educational", "COMICSERIES_EDUCATIONAL"),
+            Pair("Fantasy", "COMICSERIES_FANTASY"),
+            Pair("Historical", "COMICSERIES_HISTORICAL"),
+            Pair("Horror", "COMICSERIES_HORROR"),
+            Pair("Inspirational", "COMICSERIES_INSPIRATIONAL"),
+            Pair("Mystery", "COMICSERIES_MYSTERY"),
+            Pair("Romance", "COMICSERIES_ROMANCE"),
+            Pair("Sci-Fi", "COMICSERIES_SCI_FI"),
+            Pair("Slice Of Life", "COMICSERIES_SLICE_OF_LIFE"),
+            Pair("Superhero", "COMICSERIES_SUPERHERO"),
+            Pair("Supernatural", "COMICSERIES_SUPERNATURAL"),
+            Pair("Wholesome", "COMICSERIES_WHOLESOME"),
+            Pair("BL (Boy Love)", "COMICSERIES_BL"),
+            Pair("GL (Girl Love)", "COMICSERIES_GL"),
+            Pair("LGBTQ+", "COMICSERIES_LGBTQ"),
+            Pair("Thriller", "COMICSERIES_THRILLER"),
+            Pair("Zombies", "COMICSERIES_ZOMBIES"),
+            Pair("Post Apocalyptic", "COMICSERIES_POST_APOCALYPTIC"),
+            Pair("School", "COMICSERIES_SCHOOL"),
+            Pair("Sports", "COMICSERIES_SPORTS"),
+            Pair("Animals", "COMICSERIES_ANIMALS"),
+            Pair("Gaming", "COMICSERIES_GAMING"),
+        )
 
     val genreMap: Map<String, String> = genrePairs.associateBy({ it.second }, { it.first })
 }

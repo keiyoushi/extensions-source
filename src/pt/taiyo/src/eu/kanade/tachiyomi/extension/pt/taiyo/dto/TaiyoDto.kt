@@ -26,7 +26,9 @@ data class AdditionalInfoDto(
     val titles: List<TitleDto>,
 )
 
-enum class Genre(val portugueseName: String) {
+enum class Genre(
+    val portugueseName: String,
+) {
     ACTION("Ação"),
     ADVENTURE("Aventura"),
     COMEDY("Comédia"),
@@ -49,10 +51,17 @@ enum class Genre(val portugueseName: String) {
 }
 
 @Serializable
-data class TitleDto(val title: String, val language: String, val priority: Int)
+data class TitleDto(
+    val title: String,
+    val language: String,
+    val priority: Int,
+)
 
 @Serializable
-data class ChapterListDto(val chapters: List<ChapterDto>, val totalPages: Int)
+data class ChapterListDto(
+    val chapters: List<ChapterDto>,
+    val totalPages: Int,
+)
 
 @Serializable
 data class ChapterDto(
@@ -64,7 +73,9 @@ data class ChapterDto(
 )
 
 @Serializable
-data class ScanDto(val name: String)
+data class ScanDto(
+    val name: String,
+)
 
 @Serializable
 data class MediaChapterDto(
@@ -74,4 +85,6 @@ data class MediaChapterDto(
 )
 
 @Serializable
-data class ItemId(val id: String)
+data class ItemId(
+    val id: String,
+)

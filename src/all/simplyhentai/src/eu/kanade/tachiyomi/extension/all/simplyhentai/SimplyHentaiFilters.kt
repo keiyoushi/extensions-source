@@ -2,7 +2,9 @@ package eu.kanade.tachiyomi.extension.all.simplyhentai
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class SortFilter(values: Array<String> = labels) : Filter.Select<String>("Sort by", values) {
+class SortFilter(
+    values: Array<String> = labels,
+) : Filter.Select<String>("Sort by", values) {
     val orders = arrayOf("", "upload-date", "popularity")
 
     companion object {
@@ -35,4 +37,6 @@ class CharactersFilter : Filter.Text("Characters") {
         get() = if (state.isBlank()) null else state.split(',')
 }
 
-class Note(type: String) : Filter.Header("Separate multiple $type with commas (,)")
+class Note(
+    type: String,
+) : Filter.Header("Separate multiple $type with commas (,)")

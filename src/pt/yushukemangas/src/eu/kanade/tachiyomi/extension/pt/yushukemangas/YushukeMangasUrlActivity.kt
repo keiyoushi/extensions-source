@@ -8,18 +8,18 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class YushukeMangasUrlActivity : Activity() {
-
     private val tag = javaClass.simpleName
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegment = intent?.data?.pathSegments
         if (pathSegment != null && pathSegment.size > 1) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${YushukeMangas.PREFIX_SEARCH}${pathSegment[1]}")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${YushukeMangas.PREFIX_SEARCH}${pathSegment[1]}")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

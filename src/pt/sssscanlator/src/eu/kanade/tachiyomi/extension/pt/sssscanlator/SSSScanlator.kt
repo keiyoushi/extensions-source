@@ -27,28 +27,29 @@ class SSSScanlator :
         dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
     ),
     ConfigurableSource {
-
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .readTimeout(1, TimeUnit.MINUTES)
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).readTimeout(1, TimeUnit.MINUTES)
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", page.url)
-            .set("Alt-Used", baseUrl.substringAfterLast("/"))
-            .set("Accept", "image/avif,image/webp,*/*")
-            .set("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
-            .set("Sec-Fetch-Dest", "image")
-            .set("Sec-Fetch-Mode", "no-cors")
-            .set("Sec-Fetch-Site", "same-origin")
-            .build()
+        val newHeaders =
+            headersBuilder()
+                .set("Referer", page.url)
+                .set("Alt-Used", baseUrl.substringAfterLast("/"))
+                .set("Accept", "image/avif,image/webp,*/*")
+                .set("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
+                .set("Sec-Fetch-Dest", "image")
+                .set("Sec-Fetch-Mode", "no-cors")
+                .set("Sec-Fetch-Site", "same-origin")
+                .build()
 
         page.apply {
             imageUrl = imageUrl?.replace("$JETPACK_CDN/", "")

@@ -11,13 +11,11 @@ class FirestoreRequestFactory(
     private val helper: MangamoHelper,
     private val auth: MangamoAuth,
 ) {
-
     open class DocumentQuery {
         var fields = listOf<String>()
     }
 
     class CollectionQuery : DocumentQuery() {
-
         var filter: Filter? = null
         var orderBy: List<OrderByTerm>? = null
 
@@ -25,28 +23,37 @@ class FirestoreRequestFactory(
         var limit: Int? = null
         var offset: Int? = null
 
-        class OrderByTerm(private val field: String, private val direction: Direction) {
+        class OrderByTerm(
+            private val field: String,
+            private val direction: Direction,
+        ) {
             enum class Direction { ASCENDING, DESCENDING }
 
             fun toJsonString() = """{"direction":"$direction","field":{"fieldPath":"$field"}}"""
         }
 
-        fun ascending(field: String) =
-            OrderByTerm(field, OrderByTerm.Direction.ASCENDING)
-        fun descending(field: String) =
-            OrderByTerm(field, OrderByTerm.Direction.DESCENDING)
+        fun ascending(field: String) = OrderByTerm(field, OrderByTerm.Direction.ASCENDING)
+
+        fun descending(field: String) = OrderByTerm(field, OrderByTerm.Direction.DESCENDING)
 
         sealed interface Filter {
             fun toJsonString(): String
 
-            class CompositeFilter(private val op: Operator, private val filters: List<Filter>) : Filter {
+            class CompositeFilter(
+                private val op: Operator,
+                private val filters: List<Filter>,
+            ) : Filter {
                 enum class Operator { AND, OR }
 
                 override fun toJsonString(): String =
                     """{"compositeFilter":{"op":"$op","filters":[${filters.joinToString { it.toJsonString() }}]}}"""
             }
 
-            class FieldFilter(private val fieldName: String, private val op: Operator, private val value: Any?) : Filter {
+            class FieldFilter(
+                private val fieldName: String,
+                private val op: Operator,
+                private val value: Any?,
+            ) : Filter {
                 enum class Operator {
                     LESS_THAN,
                     LESS_THAN_OR_EQUAL,
@@ -74,50 +81,83 @@ class FirestoreRequestFactory(
                 }
             }
 
-            class UnaryFilter(private val fieldName: String, private val op: Operator) : Filter {
+            class UnaryFilter(
+                private val fieldName: String,
+                private val op: Operator,
+            ) : Filter {
                 enum class Operator { IS_NAN, IS_NULL, IS_NOT_NAN, IS_NOT_NULL }
 
-                override fun toJsonString(): String {
-                    return """{"unaryFilter":{"op":"$op","field":{"fieldPath":"$fieldName"}}}"""
-                }
+                override fun toJsonString(): String = """{"unaryFilter":{"op":"$op","field":{"fieldPath":"$fieldName"}}}"""
             }
         }
 
-        fun and(vararg filters: Filter) =
-            Filter.CompositeFilter(Filter.CompositeFilter.Operator.AND, filters.toList())
-        fun or(vararg filters: Filter) =
-            Filter.CompositeFilter(Filter.CompositeFilter.Operator.OR, filters.toList())
-        fun isLessThan(fieldName: String, value: Any?) =
-            Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.LESS_THAN, value)
-        fun isLessThanOrEqual(fieldName: String, value: Any?) =
-            Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.LESS_THAN_OR_EQUAL, value)
-        fun isGreaterThan(fieldName: String, value: Any?) =
-            Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.GREATER_THAN, value)
-        fun isGreaterThanOrEqual(fieldName: String, value: Any?) =
-            Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.GREATER_THAN_OR_EQUAL, value)
-        fun isEqual(fieldName: String, value: Any?) =
-            Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.EQUAL, value)
-        fun isNotEqual(fieldName: String, value: Any?) =
-            Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.NOT_EQUAL, value)
-        fun contains(fieldName: String, value: Any?) =
-            Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.ARRAY_CONTAINS, value)
-        fun isIn(fieldName: String, value: Any?) =
-            Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.IN, value)
-        fun containsAny(fieldName: String, value: Any?) =
-            Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.ARRAY_CONTAINS_ANY, value)
-        fun isNotIn(fieldName: String, value: Any?) =
-            Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.NOT_IN, value)
-        fun isNaN(fieldName: String) =
-            Filter.UnaryFilter(fieldName, Filter.UnaryFilter.Operator.IS_NAN)
-        fun isNull(fieldName: String) =
-            Filter.UnaryFilter(fieldName, Filter.UnaryFilter.Operator.IS_NULL)
-        fun isNotNaN(fieldName: String) =
-            Filter.UnaryFilter(fieldName, Filter.UnaryFilter.Operator.IS_NOT_NAN)
-        fun isNotNull(fieldName: String) =
-            Filter.UnaryFilter(fieldName, Filter.UnaryFilter.Operator.IS_NOT_NULL)
+        fun and(vararg filters: Filter) = Filter.CompositeFilter(Filter.CompositeFilter.Operator.AND, filters.toList())
+
+        fun or(vararg filters: Filter) = Filter.CompositeFilter(Filter.CompositeFilter.Operator.OR, filters.toList())
+
+        fun isLessThan(
+            fieldName: String,
+            value: Any?,
+        ) = Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.LESS_THAN, value)
+
+        fun isLessThanOrEqual(
+            fieldName: String,
+            value: Any?,
+        ) = Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.LESS_THAN_OR_EQUAL, value)
+
+        fun isGreaterThan(
+            fieldName: String,
+            value: Any?,
+        ) = Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.GREATER_THAN, value)
+
+        fun isGreaterThanOrEqual(
+            fieldName: String,
+            value: Any?,
+        ) = Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.GREATER_THAN_OR_EQUAL, value)
+
+        fun isEqual(
+            fieldName: String,
+            value: Any?,
+        ) = Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.EQUAL, value)
+
+        fun isNotEqual(
+            fieldName: String,
+            value: Any?,
+        ) = Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.NOT_EQUAL, value)
+
+        fun contains(
+            fieldName: String,
+            value: Any?,
+        ) = Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.ARRAY_CONTAINS, value)
+
+        fun isIn(
+            fieldName: String,
+            value: Any?,
+        ) = Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.IN, value)
+
+        fun containsAny(
+            fieldName: String,
+            value: Any?,
+        ) = Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.ARRAY_CONTAINS_ANY, value)
+
+        fun isNotIn(
+            fieldName: String,
+            value: Any?,
+        ) = Filter.FieldFilter(fieldName, Filter.FieldFilter.Operator.NOT_IN, value)
+
+        fun isNaN(fieldName: String) = Filter.UnaryFilter(fieldName, Filter.UnaryFilter.Operator.IS_NAN)
+
+        fun isNull(fieldName: String) = Filter.UnaryFilter(fieldName, Filter.UnaryFilter.Operator.IS_NULL)
+
+        fun isNotNaN(fieldName: String) = Filter.UnaryFilter(fieldName, Filter.UnaryFilter.Operator.IS_NOT_NAN)
+
+        fun isNotNull(fieldName: String) = Filter.UnaryFilter(fieldName, Filter.UnaryFilter.Operator.IS_NOT_NULL)
     }
 
-    fun getDocument(path: String, query: DocumentQuery.() -> Unit = {}): Request {
+    fun getDocument(
+        path: String,
+        query: DocumentQuery.() -> Unit = {},
+    ): Request {
         val queryInfo = DocumentQuery()
         query(queryInfo)
 
@@ -127,9 +167,11 @@ class FirestoreRequestFactory(
             urlBuilder.addQueryParameter("mask.fieldPaths", field)
         }
 
-        val headers = Headers.Builder()
-            .add("Authorization", "Bearer ${auth.getIdToken()}")
-            .build()
+        val headers =
+            Headers
+                .Builder()
+                .add("Authorization", "Bearer ${auth.getIdToken()}")
+                .build()
 
         return GET(urlBuilder.build(), headers)
     }
@@ -172,15 +214,18 @@ class FirestoreRequestFactory(
         structuredQuery["offset"] = queryInfo.offset?.toString()
         structuredQuery["limit"] = queryInfo.limit?.toString()
 
-        val headers = helper.jsonHeaders.newBuilder()
-            .add("Authorization", "Bearer ${auth.getIdToken()}")
-            .build()
+        val headers =
+            helper.jsonHeaders
+                .newBuilder()
+                .add("Authorization", "Bearer ${auth.getIdToken()}")
+                .build()
 
-        val body = "{\"structuredQuery\":{${
-        structuredQuery.entries
-            .filter { it.value != null }
-            .joinToString { "\"${it.key}\":${it.value}" }
-        }}}".toRequestBody()
+        val body =
+            "{\"structuredQuery\":{${
+                structuredQuery.entries
+                    .filter { it.value != null }
+                    .joinToString { "\"${it.key}\":${it.value}" }
+            }}}".toRequestBody()
 
         return POST("${MangamoConstants.FIRESTORE_API_BASE_PATH}/$path:runQuery", headers, body)
     }

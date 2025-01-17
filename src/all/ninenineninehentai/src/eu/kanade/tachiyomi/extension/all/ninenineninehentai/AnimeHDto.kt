@@ -11,10 +11,14 @@ typealias ApiDetailsResponse = Data<DetailsResponse>
 typealias ApiPageListResponse = Data<PageList>
 
 @Serializable
-data class Data<T>(val data: T)
+data class Data<T>(
+    val data: T,
+)
 
 @Serializable
-data class Edges<T>(val edges: List<T>)
+data class Edges<T>(
+    val edges: List<T>,
+)
 
 interface BrowseResponse {
     val chapters: Edges<ChapterResponse>
@@ -47,71 +51,85 @@ data class ChapterResponse(
     @SerialName("firstPics") val cover: List<Url>? = emptyList(),
     val tags: List<Tag>? = emptyList(),
 ) {
-    fun toSManga(shortTitle: Boolean) = SManga.create().apply {
-        url = id
-        title = if (shortTitle) name.replace(shortenTitleRegex, "").trim() else name
-        thumbnail_url = cover?.firstOrNull()?.absUrl
-        author = this@ChapterResponse.author
-        artist = author
-        genre = genres
-        description = buildString {
-            if (!this@ChapterResponse.description.isNullOrEmpty()) append(this@ChapterResponse.description.trim(), "\n\n")
-            if (formatParsed != null) append("Format: ${formatParsed}\n")
-            if (languageParsed != null) append("Language: $languageParsed\n")
-            if (group != null) append("Group: $group\n")
-            if (characters != null) append("Character(s): $characters\n")
-            if (parody != null) append("Parody: $parody\n")
-            if (magazine != null) append("Magazine: $magazine\n")
-            if (pages != null) append("Pages: $pages\n")
+    fun toSManga(shortTitle: Boolean) =
+        SManga.create().apply {
+            url = id
+            title = if (shortTitle) name.replace(shortenTitleRegex, "").trim() else name
+            thumbnail_url = cover?.firstOrNull()?.absUrl
+            author = this@ChapterResponse.author
+            artist = author
+            genre = genres
+            description =
+                buildString {
+                    if (!this@ChapterResponse.description.isNullOrEmpty()) append(this@ChapterResponse.description.trim(), "\n\n")
+                    if (formatParsed != null) append("Format: ${formatParsed}\n")
+                    if (languageParsed != null) append("Language: $languageParsed\n")
+                    if (group != null) append("Group: $group\n")
+                    if (characters != null) append("Character(s): $characters\n")
+                    if (parody != null) append("Parody: $parody\n")
+                    if (magazine != null) append("Magazine: $magazine\n")
+                    if (pages != null) append("Pages: $pages\n")
+                }
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            initialized = true
         }
-        status = SManga.COMPLETED
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        initialized = true
-    }
 
-    private val formatParsed = when (format) {
-        "artistcg" -> "ArtistCG"
-        "gamecg" -> "GameCG"
-        "imageset" -> "ImageSet"
-        else -> format?.capitalize()
-    }
+    private val formatParsed =
+        when (format) {
+            "artistcg" -> "ArtistCG"
+            "gamecg" -> "GameCG"
+            "imageset" -> "ImageSet"
+            else -> format?.capitalize()
+        }
 
-    private val languageParsed = when (language) {
-        "en" -> "English"
-        "jp" -> "Japanese"
-        "cn" -> "Chinese"
-        "es" -> "Spanish"
-        else -> language
-    }
+    private val languageParsed =
+        when (language) {
+            "en" -> "English"
+            "jp" -> "Japanese"
+            "cn" -> "Chinese"
+            "es" -> "Spanish"
+            else -> language
+        }
 
     private val author = tags?.firstOrNull { it.tagType == "artist" }?.tagName?.capitalize()
 
-    private val group = tags?.filter { it.tagType == "group" }
-        ?.joinToString { it.tagName.capitalize() }
-        ?.takeUnless { it.isEmpty() }
+    private val group =
+        tags
+            ?.filter { it.tagType == "group" }
+            ?.joinToString { it.tagName.capitalize() }
+            ?.takeUnless { it.isEmpty() }
 
-    private val characters = tags?.filter { it.tagType == "character" }
-        ?.joinToString { it.tagName.capitalize() }
-        ?.takeUnless { it.isEmpty() }
+    private val characters =
+        tags
+            ?.filter { it.tagType == "character" }
+            ?.joinToString { it.tagName.capitalize() }
+            ?.takeUnless { it.isEmpty() }
 
-    private val parody = tags?.filter { it.tagType == "parody" }
-        ?.joinToString { it.tagName.capitalize() }
-        ?.takeUnless { it.isEmpty() }
+    private val parody =
+        tags
+            ?.filter { it.tagType == "parody" }
+            ?.joinToString { it.tagName.capitalize() }
+            ?.takeUnless { it.isEmpty() }
 
-    private val magazine = tags?.filter { it.tagType == "magazine" }
-        ?.joinToString { it.tagName.capitalize() }
-        ?.takeUnless { it.isEmpty() }
+    private val magazine =
+        tags
+            ?.filter { it.tagType == "magazine" }
+            ?.joinToString { it.tagName.capitalize() }
+            ?.takeUnless { it.isEmpty() }
 
-    private val genres = tags?.filterNot { it.tagType in filterTags }
-        ?.joinToString { it.tagName.capitalize() }
-        ?.takeUnless { it.isEmpty() }
+    private val genres =
+        tags
+            ?.filterNot { it.tagType in filterTags }
+            ?.joinToString { it.tagName.capitalize() }
+            ?.takeUnless { it.isEmpty() }
 
     companion object {
         private val filterTags = listOf("artist", "group", "character", "parody", "magazine")
         private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
 
-        private fun String.capitalize(): String {
-            return this.trim().split(" ").joinToString(" ") { word ->
+        private fun String.capitalize(): String =
+            this.trim().split(" ").joinToString(" ") { word ->
                 word.replaceFirstChar {
                     if (it.isLowerCase()) {
                         it.titlecase(
@@ -122,22 +140,22 @@ data class ChapterResponse(
                     }
                 }
             }
-        }
     }
 }
 
 @Serializable
-data class Url(val url: String) {
+data class Url(
+    val url: String,
+) {
     val absUrl get() = url.toAbsUrl()
 
     companion object {
-        fun String.toAbsUrl(baseUrl: String = loUrl): String {
-            return if (this.matches(urlRegex)) {
+        fun String.toAbsUrl(baseUrl: String = loUrl): String =
+            if (this.matches(urlRegex)) {
                 this
             } else {
                 baseUrl + this
             }
-        }
 
         private const val loUrl = "https://127.0.0.1/"
         private val urlRegex = Regex("^https?://.*")

@@ -28,33 +28,37 @@ class LunarScans :
         "/series",
     ),
     ConfigurableSource {
-
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override val client = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .rateLimit(1)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).rateLimit(1)
+            .build()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isEmpty()) {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request =
+        if (query.isEmpty()) {
             super.searchMangaRequest(page, query, filters)
         } else {
             GET("$baseUrl/?s=$query&page=$page", headers)
         }
-    }
 
     override fun getFilterList(): FilterList {
-        val filters = mutableListOf<Filter<*>>(
-            Filter.Header("Note: Can't be used with text search!"),
-            Filter.Separator(),
-            StatusFilter(intl["status_filter_title"], statusOptions),
-            TypeFilter(intl["type_filter_title"], typeFilterOptions),
-            OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
-        )
+        val filters =
+            mutableListOf<Filter<*>>(
+                Filter.Header("Note: Can't be used with text search!"),
+                Filter.Separator(),
+                StatusFilter(intl["status_filter_title"], statusOptions),
+                TypeFilter(intl["type_filter_title"], typeFilterOptions),
+                OrderByFilter(intl["order_by_filter_title"], orderByFilterOptions),
+            )
         if (!genrelist.isNullOrEmpty()) {
             filters.addAll(
                 listOf(
@@ -81,8 +85,9 @@ class LunarScans :
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val scriptContent = document.selectFirst("script:containsData(ts_reader)")?.data()
-            ?: return super.pageListParse(document)
+        val scriptContent =
+            document.selectFirst("script:containsData(ts_reader)")?.data()
+                ?: return super.pageListParse(document)
         val jsonString = scriptContent.substringAfter("ts_reader.run(").substringBefore(");")
         val tsReader = json.decodeFromString<TSReader>(jsonString)
         val imageUrls = tsReader.sources.firstOrNull()?.images ?: return emptyList()

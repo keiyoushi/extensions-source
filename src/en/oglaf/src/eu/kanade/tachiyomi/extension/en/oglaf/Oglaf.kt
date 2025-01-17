@@ -15,7 +15,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class Oglaf : ParsedHttpSource() {
-
     override val name = "Oglaf"
 
     override val baseUrl = "https://www.oglaf.com"
@@ -25,27 +24,31 @@ class Oglaf : ParsedHttpSource() {
     override val supportsLatest = false
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val manga = SManga.create().apply {
-            title = "Oglaf"
-            artist = "Trudy Cooper & Doug Bayne"
-            author = "Trudy Cooper & Doug Bayne"
-            status = SManga.ONGOING
-            url = "/archive/"
-            description = "Filth and other Fantastical Things in handy webcomic form."
-            thumbnail_url = "https://i.ibb.co/tzY0VQ9/oglaf.png"
-        }
+        val manga =
+            SManga.create().apply {
+                title = "Oglaf"
+                artist = "Trudy Cooper & Doug Bayne"
+                author = "Trudy Cooper & Doug Bayne"
+                status = SManga.ONGOING
+                url = "/archive/"
+                description = "Filth and other Fantastical Things in handy webcomic form."
+                thumbnail_url = "https://i.ibb.co/tzY0VQ9/oglaf.png"
+            }
 
         return Observable.just(MangasPage(arrayListOf(manga), false))
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterList = super.chapterListParse(response).distinct()
-        return chapterList.mapIndexed {
-                i, ch ->
+        return chapterList.mapIndexed { i, ch ->
             ch.apply { chapter_number = chapterList.size.toFloat() - i }
         }
     }
@@ -89,7 +92,11 @@ class Oglaf : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 

@@ -31,15 +31,30 @@ private typealias IsWord = Boolean
  */
 @Suppress("MemberVisibilityCanBePrivate")
 @RequiresApi(Build.VERSION_CODES.N)
-class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID, BookTitle>) {
+class SmartBookSearchHandler(
+    val rawQuery: String,
+    val rawBooksData: Map<BookID, BookTitle>,
+) {
+    data class WordsData(
+        val words: List<String>,
+        val extra: List<String>,
+        val wordRanges: List<IntRange>,
+    )
 
-    data class WordsData(val words: List<String>, val extra: List<String>, val wordRanges: List<IntRange>)
-
-    data class CollatedElement<Cat>(val value: String, val range: IntRange, val origin: String, val category: Cat)
+    data class CollatedElement<Cat>(
+        val value: String,
+        val range: IntRange,
+        val origin: String,
+        val category: Cat,
+    )
 
     @Suppress("NOTHING_TO_INLINE")
     private inline fun BreakIterator.collate(text: String): List<CollatedElement<Unit>> = collate(text) {}
-    private inline fun <Cat> BreakIterator.collate(text: String, categorizer: (ruleStatus: Int) -> Cat): List<CollatedElement<Cat>> {
+
+    private inline fun <Cat> BreakIterator.collate(
+        text: String,
+        categorizer: (ruleStatus: Int) -> Cat,
+    ): List<CollatedElement<Cat>> {
         this.text = StringCharacterIterator(text)
         var left = first()
         var right = next()
@@ -63,12 +78,13 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
         val charBreak = charBreak
         val wordBreak = wordBreak
 
-        val words: List<CollatedElement<IsWord>> = wordBreak.collate(normQuery) { ruleStatus ->
-            when (ruleStatus) {
-                BreakIterator.WORD_NONE -> false
-                else -> true
+        val words: List<CollatedElement<IsWord>> =
+            wordBreak.collate(normQuery) { ruleStatus ->
+                when (ruleStatus) {
+                    BreakIterator.WORD_NONE -> false
+                    else -> true
+                }
             }
-        }
         val extra: MutableList<String> = ArrayList()
 
         words.forEach { collatedElement ->
@@ -101,7 +117,9 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
         val wordsData = wordsData
         val booksData: Map<BookID, BookTitle> = normalizedBooksData
 
-        class Counter(var value: UInt)
+        class Counter(
+            var value: UInt,
+        )
 
         val scored: Map<BookID, Counter> = booksData.mapValues { Counter(0u) }
 
@@ -128,12 +146,16 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
             }
         }
 
-        val byScore: TreeMap<UInt, MutableList<Map.Entry<BookID, Counter>>> = scored.entries.groupByTo(TreeMap(reverseOrder<UInt>())) { it.value.value }
+        val byScore: TreeMap<UInt, MutableList<Map.Entry<BookID, Counter>>> =
+            scored.entries.groupByTo(TreeMap(reverseOrder<UInt>())) {
+                it.value.value
+            }
         val highest = byScore.firstKey().toFloat()
 
         val included: MutableSet<BookID> = LinkedHashSet()
         for ((score, group) in byScore) {
-            val include = score > 0u && (included.size < MINIMUM_RESULTS || (score.toFloat() / highest) >= NEEDED_FRACTIONAL_SCORE_FOR_INCLUSION)
+            val include =
+                score > 0u && (included.size < MINIMUM_RESULTS || (score.toFloat() / highest) >= NEEDED_FRACTIONAL_SCORE_FOR_INCLUSION)
             if (!include) break
 
             included.addAll(group.map { it.key })
@@ -143,20 +165,26 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
     }
 
     val mangasPage: MangasPage by unexpectedErrorCatchingLazy {
-        filteredBooks.associateWith { rawBooksData[it]!! }
+        filteredBooks
+            .associateWith { rawBooksData[it]!! }
             .toMangasPage()
     }
 
     companion object {
-        private inline fun <T> threadLocal(crossinline initializer: () -> T) = PropertyDelegateProvider<Any?, ThreadLocal<T>> { _: Any?, _: KProperty<*> ->
-            object : ThreadLocal<T>() {
-                override fun initialValue(): T? = initializer()
+        private inline fun <T> threadLocal(crossinline initializer: () -> T) =
+            PropertyDelegateProvider<Any?, ThreadLocal<T>> { _: Any?, _: KProperty<*> ->
+                object : ThreadLocal<T>() {
+                    override fun initialValue(): T? = initializer()
+                }
             }
-        }
 
-        private operator fun <T> ThreadLocal<T>.getValue(thisRef: Any?, property: KProperty<*>): T {
-            return get() ?: reportErrorToUser("SmartBookSearchHandler.${property.name}") { "null initialValue" }
-        }
+        private operator fun <T> ThreadLocal<T>.getValue(
+            thisRef: Any?,
+            property: KProperty<*>,
+        ): T =
+            get() ?: reportErrorToUser("SmartBookSearchHandler.${property.name}") {
+                "null initialValue"
+            }
 
         private val charBreak: BreakIterator by threadLocal { BreakIterator.getCharacterInstance() }
         private val wordBreak: BreakIterator by threadLocal { BreakIterator.getWordInstance() }
@@ -171,9 +199,12 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
 
         private val stringSearch: StringSearch by threadLocal {
             StringSearch(
-                /* pattern = */ "dummy",
-                /* target = */ StringCharacterIterator("dummy"),
-                /* collator = */ collator,
+                // pattern =
+                "dummy",
+                // target =
+                StringCharacterIterator("dummy"),
+                // collator =
+                collator,
             ).apply {
                 isOverlapping = true
             }
@@ -182,16 +213,41 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
         /** first 32 fibonacci numbers */
         @JvmStatic
         @OptIn(ExperimentalUnsignedTypes::class)
-        private val fib32: UIntArray = uintArrayOf(
-            1u, 1u, 2u, 3u,
-            5u, 8u, 13u, 21u,
-            34u, 55u, 89u, 144u,
-            233u, 377u, 610u, 987u,
-            1597u, 2584u, 4181u, 6765u,
-            10946u, 17711u, 28657u, 46368u,
-            75025u, 121393u, 196418u, 317811u,
-            514229u, 832040u, 1346269u, 2178309u,
-        )
+        private val fib32: UIntArray =
+            uintArrayOf(
+                1u,
+                1u,
+                2u,
+                3u,
+                5u,
+                8u,
+                13u,
+                21u,
+                34u,
+                55u,
+                89u,
+                144u,
+                233u,
+                377u,
+                610u,
+                987u,
+                1597u,
+                2584u,
+                4181u,
+                6765u,
+                10946u,
+                17711u,
+                28657u,
+                46368u,
+                75025u,
+                121393u,
+                196418u,
+                317811u,
+                514229u,
+                832040u,
+                1346269u,
+                2178309u,
+            )
 
         private const val SCORE_EXTRA: UInt = 1u
 
@@ -201,23 +257,24 @@ class SmartBookSearchHandler(val rawQuery: String, val rawBooksData: Map<BookID,
 }
 
 /** simply creates an https://projectsuki.com/book/<bookid> [HttpUrl] */
-internal fun BookID.bookIDToURL(): HttpUrl {
-    return homepageUrl.newBuilder()
+internal fun BookID.bookIDToURL(): HttpUrl =
+    homepageUrl
+        .newBuilder()
         .addPathSegment("book")
         .addPathSegment(this)
         .build()
-}
 
 internal fun Map<BookID, BookTitle>.toMangasPage(hasNextPage: Boolean = false): MangasPage = entries.toMangasPage(hasNextPage)
-internal fun Iterable<Map.Entry<BookID, BookTitle>>.toMangasPage(hasNextPage: Boolean = false): MangasPage {
-    return MangasPage(
-        mangas = map { (bookID: BookID, bookTitle: BookTitle) ->
-            SManga.create().apply {
-                title = bookTitle
-                url = bookID.bookIDToURL().rawRelative ?: reportErrorToUser { "Could not create relative url for bookID: $bookID" }
-                thumbnail_url = bookThumbnailUrl(bookID, "").toUri().toASCIIString()
-            }
-        },
+
+internal fun Iterable<Map.Entry<BookID, BookTitle>>.toMangasPage(hasNextPage: Boolean = false): MangasPage =
+    MangasPage(
+        mangas =
+            map { (bookID: BookID, bookTitle: BookTitle) ->
+                SManga.create().apply {
+                    title = bookTitle
+                    url = bookID.bookIDToURL().rawRelative ?: reportErrorToUser { "Could not create relative url for bookID: $bookID" }
+                    thumbnail_url = bookThumbnailUrl(bookID, "").toUri().toASCIIString()
+                }
+            },
         hasNextPage = hasNextPage,
     )
-}

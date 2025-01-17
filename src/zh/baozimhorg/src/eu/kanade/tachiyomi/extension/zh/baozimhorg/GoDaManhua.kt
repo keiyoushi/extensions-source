@@ -17,8 +17,9 @@ import okio.IOException
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
-
+class GoDaManhua :
+    GoDa("GoDa漫画", "", "zh"),
+    ConfigurableSource {
     override val id get() = 774030471139699415
 
     override val baseUrl: String
@@ -28,13 +29,22 @@ class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
         if (System.getenv("CI") == "true") {
             baseUrl = mirrors.joinToString("#, ") { "https://$it" }
         } else {
-            val mirrorIndex = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-                .getString(MIRROR_PREF, "0")!!.toInt().coerceAtMost(mirrors.size - 1)
+            val mirrorIndex =
+                Injekt
+                    .get<Application>()
+                    .getSharedPreferences("source_$id", 0x0000)
+                    .getString(MIRROR_PREF, "0")!!
+                    .toInt()
+                    .coerceAtMost(mirrors.size - 1)
             baseUrl = "https://" + mirrors[mirrorIndex]
         }
     }
 
-    override val client = super.client.newBuilder().addInterceptor(NotFoundInterceptor()).build()
+    override val client =
+        super.client
+            .newBuilder()
+            .addInterceptor(NotFoundInterceptor())
+            .build()
 
     private val json: Json = Injekt.get()
 
@@ -43,25 +53,30 @@ class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
         return json.decodeFromString<ResponseDto<ChapterListDto>>(response.body.string()).data.toChapterList()
     }
 
-    override fun pageListRequest(mangaId: String, chapterId: String): Request {
+    override fun pageListRequest(
+        mangaId: String,
+        chapterId: String,
+    ): Request {
         if (mangaId.isEmpty() || chapterId.isEmpty()) throw Exception("请刷新漫画")
         return GET("https://api-get-v2.mgsearcher.com/api/chapter/getinfo?m=$mangaId&c=$chapterId", headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return json.decodeFromString<ResponseDto<PageListDto>>(response.body.string()).data.info.images.images.map { it.toPage() }
-    }
+    override fun pageListParse(response: Response): List<Page> =
+        json.decodeFromString<ResponseDto<PageListDto>>(response.body.string()).data.info.images.images.map {
+            it.toPage()
+        }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            val mirrors = MIRRORS
-            key = MIRROR_PREF
-            title = "镜像网址"
-            summary = "%s\n重启生效"
-            entries = mirrors
-            entryValues = Array(mirrors.size, Int::toString)
-            setDefaultValue("0")
-        }.let(screen::addPreference)
+        ListPreference(screen.context)
+            .apply {
+                val mirrors = MIRRORS
+                key = MIRROR_PREF
+                title = "镜像网址"
+                summary = "%s\n重启生效"
+                entries = mirrors
+                entryValues = Array(mirrors.size, Int::toString)
+                setDefaultValue("0")
+            }.let(screen::addPreference)
     }
 }
 

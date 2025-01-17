@@ -12,26 +12,24 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class KomikPlay : ZManga("KomikPlay", "https://komikplay.com", "id", SimpleDateFormat("d MMM yyyy", Locale.US)) {
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/${pagePathSegment(page)}/?s")
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/${pagePathSegment(page)}/?s")
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/${pagePathSegment(page)}")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/${pagePathSegment(page)}")
 
     override fun latestUpdatesSelector() = "h2:contains(New) + .flexbox3 .flexbox3-item"
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        SManga.create().apply {
             setUrlWithoutDomain(element.select("div.flexbox3-content a").attr("href"))
             title = element.select("div.flexbox3-content a").attr("title")
             thumbnail_url = element.select("img").attr("abs:src")
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         var url = "$baseUrl/${pagePathSegment(page)}".toHttpUrl().newBuilder()
         url.addQueryParameter("s", query)
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
@@ -48,11 +46,12 @@ class KomikPlay : ZManga("KomikPlay", "https://komikplay.com", "id", SimpleDateF
         return GET(url.build(), headers)
     }
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: cant be used with other filter!"),
-        Filter.Header("$name Project List page"),
-        ProjectFilter(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            Filter.Header("NOTE: cant be used with other filter!"),
+            Filter.Header("$name Project List page"),
+            ProjectFilter(),
+        )
 
     override val hasProjectPage = true
 }

@@ -44,14 +44,15 @@ data class Release(
     @Transient
     val timestamp = dateFormat.parse(releaseDate)?.time ?: 0L
 
-    override fun toString() = buildString {
-        if (number > 0) {
-            if (volume > 0) append("Volume $volume ")
-            append("Chapter ${decimalFormat.format(number)}")
-            if (name.isNotEmpty()) append(": ")
+    override fun toString() =
+        buildString {
+            if (number > 0) {
+                if (volume > 0) append("Volume $volume ")
+                append("Chapter ${decimalFormat.format(number)}")
+                if (name.isNotEmpty()) append(": ")
+            }
+            append(name)
         }
-        append(name)
-    }
 
     companion object {
         private const val ISO_DATE = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
@@ -75,21 +76,31 @@ data class Chapter(
 }
 
 @Serializable
-data class Page(private val filename: String, val width: Int) {
+data class Page(
+    private val filename: String,
+    val width: Int,
+) {
     override fun toString() = filename
 }
 
 @Serializable
-data class UniqidWrapper(private val uniqid: String) {
+data class UniqidWrapper(
+    private val uniqid: String,
+) {
     override fun toString() = uniqid
 }
 
 @Serializable
-data class PeopleWorks(val role: Int, private val people: NameWrapper) {
+data class PeopleWorks(
+    val role: Int,
+    private val people: NameWrapper,
+) {
     override fun toString() = people.toString()
 }
 
 @Serializable
-data class NameWrapper(private val name: String) {
+data class NameWrapper(
+    private val name: String,
+) {
     override fun toString() = name
 }

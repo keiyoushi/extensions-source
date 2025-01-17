@@ -8,7 +8,6 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class XinmeituluUrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val host = intent?.data?.host
@@ -23,11 +22,12 @@ class XinmeituluUrlActivity : Activity() {
                 exitProcess(1)
             }
 
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", query)
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", query)
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)
@@ -40,12 +40,11 @@ class XinmeituluUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun fromUrl(pathSegments: MutableList<String>): String? {
-        return if (pathSegments.size >= 2) {
+    private fun fromUrl(pathSegments: MutableList<String>): String? =
+        if (pathSegments.size >= 2) {
             val slug = pathSegments[1]
             "SLUG:$slug"
         } else {
             null
         }
-    }
 }

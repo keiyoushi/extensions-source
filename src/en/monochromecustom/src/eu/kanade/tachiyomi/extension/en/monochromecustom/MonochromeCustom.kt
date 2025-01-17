@@ -8,8 +8,9 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class MonochromeCustom : ConfigurableSource,
-    MonochromeCMS("Monochrome Custom", "", "en") {
+class MonochromeCustom :
+    MonochromeCMS("Monochrome Custom", "", "en"),
+    ConfigurableSource {
     override val baseUrl by lazy {
         preferences.getString("baseUrl", DEMO_BASE_URL)!!
     }
@@ -23,27 +24,29 @@ class MonochromeCustom : ConfigurableSource,
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = "baseUrl"
-            title = "Frontend URL"
-            summary = "The base URL of your Monochrome installation"
-            setDefaultValue(DEMO_BASE_URL)
+        EditTextPreference(screen.context)
+            .apply {
+                key = "baseUrl"
+                title = "Frontend URL"
+                summary = "The base URL of your Monochrome installation"
+                setDefaultValue(DEMO_BASE_URL)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString("baseUrl", newValue as String).commit()
-            }
-        }.let(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    preferences.edit().putString("baseUrl", newValue as String).commit()
+                }
+            }.let(screen::addPreference)
 
-        EditTextPreference(screen.context).apply {
-            key = "apiUrl"
-            title = "API URL"
-            summary = "The API URL of your Monochrome installation"
-            setDefaultValue(DEMO_API_URL)
+        EditTextPreference(screen.context)
+            .apply {
+                key = "apiUrl"
+                title = "API URL"
+                summary = "The API URL of your Monochrome installation"
+                setDefaultValue(DEMO_API_URL)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString("apiUrl", newValue as String).commit()
-            }
-        }.let(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    preferences.edit().putString("apiUrl", newValue as String).commit()
+                }
+            }.let(screen::addPreference)
     }
 
     companion object {

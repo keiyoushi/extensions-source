@@ -24,24 +24,27 @@ import rx.Observable
 open class MangaReader(
     val language: Language,
 ) : MangaReader() {
-
     override val lang = language.code
 
     override val name = "MangaReader"
 
     override val baseUrl = "https://mangareader.to"
 
-    override val client = super.client.newBuilder()
-        .addInterceptor(ImageInterceptor)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .addInterceptor(ImageInterceptor)
+            .build()
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/filter?sort=latest-updated&language=${language.infix}&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/filter?sort=latest-updated&language=${language.infix}&page=$page", headers)
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/filter?sort=most-viewed&language=${language.infix}&page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/filter?sort=most-viewed&language=${language.infix}&page=$page", headers)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
         if (query.isNotBlank()) {
             urlBuilder.addPathSegment("search").apply {
@@ -108,57 +111,70 @@ open class MangaReader(
         if (artistList.isEmpty().not()) manga.artist = artistList.joinToString()
     }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val root = document.selectFirst(Evaluator.Id("ani_detail"))!!
-        val mangaTitle = root.selectFirst(Evaluator.Tag("h2"))!!.ownText()
-        title = mangaTitle
-        description = root.run {
-            val description = selectFirst(Evaluator.Class("description"))!!.ownText()
-            when (val altTitle = selectFirst(Evaluator.Class("manga-name-or"))!!.ownText()) {
-                "", mangaTitle -> description
-                else -> "$description\n\nAlternative Title: $altTitle"
-            }
-        }
-        thumbnail_url = root.selectFirst(Evaluator.Tag("img"))!!.attr("src")
-        genre = root.selectFirst(Evaluator.Class("genres"))!!.children().joinToString { it.ownText() }
-        for (item in root.selectFirst(Evaluator.Class("anisc-info"))!!.children()) {
-            if (item.hasClass("item").not()) continue
-            when (item.selectFirst(Evaluator.Class("item-head"))!!.ownText()) {
-                "Authors:" -> item.parseAuthorsTo(this)
-                "Status:" -> status = when (item.selectFirst(Evaluator.Class("name"))!!.ownText()) {
-                    "Finished" -> SManga.COMPLETED
-                    "Publishing" -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            val root = document.selectFirst(Evaluator.Id("ani_detail"))!!
+            val mangaTitle = root.selectFirst(Evaluator.Tag("h2"))!!.ownText()
+            title = mangaTitle
+            description =
+                root.run {
+                    val description = selectFirst(Evaluator.Class("description"))!!.ownText()
+                    when (val altTitle = selectFirst(Evaluator.Class("manga-name-or"))!!.ownText()) {
+                        "", mangaTitle -> description
+                        else -> "$description\n\nAlternative Title: $altTitle"
+                    }
+                }
+            thumbnail_url = root.selectFirst(Evaluator.Tag("img"))!!.attr("src")
+            genre = root.selectFirst(Evaluator.Class("genres"))!!.children().joinToString { it.ownText() }
+            for (item in root.selectFirst(Evaluator.Class("anisc-info"))!!.children()) {
+                if (item.hasClass("item").not()) continue
+                when (item.selectFirst(Evaluator.Class("item-head"))!!.ownText()) {
+                    "Authors:" -> item.parseAuthorsTo(this)
+                    "Status:" ->
+                        status =
+                            when (item.selectFirst(Evaluator.Class("name"))!!.ownText()) {
+                                "Finished" -> SManga.COMPLETED
+                                "Publishing" -> SManga.ONGOING
+                                else -> SManga.UNKNOWN
+                            }
                 }
             }
         }
-    }
 
     override val chapterType get() = "chap"
     override val volumeType get() = "vol"
 
-    override fun chapterListRequest(mangaUrl: String, type: String): Request {
+    override fun chapterListRequest(
+        mangaUrl: String,
+        type: String,
+    ): Request {
         val id = mangaUrl.substringAfterLast('-')
         return GET("$baseUrl/ajax/manga/reading-list/$id?readingBy=$type", headers)
     }
 
-    override fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> {
-        val container = response.parseHtmlProperty().run {
-            val type = if (isVolume) "volumes" else "chapters"
-            selectFirst(Evaluator.Id("${language.chapterInfix}-$type")) ?: return emptyList()
-        }
+    override fun parseChapterElements(
+        response: Response,
+        isVolume: Boolean,
+    ): List<Element> {
+        val container =
+            response.parseHtmlProperty().run {
+                val type = if (isVolume) "volumes" else "chapters"
+                selectFirst(Evaluator.Id("${language.chapterInfix}-$type")) ?: return emptyList()
+            }
         return container.children()
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        val typeAndId = chapter.url.substringAfterLast('#', "").ifEmpty {
-            val document = client.newCall(pageListRequest(chapter)).execute().asJsoup()
-            val wrapper = document.selectFirst(Evaluator.Id("wrapper"))!!
-            wrapper.attr("data-reading-by") + '/' + wrapper.attr("data-reading-id")
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
+        Observable.fromCallable {
+            val typeAndId =
+                chapter.url.substringAfterLast('#', "").ifEmpty {
+                    val document = client.newCall(pageListRequest(chapter)).execute().asJsoup()
+                    val wrapper = document.selectFirst(Evaluator.Id("wrapper"))!!
+                    wrapper.attr("data-reading-by") + '/' + wrapper.attr("data-reading-id")
+                }
+            val ajaxUrl = "$baseUrl/ajax/image/list/$typeAndId?quality=${preferences.quality}"
+            client.newCall(GET(ajaxUrl, headers)).execute().let(::pageListParse)
         }
-        val ajaxUrl = "$baseUrl/ajax/image/list/$typeAndId?quality=${preferences.quality}"
-        client.newCall(GET(ajaxUrl, headers)).execute().let(::pageListParse)
-    }
 
     override fun pageListParse(response: Response): List<Page> {
         val pageDocument = response.parseHtmlProperty()
@@ -189,7 +205,11 @@ open class MangaReader(
         )
 
     private fun Response.parseHtmlProperty(): Document {
-        val html = Json.parseToJsonElement(body.string()).jsonObject["html"]!!.jsonPrimitive.content
+        val html =
+            Json
+                .parseToJsonElement(body.string())
+                .jsonObject["html"]!!
+                .jsonPrimitive.content
         return Jsoup.parseBodyFragment(html)
     }
 }

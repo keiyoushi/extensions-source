@@ -38,8 +38,10 @@ class CosplayTele : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
@@ -52,59 +54,83 @@ class CosplayTele : ParsedHttpSource() {
     }
 
     override fun latestUpdatesNextPageSelector() = ".next.page-number"
+
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page/")
 
     override fun latestUpdatesSelector() = "div.box"
 
     // Popular
-    override fun popularMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun popularMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 
     private val popularPageLimit = 20
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/wp-json/wordpress-popular-posts/v1/popular-posts?offset=${page * popularPageLimit}&limit=$popularPageLimit&range=last7days&embed=true&_embed=wp:featuredmedia&_fields=title,link,_embedded,_links.wp:featuredmedia")
+    override fun popularMangaRequest(page: Int) =
+        GET(
+            "$baseUrl/wp-json/wordpress-popular-posts/v1/popular-posts?offset=${page * popularPageLimit}&limit=$popularPageLimit&range=last7days&embed=true&_embed=wp:featuredmedia&_fields=title,link,_embedded,_links.wp:featuredmedia",
+        )
+
     override fun popularMangaSelector(): String = ""
 
     override fun popularMangaParse(response: Response): MangasPage {
         val respObject = json.decodeFromString<JsonArray>(response.body.string())
-        val mangas = respObject.map { item ->
-            SManga.create().apply {
-                title = item.jsonObject!!["title"]!!.jsonObject!!["rendered"]!!.jsonPrimitive.content
-                thumbnail_url = item.jsonObject!!["_embedded"]!!.jsonObject!!["wp:featuredmedia"]!!.jsonArray[0]!!.jsonObject["source_url"]!!.jsonPrimitive.content
-                setUrlWithoutDomain(item.jsonObject!!["link"]!!.jsonPrimitive.content)
+        val mangas =
+            respObject.map { item ->
+                SManga.create().apply {
+                    title =
+                        item.jsonObject!!["title"]!!
+                            .jsonObject!!["rendered"]!!
+                            .jsonPrimitive.content
+                    thumbnail_url =
+                        item.jsonObject!!["_embedded"]!!
+                            .jsonObject!!["wp:featuredmedia"]!!
+                            .jsonArray[0]!!
+                            .jsonObject["source_url"]!!
+                            .jsonPrimitive.content
+                    setUrlWithoutDomain(item.jsonObject!!["link"]!!.jsonPrimitive.content)
+                }
             }
-        }
         return MangasPage(mangas, mangas.size >= popularPageLimit)
     }
 
     // Search
     override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
+
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
 
         val categoryFilter = filterList.findInstance<UriPartFilter>()
         return when {
-            categoryFilter?.state != 0 -> GET(
-                baseUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegments(categoryFilter!!.toUriPart())
-                    addPathSegment("page")
-                    addPathSegment(page.toString())
-                    if (query.isNotEmpty()) {
-                        addQueryParameter("s", query)
-                    }
-                }.build(),
-            )
-            query.isNotEmpty() -> GET(
-                "$baseUrl/page/$page/".toHttpUrl().newBuilder().apply {
-                    addQueryParameter("s", query)
-                }.build(),
-            )
+            categoryFilter?.state != 0 ->
+                GET(
+                    baseUrl
+                        .toHttpUrl()
+                        .newBuilder()
+                        .apply {
+                            addPathSegments(categoryFilter!!.toUriPart())
+                            addPathSegment("page")
+                            addPathSegment(page.toString())
+                            if (query.isNotEmpty()) {
+                                addQueryParameter("s", query)
+                            }
+                        }.build(),
+                )
+            query.isNotEmpty() ->
+                GET(
+                    "$baseUrl/page/$page/"
+                        .toHttpUrl()
+                        .newBuilder()
+                        .apply {
+                            addQueryParameter("s", query)
+                        }.build(),
+                )
             else -> latestUpdatesRequest(page)
         }
     }
@@ -153,17 +179,17 @@ class CosplayTele : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
     override fun getFilterList(): FilterList {
         CoroutineScope(Dispatchers.IO).launch { fetchFilters() }
-        val filters = mutableListOf<Filter<*>>(
-            Filter.Header("NOTE: Only one filter will be applied!"),
-            Filter.Separator(),
-            UriPartFilter("Category", categories.entries.toTypedArray()),
-        )
+        val filters =
+            mutableListOf<Filter<*>>(
+                Filter.Header("NOTE: Only one filter will be applied!"),
+                Filter.Separator(),
+                UriPartFilter("Category", categories.entries.toTypedArray()),
+            )
 
         if (filtersState == FilterState.Unfetched) {
             filters.add(1, Filter.Header("Use 'reset' to load all filters"))
@@ -178,18 +204,21 @@ class CosplayTele : ParsedHttpSource() {
         fun toUriPart() = valuePair[state].value
     }
 
-    private var categories = mutableMapOf(
-        Pair("All", ""),
-        Pair("Cosplay Nude", "category/nude"),
-        Pair("Cosplay Ero", "category/no-nude"),
-        Pair("Cosplay", "category/cosplay"),
-    )
+    private var categories =
+        mutableMapOf(
+            Pair("All", ""),
+            Pair("Cosplay Nude", "category/nude"),
+            Pair("Cosplay Ero", "category/no-nude"),
+            Pair("Cosplay", "category/cosplay"),
+        )
 
     private var filtersState = FilterState.Unfetched
     private var filterAttempts = 0
 
     private enum class FilterState {
-        Fetching, Fetched, Unfetched
+        Fetching,
+        Fetched,
+        Unfetched,
     }
 
     private suspend fun fetchFilters() {
@@ -198,9 +227,11 @@ class CosplayTele : ParsedHttpSource() {
             filterAttempts++
 
             try {
-                client.newCall(GET("$baseUrl/explore-categories/", headers))
+                client
+                    .newCall(GET("$baseUrl/explore-categories/", headers))
                     .await()
-                    .asJsoup().let { document -> getTags(document) }
+                    .asJsoup()
+                    .let { document -> getTags(document) }
                 filtersState = FilterState.Fetched
             } catch (e: Exception) {
                 Log.e(name, e.stackTraceToString())

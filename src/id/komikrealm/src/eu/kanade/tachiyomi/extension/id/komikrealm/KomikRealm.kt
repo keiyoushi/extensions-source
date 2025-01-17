@@ -17,11 +17,12 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class KomikRealm : ZeistManga(
-    "KomikRealm",
-    "https://www.komikrealm.my.id",
-    "id",
-) {
+class KomikRealm :
+    ZeistManga(
+        "KomikRealm",
+        "https://www.komikrealm.my.id",
+        "id",
+    ) {
     override val hasFilters = true
 
     override val hasLanguageFilter = false
@@ -29,10 +30,11 @@ class KomikRealm : ZeistManga(
     override val chapterCategory = ""
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = apiUrl("Project")
-            .addQueryParameter("orderby", "updated")
-            .addQueryParameter("max-results", "12")
-            .build()
+        val url =
+            apiUrl("Project")
+                .addQueryParameter("orderby", "updated")
+                .addQueryParameter("max-results", "12")
+                .build()
 
         return GET(url, headers)
     }
@@ -41,10 +43,13 @@ class KomikRealm : ZeistManga(
         val jsonString = response.body.string()
         val result = json.decodeFromString<ZeistMangaDto>(jsonString)
 
-        val mangas = result.feed?.entry.orEmpty()
-            .filter { it.category.orEmpty().any { category -> category.term == "Series" } }
-            .filter { !it.category.orEmpty().any { category -> category.term == "Anime" } }
-            .map { it.toSManga(baseUrl) }
+        val mangas =
+            result.feed
+                ?.entry
+                .orEmpty()
+                .filter { it.category.orEmpty().any { category -> category.term == "Series" } }
+                .filter { !it.category.orEmpty().any { category -> category.term == "Anime" } }
+                .map { it.toSManga(baseUrl) }
 
         return MangasPage(mangas, false)
     }
@@ -57,8 +62,10 @@ class KomikRealm : ZeistManga(
         return SManga.create().apply {
             thumbnail_url = profileManga.select("img").first()!!.attr("data-src")
             description = profileManga.select(".sinoposis").text()
-            genre = profileManga.select("div.info-genre > a[rel=tag]")
-                .joinToString { it.text() }
+            genre =
+                profileManga
+                    .select("div.info-genre > a[rel=tag]")
+                    .joinToString { it.text() }
 
             infoManga.forEach {
                 val title = it.select("b").text()
@@ -84,13 +91,13 @@ class KomikRealm : ZeistManga(
         val jsonString = res.body.string()
         val result = json.decodeFromString<ZeistMangaDto>(jsonString)
 
-        return result.feed?.entry
+        return result.feed
+            ?.entry
             ?.filter {
                 !it.category.orEmpty().any { category ->
                     category.term == "Series"
                 }
-            }
-            ?.map { it.toSChapter(baseUrl) }
+            }?.map { it.toSChapter(baseUrl) }
             ?: throw Exception("Failed to parse from chapter API")
     }
 
@@ -100,43 +107,51 @@ class KomikRealm : ZeistManga(
         val document = response.asJsoup()
         val script = document.select(".post-body > script").html()
         val matches = imagePageRegex.findAll(script)
-        return matches.mapIndexed { i, match ->
-            Page(i, "", match.value)
-        }.toList()
+        return matches
+            .mapIndexed { i, match ->
+                Page(i, "", match.value)
+            }.toList()
     }
 
     private val labelChapterRegex = """var label_chapter = "([^"]+)";""".toRegex()
 
     override fun getChapterFeedUrl(doc: Document): String {
         val script = doc.select(".post-body > script")
-        val feed = labelChapterRegex.find(script.html())
-            ?.groupValues?.get(1)
-            ?: throw Exception("Failed to find chapter feed")
+        val feed =
+            labelChapterRegex
+                .find(script.html())
+                ?.groupValues
+                ?.get(1)
+                ?: throw Exception("Failed to find chapter feed")
 
         return apiUrl(chapterCategory)
             .addPathSegments(feed)
             .addQueryParameter("max-results", "999999")
-            .build().toString()
+            .build()
+            .toString()
     }
 
     private val intl by lazy { ZeistMangaIntl(lang) }
 
-    override fun getStatusList(): List<Status> = listOf(
-        Status(intl.all, ""),
-        Status(intl.statusOngoing, "Ongoing"),
-        Status(intl.statusCompleted, "Completed"),
-    )
+    override fun getStatusList(): List<Status> =
+        listOf(
+            Status(intl.all, ""),
+            Status(intl.statusOngoing, "Ongoing"),
+            Status(intl.statusCompleted, "Completed"),
+        )
 
-    override fun getTypeList(): List<Type> = listOf(
-        Type(intl.all, ""),
-        Type(intl.typeManga, "Manga"),
-        Type(intl.typeManhua, "Manhua"),
-        Type(intl.typeManhwa, "Manhwa"),
-    )
+    override fun getTypeList(): List<Type> =
+        listOf(
+            Type(intl.all, ""),
+            Type(intl.typeManga, "Manga"),
+            Type(intl.typeManhua, "Manhua"),
+            Type(intl.typeManhwa, "Manhwa"),
+        )
 
-    override fun getGenreList(): List<Genre> = listOf(
-        Genre("Drama", "Drama"),
-        Genre("Mature", "Mature"),
-        Genre("Supernatural", "Supernatural"),
-    )
+    override fun getGenreList(): List<Genre> =
+        listOf(
+            Genre("Drama", "Drama"),
+            Genre("Mature", "Mature"),
+            Genre("Supernatural", "Supernatural"),
+        )
 }

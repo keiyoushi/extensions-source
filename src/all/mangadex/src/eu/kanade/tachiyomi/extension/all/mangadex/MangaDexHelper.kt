@@ -50,55 +50,59 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MangaDexHelper(lang: String) {
-
+class MangaDexHelper(
+    lang: String,
+) {
     val mdFilters = MangaDexFilters()
 
-    val json = Json {
-        isLenient = true
-        ignoreUnknownKeys = true
-        allowSpecialFloatingPointValues = true
-        prettyPrint = true
-        serializersModule += SerializersModule {
-            polymorphic(EntityDto::class) {
-                subclass(AuthorDto::class)
-                subclass(ArtistDto::class)
-                subclass(ChapterDataDto::class)
-                subclass(CoverArtDto::class)
-                subclass(ListDataDto::class)
-                subclass(MangaDataDto::class)
-                subclass(ScanlationGroupDto::class)
-                subclass(TagDto::class)
-                subclass(UserDto::class)
-                defaultDeserializer { UnknownEntity.serializer() }
-            }
+    val json =
+        Json {
+            isLenient = true
+            ignoreUnknownKeys = true
+            allowSpecialFloatingPointValues = true
+            prettyPrint = true
+            serializersModule +=
+                SerializersModule {
+                    polymorphic(EntityDto::class) {
+                        subclass(AuthorDto::class)
+                        subclass(ArtistDto::class)
+                        subclass(ChapterDataDto::class)
+                        subclass(CoverArtDto::class)
+                        subclass(ListDataDto::class)
+                        subclass(MangaDataDto::class)
+                        subclass(ScanlationGroupDto::class)
+                        subclass(TagDto::class)
+                        subclass(UserDto::class)
+                        defaultDeserializer { UnknownEntity.serializer() }
+                    }
 
-            polymorphic(AttributesDto::class) {
-                subclass(AuthorArtistAttributesDto::class)
-                subclass(ChapterAttributesDto::class)
-                subclass(CoverArtAttributesDto::class)
-                subclass(ListAttributesDto::class)
-                subclass(MangaAttributesDto::class)
-                subclass(ScanlationGroupAttributes::class)
-                subclass(TagAttributesDto::class)
-                subclass(UserAttributes::class)
-            }
+                    polymorphic(AttributesDto::class) {
+                        subclass(AuthorArtistAttributesDto::class)
+                        subclass(ChapterAttributesDto::class)
+                        subclass(CoverArtAttributesDto::class)
+                        subclass(ListAttributesDto::class)
+                        subclass(MangaAttributesDto::class)
+                        subclass(ScanlationGroupAttributes::class)
+                        subclass(TagAttributesDto::class)
+                        subclass(UserAttributes::class)
+                    }
+                }
         }
-    }
 
-    val intl = Intl(
-        language = lang,
-        baseLanguage = MangaDexIntl.ENGLISH,
-        availableLanguages = MangaDexIntl.AVAILABLE_LANGS,
-        classLoader = this::class.java.classLoader!!,
-        createMessageFileName = { lang ->
-            when (lang) {
-                MangaDexIntl.SPANISH_LATAM -> Intl.createDefaultMessageFileName(MangaDexIntl.SPANISH)
-                MangaDexIntl.PORTUGUESE -> Intl.createDefaultMessageFileName(MangaDexIntl.BRAZILIAN_PORTUGUESE)
-                else -> Intl.createDefaultMessageFileName(lang)
-            }
-        },
-    )
+    val intl =
+        Intl(
+            language = lang,
+            baseLanguage = MangaDexIntl.ENGLISH,
+            availableLanguages = MangaDexIntl.AVAILABLE_LANGS,
+            classLoader = this::class.java.classLoader!!,
+            createMessageFileName = { lang ->
+                when (lang) {
+                    MangaDexIntl.SPANISH_LATAM -> Intl.createDefaultMessageFileName(MangaDexIntl.SPANISH)
+                    MangaDexIntl.PORTUGUESE -> Intl.createDefaultMessageFileName(MangaDexIntl.BRAZILIAN_PORTUGUESE)
+                    else -> Intl.createDefaultMessageFileName(lang)
+                }
+            },
+        )
 
     /**
      * Gets the UUID from the url
@@ -108,18 +112,23 @@ class MangaDexHelper(lang: String) {
     /**
      * Get chapters for manga (aka manga/$id/feed endpoint)
      */
-    fun getChapterEndpoint(mangaId: String, offset: Int, langCode: String) =
-        "${MDConstants.apiMangaUrl}/$mangaId/feed".toHttpUrl().newBuilder()
-            .addQueryParameter("includes[]", MDConstants.scanlationGroup)
-            .addQueryParameter("includes[]", MDConstants.user)
-            .addQueryParameter("limit", "500")
-            .addQueryParameter("offset", offset.toString())
-            .addQueryParameter("translatedLanguage[]", langCode)
-            .addQueryParameter("order[volume]", "desc")
-            .addQueryParameter("order[chapter]", "desc")
-            .addQueryParameter("includeFuturePublishAt", "0")
-            .addQueryParameter("includeEmptyPages", "0")
-            .toString()
+    fun getChapterEndpoint(
+        mangaId: String,
+        offset: Int,
+        langCode: String,
+    ) = "${MDConstants.apiMangaUrl}/$mangaId/feed"
+        .toHttpUrl()
+        .newBuilder()
+        .addQueryParameter("includes[]", MDConstants.scanlationGroup)
+        .addQueryParameter("includes[]", MDConstants.user)
+        .addQueryParameter("limit", "500")
+        .addQueryParameter("offset", offset.toString())
+        .addQueryParameter("translatedLanguage[]", langCode)
+        .addQueryParameter("order[volume]", "desc")
+        .addQueryParameter("order[chapter]", "desc")
+        .addQueryParameter("includeFuturePublishAt", "0")
+        .addQueryParameter("includeEmptyPages", "0")
+        .toString()
 
     /**
      * Check if the manga url is a valid uuid
@@ -139,52 +148,55 @@ class MangaDexHelper(lang: String) {
     /**
      * Get the latest chapter offset pages are 1 based, so subtract 1
      */
-    fun getLatestChapterOffset(page: Int): String =
-        (MDConstants.latestChapterLimit * (page - 1)).toString()
+    fun getLatestChapterOffset(page: Int): String = (MDConstants.latestChapterLimit * (page - 1)).toString()
 
     /**
      * Remove any HTML characters in manga or chapter name to actual
      * characters. For example &hearts; will show ♥.
      */
-    private fun String.removeEntities(): String {
-        return Parser.unescapeEntities(this, false)
-    }
+    private fun String.removeEntities(): String = Parser.unescapeEntities(this, false)
 
     /**
      * Remove any HTML characters in description to actual characters.
      * It also removes Markdown syntax for links, italic and bold.
      */
-    private fun String.removeEntitiesAndMarkdown(): String {
-        return removeEntities()
+    private fun String.removeEntitiesAndMarkdown(): String =
+        removeEntities()
             .substringBefore("---")
             .replace(markdownLinksRegex, "$1")
             .replace(markdownItalicBoldRegex, "$1")
             .replace(markdownItalicRegex, "$1")
             .trim()
-    }
 
     /**
      * Maps MangaDex status to Tachiyomi status.
      * Adapted from the MangaDex handler from TachiyomiSY.
      */
-    fun getPublicationStatus(attr: MangaAttributesDto, volumes: Map<String, AggregateVolume>): Int {
-        val chaptersList = volumes.values
-            .flatMap { it.chapters.values }
-            .map { it.chapter }
+    fun getPublicationStatus(
+        attr: MangaAttributesDto,
+        volumes: Map<String, AggregateVolume>,
+    ): Int {
+        val chaptersList =
+            volumes.values
+                .flatMap { it.chapters.values }
+                .map { it.chapter }
 
-        val tempStatus = when (attr.status) {
-            StatusDto.ONGOING -> SManga.ONGOING
-            StatusDto.CANCELLED -> SManga.CANCELLED
-            StatusDto.COMPLETED -> SManga.PUBLISHING_FINISHED
-            StatusDto.HIATUS -> SManga.ON_HIATUS
-            else -> SManga.UNKNOWN
-        }
+        val tempStatus =
+            when (attr.status) {
+                StatusDto.ONGOING -> SManga.ONGOING
+                StatusDto.CANCELLED -> SManga.CANCELLED
+                StatusDto.COMPLETED -> SManga.PUBLISHING_FINISHED
+                StatusDto.HIATUS -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
 
-        val publishedOrCancelled = tempStatus == SManga.PUBLISHING_FINISHED ||
-            tempStatus == SManga.CANCELLED
+        val publishedOrCancelled =
+            tempStatus == SManga.PUBLISHING_FINISHED ||
+                tempStatus == SManga.CANCELLED
 
-        val isOneShot = attr.tags.any { it.id == MDConstants.tagOneShotUuid } &&
-            attr.tags.none { it.id == MDConstants.tagAnthologyUuid }
+        val isOneShot =
+            attr.tags.any { it.id == MDConstants.tagOneShotUuid } &&
+                attr.tags.none { it.id == MDConstants.tagAnthologyUuid }
 
         return when {
             chaptersList.contains(attr.lastChapter) && publishedOrCancelled -> SManga.COMPLETED
@@ -193,8 +205,7 @@ class MangaDexHelper(lang: String) {
         }
     }
 
-    private fun parseDate(dateAsString: String): Long =
-        MDConstants.dateFormatter.parse(dateAsString)?.time ?: 0
+    private fun parseDate(dateAsString: String): Long = MDConstants.dateFormatter.parse(dateAsString)?.time ?: 0
 
     /**
      * Chapter URL where we get the token, last request time.
@@ -202,9 +213,11 @@ class MangaDexHelper(lang: String) {
     private val tokenTracker = hashMapOf<String, Long>()
 
     companion object {
-        val USE_CACHE = CacheControl.Builder()
-            .maxStale(Integer.MAX_VALUE, TimeUnit.SECONDS)
-            .build()
+        val USE_CACHE =
+            CacheControl
+                .Builder()
+                .maxStale(Integer.MAX_VALUE, TimeUnit.SECONDS)
+                .build()
 
         val markdownLinksRegex = "\\[([^]]+)\\]\\(([^)]+)\\)".toRegex()
         val markdownItalicBoldRegex = "\\*+\\s*([^\\*]*)\\s*\\*+".toRegex()
@@ -218,7 +231,11 @@ class MangaDexHelper(lang: String) {
     /**
      * Check the token map to see if the MD@Home host is still valid.
      */
-    fun getValidImageUrlForPage(page: Page, headers: Headers, client: OkHttpClient): Request {
+    fun getValidImageUrlForPage(
+        page: Page,
+        headers: Headers,
+        client: OkHttpClient,
+    ): Request {
         val (host, tokenRequestUrl, time) = page.url.split(",")
 
         val mdAtHomeServerUrl =
@@ -226,11 +243,12 @@ class MangaDexHelper(lang: String) {
                 false -> host
                 true -> {
                     val tokenLifespan = Date().time - (tokenTracker[tokenRequestUrl] ?: 0)
-                    val cacheControl = if (tokenLifespan > MDConstants.mdAtHomeTokenLifespan) {
-                        CacheControl.FORCE_NETWORK
-                    } else {
-                        USE_CACHE
-                    }
+                    val cacheControl =
+                        if (tokenLifespan > MDConstants.mdAtHomeTokenLifespan) {
+                            CacheControl.FORCE_NETWORK
+                        } else {
+                            USE_CACHE
+                        }
                     getMdAtHomeUrl(tokenRequestUrl, client, headers, cacheControl)
                 }
             }
@@ -275,8 +293,7 @@ class MangaDexHelper(lang: String) {
         return GET(tokenRequestUrl, headers, cacheControl)
     }
 
-    private fun List<Map<String, String>>.findTitleByLang(lang: String): String? =
-        firstOrNull { it[lang] != null }?.values?.singleOrNull()
+    private fun List<Map<String, String>>.findTitleByLang(lang: String): String? = firstOrNull { it[lang] != null }?.values?.singleOrNull()
 
     /**
      * Create a [SManga] from the JSON element with only basic attributes filled.
@@ -287,31 +304,34 @@ class MangaDexHelper(lang: String) {
         coverSuffix: String?,
         lang: String,
         preferExtensionLangTitle: Boolean,
-    ): SManga = SManga.create().apply {
-        url = "/manga/${mangaDataDto.id}"
+    ): SManga =
+        SManga.create().apply {
+            url = "/manga/${mangaDataDto.id}"
 
-        val titleMap = mangaDataDto.attributes!!.title
-        title = with(mangaDataDto.attributes) {
-            titleMap[lang] ?: altTitles.run {
-                val mainTitle = titleMap.values.firstOrNull()
-                val langTitle = findTitleByLang(lang)
-                val enTitle = findTitleByLang("en")
+            val titleMap = mangaDataDto.attributes!!.title
+            title =
+                with(mangaDataDto.attributes) {
+                    titleMap[lang] ?: altTitles.run {
+                        val mainTitle = titleMap.values.firstOrNull()
+                        val langTitle = findTitleByLang(lang)
+                        val enTitle = findTitleByLang("en")
 
-                if (preferExtensionLangTitle) {
-                    listOf(langTitle, mainTitle, enTitle)
-                } else {
-                    listOf(mainTitle, langTitle, enTitle)
-                }.firstNotNullOfOrNull { it }
-            }
-        }?.removeEntities().orEmpty()
+                        if (preferExtensionLangTitle) {
+                            listOf(langTitle, mainTitle, enTitle)
+                        } else {
+                            listOf(mainTitle, langTitle, enTitle)
+                        }.firstNotNullOfOrNull { it }
+                    }
+                }?.removeEntities().orEmpty()
 
-        coverFileName?.let {
-            thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
-                true -> "${MDConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
-                else -> "${MDConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
+            coverFileName?.let {
+                thumbnail_url =
+                    when (!coverSuffix.isNullOrEmpty()) {
+                        true -> "${MDConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName$coverSuffix"
+                        else -> "${MDConstants.cdnUrl}/covers/${mangaDataDto.id}/$coverFileName"
+                    }
             }
         }
-    }
 
     /**
      * Create an [SManga] from the JSON element with all attributes filled.
@@ -330,55 +350,64 @@ class MangaDexHelper(lang: String) {
         // Things that will go with the genre tags but aren't actually genre
         val dexLocale = Locale.forLanguageTag(lang)
 
-        val nonGenres = listOfNotNull(
-            attr.publicationDemographic
-                ?.let { intl["publication_demographic_${it.name.lowercase()}"] },
-            attr.contentRating
-                .takeIf { it != ContentRatingDto.SAFE }
-                ?.let { intl.format("content_rating_genre", intl["content_rating_${it.name.lowercase()}"]) },
-            attr.originalLanguage
-                ?.let { Locale.forLanguageTag(it) }
-                ?.getDisplayName(dexLocale)
-                ?.replaceFirstChar { it.uppercase(dexLocale) },
-        )
+        val nonGenres =
+            listOfNotNull(
+                attr.publicationDemographic
+                    ?.let { intl["publication_demographic_${it.name.lowercase()}"] },
+                attr.contentRating
+                    .takeIf { it != ContentRatingDto.SAFE }
+                    ?.let { intl.format("content_rating_genre", intl["content_rating_${it.name.lowercase()}"]) },
+                attr.originalLanguage
+                    ?.let { Locale.forLanguageTag(it) }
+                    ?.getDisplayName(dexLocale)
+                    ?.replaceFirstChar { it.uppercase(dexLocale) },
+            )
 
-        val authors = mangaDataDto.relationships
-            .filterIsInstance<AuthorDto>()
-            .mapNotNull { it.attributes?.name }
-            .distinct()
+        val authors =
+            mangaDataDto.relationships
+                .filterIsInstance<AuthorDto>()
+                .mapNotNull { it.attributes?.name }
+                .distinct()
 
-        val artists = mangaDataDto.relationships
-            .filterIsInstance<ArtistDto>()
-            .mapNotNull { it.attributes?.name }
-            .distinct()
+        val artists =
+            mangaDataDto.relationships
+                .filterIsInstance<ArtistDto>()
+                .mapNotNull { it.attributes?.name }
+                .distinct()
 
-        val coverFileName = firstVolumeCover ?: mangaDataDto.relationships
-            .filterIsInstance<CoverArtDto>()
-            .firstOrNull()
-            ?.attributes?.fileName
+        val coverFileName =
+            firstVolumeCover ?: mangaDataDto.relationships
+                .filterIsInstance<CoverArtDto>()
+                .firstOrNull()
+                ?.attributes
+                ?.fileName
 
         val tags = mdFilters.getTags(intl).associate { it.id to it.name }
 
-        val genresMap = attr.tags
-            .groupBy({ it.attributes!!.group }) { tagDto -> tags[tagDto.id] }
-            .mapValues { it.value.filterNotNull().sortedWith(intl.collator) }
+        val genresMap =
+            attr.tags
+                .groupBy({ it.attributes!!.group }) { tagDto -> tags[tagDto.id] }
+                .mapValues { it.value.filterNotNull().sortedWith(intl.collator) }
 
         val genreList = MDConstants.tagGroupsOrder.flatMap { genresMap[it].orEmpty() } + nonGenres
 
-        var desc = (attr.description[lang] ?: attr.description["en"])
-            ?.removeEntitiesAndMarkdown()
-            .orEmpty()
+        var desc =
+            (attr.description[lang] ?: attr.description["en"])
+                ?.removeEntitiesAndMarkdown()
+                .orEmpty()
 
         if (altTitlesInDesc) {
             val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
-            val altTitles = attr.altTitles
-                .filter { it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
-                .mapNotNull { it.values.singleOrNull() }
-                .filter(String::isNotEmpty)
+            val altTitles =
+                attr.altTitles
+                    .filter { it.containsKey(lang) || it.containsKey(romanizedOriginalLang) }
+                    .mapNotNull { it.values.singleOrNull() }
+                    .filter(String::isNotEmpty)
 
             if (altTitles.isNotEmpty()) {
-                val altTitlesDesc = altTitles
-                    .joinToString("\n", "${intl["alternative_titles"]}\n") { "• $it" }
+                val altTitlesDesc =
+                    altTitles
+                        .joinToString("\n", "${intl["alternative_titles"]}\n") { "• $it" }
                 desc += (if (desc.isBlank()) "" else "\n\n") + altTitlesDesc.removeEntities()
             }
         }
@@ -388,9 +417,10 @@ class MangaDexHelper(lang: String) {
             author = authors.joinToString()
             artist = artists.joinToString()
             status = getPublicationStatus(attr, chapters)
-            genre = genreList
-                .filter(String::isNotEmpty)
-                .joinToString()
+            genre =
+                genreList
+                    .filter(String::isNotEmpty)
+                    .joinToString()
         }
     }
 
@@ -400,19 +430,20 @@ class MangaDexHelper(lang: String) {
     fun createChapter(chapterDataDto: ChapterDataDto): SChapter {
         val attr = chapterDataDto.attributes!!
 
-        val groups = chapterDataDto.relationships
-            .filterIsInstance<ScanlationGroupDto>()
-            .filterNot { it.id == MDConstants.legacyNoGroupId } // 'no group' left over from MDv3
-            .mapNotNull { it.attributes?.name }
-            .joinToString(" & ")
-            .ifEmpty {
-                // Fallback to uploader name if no group is set.
-                val users = chapterDataDto.relationships
-                    .filterIsInstance<UserDto>()
-                    .mapNotNull { it.attributes?.username }
-                if (users.isNotEmpty()) intl.format("uploaded_by", users.joinToString(" & ")) else ""
-            }
-            .ifEmpty { intl["no_group"] } // "No Group" as final resort
+        val groups =
+            chapterDataDto.relationships
+                .filterIsInstance<ScanlationGroupDto>()
+                .filterNot { it.id == MDConstants.legacyNoGroupId } // 'no group' left over from MDv3
+                .mapNotNull { it.attributes?.name }
+                .joinToString(" & ")
+                .ifEmpty {
+                    // Fallback to uploader name if no group is set.
+                    val users =
+                        chapterDataDto.relationships
+                            .filterIsInstance<UserDto>()
+                            .mapNotNull { it.attributes?.username }
+                    if (users.isNotEmpty()) intl.format("uploaded_by", users.joinToString(" & ")) else ""
+                }.ifEmpty { intl["no_group"] } // "No Group" as final resort
 
         val chapterName = mutableListOf<String>()
         // Build chapter name
@@ -453,19 +484,21 @@ class MangaDexHelper(lang: String) {
         }
     }
 
-    fun titleToSlug(title: String) = title.trim()
-        .lowercase(Locale.US)
-        .replace(titleSpecialCharactersRegex, "-")
-        .replace(trailingHyphenRegex, "")
-        .split("-")
-        .reduce { accumulator, element ->
-            val currentSlug = "$accumulator-$element"
-            if (currentSlug.length > 100) {
-                accumulator
-            } else {
-                currentSlug
+    fun titleToSlug(title: String) =
+        title
+            .trim()
+            .lowercase(Locale.US)
+            .replace(titleSpecialCharactersRegex, "-")
+            .replace(trailingHyphenRegex, "")
+            .split("-")
+            .reduce { accumulator, element ->
+                val currentSlug = "$accumulator-$element"
+                if (currentSlug.length > 100) {
+                    accumulator
+                } else {
+                    currentSlug
+                }
             }
-        }
 
     /**
      * Adds a custom [TextWatcher] to the preference's [EditText] that show an
@@ -478,23 +511,35 @@ class MangaDexHelper(lang: String) {
     fun setupEditTextUuidValidator(editText: EditText) {
         editText.addTextChangedListener(
             object : TextWatcher {
+                override fun beforeTextChanged(
+                    s: CharSequence?,
+                    start: Int,
+                    count: Int,
+                    after: Int,
+                ) = Unit
 
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun onTextChanged(
+                    s: CharSequence?,
+                    start: Int,
+                    before: Int,
+                    count: Int,
+                ) = Unit
 
                 override fun afterTextChanged(editable: Editable?) {
                     requireNotNull(editable)
 
                     val text = editable.toString()
 
-                    val isValid = text.isBlank() || text
-                        .split(",")
-                        .map(String::trim)
-                        .all(::isUuid)
+                    val isValid =
+                        text.isBlank() ||
+                            text
+                                .split(",")
+                                .map(String::trim)
+                                .all(::isUuid)
 
                     editText.error = if (!isValid) intl["invalid_uuids"] else null
-                    editText.rootView.findViewById<Button>(android.R.id.button1)
+                    editText.rootView
+                        .findViewById<Button>(android.R.id.button1)
                         ?.isEnabled = editText.error == null
                 }
             },

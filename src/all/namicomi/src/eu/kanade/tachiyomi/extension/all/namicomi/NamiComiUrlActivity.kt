@@ -23,11 +23,12 @@ class NamiComiUrlActivity : Activity() {
         // Supported path: /en/title/12345
         if (pathSegments != null && pathSegments.size > 2) {
             val titleId = pathSegments[2]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", NamiComiConstants.prefixIdSearch + titleId)
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", NamiComiConstants.prefixIdSearch + titleId)
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

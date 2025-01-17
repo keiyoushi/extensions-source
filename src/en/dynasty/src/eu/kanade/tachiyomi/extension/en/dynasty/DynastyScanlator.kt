@@ -14,12 +14,15 @@ class DynastyScanlator : DynastyScans() {
     override val searchPrefix = "scanlators"
     override val categoryPrefix = "Scanlator"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET(
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request =
+        GET(
             "$baseUrl/search?q=$query&classes%5B%5D=$categoryPrefix&page=$page&sort=",
             headers,
         )
-    }
 
     override fun popularMangaInitialUrl() = ""
 
@@ -38,7 +41,5 @@ class DynastyScanlator : DynastyScans() {
 
     override fun chapterListSelector() = "dl.chapter-list > dd"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 }

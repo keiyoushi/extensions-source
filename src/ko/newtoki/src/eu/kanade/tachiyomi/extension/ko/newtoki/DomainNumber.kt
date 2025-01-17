@@ -32,30 +32,36 @@ object DomainInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
-        val response = try {
-            chain.proceed(request)
-        } catch (e: IOException) {
-            if (chain.call().isCanceled()) throw e
-            Log.e("NewToki", "failed to fetch ${request.url}", e)
-
-            val newDomainNumber = try {
-                val domainNumberUrl = "https://stevenyomi.github.io/source-domains/newtoki.txt"
-                chain.proceed(GET(domainNumberUrl)).body.string().also { it.toInt() }
-            } catch (_: Throwable) {
-                throw IOException(editDomainNumber(), e)
-            }
-            domainNumber = newDomainNumber
-
-            val url = request.url
-            val newHost = numberRegex.replaceFirst(url.host, newDomainNumber)
-            val newUrl = url.newBuilder().host(newHost).build()
+        val response =
             try {
-                chain.proceed(request.newBuilder().url(newUrl).build())
+                chain.proceed(request)
             } catch (e: IOException) {
-                Log.e("NewToki", "failed to fetch $newUrl", e)
-                throw IOException(editDomainNumber(), e)
+                if (chain.call().isCanceled()) throw e
+                Log.e("NewToki", "failed to fetch ${request.url}", e)
+
+                val newDomainNumber =
+                    try {
+                        val domainNumberUrl = "https://stevenyomi.github.io/source-domains/newtoki.txt"
+                        chain
+                            .proceed(GET(domainNumberUrl))
+                            .body
+                            .string()
+                            .also { it.toInt() }
+                    } catch (_: Throwable) {
+                        throw IOException(editDomainNumber(), e)
+                    }
+                domainNumber = newDomainNumber
+
+                val url = request.url
+                val newHost = numberRegex.replaceFirst(url.host, newDomainNumber)
+                val newUrl = url.newBuilder().host(newHost).build()
+                try {
+                    chain.proceed(request.newBuilder().url(newUrl).build())
+                } catch (e: IOException) {
+                    Log.e("NewToki", "failed to fetch $newUrl", e)
+                    throw IOException(editDomainNumber(), e)
+                }
             }
-        }
 
         if (response.priorResponse == null) return response
 

@@ -32,7 +32,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class Madokami : ConfigurableSource, ParsedHttpSource() {
+class Madokami :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "Madokami"
     override val baseUrl = "https://manga.madokami.al"
     override val lang = "en"
@@ -51,15 +53,25 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
         return request.newBuilder().header("Authorization", credential).build()
     }
 
-    override val client: OkHttpClient = super.client.newBuilder().addInterceptor { chain ->
-        val response = chain.proceed(chain.request())
-        if (response.code == 401) throw IOException("You are currently logged out.\nGo to Extensions > Details to input your credentials.")
-        response
-    }.build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                if (response.code ==
+                    401
+                ) {
+                    throw IOException("You are currently logged out.\nGo to Extensions > Details to input your credentials.")
+                }
+                response
+            }.build()
 
     override fun latestUpdatesSelector() = ""
+
     override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
+
     override fun latestUpdatesNextPageSelector(): String? = null
+
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
     override fun popularMangaSelector(): String = "table.mobile-files-table tbody tr td:nth-child(1) a:nth-child(1)"
@@ -70,7 +82,10 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
         val pathSegments = element.attr("href").split("/")
         var i = pathSegments.size
         manga.description = URLDecoder.decode(pathSegments[i - 1], "UTF-8")
-        do { i--; manga.title = URLDecoder.decode(pathSegments[i], "UTF-8") } while (URLDecoder.decode(pathSegments[i], "UTF-8").startsWith("!"))
+        do {
+            i--
+            manga.title = URLDecoder.decode(pathSegments[i], "UTF-8")
+        } while (URLDecoder.decode(pathSegments[i], "UTF-8").startsWith("!"))
         return manga
     }
 
@@ -78,7 +93,11 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = authenticate(GET("$baseUrl/recent", headers))
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = authenticate(GET("$baseUrl/search?q=$query", headers))
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = authenticate(GET("$baseUrl/search?q=$query", headers))
 
     override fun searchMangaSelector() = "div.container table tbody tr td:nth-child(1) a:nth-child(1)"
 
@@ -90,7 +109,9 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
         val url = (baseUrl + manga.url).toHttpUrl()
         if (url.pathSize > 5 && url.pathSegments[0] == "Manga" && url.pathSegments[1].length == 1) {
             val builder = url.newBuilder()
-            for (i in 5 until url.pathSize) { builder.removePathSegment(5) }
+            for (i in 5 until url.pathSize) {
+                builder.removePathSegment(5)
+            }
             return authenticate(GET(builder.build().toUrl().toExternalForm(), headers))
         }
         if (url.pathSize > 2 && url.pathSegments[0] == "Raws") {
@@ -98,7 +119,10 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
             // to accomodate path pattern of /Raws/Magz/Series, this will remove all latter path segments that starts with !
             // will fails if there's ever manga with ! prefix, but for now it works
             var i = url.pathSize - 1
-            while (url.pathSegments[i].startsWith("!") && i >= 2) { builder.removePathSegment(i); i--; }
+            while (url.pathSegments[i].startsWith("!") && i >= 2) {
+                builder.removePathSegment(i)
+                i--
+            }
             return authenticate(GET(builder.build().toUrl().toExternalForm(), headers))
         }
         return authenticate(GET(url.toUrl().toExternalForm(), headers))
@@ -137,8 +161,11 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter {
         val el = element.parent()!!.parent()!!
         val chapter = SChapter.create()
-        chapter.url = "/reader" + el.select("td:nth-child(6) a").attr("href")
-            .substringAfter("/reader")
+        chapter.url = "/reader" +
+            el
+                .select("td:nth-child(6) a")
+                .attr("href")
+                .substringAfter("/reader")
         chapter.name = el.select("td:nth-child(1) a").text()
         val date = el.select("td:nth-child(3)").text()
         if (date.endsWith("ago")) {
@@ -174,14 +201,16 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
         val files = json.decodeFromString<JsonArray>(element.attr("data-files"))
         val pages = mutableListOf<Page>()
         for ((index, file) in files.withIndex()) {
-            val url = HttpUrl.Builder()
-                .scheme("https")
-                .host("manga.madokami.al")
-                .addPathSegments("reader/image")
-                .addEncodedQueryParameter("path", URLEncoder.encode(path, "UTF-8"))
-                .addEncodedQueryParameter("file", URLEncoder.encode(file.jsonPrimitive.content, "UTF-8"))
-                .build()
-                .toUrl()
+            val url =
+                HttpUrl
+                    .Builder()
+                    .scheme("https")
+                    .host("manga.madokami.al")
+                    .addPathSegments("reader/image")
+                    .addEncodedQueryParameter("path", URLEncoder.encode(path, "UTF-8"))
+                    .addEncodedQueryParameter("file", URLEncoder.encode(file.jsonPrimitive.content, "UTF-8"))
+                    .build()
+                    .toUrl()
             pages.add(Page(index, url.toExternalForm(), url.toExternalForm()))
         }
         return pages
@@ -197,26 +226,28 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
     override fun imageUrlParse(document: Document) = ""
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val username = androidx.preference.EditTextPreference(screen.context).apply {
-            key = "username"
-            title = "Username"
+        val username =
+            androidx.preference.EditTextPreference(screen.context).apply {
+                key = "username"
+                title = "Username"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(key, newValue as String).commit()
+                setOnPreferenceChangeListener { _, newValue ->
+                    preferences.edit().putString(key, newValue as String).commit()
+                }
             }
-        }
-        val password = androidx.preference.EditTextPreference(screen.context).apply {
-            key = "password"
-            title = "Password"
+        val password =
+            androidx.preference.EditTextPreference(screen.context).apply {
+                key = "password"
+                title = "Password"
 
-            setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            }
+                setOnBindEditTextListener {
+                    it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                }
 
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(key, newValue as String).commit()
+                setOnPreferenceChangeListener { _, newValue ->
+                    preferences.edit().putString(key, newValue as String).commit()
+                }
             }
-        }
 
         screen.addPreference(username)
         screen.addPreference(password)

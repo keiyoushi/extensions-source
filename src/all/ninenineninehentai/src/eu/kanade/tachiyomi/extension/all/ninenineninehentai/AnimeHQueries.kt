@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.ninenineninehentai
 
-private fun buildQuery(queryAction: () -> String): String {
-    return queryAction()
+private fun buildQuery(queryAction: () -> String): String =
+    queryAction()
         .trimIndent()
         .replace("%", "$")
-}
 
-val POPULAR_QUERY: String = buildQuery {
-    """
+val POPULAR_QUERY: String =
+    buildQuery {
+        """
         query(
             %size: Int
             %language: String
@@ -34,10 +34,11 @@ val POPULAR_QUERY: String = buildQuery {
             }
         }
     """
-}
+    }
 
-val SEARCH_QUERY: String = buildQuery {
-    """
+val SEARCH_QUERY: String =
+    buildQuery {
+        """
         query(
             %search: SearchInput
             %size: Int
@@ -62,10 +63,11 @@ val SEARCH_QUERY: String = buildQuery {
             }
         }
     """
-}
+    }
 
-val DETAILS_QUERY: String = buildQuery {
-    """
+val DETAILS_QUERY: String =
+    buildQuery {
+        """
         query(
             %id: String
         ) {
@@ -84,10 +86,11 @@ val DETAILS_QUERY: String = buildQuery {
             }
         }
     """
-}
+    }
 
-val PAGES_QUERY: String = buildQuery {
-    """
+val PAGES_QUERY: String =
+    buildQuery {
+        """
         query(
             %id: String
         ) {
@@ -103,4 +106,4 @@ val PAGES_QUERY: String = buildQuery {
             }
         }
     """
-}
+    }

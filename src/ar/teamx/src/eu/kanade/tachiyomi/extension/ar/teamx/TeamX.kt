@@ -25,8 +25,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class TeamX : ParsedHttpSource(), ConfigurableSource {
-
+class TeamX :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "Team X"
 
     private val defaultBaseUrl = "https://olympustaff.com"
@@ -37,11 +38,13 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(10, 1, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .rateLimit(10, 1, TimeUnit.SECONDS)
+            .build()
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
@@ -49,25 +52,23 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/series/" + if (page > 1) "?page=$page" else "", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series/" + if (page > 1) "?page=$page" else "", headers)
 
     override fun popularMangaSelector() = "div.listupd div.bsx"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             title = element.select("a").attr("title")
             setUrlWithoutDomain(element.select("a").first()!!.attr("href"))
-            thumbnail_url = element.select("img").let {
-                if (it.hasAttr("data-src")) {
-                    it.attr("abs:data-src")
-                } else {
-                    it.attr("abs:src")
+            thumbnail_url =
+                element.select("img").let {
+                    if (it.hasAttr("data-src")) {
+                        it.attr("abs:data-src")
+                    } else {
+                        it.attr("abs:src")
+                    }
                 }
-            }
         }
-    }
 
     override fun popularMangaNextPageSelector() = "a[rel=next]"
 
@@ -86,13 +87,15 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
         val unfilteredManga = document.select(latestUpdatesSelector())
 
-        val mangaList = unfilteredManga.map { element ->
-            latestUpdatesFromElement(element)
-        }.distinctBy {
-            it.title
-        }.filter {
-            !titlesAdded.contains(it.title)
-        }
+        val mangaList =
+            unfilteredManga
+                .map { element ->
+                    latestUpdatesFromElement(element)
+                }.distinctBy {
+                    it.title
+                }.filter {
+                    !titlesAdded.contains(it.title)
+                }
 
         titlesAdded.addAll(mangaList.map { it.title })
 
@@ -101,41 +104,41 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesSelector() = "div.last-chapter div.box"
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        SManga.create().apply {
             val linkElement = element.select("div.info a")
             title = linkElement.select("h3").text()
             setUrlWithoutDomain(linkElement.first()!!.attr("href"))
             thumbnail_url = element.select("div.imgu img").first()!!.absUrl("src")
         }
-    }
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/ajax/search?keyword=$query", headers)
-    }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = GET("$baseUrl/ajax/search?keyword=$query", headers)
 
     override fun searchMangaSelector() = "li.list-group-item"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun searchMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             val urlAndText = element.select("div.ms-2 a")
             title = urlAndText.text()
             setUrlWithoutDomain(urlAndText.first()!!.absUrl("href"))
             thumbnail_url = element.select("a img").first()!!.absUrl("src")
         }
-    }
 
     // doesnt matter as there is no next page
     override fun searchMangaNextPageSelector(): String? = null
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
             title = document.select("div.author-info-title h1").text()
             description = document.select("div.review-content").text()
             if (description.isNullOrBlank()) {
@@ -143,16 +146,17 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
             }
             genre = document.select("div.review-author-info a").joinToString { it.text() }
             thumbnail_url = document.select("div.text-right img").first()!!.absUrl("src")
-            status = document
-                .selectFirst(".full-list-info > small:first-child:contains(الحالة) + small")
-                ?.text()
-                .toStatus()
-            author = document
-                .selectFirst(".full-list-info > small:first-child:contains(الرسام) + small")
-                ?.text()
-                ?.takeIf { it != "غير معروف" }
+            status =
+                document
+                    .selectFirst(".full-list-info > small:first-child:contains(الحالة) + small")
+                    ?.text()
+                    .toStatus()
+            author =
+                document
+                    .selectFirst(".full-list-info > small:first-child:contains(الرسام) + small")
+                    ?.text()
+                    ?.takeIf { it != "غير معروف" }
         }
-    }
 
     // Chapters
     private fun chapterNextPageSelector() = popularMangaNextPageSelector()
@@ -186,43 +190,42 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterListSelector() = "div.eplister ul a"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
             val chpNum = element.select("div.epl-num").text()
             val chpTitle = element.select("div.epl-title").text()
 
-            name = when (chpNum.isNullOrBlank()) {
-                true -> chpTitle
-                false -> "$chpNum - $chpTitle"
-            }
+            name =
+                when (chpNum.isNullOrBlank()) {
+                    true -> chpTitle
+                    false -> "$chpNum - $chpTitle"
+                }
 
             date_upload = parseChapterDate(element.select("div.epl-date").text())
 
             setUrlWithoutDomain(element.attr("href"))
         }
-    }
 
-    private fun parseChapterDate(date: String): Long {
-        return runCatching {
+    private fun parseChapterDate(date: String): Long =
+        runCatching {
             chapterFormat.parse(date)?.time
         }.getOrNull() ?: 0
-    }
 
-    private fun String?.toStatus() = when (this) {
-        "مستمرة" -> SManga.ONGOING
-        "قادم قريبًا" -> SManga.ONGOING // "coming soon"
-        "مكتمل" -> SManga.COMPLETED
-        "متوقف" -> SManga.ON_HIATUS
-        else -> SManga.UNKNOWN
-    }
+    private fun String?.toStatus() =
+        when (this) {
+            "مستمرة" -> SManga.ONGOING
+            "قادم قريبًا" -> SManga.ONGOING // "coming soon"
+            "مكتمل" -> SManga.COMPLETED
+            "متوقف" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.image_list img[src]").mapIndexed { i, img ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("div.image_list img[src]").mapIndexed { i, img ->
             Page(i, "", img.absUrl("src"))
         }
-    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
@@ -235,27 +238,30 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            this.setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
+        val baseUrlPref =
+            androidx.preference.EditTextPreference(screen.context).apply {
+                key = BASE_URL_PREF
+                title = BASE_URL_PREF_TITLE
+                summary = BASE_URL_PREF_SUMMARY
+                this.setDefaultValue(defaultBaseUrl)
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "Default: $defaultBaseUrl"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                    true
+                }
             }
-        }
         screen.addPreference(baseUrlPref)
     }
+
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
             if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
+                preferences
+                    .edit()
                     .putString(BASE_URL_PREF, defaultBaseUrl)
                     .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
                     .apply()

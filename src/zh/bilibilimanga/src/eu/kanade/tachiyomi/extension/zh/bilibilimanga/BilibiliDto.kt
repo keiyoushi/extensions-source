@@ -62,8 +62,10 @@ data class BilibiliImageDto(
     @SerialName("x") val width: Int,
     @SerialName("y") val height: Int,
 ) {
-
-    fun url(quality: String, format: String): String {
+    fun url(
+        quality: String,
+        format: String,
+    ): String {
         val imageWidth = if (quality == "raw") "${width}w" else quality
 
         return "$path@$imageWidth.$format"

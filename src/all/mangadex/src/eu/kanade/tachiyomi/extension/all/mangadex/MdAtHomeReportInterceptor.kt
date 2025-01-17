@@ -24,7 +24,6 @@ class MdAtHomeReportInterceptor(
     private val client: OkHttpClient,
     private val headers: Headers,
 ) : Interceptor {
-
     private val json: Json by injectLazy()
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -53,30 +52,37 @@ class MdAtHomeReportInterceptor(
 
         Log.e("MangaDex", "Error connecting to MD@Home node, fallback to uploads server")
 
-        val imagePath = originalRequest.url.pathSegments
-            .dropWhile { it != "data" && it != "data-saver" }
-            .joinToString("/")
+        val imagePath =
+            originalRequest.url.pathSegments
+                .dropWhile { it != "data" && it != "data-saver" }
+                .joinToString("/")
 
-        val fallbackUrl = MDConstants.cdnUrl.toHttpUrl().newBuilder()
-            .addPathSegments(imagePath)
-            .build()
+        val fallbackUrl =
+            MDConstants.cdnUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments(imagePath)
+                .build()
 
-        val fallbackRequest = originalRequest.newBuilder()
-            .url(fallbackUrl)
-            .headers(headers)
-            .build()
+        val fallbackRequest =
+            originalRequest
+                .newBuilder()
+                .url(fallbackUrl)
+                .headers(headers)
+                .build()
 
         return chain.proceed(fallbackRequest)
     }
 
     private fun mdAtHomeReportRequest(response: Response): Request {
-        val result = ImageReportDto(
-            url = response.request.url.toString(),
-            success = response.isSuccessful,
-            bytes = response.peekBody(Long.MAX_VALUE).bytes().size,
-            cached = response.headers["X-Cache"] == "HIT",
-            duration = response.receivedResponseAtMillis - response.sentRequestAtMillis,
-        )
+        val result =
+            ImageReportDto(
+                url = response.request.url.toString(),
+                success = response.isSuccessful,
+                bytes = response.peekBody(Long.MAX_VALUE).bytes().size,
+                cached = response.headers["X-Cache"] == "HIT",
+                duration = response.receivedResponseAtMillis - response.sentRequestAtMillis,
+            )
 
         val payload = json.encodeToString(result)
 
@@ -92,18 +98,25 @@ class MdAtHomeReportInterceptor(
         private val MD_AT_HOME_URL_REGEX =
             """^https://[\w\d]+\.[\w\d]+\.mangadex(\b-test\b)?\.network.*${'$'}""".toRegex()
 
-        private val REPORT_CALLBACK = object : Callback {
-            override fun onFailure(call: Call, e: okio.IOException) {
-                Log.e("MangaDex", "Error trying to POST report to MD@Home: ${e.message}")
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) {
-                    Log.e("MangaDex", "Error trying to POST report to MD@Home: HTTP error ${response.code}")
+        private val REPORT_CALLBACK =
+            object : Callback {
+                override fun onFailure(
+                    call: Call,
+                    e: okio.IOException,
+                ) {
+                    Log.e("MangaDex", "Error trying to POST report to MD@Home: ${e.message}")
                 }
 
-                response.close()
+                override fun onResponse(
+                    call: Call,
+                    response: Response,
+                ) {
+                    if (!response.isSuccessful) {
+                        Log.e("MangaDex", "Error trying to POST report to MD@Home: HTTP error ${response.code}")
+                    }
+
+                    response.close()
+                }
             }
-        }
     }
 }

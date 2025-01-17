@@ -38,8 +38,9 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Tapastic : ConfigurableSource, ParsedHttpSource() {
-
+class Tapastic :
+    ParsedHttpSource(),
+    ConfigurableSource {
     // Originally Tapastic
     override val id = 3825434541981130345
 
@@ -53,103 +54,117 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
 
     private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .cookieJar(
-            // Syncs okhttp with webview cookies, allowing logged-in users do logged-in stuff
-            object : CookieJar {
-                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                    for (cookie in cookies) {
-                        webViewCookieManager.setCookie(url.toString(), cookie.toString())
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .cookieJar(
+                // Syncs okhttp with webview cookies, allowing logged-in users do logged-in stuff
+                object : CookieJar {
+                    override fun saveFromResponse(
+                        url: HttpUrl,
+                        cookies: List<Cookie>,
+                    ) {
+                        for (cookie in cookies) {
+                            webViewCookieManager.setCookie(url.toString(), cookie.toString())
+                        }
                     }
-                }
-                override fun loadForRequest(url: HttpUrl): MutableList<Cookie> {
-                    val cookiesString = webViewCookieManager.getCookie(url.toString())
 
-                    if (cookiesString != null && cookiesString.isNotEmpty()) {
-                        val cookieHeaders = cookiesString.split("; ").toList()
-                        val cookies = mutableListOf<Cookie>()
-                        for (header in cookieHeaders) {
-                            cookies.add(Cookie.parse(url, header)!!)
+                    override fun loadForRequest(url: HttpUrl): MutableList<Cookie> {
+                        val cookiesString = webViewCookieManager.getCookie(url.toString())
+
+                        if (cookiesString != null && cookiesString.isNotEmpty()) {
+                            val cookieHeaders = cookiesString.split("; ").toList()
+                            val cookies = mutableListOf<Cookie>()
+                            for (header in cookieHeaders) {
+                                cookies.add(Cookie.parse(url, header)!!)
+                            }
+                            // Adds age verification cookies to access mature comics
+                            return cookies.apply {
+                                add(
+                                    Cookie
+                                        .Builder()
+                                        .domain("tapas.io")
+                                        .path("/")
+                                        .name("birthDate")
+                                        .value("1994-01-01")
+                                        .build(),
+                                )
+                                add(
+                                    Cookie
+                                        .Builder()
+                                        .domain("tapas.io")
+                                        .path("/")
+                                        .name("adjustedBirthDate")
+                                        .value("1994-01-01")
+                                        .build(),
+                                )
+                            }
+                        } else {
+                            return mutableListOf()
                         }
-                        // Adds age verification cookies to access mature comics
-                        return cookies.apply {
-                            add(
-                                Cookie.Builder()
-                                    .domain("tapas.io")
-                                    .path("/")
-                                    .name("birthDate")
-                                    .value("1994-01-01")
-                                    .build(),
-                            )
-                            add(
-                                Cookie.Builder()
-                                    .domain("tapas.io")
-                                    .path("/")
-                                    .name("adjustedBirthDate")
-                                    .value("1994-01-01")
-                                    .build(),
-                            )
-                        }
-                    } else {
-                        return mutableListOf()
                     }
-                }
-            },
-        )
-        .addInterceptor(TextInterceptor())
-        .build()
+                },
+            ).addInterceptor(TextInterceptor())
+            .build()
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", "https://m.tapas.io")
-        .set("User-Agent", USER_AGENT)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("Referer", "https://m.tapas.io")
+            .set("User-Agent", USER_AGENT)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val chapterVisibilityPref = SwitchPreferenceCompat(screen.context).apply {
-            key = CHAPTER_VIS_PREF_KEY
-            title = "Show paywalled chapters"
-            summary = "Tapas requires login/payment for some chapters. Enable to always show paywalled chapters."
-            setDefaultValue(true)
+        val chapterVisibilityPref =
+            SwitchPreferenceCompat(screen.context).apply {
+                key = CHAPTER_VIS_PREF_KEY
+                title = "Show paywalled chapters"
+                summary = "Tapas requires login/payment for some chapters. Enable to always show paywalled chapters."
+                setDefaultValue(true)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean(CHAPTER_VIS_PREF_KEY, checkValue).commit()
+                setOnPreferenceChangeListener { _, newValue ->
+                    val checkValue = newValue as Boolean
+                    preferences.edit().putBoolean(CHAPTER_VIS_PREF_KEY, checkValue).commit()
+                }
             }
-        }
         screen.addPreference(chapterVisibilityPref)
 
-        val lockPref = SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_LOCK_PREF_KEY
-            title = "Show lock icon"
-            summary = "Enable to continue showing \uD83D\uDD12 for locked chapters after login."
-            setDefaultValue(false)
+        val lockPref =
+            SwitchPreferenceCompat(screen.context).apply {
+                key = SHOW_LOCK_PREF_KEY
+                title = "Show lock icon"
+                summary = "Enable to continue showing \uD83D\uDD12 for locked chapters after login."
+                setDefaultValue(false)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean(SHOW_LOCK_PREF_KEY, checkValue).commit()
+                setOnPreferenceChangeListener { _, newValue ->
+                    val checkValue = newValue as Boolean
+                    preferences.edit().putBoolean(SHOW_LOCK_PREF_KEY, checkValue).commit()
+                }
             }
-        }
         screen.addPreference(lockPref)
 
-        val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_AUTHORS_NOTES_KEY
-            title = "Show author's notes"
-            summary = "Enable to see the author's notes at the end of chapters (if they're there)."
-            setDefaultValue(false)
+        val authorsNotesPref =
+            SwitchPreferenceCompat(screen.context).apply {
+                key = SHOW_AUTHORS_NOTES_KEY
+                title = "Show author's notes"
+                summary = "Enable to see the author's notes at the end of chapters (if they're there)."
+                setDefaultValue(false)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean(SHOW_AUTHORS_NOTES_KEY, checkValue).commit()
+                setOnPreferenceChangeListener { _, newValue ->
+                    val checkValue = newValue as Boolean
+                    preferences.edit().putBoolean(SHOW_AUTHORS_NOTES_KEY, checkValue).commit()
+                }
             }
-        }
         screen.addPreference(authorsNotesPref)
     }
 
     private fun showLockedChapterPref() = preferences.getBoolean(CHAPTER_VIS_PREF_KEY, false)
+
     private fun showLockPref() = preferences.getBoolean(SHOW_LOCK_PREF_KEY, false)
+
     private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
 
     // Popular
@@ -158,31 +173,35 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         GET("$baseUrl/comics?b=POPULAR&g=0&f=NONE&pageNumber=$page&pageSize=20&", headers)
 
     override fun popularMangaNextPageSelector() = "div[data-has-next=true]"
+
     override fun popularMangaSelector() = "li.js-list-item"
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        url = element.select(".item__thumb a").attr("href")
-        title = toTitle(element.select(".item__thumb img").attr("alt"))
-        thumbnail_url = element.select(".item__thumb img").attr("src")
-    }
+
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            url = element.select(".item__thumb a").attr("href")
+            title = toTitle(element.select(".item__thumb img").attr("alt"))
+            thumbnail_url = element.select(".item__thumb img").attr("src")
+        }
 
     private class Genre {
         companion object {
-            val genreArray = arrayOf(
-                "Any",
-                "Action",
-                "BL",
-                "Comedy",
-                "Drama",
-                "Fantasy",
-                "GL",
-                "Gaming",
-                "Horror",
-                "LGBTQ+",
-                "Mystery",
-                "Romance",
-                "Science fiction",
-                "Slice of life",
-            )
+            val genreArray =
+                arrayOf(
+                    "Any",
+                    "Action",
+                    "BL",
+                    "Comedy",
+                    "Drama",
+                    "Fantasy",
+                    "GL",
+                    "Gaming",
+                    "Horror",
+                    "LGBTQ+",
+                    "Mystery",
+                    "Romance",
+                    "Science fiction",
+                    "Slice of life",
+                )
         }
     }
 
@@ -198,24 +217,31 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/comics?b=FRESH&g=0&f=NONE&pageNumber=$page&pageSize=20&", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/comics?b=FRESH&g=0&f=NONE&pageNumber=$page&pageSize=20&", headers)
 
     override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
+
     override fun latestUpdatesSelector(): String = popularMangaSelector()
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val url: HttpUrl.Builder
         // If there is any search text, use text search, ignoring filters
         if (query.isNotBlank()) {
-            url = "$baseUrl/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .addQueryParameter("t", "COMICS")
+            url =
+                "$baseUrl/search"
+                    .toHttpUrl()
+                    .newBuilder()
+                    .addQueryParameter("q", query)
+                    .addQueryParameter("t", "COMICS")
         } else {
             // Checking mature filter
             val matureFilter = filterList.find { it is MatureFilter } as MatureFilter
@@ -247,49 +273,53 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaNextPageSelector() =
-        "${popularMangaNextPageSelector()}, a.paging__button--next"
+    override fun searchMangaNextPageSelector() = "${popularMangaNextPageSelector()}, a.paging__button--next"
 
     override fun searchMangaSelector() = "${popularMangaSelector()}, .search-item-wrap"
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        url = element.select(".item__thumb a, .title-section .title a").attr("href")
-        title = toTitle(element.select(".item__thumb img").firstOrNull()?.attr("alt") ?: element.select(".title-section .title a").text())
-        thumbnail_url = element.select(".item__thumb img, .thumb-wrap img").attr("src")
-    }
+
+    override fun searchMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            url = element.select(".item__thumb a, .title-section .title a").attr("href")
+            title =
+                toTitle(element.select(".item__thumb img").firstOrNull()?.attr("alt") ?: element.select(".title-section .title a").text())
+            thumbnail_url = element.select(".item__thumb img, .thumb-wrap img").attr("src")
+        }
 
     // Details
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl + "${manga.url}/info", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl + "${manga.url}/info", headers)
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        genre = document.select("div.info-detail__row a.genre-btn").joinToString { it.text() }
-        title = document.select("div.title-wrapper a.title").text()
-        thumbnail_url = document.select("div.thumb-wrapper img").attr("abs:src")
-        author = document.select("ul.creator-section a.name").joinToString { it.text() }
-        artist = author
-        status = document.select("div.schedule span.schedule-label").text().toStatus()
-        val announcementName: String? = document.select("div.series-announcement div.announcement__text p").text()
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            genre = document.select("div.info-detail__row a.genre-btn").joinToString { it.text() }
+            title = document.select("div.title-wrapper a.title").text()
+            thumbnail_url = document.select("div.thumb-wrapper img").attr("abs:src")
+            author = document.select("ul.creator-section a.name").joinToString { it.text() }
+            artist = author
+            status = document.select("div.schedule span.schedule-label").text().toStatus()
+            val announcementName: String? = document.select("div.series-announcement div.announcement__text p").text()
 
-        if (announcementName!!.contains("Hiatus")) {
-            status = SManga.ON_HIATUS
-            description = document.select("div.row-body span.description__body").text()
-        } else {
-            val announcementText: String? = document.select("div.announcement__body p.js-announcement-text").text()
-            description = if (announcementName.isNullOrEmpty() || announcementText.isNullOrEmpty()) {
-                document.select("div.row-body span.description__body").text()
+            if (announcementName!!.contains("Hiatus")) {
+                status = SManga.ON_HIATUS
+                description = document.select("div.row-body span.description__body").text()
             } else {
-                announcementName.plus("\n") + announcementText.plus("\n\n") + document.select("div.row-body span.description__body").text()
+                val announcementText: String? = document.select("div.announcement__body p.js-announcement-text").text()
+                description =
+                    if (announcementName.isNullOrEmpty() || announcementText.isNullOrEmpty()) {
+                        document.select("div.row-body span.description__body").text()
+                    } else {
+                        announcementName.plus("\n") + announcementText.plus("\n\n") +
+                            document.select("div.row-body span.description__body").text()
+                    }
             }
         }
-    }
 
-    private fun String.toStatus() = when {
-        this.contains("Updates", ignoreCase = true) -> SManga.ONGOING
-        this.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    private fun String.toStatus() =
+        when {
+            this.contains("Updates", ignoreCase = true) -> SManga.ONGOING
+            this.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
 
     // Chapters
 
@@ -299,9 +329,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    private fun Element.isLockedChapter(): Boolean {
-        return this.hasClass("js-have-to-sign") || (showLockPref() && this.hasClass("js-locked"))
-    }
+    private fun Element.isLockedChapter(): Boolean = this.hasClass("js-have-to-sign") || (showLockPref() && this.hasClass("js-locked"))
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -314,12 +342,13 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
             val jsonResponse = client.newCall(GET(url, headers)).execute()
             val json = json.parseToJsonElement(jsonResponse.body.string()).jsonObject["data"]!!.jsonObject
 
-            Jsoup.parse(json["body"]!!.jsonPrimitive.content).select(chapterListSelector())
+            Jsoup
+                .parse(json["body"]!!.jsonPrimitive.content)
+                .select(chapterListSelector())
                 .let { list ->
                     // show/don't show locked chapters based on user's preferences
                     if (showLockedChapterPref()) list else list.filterNot { it.isLockedChapter() }
-                }
-                .map { chapters.add(chapterFromElement(it)) }
+                }.map { chapters.add(chapterFromElement(it)) }
 
             val hasNextPage = json["pagination"]!!.jsonObject["has_next"]!!.jsonPrimitive.boolean
             val nextPage = json["pagination"]!!.jsonObject["page"]!!.jsonPrimitive.int
@@ -334,13 +363,14 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
 
     private val datePattern = Regex("""\w\w\w \d\d, \d\d\d\d""")
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val episode = element.select("p.scene").text()
-        val chName = element.select("span.title__body").text()
-        name = (if (element.isLockedChapter()) "\uD83D\uDD12 " else "") + "$episode | $chName"
-        setUrlWithoutDomain(element.attr("href"))
-        date_upload = datePattern.find(element.select("p.additional").text())?.value.toDate()
-    }
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            val episode = element.select("p.scene").text()
+            val chName = element.select("span.title__body").text()
+            name = (if (element.isLockedChapter()) "\uD83D\uDD12 " else "") + "$episode | $chName"
+            setUrlWithoutDomain(element.attr("href"))
+            date_upload = datePattern.find(element.select("p.additional").text())?.value.toDate()
+        }
 
     private fun String?.toDate(): Long {
         this ?: return 0L
@@ -350,9 +380,10 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
     // Pages
 
     override fun pageListParse(document: Document): List<Page> {
-        var pages = document.select("img.content__img").mapIndexed { i, img ->
-            Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })
-        }
+        var pages =
+            document.select("img.content__img").mapIndexed { i, img ->
+                Page(i, "", img.let { if (it.hasAttr("data-src")) it.attr("abs:data-src") else it.attr("abs:src") })
+            }
 
         if (showAuthorsNotesPref()) {
             val episodeStory = document.select("p.js-episode-story").html()
@@ -360,122 +391,131 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
             if (episodeStory.isNotEmpty()) {
                 val creator = document.select("a.name.js-fb-tracking")[0].text()
 
-                pages = pages + Page(
-                    pages.size,
-                    "",
-                    TextInterceptorHelper.createUrl("Author's Notes from $creator", episodeStory),
-                )
+                pages = pages +
+                    Page(
+                        pages.size,
+                        "",
+                        TextInterceptorHelper.createUrl("Author's Notes from $creator", episodeStory),
+                    )
             }
         }
         return pages
     }
 
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     // Filters
 
-    override fun getFilterList() = FilterList(
-        // Tapastic does not support genre filtering and text search at the same time
-        Filter.Header("NOTE: All filters ignored if using text search!"),
-        Filter.Separator(),
-        Filter.Header("Sort: Only applied when category is All"),
-        SortFilter(),
-        Filter.Separator(),
-        CategoryFilter(),
-        GenreFilter(),
-        StatusFilter(),
-        Filter.Separator(),
-        Filter.Header("Mature filters"),
-        MatureFilter("Show Mature Results Only"),
-        MatureCategoryFilter(),
-        MatureGenreFilter(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            // Tapastic does not support genre filtering and text search at the same time
+            Filter.Header("NOTE: All filters ignored if using text search!"),
+            Filter.Separator(),
+            Filter.Header("Sort: Only applied when category is All"),
+            SortFilter(),
+            Filter.Separator(),
+            CategoryFilter(),
+            GenreFilter(),
+            StatusFilter(),
+            Filter.Separator(),
+            Filter.Header("Mature filters"),
+            MatureFilter("Show Mature Results Only"),
+            MatureCategoryFilter(),
+            MatureGenreFilter(),
+        )
 
-    private class CategoryFilter : UriSelectFilter(
-        "Category",
-        false,
-        "b",
-        arrayOf(
-            Pair("ALL", "All"),
-            Pair("POPULAR", "Popular"),
-            Pair("TRENDING", "Trending"),
-            Pair("FRESH", "Fresh"),
-            Pair("BINGE", "Binge"),
-            Pair("ORIGINAL", "Tapas Originals"),
-        ),
-        defaultValue = 1,
-    )
+    private class CategoryFilter :
+        UriSelectFilter(
+            "Category",
+            false,
+            "b",
+            arrayOf(
+                Pair("ALL", "All"),
+                Pair("POPULAR", "Popular"),
+                Pair("TRENDING", "Trending"),
+                Pair("FRESH", "Fresh"),
+                Pair("BINGE", "Binge"),
+                Pair("ORIGINAL", "Tapas Originals"),
+            ),
+            defaultValue = 1,
+        )
 
-    private class GenreFilter : UriSelectFilter(
-        "Genre",
-        false,
-        "g",
-        arrayOf(
-            Pair("0", "Any"),
-            Pair("7", "Action"),
-            Pair("22", "Boys Love"),
-            Pair("2", "Comedy"),
-            Pair("8", "Drama"),
-            Pair("3", "Fantasy"),
-            Pair("24", "Girls Love"),
-            Pair("9", "Gaming"),
-            Pair("6", "Horror"),
-            Pair("25", "LGBTQ+"),
-            Pair("10", "Mystery"),
-            Pair("5", "Romance"),
-            Pair("4", "Science Fiction"),
-            Pair("1", "Slice of Life"),
-        ),
-    )
+    private class GenreFilter :
+        UriSelectFilter(
+            "Genre",
+            false,
+            "g",
+            arrayOf(
+                Pair("0", "Any"),
+                Pair("7", "Action"),
+                Pair("22", "Boys Love"),
+                Pair("2", "Comedy"),
+                Pair("8", "Drama"),
+                Pair("3", "Fantasy"),
+                Pair("24", "Girls Love"),
+                Pair("9", "Gaming"),
+                Pair("6", "Horror"),
+                Pair("25", "LGBTQ+"),
+                Pair("10", "Mystery"),
+                Pair("5", "Romance"),
+                Pair("4", "Science Fiction"),
+                Pair("1", "Slice of Life"),
+            ),
+        )
 
-    private class StatusFilter : UriSelectFilter(
-        "Status",
-        false,
-        "f",
-        arrayOf(
-            Pair("NONE", "All"),
-            Pair("F2R", "Free to read"),
-            Pair("PRM", "Premium"),
-        ),
-    )
+    private class StatusFilter :
+        UriSelectFilter(
+            "Status",
+            false,
+            "f",
+            arrayOf(
+                Pair("NONE", "All"),
+                Pair("F2R", "Free to read"),
+                Pair("PRM", "Premium"),
+            ),
+        )
 
-    private class MatureFilter(name: String) : Filter.CheckBox(name)
+    private class MatureFilter(
+        name: String,
+    ) : Filter.CheckBox(name)
 
-    private class MatureCategoryFilter : UriSelectFilter(
-        "Category",
-        true,
-        "b",
-        arrayOf(
-            Pair("ALL", "All"),
-            Pair("POPULAR", "Popular"),
-            Pair("FRESH", "Fresh"),
-        ),
-        defaultValue = 1,
-    )
+    private class MatureCategoryFilter :
+        UriSelectFilter(
+            "Category",
+            true,
+            "b",
+            arrayOf(
+                Pair("ALL", "All"),
+                Pair("POPULAR", "Popular"),
+                Pair("FRESH", "Fresh"),
+            ),
+            defaultValue = 1,
+        )
 
-    private class MatureGenreFilter : UriSelectFilter(
-        "Genre",
-        true,
-        "g",
-        arrayOf(
-            Pair("0", "Any"),
-            Pair("5", "Romance"),
-            Pair("8", "Drama"),
-            Pair("22", "Boys Love"),
-            Pair("24", "Girls Love"),
-            Pair("2", "Comedy"),
-            Pair("6", "Horror"),
-        ),
-    )
+    private class MatureGenreFilter :
+        UriSelectFilter(
+            "Genre",
+            true,
+            "g",
+            arrayOf(
+                Pair("0", "Any"),
+                Pair("5", "Romance"),
+                Pair("8", "Drama"),
+                Pair("22", "Boys Love"),
+                Pair("24", "Girls Love"),
+                Pair("2", "Comedy"),
+                Pair("6", "Horror"),
+            ),
+        )
 
     private class SortFilter(
         name: String = "Sort by",
-        var vals: Array<Pair<String, String>> = arrayOf(
-            Pair("DATE", "Date"),
-            Pair("LIKE", "Likes"),
-            Pair("SUBSCRIBE", "Subscribers"),
-        ),
+        var vals: Array<Pair<String, String>> =
+            arrayOf(
+                Pair("DATE", "Date"),
+                Pair("LIKE", "Likes"),
+                Pair("SUBSCRIBE", "Subscribers"),
+            ),
         defaultValue: Int = 0,
     ) : Filter.Select<String>(name, vals.map { it.second }.toTypedArray(), defaultValue) {
         fun addToUri(uri: HttpUrl.Builder) {
@@ -496,8 +536,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         val vals: Array<Pair<String, String>>,
         val firstIsUnspecified: Boolean = false,
         defaultValue: Int = 0,
-    ) :
-        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray(), defaultValue),
+    ) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray(), defaultValue),
         UriFilter {
         override fun addToUri(uri: HttpUrl.Builder) {
             if (state != 0 || !firstIsUnspecified) {
@@ -511,6 +550,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
      */
     private interface UriFilter {
         val isMature: Boolean
+
         fun addToUri(uri: HttpUrl.Builder)
     }
 

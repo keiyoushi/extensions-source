@@ -22,7 +22,6 @@ open class GoDa(
     override val baseUrl: String,
     override val lang: String,
 ) : HttpSource() {
-
     override val supportsLatest get() = true
 
     private val enableGenres = true
@@ -31,22 +30,21 @@ open class GoDa(
 
     override val client = network.cloudflareClient
 
-    private fun getKey(link: String): String {
-        return link.substringAfter("/manga/").removeSuffix("/")
-    }
+    private fun getKey(link: String): String = link.substringAfter("/manga/").removeSuffix("/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/hots/page/$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup().also(::parseGenres)
-        val mangas = document.select(".container > .cardlist .pb-2 a").map { element ->
-            SManga.create().apply {
-                val imgSrc = element.selectFirst("img")!!.attr("src")
-                url = getKey(element.attr("href"))
-                title = element.selectFirst("h3")!!.ownText()
-                thumbnail_url = if ("url=" in imgSrc) imgSrc.toHttpUrl().queryParameter("url")!! else imgSrc
+        val mangas =
+            document.select(".container > .cardlist .pb-2 a").map { element ->
+                SManga.create().apply {
+                    val imgSrc = element.selectFirst("img")!!.attr("src")
+                    url = getKey(element.attr("href"))
+                    title = element.selectFirst("h3")!!.ownText()
+                    thumbnail_url = if ("url=" in imgSrc) imgSrc.toHttpUrl().queryParameter("url")!! else imgSrc
+                }
             }
-        }
         val nextPage = if (lang == "zh") "下一頁" else "NEXT"
         val hasNextPage = document.selectFirst("a[aria-label=$nextPage] button") != null
         return MangasPage(mangas, hasNextPage)
@@ -56,12 +54,19 @@ open class GoDa(
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/s".toHttpUrl().newBuilder()
-                .addPathSegment(query)
-                .addEncodedQueryParameter("page", "$page")
-                .build()
+            val url =
+                "$baseUrl/s"
+                    .toHttpUrl()
+                    .newBuilder()
+                    .addPathSegment(query)
+                    .addEncodedQueryParameter("page", "$page")
+                    .build()
             return GET(url, headers)
         }
         for (filter in filters) {
@@ -74,45 +79,50 @@ open class GoDa(
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(getMangaUrl(manga), headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
 
     private fun Element.getMangaId() = selectFirst("#mangachapters")!!.attr("data-mid")
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup().selectFirst("main")!!
-        val titleElement = document.selectFirst("h1")!!
-        val elements = titleElement.parent()!!.parent()!!.children()
-        check(elements.size == 6)
+    override fun mangaDetailsParse(response: Response) =
+        SManga.create().apply {
+            val document = response.asJsoup().selectFirst("main")!!
+            val titleElement = document.selectFirst("h1")!!
+            val elements = titleElement.parent()!!.parent()!!.children()
+            check(elements.size == 6)
 
-        title = titleElement.ownText()
-        status = when (titleElement.child(0).text()) {
-            "連載中", "Ongoing" -> SManga.ONGOING
-            "完結" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+            title = titleElement.ownText()
+            status =
+                when (titleElement.child(0).text()) {
+                    "連載中", "Ongoing" -> SManga.ONGOING
+                    "完結" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+            author = Entities.unescape(elements[1].children().drop(1).joinToString { it.text().removeSuffix(" ,") })
+            genre =
+                buildList {
+                    elements[2].children().drop(1).mapTo(this) { it.text().removeSuffix(" ,") }
+                    elements[3].children().mapTo(this) { it.text().removePrefix("#") }
+                }.joinToString()
+            description = (elements[4].text() + "\n\nID: ${document.getMangaId()}").trim()
+            thumbnail_url = document.selectFirst("img.object-cover")!!.attr("src")
         }
-        author = Entities.unescape(elements[1].children().drop(1).joinToString { it.text().removeSuffix(" ,") })
-        genre = buildList {
-            elements[2].children().drop(1).mapTo(this) { it.text().removeSuffix(" ,") }
-            elements[3].children().mapTo(this) { it.text().removePrefix("#") }
-        }.joinToString()
-        description = (elements[4].text() + "\n\nID: ${document.getMangaId()}").trim()
-        thumbnail_url = document.selectFirst("img.object-cover")!!.attr("src")
-    }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
-        val mangaId = manga.description
-            ?.substringAfterLast("ID: ", "")
-            ?.takeIf { it.toIntOrNull() != null }
-            ?: client.newCall(mangaDetailsRequest(manga)).execute().asJsoup().getMangaId()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        Observable.fromCallable {
+            val mangaId =
+                manga.description
+                    ?.substringAfterLast("ID: ", "")
+                    ?.takeIf { it.toIntOrNull() != null }
+                    ?: client
+                        .newCall(mangaDetailsRequest(manga))
+                        .execute()
+                        .asJsoup()
+                        .getMangaId()
 
-        fetchChapterList(mangaId)
-    }
+            fetchChapterList(mangaId)
+        }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     open fun fetchChapterList(mangaId: String): List<SChapter> {
         val response = client.newCall(GET("$baseUrl/manga/get?mid=$mangaId&mode=all", headers)).execute()
@@ -135,7 +145,10 @@ open class GoDa(
         return pageListRequest(mangaId, chapterId)
     }
 
-    open fun pageListRequest(mangaId: String, chapterId: String) = GET("$baseUrl/chapter/getcontent?m=$mangaId&c=$chapterId", headers)
+    open fun pageListRequest(
+        mangaId: String,
+        chapterId: String,
+    ) = GET("$baseUrl/chapter/getcontent?m=$mangaId&c=$chapterId", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -152,10 +165,11 @@ open class GoDa(
         if (!enableGenres || genres.isNotEmpty()) return
         val box = document.selectFirst("h2")?.parent()?.parent() ?: return
         val items = box.select("a")
-        genres = Array(items.size) { i ->
-            val item = items[i]
-            Pair(item.text().removePrefix("#"), item.attr("href"))
-        }
+        genres =
+            Array(items.size) { i ->
+                val item = items[i]
+                Pair(item.text().removePrefix("#"), item.attr("href"))
+            }
     }
 
     override fun getFilterList(): FilterList =
@@ -164,15 +178,18 @@ open class GoDa(
         } else if (genres.isEmpty()) {
             FilterList(listOf(Filter.Header(if (lang == "zh") "点击“重置”刷新分类" else "Tap 'Reset' to load genres")))
         } else {
-            val list = listOf(
-                Filter.Header(if (lang == "zh") "分类（搜索文本时无效）" else "Filters are ignored when using text search."),
-                UriPartFilter(if (lang == "zh") "分类" else "Genre", genres),
-            )
+            val list =
+                listOf(
+                    Filter.Header(if (lang == "zh") "分类（搜索文本时无效）" else "Filters are ignored when using text search."),
+                    UriPartFilter(if (lang == "zh") "分类" else "Genre", genres),
+                )
             FilterList(list)
         }
 
-    class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    class UriPartFilter(
+        displayName: String,
+        private val vals: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }

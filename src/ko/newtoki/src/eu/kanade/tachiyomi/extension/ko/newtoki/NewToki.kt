@@ -33,8 +33,8 @@ abstract class NewToki(
     override val name: String,
     private val boardName: String,
     private val preferences: SharedPreferences,
-) : ParsedHttpSource(), ConfigurableSource {
-
+) : ParsedHttpSource(),
+    ConfigurableSource {
     override val lang: String = "ko"
     override val supportsLatest = true
 
@@ -42,14 +42,17 @@ abstract class NewToki(
     private val rateLimitedClient by lazy { buildClient(withRateLimit = true) }
 
     private fun buildClient(withRateLimit: Boolean) =
-        network.cloudflareClient.newBuilder()
+        network.cloudflareClient
+            .newBuilder()
             .apply { if (withRateLimit) rateLimit(1, preferences.rateLimitPeriod.toLong()) }
             .addInterceptor(DomainInterceptor) // not rate-limited
             .connectTimeout(10, TimeUnit.SECONDS) // fail fast
             .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     override fun popularMangaSelector() = "div#webtoon-list > ul > li"
 
@@ -69,13 +72,21 @@ abstract class NewToki(
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/$boardName" + if (page > 1) "/p$page" else "", headers)
 
     override fun searchMangaSelector() = popularMangaSelector()
+
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        if (query.startsWith(PREFIX_ID_SEARCH)) {
             val realQuery = query.removePrefix(PREFIX_ID_SEARCH)
             val urlPath = "/$boardName/$realQuery"
-            rateLimitedClient.newCall(GET("$baseUrl$urlPath", headers))
+            rateLimitedClient
+                .newCall(GET("$baseUrl$urlPath", headers))
                 .asObservableSuccess()
                 .map { response ->
                     // the id is matches any of 'post' from their CMS board.
@@ -85,9 +96,11 @@ abstract class NewToki(
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
-    private fun actualMangaParseById(urlPath: String, response: Response): MangasPage {
+    private fun actualMangaParseById(
+        urlPath: String,
+        response: Response,
+    ): MangasPage {
         val document = response.asJsoup()
 
         // Only exists on detail page.
@@ -95,20 +108,21 @@ abstract class NewToki(
         // only exists on chapter with proper manga detail page.
         val fullListButton = document.select(".comic-navbar .toon-nav a").last()
 
-        val list: List<SManga> = when {
-            firstChapterButton?.text()?.contains("첫회보기") == true -> { // Check this page is detail page
-                val details = mangaDetailsParse(document)
-                details.url = urlPath
-                listOf(details)
+        val list: List<SManga> =
+            when {
+                firstChapterButton?.text()?.contains("첫회보기") == true -> { // Check this page is detail page
+                    val details = mangaDetailsParse(document)
+                    details.url = urlPath
+                    listOf(details)
+                }
+                fullListButton?.text()?.contains("전체목록") == true -> { // Check this page is chapter page
+                    val url = fullListButton.attr("abs:href")
+                    val details = mangaDetailsParse(rateLimitedClient.newCall(GET(url, headers)).execute())
+                    details.url = getUrlPath(url)
+                    listOf(details)
+                }
+                else -> emptyList()
             }
-            fullListButton?.text()?.contains("전체목록") == true -> { // Check this page is chapter page
-                val url = fullListButton.attr("abs:href")
-                val details = mangaDetailsParse(rateLimitedClient.newCall(GET(url, headers)).execute())
-                details.url = getUrlPath(url)
-                listOf(details)
-            }
-            else -> emptyList()
-        }
 
         return MangasPage(list, false)
     }
@@ -118,9 +132,10 @@ abstract class NewToki(
         val title = document.select("div.view-content > span > b").text()
         val thumbnail = document.select("div.row div.view-img > img").attr("src")
         val descriptionElement = info.select("div.row div.view-content:not([style])")
-        val description = descriptionElement.map {
-            it.text().trim()
-        }
+        val description =
+            descriptionElement.map {
+                it.text().trim()
+            }
         val prefix = if (isCleanPath(document.location())) "" else needMigration()
 
         val manga = SManga.create()
@@ -144,11 +159,12 @@ abstract class NewToki(
         return manga
     }
 
-    private fun parseStatus(status: String) = when (status.trim()) {
-        "주간", "격주", "월간", "격월/비정기", "단행본" -> SManga.ONGOING
-        "단편", "완결" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    private fun parseStatus(status: String) =
+        when (status.trim()) {
+            "주간", "격주", "월간", "격월/비정기", "단행본" -> SManga.ONGOING
+            "단편", "완결" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
 
     override fun chapterListSelector() = "div.serial-list > ul.list-body > li.list-item"
 
@@ -160,7 +176,14 @@ abstract class NewToki(
         chapter.setUrlWithoutDomain(linkElement.attr("href"))
         chapter.chapter_number = parseChapterNumber(rawName)
         chapter.name = rawName
-        chapter.date_upload = parseChapterDate(element.select(".wr-date").last()!!.text().trim())
+        chapter.date_upload =
+            parseChapterDate(
+                element
+                    .select(".wr-date")
+                    .last()!!
+                    .text()
+                    .trim(),
+            )
         return chapter
     }
 
@@ -179,25 +202,28 @@ abstract class NewToki(
         }
     }
 
-    private fun mangaDetailsParseWithTitleCheck(manga: SManga, document: Document) =
-        mangaDetailsParse(document).apply {
-            // TODO: don't throw when there is download folder rename feature
-            if (manga.description.isNullOrEmpty() && title.removeSuffix("…") !in manga.title) {
-                throw Exception(titleNotMatch(title))
-            }
+    private fun mangaDetailsParseWithTitleCheck(
+        manga: SManga,
+        document: Document,
+    ) = mangaDetailsParse(document).apply {
+        // TODO: don't throw when there is download folder rename feature
+        if (manga.description.isNullOrEmpty() && title.removeSuffix("…") !in manga.title) {
+            throw Exception(titleNotMatch(title))
         }
+    }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return rateLimitedClient.newCall(mangaDetailsRequest(manga))
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        rateLimitedClient
+            .newCall(mangaDetailsRequest(manga))
             .asObservableSuccess()
             .map { response ->
                 val document = response.asJsoup()
                 mangaDetailsParseWithTitleCheck(manga, document).apply { initialized = true }
             }
-    }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return rateLimitedClient.newCall(chapterListRequest(manga))
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        rateLimitedClient
+            .newCall(chapterListRequest(manga))
             .asObservableSuccess()
             .map { response ->
                 val document = response.asJsoup()
@@ -208,13 +234,12 @@ abstract class NewToki(
                     }
                 }
             }
-    }
 
     // not thread-safe
     private val dateFormat by lazy { SimpleDateFormat("yyyy.MM.dd", Locale.ENGLISH) }
 
-    private fun parseChapterDate(date: String): Long {
-        return try {
+    private fun parseChapterDate(date: String): Long =
+        try {
             if (date.contains(":")) {
                 val calendar = Calendar.getInstance()
                 val splitDate = date.split(":")
@@ -237,16 +262,19 @@ abstract class NewToki(
             Log.e("NewToki", "failed to parse chapter date '$date'", e)
             0
         }
-    }
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.select("script:containsData(html_data)").firstOrNull()?.data()
-            ?: throw Exception("data script not found")
-        val loadScript = document.select("script:containsData(data_attribute)").firstOrNull()?.data()
-            ?: throw Exception("load script not found")
+        val script =
+            document.select("script:containsData(html_data)").firstOrNull()?.data()
+                ?: throw Exception("data script not found")
+        val loadScript =
+            document.select("script:containsData(data_attribute)").firstOrNull()?.data()
+                ?: throw Exception("load script not found")
         val dataAttr = "abs:data-" + loadScript.substringAfter("data_attribute: '").substringBefore("',")
 
-        return htmlDataRegex.findAll(script).map { it.groupValues[1] }
+        return htmlDataRegex
+            .findAll(script)
+            .map { it.groupValues[1] }
             .asIterable()
             .flatMap { it.split(".") }
             .joinToString("") { it.toIntOrNull(16)?.toChar()?.toString() ?: "" }
@@ -256,8 +284,11 @@ abstract class NewToki(
     }
 
     override fun latestUpdatesSelector() = ".media.post-list"
+
     override fun latestUpdatesFromElement(element: Element) = ManaToki.latestUpdatesElementParse(element)
+
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/page/update?hid=update&page=$page", headers)
+
     override fun latestUpdatesNextPageSelector() = ".pg_end"
 
     // We are able to get the image URL directly from the page list

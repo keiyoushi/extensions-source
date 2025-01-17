@@ -25,17 +25,18 @@ class HomeDto(
 )
 
 object PopularComicsSerializer : JsonTransformingSerializer<List<MangaDto>>(ListSerializer(MangaDto.serializer())) {
-    override fun transformDeserialize(element: JsonElement): JsonElement {
-        return if (element is JsonPrimitive && element.isString) {
+    override fun transformDeserialize(element: JsonElement): JsonElement =
+        if (element is JsonPrimitive && element.isString) {
             Json.parseToJsonElement(element.content)
         } else {
             element
         }
-    }
 }
 
 @Serializable
-class PayloadSeriesDto(val data: PayloadSeriesDataDto)
+class PayloadSeriesDto(
+    val data: PayloadSeriesDataDto,
+)
 
 @Serializable
 class PayloadSeriesDataDto(
@@ -50,7 +51,9 @@ class SeriesDto(
 )
 
 @Serializable
-class PayloadMangaDto(val data: List<MangaDto>)
+class PayloadMangaDto(
+    val data: List<MangaDto>,
+)
 
 @Serializable
 class MangaDto(
@@ -62,17 +65,19 @@ class MangaDto(
     private val status: MangaStatusDto? = null,
     private val genres: List<FilterDto>? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
-        title = name
-        url = "/series/comic-$slug"
-        thumbnail_url = cover
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            title = name
+            url = "/series/comic-$slug"
+            thumbnail_url = cover
+        }
 
-    fun toSMangaDetails() = toSManga().apply {
-        description = summary
-        status = parseStatus()
-        genre = genres?.joinToString { it.name.trim() }
-    }
+    fun toSMangaDetails() =
+        toSManga().apply {
+            description = summary
+            status = parseStatus()
+            genre = genres?.joinToString { it.name.trim() }
+        }
 
     private fun parseStatus(): Int {
         val status = this.status ?: return SManga.UNKNOWN
@@ -100,11 +105,12 @@ class LatestMangaDto(
     private val cover: String? = null,
     val type: String? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
-        title = name
-        url = "/series/comic-$slug"
-        thumbnail_url = cover
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            title = name
+            url = "/series/comic-$slug"
+            thumbnail_url = cover
+        }
 }
 
 @Serializable
@@ -113,7 +119,10 @@ class MangaDetailDto(
 )
 
 @Serializable
-class PayloadChapterDto(var data: List<ChapterDto>, val meta: MetaDto)
+class PayloadChapterDto(
+    var data: List<ChapterDto>,
+    val meta: MetaDto,
+)
 
 @Serializable
 class ChapterDto(
@@ -121,25 +130,35 @@ class ChapterDto(
     private val name: String,
     @SerialName("published_at") private val date: String,
 ) {
-    fun toSChapter(mangaSlug: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(
+        mangaSlug: String,
+        dateFormat: SimpleDateFormat,
+    ) = SChapter.create().apply {
         name = "Capitulo ${this@ChapterDto.name}"
         url = "/capitulo/$id/comic-$mangaSlug"
-        date_upload = try {
-            dateFormat.parse(date)!!.time
-        } catch (e: ParseException) {
-            0L
-        }
+        date_upload =
+            try {
+                dateFormat.parse(date)!!.time
+            } catch (e: ParseException) {
+                0L
+            }
     }
 }
 
 @Serializable
-class MetaDto(val total: Int)
+class MetaDto(
+    val total: Int,
+)
 
 @Serializable
-class PayloadPagesDto(val chapter: PageDto)
+class PayloadPagesDto(
+    val chapter: PageDto,
+)
 
 @Serializable
-class PageDto(val pages: List<String>)
+class PageDto(
+    val pages: List<String>,
+)
 
 @Serializable
 class MangaStatusDto(

@@ -11,7 +11,9 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.abs
 
-private class NoSuchTagException(message: String) : Exception(message)
+private class NoSuchTagException(
+    message: String,
+) : Exception(message)
 
 internal fun tagInterceptor(chain: Interceptor.Chain): Response {
     val request = chain.request()
@@ -38,23 +40,29 @@ internal fun randomString(): String {
 
 @OptIn(ExperimentalUnsignedTypes::class)
 internal fun getTimeAndHash(salt: String): Pair<String, String> {
-    val timeFormatted = if (Build.VERSION.SDK_INT < 24) {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).format(Date())
-            .plus(getCurrentTimeZoneOffsetString())
-    } else {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH).format(Date())
-    }
+    val timeFormatted =
+        if (Build.VERSION.SDK_INT < 24) {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
+                .format(Date())
+                .plus(getCurrentTimeZoneOffsetString())
+        } else {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ENGLISH).format(Date())
+        }
 
     val saltedTimeArray = timeFormatted.plus(salt).toByteArray()
-    val saltedTimeHash = MessageDigest.getInstance("SHA-256")
-        .digest(saltedTimeArray).toUByteArray()
-    val hexadecimalTimeHash = saltedTimeHash.joinToString("") {
-        var hex = Integer.toHexString(it.toInt())
-        if (hex.length < 2) {
-            hex = "0$hex"
+    val saltedTimeHash =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest(saltedTimeArray)
+            .toUByteArray()
+    val hexadecimalTimeHash =
+        saltedTimeHash.joinToString("") {
+            var hex = Integer.toHexString(it.toInt())
+            if (hex.length < 2) {
+                hex = "0$hex"
+            }
+            return@joinToString hex
         }
-        return@joinToString hex
-    }
 
     return Pair(timeFormatted, hexadecimalTimeHash)
 }

@@ -16,11 +16,12 @@ class MonochromeActivity : Activity() {
         super.onCreate(savedInstanceState)
         val segments = intent?.data?.pathSegments
         if (segments != null && segments.size > 1) {
-            val activity = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", UUID_QUERY + segments[1])
-                putExtra("filter", packageName)
-            }
+            val activity =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", UUID_QUERY + segments[1])
+                    putExtra("filter", packageName)
+                }
             try {
                 startActivity(activity)
             } catch (ex: ActivityNotFoundException) {

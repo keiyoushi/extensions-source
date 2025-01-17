@@ -14,7 +14,10 @@ import eu.kanade.tachiyomi.source.model.FilterList
  * [6] 1=manga, 2=novel, else=manga
  * [7] vip, 0=default, useless
  */
-internal fun parseFilters(page: Int, filters: FilterList): String {
+internal fun parseFilters(
+    page: Int,
+    filters: FilterList,
+): String {
     var status = '2'
     var type = '0'
     var genre = "0"
@@ -41,7 +44,9 @@ internal class TypeFilter : Filter.Select<String>("类型", TYPE_NAMES)
 private val TYPE_NAMES = arrayOf("全部", "清水", "有肉")
 private val TYPE_KEYS = arrayOf('0', '1', '2')
 
-internal class GenreFilter(names: Array<String>) : Filter.Select<String>("标签", names)
+internal class GenreFilter(
+    names: Array<String>,
+) : Filter.Select<String>("标签", names)
 
 internal class SortFilter : Filter.Select<String>("排序", SORT_NAMES)
 

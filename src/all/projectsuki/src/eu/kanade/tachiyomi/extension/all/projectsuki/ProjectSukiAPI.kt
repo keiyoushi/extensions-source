@@ -28,11 +28,13 @@ import org.jsoup.nodes.Element
 private inline val INFO: Nothing get() = error("INFO")
 
 internal val callpageUrl = homepageUrl.newBuilder().addPathSegment("callpage").build()
-internal val apiBookSearchUrl = homepageUrl.newBuilder()
-    .addPathSegment("api")
-    .addPathSegment("book")
-    .addPathSegment("search")
-    .build()
+internal val apiBookSearchUrl =
+    homepageUrl
+        .newBuilder()
+        .addPathSegment("api")
+        .addPathSegment("book")
+        .addPathSegment("search")
+        .build()
 
 /**
  * Json [MIME/media type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types)
@@ -56,9 +58,12 @@ fun Element.imageSrc(): HttpUrl? {
         return attr("abs:srcset").substringBefore(" ").toHttpUrlOrNull()
     }
 
-    return attributes().firstOrNull {
-        it.key.contains("src") && imageExtensions.any { ext -> it.value.contains(ext) }
-    }?.value?.substringBefore(" ")?.toHttpUrlOrNull()
+    return attributes()
+        .firstOrNull {
+            it.key.contains("src") && imageExtensions.any { ext -> it.value.contains(ext) }
+        }?.value
+        ?.substringBefore(" ")
+        ?.toHttpUrlOrNull()
 }
 
 internal typealias BookTitle = String
@@ -69,7 +74,6 @@ internal typealias BookTitle = String
  * @author Federico d'Alonzo &lt;me@npgx.dev&gt;
  */
 object ProjectSukiAPI {
-
     private inline fun <reified T : Any> Any.tryAs(): T? = this as? T
 
     /**
@@ -96,14 +100,23 @@ object ProjectSukiAPI {
     /**
      * Creates a [Request] for the server to send the chapter's pages.
      */
-    fun chapterPagesRequest(json: Json, headers: Headers, bookID: BookID, chapterID: ChapterID): Request {
-        val newHeaders: Headers = headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .add("Content-Type", "application/json;charset=UTF-8")
-            .build()
+    fun chapterPagesRequest(
+        json: Json,
+        headers: Headers,
+        bookID: BookID,
+        chapterID: ChapterID,
+    ): Request {
+        val newHeaders: Headers =
+            headers
+                .newBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .add("Content-Type", "application/json;charset=UTF-8")
+                .build()
 
-        val body: RequestBody = json.encodeToString(PagesRequestData(bookID, chapterID, "true"))
-            .toRequestBody(jsonMediaType)
+        val body: RequestBody =
+            json
+                .encodeToString(PagesRequestData(bookID, chapterID, "true"))
+                .toRequestBody(jsonMediaType)
 
         return POST(callpageUrl.toUri().toASCIIString(), newHeaders, body)
     }
@@ -111,7 +124,10 @@ object ProjectSukiAPI {
     /**
      * Handles the [Response] returned from [chapterPagesRequest]'s [call][okhttp3.OkHttpClient.newCall].
      */
-    fun parseChapterPagesResponse(json: Json, response: Response): List<Page> {
+    fun parseChapterPagesResponse(
+        json: Json,
+        response: Response,
+    ): List<Page> {
         // response is a json object containing 2 elements
         // chapter_id: seems to be the same as chapterid, I'm not really sure what it's supposed to be
         // src: source html that will be appended in the page
@@ -122,21 +138,24 @@ object ProjectSukiAPI {
         // the uuid is a 128-bit number in base 16 (hex), most likely there to manage edits and versions.
 
         // page 001 is included in the response
-        val rawSrc: String = json.runCatching { parseToJsonElement(response.body.string()) }
-            .getOrNull()
-            ?.tryAs<JsonObject>()
-            ?.get("src")
-            ?.tryAs<JsonPrimitive>()
-            ?.content ?: reportErrorToUser { "chapter pages aren't in the expected format!" }
+        val rawSrc: String =
+            json
+                .runCatching { parseToJsonElement(response.body.string()) }
+                .getOrNull()
+                ?.tryAs<JsonObject>()
+                ?.get("src")
+                ?.tryAs<JsonPrimitive>()
+                ?.content ?: reportErrorToUser { "chapter pages aren't in the expected format!" }
 
         // we can handle relative urls by specifying manually the location of the "document"
         val srcFragment: Element = Jsoup.parseBodyFragment(rawSrc, homepageUri.toASCIIString())
 
-        val urls: Map<HttpUrl, PathMatchResult> = srcFragment.allElements
-            .asSequence()
-            .mapNotNull { it.imageSrc() }
-            .associateWith { it.matchAgainst(pageUrlPattern) } // create match result
-            .filterValues { it.doesMatch } // make sure they are the urls we expect
+        val urls: Map<HttpUrl, PathMatchResult> =
+            srcFragment.allElements
+                .asSequence()
+                .mapNotNull { it.imageSrc() }
+                .associateWith { it.matchAgainst(pageUrlPattern) } // create match result
+                .filterValues { it.doesMatch } // make sure they are the urls we expect
 
         if (urls.isEmpty()) {
             reportErrorToUser { "chapter pages URLs aren't in the expected format!" }
@@ -163,15 +182,29 @@ object ProjectSukiAPI {
     /**
      * Creates a [Request] for the server to send the books.
      */
-    fun bookSearchRequest(json: Json, headers: Headers): Request {
-        val newHeaders: Headers = headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .add("Content-Type", "application/json;charset=UTF-8")
-            .add("Referer", homepageUrl.newBuilder().addPathSegment("browse").build().toUri().toASCIIString())
-            .build()
+    fun bookSearchRequest(
+        json: Json,
+        headers: Headers,
+    ): Request {
+        val newHeaders: Headers =
+            headers
+                .newBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .add("Content-Type", "application/json;charset=UTF-8")
+                .add(
+                    "Referer",
+                    homepageUrl
+                        .newBuilder()
+                        .addPathSegment("browse")
+                        .build()
+                        .toUri()
+                        .toASCIIString(),
+                ).build()
 
-        val body: RequestBody = json.encodeToString(SearchRequestData(null))
-            .toRequestBody(jsonMediaType)
+        val body: RequestBody =
+            json
+                .encodeToString(SearchRequestData(null))
+                .toRequestBody(jsonMediaType)
 
         return POST(apiBookSearchUrl.toUri().toASCIIString(), newHeaders, body)
     }
@@ -179,23 +212,31 @@ object ProjectSukiAPI {
     /**
      * Handles the [Response] returned from [parseBookSearchResponse]'s [call][okhttp3.OkHttpClient.newCall].
      */
-    fun parseBookSearchResponse(json: Json, response: Response): Map<BookID, BookTitle> {
-        val data: JsonObject = json.runCatching { parseToJsonElement(response.body.string()) }
-            .getOrNull()
-            ?.tryAs<JsonObject>()
-            ?.get("data")
-            ?.tryAs<JsonObject>() ?: reportErrorToUser { "books data isn't in the expected format!" }
+    fun parseBookSearchResponse(
+        json: Json,
+        response: Response,
+    ): Map<BookID, BookTitle> {
+        val data: JsonObject =
+            json
+                .runCatching { parseToJsonElement(response.body.string()) }
+                .getOrNull()
+                ?.tryAs<JsonObject>()
+                ?.get("data")
+                ?.tryAs<JsonObject>() ?: reportErrorToUser { "books data isn't in the expected format!" }
 
-        val refined: Map<BookID, BookTitle> = buildMap {
-            data.forEach { (id: BookID, valueObj: JsonElement) ->
-                val title: BookTitle = valueObj.tryAs<JsonObject>()
-                    ?.get("value")
-                    ?.tryAs<JsonPrimitive>()
-                    ?.content ?: reportErrorToUser { "books data isn't in the expected format!" }
+        val refined: Map<BookID, BookTitle> =
+            buildMap {
+                data.forEach { (id: BookID, valueObj: JsonElement) ->
+                    val title: BookTitle =
+                        valueObj
+                            .tryAs<JsonObject>()
+                            ?.get("value")
+                            ?.tryAs<JsonPrimitive>()
+                            ?.content ?: reportErrorToUser { "books data isn't in the expected format!" }
 
-                this[id] = title
+                    this[id] = title
+                }
             }
-        }
 
         return refined
     }
@@ -210,28 +251,34 @@ private val alphaNumericRegex = """\p{Alnum}+""".toRegex(RegexOption.IGNORE_CASE
  * but sorting is done based on the amount of matches.
  */
 internal fun Map<BookID, BookTitle>.simpleSearchMangasPage(searchQuery: String): MangasPage {
-    data class Match(val bookID: BookID, val title: BookTitle, val count: Int)
+    data class Match(
+        val bookID: BookID,
+        val title: BookTitle,
+        val count: Int,
+    )
 
     val words: Set<String> = alphaNumericRegex.findAll(searchQuery).mapTo(HashSet()) { it.value }
 
-    val matches: Map<BookID, Match> = mapValues { (bookID, bookTitle) ->
-        val matchesCount: Int = words.sumOf { word ->
-            var count = 0
-            var idx = 0
+    val matches: Map<BookID, Match> =
+        mapValues { (bookID, bookTitle) ->
+            val matchesCount: Int =
+                words.sumOf { word ->
+                    var count = 0
+                    var idx = 0
 
-            while (true) {
-                val found = bookTitle.indexOf(word, idx, ignoreCase = true)
-                if (found < 0) break
+                    while (true) {
+                        val found = bookTitle.indexOf(word, idx, ignoreCase = true)
+                        if (found < 0) break
 
-                idx = found + 1
-                count++
-            }
+                        idx = found + 1
+                        count++
+                    }
 
-            count
-        }
+                    count
+                }
 
-        Match(bookID, bookTitle, matchesCount)
-    }.filterValues { it.count > 0 }
+            Match(bookID, bookTitle, matchesCount)
+        }.filterValues { it.count > 0 }
 
     return matches.entries
         .sortedWith(compareBy({ -it.value.count }, { it.value.title }))

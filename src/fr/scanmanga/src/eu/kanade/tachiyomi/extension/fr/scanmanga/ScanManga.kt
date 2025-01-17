@@ -25,7 +25,6 @@ import uy.kohesive.injekt.injectLazy
 import kotlin.random.Random
 
 class ScanManga : ParsedHttpSource() {
-
     override val name = "Scan-Manga"
 
     override val baseUrl = "https://www.scan-manga.com"
@@ -34,48 +33,48 @@ class ScanManga : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addNetworkInterceptor { chain ->
-            val originalCookies = chain.request().header("Cookie") ?: ""
-            val newReq = chain
-                .request()
-                .newBuilder()
-                .header("Cookie", "$originalCookies; _ga=GA1.2.${shuffle("123456789")}.${System.currentTimeMillis() / 1000}")
-                .build()
-            chain.proceed(newReq)
-        }.build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .addNetworkInterceptor { chain ->
+                val originalCookies = chain.request().header("Cookie") ?: ""
+                val newReq =
+                    chain
+                        .request()
+                        .newBuilder()
+                        .header("Cookie", "$originalCookies; _ga=GA1.2.${shuffle("123456789")}.${System.currentTimeMillis() / 1000}")
+                        .build()
+                chain.proceed(newReq)
+            }.build()
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept-Language", "fr-FR")
+    override fun headersBuilder(): Headers.Builder =
+        super
+            .headersBuilder()
+            .add("Accept-Language", "fr-FR")
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/TOP-Manga-Webtoon-22.html", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/TOP-Manga-Webtoon-22.html", headers)
 
     override fun popularMangaSelector() = "div.image_manga a[href]"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             title = element.select("img").attr("title")
             setUrlWithoutDomain(element.attr("href"))
             thumbnail_url = element.select("img").attr("data-original")
         }
-    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesSelector() = "#content_news .listing"
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        SManga.create().apply {
             title = element.select("a.nom_manga").text()
             setUrlWithoutDomain(element.select("a.nom_manga").attr("href"))
             /*thumbnail_url = element.select(".logo_manga img").let {
@@ -84,7 +83,6 @@ class ScanManga : ParsedHttpSource() {
             }*/
             // Better not use it, width is too large, which results in terrible image
         }
-    }
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
@@ -107,26 +105,42 @@ class ScanManga : ParsedHttpSource() {
         return result.toString()
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchHeaders = headersBuilder()
-            .add("Referer", "$baseUrl/scanlation/liste_series.html")
-            .add("x-requested-with", "XMLHttpRequest")
-            .build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val searchHeaders =
+            headersBuilder()
+                .add("Referer", "$baseUrl/scanlation/liste_series.html")
+                .add("x-requested-with", "XMLHttpRequest")
+                .build()
 
         return GET("$baseUrl/scanlation/scan.data.json", searchHeaders)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        client
+            .newCall(searchMangaRequest(page, query, filters))
             .asObservableSuccess()
             .map { response ->
                 searchMangaParse(response, query)
             }
-    }
 
-    private fun searchMangaParse(response: Response, query: String): MangasPage {
-        return MangasPage(parseMangaFromJson(response).mangas.filter { it.title.contains(query, ignoreCase = true) }, false)
-    }
+    private fun searchMangaParse(
+        response: Response,
+        query: String,
+    ): MangasPage =
+        MangasPage(
+            parseMangaFromJson(response).mangas.filter {
+                it.title.contains(query, ignoreCase = true)
+            },
+            false,
+        )
 
     private fun parseMangaFromJson(response: Response): MangasPage {
         val jsonRaw = response.body.string()
@@ -137,31 +151,37 @@ class ScanManga : ParsedHttpSource() {
 
         val jsonObj = json.parseToJsonElement(jsonRaw).jsonObject
 
-        val mangaList = jsonObj.entries.map { entry ->
-            SManga.create().apply {
-                title = Parser.unescapeEntities(entry.key, false)
-                genre = entry.value.jsonArray[2].jsonPrimitive.content.let {
-                    when {
-                        it.contains("0") -> "Shōnen"
-                        it.contains("1") -> "Shōjo"
-                        it.contains("2") -> "Seinen"
-                        it.contains("3") -> "Josei"
-                        else -> null
-                    }
+        val mangaList =
+            jsonObj.entries.map { entry ->
+                SManga.create().apply {
+                    title = Parser.unescapeEntities(entry.key, false)
+                    genre =
+                        entry.value.jsonArray[2].jsonPrimitive.content.let {
+                            when {
+                                it.contains("0") -> "Shōnen"
+                                it.contains("1") -> "Shōjo"
+                                it.contains("2") -> "Seinen"
+                                it.contains("3") -> "Josei"
+                                else -> null
+                            }
+                        }
+                    status =
+                        entry.value.jsonArray[3].jsonPrimitive.content.let {
+                            when {
+                                it.contains("0") -> SManga.ONGOING // En cours
+                                it.contains("1") -> SManga.ONGOING // En pause
+                                it.contains("2") -> SManga.COMPLETED // Terminé
+                                it.contains("3") -> SManga.COMPLETED // One shot
+                                else -> SManga.UNKNOWN
+                            }
+                        }
+                    url = "/" +
+                        entry.value.jsonArray[0]
+                            .jsonPrimitive.content + "/" +
+                        entry.value.jsonArray[1]
+                            .jsonPrimitive.content + ".html"
                 }
-                status = entry.value.jsonArray[3].jsonPrimitive.content.let {
-                    when {
-                        it.contains("0") -> SManga.ONGOING // En cours
-                        it.contains("1") -> SManga.ONGOING // En pause
-                        it.contains("2") -> SManga.COMPLETED // Terminé
-                        it.contains("3") -> SManga.COMPLETED // One shot
-                        else -> SManga.UNKNOWN
-                    }
-                }
-                url = "/" + entry.value.jsonArray[0].jsonPrimitive.content + "/" +
-                    entry.value.jsonArray[1].jsonPrimitive.content + ".html"
             }
-        }
 
         return MangasPage(mangaList, hasNextPage = false)
     }
@@ -169,12 +189,13 @@ class ScanManga : ParsedHttpSource() {
     override fun searchMangaSelector() = throw UnsupportedOperationException()
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select("h2[itemprop=\"name\"]").text()
-        author = document.select("li[itemprop=\"author\"] a").joinToString { it.text() }
-        description = document.select("p[itemprop=\"description\"]").text()
-        thumbnail_url = document.select(".contenu_fiche_technique .image_manga img").attr("src")
-    }
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            title = document.select("h2[itemprop=\"name\"]").text()
+            author = document.select("li[itemprop=\"author\"] a").joinToString { it.text() }
+            description = document.select("p[itemprop=\"description\"]").text()
+            thumbnail_url = document.select(".contenu_fiche_technique .image_manga img").attr("src")
+        }
 
     // Chapters
     override fun chapterListSelector() = throw UnsupportedOperationException()
@@ -210,9 +231,10 @@ class ScanManga : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
-        val imgHeaders = headersBuilder()
-            .add("Referer", page.url)
-            .build()
+        val imgHeaders =
+            headersBuilder()
+                .add("Referer", page.url)
+                .build()
 
         return GET(page.imageUrl!!, imgHeaders)
     }

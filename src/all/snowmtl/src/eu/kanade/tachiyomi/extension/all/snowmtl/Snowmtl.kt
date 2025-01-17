@@ -15,22 +15,26 @@ import java.util.concurrent.TimeUnit
 class Snowmtl(
     language: Language,
 ) : MachineTranslations(
-    name = "Snow Machine Translations",
-    baseUrl = "https://snowmtl.ru",
-    language,
-) {
+        name = "Snow Machine Translations",
+        baseUrl = "https://snowmtl.ru",
+        language,
+    ) {
     override val lang = language.lang
 
-    private val clientUtils = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+    private val clientUtils =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     private val translator: TranslatorEngine = BingTranslator(clientUtils, headers)
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .readTimeout(2, TimeUnit.MINUTES)
-        .addInterceptor(TranslationInterceptor(language, translator))
-        .addInterceptor(ComposedImageInterceptor(baseUrl, language))
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(2)
+            .readTimeout(2, TimeUnit.MINUTES)
+            .addInterceptor(TranslationInterceptor(language, translator))
+            .addInterceptor(ComposedImageInterceptor(baseUrl, language))
+            .build()
 }

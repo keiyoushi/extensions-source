@@ -23,7 +23,6 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 class InfinityScans : HttpSource() {
-
     override val name = "InfinityScans"
 
     override val baseUrl = "https://infinityscans.org"
@@ -33,22 +32,27 @@ class InfinityScans : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor(WebviewInterceptor(baseUrl))
-        .rateLimit(1)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(WebviewInterceptor(baseUrl))
+            .rateLimit(1)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder().apply {
-        add("Referer", "$baseUrl/")
-    }
+    override fun headersBuilder() =
+        super.headersBuilder().apply {
+            add("Referer", "$baseUrl/")
+        }
 
-    private val apiHeaders = headersBuilder().apply {
-        add("Accept", "application/json, text/javascript, */*; q=0.01")
-        add("Sec-Fetch-Dest", "empty")
-        add("Sec-Fetch-Mode", "cors")
-        add("Sec-Fetch-Site", "same-origin")
-        add("X-requested-with", "XMLHttpRequest")
-    }.build()
+    private val apiHeaders =
+        headersBuilder()
+            .apply {
+                add("Accept", "application/json, text/javascript, */*; q=0.01")
+                add("Sec-Fetch-Dest", "empty")
+                add("Sec-Fetch-Mode", "cors")
+                add("Sec-Fetch-Site", "same-origin")
+                add("X-requested-with", "XMLHttpRequest")
+            }.build()
 
     private val json: Json by injectLazy()
 
@@ -58,8 +62,9 @@ class InfinityScans : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<ResponseDto<RankingResultDto>>().result
-        val entries = data.weekly
-            .map { it.toSManga(cdnHost) }
+        val entries =
+            data.weekly
+                .map { it.toSManga(cdnHost) }
 
         return MangasPage(entries, false)
     }
@@ -72,8 +77,10 @@ class InfinityScans : HttpSource() {
         val data = response.parseAs<ResponseDto<SearchResultDto>>().result
         runCatching { updateFilters(data) }
 
-        val entries = data.titles.sortedByDescending { it.updated }
-            .map { it.toSManga(cdnHost) }
+        val entries =
+            data.titles
+                .sortedByDescending { it.updated }
+                .map { it.toSManga(cdnHost) }
 
         return MangasPage(entries, false)
     }
@@ -84,8 +91,9 @@ class InfinityScans : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return client.newCall(fetchJson("api/comics"))
+    ): Observable<MangasPage> =
+        client
+            .newCall(fetchJson("api/comics"))
             .asObservableSuccess()
             .map { response ->
                 val data = response.parseAs<ResponseDto<SearchResultDto>>().result
@@ -130,7 +138,7 @@ class InfinityScans : HttpSource() {
                             }
                         }
 
-                        else -> { /* Do Nothing */
+                        else -> { // Do Nothing
                         }
                     }
                 }
@@ -139,18 +147,36 @@ class InfinityScans : HttpSource() {
 
                 MangasPage(entries, false)
             }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
+
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     private fun fetchJson(api: String): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments(api)
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments(api)
 
-        val searchHeaders = apiHeaders.newBuilder().apply {
-            set("Referer", url.build().newBuilder().removePathSegment(0).build().toString())
-        }.build()
+        val searchHeaders =
+            apiHeaders
+                .newBuilder()
+                .apply {
+                    set(
+                        "Referer",
+                        url
+                            .build()
+                            .newBuilder()
+                            .removePathSegment(0)
+                            .build()
+                            .toString(),
+                    )
+                }.build()
 
         return GET(url.build(), searchHeaders)
     }
@@ -176,19 +202,21 @@ class InfinityScans : HttpSource() {
     private var statusList: List<Pair<String, String>> = emptyList()
 
     override fun getFilterList(): FilterList {
-        val filters: MutableList<Filter<*>> = mutableListOf(
-            SortFilter(),
-        )
+        val filters: MutableList<Filter<*>> =
+            mutableListOf(
+                SortFilter(),
+            )
 
         if (genreList.isNotEmpty() || authorList.isNotEmpty() || statusList.isNotEmpty()) {
             if (genreList.isNotEmpty()) filters += listOf(GenreFilter("Genres", genreList))
             if (authorList.isNotEmpty()) filters += listOf(AuthorFilter("Authors", authorList))
             if (statusList.isNotEmpty()) filters += listOf(StatusFilter("Statuses", statusList))
         } else {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header("Press 'reset' to attempt to show additional filters"),
-            )
+            filters +=
+                listOf(
+                    Filter.Separator(),
+                    Filter.Header("Press 'reset' to attempt to show additional filters"),
+                )
         }
 
         return FilterList(filters)
@@ -199,11 +227,13 @@ class InfinityScans : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.use { it.asJsoup() }
 
-        val desc = document.select("div:has(>h4:contains(Summary)) p")
-            .text()
-            .split("</br>")
-            .joinToString("\n", transform = String::trim)
-            .trim()
+        val desc =
+            document
+                .select("div:has(>h4:contains(Summary)) p")
+                .text()
+                .split("</br>")
+                .joinToString("\n", transform = String::trim)
+                .trim()
 
         return SManga.create().apply {
             document.selectFirst("div:has(>span:contains(Rank:))")!!.parent()!!.also { details ->
@@ -220,21 +250,22 @@ class InfinityScans : HttpSource() {
     }
 
     // From mangathemesia
-    private fun String?.parseStatus(): Int = when {
-        this == null -> SManga.UNKNOWN
-        listOf("ongoing", "publishing").any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
-        this.contains("hiatus", ignoreCase = true) -> SManga.ON_HIATUS
-        this.contains("completed", ignoreCase = true) -> SManga.COMPLETED
-        listOf("dropped", "cancelled").any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
-    }
+    private fun String?.parseStatus(): Int =
+        when {
+            this == null -> SManga.UNKNOWN
+            listOf("ongoing", "publishing").any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
+            this.contains("hiatus", ignoreCase = true) -> SManga.ON_HIATUS
+            this.contains("completed", ignoreCase = true) -> SManga.COMPLETED
+            listOf("dropped", "cancelled").any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
 
-    private fun Element.getInfo(name: String): String? =
-        selectFirst("div:has(>span:matches($name:))")?.ownText()
+    private fun Element.getInfo(name: String): String? = selectFirst("div:has(>span:matches($name:))")?.ownText()
 
     private fun Element.getLinks(name: String): String? =
         select("div:has(>span:matches($name:)) a")
-            .joinToString(", ", transform = Element::text).trim()
+            .joinToString(", ", transform = Element::text)
+            .trim()
             .takeIf { it.isNotBlank() }
 
     // Chapters
@@ -244,15 +275,21 @@ class InfinityScans : HttpSource() {
         val slug = url.pathSegments.take(3).joinToString("/", prefix = "/")
 
         // Create POST request
-        val chapterHeaders = apiHeaders.newBuilder().apply {
-            add("content-length", "0")
-            add("Origin", baseUrl)
-            set("Referer", url.toString())
-        }.build()
+        val chapterHeaders =
+            apiHeaders
+                .newBuilder()
+                .apply {
+                    add("content-length", "0")
+                    add("Origin", baseUrl)
+                    set("Referer", url.toString())
+                }.build()
 
-        val chapterListData = client.newCall(
-            POST(url.toString(), chapterHeaders),
-        ).execute().parseAs<ResponseDto<List<ChapterEntryDto>>>()
+        val chapterListData =
+            client
+                .newCall(
+                    POST(url.toString(), chapterHeaders),
+                ).execute()
+                .parseAs<ResponseDto<List<ChapterEntryDto>>>()
 
         return chapterListData.result.map {
             it.toSChapter(slug)
@@ -265,15 +302,21 @@ class InfinityScans : HttpSource() {
         val url = response.request.url
 
         // Create POST request
-        val pageListHeaders = apiHeaders.newBuilder().apply {
-            add("content-length", "0")
-            add("Origin", baseUrl)
-            set("Referer", url.toString())
-        }.build()
+        val pageListHeaders =
+            apiHeaders
+                .newBuilder()
+                .apply {
+                    add("content-length", "0")
+                    add("Origin", baseUrl)
+                    set("Referer", url.toString())
+                }.build()
 
-        val pageListData = client.newCall(
-            POST(url.toString(), pageListHeaders),
-        ).execute().parseAs<ResponseDto<List<PageEntryDto>>>()
+        val pageListData =
+            client
+                .newCall(
+                    POST(url.toString(), pageListHeaders),
+                ).execute()
+                .parseAs<ResponseDto<List<PageEntryDto>>>()
 
         return pageListData.result.mapIndexed { index, p ->
             Page(index, url.toString(), p.link)
@@ -285,17 +328,20 @@ class InfinityScans : HttpSource() {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
-        val pageHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*")
-            add("Host", page.imageUrl!!.toHttpUrl().host)
-        }.build()
+        val pageHeaders =
+            headersBuilder()
+                .apply {
+                    add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*")
+                    add("Host", page.imageUrl!!.toHttpUrl().host)
+                }.build()
 
         return GET(page.imageUrl!!, pageHeaders)
     }
 
     // Utilities
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream(it.body.byteStream())
-    }
+    private inline fun <reified T> Response.parseAs(): T =
+        use {
+            json.decodeFromStream(it.body.byteStream())
+        }
 }

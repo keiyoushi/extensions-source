@@ -45,9 +45,10 @@ class Komiic : HttpSource() {
         val res = response.parseAs<Data<T>>()
         val comics = res.data.comics
 
-        val entries = comics.map { comic ->
-            comic.toSManga()
-        }
+        val entries =
+            comics.map { comic ->
+                comic.toSManga()
+            }
 
         val hasNextPage = comics.size == PAGE_SIZE
         return MangasPage(entries, hasNextPage)
@@ -55,19 +56,22 @@ class Komiic : HttpSource() {
 
     // Hot Comic
     override fun popularMangaRequest(page: Int): Request {
-        val payload = Payload(
-            operationName = "hotComics",
-            variables = HotComicsVariables(
-                pagination = MangaListPagination(
-                    PAGE_SIZE,
-                    (page - 1) * PAGE_SIZE,
-                    "MONTH_VIEWS",
-                    "",
-                    true,
-                ),
-            ),
-            query = QUERY_HOT_COMICS,
-        ).toJsonRequestBody()
+        val payload =
+            Payload(
+                operationName = "hotComics",
+                variables =
+                    HotComicsVariables(
+                        pagination =
+                            MangaListPagination(
+                                PAGE_SIZE,
+                                (page - 1) * PAGE_SIZE,
+                                "MONTH_VIEWS",
+                                "",
+                                true,
+                            ),
+                    ),
+                query = QUERY_HOT_COMICS,
+            ).toJsonRequestBody()
         return POST(queryAPIUrl, headers, payload)
     }
 
@@ -75,19 +79,22 @@ class Komiic : HttpSource() {
 
     // Recent update
     override fun latestUpdatesRequest(page: Int): Request {
-        val payload = Payload(
-            operationName = "recentUpdate",
-            variables = RecentUpdateVariables(
-                pagination = MangaListPagination(
-                    PAGE_SIZE,
-                    (page - 1) * PAGE_SIZE,
-                    "DATE_UPDATED",
-                    "",
-                    true,
-                ),
-            ),
-            query = QUERY_RECENT_UPDATE,
-        ).toJsonRequestBody()
+        val payload =
+            Payload(
+                operationName = "recentUpdate",
+                variables =
+                    RecentUpdateVariables(
+                        pagination =
+                            MangaListPagination(
+                                PAGE_SIZE,
+                                (page - 1) * PAGE_SIZE,
+                                "DATE_UPDATED",
+                                "",
+                                true,
+                            ),
+                    ),
+                query = QUERY_RECENT_UPDATE,
+            ).toJsonRequestBody()
         return POST(queryAPIUrl, headers, payload)
     }
 
@@ -98,11 +105,12 @@ class Komiic : HttpSource() {
      * Search the comic based on the ID.
      */
     private fun comicByIDRequest(id: String): Request {
-        val payload = Payload(
-            operationName = "comicById",
-            variables = ComicByIdVariables(id),
-            query = QUERY_COMIC_BY_ID,
-        ).toJsonRequestBody()
+        val payload =
+            Payload(
+                operationName = "comicById",
+                variables = ComicByIdVariables(id),
+                query = QUERY_COMIC_BY_ID,
+            ).toJsonRequestBody()
         return POST(queryAPIUrl, headers, payload)
     }
 
@@ -120,12 +128,17 @@ class Komiic : HttpSource() {
     }
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val payload = Payload(
-            operationName = "searchComicAndAuthorQuery",
-            variables = SearchVariables(query),
-            query = QUERY_SEARCH,
-        ).toJsonRequestBody()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val payload =
+            Payload(
+                operationName = "searchComicAndAuthorQuery",
+                variables = SearchVariables(query),
+                query = QUERY_SEARCH,
+            ).toJsonRequestBody()
         return POST(queryAPIUrl, headers, payload)
     }
 
@@ -133,24 +146,25 @@ class Komiic : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
+    ): Observable<MangasPage> =
+        if (query.startsWith(PREFIX_ID_SEARCH)) {
             val mangaId = query.substringAfter(PREFIX_ID_SEARCH)
-            client.newCall(comicByIDRequest(mangaId))
+            client
+                .newCall(comicByIDRequest(mangaId))
                 .asObservableSuccess()
                 .map(::parseComicByID)
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val res = response.parseAs<Data<SearchResponse>>()
         val comics = res.data.action.comics
 
-        val entries = comics.map { comic ->
-            comic.toSManga()
-        }
+        val entries =
+            comics.map { comic ->
+                comic.toSManga()
+            }
 
         val hasNextPage = comics.size == PAGE_SIZE
         return MangasPage(entries, hasNextPage)
@@ -171,22 +185,22 @@ class Komiic : HttpSource() {
      * 解析日期
      * Parse date
      */
-    private fun parseDate(dateStr: String): Long {
-        return try {
+    private fun parseDate(dateStr: String): Long =
+        try {
             DATE_FORMAT.parse(dateStr)?.time ?: 0L
         } catch (e: ParseException) {
             e.printStackTrace()
             0L
         }
-    }
 
     // Chapter list
     override fun chapterListRequest(manga: SManga): Request {
-        val payload = Payload(
-            operationName = "chapterByComicId",
-            variables = ChapterByComicIdVariables(manga.url.substringAfterLast("/")),
-            query = QUERY_CHAPTER,
-        ).toJsonRequestBody()
+        val payload =
+            Payload(
+                operationName = "chapterByComicId",
+                variables = ChapterByComicIdVariables(manga.url.substringAfterLast("/")),
+                query = QUERY_CHAPTER,
+            ).toJsonRequestBody()
 
         return POST("$queryAPIUrl#${manga.url}", headers, payload)
     }
@@ -199,18 +213,21 @@ class Komiic : HttpSource() {
         val tChapters = comics.filter { it.type == "chapter" }
         val tBooks = comics.filter { it.type == "book" }
 
-        val entries = (tChapters + tBooks).map { chapter ->
-            SChapter.create().apply {
-                url = "$comicUrl/chapter/${chapter.id}/page/1"
-                name = when (chapter.type) {
-                    "chapter" -> "第 ${chapter.serial} 話"
-                    "book" -> "第 ${chapter.serial} 卷"
-                    else -> chapter.serial
-                }
-                date_upload = parseDate(chapter.dateCreated)
-                chapter_number = chapter.serial.toFloatOrNull() ?: -1f
-            }
-        }.reversed()
+        val entries =
+            (tChapters + tBooks)
+                .map { chapter ->
+                    SChapter.create().apply {
+                        url = "$comicUrl/chapter/${chapter.id}/page/1"
+                        name =
+                            when (chapter.type) {
+                                "chapter" -> "第 ${chapter.serial} 話"
+                                "book" -> "第 ${chapter.serial} 卷"
+                                else -> chapter.serial
+                            }
+                        date_upload = parseDate(chapter.dateCreated)
+                        chapter_number = chapter.serial.toFloatOrNull() ?: -1f
+                    }
+                }.reversed()
 
         return entries
     }
@@ -230,13 +247,15 @@ class Komiic : HttpSource() {
 
     // Page list
     override fun pageListRequest(chapter: SChapter): Request {
-        val payload = Payload(
-            operationName = "imagesByChapterId",
-            variables = ImagesByChapterIdVariables(
-                chapter.url.substringAfter("/chapter/").substringBefore("/page/"),
-            ),
-            query = QUERY_PAGE_LIST,
-        ).toJsonRequestBody()
+        val payload =
+            Payload(
+                operationName = "imagesByChapterId",
+                variables =
+                    ImagesByChapterIdVariables(
+                        chapter.url.substringAfter("/chapter/").substringBefore("/page/"),
+                    ),
+                query = QUERY_PAGE_LIST,
+            ).toJsonRequestBody()
 
         return POST("$queryAPIUrl#${chapter.url}", headers, payload)
     }
@@ -244,7 +263,10 @@ class Komiic : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val res = response.parseAs<Data<ImagesResponse>>()
         val pages = res.data.images
-        val chapterUrl = response.request.url.toString().split("#")[1]
+        val chapterUrl =
+            response.request.url
+                .toString()
+                .split("#")[1]
 
         return pages.mapIndexed { index, image ->
             Page(
@@ -255,31 +277,32 @@ class Komiic : HttpSource() {
         }
     }
 
-    override fun imageRequest(page: Page): Request {
-        return super.imageRequest(page).newBuilder()
+    override fun imageRequest(page: Page): Request =
+        super
+            .imageRequest(page)
+            .newBuilder()
             .addHeader("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'")
             .addHeader("referer", page.url)
             .build()
-    }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> String.parseAs(): T =
-        json.decodeFromString(this)
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use { body.string() }.parseAs()
+    private inline fun <reified T> Response.parseAs(): T = use { body.string() }.parseAs()
 
     private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
-        json.encodeToString(this)
+        json
+            .encodeToString(this)
             .toRequestBody(JSON_MEDIA_TYPE)
 
     companion object {
         private const val PAGE_SIZE = 20
         const val PREFIX_ID_SEARCH = "id:"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
+        private val DATE_FORMAT =
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
     }
 }

@@ -21,22 +21,24 @@ data class VoyceMeComic(
     val thumbnail: String = "",
     val title: String = "",
 ) {
-
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@VoyceMeComic.title
-        author = this@VoyceMeComic.author?.username.orEmpty()
-        description = Parser
-            .unescapeEntities(this@VoyceMeComic.description.orEmpty(), true)
-            .let { Jsoup.parseBodyFragment(it).text() }
-        status = when (this@VoyceMeComic.status.orEmpty()) {
-            "completed" -> SManga.COMPLETED
-            "ongoing" -> SManga.ONGOING
-            else -> SManga.UNKNOWN
+    fun toSManga(): SManga =
+        SManga.create().apply {
+            title = this@VoyceMeComic.title
+            author = this@VoyceMeComic.author?.username.orEmpty()
+            description =
+                Parser
+                    .unescapeEntities(this@VoyceMeComic.description.orEmpty(), true)
+                    .let { Jsoup.parseBodyFragment(it).text() }
+            status =
+                when (this@VoyceMeComic.status.orEmpty()) {
+                    "completed" -> SManga.COMPLETED
+                    "ongoing" -> SManga.ONGOING
+                    else -> SManga.UNKNOWN
+                }
+            genre = genres.mapNotNull { it.genre?.title }.joinToString(", ")
+            url = "/series/$slug"
+            thumbnail_url = VoyceMe.STATIC_URL + thumbnail
         }
-        genre = genres.mapNotNull { it.genre?.title }.joinToString(", ")
-        url = "/series/$slug"
-        thumbnail_url = VoyceMe.STATIC_URL + thumbnail
-    }
 }
 
 @Serializable
@@ -61,13 +63,13 @@ data class VoyceMeChapter(
     val images: List<VoyceMePage> = emptyList(),
     val title: String = "",
 ) {
-
-    fun toSChapter(comicSlug: String): SChapter = SChapter.create().apply {
-        name = title
-        date_upload = runCatching { DATE_FORMATTER.parse(createdAt)?.time }
-            .getOrNull() ?: 0L
-        url = "/series/$comicSlug/$id#comic"
-    }
+    fun toSChapter(comicSlug: String): SChapter =
+        SChapter.create().apply {
+            name = title
+            date_upload = runCatching { DATE_FORMATTER.parse(createdAt)?.time }
+                .getOrNull() ?: 0L
+            url = "/series/$comicSlug/$id#comic"
+        }
 
     companion object {
         private val DATE_FORMATTER by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH) }
@@ -86,7 +88,9 @@ data class GraphQlQuery<T>(
 )
 
 @Serializable
-data class GraphQlResponse<T>(val data: T)
+data class GraphQlResponse<T>(
+    val data: T,
+)
 
 typealias VoyceMeSeriesResponse = GraphQlResponse<VoyceMeSeriesCollection>
 typealias VoyceMeChapterImagesResponse = GraphQlResponse<VoyceChapterImagesCollection>
@@ -117,10 +121,14 @@ data class SearchQueryVariables(
 )
 
 @Serializable
-data class DetailsQueryVariables(val slug: String)
+data class DetailsQueryVariables(
+    val slug: String,
+)
 
 @Serializable
-data class PagesQueryVariables(val chapterId: Int)
+data class PagesQueryVariables(
+    val chapterId: Int,
+)
 
 typealias LatestQueryVariables = PopularQueryVariables
 typealias ChaptersQueryVariables = DetailsQueryVariables

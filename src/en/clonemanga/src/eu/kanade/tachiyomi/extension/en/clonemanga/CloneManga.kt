@@ -15,28 +15,24 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class CloneManga : ParsedHttpSource() {
-
     override val name = "Clone Manga"
     override val baseUrl = "https://manga.clone-army.org/"
     override val lang = "en"
     override val supportsLatest = false
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/viewer_landing.php")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/viewer_landing.php")
 
     override fun popularMangaParse(response: Response): MangasPage {
         // Gets every manga on landing page
         val document = response.asJsoup()
-        val mangas = document.getElementsByClass(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
-        }
+        val mangas =
+            document.getElementsByClass(popularMangaSelector()).map { element ->
+                popularMangaFromElement(element)
+            }
         return MangasPage(mangas, false)
     }
 
-    override fun popularMangaSelector(): String {
-        return "comicPreviewContainer"
-    }
+    override fun popularMangaSelector(): String = "comicPreviewContainer"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val attr = element.getElementsByClass("comicPreview").attr("style")
@@ -47,15 +43,21 @@ class CloneManga : ParsedHttpSource() {
             status = SManga.UNKNOWN
             url = element.select("a").first()!!.attr("href")
             description = element.select("h4").first()?.text() ?: ""
-            thumbnail_url = baseUrl + attr.substring(
-                attr.indexOf("site/themes"),
-                attr.indexOf(")"),
-            )
+            thumbnail_url = baseUrl +
+                attr.substring(
+                    attr.indexOf("site/themes"),
+                    attr.indexOf(")"),
+                )
         }
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1)
-        .map { mp -> MangasPage(mp.mangas.filter { it.title.contains(query, ignoreCase = true) }, false) }
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        fetchPopularManga(1)
+            .map { mp -> MangasPage(mp.mangas.filter { it.title.contains(query, ignoreCase = true) }, false) }
 
     override fun mangaDetailsParse(document: Document): SManga {
         // Populate with already fetched details
@@ -66,62 +68,71 @@ class CloneManga : ParsedHttpSource() {
         // Treat each page as an individual chapter
         val document = response.asJsoup()
         val series = document.location()
-        val numChapters = Regex(
-            pattern = "&page=(.*)&lang=",
-        ).findAll(
-            input = document.getElementsByTag("script")[3].toString(),
-        )
-            .elementAt(3).destructured.component1()
-            .toInt()
+        val numChapters =
+            Regex(
+                pattern = "&page=(.*)&lang=",
+            ).findAll(
+                input = document.getElementsByTag("script")[3].toString(),
+            ).elementAt(3)
+                .destructured
+                .component1()
+                .toInt()
         val chapters = ArrayList<SChapter>()
 
         for (i in 1..numChapters) {
-            val chapter = SChapter.create().apply {
-                url = "$series&page=$i"
-                name = "Chapter $i"
-                date_upload = 0
-                chapter_number = i.toFloat()
-            }
+            val chapter =
+                SChapter.create().apply {
+                    url = "$series&page=$i"
+                    name = "Chapter $i"
+                    date_upload = 0
+                    chapter_number = i.toFloat()
+                }
             chapters.add(chapter)
         }
         return chapters.reversed() // Reverse to correct ordering
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url)
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val imgAbsoluteUrl = document.getElementsByClass("subsectionContainer")[0]
-            .select("img").first()!!.absUrl("src")
+        val imgAbsoluteUrl =
+            document
+                .getElementsByClass("subsectionContainer")[0]
+                .select("img")
+                .first()!!
+                .absUrl("src")
         // List of pages will always contain only one page
         return listOf(Page(1, "", imgAbsoluteUrl))
     }
 
-    override fun imageUrlParse(document: Document): String { throw UnsupportedOperationException() }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> { throw Exception("Not used") }
+    override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
 
-    override fun chapterListSelector(): String { throw Exception("Not used") }
+    override fun chapterListSelector(): String = throw Exception("Not used")
 
-    override fun chapterFromElement(element: Element): SChapter { throw UnsupportedOperationException() }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga { throw UnsupportedOperationException() }
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String? { throw Exception("Not used") }
+    override fun latestUpdatesNextPageSelector(): String? = throw Exception("Not used")
 
-    override fun latestUpdatesRequest(page: Int): Request { throw UnsupportedOperationException() }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String { throw Exception("Not used") }
+    override fun latestUpdatesSelector(): String = throw Exception("Not used")
 
-    override fun popularMangaNextPageSelector(): String? { throw Exception("Not used") }
+    override fun popularMangaNextPageSelector(): String? = throw Exception("Not used")
 
-    override fun searchMangaFromElement(element: Element): SManga { throw UnsupportedOperationException() }
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String? { throw Exception("Not used") }
+    override fun searchMangaNextPageSelector(): String? = throw Exception("Not used")
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request { throw UnsupportedOperationException() }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaSelector(): String { throw Exception("Not used") }
+    override fun searchMangaSelector(): String = throw Exception("Not used")
 }

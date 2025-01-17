@@ -8,18 +8,21 @@ import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaTilkisi : Madara(
-    "MangaTilkisi",
-    "https://www.manga-tilkisi.com",
-    "tr",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr")),
-) {
+class MangaTilkisi :
+    Madara(
+        "MangaTilkisi",
+        "https://www.manga-tilkisi.com",
+        "tr",
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val payload = FormBody.Builder()
-            .add("verified", "1")
-            .build()
+        val payload =
+            FormBody
+                .Builder()
+                .add("verified", "1")
+                .build()
         return POST(chapter.url, headers, payload)
     }
 }

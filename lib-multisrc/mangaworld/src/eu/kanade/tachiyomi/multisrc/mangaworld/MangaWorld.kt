@@ -26,7 +26,6 @@ abstract class MangaWorld(
     override val baseUrl: String,
     override val lang: String,
 ) : ParsedHttpSource() {
-
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient
 
@@ -37,15 +36,14 @@ abstract class MangaWorld(
         protected val DATE_FORMATTER_2 by lazy { SimpleDateFormat("H", Locale.ITALY) }
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/archive?sort=most_read&page=$page", headers)
-    }
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/archive?sort=most_read&page=$page", headers)
+
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?page=$page", headers)
 
     override fun searchMangaSelector() = "div.comics-grid .entry"
+
     override fun popularMangaSelector() = searchMangaSelector()
+
     override fun latestUpdatesSelector() = searchMangaSelector()
 
     override fun searchMangaFromElement(element: Element): SManga {
@@ -57,27 +55,38 @@ abstract class MangaWorld(
         }
         return manga
     }
+
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
+
     override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
     override fun searchMangaNextPageSelector(): String? = null
+
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
+
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector()).map { element ->
-            searchMangaFromElement(element)
-        }
+        val mangas =
+            document.select(latestUpdatesSelector()).map { element ->
+                searchMangaFromElement(element)
+            }
         // nextPage is not possible because pagination is loaded after via Javascript
         // 16 is the default manga-per-page. If it is less than 16 then there's no next page
         val hasNextPage = mangas.size == 16
         return MangasPage(mangas, hasNextPage)
     }
+
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$baseUrl/archive?page=$page".toHttpUrl().newBuilder()
         url.addQueryParameter("keyword", query)
 
@@ -121,9 +130,10 @@ abstract class MangaWorld(
         }
         manga.description = description.trim()
 
-        manga.genre = infoElement.select("div.meta-data a.badge").joinToString(", ") {
-            it.text()
-        }
+        manga.genre =
+            infoElement.select("div.meta-data a.badge").joinToString(", ") {
+                it.text()
+            }
 
         val status = infoElement.select("a[href*=/archive?status=]").first()?.text()
         manga.status = parseStatus(status)
@@ -149,8 +159,9 @@ abstract class MangaWorld(
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
 
-        val url = element.select("a.chap").first()?.attr("href")
-            ?: throw throw Exception("Url not found")
+        val url =
+            element.select("a.chap").first()?.attr("href")
+                ?: throw throw Exception("Url not found")
         chapter.setUrlWithoutDomain(fixChapterUrl(url))
 
         val name = element.select("span.d-inline-block").first()?.text() ?: ""
@@ -188,117 +199,151 @@ abstract class MangaWorld(
             ?: runCatching { DATE_FORMATTER_2.parse(string)?.time }.getOrNull() ?: 0L
     }
 
-    protected fun parseChapterNumber(string: String): Float? {
-        return CHAPTER_NUMBER_REGEX.find(string)?.let {
+    protected fun parseChapterNumber(string: String): Float? =
+        CHAPTER_NUMBER_REGEX.find(string)?.let {
             it.groups[1]?.value?.toFloat()
         }
-    }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#page img.page-image").mapIndexed { index, it ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("div#page img.page-image").mapIndexed { index, it ->
             val url = it.attr("src")
             Page(index, imageUrl = url)
         }
-    }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
-        val imgHeader = Headers.Builder().apply {
-            add("User-Agent", "Mozilla/5.0 (Linux; U; Android 4.1.1; en-gb; Build/KLP) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Safari/534.30")
-            add("Referer", baseUrl)
-        }.build()
+        val imgHeader =
+            Headers
+                .Builder()
+                .apply {
+                    add(
+                        "User-Agent",
+                        "Mozilla/5.0 (Linux; U; Android 4.1.1; en-gb; Build/KLP) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Safari/534.30",
+                    )
+                    add("Referer", baseUrl)
+                }.build()
         return GET(page.imageUrl!!, imgHeader)
     }
 
-    override fun getFilterList() = FilterList(
-        TextField("Anno di uscita", "year"),
-        SortBy(),
-        StatusList(getStatusList()),
-        GenreList(getGenreList()),
-        MTypeList(getTypesList()),
-    )
+    override fun getFilterList() =
+        FilterList(
+            TextField("Anno di uscita", "year"),
+            SortBy(),
+            StatusList(getStatusList()),
+            GenreList(getGenreList()),
+            MTypeList(getTypesList()),
+        )
 
-    private class SortBy : UriPartFilter(
-        "Ordina per",
-        arrayOf(
-            Pair("Rilevanza", ""),
-            Pair("Più letti", "most_read"),
-            Pair("Meno letti", "less_read"),
-            Pair("Più recenti", "newest"),
-            Pair("Meno recenti", "oldest"),
-            Pair("A-Z", "a-z"),
-            Pair("Z-A", "z-a"),
-        ),
-    )
+    private class SortBy :
+        UriPartFilter(
+            "Ordina per",
+            arrayOf(
+                Pair("Rilevanza", ""),
+                Pair("Più letti", "most_read"),
+                Pair("Meno letti", "less_read"),
+                Pair("Più recenti", "newest"),
+                Pair("Meno recenti", "oldest"),
+                Pair("A-Z", "a-z"),
+                Pair("Z-A", "z-a"),
+            ),
+        )
 
-    private class TextField(name: String, val key: String) : Filter.Text(name)
+    private class TextField(
+        name: String,
+        val key: String,
+    ) : Filter.Text(name)
 
-    class Genre(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Generi", genres)
+    class Genre(
+        name: String,
+        val id: String = name,
+    ) : Filter.CheckBox(name)
 
-    class MType(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class MTypeList(types: List<MType>) : Filter.Group<MType>("Tipologia", types)
+    private class GenreList(
+        genres: List<Genre>,
+    ) : Filter.Group<Genre>("Generi", genres)
 
-    class Status(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class StatusList(statuses: List<Status>) : Filter.Group<Status>("Stato", statuses)
+    class MType(
+        name: String,
+        val id: String = name,
+    ) : Filter.CheckBox(name)
 
-    protected fun getGenreList() = listOf(
-        Genre("Adulti", "adulti"),
-        Genre("Arti Marziali", "arti-marziali"),
-        Genre("Avventura", "avventura"),
-        Genre("Azione", "azione"),
-        Genre("Commedia", "commedia"),
-        Genre("Doujinshi", "doujinshi"),
-        Genre("Drammatico", "drammatico"),
-        Genre("Ecchi", "ecchi"),
-        Genre("Fantasy", "fantasy"),
-        Genre("Gender Bender", "gender-bender"),
-        Genre("Harem", "harem"),
-        Genre("Hentai", "hentai"),
-        Genre("Horror", "horror"),
-        Genre("Josei", "josei"),
-        Genre("Lolicon", "lolicon"),
-        Genre("Maturo", "maturo"),
-        Genre("Mecha", "mecha"),
-        Genre("Mistero", "mistero"),
-        Genre("Psicologico", "psicologico"),
-        Genre("Romantico", "romantico"),
-        Genre("Sci-fi", "sci-fi"),
-        Genre("Scolastico", "scolastico"),
-        Genre("Seinen", "seinen"),
-        Genre("Shotacon", "shotacon"),
-        Genre("Shoujo", "shoujo"),
-        Genre("Shoujo Ai", "shoujo-ai"),
-        Genre("Shounen", "shounen"),
-        Genre("Shounen Ai", "shounen-ai"),
-        Genre("Slice of Life", "slice-of-life"),
-        Genre("Smut", "smut"),
-        Genre("Soprannaturale", "soprannaturale"),
-        Genre("Sport", "sport"),
-        Genre("Storico", "storico"),
-        Genre("Tragico", "tragico"),
-        Genre("Yaoi", "yaoi"),
-        Genre("Yuri", "yuri"),
-    )
-    protected fun getTypesList() = listOf(
-        MType("Manga", "manga"),
-        MType("Manhua", "manhua"),
-        MType("Manhwa", "manhwa"),
-        MType("Oneshot", "oneshot"),
-        MType("Thai", "thai"),
-        MType("Vietnamita", "vietnamese"),
-    )
-    protected fun getStatusList() = listOf(
-        Status("In corso", "ongoing"),
-        Status("Finito", "completed"),
-        Status("Droppato", "dropped"),
-        Status("In pausa", "paused"),
-        Status("Cancellato", "canceled"),
-    )
+    private class MTypeList(
+        types: List<MType>,
+    ) : Filter.Group<MType>("Tipologia", types)
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    class Status(
+        name: String,
+        val id: String = name,
+    ) : Filter.CheckBox(name)
+
+    private class StatusList(
+        statuses: List<Status>,
+    ) : Filter.Group<Status>("Stato", statuses)
+
+    protected fun getGenreList() =
+        listOf(
+            Genre("Adulti", "adulti"),
+            Genre("Arti Marziali", "arti-marziali"),
+            Genre("Avventura", "avventura"),
+            Genre("Azione", "azione"),
+            Genre("Commedia", "commedia"),
+            Genre("Doujinshi", "doujinshi"),
+            Genre("Drammatico", "drammatico"),
+            Genre("Ecchi", "ecchi"),
+            Genre("Fantasy", "fantasy"),
+            Genre("Gender Bender", "gender-bender"),
+            Genre("Harem", "harem"),
+            Genre("Hentai", "hentai"),
+            Genre("Horror", "horror"),
+            Genre("Josei", "josei"),
+            Genre("Lolicon", "lolicon"),
+            Genre("Maturo", "maturo"),
+            Genre("Mecha", "mecha"),
+            Genre("Mistero", "mistero"),
+            Genre("Psicologico", "psicologico"),
+            Genre("Romantico", "romantico"),
+            Genre("Sci-fi", "sci-fi"),
+            Genre("Scolastico", "scolastico"),
+            Genre("Seinen", "seinen"),
+            Genre("Shotacon", "shotacon"),
+            Genre("Shoujo", "shoujo"),
+            Genre("Shoujo Ai", "shoujo-ai"),
+            Genre("Shounen", "shounen"),
+            Genre("Shounen Ai", "shounen-ai"),
+            Genre("Slice of Life", "slice-of-life"),
+            Genre("Smut", "smut"),
+            Genre("Soprannaturale", "soprannaturale"),
+            Genre("Sport", "sport"),
+            Genre("Storico", "storico"),
+            Genre("Tragico", "tragico"),
+            Genre("Yaoi", "yaoi"),
+            Genre("Yuri", "yuri"),
+        )
+
+    protected fun getTypesList() =
+        listOf(
+            MType("Manga", "manga"),
+            MType("Manhua", "manhua"),
+            MType("Manhwa", "manhwa"),
+            MType("Oneshot", "oneshot"),
+            MType("Thai", "thai"),
+            MType("Vietnamita", "vietnamese"),
+        )
+
+    protected fun getStatusList() =
+        listOf(
+            Status("In corso", "ongoing"),
+            Status("Finito", "completed"),
+            Status("Droppato", "dropped"),
+            Status("In pausa", "paused"),
+            Status("Cancellato", "canceled"),
+        )
+
+    private open class UriPartFilter(
+        displayName: String,
+        val vals: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }

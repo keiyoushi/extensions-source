@@ -33,8 +33,9 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
-
+class VlogTruyen :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val lang = "vi"
 
     override val name = "VlogTruyen"
@@ -51,21 +52,26 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(1)
+            .build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("X-Requested-With", "XMLHttpRequest")
+    override fun headersBuilder(): Headers.Builder =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
+            .add("X-Requested-With", "XMLHttpRequest")
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/the-loai/moi-cap-nhap/?page=$page", headers)
 
-    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        title = element.select("h3.title-commic-tab").text()
-        thumbnail_url = element.selectFirst(".image-commic-tab img.lazyload")?.attr("data-src")
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+            title = element.select("h3.title-commic-tab").text()
+            thumbnail_url = element.selectFirst(".image-commic-tab img.lazyload")?.attr("data-src")
+        }
 
     override fun latestUpdatesNextPageSelector() = ".pagination > li.active + li"
 
@@ -79,38 +85,54 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaSelector() = latestUpdatesSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select("h1.title-commic-detail").text()
-        genre = document.select(".categories-list-detail-commic > li > a").joinToString { it.text().trim(',', ' ') }
-        description = document.select("div.top-detail-manga > div.top-detail-manga-content > span.desc-commic-detail").text()
-        thumbnail_url = document.select("div.image-commic-detail > a > img").attr("data-src")
-        status = parseStatus(document.selectFirst("div.top-detail-manga > div.top-detail-manga-avatar > div.manga-status > p")?.text())
-        author = document.select(".h5-drawer:contains(Tác Giả) + ul li a").joinToString { it.text() }
-    }
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            title = document.select("h1.title-commic-detail").text()
+            genre = document.select(".categories-list-detail-commic > li > a").joinToString { it.text().trim(',', ' ') }
+            description = document.select("div.top-detail-manga > div.top-detail-manga-content > span.desc-commic-detail").text()
+            thumbnail_url = document.select("div.image-commic-detail > a > img").attr("data-src")
+            status = parseStatus(document.selectFirst("div.top-detail-manga > div.top-detail-manga-avatar > div.manga-status > p")?.text())
+            author = document.select(".h5-drawer:contains(Tác Giả) + ul li a").joinToString { it.text() }
+        }
 
-    private fun parseStatus(status: String?) = when {
-        status == null -> SManga.UNKNOWN
-        status.contains("Đang tiến hành") -> SManga.ONGOING
-        status.contains("Đã hoàn thành") -> SManga.COMPLETED
-        status.contains("Tạm ngưng") -> SManga.ON_HIATUS
-        else -> SManga.UNKNOWN
-    }
+    private fun parseStatus(status: String?) =
+        when {
+            status == null -> SManga.UNKNOWN
+            status.contains("Đang tiến hành") -> SManga.ONGOING
+            status.contains("Đã hoàn thành") -> SManga.COMPLETED
+            status.contains("Tạm ngưng") -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val json = json.decodeFromString<ChapterDTO>(response.body.string().replace("\\n", ""))
         val document = Jsoup.parseBodyFragment(json.data.chaptersHtml, response.request.url.toString())
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
-        return document.select("li, .ul-list-chaper-detail-commic li").filterNot {
-            if (hidePaidChapters) {
-                it.select("li:not(:has(> b))").text().isBlank().or(!hidePaidChapters)
-            } else {
-                it.select("li > a").text().isBlank().or(false)
-            }
-        }
-            .mapNotNull {
+        return document
+            .select("li, .ul-list-chaper-detail-commic li")
+            .filterNot {
+                if (hidePaidChapters) {
+                    it
+                        .select("li:not(:has(> b))")
+                        .text()
+                        .isBlank()
+                        .or(!hidePaidChapters)
+                } else {
+                    it
+                        .select("li > a")
+                        .text()
+                        .isBlank()
+                        .or(false)
+                }
+            }.mapNotNull {
                 SChapter.create().apply {
                     setUrlWithoutDomain(it.selectFirst("a")!!.attr("href"))
-                    name = it.select("h3").first()!!.text().trim()
+                    name =
+                        it
+                            .select("h3")
+                            .first()!!
+                            .text()
+                            .trim()
                     if (it.select("li > b").text().isNotBlank()) {
                         name += " " + it.select("li > b").text() + " 🔒"
                     }
@@ -119,15 +141,17 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
             }
     }
 
-    private fun parseDate(date: String): Long = runCatching {
-        dateFormat.parse(date)?.time
-    }.getOrNull() ?: 0L
+    private fun parseDate(date: String): Long =
+        runCatching {
+            dateFormat.parse(date)?.time
+        }.getOrNull() ?: 0L
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val url = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()
         if (checkChapterLists(url).isNotEmpty()) {
             val mangaId = checkChapterLists(url)
-            return client.newCall(GET("$baseUrl/thong-tin-ca-nhan?manga_id=$mangaId", headers))
+            return client
+                .newCall(GET("$baseUrl/thong-tin-ca-nhan?manga_id=$mangaId", headers))
                 .asObservableSuccess()
                 .map { response -> chapterListParse(response) }
         }
@@ -140,13 +164,21 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = searchURL.toHttpUrl().newBuilder().apply {
-            addQueryParameter("q", query)
-            if (page > 1) {
-                addQueryParameter("page", page.toString())
-            }
-        }.build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            searchURL
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("q", query)
+                    if (page > 1) {
+                        addQueryParameter("page", page.toString())
+                    }
+                }.build()
         return GET(url, headers)
     }
 
@@ -175,34 +207,38 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
             if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
+                preferences
+                    .edit()
                     .putString(BASE_URL_PREF, defaultBaseUrl)
                     .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
                     .apply()
             }
         }
     }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
+        EditTextPreference(screen.context)
+            .apply {
+                key = BASE_URL_PREF
+                title = BASE_URL_PREF_TITLE
+                summary = BASE_URL_PREF_SUMMARY
+                setDefaultValue(defaultBaseUrl)
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "Default: $defaultBaseUrl"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                    true
+                }
+            }.let(screen::addPreference)
 
-        SwitchPreferenceCompat(screen.context).apply {
-            key = KEY_HIDE_PAID_CHAPTERS
-            title = "Ẩn các chương cần tài khoản"
-            summary = "Ẩn các chương truyện cần nạp xu để đọc."
-            setDefaultValue(false)
-        }.let(screen::addPreference)
+        SwitchPreferenceCompat(screen.context)
+            .apply {
+                key = KEY_HIDE_PAID_CHAPTERS
+                title = "Ẩn các chương cần tài khoản"
+                summary = "Ẩn các chương truyện cần nạp xu để đọc."
+                setDefaultValue(false)
+            }.let(screen::addPreference)
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!

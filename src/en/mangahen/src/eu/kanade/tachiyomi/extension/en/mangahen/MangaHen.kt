@@ -16,7 +16,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class MangaHen : HttpSource() {
-
     override val name = "MangaHen"
 
     override val baseUrl = "https://manga-hen.com"
@@ -32,9 +31,7 @@ class MangaHen : HttpSource() {
     private var tagsList: List<String> = listOf()
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$advSearchURL/?search=1&type=0&sort=1&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$advSearchURL/?search=1&type=0&sort=1&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -46,24 +43,24 @@ class MangaHen : HttpSource() {
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    private fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             title = element.selectFirst("h2")!!.ownText()
             setUrlWithoutDomain(element.absUrl("href"))
             thumbnail_url = element.selectFirst("img")!!.absUrl("src")
         }
-    }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$advSearchURL/?search=1&type=0&sort=2&page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$advSearchURL/?search=1&type=0&sort=2&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
 
-    private fun tagSearch(tag: String, tagsList: List<String>): String? {
+    private fun tagSearch(
+        tag: String,
+        tagsList: List<String>,
+    ): String? {
         val index = (tagsList.indexOf(tag) + 1).toString()
         return if (index != "-1") index else null
     }
@@ -79,45 +76,53 @@ class MangaHen : HttpSource() {
         return tagsList
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val includeTags = mutableListOf<String>()
         val excludeTags = mutableListOf<String>()
 
         val tagsList = tagsList()
-        val url = advSearchURL.toHttpUrl().newBuilder().apply {
-            filters.forEach {
-                when (it) {
-                    is SortFilter -> addQueryParameter("sort", it.getValue())
+        val url =
+            advSearchURL
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    filters.forEach {
+                        when (it) {
+                            is SortFilter -> addQueryParameter("sort", it.getValue())
 
-                    is TypeFilter -> addQueryParameter("type", it.getValue())
+                            is TypeFilter -> addQueryParameter("type", it.getValue())
 
-                    is TextFilter -> {
-                        if (it.state.isNotEmpty()) {
-                            it.state.split(",").filter(String::isNotBlank).map { tag ->
-                                val trimmed = tag.trim().lowercase()
-                                if (trimmed.startsWith('-')) {
-                                    tagSearch(trimmed.removePrefix("-"), tagsList)?.let { tagInfo ->
-                                        excludeTags.add(tagInfo)
-                                    }
-                                } else {
-                                    tagSearch(trimmed, tagsList)?.let { tagInfo ->
-                                        includeTags.add(tagInfo)
+                            is TextFilter -> {
+                                if (it.state.isNotEmpty()) {
+                                    it.state.split(",").filter(String::isNotBlank).map { tag ->
+                                        val trimmed = tag.trim().lowercase()
+                                        if (trimmed.startsWith('-')) {
+                                            tagSearch(trimmed.removePrefix("-"), tagsList)?.let { tagInfo ->
+                                                excludeTags.add(tagInfo)
+                                            }
+                                        } else {
+                                            tagSearch(trimmed, tagsList)?.let { tagInfo ->
+                                                includeTags.add(tagInfo)
+                                            }
+                                        }
                                     }
                                 }
                             }
+                            else -> {}
                         }
                     }
-                    else -> {}
-                }
-            }
 
-            addQueryParameter("name", query)
+                    addQueryParameter("name", query)
 
-            addQueryParameter("search", "1")
-            if (includeTags.isNotEmpty()) addQueryParameter("include_tags", includeTags.joinToString())
-            if (excludeTags.isNotEmpty()) addQueryParameter("exclude_tags", excludeTags.joinToString())
-            if (page > 1) addQueryParameter("page", page.toString())
-        }.build()
+                    addQueryParameter("search", "1")
+                    if (includeTags.isNotEmpty()) addQueryParameter("include_tags", includeTags.joinToString())
+                    if (excludeTags.isNotEmpty()) addQueryParameter("exclude_tags", excludeTags.joinToString())
+                    if (page > 1) addQueryParameter("page", page.toString())
+                }.build()
 
         return GET(url, headers)
     }
@@ -138,18 +143,19 @@ class MangaHen : HttpSource() {
             author = authors.ifEmpty { artists }
             artist = artists
             genre = document.select("a[href*=/tags/]").eachText().joinToString()
-            description = buildString {
-                titles.getOrNull(1)?.let {
-                    append("Alternative Titles: ", "\n", "- $it", "\n")
-                    if (altit.isNotBlank()) append("- $altit", "\n")
-                    append("\n")
+            description =
+                buildString {
+                    titles.getOrNull(1)?.let {
+                        append("Alternative Titles: ", "\n", "- $it", "\n")
+                        if (altit.isNotBlank()) append("- $altit", "\n")
+                        append("\n")
+                    }
+                    append("Categories: ", document.select("a[href*=/categories/]").text(), "\n")
+                    append("Parodies: ", document.select("a[href*=/parodies/]").text(), "\n")
+                    append("Circles: ", document.select("a[href*=/circles/]").text(), "\n\n")
+                    append(document.select("tr:contains(page)").text(), "\n")
+                    append(document.select("tr:contains(view)").text(), "\n")
                 }
-                append("Categories: ", document.select("a[href*=/categories/]").text(), "\n")
-                append("Parodies: ", document.select("a[href*=/parodies/]").text(), "\n")
-                append("Circles: ", document.select("a[href*=/circles/]").text(), "\n\n")
-                append(document.select("tr:contains(page)").text(), "\n")
-                append(document.select("tr:contains(view)").text(), "\n")
-            }
             thumbnail_url = document.selectFirst("img[src*=thumbnail].w-96")?.absUrl("src")
             status = COMPLETED
         }
@@ -157,8 +163,8 @@ class MangaHen : HttpSource() {
 
     // Chapters
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        Observable.just(
             listOf(
                 SChapter.create().apply {
                     name = "Chapter"
@@ -166,7 +172,6 @@ class MangaHen : HttpSource() {
                 },
             ),
         )
-    }
 
     // Pages
 
@@ -179,6 +184,8 @@ class MangaHen : HttpSource() {
     }
 
     override fun getFilterList() = getFilters()
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 }

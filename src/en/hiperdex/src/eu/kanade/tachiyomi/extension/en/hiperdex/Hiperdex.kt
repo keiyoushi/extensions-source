@@ -21,7 +21,6 @@ class Hiperdex :
         "en",
     ),
     ConfigurableSource {
-
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
 
     private val preferences =
@@ -29,29 +28,31 @@ class Hiperdex :
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override val client = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .rateLimit(3)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).rateLimit(3)
+            .build()
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default URL:\n\t${super.baseUrl}"
-            setDefaultValue(super.baseUrl)
-            setOnPreferenceChangeListener { _, newValue ->
-                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also { screen.addPreference(it) }
+        EditTextPreference(screen.context)
+            .apply {
+                key = BASE_URL_PREF
+                title = BASE_URL_PREF_TITLE
+                summary = BASE_URL_PREF_SUMMARY
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "Default URL:\n\t${super.baseUrl}"
+                setDefaultValue(super.baseUrl)
+                setOnPreferenceChangeListener { _, newValue ->
+                    Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
+                    true
+                }
+            }.also { screen.addPreference(it) }
 
         addRandomUAPreferenceToScreen(screen)
     }
@@ -61,7 +62,8 @@ class Hiperdex :
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { defaultBaseUrl ->
             if (defaultBaseUrl != super.baseUrl) {
-                preferences.edit()
+                preferences
+                    .edit()
                     .putString(BASE_URL_PREF, super.baseUrl)
                     .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
                     .apply()

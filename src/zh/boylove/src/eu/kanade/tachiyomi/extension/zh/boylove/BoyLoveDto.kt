@@ -20,29 +20,32 @@ class MangaDto(
     private val mhstatus: Int,
     private val keyword: String,
 ) {
-    fun toSManga() = SManga.create().apply {
-        url = id.toString()
-        title = this@MangaDto.title
-        author = auther
-        genre = keyword.replace(",", ", ")
-        status = when (mhstatus) {
-            0 -> SManga.ONGOING
-            1 -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    fun toSManga() =
+        SManga.create().apply {
+            url = id.toString()
+            title = this@MangaDto.title
+            author = auther
+            genre = keyword.replace(",", ", ")
+            status =
+                when (mhstatus) {
+                    0 -> SManga.ONGOING
+                    1 -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+            thumbnail_url = image.toImageUrl()
+            val rawUpdateTime = update_time
+            if (rawUpdateTime == null) {
+                description = desc?.trim()
+                return@apply
+            }
+            val updateTime =
+                when {
+                    rawUpdateTime.isString -> rawUpdateTime.content
+                    else -> dateFormat.format(Date(rawUpdateTime.long * 1000))
+                }
+            description = "更新时间：$updateTime\n\n${desc?.trim()}"
+            initialized = true
         }
-        thumbnail_url = image.toImageUrl()
-        val rawUpdateTime = update_time
-        if (rawUpdateTime == null) {
-            description = desc?.trim()
-            return@apply
-        }
-        val updateTime = when {
-            rawUpdateTime.isString -> rawUpdateTime.content
-            else -> dateFormat.format(Date(rawUpdateTime.long * 1000))
-        }
-        description = "更新时间：$updateTime\n\n${desc?.trim()}"
-        initialized = true
-    }
 }
 
 fun String.toImageUrl() =
@@ -57,16 +60,22 @@ class ChapterDto(
     private val id: Int,
     private val title: String,
 ) {
-    fun toSChapter() = SChapter.create().apply {
-        url = "/home/book/capter/id/$id"
-        name = title.trim()
-    }
+    fun toSChapter() =
+        SChapter.create().apply {
+            url = "/home/book/capter/id/$id"
+            name = title.trim()
+        }
 }
 
 private val dateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH) }
 
 @Serializable
-class ListPageDto<T>(val lastPage: Boolean, val list: List<T> = emptyList())
+class ListPageDto<T>(
+    val lastPage: Boolean,
+    val list: List<T> = emptyList(),
+)
 
 @Serializable
-class ResultDto<T>(val result: T)
+class ResultDto<T>(
+    val result: T,
+)

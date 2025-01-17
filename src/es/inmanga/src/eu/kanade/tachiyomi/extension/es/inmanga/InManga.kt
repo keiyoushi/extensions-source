@@ -23,7 +23,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class InManga : ParsedHttpSource() {
-
     override val name = "InManga"
 
     override val baseUrl = "https://inmanga.com"
@@ -34,10 +33,12 @@ class InManga : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    private val postHeaders = headers.newBuilder()
-        .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-        .add("X-Requested-With", "XMLHttpRequest")
-        .build()
+    private val postHeaders =
+        headers
+            .newBuilder()
+            .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+            .add("X-Requested-With", "XMLHttpRequest")
+            .build()
 
     private val json: Json by injectLazy()
 
@@ -51,13 +52,21 @@ class InManga : ParsedHttpSource() {
      * sortby = 1: Populars
      * sortby = 3: Latest
      */
-    private fun requestBodyBuilder(page: Int, isPopular: Boolean): RequestBody = "filter%5Bgeneres%5D%5B%5D=-1&filter%5BqueryString%5D=&filter%5Bskip%5D=${(page - 1) * 10}&filter%5Btake%5D=10&filter%5Bsortby%5D=${if (isPopular) "1" else "3"}&filter%5BbroadcastStatus%5D=0&filter%5BonlyFavorites%5D=false&d=".toRequestBody(null)
+    private fun requestBodyBuilder(
+        page: Int,
+        isPopular: Boolean,
+    ): RequestBody =
+        "filter%5Bgeneres%5D%5B%5D=-1&filter%5BqueryString%5D=&filter%5Bskip%5D=${(page - 1) * 10}&filter%5Btake%5D=10&filter%5Bsortby%5D=${if (isPopular) "1" else "3"}&filter%5BbroadcastStatus%5D=0&filter%5BonlyFavorites%5D=false&d="
+            .toRequestBody(
+                null,
+            )
 
-    override fun popularMangaRequest(page: Int) = POST(
-        url = "$baseUrl/manga/getMangasConsultResult",
-        headers = postHeaders,
-        body = requestBodyBuilder(page, true),
-    )
+    override fun popularMangaRequest(page: Int) =
+        POST(
+            url = "$baseUrl/manga/getMangasConsultResult",
+            headers = postHeaders,
+            body = requestBodyBuilder(page, true),
+        )
 
     override fun popularMangaSelector() = searchMangaSelector()
 
@@ -65,11 +74,12 @@ class InManga : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = "body"
 
-    override fun latestUpdatesRequest(page: Int) = POST(
-        url = "$baseUrl/manga/getMangasConsultResult",
-        headers = postHeaders,
-        body = requestBodyBuilder(page, false),
-    )
+    override fun latestUpdatesRequest(page: Int) =
+        POST(
+            url = "$baseUrl/manga/getMangasConsultResult",
+            headers = postHeaders,
+            body = requestBodyBuilder(page, false),
+        )
 
     override fun latestUpdatesSelector() = searchMangaSelector()
 
@@ -77,12 +87,17 @@ class InManga : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val skip = (page - 1) * 10
         val body =
-            "filter%5Bgeneres%5D%5B%5D=-1&filter%5BqueryString%5D=$query&filter%5Bskip%5D=$skip&filter%5Btake%5D=10&filter%5Bsortby%5D=1&filter%5BbroadcastStatus%5D=0&filter%5BonlyFavorites%5D=false&d=".toRequestBody(
-                null,
-            )
+            "filter%5Bgeneres%5D%5B%5D=-1&filter%5BqueryString%5D=$query&filter%5Bskip%5D=$skip&filter%5Btake%5D=10&filter%5Bsortby%5D=1&filter%5BbroadcastStatus%5D=0&filter%5BonlyFavorites%5D=false&d="
+                .toRequestBody(
+                    null,
+                )
 
         return POST("$baseUrl/manga/getMangasConsultResult", postHeaders, body)
     }
@@ -97,36 +112,40 @@ class InManga : ParsedHttpSource() {
 
     override fun searchMangaSelector() = "body > a"
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        title = element.select("h4.m0").text()
-        thumbnail_url = element.select("img").attr("abs:data-src")
-    }
+    override fun searchMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            title = element.select("h4.m0").text()
+            thumbnail_url = element.select("img").attr("abs:data-src")
+        }
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        document.select("div.col-md-3 div.panel.widget").let { info ->
-            thumbnail_url = info.select("img").attr("abs:src")
-            status = parseStatus(info.select(" a.list-group-item:contains(estado) span").text())
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            document.select("div.col-md-3 div.panel.widget").let { info ->
+                thumbnail_url = info.select("img").attr("abs:src")
+                status = parseStatus(info.select(" a.list-group-item:contains(estado) span").text())
+            }
+            document.select("div.col-md-9").let { info ->
+                title = info.select("h1").text()
+                description = info.select("div.panel-body").text()
+            }
         }
-        document.select("div.col-md-9").let { info ->
-            title = info.select("h1").text()
-            description = info.select("div.panel-body").text()
+
+    private fun parseStatus(status: String?) =
+        when {
+            status == null -> SManga.UNKNOWN
+            status.contains("En emisión") -> SManga.ONGOING
+            status.contains("Finalizado") -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
-    }
 
-    private fun parseStatus(status: String?) = when {
-        status == null -> SManga.UNKNOWN
-        status.contains("En emisión") -> SManga.ONGOING
-        status.contains("Finalizado") -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
-
-    override fun chapterListRequest(manga: SManga) = GET(
-        url = "$baseUrl/chapter/getall?mangaIdentification=${manga.url.substringAfterLast("/")}",
-        headers = headers,
-    )
+    override fun chapterListRequest(manga: SManga) =
+        GET(
+            url = "$baseUrl/chapter/getall?mangaIdentification=${manga.url.substringAfterLast("/")}",
+            headers = headers,
+        )
 
     override fun chapterListParse(response: Response): List<SChapter> {
         // The server returns a JSON with data property that contains a string with the JSON,
@@ -143,32 +162,33 @@ class InManga : ParsedHttpSource() {
 
         return result.result
             .map { chap -> chapterFromObject(chap) }
-            .sortedBy { it.chapter_number.toInt() }.reversed()
+            .sortedBy { it.chapter_number.toInt() }
+            .reversed()
     }
 
     override fun chapterListSelector() = "not using"
 
-    private fun chapterFromObject(chapter: InMangaChapterDto) = SChapter.create().apply {
-        url = "/chapter/chapterIndexControls?identification=${chapter.identification}"
-        name = "Chapter ${chapter.friendlyChapterNumber}"
-        chapter_number = chapter.number!!.toFloat()
-        date_upload = parseChapterDate(chapter.registrationDate)
-    }
+    private fun chapterFromObject(chapter: InMangaChapterDto) =
+        SChapter.create().apply {
+            url = "/chapter/chapterIndexControls?identification=${chapter.identification}"
+            name = "Chapter ${chapter.friendlyChapterNumber}"
+            chapter_number = chapter.number!!.toFloat()
+            date_upload = parseChapterDate(chapter.registrationDate)
+        }
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    private fun parseChapterDate(string: String): Long {
-        return DATE_FORMATTER.parse(string)?.time ?: 0L
-    }
+    private fun parseChapterDate(string: String): Long = DATE_FORMATTER.parse(string)?.time ?: 0L
 
-    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
-        val ch = document.select("[id=\"FriendlyChapterNumberUrl\"]").attr("value")
-        val title = document.select("[id=\"FriendlyMangaName\"]").attr("value")
+    override fun pageListParse(document: Document): List<Page> =
+        mutableListOf<Page>().apply {
+            val ch = document.select("[id=\"FriendlyChapterNumberUrl\"]").attr("value")
+            val title = document.select("[id=\"FriendlyMangaName\"]").attr("value")
 
-        document.select("img.ImageContainer").forEachIndexed { i, img ->
-            add(Page(i, "", "$imageCDN/images/manga/$title/chapter/$ch/page/${i + 1}/${img.attr("id")}"))
+            document.select("img.ImageContainer").forEachIndexed { i, img ->
+                add(Page(i, "", "$imageCDN/images/manga/$title/chapter/$ch/page/${i + 1}/${img.attr("id")}"))
+            }
         }
-    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

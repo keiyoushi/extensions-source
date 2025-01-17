@@ -50,11 +50,12 @@ data class Chapter(
     private val uploadTime: String,
 ) {
     val title: String
-        get() = buildString {
-            if (volume != null) append("Vol ").append(volume).append(" ")
-            append("Chapter ").append(decimalFormat.format(number))
-            if (name.isNotEmpty()) append(" - ").append(name)
-        }
+        get() =
+            buildString {
+                if (volume != null) append("Vol ").append(volume).append(" ")
+                append("Chapter ").append(decimalFormat.format(number))
+                if (name.isNotEmpty()) append(" - ").append(name)
+            }
 
     val timestamp: Long
         get() = dateFormat.parse(uploadTime)?.time ?: 0L

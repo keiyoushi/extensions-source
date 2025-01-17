@@ -31,8 +31,9 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SimplyCosplay : HttpSource(), ConfigurableSource {
-
+class SimplyCosplay :
+    HttpSource(),
+    ConfigurableSource {
     override val name = "Simply Cosplay"
 
     override val lang = "all"
@@ -43,13 +44,17 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::tokenIntercept)
-        .rateLimit(2)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::tokenIntercept)
+            .rateLimit(2)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", baseUrl)
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", baseUrl)
 
     private val json: Json by injectLazy()
 
@@ -64,15 +69,19 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
             return chain.proceed(request)
         }
 
-        val url = request.url.newBuilder()
-            .setQueryParameter("token", preference.getToken())
-            .build()
+        val url =
+            request.url
+                .newBuilder()
+                .setQueryParameter("token", preference.getToken())
+                .build()
 
-        val response = chain.proceed(
-            request.newBuilder()
-                .url(url)
-                .build(),
-        )
+        val response =
+            chain.proceed(
+                request
+                    .newBuilder()
+                    .url(url)
+                    .build(),
+            )
 
         if (response.isSuccessful.not() && response.code == 403) {
             response.close()
@@ -81,12 +90,15 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
 
             preference.putToken(newToken)
 
-            val newUrl = request.url.newBuilder()
-                .setQueryParameter("token", newToken)
-                .build()
+            val newUrl =
+                request.url
+                    .newBuilder()
+                    .setQueryParameter("token", newToken)
+                    .build()
 
             return chain.proceed(
-                request.newBuilder()
+                request
+                    .newBuilder()
                     .url(newUrl)
                     .build(),
             )
@@ -98,26 +110,34 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
     private fun fetchNewToken(): String {
         val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
 
-        val scriptUrl = document.selectFirst("script[src*=main]")
-            ?.attr("abs:src")
-            ?: throw IOException(TOKEN_EXCEPTION)
+        val scriptUrl =
+            document
+                .selectFirst("script[src*=main]")
+                ?.attr("abs:src")
+                ?: throw IOException(TOKEN_EXCEPTION)
 
-        val scriptContent = client.newCall(GET(scriptUrl, headers)).execute()
-            .use { it.body.string() }
-            .replace("\'", "\"")
+        val scriptContent =
+            client
+                .newCall(GET(scriptUrl, headers))
+                .execute()
+                .use { it.body.string() }
+                .replace("\'", "\"")
 
         return TokenRegex.find(scriptContent)?.groupValues?.get(1)
             ?: throw IOException(TOKEN_EXCEPTION)
     }
 
-    private fun browseUrlBuilder(endPoint: String, sort: String, page: Int): HttpUrl.Builder {
-        return apiUrl.newBuilder().apply {
+    private fun browseUrlBuilder(
+        endPoint: String,
+        sort: String,
+        page: Int,
+    ): HttpUrl.Builder =
+        apiUrl.newBuilder().apply {
             addPathSegment(endPoint)
             addQueryParameter("sort", sort)
             addQueryParameter("limit", limit.toString())
             addQueryParameter("page", page.toString())
         }
-    }
 
     override fun popularMangaRequest(page: Int): Request {
         val url = browseUrlBuilder(preference.getDefaultBrowse(), "hot", page)
@@ -144,8 +164,12 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(SEARCH_PREFIX)) {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        if (query.startsWith(SEARCH_PREFIX)) {
             val url = query.substringAfter(SEARCH_PREFIX)
             val manga = SManga.create().apply { this.url = url }
             fetchMangaDetails(manga).map {
@@ -154,36 +178,40 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val sort = filters.filterIsInstance<SortFilter>().firstOrNull()?.getSort() ?: "new"
 
-        val url = browseUrlBuilder("search", sort, page).apply {
-            if (query.isNotEmpty()) {
-                addQueryParameter("query", query)
-            }
-            filters.map { filter ->
-                when (filter) {
-                    is TagFilter -> {
-                        filter.getSelected().forEachIndexed { index, tag ->
-                            addQueryParameter(
-                                "filter[tag_names][$index]",
-                                tag.name.replace(" ", "+"),
-                            )
-                        }
-                    }
-                    is TypeFilter -> {
-                        filter.getValue().let {
-                            if (it.isNotEmpty()) {
-                                addQueryParameter("filter[type][0]", it)
+        val url =
+            browseUrlBuilder("search", sort, page).apply {
+                if (query.isNotEmpty()) {
+                    addQueryParameter("query", query)
+                }
+                filters.map { filter ->
+                    when (filter) {
+                        is TagFilter -> {
+                            filter.getSelected().forEachIndexed { index, tag ->
+                                addQueryParameter(
+                                    "filter[tag_names][$index]",
+                                    tag.name.replace(" ", "+"),
+                                )
                             }
                         }
+                        is TypeFilter -> {
+                            filter.getValue().let {
+                                if (it.isNotEmpty()) {
+                                    addQueryParameter("filter[type][0]", it)
+                                }
+                            }
+                        }
+                        else -> { }
                     }
-                    else -> { }
                 }
             }
-        }
 
         return GET(url.build(), headers)
     }
@@ -196,24 +224,30 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
 
     private fun fetchTags() {
         if (tagsFetchAttempt < 3 && (tagList.isEmpty() || tagsFetchFailed)) {
-            val tags = runCatching {
-                client.newCall(tagsRequest())
-                    .execute().use(::tagsParse)
-            }
+            val tags =
+                runCatching {
+                    client
+                        .newCall(tagsRequest())
+                        .execute()
+                        .use(::tagsParse)
+                }
 
             tagsFetchFailed = tags.isFailure
-            tagList = tags.getOrElse {
-                Log.e("SimplyHentaiTags", it.stackTraceToString())
-                emptyList()
-            }
+            tagList =
+                tags.getOrElse {
+                    Log.e("SimplyHentaiTags", it.stackTraceToString())
+                    emptyList()
+                }
             tagsFetchAttempt++
         }
     }
 
     private fun tagsRequest(): Request {
-        val url = apiUrl.newBuilder()
-            .addPathSegment("search")
-            .build()
+        val url =
+            apiUrl
+                .newBuilder()
+                .addPathSegment("search")
+                .build()
 
         return GET(url, headers)
     }
@@ -226,39 +260,46 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
         }
     }
 
-    class Tag(name: String) : Filter.CheckBox(name)
+    class Tag(
+        name: String,
+    ) : Filter.CheckBox(name)
 
-    class TagFilter(title: String, tags: List<String>) :
-        Filter.Group<Tag>(title, tags.map(::Tag)) {
-
+    class TagFilter(
+        title: String,
+        tags: List<String>,
+    ) : Filter.Group<Tag>(title, tags.map(::Tag)) {
         fun getSelected() = state.filter { it.state }
     }
 
-    class TypeFilter(title: String, private val types: List<String>) :
-        Filter.Select<String>(title, types.toTypedArray()) {
-
+    class TypeFilter(
+        title: String,
+        private val types: List<String>,
+    ) : Filter.Select<String>(title, types.toTypedArray()) {
         fun getValue() = types[state].lowercase()
     }
 
-    class SortFilter(title: String, private val sorts: List<String>) :
-        Filter.Select<String>(title, sorts.toTypedArray()) {
-
+    class SortFilter(
+        title: String,
+        private val sorts: List<String>,
+    ) : Filter.Select<String>(title, sorts.toTypedArray()) {
         fun getSort() = sorts[state].lowercase()
     }
 
     override fun getFilterList(): FilterList {
-        val filters: MutableList<Filter<*>> = mutableListOf(
-            SortFilter("Sort", listOf("New", "Hot")),
-            TypeFilter("Type", listOf("", "Image", "Gallery")),
-        )
+        val filters: MutableList<Filter<*>> =
+            mutableListOf(
+                SortFilter("Sort", listOf("New", "Hot")),
+                TypeFilter("Type", listOf("", "Image", "Gallery")),
+            )
 
         if (tagList.isNotEmpty()) {
             filters += TagFilter("Tags", tagList)
         } else {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header("Press 'Reset' to attempt to show tags"),
-            )
+            filters +=
+                listOf(
+                    Filter.Separator(),
+                    Filter.Header("Press 'Reset' to attempt to show tags"),
+                )
         }
 
         return FilterList(filters)
@@ -289,25 +330,25 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        Observable.just(
             listOf(
                 SChapter.create().apply {
                     url = manga.url
-                    name = manga.url.split("/")[1].replaceFirstChar {
-                        if (it.isLowerCase()) {
-                            it.titlecase(
-                                Locale.ROOT,
-                            )
-                        } else {
-                            it.toString()
+                    name =
+                        manga.url.split("/")[1].replaceFirstChar {
+                            if (it.isLowerCase()) {
+                                it.titlecase(
+                                    Locale.ROOT,
+                                )
+                            } else {
+                                it.toString()
+                            }
                         }
-                    }
                     date_upload = manga.description?.substringAfterLast("Date: ").parseDate()
                 },
             ),
         )
-    }
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
@@ -331,33 +372,28 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = BROWSE_TYPE_PREF_KEY
-            title = BROWSE_TYPE_TITLE
-            entries = arrayOf("Gallery", "Image")
-            entryValues = arrayOf("gallery", "image")
-            summary = "%s"
-            setDefaultValue("gallery")
-        }.also(screen::addPreference)
+        ListPreference(screen.context)
+            .apply {
+                key = BROWSE_TYPE_PREF_KEY
+                title = BROWSE_TYPE_TITLE
+                entries = arrayOf("Gallery", "Image")
+                entryValues = arrayOf("gallery", "image")
+                summary = "%s"
+                setDefaultValue("gallery")
+            }.also(screen::addPreference)
     }
 
-    private fun SharedPreferences.getDefaultBrowse() =
-        getString(BROWSE_TYPE_PREF_KEY, "gallery")!!
+    private fun SharedPreferences.getDefaultBrowse() = getString(BROWSE_TYPE_PREF_KEY, "gallery")!!
 
-    private fun SharedPreferences.getToken() =
-        getString(DEFAULT_TOKEN_PREF, DEFAULT_FALLBACK_TOKEN) ?: DEFAULT_FALLBACK_TOKEN
+    private fun SharedPreferences.getToken() = getString(DEFAULT_TOKEN_PREF, DEFAULT_FALLBACK_TOKEN) ?: DEFAULT_FALLBACK_TOKEN
 
-    private fun SharedPreferences.putToken(token: String) =
-        edit().putString(DEFAULT_TOKEN_PREF, token).commit()
+    private fun SharedPreferences.putToken(token: String) = edit().putString(DEFAULT_TOKEN_PREF, token).commit()
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    private fun String?.parseDate(): Long {
-        return runCatching { dateFormat.parse(this!!)!!.time }
+    private fun String?.parseDate(): Long =
+        runCatching { dateFormat.parse(this!!)!!.time }
             .getOrDefault(0L)
-    }
 
     companion object {
         private const val limit = 20
@@ -374,9 +410,7 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
         private const val BROWSE_TYPE_TITLE = "Default Browse List"
     }
 
-    override fun chapterListParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

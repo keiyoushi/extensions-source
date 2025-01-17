@@ -7,12 +7,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class HentaiCB : Madara("CBHentai", "https://hentaicube.xyz", "vi", SimpleDateFormat("dd/MM/yyyy", Locale("vi"))) {
-
     override val id: Long = 823638192569572166
 
     override val filterNonMangaItems = false
 
-    override fun pageListParse(document: Document): List<Page> {
-        return super.pageListParse(document).distinctBy { it.imageUrl }
-    }
+    override fun pageListParse(document: Document): List<Page> = super.pageListParse(document).distinctBy { it.imageUrl }
 }

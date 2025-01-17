@@ -40,8 +40,10 @@ abstract class Liliana(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
 
@@ -49,64 +51,72 @@ abstract class Liliana(
 
     override fun popularMangaSelector(): String = "div#main div.grid > div"
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")?.imgAttr()
-        with(element.selectFirst(".text-center a")!!) {
-            title = text()
-            setUrlWithoutDomain(attr("abs:href"))
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            thumbnail_url = element.selectFirst("img")?.imgAttr()
+            with(element.selectFirst(".text-center a")!!) {
+                title = text()
+                setUrlWithoutDomain(attr("abs:href"))
+            }
         }
-    }
 
     override fun popularMangaNextPageSelector(): String = ".blog-pager > span.pagecurrent + span"
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/all-manga/$page/?sort=last_update&status=0", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/all-manga/$page/?sort=last_update&status=0", headers)
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun latestUpdatesSelector(): String =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isNotBlank() && usesPostSearch) {
-            val formBody = FormBody.Builder()
-                .add("search", query)
-                .build()
+            val formBody =
+                FormBody
+                    .Builder()
+                    .add("search", query)
+                    .build()
 
-            val formHeaders = headersBuilder().apply {
-                add("Accept", "application/json, text/javascript, */*; q=0.01")
-                add("Host", baseUrl.toHttpUrl().host)
-                add("Origin", baseUrl)
-                add("X-Requested-With", "XMLHttpRequest")
-            }.build()
+            val formHeaders =
+                headersBuilder()
+                    .apply {
+                        add("Accept", "application/json, text/javascript, */*; q=0.01")
+                        add("Host", baseUrl.toHttpUrl().host)
+                        add("Origin", baseUrl)
+                        add("X-Requested-With", "XMLHttpRequest")
+                    }.build()
 
             return POST("$baseUrl/ajax/search", formHeaders, formBody)
         }
 
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (query.isNotBlank()) {
-                addPathSegment("search")
-                addQueryParameter("keyword", query)
-            } else {
-                addPathSegment("filter")
-                filters.filterIsInstance<UrlPartFilter>().forEach {
-                    it.addUrlParameter(this)
-                }
-            }
-            addPathSegment(page.toString())
-            addPathSegment("")
-        }.build()
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    if (query.isNotBlank()) {
+                        addPathSegment("search")
+                        addQueryParameter("keyword", query)
+                    } else {
+                        addPathSegment("filter")
+                        filters.filterIsInstance<UrlPartFilter>().forEach {
+                            it.addUrlParameter(this)
+                        }
+                    }
+                    addPathSegment(page.toString())
+                    addPathSegment("")
+                }.build()
 
         return GET(url, headers)
     }
@@ -116,13 +126,14 @@ abstract class Liliana(
             return popularMangaParse(response)
         }
 
-        val mangaList = response.parseAs<SearchResponseDto>().list.map { manga ->
-            SManga.create().apply {
-                setUrlWithoutDomain(manga.url)
-                title = manga.name
-                thumbnail_url = baseUrl + manga.cover
+        val mangaList =
+            response.parseAs<SearchResponseDto>().list.map { manga ->
+                SManga.create().apply {
+                    setUrlWithoutDomain(manga.url)
+                    title = manga.name
+                    thumbnail_url = baseUrl + manga.cover
+                }
             }
-        }
 
         return MangasPage(mangaList, false)
     }
@@ -139,14 +150,11 @@ abstract class Liliana(
         )
     }
 
-    override fun searchMangaSelector(): String =
-        throw UnsupportedOperationException()
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String =
-        throw UnsupportedOperationException()
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
     // =============================== Filters ==============================
 
@@ -168,9 +176,11 @@ abstract class Liliana(
             arrayOf(genreData, chapterCountData, statusData, genderData, sortData).any { it.isEmpty() }
         ) {
             try {
-                val doc = client.newCall(filtersRequest())
-                    .await()
-                    .asJsoup()
+                val doc =
+                    client
+                        .newCall(filtersRequest())
+                        .await()
+                        .asJsoup()
 
                 parseFilters(doc)
             } catch (e: Exception) {
@@ -184,9 +194,10 @@ abstract class Liliana(
 
     protected open fun parseFilters(document: Document) {
         genreName = document.selectFirst("div.advanced-genres > h3")?.text() ?: ""
-        genreData = document.select("div.advanced-genres > div > .advance-item").map {
-            it.text() to it.selectFirst("span")!!.attr("data-genre")
-        }
+        genreData =
+            document.select("div.advanced-genres > div > .advance-item").map {
+                it.text() to it.selectFirst("span")!!.attr("data-genre")
+            }
 
         chapterCountName = document.getSelectName("select-count")
         chapterCountData = document.getSelectData("select-count")
@@ -201,15 +212,12 @@ abstract class Liliana(
         sortData = document.getSelectData("select-sort")
     }
 
-    private fun Document.getSelectName(selectorClass: String): String {
-        return this.selectFirst(".select-div > label.$selectorClass")?.text() ?: ""
-    }
+    private fun Document.getSelectName(selectorClass: String): String = this.selectFirst(".select-div > label.$selectorClass")?.text() ?: ""
 
-    private fun Document.getSelectData(selectorId: String): List<Pair<String, String>> {
-        return this.select("#$selectorId > option").map {
+    private fun Document.getSelectData(selectorId: String): List<Pair<String, String>> =
+        this.select("#$selectorId > option").map {
             it.text() to it.attr("value")
         }
-    }
 
     override fun getFilterList(): FilterList {
         launchIO { fetchFilters() }
@@ -247,38 +255,42 @@ abstract class Liliana(
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        description = document.selectFirst("div#syn-target")?.text()
-        thumbnail_url = document.selectFirst(".a1 > figure img")?.imgAttr()
-        title = document.selectFirst(".a2 header h1")!!.text()
-        genre = document.select(".a2 div > a[rel='tag'].label").joinToString { it.text() }
-        author = document.selectFirst("div.y6x11p i.fas.fa-user + span.dt")?.text()?.takeUnless {
-            it.equals("updating", true)
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            description = document.selectFirst("div#syn-target")?.text()
+            thumbnail_url = document.selectFirst(".a1 > figure img")?.imgAttr()
+            title = document.selectFirst(".a2 header h1")!!.text()
+            genre = document.select(".a2 div > a[rel='tag'].label").joinToString { it.text() }
+            author =
+                document.selectFirst("div.y6x11p i.fas.fa-user + span.dt")?.text()?.takeUnless {
+                    it.equals("updating", true)
+                }
+            status = document.selectFirst("div.y6x11p i.fas.fa-rss + span.dt").parseStatus()
         }
-        status = document.selectFirst("div.y6x11p i.fas.fa-rss + span.dt").parseStatus()
-    }
 
-    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
-        "ongoing", "đang tiến hành", "進行中" -> SManga.ONGOING
-        "completed", "hoàn thành", "完了" -> SManga.COMPLETED
-        "on-hold", "tạm ngưng", "保留" -> SManga.ON_HIATUS
-        "canceled", "đã huỷ", "キャンセル" -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
-    }
+    private fun Element?.parseStatus(): Int =
+        when (this?.text()?.lowercase()) {
+            "ongoing", "đang tiến hành", "進行中" -> SManga.ONGOING
+            "completed", "hoàn thành", "完了" -> SManga.COMPLETED
+            "on-hold", "tạm ngưng", "保留" -> SManga.ON_HIATUS
+            "canceled", "đã huỷ", "キャンセル" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
 
     // ============================== Chapters ==============================
 
     override fun chapterListSelector() = "ul > li.chapter"
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        element.selectFirst("time[datetime]")?.also {
-            date_upload = it.attr("datetime").toLongOrNull()?.let { it * 1000L } ?: 0L
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            element.selectFirst("time[datetime]")?.also {
+                date_upload = it.attr("datetime").toLongOrNull()?.let { it * 1000L } ?: 0L
+            }
+            with(element.selectFirst("a")!!) {
+                name = text()
+                setUrlWithoutDomain(attr("abs:href"))
+            }
         }
-        with(element.selectFirst("a")!!) {
-            name = text()
-            setUrlWithoutDomain(attr("abs:href"))
-        }
-    }
 
     // =============================== Pages ================================
 
@@ -291,21 +303,26 @@ abstract class Liliana(
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(const CHAPTER_ID)")?.data()
-            ?: throw Exception("Failed to get chapter id")
+        val script =
+            document.selectFirst("script:containsData(const CHAPTER_ID)")?.data()
+                ?: throw Exception("Failed to get chapter id")
 
         val chapterId = script.substringAfter("const CHAPTER_ID = ").substringBefore(";")
 
-        val pageHeaders = headersBuilder().apply {
-            add("Accept", "application/json, text/javascript, *//*; q=0.01")
-            add("Host", baseUrl.toHttpUrl().host)
-            set("Referer", response.request.url.toString())
-            add("X-Requested-With", "XMLHttpRequest")
-        }.build()
+        val pageHeaders =
+            headersBuilder()
+                .apply {
+                    add("Accept", "application/json, text/javascript, *//*; q=0.01")
+                    add("Host", baseUrl.toHttpUrl().host)
+                    set("Referer", response.request.url.toString())
+                    add("X-Requested-With", "XMLHttpRequest")
+                }.build()
 
-        val ajaxResponse = client.newCall(
-            GET("$baseUrl/ajax/image/list/chap/$chapterId", pageHeaders),
-        ).execute()
+        val ajaxResponse =
+            client
+                .newCall(
+                    GET("$baseUrl/ajax/image/list/chap/$chapterId", pageHeaders),
+                ).execute()
 
         val data = ajaxResponse.parseAs<PageListResponseDto>()
 
@@ -321,42 +338,44 @@ abstract class Liliana(
         )
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return if (document.selectFirst("div.separator[data-index]") == null) {
+    override fun pageListParse(document: Document): List<Page> =
+        if (document.selectFirst("div.separator[data-index]") == null) {
             document.select("div.separator").mapIndexed { i, page ->
                 val url = page.selectFirst("a")!!.attr("abs:href")
                 Page(i, document.location(), url)
             }
         } else {
-            document.select("div.separator[data-index]").map { page ->
-                val index = page.attr("data-index").toInt()
-                val url = page.selectFirst("a")!!.attr("abs:href")
-                Page(index, document.location(), url)
-            }.sortedBy { it.index }
+            document
+                .select("div.separator[data-index]")
+                .map { page ->
+                    val index = page.attr("data-index").toInt()
+                    val url = page.selectFirst("a")!!.attr("abs:href")
+                    Page(index, document.location(), url)
+                }.sortedBy { it.index }
         }
-    }
 
     override fun imageUrlParse(document: Document) = ""
 
     override fun imageRequest(page: Page): Request {
-        val imgHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,*/*")
-            add("Host", page.imageUrl!!.toHttpUrl().host)
-            removeAll("Referer")
-        }.build()
+        val imgHeaders =
+            headersBuilder()
+                .apply {
+                    add("Accept", "image/avif,image/webp,*/*")
+                    add("Host", page.imageUrl!!.toHttpUrl().host)
+                    removeAll("Referer")
+                }.build()
         return GET(page.imageUrl!!, imgHeaders)
     }
 
     // ============================= Utilities ==============================
 
     // From mangathemesia
-    private fun Element.imgAttr(): String = when {
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("data-src") -> attr("abs:data-src")
-        else -> attr("abs:src")
-    }
+    private fun Element.imgAttr(): String =
+        when {
+            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+            hasAttr("data-src") -> attr("abs:data-src")
+            else -> attr("abs:src")
+        }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }

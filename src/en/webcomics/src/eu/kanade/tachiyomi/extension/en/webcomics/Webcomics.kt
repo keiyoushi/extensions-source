@@ -27,8 +27,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
-class Webcomics : ParsedHttpSource(), ConfigurableSource {
-
+class Webcomics :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "Webcomics"
 
     override val baseUrl = "https://webcomicsapp.com"
@@ -43,16 +44,19 @@ class Webcomics : ParsedHttpSource(), ConfigurableSource {
 
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(3)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(3)
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).build()
 
     // ========================== Popular =====================================
 
@@ -62,11 +66,12 @@ class Webcomics : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaNextPageSelector() = ".page-list li:not([style*=none]) a.next"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.selectFirst("h2")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        setUrlWithoutDomain(element.absUrl("href"))
-    }
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            title = element.selectFirst("h2")!!.text()
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+            setUrlWithoutDomain(element.absUrl("href"))
+        }
 
     // ========================== Latest =====================================
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/genres/All/All/Latest_Updated/$page", headers)
@@ -79,7 +84,11 @@ class Webcomics : ParsedHttpSource(), ConfigurableSource {
 
     // ========================== Search =====================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isNotBlank()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
             return GET(url.addPathSegment(query.toPathSegment()).build(), headers)
@@ -106,16 +115,17 @@ class Webcomics : ParsedHttpSource(), ConfigurableSource {
 
     // ========================== Details ====================================
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val infoElement = document.selectFirst(".card-info")!!
-        title = infoElement.selectFirst("h5")!!.text()
-        description = infoElement.selectFirst(".book-detail > p")?.text()
-        genre = infoElement.select(".label-tag").joinToString { it.text() }
-        thumbnail_url = infoElement.selectFirst("img")?.absUrl("src")
-        document.selectFirst(".chapter-updateDetail")?.text()?.let {
-            status = if (it.contains("IDK")) SManga.COMPLETED else SManga.ONGOING
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            val infoElement = document.selectFirst(".card-info")!!
+            title = infoElement.selectFirst("h5")!!.text()
+            description = infoElement.selectFirst(".book-detail > p")?.text()
+            genre = infoElement.select(".label-tag").joinToString { it.text() }
+            thumbnail_url = infoElement.selectFirst("img")?.absUrl("src")
+            document.selectFirst(".chapter-updateDetail")?.text()?.let {
+                status = if (it.contains("IDK")) SManga.COMPLETED else SManga.ONGOING
+            }
         }
-    }
 
     // ========================== Chapter ====================================
 
@@ -130,21 +140,26 @@ class Webcomics : ParsedHttpSource(), ConfigurableSource {
         val dto = response.parseAs<ChapterWrapper>()
         val manga = dto.manga
 
-        return dto.chapters.map { chapter ->
-            SChapter.create().apply {
-                name = if (chapter.is_pay) "🔒 ${chapter.name}" else chapter.name
-                date_upload = chapter.update_time
-                chapter_number = chapter.index.toFloat()
+        return dto.chapters
+            .map { chapter ->
+                SChapter.create().apply {
+                    name = if (chapter.is_pay) "🔒 ${chapter.name}" else chapter.name
+                    date_upload = chapter.update_time
+                    chapter_number = chapter.index.toFloat()
 
-                val chapterUrl = "$baseUrl/view".toHttpUrl().newBuilder()
-                    .addPathSegment(manga.name.replace(WHITE_SPACE_REGEX, "-"))
-                    .addPathSegment(chapter.index.toString())
-                    .addPathSegment("${manga.manga_id}-${chapter.name.toPathSegment()}")
-                    .build()
+                    val chapterUrl =
+                        "$baseUrl/view"
+                            .toHttpUrl()
+                            .newBuilder()
+                            .addPathSegment(manga.name.replace(WHITE_SPACE_REGEX, "-"))
+                            .addPathSegment(chapter.index.toString())
+                            .addPathSegment("${manga.manga_id}-${chapter.name.toPathSegment()}")
+                            .build()
 
-                setUrlWithoutDomain(chapterUrl.toString())
-            }
-        }.sortedBy(SChapter::chapter_number).reversed()
+                    setUrlWithoutDomain(chapterUrl.toString())
+                }
+            }.sortedBy(SChapter::chapter_number)
+            .reversed()
     }
 
     override fun chapterFromElement(element: Element): SChapter {
@@ -159,58 +174,62 @@ class Webcomics : ParsedHttpSource(), ConfigurableSource {
     // ========================== Pages ====================================
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.select("script")
-            .firstOrNull { PAGE_REGEX.containsMatchIn(it.data()) }
-            ?: throw Exception("You may need to log in")
+        val script =
+            document
+                .select("script")
+                .firstOrNull { PAGE_REGEX.containsMatchIn(it.data()) }
+                ?: throw Exception("You may need to log in")
 
-        return PAGE_REGEX.findAll(script.data()).mapIndexed { index, match ->
-            Page(index, imageUrl = match.groups["img"]!!.value.unicode())
-        }.toList()
+        return PAGE_REGEX
+            .findAll(script.data())
+            .mapIndexed { index, match ->
+                Page(index, imageUrl = match.groups["img"]!!.value.unicode())
+            }.toList()
     }
 
     override fun imageUrlParse(document: Document) = ""
 
     // ========================== Filters ==================================
 
-    private class GenreFilter(val genres: Array<String>) : Filter.Select<String>("Genre", genres) {
+    private class GenreFilter(
+        val genres: Array<String>,
+    ) : Filter.Select<String>("Genre", genres) {
         fun selected() = genres[state]
     }
 
-    override fun getFilterList() = FilterList(
-        GenreFilter(getGenreList()),
-    )
+    override fun getFilterList() =
+        FilterList(
+            GenreFilter(getGenreList()),
+        )
 
-    private fun getGenreList() = arrayOf(
-        "All",
-        "Romance",
-        "Fantasy",
-        "Action",
-        "Drama",
-        "BL",
-        "GL",
-        "Comedy",
-        "Horror",
-        "Mistery",
-    )
+    private fun getGenreList() =
+        arrayOf(
+            "All",
+            "Romance",
+            "Fantasy",
+            "Action",
+            "Drama",
+            "BL",
+            "GL",
+            "Comedy",
+            "Horror",
+            "Mistery",
+        )
 
     // =============================== Utlis ====================================
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    private fun String.toPathSegment(): String {
-        return this
+    private fun String.toPathSegment(): String =
+        this
             .replace(PUNCTUATION_REGEX, "")
             .replace(WHITE_SPACE_REGEX, "-")
-    }
 
-    fun String.unicode(): String {
-        return UNICODE_REGEX.replace(this) { match ->
+    fun String.unicode(): String =
+        UNICODE_REGEX.replace(this) { match ->
             val hex = match.groupValues[1].ifEmpty { match.groupValues[2] }
             val value = hex.toInt(16)
             value.toChar().toString()
         }
-    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
@@ -220,7 +239,8 @@ class Webcomics : ParsedHttpSource(), ConfigurableSource {
             if (it != "off") {
                 return@let
             }
-            preferences.edit()
+            preferences
+                .edit()
                 .putString(PREF_KEY_RANDOM_UA, "desktop")
                 .apply()
         }

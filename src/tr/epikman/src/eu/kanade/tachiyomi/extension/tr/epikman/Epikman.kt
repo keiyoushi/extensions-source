@@ -11,11 +11,12 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class Epikman : ZeistManga(
-    "Epikman",
-    "https://www.epikman.ga",
-    "tr",
-) {
+class Epikman :
+    ZeistManga(
+        "Epikman",
+        "https://www.epikman.ga",
+        "tr",
+    ) {
     override val useOldChapterFeed = true
     override val chapterCategory = "Bölüm"
     override val pageListSelector = ".chapter-view"
@@ -27,9 +28,10 @@ class Epikman : ZeistManga(
             nextLatestPageUrl = ""
         }
 
-        val url = nextLatestPageUrl.ifBlank {
-            "$baseUrl/search/label/Seri?max-results=20"
-        }
+        val url =
+            nextLatestPageUrl.ifBlank {
+                "$baseUrl/search/label/Seri?max-results=20"
+            }
         return GET(url, headers)
     }
 
@@ -45,16 +47,22 @@ class Epikman : ZeistManga(
         return MangasPage(mangas, nextPage != null)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .addQueryParameter("max-results", "999")
-            .build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/search"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("max-results", "999")
+                .build()
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) =
-        MangasPage(mangaListParse(response.asJsoup()), false)
+    override fun searchMangaParse(response: Response) = MangasPage(mangaListParse(response.asJsoup()), false)
 
     private fun mangaListParse(document: Document) =
         document.select("#Blog1 .grid > div").map { element ->

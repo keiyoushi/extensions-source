@@ -21,7 +21,6 @@ import java.io.IOException
 class PageDto(
     @SerialName("img_url")
     val imageUrl: String,
-
     @SerialName("translations")
     @Serializable(with = DialogListSerializer::class)
     val dialogues: List<Dialog> = emptyList(),
@@ -43,6 +42,7 @@ data class Dialog(
     private val bgColor: List<Int> = emptyList(),
 ) {
     val text: String get() = textByLanguage["text"] ?: throw Exception("Dialog not found")
+
     fun getTextBy(language: Language) = textByLanguage[language.target] ?: text
 
     val width get() = x2 - x1
@@ -51,14 +51,16 @@ data class Dialog(
     val centerX get() = (x2 + x1) / 2f
 
     val foregroundColor: Int get() {
-        val color = fbColor.takeIf { it.isNotEmpty() }
-            ?: return Color.BLACK
+        val color =
+            fbColor.takeIf { it.isNotEmpty() }
+                ?: return Color.BLACK
         return Color.rgb(color[0], color[1], color[2])
     }
 
     val backgroundColor: Int get() {
-        val color = bgColor.takeIf { it.isNotEmpty() }
-            ?: return Color.WHITE
+        val color =
+            bgColor.takeIf { it.isNotEmpty() }
+                ?: return Color.WHITE
         return Color.rgb(color[0], color[1], color[2])
     }
 }
@@ -95,15 +97,16 @@ private object DialogListSerializer :
         )
     }
 
-    private fun getCoordinates(element: JsonElement): JsonArray {
-        return when (element) {
+    private fun getCoordinates(element: JsonElement): JsonArray =
+        when (element) {
             is JsonArray -> element.jsonArray[0].jsonArray
-            else -> element.jsonObject["bbox"]?.jsonArray
-                ?: throw IOException("Dialog box position not found")
+            else ->
+                element.jsonObject["bbox"]?.jsonArray
+                    ?: throw IOException("Dialog box position not found")
         }
-    }
-    private fun getDialogs(element: JsonElement): JsonObject {
-        return buildJsonObject {
+
+    private fun getDialogs(element: JsonElement): JsonObject =
+        buildJsonObject {
             when (element) {
                 is JsonArray -> put("text", element.jsonArray[1])
                 else -> {
@@ -113,7 +116,6 @@ private object DialogListSerializer :
                 }
             }
         }
-    }
 
     private val JsonElement.isArray get() = this is JsonArray
     private val JsonElement.isObject get() = this is JsonObject

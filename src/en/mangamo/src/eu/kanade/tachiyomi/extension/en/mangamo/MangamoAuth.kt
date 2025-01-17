@@ -16,7 +16,6 @@ class MangamoAuth(
     private val client: OkHttpClient,
     private val userToken: String,
 ) {
-
     private lateinit var currentToken: String
     private lateinit var refreshToken: String
     private var expirationTime: Long = 0
@@ -40,23 +39,31 @@ class MangamoAuth(
     }
 
     private fun obtainInitialIdToken() {
-        val mangamoLoginResponse = client.newCall(
-            POST(
-                "${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/v3/login",
-                helper.jsonHeaders,
-                "{\"purchaserInfo\":{\"originalAppUserId\":\"$userToken\"}}".toRequestBody(),
-            ),
-        ).execute()
+        val mangamoLoginResponse =
+            client
+                .newCall(
+                    POST(
+                        "${MangamoConstants.FIREBASE_FUNCTION_BASE_PATH}/v3/login",
+                        helper.jsonHeaders,
+                        "{\"purchaserInfo\":{\"originalAppUserId\":\"$userToken\"}}".toRequestBody(),
+                    ),
+                ).execute()
 
-        val customToken = mangamoLoginResponse.body.string().parseJson<MangamoLoginDto>().accessToken
+        val customToken =
+            mangamoLoginResponse.body
+                .string()
+                .parseJson<MangamoLoginDto>()
+                .accessToken
 
-        val googleIdentityResponse = client.newCall(
-            POST(
-                "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${MangamoConstants.FIREBASE_API_KEY}",
-                EMPTY_HEADERS,
-                "{\"token\":\"$customToken\",\"returnSecureToken\":true}".toRequestBody(),
-            ),
-        ).execute()
+        val googleIdentityResponse =
+            client
+                .newCall(
+                    POST(
+                        "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${MangamoConstants.FIREBASE_API_KEY}",
+                        EMPTY_HEADERS,
+                        "{\"token\":\"$customToken\",\"returnSecureToken\":true}".toRequestBody(),
+                    ),
+                ).execute()
 
         val tokenInfo = googleIdentityResponse.body.string().parseJson<FirebaseAuthDto>()
 
@@ -67,17 +74,21 @@ class MangamoAuth(
 
     private fun refreshIfNecessary() {
         if (System.currentTimeMillis() > expirationTime) {
-            val headers = Headers.Builder()
-                .add("Content-Type", "application/x-www-form-urlencoded")
-                .build()
+            val headers =
+                Headers
+                    .Builder()
+                    .add("Content-Type", "application/x-www-form-urlencoded")
+                    .build()
 
-            val refreshResponse = client.newCall(
-                POST(
-                    "https://securetoken.googleapis.com/v1/token?key=${MangamoConstants.FIREBASE_API_KEY}",
-                    headers,
-                    "grant_type=refresh_token&refresh_token=$refreshToken".toRequestBody(),
-                ),
-            ).execute()
+            val refreshResponse =
+                client
+                    .newCall(
+                        POST(
+                            "https://securetoken.googleapis.com/v1/token?key=${MangamoConstants.FIREBASE_API_KEY}",
+                            headers,
+                            "grant_type=refresh_token&refresh_token=$refreshToken".toRequestBody(),
+                        ),
+                    ).execute()
 
             if (refreshResponse.code == 200) {
                 val tokenInfo = refreshResponse.body.string().parseJson<TokenRefreshDto>()
@@ -94,13 +105,15 @@ class MangamoAuth(
 
     companion object {
         fun createAnonymousUserToken(client: OkHttpClient): String {
-            val googleIdentityResponse = client.newCall(
-                POST(
-                    "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${MangamoConstants.FIREBASE_API_KEY}",
-                    EMPTY_HEADERS,
-                    "{\"returnSecureToken\":true}".toRequestBody(),
-                ),
-            ).execute()
+            val googleIdentityResponse =
+                client
+                    .newCall(
+                        POST(
+                            "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${MangamoConstants.FIREBASE_API_KEY}",
+                            EMPTY_HEADERS,
+                            "{\"returnSecureToken\":true}".toRequestBody(),
+                        ),
+                    ).execute()
 
             val tokenInfo = googleIdentityResponse.body.string().parseJson<FirebaseRegisterDto>()
 

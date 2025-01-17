@@ -27,11 +27,12 @@ class MangaDto(
     @JsonNames("title", "series_name")
     val name: String,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@MangaDto.name
-        thumbnail_url = cover
-        url = "/series/$code"
-    }
+    fun toSManga(): SManga =
+        SManga.create().apply {
+            title = this@MangaDto.name
+            thumbnail_url = cover
+            url = "/series/$code"
+        }
 }
 
 @Serializable
@@ -51,22 +52,24 @@ class MangaDetailsDto(
     val synopsis: String? = null,
     val status: String? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@MangaDetailsDto.title
-        author = this@MangaDetailsDto.author
-        artist = this@MangaDetailsDto.artist
-        description = synopsis
-        status = when (this@MangaDetailsDto.status) {
-            "Em Lançamento" -> SManga.ONGOING
-            "Hiato" -> SManga.ON_HIATUS
-            "Cancelado" -> SManga.CANCELLED
-            "Finalizado" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    fun toSManga(): SManga =
+        SManga.create().apply {
+            title = this@MangaDetailsDto.title
+            author = this@MangaDetailsDto.author
+            artist = this@MangaDetailsDto.artist
+            description = synopsis
+            status =
+                when (this@MangaDetailsDto.status) {
+                    "Em Lançamento" -> SManga.ONGOING
+                    "Hiato" -> SManga.ON_HIATUS
+                    "Cancelado" -> SManga.CANCELLED
+                    "Finalizado" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+            genre = genres.joinToString()
+            thumbnail_url = cover
+            url = "/series/$code"
         }
-        genre = genres.joinToString()
-        thumbnail_url = cover
-        url = "/series/$code"
-    }
 }
 
 @Serializable
@@ -74,9 +77,7 @@ class ChapterContainerDto(
     val results: WrapperDto,
     val next: String?,
 ) {
-    fun toSChapter(seriesCode: String): List<SChapter> {
-        return results.chapters.map { it.toSChapter(seriesCode) }
-    }
+    fun toSChapter(seriesCode: String): List<SChapter> = results.chapters.map { it.toSChapter(seriesCode) }
 
     @Serializable
     class WrapperDto(
@@ -91,11 +92,12 @@ class ChapterDto(
     @SerialName("upload_date")
     val date: String,
 ) {
-    fun toSChapter(mangaCode: String): SChapter = SChapter.create().apply {
-        name = this@ChapterDto.name
-        date_upload = parseDate()
-        url = "/series/$mangaCode/$code"
-    }
+    fun toSChapter(mangaCode: String): SChapter =
+        SChapter.create().apply {
+            name = this@ChapterDto.name
+            date_upload = parseDate()
+            url = "/series/$mangaCode/$code"
+        }
 
     private fun parseDate(): Long {
         return try {
@@ -108,12 +110,12 @@ class ChapterDto(
                     else -> 0L
                 }
             }
-        } catch (_: Exception) { 0L }
+        } catch (_: Exception) {
+            0L
+        }
     }
 
-    private fun String.contains(vararg elements: String): Boolean {
-        return elements.any { this.contains(it, true) }
-    }
+    private fun String.contains(vararg elements: String): Boolean = elements.any { this.contains(it, true) }
 }
 
 @Serializable

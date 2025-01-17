@@ -9,14 +9,16 @@ internal data class Series(
     val thumb: String?,
     val volumes: List<Volume>,
 ) : Iterable<Chapter> {
-    override fun iterator() = volumes.flatMap { vol ->
-        vol.map {
-            it.copy(
-                name = "$vol - $it",
-                dir = "$dir/${vol.dir}/${it.dir}",
-            )
-        }
-    }.iterator()
+    override fun iterator() =
+        volumes
+            .flatMap { vol ->
+                vol.map {
+                    it.copy(
+                        name = "$vol - $it",
+                        dir = "$dir/${vol.dir}/${it.dir}",
+                    )
+                }
+            }.iterator()
 
     val cover: String
         get() = thumb ?: "static/nocover.png"

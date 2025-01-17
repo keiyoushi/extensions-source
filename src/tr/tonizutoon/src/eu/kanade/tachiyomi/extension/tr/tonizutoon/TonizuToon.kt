@@ -7,12 +7,13 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TonizuToon : Madara(
-    "TonizuToon",
-    "https://tonizu.xyz",
-    "tr",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-) {
+class TonizuToon :
+    Madara(
+        "TonizuToon",
+        "https://tonizu.xyz",
+        "tr",
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    ) {
     override val useNewChapterEndpoint = true
 
     override val mangaDetailsSelectorTitle = "#manga-title"
@@ -21,9 +22,11 @@ class TonizuToon : Madara(
 
     override val mangaDetailsSelectorStatus = ".summary-heading:contains(Durumu) ~ .summary-content"
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addNetworkInterceptor(::loginCheckInterceptor)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addNetworkInterceptor(::loginCheckInterceptor)
+            .build()
 
     private fun loginCheckInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()

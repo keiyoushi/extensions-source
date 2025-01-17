@@ -18,7 +18,6 @@ import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 class MikuDoujin : ParsedHttpSource() {
-
     override val baseUrl: String = "https://miku-doujin.com"
 
     override val lang: String = "th"
@@ -26,17 +25,17 @@ class MikuDoujin : ParsedHttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .writeTimeout(1, TimeUnit.MINUTES)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(1, TimeUnit.MINUTES)
+            .writeTimeout(1, TimeUnit.MINUTES)
+            .build()
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/?page=$page", headers)
 
     override fun popularMangaSelector() = "div.col-6.inz-col"
 
@@ -60,22 +59,23 @@ class MikuDoujin : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // Search
-    private fun genre(name: String): String {
-        return if (name != "สาวใหญ่/แม่บ้าน") {
+    private fun genre(name: String): String =
+        if (name != "สาวใหญ่/แม่บ้าน") {
             URLEncoder.encode(name, "UTF-8")
         } else {
             name
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
@@ -89,33 +89,34 @@ class MikuDoujin : ParsedHttpSource() {
         filters: FilterList,
     ): Observable<MangasPage> {
         val searchMethod = query.startsWith("http")
-        return client.newCall(
-            GET(
-                if (searchMethod) {
-                    query
-                } else {
-                    "$baseUrl/genre/${genre(query)}/?page=$page"
-                },
-            ),
-        )
-            .asObservableSuccess()
+        return client
+            .newCall(
+                GET(
+                    if (searchMethod) {
+                        query
+                    } else {
+                        "$baseUrl/genre/${genre(query)}/?page=$page"
+                    },
+                ),
+            ).asObservableSuccess()
             .map {
                 val document = it.asJsoup()
-                val mangas: List<SManga> = if (searchMethod) {
-                    listOf(
-                        SManga.create().apply {
-                            url = query.substringAfter(baseUrl)
-                            title = document.title()
-                            thumbnail_url =
-                                document.select("div.sr-card-body div.col-md-4 img").attr("abs:src")
-                            initialized = false
-                        },
-                    )
-                } else {
-                    document.select(popularMangaSelector()).map { element ->
-                        popularMangaFromElement(element)
+                val mangas: List<SManga> =
+                    if (searchMethod) {
+                        listOf(
+                            SManga.create().apply {
+                                url = query.substringAfter(baseUrl)
+                                title = document.title()
+                                thumbnail_url =
+                                    document.select("div.sr-card-body div.col-md-4 img").attr("abs:src")
+                                initialized = false
+                            },
+                        )
+                    } else {
+                        document.select(popularMangaSelector()).map { element ->
+                            popularMangaFromElement(element)
+                        }
                     }
-                }
 
                 MangasPage(mangas, !searchMethod)
             }
@@ -131,8 +132,10 @@ class MikuDoujin : ParsedHttpSource() {
             author = infoElement.select("div.col-md-8 p a.badge-secondary")[2].ownText()
             artist = author
             status = SManga.UNKNOWN
-            genre = infoElement.select("div.sr-card-body div.col-md-8 div.tags a")
-                .joinToString { it.text() }
+            genre =
+                infoElement
+                    .select("div.sr-card-body div.col-md-8 div.tags a")
+                    .joinToString { it.text() }
             description = infoElement.select("div.col-md-8").first()!!.ownText()
             thumbnail_url = infoElement.select("div.col-md-4 img").first()!!.attr("abs:src")
             initialized = true
@@ -145,7 +148,11 @@ class MikuDoujin : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    private fun chapterFromElementWithIndex(element: Element, idx: Int, manga: SManga): SChapter {
+    private fun chapterFromElementWithIndex(
+        element: Element,
+        idx: Int,
+        manga: SManga,
+    ): SChapter {
         val chapter = SChapter.create()
         element.select("td a").let {
             chapter.setUrlWithoutDomain(it.attr("href"))
@@ -168,8 +175,9 @@ class MikuDoujin : ParsedHttpSource() {
         return chapter
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(GET("$baseUrl/${manga.url}"))
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        client
+            .newCall(GET("$baseUrl/${manga.url}"))
             .asObservableSuccess()
             .map {
                 val chList: List<SChapter>
@@ -177,11 +185,12 @@ class MikuDoujin : ParsedHttpSource() {
 
                 if (mangaDocument.select(chapterListSelector()).isEmpty()) {
                     manga.status = SManga.COMPLETED
-                    val createdChapter = SChapter.create().apply {
-                        url = manga.url
-                        name = "Chapter 1"
-                        chapter_number = 1.0f
-                    }
+                    val createdChapter =
+                        SChapter.create().apply {
+                            url = manga.url
+                            name = "Chapter 1"
+                            chapter_number = 1.0f
+                        }
                     chList = listOf(createdChapter)
                 } else {
                     chList =
@@ -191,22 +200,19 @@ class MikuDoujin : ParsedHttpSource() {
                 }
                 chList
             }
-    }
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#v-pills-tabContent img.lazy").mapIndexed { i, img ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("div#v-pills-tabContent img.lazy").mapIndexed { i, img ->
             if (img.hasAttr("data-src")) {
                 Page(i, "", img.attr("abs:data-src"))
             } else {
                 Page(i, "", img.attr("abs:src"))
             }
         }
-    }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()
 }

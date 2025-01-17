@@ -48,16 +48,15 @@ class SeriesDto(
     @SerialName("idioma")
     val language: String? = null,
 ) {
-    fun toSManga(seriesPath: String): SManga {
-        return SManga.create().apply {
+    fun toSManga(seriesPath: String): SManga =
+        SManga.create().apply {
             title = name
             thumbnail_url = thumbnail
             url = "$seriesPath/$slug"
         }
-    }
 
-    fun toSMangaDetails(): SManga {
-        return SManga.create().apply {
+    fun toSMangaDetails(): SManga =
+        SManga.create().apply {
             title = name
             thumbnail_url = thumbnail
             description = synopsis
@@ -69,7 +68,6 @@ class SeriesDto(
             author = authors.joinToString { it.author.name }
             artist = artists.joinToString { it.artist.name }
         }
-    }
 }
 
 @Serializable
@@ -104,20 +102,23 @@ class ChapterDto(
     private val slug: String,
     @SerialName("created_at") private val date: String,
 ) {
-    fun toSChapter(seriesPath: String, seriesSlug: String): SChapter {
-        return SChapter.create().apply {
+    fun toSChapter(
+        seriesPath: String,
+        seriesSlug: String,
+    ): SChapter =
+        SChapter.create().apply {
             name = "Capítulo ${number.toString().removeSuffix(".0")}"
             if (!this@ChapterDto.name.isNullOrBlank()) {
                 name += " - ${this@ChapterDto.name}"
             }
-            date_upload = try {
-                DATE_FORMATTER.parse(date)?.time ?: 0L
-            } catch (e: Exception) {
-                0L
-            }
+            date_upload =
+                try {
+                    DATE_FORMATTER.parse(date)?.time ?: 0L
+                } catch (e: Exception) {
+                    0L
+                }
             url = "$seriesPath/$seriesSlug/$slug"
         }
-    }
 
     companion object {
         private val DATE_FORMATTER by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US) }

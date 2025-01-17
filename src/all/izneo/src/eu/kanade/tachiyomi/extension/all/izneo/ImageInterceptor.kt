@@ -17,19 +17,28 @@ object ImageInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val url = chain.request().url
-        val key = url.queryParameter("key")
-            ?: return chain.proceed(chain.request())
-        return chain.proceed(
-            chain.request().newBuilder().url(
-                url.newBuilder()
-                    .removeAllQueryParameters("key")
-                    .removeAllQueryParameters("iv")
-                    .build(),
-            ).build(),
-        ).decode(key.atob(), url.queryParameter("iv")!!.atob())
+        val key =
+            url.queryParameter("key")
+                ?: return chain.proceed(chain.request())
+        return chain
+            .proceed(
+                chain
+                    .request()
+                    .newBuilder()
+                    .url(
+                        url
+                            .newBuilder()
+                            .removeAllQueryParameters("key")
+                            .removeAllQueryParameters("iv")
+                            .build(),
+                    ).build(),
+            ).decode(key.atob(), url.queryParameter("iv")!!.atob())
     }
 
-    private fun Response.decode(key: ByteArray, iv: ByteArray) = AES.let {
+    private fun Response.decode(
+        key: ByteArray,
+        iv: ByteArray,
+    ) = AES.let {
         it.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
         newBuilder().body(it.doFinal(body.bytes()).toResponseBody(mediaType)).build()
     }

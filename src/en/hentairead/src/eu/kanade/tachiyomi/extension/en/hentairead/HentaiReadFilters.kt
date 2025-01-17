@@ -4,8 +4,8 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.Filter.Sort.Selection
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList {
-    return FilterList(
+fun getFilters(): FilterList =
+    FilterList(
         SortFilter("Sort by", Selection(0, false), getSortsList),
         TypeFilter("Types"),
         Filter.Separator(),
@@ -26,16 +26,23 @@ fun getFilters(): FilterList {
         Filter.Header("Filter by pages, for example: (>20)"),
         PageFilter("Pages"),
     )
-}
 
-internal open class UploadedFilter(name: String) : Filter.Text(name)
+internal open class UploadedFilter(
+    name: String,
+) : Filter.Text(name)
 
-internal open class PageFilter(name: String) : Filter.Text(name)
+internal open class PageFilter(
+    name: String,
+) : Filter.Text(name)
 
-internal open class TextFilter(name: String, val type: String) : Filter.Text(name)
+internal open class TextFilter(
+    name: String,
+    val type: String,
+) : Filter.Text(name)
 
-internal class TypeFilter(name: String) :
-    Filter.Group<CheckBoxFilter>(
+internal class TypeFilter(
+    name: String,
+) : Filter.Group<CheckBoxFilter>(
         name,
         listOf(
             "Doujinshi" to "4",
@@ -43,16 +50,25 @@ internal class TypeFilter(name: String) :
             "Artist CG" to "4798",
         ).map { CheckBoxFilter(it.first, it.second, true) },
     )
-internal open class CheckBoxFilter(name: String, val value: String, state: Boolean) : Filter.CheckBox(name, state)
 
-internal open class SortFilter(name: String, selection: Selection, private val vals: List<Pair<String, String>>) :
-    Filter.Sort(name, vals.map { it.first }.toTypedArray(), selection) {
+internal open class CheckBoxFilter(
+    name: String,
+    val value: String,
+    state: Boolean,
+) : Filter.CheckBox(name, state)
+
+internal open class SortFilter(
+    name: String,
+    selection: Selection,
+    private val vals: List<Pair<String, String>>,
+) : Filter.Sort(name, vals.map { it.first }.toTypedArray(), selection) {
     fun getValue() = vals[state!!.index].second
 }
 
-private val getSortsList: List<Pair<String, String>> = listOf(
-    Pair("Latest", "new"),
-    Pair("A-Z", "alphabet"),
-    Pair("Rating", "rating"),
-    Pair("Views", "views"),
-)
+private val getSortsList: List<Pair<String, String>> =
+    listOf(
+        Pair("Latest", "new"),
+        Pair("A-Z", "alphabet"),
+        Pair("Rating", "rating"),
+        Pair("Views", "views"),
+    )

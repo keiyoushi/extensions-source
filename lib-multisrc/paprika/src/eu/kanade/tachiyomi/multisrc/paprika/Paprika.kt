@@ -24,36 +24,30 @@ abstract class Paprika(
     override val baseUrl: String,
     override val lang: String,
 ) : ParsedHttpSource() {
-
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/popular-manga?page=$page")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/popular-manga?page=$page")
 
     override fun popularMangaSelector() = "div.media"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             element.select("a:has(h4)").let {
                 setUrlWithoutDomain(it.attr("href"))
                 title = it.text()
             }
             thumbnail_url = element.select("img").attr("abs:src")
         }
-    }
 
     override fun popularMangaNextPageSelector() = "a[rel=next]"
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/latest-manga?page=$page")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest-manga?page=$page")
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -63,8 +57,12 @@ abstract class Paprika(
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotBlank()) {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request =
+        if (query.isNotBlank()) {
             GET("$baseUrl/search?q=$query&page=$page")
         } else {
             val url = "$baseUrl/mangas/".toHttpUrl().newBuilder()
@@ -78,7 +76,6 @@ abstract class Paprika(
             url.addQueryParameter("page", page.toString())
             GET(url.build(), headers)
         }
-    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -88,8 +85,8 @@ abstract class Paprika(
 
     // Manga details
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
             title = document.select("div.manga-detail h1").text()
             thumbnail_url = document.select("div.manga-detail img").attr("abs:src")
             document.select("div.media-body p").html().split("<br>").forEach {
@@ -104,14 +101,14 @@ abstract class Paprika(
             }
             description = document.select("div.manga-content p").joinToString("\n") { it.text() }
         }
-    }
 
-    fun String?.toStatus() = when {
-        this == null -> SManga.UNKNOWN
-        this.contains("Ongoing", ignoreCase = true) -> SManga.ONGOING
-        this.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    fun String?.toStatus() =
+        when {
+            this == null -> SManga.UNKNOWN
+            this.contains("Ongoing", ignoreCase = true) -> SManga.ONGOING
+            this.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
 
     // Chapters
 
@@ -129,19 +126,24 @@ abstract class Paprika(
     override fun chapterListSelector() = "div.total-chapter:has(h2) li"
 
     // never called
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    open fun chapterFromElement(element: Element, mangaTitle: String): SChapter {
-        return SChapter.create().apply {
+    open fun chapterFromElement(
+        element: Element,
+        mangaTitle: String,
+    ): SChapter =
+        SChapter.create().apply {
             element.select("a").let {
                 name = it.text().substringAfter("$mangaTitle ")
                 setUrlWithoutDomain(it.attr("href"))
             }
-            date_upload = element.select("div.small").firstOrNull()?.text().toDate()
+            date_upload =
+                element
+                    .select("div.small")
+                    .firstOrNull()
+                    ?.text()
+                    .toDate()
         }
-    }
 
     private val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
 
@@ -149,7 +151,10 @@ abstract class Paprika(
         this ?: return 0L
         return try {
             when {
-                this.contains("yesterday", ignoreCase = true) -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
+                this.contains(
+                    "yesterday",
+                    ignoreCase = true,
+                ) -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
                 this.contains("ago", ignoreCase = true) -> {
                     val trimmedDate = this.substringBefore(" ago").removeSuffix("s").split(" ")
                     val num = trimmedDate[0].toIntOrNull() ?: 1 // for "an hour ago"
@@ -164,7 +169,8 @@ abstract class Paprika(
                 }
                 else ->
                     SimpleDateFormat("MMM d yy", Locale.US)
-                        .parse("${this.substringBefore(",")} $currentYear")?.time ?: 0
+                        .parse("${this.substringBefore(",")} $currentYear")
+                        ?.time ?: 0
             }
         } catch (_: Exception) {
             0L
@@ -173,136 +179,144 @@ abstract class Paprika(
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#arraydata").text().split(",").mapIndexed { i, url ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("#arraydata").text().split(",").mapIndexed { i, url ->
             Page(i, "", url)
         }
-    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        OrderFilter(getOrderList()),
-        GenreFilter(getGenreList()),
-    )
+    override fun getFilterList() =
+        FilterList(
+            Filter.Header("NOTE: Ignored if using text search!"),
+            Filter.Separator(),
+            OrderFilter(getOrderList()),
+            GenreFilter(getGenreList()),
+        )
 
-    class OrderFilter(vals: Array<Pair<String, String>>) : UriPartFilter("Category", vals)
+    class OrderFilter(
+        vals: Array<Pair<String, String>>,
+    ) : UriPartFilter("Category", vals)
 
-    private fun getOrderList() = arrayOf(
-        Pair("Views", "2"),
-        Pair("Latest", "3"),
-        Pair("A-Z", "1"),
-    )
+    private fun getOrderList() =
+        arrayOf(
+            Pair("Views", "2"),
+            Pair("Latest", "3"),
+            Pair("A-Z", "1"),
+        )
 
-    class GenreFilter(vals: Array<Pair<String, String>>) : UriPartFilter("Category", vals)
+    class GenreFilter(
+        vals: Array<Pair<String, String>>,
+    ) : UriPartFilter("Category", vals)
 
-    private fun getGenreList() = arrayOf(
-        Pair("4 koma", "4-koma"),
-        Pair("Action", "action"),
-        Pair("Adaptation", "adaptation"),
-        Pair("Adult", "adult"),
-        Pair("Adventure", "adventure"),
-        Pair("Aliens", "aliens"),
-        Pair("Animals", "animals"),
-        Pair("Anthology", "anthology"),
-        Pair("Award winning", "award-winning"),
-        Pair("Comedy", "comedy"),
-        Pair("Cooking", "cooking"),
-        Pair("Crime", "crime"),
-        Pair("Crossdressing", "crossdressing"),
-        Pair("Delinquents", "delinquents"),
-        Pair("Demons", "demons"),
-        Pair("Doujinshi", "doujinshi"),
-        Pair("Drama", "drama"),
-        Pair("Ecchi", "ecchi"),
-        Pair("Fan colored", "fan-colored"),
-        Pair("Fantasy", "fantasy"),
-        Pair("Food", "food"),
-        Pair("Full color", "full-color"),
-        Pair("Game", "game"),
-        Pair("Gender bender", "gender-bender"),
-        Pair("Genderswap", "genderswap"),
-        Pair("Ghosts", "ghosts"),
-        Pair("Gore", "gore"),
-        Pair("Gossip", "gossip"),
-        Pair("Gyaru", "gyaru"),
-        Pair("Harem", "harem"),
-        Pair("Historical", "historical"),
-        Pair("Horror", "horror"),
-        Pair("Isekai", "isekai"),
-        Pair("Josei", "josei"),
-        Pair("Kids", "kids"),
-        Pair("Loli", "loli"),
-        Pair("Lolicon", "lolicon"),
-        Pair("Long strip", "long-strip"),
-        Pair("Mafia", "mafia"),
-        Pair("Magic", "magic"),
-        Pair("Magical girls", "magical-girls"),
-        Pair("Manhwa", "manhwa"),
-        Pair("Martial arts", "martial-arts"),
-        Pair("Mature", "mature"),
-        Pair("Mecha", "mecha"),
-        Pair("Medical", "medical"),
-        Pair("Military", "military"),
-        Pair("Monster girls", "monster-girls"),
-        Pair("Monsters", "monsters"),
-        Pair("Music", "music"),
-        Pair("Mystery", "mystery"),
-        Pair("Ninja", "ninja"),
-        Pair("Office workers", "office-workers"),
-        Pair("Official colored", "official-colored"),
-        Pair("One shot", "one-shot"),
-        Pair("Parody", "parody"),
-        Pair("Philosophical", "philosophical"),
-        Pair("Police", "police"),
-        Pair("Post apocalyptic", "post-apocalyptic"),
-        Pair("Psychological", "psychological"),
-        Pair("Reincarnation", "reincarnation"),
-        Pair("Reverse harem", "reverse-harem"),
-        Pair("Romance", "romance"),
-        Pair("Samurai", "samurai"),
-        Pair("School life", "school-life"),
-        Pair("Sci fi", "sci-fi"),
-        Pair("Seinen", "seinen"),
-        Pair("Shota", "shota"),
-        Pair("Shotacon", "shotacon"),
-        Pair("Shoujo", "shoujo"),
-        Pair("Shoujo ai", "shoujo-ai"),
-        Pair("Shounen", "shounen"),
-        Pair("Shounen ai", "shounen-ai"),
-        Pair("Slice of life", "slice-of-life"),
-        Pair("Smut", "smut"),
-        Pair("Space", "space"),
-        Pair("Sports", "sports"),
-        Pair("Super power", "super-power"),
-        Pair("Superhero", "superhero"),
-        Pair("Supernatural", "supernatural"),
-        Pair("Survival", "survival"),
-        Pair("Suspense", "suspense"),
-        Pair("Thriller", "thriller"),
-        Pair("Time travel", "time-travel"),
-        Pair("Toomics", "toomics"),
-        Pair("Traditional games", "traditional-games"),
-        Pair("Tragedy", "tragedy"),
-        Pair("User created", "user-created"),
-        Pair("Vampire", "vampire"),
-        Pair("Vampires", "vampires"),
-        Pair("Video games", "video-games"),
-        Pair("Virtual reality", "virtual-reality"),
-        Pair("Web comic", "web-comic"),
-        Pair("Webtoon", "webtoon"),
-        Pair("Wuxia", "wuxia"),
-        Pair("Yaoi", "yaoi"),
-        Pair("Yuri", "yuri"),
-        Pair("Zombies", "zombies"),
-    )
+    private fun getGenreList() =
+        arrayOf(
+            Pair("4 koma", "4-koma"),
+            Pair("Action", "action"),
+            Pair("Adaptation", "adaptation"),
+            Pair("Adult", "adult"),
+            Pair("Adventure", "adventure"),
+            Pair("Aliens", "aliens"),
+            Pair("Animals", "animals"),
+            Pair("Anthology", "anthology"),
+            Pair("Award winning", "award-winning"),
+            Pair("Comedy", "comedy"),
+            Pair("Cooking", "cooking"),
+            Pair("Crime", "crime"),
+            Pair("Crossdressing", "crossdressing"),
+            Pair("Delinquents", "delinquents"),
+            Pair("Demons", "demons"),
+            Pair("Doujinshi", "doujinshi"),
+            Pair("Drama", "drama"),
+            Pair("Ecchi", "ecchi"),
+            Pair("Fan colored", "fan-colored"),
+            Pair("Fantasy", "fantasy"),
+            Pair("Food", "food"),
+            Pair("Full color", "full-color"),
+            Pair("Game", "game"),
+            Pair("Gender bender", "gender-bender"),
+            Pair("Genderswap", "genderswap"),
+            Pair("Ghosts", "ghosts"),
+            Pair("Gore", "gore"),
+            Pair("Gossip", "gossip"),
+            Pair("Gyaru", "gyaru"),
+            Pair("Harem", "harem"),
+            Pair("Historical", "historical"),
+            Pair("Horror", "horror"),
+            Pair("Isekai", "isekai"),
+            Pair("Josei", "josei"),
+            Pair("Kids", "kids"),
+            Pair("Loli", "loli"),
+            Pair("Lolicon", "lolicon"),
+            Pair("Long strip", "long-strip"),
+            Pair("Mafia", "mafia"),
+            Pair("Magic", "magic"),
+            Pair("Magical girls", "magical-girls"),
+            Pair("Manhwa", "manhwa"),
+            Pair("Martial arts", "martial-arts"),
+            Pair("Mature", "mature"),
+            Pair("Mecha", "mecha"),
+            Pair("Medical", "medical"),
+            Pair("Military", "military"),
+            Pair("Monster girls", "monster-girls"),
+            Pair("Monsters", "monsters"),
+            Pair("Music", "music"),
+            Pair("Mystery", "mystery"),
+            Pair("Ninja", "ninja"),
+            Pair("Office workers", "office-workers"),
+            Pair("Official colored", "official-colored"),
+            Pair("One shot", "one-shot"),
+            Pair("Parody", "parody"),
+            Pair("Philosophical", "philosophical"),
+            Pair("Police", "police"),
+            Pair("Post apocalyptic", "post-apocalyptic"),
+            Pair("Psychological", "psychological"),
+            Pair("Reincarnation", "reincarnation"),
+            Pair("Reverse harem", "reverse-harem"),
+            Pair("Romance", "romance"),
+            Pair("Samurai", "samurai"),
+            Pair("School life", "school-life"),
+            Pair("Sci fi", "sci-fi"),
+            Pair("Seinen", "seinen"),
+            Pair("Shota", "shota"),
+            Pair("Shotacon", "shotacon"),
+            Pair("Shoujo", "shoujo"),
+            Pair("Shoujo ai", "shoujo-ai"),
+            Pair("Shounen", "shounen"),
+            Pair("Shounen ai", "shounen-ai"),
+            Pair("Slice of life", "slice-of-life"),
+            Pair("Smut", "smut"),
+            Pair("Space", "space"),
+            Pair("Sports", "sports"),
+            Pair("Super power", "super-power"),
+            Pair("Superhero", "superhero"),
+            Pair("Supernatural", "supernatural"),
+            Pair("Survival", "survival"),
+            Pair("Suspense", "suspense"),
+            Pair("Thriller", "thriller"),
+            Pair("Time travel", "time-travel"),
+            Pair("Toomics", "toomics"),
+            Pair("Traditional games", "traditional-games"),
+            Pair("Tragedy", "tragedy"),
+            Pair("User created", "user-created"),
+            Pair("Vampire", "vampire"),
+            Pair("Vampires", "vampires"),
+            Pair("Video games", "video-games"),
+            Pair("Virtual reality", "virtual-reality"),
+            Pair("Web comic", "web-comic"),
+            Pair("Webtoon", "webtoon"),
+            Pair("Wuxia", "wuxia"),
+            Pair("Yaoi", "yaoi"),
+            Pair("Yuri", "yuri"),
+            Pair("Zombies", "zombies"),
+        )
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(
+        displayName: String,
+        private val vals: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 }

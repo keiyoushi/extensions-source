@@ -9,10 +9,14 @@ class WrapperResult<T>(
     val result: Result<T>? = null,
 ) {
     @Serializable
-    class Result<T>(val `data`: Data<T>)
+    class Result<T>(
+        val `data`: Data<T>,
+    )
 
     @Serializable
-    class Data<T>(val json: T)
+    class Data<T>(
+        val json: T,
+    )
 }
 
 @Serializable

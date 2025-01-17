@@ -15,15 +15,18 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class RawINU : FMReader(
-    "RawINU",
-    "https://rawinu.com",
-    "ja",
-) {
-    override val client = network.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
-        .addInterceptor(::ddosChallengeInterceptor)
-        .build()
+class RawINU :
+    FMReader(
+        "RawINU",
+        "https://rawinu.com",
+        "ja",
+    ) {
+    override val client =
+        network.client
+            .newBuilder()
+            .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            .addInterceptor(::ddosChallengeInterceptor)
+            .build()
 
     private val patternDdosKey = """'([a-f0-9]{32})'""".toRegex()
 
@@ -61,11 +64,12 @@ class RawINU : FMReader(
         return doc.select(chapterListSelector()).map(::chapterFromElement)
     }
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.absUrl("href"))
-        name = element.attr(chapterNameAttrSelector).trim()
-        date_upload = element.select(chapterTimeSelector).run { if (hasText()) parseRelativeDate(text()) else 0 }
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.absUrl("href"))
+            name = element.attr(chapterNameAttrSelector).trim()
+            date_upload = element.select(chapterTimeSelector).run { if (hasText()) parseRelativeDate(text()) else 0 }
+        }
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {

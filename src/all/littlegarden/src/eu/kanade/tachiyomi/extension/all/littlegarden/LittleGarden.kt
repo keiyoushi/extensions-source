@@ -37,28 +37,50 @@ class LittleGarden : ParsedHttpSource() {
 
     // Popular
     override fun popularMangaRequest(page: Int) = GET(baseUrl)
+
     override fun popularMangaSelector() = "div.listing div .col-md-6.col-lg-6.col-xl-4.col-12"
+
     override fun popularMangaNextPageSelector(): String? = null
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.select(".item-title .name").text().trim()
-        setUrlWithoutDomain(element.select("a").attr("href"))
-        thumbnail_url = element.select(".thumb").attr("style").substringAfter("(").substringBefore(")")
-    }
+
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            title = element.select(".item-title .name").text().trim()
+            setUrlWithoutDomain(element.select("a").attr("href"))
+            thumbnail_url =
+                element
+                    .select(".thumb")
+                    .attr("style")
+                    .substringAfter("(")
+                    .substringBefore(")")
+        }
 
     // Latest
     override fun latestUpdatesRequest(page: Int) = GET(baseUrl)
+
     override fun latestUpdatesSelector() = ".d-sm-block.col-sm-6.col-lg-6.col-xl-3.col-12"
+
     override fun latestUpdatesNextPageSelector(): String? = null
-    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("h3")!!.text().trim()
-        setUrlWithoutDomain(element.select("a").attr("href").substringBeforeLast("/"))
-        thumbnail_url = element.select(".img.image-item").attr("style").substringAfter("(").substringBefore(")")
-    }
+
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        SManga.create().apply {
+            title = element.selectFirst("h3")!!.text().trim()
+            setUrlWithoutDomain(element.select("a").attr("href").substringBeforeLast("/"))
+            thumbnail_url =
+                element
+                    .select(".img.image-item")
+                    .attr("style")
+                    .substringAfter("(")
+                    .substringBefore(")")
+        }
+
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select(latestUpdatesSelector()).map { element ->
-            latestUpdatesFromElement(element)
-        }.distinctBy { it.title }
+        val mangas =
+            document
+                .select(latestUpdatesSelector())
+                .map { element ->
+                    latestUpdatesFromElement(element)
+                }.distinctBy { it.title }
         return MangasPage(mangas, false)
     }
 
@@ -72,13 +94,22 @@ class LittleGarden : ParsedHttpSource() {
         }
         return MangasPage(mangas, false)
     }
+
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+
     override fun searchMangaNextPageSelector(): String? = null
+
     override fun searchMangaSelector(): String = popularMangaSelector()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val headers = headersBuilder()
-            .add("query", query)
-            .build()
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val headers =
+            headersBuilder()
+                .add("query", query)
+                .build()
         return GET(baseUrl, headers)
     }
 
@@ -87,13 +118,17 @@ class LittleGarden : ParsedHttpSource() {
 
     // Chapter list
     override fun chapterListSelector() = throw UnsupportedOperationException()
+
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val slug = slugRegex.find(document.toString())?.groupValues?.get(1)
+
         fun buildQuery(queryAction: () -> String) = queryAction().replace("%", "$")
-        val query = buildQuery {
-            """
+        val query =
+            buildQuery {
+                """
                 query chapters(
                 	%slug: String,
                 	%limit: Float,
@@ -129,36 +164,51 @@ class LittleGarden : ParsedHttpSource() {
                         __typename
                 	}
                 }
-            """.trimIndent()
-        }
-        val payload = buildJsonObject {
-            put("operationName", "chapters")
-            put("query", query)
-            putJsonObject("variables") {
-                put("slug", slug)
-                put("order", -1)
-                put("limit", 2000)
-                put("skip", 0)
-                put("isAdmin", true)
+                """.trimIndent()
             }
-        }
+        val payload =
+            buildJsonObject {
+                put("operationName", "chapters")
+                put("query", query)
+                putJsonObject("variables") {
+                    put("slug", slug)
+                    put("order", -1)
+                    put("limit", 2000)
+                    put("skip", 0)
+                    put("isAdmin", true)
+                }
+            }
         val body = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
-        val newHeaders = headersBuilder()
-            .add("Content-Length", body.contentLength().toString())
-            .add("Content-Type", body.contentType().toString())
-            .build()
-        val request = Request.Builder()
-            .method("POST", body)
-            .url("https://littlexgarden.com/graphql") // Request directly their data rather than scraping a page as chapters are dynamically loaded
-            .headers(newHeaders)
-            .build()
+        val newHeaders =
+            headersBuilder()
+                .add("Content-Length", body.contentLength().toString())
+                .add("Content-Type", body.contentType().toString())
+                .build()
+        val request =
+            Request
+                .Builder()
+                .method("POST", body)
+                .url("https://littlexgarden.com/graphql") // Request directly their data rather than scraping a page as chapters are dynamically loaded
+                .headers(newHeaders)
+                .build()
         val resp = client.newCall(request).execute()
-        val chapters = Json.parseToJsonElement(resp.body.string()).jsonObject["data"]?.jsonObject?.get("chapters")?.jsonArray
+        val chapters =
+            Json
+                .parseToJsonElement(resp.body.string())
+                .jsonObject["data"]
+                ?.jsonObject
+                ?.get("chapters")
+                ?.jsonArray
         if (chapters != null) {
             return chapters.map {
                 SChapter.create().apply {
                     val chap = it.jsonObject["number"].toString()
-                    val manga = it.jsonObject["manga"]?.jsonObject?.get("name").toString().replace("\"", "")
+                    val manga =
+                        it.jsonObject["manga"]
+                            ?.jsonObject
+                            ?.get("name")
+                            .toString()
+                            .replace("\"", "")
                     setUrlWithoutDomain("/$slug/$chap")
                     name = "$manga - $chap"
                     chapter_number = chap.toFloat()
@@ -172,7 +222,12 @@ class LittleGarden : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        val chapNb = document.selectFirst("div.chapter-number")!!.text().trim().toInt()
+        val chapNb =
+            document
+                .selectFirst("div.chapter-number")!!
+                .text()
+                .trim()
+                .toInt()
         val engChaps: IntArray = intArrayOf(970, 987, 992)
         if (document.selectFirst("div.manga-name")!!.text().trim() == "One Piece" && (engChaps.contains(chapNb) || chapNb > 1004)) { // Permits to get French pages rather than English pages for some chapters
             oricolPageRegex.findAll(document.select("script:containsData(pages)").toString()).asIterable().mapIndexed { i, it ->
@@ -189,5 +244,6 @@ class LittleGarden : ParsedHttpSource() {
         }
         return pages
     }
+
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

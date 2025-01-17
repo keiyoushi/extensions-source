@@ -25,72 +25,80 @@ class RealLifeComics : ParsedHttpSource() {
 
     // Helper
 
-    private fun createManga(year: Int): SManga = SManga.create().apply {
-        setUrlWithoutDomain("/archivepage.php?year=$year")
-        title = "$name ($year)"
-        thumbnail_url = "$baseUrl$LOGO"
-        author = AUTHOR
-        status = if (year != currentYear) SManga.COMPLETED else SManga.ONGOING
-        description = "$SUMMARY $year"
-    }
+    private fun createManga(year: Int): SManga =
+        SManga.create().apply {
+            setUrlWithoutDomain("/archivepage.php?year=$year")
+            title = "$name ($year)"
+            thumbnail_url = "$baseUrl$LOGO"
+            author = AUTHOR
+            status = if (year != currentYear) SManga.COMPLETED else SManga.ONGOING
+            description = "$SUMMARY $year"
+        }
 
     // Popular
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         // create one manga entry for each yearly archive
         // skip 2016 and 2017 as they don't have any archive
-        return (currentYear downTo 1999).filter { it !in 2016..2017 }
+        return (currentYear downTo 1999)
+            .filter { it !in 2016..2017 }
             .map { createManga(it) }
             .let { Observable.just(MangasPage(it, false))!! }
     }
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
         fetchPopularManga(1).map { mangaList ->
             mangaList.copy(mangaList.mangas.filter { it.title.contains(query) })
         }
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga) = Observable.just(
-        manga.apply {
-            initialized = true
-        },
-    )!!
+    override fun fetchMangaDetails(manga: SManga) =
+        Observable.just(
+            manga.apply {
+                initialized = true
+            },
+        )!!
 
     // Chapters
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).distinct().mapIndexed { index, chapter ->
+    override fun chapterListParse(response: Response): List<SChapter> =
+        super.chapterListParse(response).distinct().mapIndexed { index, chapter ->
             chapter.apply { chapter_number = index.toFloat() }
         }
-    }
 
     override fun chapterListSelector() = ".calendar tbody tr td a"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        url = element.attr("href")
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            url = element.attr("href")
 
-        // entries between 1999-2014 do not have dates in the link
-        // but all entries are placed in a calendar class which has the month & year as heading
-        // figure out a date using the calendar
-        // perhaps there might be a better way to get this but for now this works
-        val monthYear = element
-            .parent()!!
-            .parent()!!
-            .parent()!!
-            .parent()!!
-            .firstElementSibling()
-            .text()
+            // entries between 1999-2014 do not have dates in the link
+            // but all entries are placed in a calendar class which has the month & year as heading
+            // figure out a date using the calendar
+            // perhaps there might be a better way to get this but for now this works
+            val monthYear =
+                element
+                    .parent()!!
+                    .parent()!!
+                    .parent()!!
+                    .parent()!!
+                    .firstElementSibling()
+                    .text()
 
-        val date = "$monthYear ${element.text()}"
-        val parsedDate = SimpleDateFormat("MMMM yyyy dd", Locale.US).parse(date)
-        date_upload = parsedDate?.time ?: 0L
+            val date = "$monthYear ${element.text()}"
+            val parsedDate = SimpleDateFormat("MMMM yyyy dd", Locale.US).parse(date)
+            date_upload = parsedDate?.time ?: 0L
 
-        // chapter names are kept the same as what the site has
-        name = SimpleDateFormat("EEEE, MMM dd, yyyy", Locale.US).format(parsedDate ?: 0L)
-    }
+            // chapter names are kept the same as what the site has
+            name = SimpleDateFormat("EEEE, MMM dd, yyyy", Locale.US).format(parsedDate ?: 0L)
+        }
 
     // Page
 
@@ -113,7 +121,11 @@ class RealLifeComics : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 

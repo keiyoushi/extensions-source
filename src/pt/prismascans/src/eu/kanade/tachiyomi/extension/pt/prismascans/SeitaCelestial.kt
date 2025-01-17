@@ -11,34 +11,36 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class SeitaCelestial : MangaThemesia(
-    "Seita Celestial",
-    "https://seitacelestial.com",
-    "pt-BR",
-    mangaUrlDirectory = "/comics",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
-) {
-
+class SeitaCelestial :
+    MangaThemesia(
+        "Seita Celestial",
+        "https://seitacelestial.com",
+        "pt-BR",
+        mangaUrlDirectory = "/comics",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
+    ) {
     // They changed their name from Prisma Scans to Demon Sect and now to Celestial Sect.
     override val id: Long = 8168108118738519332
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        client
+            .newCall(chapterListRequest(manga))
             .asObservable()
             .map { response ->
                 if (!response.isSuccessful) {
                     throw Exception(
                         """
-                            Obra não encontrada.
-                            Realize a migração do título para atualizar.
+                        Obra não encontrada.
+                        Realize a migração do título para atualizar.
                         """.trimIndent(),
                     )
                 }
                 chapterListParse(response)
             }
-    }
 }

@@ -7,18 +7,21 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class TsundokuTraducoes : MangaThemesia(
-    "Tsundoku Traduções",
-    "https://tsundoku.com.br",
-    "pt-BR",
-    dateFormat = SimpleDateFormat("MMMMM d, yyyy", Locale("pt", "BR")),
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+class TsundokuTraducoes :
+    MangaThemesia(
+        "Tsundoku Traduções",
+        "https://tsundoku.com.br",
+        "pt-BR",
+        dateFormat = SimpleDateFormat("MMMMM d, yyyy", Locale("pt", "BR")),
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     override val altNamePrefix = "Nome alternativo: "
 
-    override fun searchMangaSelector() = ".utao .uta .imgu, .listupd .bs .bsx:not(:has(span.novelabel)), .listo .bs .bsx:not(:has(span.novelabel))"
+    override fun searchMangaSelector() =
+        ".utao .uta .imgu, .listupd .bs .bsx:not(:has(span.novelabel)), .listo .bs .bsx:not(:has(span.novelabel))"
 }

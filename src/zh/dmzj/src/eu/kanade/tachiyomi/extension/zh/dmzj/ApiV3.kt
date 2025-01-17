@@ -10,7 +10,6 @@ import okhttp3.Response
 import org.jsoup.parser.Parser
 
 object ApiV3 {
-
     private const val v3apiUrl = "https://v3api.idmzj.com"
     private const val apiUrl = "https://api.dmzj.com"
 
@@ -18,7 +17,10 @@ object ApiV3 {
 
     fun latestUpdatesUrl(page: Int) = "$v3apiUrl/classify/0/1/${page - 1}.json"
 
-    fun pageUrl(page: Int, filters: FilterList) = "$v3apiUrl/classify/${parseFilters(filters)}/${page - 1}.json"
+    fun pageUrl(
+        page: Int,
+        filters: FilterList,
+    ) = "$v3apiUrl/classify/${parseFilters(filters)}/${page - 1}.json"
 
     fun parsePage(response: Response): MangasPage {
         val data: List<MangaDto> = response.parseAs()
@@ -27,15 +29,14 @@ object ApiV3 {
 
     fun mangaInfoUrlV1(id: String) = "$apiUrl/dynamic/comicinfo/$id.json"
 
-    private fun parseMangaInfoV1(response: Response): ResponseDto = try {
-        response.parseAs()
-    } catch (_: Throwable) {
-        throw Exception("获取漫画信息失败")
-    }
+    private fun parseMangaInfoV1(response: Response): ResponseDto =
+        try {
+            response.parseAs()
+        } catch (_: Throwable) {
+            throw Exception("获取漫画信息失败")
+        }
 
-    fun parseMangaDetailsV1(response: Response): SManga {
-        return parseMangaInfoV1(response).data.info.toSManga()
-    }
+    fun parseMangaDetailsV1(response: Response): SManga = parseMangaInfoV1(response).data.info.toSManga()
 
     fun parseChapterListV1(response: Response): List<SChapter> {
         val data = parseMangaInfoV1(response).data
@@ -51,17 +52,20 @@ object ApiV3 {
 
     fun chapterImagesUrlV1(path: String) = "https://m.idmzj.com/chapinfo/$path.html"
 
-    fun parseChapterImagesV1(response: Response) =
-        response.parseAs<ChapterImagesDto>().toPageList()
+    fun parseChapterImagesV1(response: Response) = response.parseAs<ChapterImagesDto>().toPageList()
 
     fun chapterCommentsUrl(path: String) = "$v3apiUrl/viewPoint/0/$path.json"
 
-    fun parseChapterComments(response: Response, count: Int): List<String> {
+    fun parseChapterComments(
+        response: Response,
+        count: Int,
+    ): List<String> {
         val result: List<ChapterCommentDto> = response.parseAs()
         if (result.isEmpty()) return listOf("没有吐槽")
-        val aggregated = result.groupBy({ it.content }, { it.num }).map { (content, likes) ->
-            ChapterCommentDto(Parser.unescapeEntities(content, false), likes.sum())
-        } as ArrayList
+        val aggregated =
+            result.groupBy({ it.content }, { it.num }).map { (content, likes) ->
+                ChapterCommentDto(Parser.unescapeEntities(content, false), likes.sum())
+            } as ArrayList
         aggregated.sort()
         return aggregated.take(count).map { it.toString() }
     }
@@ -76,18 +80,19 @@ object ApiV3 {
         private val types: String,
         private val description: String? = null,
     ) {
-        fun toSManga() = SManga.create().apply {
-            url = getMangaUrl(id.content)
-            title = this@MangaDto.title
-            author = authors?.formatList()
-            genre = types.formatList()
-            status = parseStatus(this@MangaDto.status)
-            thumbnail_url = cover
+        fun toSManga() =
+            SManga.create().apply {
+                url = getMangaUrl(id.content)
+                title = this@MangaDto.title
+                author = authors?.formatList()
+                genre = types.formatList()
+                status = parseStatus(this@MangaDto.status)
+                thumbnail_url = cover
 
-            val desc = this@MangaDto.description ?: return@apply
-            description = "$desc\n\n漫画 ID (2): ${id.content}" // hidden
-            initialized = true
-        }
+                val desc = this@MangaDto.description ?: return@apply
+                description = "$desc\n\n漫画 ID (2): ${id.content}" // hidden
+                initialized = true
+            }
     }
 
     @Serializable
@@ -97,11 +102,12 @@ object ApiV3 {
         private val chapter_name: String,
         private val updatetime: String,
     ) {
-        fun toSChapter() = SChapter.create().apply {
-            url = "$comic_id/$id"
-            name = chapter_name.formatChapterName()
-            date_upload = updatetime.toLong() * 1000
-        }
+        fun toSChapter() =
+            SChapter.create().apply {
+                url = "$comic_id/$id"
+                name = chapter_name.formatChapterName()
+                date_upload = updatetime.toLong() * 1000
+            }
     }
 
     @Serializable
@@ -117,12 +123,19 @@ object ApiV3 {
         val num: Int,
     ) : Comparable<ChapterCommentDto> {
         override fun toString() = if (num > 0) "$content [+$num]" else content
+
         override fun compareTo(other: ChapterCommentDto) = other.num.compareTo(num) // descending
     }
 
     @Serializable
-    class DataDto(val info: MangaDto, val list: List<ChapterDto>, val alone: List<ChapterDto>)
+    class DataDto(
+        val info: MangaDto,
+        val list: List<ChapterDto>,
+        val alone: List<ChapterDto>,
+    )
 
     @Serializable
-    class ResponseDto(val data: DataDto)
+    class ResponseDto(
+        val data: DataDto,
+    )
 }

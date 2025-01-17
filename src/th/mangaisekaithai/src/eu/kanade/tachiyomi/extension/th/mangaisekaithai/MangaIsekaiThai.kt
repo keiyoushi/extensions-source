@@ -19,12 +19,13 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaIsekaiThai : Madara(
-    "MangaIsekaiThai",
-    "https://www.mangaisekaithai.com",
-    "th",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("th")),
-) {
+class MangaIsekaiThai :
+    Madara(
+        "MangaIsekaiThai",
+        "https://www.mangaisekaithai.com",
+        "th",
+        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("th")),
+    ) {
     override val supportsLatest = false
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
@@ -35,11 +36,14 @@ class MangaIsekaiThai : Madara(
     override val fetchGenres = false // While genres exist, they can't be used in standard Madara search
 
     // Descrambling logic from ManhuaKey
-    override val client = super.client.newBuilder()
-        .addNetworkInterceptor(::imageDescrambler)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .addNetworkInterceptor(::imageDescrambler)
+            .build()
 
     override val pageListParseSelector = ".reading-content img, .reading-content div.displayImage + script:containsData(p,a,c,k,e,d)"
+
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
         val location = document.location()
@@ -51,17 +55,22 @@ class MangaIsekaiThai : Madara(
                 val unpackedScript = Unpacker.unpack(element.data())
                 val blockWidth = blockWidthRegex.find(unpackedScript)!!.groupValues[1].toInt()
                 val blockHeight = blockHeightRegex.find(unpackedScript)!!.groupValues[1].toInt()
-                val matrix = unpackedScript.substringAfter("[")
-                    .substringBefore("];")
-                    .let { "[$it]" }
-                val scrambledImageUrl = unpackedScript.substringAfter("url(")
-                    .substringBefore(");")
+                val matrix =
+                    unpackedScript
+                        .substringAfter("[")
+                        .substringBefore("];")
+                        .let { "[$it]" }
+                val scrambledImageUrl =
+                    unpackedScript
+                        .substringAfter("url(")
+                        .substringBefore(");")
 
-                val data = ScramblingData(
-                    blockWidth = blockWidth,
-                    blockHeight = blockHeight,
-                    matrix = json.decodeFromString(matrix),
-                )
+                val data =
+                    ScramblingData(
+                        blockWidth = blockWidth,
+                        blockHeight = blockHeight,
+                        matrix = json.decodeFromString(matrix),
+                    )
 
                 Page(idx, location, "$scrambledImageUrl#${json.encodeToString(data)}")
             }
@@ -93,18 +102,20 @@ class MangaIsekaiThai : Madara(
         val canvas = Canvas(descrambledImg)
 
         for (pos in scramblingData.matrix) {
-            val srcRect = Rect(
-                pos[2].toInt(),
-                pos[3].toInt(),
-                pos[2].toInt() + scramblingData.blockWidth,
-                pos[3].toInt() + scramblingData.blockHeight,
-            )
-            val destRect = Rect(
-                pos[0].toInt(),
-                pos[1].toInt(),
-                pos[0].toInt() + scramblingData.blockWidth,
-                pos[1].toInt() + scramblingData.blockHeight,
-            )
+            val srcRect =
+                Rect(
+                    pos[2].toInt(),
+                    pos[3].toInt(),
+                    pos[2].toInt() + scramblingData.blockWidth,
+                    pos[3].toInt() + scramblingData.blockHeight,
+                )
+            val destRect =
+                Rect(
+                    pos[0].toInt(),
+                    pos[1].toInt(),
+                    pos[0].toInt() + scramblingData.blockWidth,
+                    pos[1].toInt() + scramblingData.blockHeight,
+                )
             canvas.drawBitmap(scrambledImg, srcRect, destRect, null)
         }
 
@@ -114,7 +125,8 @@ class MangaIsekaiThai : Madara(
         val image = output.toByteArray()
         val body = image.toResponseBody("image/jpeg".toMediaType())
 
-        return response.newBuilder()
+        return response
+            .newBuilder()
             .body(body)
             .build()
     }

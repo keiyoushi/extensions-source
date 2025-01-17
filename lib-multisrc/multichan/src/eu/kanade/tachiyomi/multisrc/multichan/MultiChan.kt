@@ -23,19 +23,22 @@ abstract class MultiChan(
     override val baseUrl: String,
     final override val lang: String,
 ) : ParsedHttpSource() {
-
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(2)
-        .build()
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("Referer", baseUrl)
-    }
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/mostfavorites?offset=${20 * (page - 1)}", headers)
+    override val client: OkHttpClient =
+        network.client
+            .newBuilder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .rateLimit(2)
+            .build()
+
+    override fun headersBuilder() =
+        Headers.Builder().apply {
+            add("Referer", baseUrl)
+        }
+
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mostfavorites?offset=${20 * (page - 1)}", headers)
 
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/new?offset=${20 * (page - 1)}")
 
@@ -55,8 +58,7 @@ abstract class MultiChan(
         return manga
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
@@ -72,17 +74,19 @@ abstract class MultiChan(
         val document = response.asJsoup()
         var hasNextPage = false
 
-        val mangas = document.select(searchMangaSelector()).map { element ->
-            searchMangaFromElement(element)
-        }
+        val mangas =
+            document.select(searchMangaSelector()).map { element ->
+                searchMangaFromElement(element)
+            }
 
         val nextSearchPage = document.select(searchMangaNextPageSelector())
         if (nextSearchPage.isNotEmpty()) {
             val query = document.select("input#searchinput").first()!!.attr("value")
-            val pageNum = nextSearchPage.let { selector ->
-                val onClick = selector.attr("onclick")
-                onClick.split("""\\d+""")
-            }
+            val pageNum =
+                nextSearchPage.let { selector ->
+                    val onClick = selector.attr("onclick")
+                    onClick.split("""\\d+""")
+                }
             nextSearchPage.attr("href", "$baseUrl/?do=search&subaction=search&story=$query&search_start=$pageNum")
             hasNextPage = true
         }
@@ -104,16 +108,22 @@ abstract class MultiChan(
         manga.author = infoElement.select(":contains(Автор) .item2").text()
         manga.genre = rawCategory + ", " + document.select(".sidetags ul a:last-child").joinToString { it.text() }
         manga.status = parseStatus(infoElement.select(":contains(Загружено)").text())
-        manga.description = descElement.textNodes().first().text().trim()
+        manga.description =
+            descElement
+                .textNodes()
+                .first()
+                .text()
+                .trim()
         manga.thumbnail_url = document.select("img#cover").first()!!.attr("src")
         return manga
     }
 
-    private fun parseStatus(element: String): Int = when {
-        element.contains("перевод завершен") -> SManga.COMPLETED
-        element.contains("перевод продолжается") -> SManga.ONGOING
-        else -> SManga.UNKNOWN
-    }
+    private fun parseStatus(element: String): Int =
+        when {
+            element.contains("перевод завершен") -> SManga.COMPLETED
+            element.contains("перевод продолжается") -> SManga.ONGOING
+            else -> SManga.UNKNOWN
+        }
 
     override fun chapterListSelector() = "table.table_cha tr:gt(1)"
 
@@ -123,7 +133,9 @@ abstract class MultiChan(
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(urlElement.attr("href"))
         chapter.name = urlElement.text()
-        chapter.chapter_number = "(глава\\s|часть\\s)([0-9]+\\.?[0-9]*)".toRegex(RegexOption.IGNORE_CASE).find(chapter.name)?.groupValues?.get(2)?.toFloat() ?: -1F
+        chapter.chapter_number =
+            "(глава\\s|часть\\s)([0-9]+\\.?[0-9]*)".toRegex(RegexOption.IGNORE_CASE).find(chapter.name)?.groupValues?.get(2)?.toFloat()
+                ?: -1F
         chapter.date_upload = simpleDateFormat.parse(element.select("div.date").first()!!.text())?.time ?: 0L
         return chapter
     }
@@ -138,9 +150,7 @@ abstract class MultiChan(
         return pageUrls.mapIndexed { i, url -> Page(i, "", url) }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        throw Exception("Not used")
-    }
+    override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
 
     override fun imageUrlParse(document: Document) = ""
 

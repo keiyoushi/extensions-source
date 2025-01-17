@@ -11,37 +11,43 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MGKomik : Madara(
-    "MG Komik",
-    "https://mgkomik.org",
-    "id",
-    SimpleDateFormat("dd MMM yy", Locale.US),
-) {
+class MGKomik :
+    Madara(
+        "MG Komik",
+        "https://mgkomik.org",
+        "id",
+        SimpleDateFormat("dd MMM yy", Locale.US),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val useNewChapterEndpoint = false
 
     override val mangaSubString = "komik"
 
-    override fun headersBuilder() = super.headersBuilder().apply {
-        add("Sec-Fetch-Dest", "document")
-        add("Sec-Fetch-Mode", "navigate")
-        add("Sec-Fetch-Site", "same-origin")
-        add("Upgrade-Insecure-Requests", "1")
-        add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
-    }
-
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val headers = request.headers.newBuilder().apply {
-                removeAll("X-Requested-With")
-            }.build()
-
-            chain.proceed(request.newBuilder().headers(headers).build())
+    override fun headersBuilder() =
+        super.headersBuilder().apply {
+            add("Sec-Fetch-Dest", "document")
+            add("Sec-Fetch-Mode", "navigate")
+            add("Sec-Fetch-Site", "same-origin")
+            add("Upgrade-Insecure-Requests", "1")
+            add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
         }
-        .rateLimit(9, 2)
-        .build()
+
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val headers =
+                    request.headers
+                        .newBuilder()
+                        .apply {
+                            removeAll("X-Requested-With")
+                        }.build()
+
+                chain.proceed(request.newBuilder().headers(headers).build())
+            }.rateLimit(9, 2)
+            .build()
 
     // ================================== Popular ======================================
 
@@ -58,7 +64,11 @@ class MGKomik : Madara(
 
     // ================================== Search =======================================
 
-    override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         filters.forEach { filter ->
             when (filter) {
                 is GenreContentFilter -> {
@@ -94,28 +104,33 @@ class MGKomik : Madara(
         val filters = super.getFilterList().list.toMutableList()
 
         if (genresList.isNotEmpty()) {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header(intl["genre_filter_header"]),
-                GenreContentFilter(
-                    title = intl["genre_filter_title"],
-                    options = genresList.map { it.name to it.id },
-                ),
-            )
+            filters +=
+                listOf(
+                    Filter.Separator(),
+                    Filter.Header(intl["genre_filter_header"]),
+                    GenreContentFilter(
+                        title = intl["genre_filter_title"],
+                        options = genresList.map { it.name to it.id },
+                    ),
+                )
         } else if (fetchGenres) {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header(intl["genre_missing_warning"]),
-            )
+            filters +=
+                listOf(
+                    Filter.Separator(),
+                    Filter.Header(intl["genre_missing_warning"]),
+                )
         }
 
         return FilterList(filters)
     }
 
-    private class GenreContentFilter(title: String, options: List<Pair<String, String>>) : UriPartFilter(
-        title,
-        options.toTypedArray(),
-    )
+    private class GenreContentFilter(
+        title: String,
+        options: List<Pair<String, String>>,
+    ) : UriPartFilter(
+            title,
+            options.toTypedArray(),
+        )
 
     override fun genresRequest() = GET("$baseUrl/$mangaSubString", headers)
 
@@ -124,8 +139,11 @@ class MGKomik : Madara(
     fun fetchGenresOption() {
         if (fetchGenresAttempts < 3 && genresList.isEmpty()) {
             try {
-                genresList = client.newCall(genresRequest()).execute()
-                    .use { parseGenres(it.asJsoup()) }
+                genresList =
+                    client
+                        .newCall(genresRequest())
+                        .execute()
+                        .use { parseGenres(it.asJsoup()) }
             } catch (_: Exception) {
             } finally {
                 fetchGenresAttempts++
@@ -136,9 +154,10 @@ class MGKomik : Madara(
     override fun parseGenres(document: Document): List<Genre> {
         val genres = mutableListOf<Genre>()
         genres += Genre("All", "")
-        genres += document.select(".row.genres li a").map { a ->
-            Genre(a.text(), a.absUrl("href"))
-        }
+        genres +=
+            document.select(".row.genres li a").map { a ->
+                Genre(a.text(), a.absUrl("href"))
+            }
         return genres
     }
 

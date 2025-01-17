@@ -23,7 +23,6 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class BH3 : ParsedHttpSource() {
-
     override val name = "《崩坏3》IP站"
 
     override val baseUrl = "https://comic.bh3.com"
@@ -32,12 +31,14 @@ class BH3 : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .retryOnConnectionFailure(true)
-        .followRedirects(true)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(1, TimeUnit.MINUTES)
+            .retryOnConnectionFailure(true)
+            .followRedirects(true)
+            .build()
 
     private val json: Json by injectLazy()
 
@@ -59,7 +60,11 @@ class BH3 : ParsedHttpSource() {
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw Exception("No search")
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw Exception("No search")
 
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url + "/get_chapter", headers)
 
@@ -85,28 +90,27 @@ class BH3 : ParsedHttpSource() {
         return jsonResult.map { jsonEl -> createChapter(jsonEl.jsonObject) }
     }
 
-    private fun createChapter(jsonObj: JsonObject) = SChapter.create().apply {
-        name = jsonObj["title"]!!.jsonPrimitive.content
-        url = "/book/${jsonObj["bookid"]!!.jsonPrimitive.int}/${jsonObj["chapterid"]!!.jsonPrimitive.int}"
-        date_upload = parseDate(jsonObj["timestamp"]!!.jsonPrimitive.content)
-        chapter_number = jsonObj["chapterid"]!!.jsonPrimitive.float
-    }
+    private fun createChapter(jsonObj: JsonObject) =
+        SChapter.create().apply {
+            name = jsonObj["title"]!!.jsonPrimitive.content
+            url = "/book/${jsonObj["bookid"]!!.jsonPrimitive.int}/${jsonObj["chapterid"]!!.jsonPrimitive.int}"
+            date_upload = parseDate(jsonObj["timestamp"]!!.jsonPrimitive.content)
+            chapter_number = jsonObj["chapterid"]!!.jsonPrimitive.float
+        }
 
-    private fun parseDate(date: String): Long {
-        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0L
-    }
+    private fun parseDate(date: String): Long = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(date)?.time ?: 0L
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        thumbnail_url = document.select("img.cover").attr("abs:src")
-        description = document.select("div.detail_info1").text().trim()
-        title = document.select("div.title").text().trim()
-    }
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            thumbnail_url = document.select("img.cover").attr("abs:src")
+            description = document.select("div.detail_info1").text().trim()
+            title = document.select("div.title").text().trim()
+        }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.lazy.comic_img").mapIndexed { i, el ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("img.lazy.comic_img").mapIndexed { i, el ->
             Page(i, "", el.attr("data-original"))
         }
-    }
 
     override fun imageUrlParse(document: Document) = ""
 }

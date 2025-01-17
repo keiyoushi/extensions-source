@@ -10,22 +10,27 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MrYaoiFansub : Madara(
-    "MR Yaoi Fansub",
-    "https://mrbenne.com",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor(::loginCheckIntercept)
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+class MrYaoiFansub :
+    Madara(
+        "MR Yaoi Fansub",
+        "https://mrbenne.com",
+        "pt-BR",
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .addInterceptor(::loginCheckIntercept)
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     private fun loginCheckIntercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
 
-        if (response.request.url.queryParameter("password-protected").isNullOrEmpty()) {
+        if (response.request.url
+                .queryParameter("password-protected")
+                .isNullOrEmpty()
+        ) {
             return response
         }
 

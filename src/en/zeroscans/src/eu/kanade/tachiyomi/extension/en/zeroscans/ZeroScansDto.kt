@@ -43,9 +43,7 @@ data class ZeroScansComicDto(
     @SerialName("view_count") val viewCount: Int,
     val rating: JsonElement,
 ) {
-    fun getRating(): Float {
-        return this.rating.toString().toFloatOrNull() ?: 0F
-    }
+    fun getRating(): Float = this.rating.toString().toFloatOrNull() ?: 0F
 }
 
 @Serializable
@@ -78,14 +76,13 @@ data class ZeroScansCoverDto(
     val vertical: String? = null,
     val full: String? = null,
 ) {
-    fun getHighResCover(): String {
-        return when {
+    fun getHighResCover(): String =
+        when {
             !this.full.isNullOrBlank() -> this.full
             !this.horizontal.isNullOrBlank() -> this.horizontal.replace("-horizontal", "-full")
             !this.vertical.isNullOrBlank() -> this.vertical.replace("-vertical", "-full")
             else -> ""
         }
-    }
 }
 
 @Serializable

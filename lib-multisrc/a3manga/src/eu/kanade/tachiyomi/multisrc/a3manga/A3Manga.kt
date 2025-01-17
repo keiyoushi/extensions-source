@@ -35,7 +35,6 @@ open class A3Manga(
     override val baseUrl: String,
     override val lang: String,
 ) : ParsedHttpSource() {
-
     override val supportsLatest: Boolean = false
 
     override val client: OkHttpClient = network.cloudflareClient
@@ -48,11 +47,12 @@ open class A3Manga(
 
     override fun popularMangaSelector() = ".comic-list .comic-item"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select(".comic-title-link a").attr("href"))
-        title = element.select(".comic-title").text().trim()
-        thumbnail_url = element.select(".img-thumbnail").attr("abs:src")
-    }
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.select(".comic-title-link a").attr("href"))
+            title = element.select(".comic-title").text().trim()
+            thumbnail_url = element.select(".img-thumbnail").attr("abs:src")
+        }
 
     override fun popularMangaNextPageSelector() = "li.next:not(.disabled)"
 
@@ -64,29 +64,36 @@ open class A3Manga(
 
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return when {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        when {
             query.startsWith(PREFIX_ID_SEARCH) -> {
                 val id = query.removePrefix(PREFIX_ID_SEARCH).trim()
                 fetchMangaDetails(
                     SManga.create().apply {
                         url = "/truyen-tranh/$id/"
                     },
-                )
-                    .map {
-                        it.url = "/truyen-tranh/$id/"
-                        MangasPage(listOf(it), false)
-                    }
+                ).map {
+                    it.url = "/truyen-tranh/$id/"
+                    MangasPage(listOf(it), false)
+                }
             }
             else -> super.fetchSearchManga(page, query, filters)
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request =
         POST(
             "$baseUrl/wp-admin/admin-ajax.php",
             headers,
-            FormBody.Builder()
+            FormBody
+                .Builder()
                 .add("action", "searchtax")
                 .add("keyword", query)
                 .build(),
@@ -105,66 +112,77 @@ open class A3Manga(
             return MangasPage(emptyList(), false)
         }
 
-        val manga = dto.data
-            .filter { it.cstatus != "Nhóm dịch" }
-            .map {
-                SManga.create().apply {
-                    setUrlWithoutDomain(it.link)
-                    title = it.title
-                    thumbnail_url = it.img
+        val manga =
+            dto.data
+                .filter { it.cstatus != "Nhóm dịch" }
+                .map {
+                    SManga.create().apply {
+                        setUrlWithoutDomain(it.link)
+                        title = it.title
+                        thumbnail_url = it.img
+                    }
                 }
-            }
 
         return MangasPage(manga, false)
     }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select(".info-title").text()
-        author = document.select(".comic-info strong:contains(Tác giả) + span").text().trim()
-        description = document.select(".intro-container .text-justify").text().substringBefore("— Xem Thêm —")
-        genre = document.select(".comic-info .tags a").joinToString { tag ->
-            tag.text().split(' ').joinToString(separator = " ") { word ->
-                word.replaceFirstChar { it.titlecase() }
-            }
-        }
-        thumbnail_url = document.select(".img-thumbnail").attr("abs:src")
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = document.select(".info-title").text()
+            author = document.select(".comic-info strong:contains(Tác giả) + span").text().trim()
+            description = document.select(".intro-container .text-justify").text().substringBefore("— Xem Thêm —")
+            genre =
+                document.select(".comic-info .tags a").joinToString { tag ->
+                    tag.text().split(' ').joinToString(separator = " ") { word ->
+                        word.replaceFirstChar { it.titlecase() }
+                    }
+                }
+            thumbnail_url = document.select(".img-thumbnail").attr("abs:src")
 
-        val statusString = document.select(".comic-info strong:contains(Tình trạng) + span").text()
-        status = when (statusString) {
-            "Đang tiến hành" -> SManga.ONGOING
-            "Trọn bộ " -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+            val statusString = document.select(".comic-info strong:contains(Tình trạng) + span").text()
+            status =
+                when (statusString) {
+                    "Đang tiến hành" -> SManga.ONGOING
+                    "Trọn bộ " -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
-    }
 
     override fun chapterListSelector(): String = ".chapter-table table tbody tr"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.select("a").attr("href"))
-        name = element.select("a .hidden-sm").text()
-        date_upload = runCatching {
-            dateFormat.parse(element.select("td").last()!!.text())?.time
-        }.getOrNull() ?: 0
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.select("a").attr("href"))
+            name = element.select("a .hidden-sm").text()
+            date_upload = runCatching {
+                dateFormat.parse(element.select("td").last()!!.text())?.time
+            }.getOrNull() ?: 0
+        }
 
     protected fun decodeImgList(document: Document): String {
-        val htmlContentScript = document.selectFirst("script:containsData(htmlContent)")?.html()
-            ?.substringAfter("var htmlContent=\"")
-            ?.substringBefore("\";")
-            ?.replace("\\\"", "\"")
-            ?.replace("\\\\", "\\")
-            ?.replace("\\/", "/")
-            ?: throw Exception("Couldn't find script with image data.")
+        val htmlContentScript =
+            document
+                .selectFirst("script:containsData(htmlContent)")
+                ?.html()
+                ?.substringAfter("var htmlContent=\"")
+                ?.substringBefore("\";")
+                ?.replace("\\\"", "\"")
+                ?.replace("\\\\", "\\")
+                ?.replace("\\/", "/")
+                ?: throw Exception("Couldn't find script with image data.")
         val htmlContent = json.decodeFromString<CipherDto>(htmlContentScript)
         val ciphertext = Base64.decode(htmlContent.ciphertext, Base64.DEFAULT)
         val iv = htmlContent.iv.decodeHex()
         val salt = htmlContent.salt.decodeHex()
 
-        val passwordScript = document.selectFirst("script:containsData(chapterHTML)")?.html()
-            ?: throw Exception("Couldn't find password to decrypt image data.")
-        val passphrase = passwordScript.substringAfter("var chapterHTML=CryptoJSAesDecrypt('")
-            .substringBefore("',htmlContent")
-            .replace("'+'", "")
+        val passwordScript =
+            document.selectFirst("script:containsData(chapterHTML)")?.html()
+                ?: throw Exception("Couldn't find password to decrypt image data.")
+        val passphrase =
+            passwordScript
+                .substringAfter("var chapterHTML=CryptoJSAesDecrypt('")
+                .substringBefore("',htmlContent")
+                .replace("'+'", "")
 
         val keyFactory = SecretKeyFactory.getInstance(KEY_ALGORITHM)
         val spec = PBEKeySpec(passphrase.toCharArray(), salt, 999, 256)
@@ -192,12 +210,13 @@ open class A3Manga(
         // We expect the URL to start with `https://`, where the last 3 characters are encoded.
         // The length of the encoded character is not known, but it is the same across all.
         // Essentially we are looking for the two encoded slashes, which tells us the length.
-        val patternIdx = patternsLengthCheck.indexOfFirst { pattern ->
-            val matchResult = pattern.find(this)
-            val g1 = matchResult?.groupValues?.get(1)
-            val g2 = matchResult?.groupValues?.get(2)
-            g1 == g2 && g1 != null
-        }
+        val patternIdx =
+            patternsLengthCheck.indexOfFirst { pattern ->
+                val matchResult = pattern.find(this)
+                val g1 = matchResult?.groupValues?.get(1)
+                val g2 = matchResult?.groupValues?.get(2)
+                g1 == g2 && g1 != null
+            }
         if (patternIdx == -1) {
             return null
         }
@@ -215,9 +234,7 @@ open class A3Manga(
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     // https://stackoverflow.com/a/66614516
     private fun String.decodeHex(): ByteArray {
@@ -233,15 +250,18 @@ open class A3Manga(
         const val CIPHER_TRANSFORMATION = "AES/CBC/PKCS7PADDING"
 
         const val PREFIX_ID_SEARCH = "id:"
-        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-        }
+        val dateFormat =
+            SimpleDateFormat("dd/MM/yyyy", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+            }
 
-        private val patternsLengthCheck: List<Regex> = (20 downTo 1).map { i ->
-            """^https.{$i}(.{$i})(.{$i})""".toRegex()
-        }
-        private val patternsSubstitution: List<Regex> = (20 downTo 1).map { i ->
-            """^https(.{$i})(.{$i}).*(.{$i})(?:webp|jpeg|tiff|.{3})$""".toRegex()
-        }
+        private val patternsLengthCheck: List<Regex> =
+            (20 downTo 1).map { i ->
+                """^https.{$i}(.{$i})(.{$i})""".toRegex()
+            }
+        private val patternsSubstitution: List<Regex> =
+            (20 downTo 1).map { i ->
+                """^https(.{$i})(.{$i}).*(.{$i})(?:webp|jpeg|tiff|.{3})$""".toRegex()
+            }
     }
 }

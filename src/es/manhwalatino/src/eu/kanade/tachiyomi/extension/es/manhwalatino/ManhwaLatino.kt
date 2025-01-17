@@ -14,32 +14,40 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhwaLatino : Madara(
-    "Manhwa-Latino",
-    "https://manhwa-latino.com",
-    "es",
-    SimpleDateFormat("dd/MM/yyyy", Locale("es")),
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val headers = request.headers.newBuilder()
-                .removeAll("Accept-Encoding")
-                .build()
-            val response = chain.proceed(request.newBuilder().headers(headers).build())
-            if (response.headers("Content-Type").contains("application/octet-stream") && response.request.url.toString().endsWith(".jpg")) {
-                val orgBody = response.body.bytes()
-                val newBody = orgBody.toResponseBody("image/jpeg".toMediaTypeOrNull())
-                response.newBuilder()
-                    .body(newBody)
-                    .build()
-            } else {
-                response
-            }
-        }
-        .build()
+class ManhwaLatino :
+    Madara(
+        "Manhwa-Latino",
+        "https://manhwa-latino.com",
+        "es",
+        SimpleDateFormat("dd/MM/yyyy", Locale("es")),
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val headers =
+                    request.headers
+                        .newBuilder()
+                        .removeAll("Accept-Encoding")
+                        .build()
+                val response = chain.proceed(request.newBuilder().headers(headers).build())
+                if (response.headers("Content-Type").contains("application/octet-stream") &&
+                    response.request.url
+                        .toString()
+                        .endsWith(".jpg")
+                ) {
+                    val orgBody = response.body.bytes()
+                    val newBody = orgBody.toResponseBody("image/jpeg".toMediaTypeOrNull())
+                    response
+                        .newBuilder()
+                        .body(newBody)
+                        .build()
+                } else {
+                    response
+                }
+            }.build()
 
     override val useNewChapterEndpoint = true
 
@@ -50,6 +58,7 @@ class ManhwaLatino : Madara(
     override val pageListParseSelector = "div.page-break img.wp-manga-chapter-img"
 
     private val chapterListNextPageSelector = "div.pagination > span.current + span"
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaUrl = response.request.url
         var document = response.asJsoup()
@@ -67,7 +76,9 @@ class ManhwaLatino : Madara(
                 page++
                 val nextPageUrl = mangaUrl.newBuilder().setQueryParameter("t", page.toString()).build()
                 document = client.newCall(GET(nextPageUrl, headers)).execute().asJsoup()
-            } else { break }
+            } else {
+                break
+            }
         } while (true)
 
         return chapterList
@@ -78,9 +89,10 @@ class ManhwaLatino : Madara(
 
         with(element) {
             selectFirst(chapterUrlSelector)!!.let { urlElement ->
-                chapter.url = urlElement.attr("abs:href").let {
-                    it.substringBefore("?style=paged") + if (!it.endsWith(chapterUrlSuffix)) chapterUrlSuffix else ""
-                }
+                chapter.url =
+                    urlElement.attr("abs:href").let {
+                        it.substringBefore("?style=paged") + if (!it.endsWith(chapterUrlSuffix)) chapterUrlSuffix else ""
+                    }
                 chapter.name = urlElement.wholeText().substringAfter("\n")
             }
 

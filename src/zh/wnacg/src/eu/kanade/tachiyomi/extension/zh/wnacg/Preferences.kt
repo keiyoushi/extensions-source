@@ -45,7 +45,8 @@ fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 fun getSharedPreferences(id: Long): SharedPreferences {
     val preferences: SharedPreferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     if (preferences.getString(DEFAULT_LIST_PREF, "")!! == DEFAULT_LIST) return preferences
-    preferences.edit()
+    preferences
+        .edit()
         .remove("overrideBaseUrl")
         .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
         .setUrlList(DEFAULT_LIST, preferences.urlIndex)
@@ -53,7 +54,10 @@ fun getSharedPreferences(id: Long): SharedPreferences {
     return preferences
 }
 
-fun SharedPreferences.Editor.setUrlList(urlList: String, oldIndex: Int): SharedPreferences.Editor {
+fun SharedPreferences.Editor.setUrlList(
+    urlList: String,
+    oldIndex: Int,
+): SharedPreferences.Editor {
     putString(URL_LIST_PREF, urlList)
     val maxIndex = urlList.count { it == ',' }
     if (oldIndex in 0..maxIndex) return this
@@ -61,7 +65,9 @@ fun SharedPreferences.Editor.setUrlList(urlList: String, oldIndex: Int): SharedP
     return putString(URL_INDEX_PREF, newIndex.toString())
 }
 
-class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interceptor {
+class UpdateUrlInterceptor(
+    private val preferences: SharedPreferences,
+) : Interceptor {
     private val baseUrl = preferences.baseUrl
     var isUpdated = false
 
@@ -69,15 +75,16 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
         val request = chain.request()
         if (!request.url.toString().startsWith(baseUrl)) return chain.proceed(request)
 
-        val failedResponse = try {
-            val response = chain.proceed(request)
-            if (response.isSuccessful && response.header("Server") != "Parking/1.0") return response
-            response.close()
-            Result.success(response)
-        } catch (e: Throwable) {
-            if (chain.call().isCanceled()) throw e
-            Result.failure(e)
-        }
+        val failedResponse =
+            try {
+                val response = chain.proceed(request)
+                if (response.isSuccessful && response.header("Server") != "Parking/1.0") return response
+                response.close()
+                Result.success(response)
+            } catch (e: Throwable) {
+                if (chain.call().isCanceled()) throw e
+                Result.failure(e)
+            }
 
         if (isUpdated || updateUrl(chain)) {
             throw IOException("网址已自动更新，请重启应用")
@@ -88,18 +95,20 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
     @Synchronized
     private fun updateUrl(chain: Interceptor.Chain): Boolean {
         if (isUpdated) return true
-        val response = try {
-            chain.proceed(GET("https://stevenyomi.github.io/source-domains/wnacg.txt"))
-        } catch (_: Throwable) {
-            return false
-        }
+        val response =
+            try {
+                chain.proceed(GET("https://stevenyomi.github.io/source-domains/wnacg.txt"))
+            } catch (_: Throwable) {
+                return false
+            }
         if (!response.isSuccessful) {
             response.close()
             return false
         }
         val newList = response.body.string()
         if (newList != preferences.getString(URL_LIST_PREF, "")!!) {
-            preferences.edit()
+            preferences
+                .edit()
                 .setUrlList(newList, preferences.urlIndex)
                 .apply()
         }

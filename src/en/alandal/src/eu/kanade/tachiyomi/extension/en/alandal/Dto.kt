@@ -31,11 +31,12 @@ class SearchSeriesDto(
         val slug: String,
         val cover: String,
     ) {
-        fun toSManga(): SManga = SManga.create().apply {
-            title = name
-            url = "/series/$slug"
-            thumbnail_url = cover
-        }
+        fun toSManga(): SManga =
+            SManga.create().apply {
+                title = name
+                url = "/series/$slug"
+                thumbnail_url = cover
+            }
     }
 }
 
@@ -54,20 +55,22 @@ class MangaDetailsDto(
         val type: String? = null,
     )
 
-    fun toSManga(): SManga = SManga.create().apply {
-        title = name
-        thumbnail_url = cover
-        description = Jsoup.parseBodyFragment(summary).text()
-        genre = genres.joinToString { it.name }
-        author = creators.filter { it.type!! == "author" }.joinToString { it.name }
-        status = this@MangaDetailsDto.status.name.parseStatus()
-    }
+    fun toSManga(): SManga =
+        SManga.create().apply {
+            title = name
+            thumbnail_url = cover
+            description = Jsoup.parseBodyFragment(summary).text()
+            genre = genres.joinToString { it.name }
+            author = creators.filter { it.type!! == "author" }.joinToString { it.name }
+            status = this@MangaDetailsDto.status.name.parseStatus()
+        }
 
-    private fun String.parseStatus(): Int = when (this.lowercase()) {
-        "ongoing" -> SManga.ONGOING
-        "completed" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    private fun String.parseStatus(): Int =
+        when (this.lowercase()) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
 }
 
 @Serializable
@@ -80,16 +83,18 @@ class ChapterResponseDto(
         @SerialName("published_at") val published: String,
         val access: Boolean,
     ) {
-        fun toSChapter(slug: String): SChapter = SChapter.create().apply {
-            val prefix = if (access) "" else "[LOCKED] "
-            name = "${prefix}Chapter ${this@ChapterDto.name}"
-            date_upload = try {
-                dateFormat.parse(published)!!.time
-            } catch (_: ParseException) {
-                0L
+        fun toSChapter(slug: String): SChapter =
+            SChapter.create().apply {
+                val prefix = if (access) "" else "[LOCKED] "
+                name = "${prefix}Chapter ${this@ChapterDto.name}"
+                date_upload =
+                    try {
+                        dateFormat.parse(published)!!.time
+                    } catch (_: ParseException) {
+                        0L
+                    }
+                url = "$slug/${this@ChapterDto.name}"
             }
-            url = "$slug/${this@ChapterDto.name}"
-        }
 
         companion object {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ENGLISH)

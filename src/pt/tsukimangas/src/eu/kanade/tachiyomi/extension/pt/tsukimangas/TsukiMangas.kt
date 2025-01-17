@@ -37,7 +37,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class TsukiMangas : HttpSource() {
-
     override val name = "Tsuki Mangás"
 
     override val baseUrl = "https://tsuki-mangas.com"
@@ -60,22 +59,26 @@ class TsukiMangas : HttpSource() {
                 databaseEnabled = true
                 blockNetworkImage = true
             }
-            webView.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, url: String) {
-                    val script = "javascript:localStorage['token']"
-                    view.evaluateJavascript(script) {
-                        view.apply {
-                            stopLoading()
-                            destroy()
+            webView.webViewClient =
+                object : WebViewClient() {
+                    override fun onPageFinished(
+                        view: WebView,
+                        url: String,
+                    ) {
+                        val script = "javascript:localStorage['token']"
+                        view.evaluateJavascript(script) {
+                            view.apply {
+                                stopLoading()
+                                destroy()
+                            }
+                            if (it.isBlank() || it in listOf("null", "undefined")) {
+                                return@evaluateJavascript
+                            }
+                            token = it.replace("[\"]+".toRegex(), "")
+                            latch.countDown()
                         }
-                        if (it.isBlank() || it in listOf("null", "undefined")) {
-                            return@evaluateJavascript
-                        }
-                        token = it.replace("[\"]+".toRegex(), "")
-                        latch.countDown()
                     }
                 }
-            }
             webView.loadUrl(baseUrl)
         }
         latch.await(10, TimeUnit.SECONDS)
@@ -84,7 +87,8 @@ class TsukiMangas : HttpSource() {
     }
 
     override val client by lazy {
-        network.client.newBuilder()
+        network.client
+            .newBuilder()
             .addInterceptor(::apiHeadersInterceptor)
             .addInterceptor(::imageCdnSwapper)
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
@@ -93,8 +97,10 @@ class TsukiMangas : HttpSource() {
             .build()
     }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -103,13 +109,14 @@ class TsukiMangas : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val item = response.parseAs<MangaListDto>()
-        val mangas = item.data.map {
-            SManga.create().apply {
-                url = "/obra" + it.entryPath
-                thumbnail_url = baseUrl + it.imagePath
-                title = it.title
+        val mangas =
+            item.data.map {
+                SManga.create().apply {
+                    url = "/obra" + it.entryPath
+                    thumbnail_url = baseUrl + it.imagePath
+                    title = it.title
+                }
             }
-        }
         val hasNextPage = item.page < item.lastPage
         return MangasPage(mangas, hasNextPage)
     }
@@ -123,16 +130,20 @@ class TsukiMangas : HttpSource() {
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
             val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$apiUrl/mangas/$id", headers))
+            client
+                .newCall(GET("$apiUrl/mangas/$id", headers))
                 .asObservableSuccess()
                 .map(::searchMangaByIdParse)
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
         val details = mangaDetailsParse(response)
@@ -141,19 +152,26 @@ class TsukiMangas : HttpSource() {
 
     override fun getFilterList() = TsukiMangasFilters.FILTER_LIST
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val params = TsukiMangasFilters.getSearchParameters(filters)
-        val url = "$apiUrl/mangas".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("title", query.trim())
-            .addIfNotBlank("filter", params.filter)
-            .addIfNotBlank("format", params.format)
-            .addIfNotBlank("status", params.status)
-            .addIfNotBlank("adult_content", params.adult)
-            .apply {
-                params.genres.forEach { addQueryParameter("genres[]", it) }
-                params.tags.forEach { addQueryParameter("tags[]", it) }
-            }.build()
+        val url =
+            "$apiUrl/mangas"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("page", page.toString())
+                .addQueryParameter("title", query.trim())
+                .addIfNotBlank("filter", params.filter)
+                .addIfNotBlank("format", params.format)
+                .addIfNotBlank("status", params.status)
+                .addIfNotBlank("adult_content", params.adult)
+                .apply {
+                    params.genres.forEach { addQueryParameter("genres[]", it) }
+                    params.tags.forEach { addQueryParameter("tags[]", it) }
+                }.build()
 
         return GET(url, headers)
     }
@@ -168,28 +186,31 @@ class TsukiMangas : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val mangaDto = response.parseAs<CompleteMangaDto>()
-        url = "/obra" + mangaDto.entryPath
-        thumbnail_url = baseUrl + mangaDto.imagePath
-        title = mangaDto.title
-        artist = mangaDto.staff
-        genre = mangaDto.genres.joinToString { it.genre }
-        status = parseStatus(mangaDto.status.orEmpty())
-        description = buildString {
-            mangaDto.synopsis?.also { append("$it\n\n") }
-            if (mangaDto.titles.isNotEmpty()) {
-                append("Títulos alternativos: ${mangaDto.titles.joinToString { it.title }}")
-            }
+    override fun mangaDetailsParse(response: Response) =
+        SManga.create().apply {
+            val mangaDto = response.parseAs<CompleteMangaDto>()
+            url = "/obra" + mangaDto.entryPath
+            thumbnail_url = baseUrl + mangaDto.imagePath
+            title = mangaDto.title
+            artist = mangaDto.staff
+            genre = mangaDto.genres.joinToString { it.genre }
+            status = parseStatus(mangaDto.status.orEmpty())
+            description =
+                buildString {
+                    mangaDto.synopsis?.also { append("$it\n\n") }
+                    if (mangaDto.titles.isNotEmpty()) {
+                        append("Títulos alternativos: ${mangaDto.titles.joinToString { it.title }}")
+                    }
+                }
         }
-    }
 
-    private fun parseStatus(status: String) = when (status) {
-        "Ativo" -> SManga.ONGOING
-        "Completo" -> SManga.COMPLETED
-        "Hiato" -> SManga.ON_HIATUS
-        else -> SManga.UNKNOWN
-    }
+    private fun parseStatus(status: String) =
+        when (status) {
+            "Ativo" -> SManga.ONGOING
+            "Completo" -> SManga.COMPLETED
+            "Hiato" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
 
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga): Request {
@@ -203,7 +224,9 @@ class TsukiMangas : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val parsed = response.parseAs<ChapterListDto>()
         val mangaSlug = response.request.url.fragment!!
-        val mangaId = response.request.url.pathSegments.reversed()[1]
+        val mangaId =
+            response.request.url.pathSegments
+                .reversed()[1]
 
         return parsed.chapters.reversed().map {
             SChapter.create().apply {
@@ -252,43 +275,45 @@ class TsukiMangas : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
-    private inline fun <reified T> Response.parseAs(): T = use {
-        try {
-            json.decodeFromStream(it.body.byteStream())
-        } catch (_: Exception) {
-            throw Exception(
-                """
+    private inline fun <reified T> Response.parseAs(): T =
+        use {
+            try {
+                json.decodeFromStream(it.body.byteStream())
+            } catch (_: Exception) {
+                throw Exception(
+                    """
                     Contéudo protegido ou foi removido.
                     Faça o login na WebView e tente novamente
-                """.trimIndent(),
-            )
+                    """.trimIndent(),
+                )
+            }
         }
-    }
 
-    private fun HttpUrl.Builder.addIfNotBlank(query: String, value: String): HttpUrl.Builder {
+    private fun HttpUrl.Builder.addIfNotBlank(
+        query: String,
+        value: String,
+    ): HttpUrl.Builder {
         if (value.isNotBlank()) addQueryParameter(query, value)
         return this
     }
 
     private fun String.getMangaId() = substringAfter("/obra/").substringBefore("/")
 
-    private fun String.toDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(trim())?.time }
+    private fun String.toDate(): Long =
+        runCatching { DATE_FORMATTER.parse(trim())?.time }
             .getOrNull() ?: 0L
-    }
 
     private val pageNumberRegex = Regex("""(\d+)\.(png|jpg|jpeg|gif|webp)$""")
 
-    private fun String.extractPageNumber() = pageNumberRegex
-        .find(substringBefore("?"))
-        ?.groupValues
-        ?.get(1)
-        ?.toInt() ?: 0
+    private fun String.extractPageNumber() =
+        pageNumberRegex
+            .find(substringBefore("?"))
+            ?.groupValues
+            ?.get(1)
+            ?.toInt() ?: 0
 
     /**
      * This may sound stupid (because it is), but a similar approach exists
@@ -305,23 +330,32 @@ class TsukiMangas : HttpSource() {
         } else {
             response.close()
             val url = request.url.toString()
-            val newUrl = when {
-                url.startsWith(MAIN_CDN) -> url.replace("$MAIN_CDN/tsuki", SECONDARY_CDN)
-                url.startsWith(SECONDARY_CDN) -> url.replace(SECONDARY_CDN, "$MAIN_CDN/tsuki")
-                else -> url
-            }
+            val newUrl =
+                when {
+                    url.startsWith(MAIN_CDN) -> url.replace("$MAIN_CDN/tsuki", SECONDARY_CDN)
+                    url.startsWith(SECONDARY_CDN) -> url.replace(SECONDARY_CDN, "$MAIN_CDN/tsuki")
+                    else -> url
+                }
 
             val newRequest = GET(newUrl, request.headers)
             chain.proceed(newRequest)
         }
     }
 
-    private val apiHeadersRegex = Regex("""headers\.common(?:\.(?<key>[0-9A-Za-z_]+)|\[['"](?<key2>[0-9A-Za-z-_]+)['"]])\s*=\s*['"](?<value>[a-zA-Z0-9_ :;.,\\/?!(){}\[\]@<>=\-+*#$&`|~^%]+)['"]""")
+    private val apiHeadersRegex =
+        Regex(
+            """headers\.common(?:\.(?<key>[0-9A-Za-z_]+)|\[['"](?<key2>[0-9A-Za-z-_]+)['"]])\s*=\s*['"](?<value>[a-zA-Z0-9_ :;.,\\/?!(){}\[\]@<>=\-+*#$&`|~^%]+)['"]""",
+        )
 
     private val apiHeaders by lazy {
         val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
         val scriptUrl = document.selectFirst("script[src*=index-]")!!.absUrl("src")
-        val script = client.newCall(GET(scriptUrl, headers)).execute().body.string()
+        val script =
+            client
+                .newCall(GET(scriptUrl, headers))
+                .execute()
+                .body
+                .string()
         val matches = apiHeadersRegex.findAll(script)
 
         matches.associate {
@@ -336,12 +370,15 @@ class TsukiMangas : HttpSource() {
             return chain.proceed(request)
         }
 
-        val newRequest = request.newBuilder().apply {
-            apiHeaders.entries.forEach { addHeader(it.key, it.value) }
-            if (token.isNotBlank()) {
-                addHeader("Authorization", "Bearer $token")
-            }
-        }.build()
+        val newRequest =
+            request
+                .newBuilder()
+                .apply {
+                    apiHeaders.entries.forEach { addHeader(it.key, it.value) }
+                    if (token.isNotBlank()) {
+                        addHeader("Authorization", "Bearer $token")
+                    }
+                }.build()
 
         return chain.proceed(newRequest)
     }

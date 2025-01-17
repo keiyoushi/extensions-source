@@ -14,10 +14,11 @@ object ScrambledImageInterceptor : Interceptor {
         val response = chain.proceed(request)
         val url = request.url
         val rawSovleImage = url.queryParameter("sovleImage") ?: return response
-        val sovleImage = rawSovleImage.split("::").map { numbers ->
-            val (x, y, px, py) = numbers.split(",")
-            listOf(x, y, px, py)
-        }
+        val sovleImage =
+            rawSovleImage.split("::").map { numbers ->
+                val (x, y, px, py) = numbers.split(",")
+                listOf(x, y, px, py)
+            }
 
         val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
         val width = bitmap.width
@@ -32,7 +33,14 @@ object ScrambledImageInterceptor : Interceptor {
             val positionX = px.substringBefore(".").toInt()
             val positionY = py.substringBefore(".").toInt()
 
-            val subBitmap = Bitmap.createBitmap(bitmap, positionX, positionY, request.url.queryParameter("segmentWidth")!!.toInt(), request.url.queryParameter("segmentHeight")!!.toInt())
+            val subBitmap =
+                Bitmap.createBitmap(
+                    bitmap,
+                    positionX,
+                    positionY,
+                    request.url.queryParameter("segmentWidth")!!.toInt(),
+                    request.url.queryParameter("segmentHeight")!!.toInt(),
+                )
             canvas.drawBitmap(subBitmap, segmentX, segmentY, null)
             subBitmap.recycle()
         }
@@ -40,7 +48,8 @@ object ScrambledImageInterceptor : Interceptor {
         val output = ByteArrayOutputStream()
         image.compress(Bitmap.CompressFormat.JPEG, 90, output)
 
-        return response.newBuilder()
+        return response
+            .newBuilder()
             .body(output.toByteArray().toResponseBody(response.body.contentType()))
             .build()
     }

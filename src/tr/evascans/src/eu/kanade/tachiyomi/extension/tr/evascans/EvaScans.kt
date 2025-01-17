@@ -6,12 +6,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class EvaScans : Madara(
-    "ManWe",
-    "https://manwe.pro",
-    "tr",
-    dateFormat = SimpleDateFormat("MMM d, yyy", Locale("tr")),
-) {
+class EvaScans :
+    Madara(
+        "ManWe",
+        "https://manwe.pro",
+        "tr",
+        dateFormat = SimpleDateFormat("MMM d, yyy", Locale("tr")),
+    ) {
     override val id = 5223802501310383833
 
     override val useNewChapterEndpoint = true

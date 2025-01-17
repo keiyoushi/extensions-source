@@ -5,7 +5,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Data<T>(val data: T)
+data class Data<T>(
+    val data: T,
+)
 
 interface ComicListResult {
     val comics: List<Comic>
@@ -64,26 +66,29 @@ data class Comic(
     val lastChapterUpdate: String,
     @SerialName("__typename") val typeName: String,
 ) {
-    private val parseStatus = when (status) {
-        "ONGOING" -> SManga.ONGOING
-        "END" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
-
-    fun toSManga() = SManga.create().apply {
-        url = "/comic/$id"
-        title = this@Comic.title
-        thumbnail_url = this@Comic.imageUrl
-        author = this@Comic.authors.joinToString { it.name }
-        genre = this@Comic.categories.joinToString { it.name }
-        description = buildString {
-            append("年份: $year | ")
-            append("點閱: ${simplifyNumber(views)} | ")
-            append("喜愛: ${simplifyNumber(favoriteCount)}\n")
+    private val parseStatus =
+        when (status) {
+            "ONGOING" -> SManga.ONGOING
+            "END" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
-        status = parseStatus
-        initialized = true
-    }
+
+    fun toSManga() =
+        SManga.create().apply {
+            url = "/comic/$id"
+            title = this@Comic.title
+            thumbnail_url = this@Comic.imageUrl
+            author = this@Comic.authors.joinToString { it.name }
+            genre = this@Comic.categories.joinToString { it.name }
+            description =
+                buildString {
+                    append("年份: $year | ")
+                    append("點閱: ${simplifyNumber(views)} | ")
+                    append("喜愛: ${simplifyNumber(favoriteCount)}\n")
+                }
+            status = parseStatus
+            initialized = true
+        }
 }
 
 @Serializable

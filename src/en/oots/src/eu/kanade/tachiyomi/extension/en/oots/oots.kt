@@ -25,28 +25,32 @@ class oots : ParsedHttpSource() {
     override val supportsLatest = false
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val manga = SManga.create().apply {
-            title = "The Order Of The Stick"
-            artist = "Rich Burlew"
-            author = "Rich Burlew"
-            status = SManga.ONGOING
-            url = "/comics/oots.html"
-            description = "Having fun with games."
-            thumbnail_url = "https://i.giantitp.com/redesign/Icon_Comics_OOTS.gif"
-        }
+        val manga =
+            SManga.create().apply {
+                title = "The Order Of The Stick"
+                artist = "Rich Burlew"
+                author = "Rich Burlew"
+                status = SManga.ONGOING
+                url = "/comics/oots.html"
+                description = "Having fun with games."
+                thumbnail_url = "https://i.giantitp.com/redesign/Icon_Comics_OOTS.gif"
+            }
 
         manga.initialized = true
         return Observable.just(MangasPage(listOf(manga), false))
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterList = super.chapterListParse(response).distinct()
-        return chapterList.mapIndexed {
-                i, ch ->
+        return chapterList.mapIndexed { i, ch ->
             ch.apply { chapter_number = chapterList.size.toFloat() - i }
         }
     }
@@ -103,7 +107,11 @@ class oots : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 

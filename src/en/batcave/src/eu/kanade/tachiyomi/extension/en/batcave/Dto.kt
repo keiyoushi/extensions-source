@@ -12,7 +12,6 @@ class XFilters(
 class XFilterItems(
     @SerialName("p") val publisher: XFilterItem = XFilterItem(),
     @SerialName("g") var genre: XFilterItem = XFilterItem(),
-
 )
 
 @Serializable

@@ -30,8 +30,9 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
-
+class BlackoutComics :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "Blackout Comics"
 
     override val baseUrl = "https://blackoutcomics.com"
@@ -41,19 +42,21 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
     override val client by lazy {
-        network.client.newBuilder()
+        network.client
+            .newBuilder()
             .addInterceptor { chain ->
                 checkingCredentials()
 
                 val request = chain.request()
                 val response = chain.proceed(request)
 
-                if (response.request.url.pathSegments.contains("temp")) {
+                if (response.request.url.pathSegments
+                        .contains("temp")
+                ) {
                     return@addInterceptor doAuth(chain, request, response)
                 }
                 response
-            }
-            .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            }.rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
     }
 
@@ -74,19 +77,29 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private fun doAuth(chain: Interceptor.Chain, request: Request, response: Response): Response {
-        val csrf = response.asJsoup()
-            .selectFirst("input[name='_token']")
-            ?.attr("value") ?: ""
+    private fun doAuth(
+        chain: Interceptor.Chain,
+        request: Request,
+        response: Response,
+    ): Response {
+        val csrf =
+            response
+                .asJsoup()
+                .selectFirst("input[name='_token']")
+                ?.attr("value") ?: ""
 
-        val form = FormBody.Builder()
-            .add("_token", csrf)
-            .add("email", credentials.first)
-            .add("password", credentials.second)
-            .build()
+        val form =
+            FormBody
+                .Builder()
+                .add("_token", csrf)
+                .add("email", credentials.first)
+                .add("password", credentials.second)
+                .build()
 
         chain.proceed(POST("$baseUrl/blackout/login", headers, form)).use {
-            if (it.request.url.pathSegments.contains("temp")) {
+            if (it.request.url.pathSegments
+                    .contains("temp")
+            ) {
                 throw IOException(
                     """
                     Falha ao acessar recurso: Usuário ou senha incorreto.
@@ -102,7 +115,8 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
     override fun headersBuilder() =
-        super.headersBuilder()
+        super
+            .headersBuilder()
             .add("Referer", "$baseUrl/")
             .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
             .add("Accept-Language", "en-US,en;q=0.5")
@@ -113,11 +127,12 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaSelector() = "section > div.container div > a"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        thumbnail_url = element.selectFirst("img.custom-image:not(.hidden), img.img-comics")?.absUrl("src")
-        title = element.selectFirst("p.image-name:not(.hidden), span.text-comic")!!.text()
-    }
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            thumbnail_url = element.selectFirst("img.custom-image:not(.hidden), img.img-comics")?.absUrl("src")
+            title = element.selectFirst("p.image-name:not(.hidden), span.text-comic")!!.text()
+        }
 
     override fun popularMangaNextPageSelector() = null
 
@@ -131,27 +146,38 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesNextPageSelector() = null
 
     // =============================== Search ===============================
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
             val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/comics/$id"))
+            client
+                .newCall(GET("$baseUrl/comics/$id"))
                 .asObservableSuccess()
                 .map(::searchMangaByIdParse)
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
         val details = mangaDetailsParse(response.use { it.asJsoup() })
         return MangasPage(listOf(details), false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         // Using URLBuilder just to prevent issues with strange queries
-        val url = "$baseUrl/comics".toHttpUrl().newBuilder()
-            .addQueryParameter("search", query)
-            .build()
+        val url =
+            "$baseUrl/comics"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("search", query)
+                .build()
         return GET(url, headers)
     }
 
@@ -162,45 +188,50 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaNextPageSelector() = null
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val row = document.selectFirst("div.special-edition")!!
-        thumbnail_url = row.selectFirst("img:last-child")?.absUrl("src")
-        title = row.select("h2")
-            .first { it.classNames().isEmpty() }!!
-            .text()
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            val row = document.selectFirst("div.special-edition")!!
+            thumbnail_url = row.selectFirst("img:last-child")?.absUrl("src")
+            title =
+                row
+                    .select("h2")
+                    .first { it.classNames().isEmpty() }!!
+                    .text()
 
-        with(row.selectFirst("div.trailer-content:has(h3:containsOwn(Detalhes))")!!) {
-            println(outerHtml())
-            artist = getInfo("Artista")
-            author = getInfo("Autor")
-            genre = getInfo("Genêros")
-            status = when (getInfo("Status")) {
-                "Completo" -> SManga.COMPLETED
-                "Em Lançamento" -> SManga.ONGOING
-                else -> SManga.UNKNOWN
-            }
+            with(row.selectFirst("div.trailer-content:has(h3:containsOwn(Detalhes))")!!) {
+                println(outerHtml())
+                artist = getInfo("Artista")
+                author = getInfo("Autor")
+                genre = getInfo("Genêros")
+                status =
+                    when (getInfo("Status")) {
+                        "Completo" -> SManga.COMPLETED
+                        "Em Lançamento" -> SManga.ONGOING
+                        else -> SManga.UNKNOWN
+                    }
 
-            description = buildString {
-                // Synopsis
-                row.selectFirst("h3:containsOwn(Descrição) + p")?.ownText()?.also {
-                    append("$it\n\n")
-                }
+                description =
+                    buildString {
+                        // Synopsis
+                        row.selectFirst("h3:containsOwn(Descrição) + p")?.ownText()?.also {
+                            append("$it\n\n")
+                        }
 
-                row.selectFirst("h2:contains($title) + p")?.ownText()?.also {
-                    // Alternative title
-                    append("Título alternativo: $it\n")
-                }
+                        row.selectFirst("h2:contains($title) + p")?.ownText()?.also {
+                            // Alternative title
+                            append("Título alternativo: $it\n")
+                        }
 
-                // Additional info
-                listOf("Editora", "Lançamento", "Scans", "Tradução", "Cleaner", "Vizualizações")
-                    .forEach { item ->
-                        selectFirst("p:contains($item)")
-                            ?.text()
-                            ?.also { append("$it\n") }
+                        // Additional info
+                        listOf("Editora", "Lançamento", "Scans", "Tradução", "Cleaner", "Vizualizações")
+                            .forEach { item ->
+                                selectFirst("p:contains($item)")
+                                    ?.text()
+                                    ?.also { append("$it\n") }
+                            }
                     }
             }
         }
-    }
 
     private fun Element.getInfo(text: String) =
         selectFirst("p:contains($text)")?.run {
@@ -210,36 +241,40 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
     // ============================== Chapters ==============================
     override fun chapterListSelector() = "section.relese > div.container > div.row h5:has(a)"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        element.selectFirst("form + a")!!.run {
-            setUrlWithoutDomain(attr("href"))
-            name = text()
-            chapter_number = name.substringAfter(" ").toFloatOrNull() ?: 1F
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            element.selectFirst("form + a")!!.run {
+                setUrlWithoutDomain(attr("href"))
+                name = text()
+                chapter_number = name.substringAfter(" ").toFloatOrNull() ?: 1F
+            }
+
+            date_upload =
+                element
+                    .selectFirst("form + a + span")
+                    ?.text()
+                    .orEmpty()
+                    .toDate()
         }
 
-        date_upload = element.selectFirst("form + a + span")?.text().orEmpty().toDate()
-    }
-
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div[class*=cap] canvas[height][width]").mapIndexed { index, item ->
-            val attr = item.attributes()
-                .firstOrNull { it.value.contains("/assets/obras", ignoreCase = true) }
-                ?.key ?: throw Exception("Capitulo não pode ser obtido")
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("div[class*=cap] canvas[height][width]").mapIndexed { index, item ->
+            val attr =
+                item
+                    .attributes()
+                    .firstOrNull { it.value.contains("/assets/obras", ignoreCase = true) }
+                    ?.key ?: throw Exception("Capitulo não pode ser obtido")
 
             Page(index, "", item.absUrl(attr))
         }
-    }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
-    private fun String.toDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(trim())?.time }
+    private fun String.toDate(): Long =
+        runCatching { DATE_FORMATTER.parse(trim())?.time }
             .getOrNull() ?: 0L
-    }
 
     private fun randomString(length: Int): String {
         val charPool = ('a'..'z') + ('A'..'Z')
@@ -247,29 +282,33 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val usernamePref = EditTextPreference(screen.context).apply {
-            key = USERNAME_PREF
-            summary = "Email de acesso. Necessário reiniciar o app"
-            title = "Usuário"
+        val usernamePref =
+            EditTextPreference(screen.context).apply {
+                key = USERNAME_PREF
+                summary = "Email de acesso. Necessário reiniciar o app"
+                title = "Usuário"
 
-            dialogMessage = """
-            Configure seu usuário para acessar o contéudo.
-            """.trimIndent()
+                dialogMessage =
+                    """
+                    Configure seu usuário para acessar o contéudo.
+                    """.trimIndent()
 
-            setDefaultValue("")
-        }
+                setDefaultValue("")
+            }
 
-        val passwordPref = EditTextPreference(screen.context).apply {
-            key = PASSWORD_PREF
-            summary = "Senha de acesso. Necessário reiniciar o app"
-            title = "Senha"
+        val passwordPref =
+            EditTextPreference(screen.context).apply {
+                key = PASSWORD_PREF
+                summary = "Senha de acesso. Necessário reiniciar o app"
+                title = "Senha"
 
-            dialogMessage = """
-            Configure seu senha para acessar o contéudo.
-            """.trimIndent()
+                dialogMessage =
+                    """
+                    Configure seu senha para acessar o contéudo.
+                    """.trimIndent()
 
-            setDefaultValue("")
-        }
+                setDefaultValue("")
+            }
 
         screen.addPreference(usernamePref)
         screen.addPreference(passwordPref)

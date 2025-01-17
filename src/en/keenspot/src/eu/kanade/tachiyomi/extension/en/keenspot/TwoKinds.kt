@@ -15,7 +15,6 @@ import rx.Observable
 import kotlin.math.min
 
 class TwoKinds : HttpSource() {
-
     override val name = "Keenspot TwoKinds"
 
     override val baseUrl = "https://twokinds.keenspot.com"
@@ -27,8 +26,8 @@ class TwoKinds : HttpSource() {
     override val id: Long = 3133607736276627986
 
     // the one and only manga entry
-    fun mangaSinglePages(): SManga {
-        return SManga.create().apply {
+    fun mangaSinglePages(): SManga =
+        SManga.create().apply {
             title = "TwoKinds (1 page per chapter)"
             thumbnail_url = "https://dummyimage.com/768x994/000/ffffff.jpg&text=$title"
             artist = "Tom Fischbach"
@@ -36,10 +35,9 @@ class TwoKinds : HttpSource() {
             status = SManga.UNKNOWN
             url = "1"
         }
-    }
 
-    fun manga20Pages(): SManga {
-        return SManga.create().apply {
+    fun manga20Pages(): SManga =
+        SManga.create().apply {
             title = "TwoKinds (20 pages per chapter)"
             thumbnail_url = "https://dummyimage.com/768x994/000/ffffff.jpg&text=$title"
             artist = "Tom Fischbach"
@@ -47,11 +45,9 @@ class TwoKinds : HttpSource() {
             status = SManga.UNKNOWN
             url = "20"
         }
-    }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(listOf(mangaSinglePages(), manga20Pages()), false))
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        Observable.just(MangasPage(listOf(mangaSinglePages(), manga20Pages()), false))
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -76,43 +72,50 @@ class TwoKinds : HttpSource() {
 
     // chapter list
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        client
+            .newCall(chapterListRequest(manga))
             .asObservableSuccess()
             .map { response ->
                 chapterListParse(response, manga)
             }
-    }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/archive/", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/archive/", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
-    data class TwoKindsPage(val url: String, val name: String)
+    data class TwoKindsPage(
+        val url: String,
+        val name: String,
+    )
 
-    private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
+    private fun chapterListParse(
+        response: Response,
+        manga: SManga,
+    ): List<SChapter> {
         val document = response.asJsoup()
 
-        val pages = document.select(".chapter-links")
-            .flatMap { season -> season.select("> a") }
-            .map { a ->
-                // /comic/1185halloween/ -> 1185halloween
-                val urlPart = a.attr("href").split("/")[2]
-                val name = a.selectFirst("span")!!.text()
+        val pages =
+            document
+                .select(".chapter-links")
+                .flatMap { season -> season.select("> a") }
+                .map { a ->
+                    // /comic/1185halloween/ -> 1185halloween
+                    val urlPart = a.attr("href").split("/")[2]
+                    val name = a.selectFirst("span")!!.text()
 
-                TwoKindsPage(urlPart, name)
-            }
+                    TwoKindsPage(urlPart, name)
+                }
 
         // 1 page per chapter
         if (manga.url == "1") {
-            return pages.map { page ->
-                SChapter.create().apply {
-                    url = "1-${page.url}"
-                    name = "Page ${page.name}"
-                }
-            }.reversed()
+            return pages
+                .map { page ->
+                    SChapter.create().apply {
+                        url = "1-${page.url}"
+                        name = "Page ${page.name}"
+                    }
+                }.reversed()
         }
 
         // 20 pages per chapter
@@ -139,15 +142,17 @@ class TwoKinds : HttpSource() {
             val firstPage = chapter.url.substringAfter("-")
             val document = client.newCall(chapterListRequest(SManga.create())).execute().asJsoup()
 
-            val pages = document.select(".chapter-links")
-                .flatMap { season -> season.select("> a") }
-                .map { a ->
-                    // /comic/1185halloween/ -> 1185halloween
-                    val urlPart = a.attr("href").split("/")[2]
-                    val name = a.selectFirst("span")!!.text()
+            val pages =
+                document
+                    .select(".chapter-links")
+                    .flatMap { season -> season.select("> a") }
+                    .map { a ->
+                        // /comic/1185halloween/ -> 1185halloween
+                        val urlPart = a.attr("href").split("/")[2]
+                        val name = a.selectFirst("span")!!.text()
 
-                    TwoKindsPage(urlPart, name)
-                }
+                        TwoKindsPage(urlPart, name)
+                    }
 
             val firstPageIdx = pages.indexOfFirst { it.url == firstPage }
             val lastPageIdx = min(pages.size, firstPageIdx + 20)
@@ -170,9 +175,17 @@ class TwoKinds : HttpSource() {
         return document.select("#content article img").first()!!.attr("src")
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw Exception("Search functionality is not available.")
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = throw Exception("Search functionality is not available.")
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 }

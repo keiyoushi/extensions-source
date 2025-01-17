@@ -21,7 +21,9 @@ class DayOfWeekRequest(
     @ProtoNumber(2) private val dayOfWeek: DayOfWeek,
 )
 
-enum class DayOfWeek(private val dayNum: Int) {
+enum class DayOfWeek(
+    private val dayNum: Int,
+) {
     ALL(0),
     MONDAY(1),
     TUESDAY(2),

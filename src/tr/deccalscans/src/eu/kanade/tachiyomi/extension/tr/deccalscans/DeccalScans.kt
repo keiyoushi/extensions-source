@@ -5,15 +5,18 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DeccalScans : Madara(
-    "Deccal Scans",
-    "https://deccalscans.net",
-    "tr",
-    SimpleDateFormat("dd MMM yyyy", Locale("tr")),
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+class DeccalScans :
+    Madara(
+        "Deccal Scans",
+        "https://deccalscans.net",
+        "tr",
+        SimpleDateFormat("dd MMM yyyy", Locale("tr")),
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(3)
+            .build()
 
     override val useNewChapterEndpoint = true
 

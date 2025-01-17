@@ -12,7 +12,6 @@ import kotlin.system.exitProcess
  * and redirects them to the main Tachiyomi process.
  */
 class TsukiMangasUrlActivity : Activity() {
-
     private val tag = javaClass.simpleName
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,11 +19,12 @@ class TsukiMangasUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
             val id = pathSegments[1]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${TsukiMangas.PREFIX_SEARCH}$id")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${TsukiMangas.PREFIX_SEARCH}$id")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

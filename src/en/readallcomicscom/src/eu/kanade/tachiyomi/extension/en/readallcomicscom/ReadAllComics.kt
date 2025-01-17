@@ -22,7 +22,6 @@ import org.jsoup.select.Elements
 import rx.Observable
 
 class ReadAllComics : ParsedHttpSource() {
-
     override val name = "ReadAllComics"
 
     override val baseUrl = "https://readallcomics.com"
@@ -33,29 +32,36 @@ class ReadAllComics : ParsedHttpSource() {
 
     private lateinit var searchPageElements: Elements
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::archivedCategoryInterceptor)
-        .rateLimit(2)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::archivedCategoryInterceptor)
+            .rateLimit(2)
+            .build()
 
     private fun archivedCategoryInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
 
-        val document = Jsoup.parse(
-            response.peekBody(Long.MAX_VALUE).string(),
-            request.url.toString(),
-        )
+        val document =
+            Jsoup.parse(
+                response.peekBody(Long.MAX_VALUE).string(),
+                request.url.toString(),
+            )
 
-        val newUrl = document.selectFirst(".description-archive > p > span > a")
-            ?.attr("href")?.toHttpUrlOrNull()
-            ?: return response
+        val newUrl =
+            document
+                .selectFirst(".description-archive > p > span > a")
+                ?.attr("href")
+                ?.toHttpUrlOrNull()
+                ?: return response
 
         if (newUrl.pathSegments.contains("category")) {
             response.close()
 
             return chain.proceed(
-                request.newBuilder()
+                request
+                    .newBuilder()
                     .url(newUrl)
                     .build(),
             )
@@ -64,42 +70,57 @@ class ReadAllComics : ParsedHttpSource() {
         return response
     }
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl${if (page > 1)"/page/$page/" else ""}", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl${if (page > 1)"/page/$page/" else ""}", headers)
 
     override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create().apply {
-            val category = element.classNames()
-                .firstOrNull { it.startsWith("category-") }!!
-                .substringAfter("category-")
+        val manga =
+            SManga.create().apply {
+                val category =
+                    element
+                        .classNames()
+                        .firstOrNull { it.startsWith("category-") }!!
+                        .substringAfter("category-")
 
-            url = "/category/$category/"
-            title = category.replace("-", " ").capitalizeEachWord()
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
+                url = "/category/$category/"
+                title = category.replace("-", " ").capitalizeEachWord()
+                thumbnail_url = element.select("img").attr("abs:src")
+            }
 
         return manga
     }
 
     override fun popularMangaSelector() = "#post-area > div"
+
     override fun popularMangaNextPageSelector() = "div.pagenavi > a.next"
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(searchMangaRequest(page, query, filters))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        if (page == 1) {
+            client
+                .newCall(searchMangaRequest(page, query, filters))
                 .asObservableSuccess()
                 .map { searchMangaParse(it) }
         } else {
             Observable.just(searchPageParse(page))
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addQueryParameter("story", query)
-            addQueryParameter("s", "")
-            addQueryParameter("type", "comic")
-        }.build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("story", query)
+                    addQueryParameter("s", "")
+                    addQueryParameter("type", "comic")
+                }.build()
 
         return GET(url, headers)
     }
@@ -123,46 +144,50 @@ class ReadAllComics : ParsedHttpSource() {
         return MangasPage(mangas, endRange < searchPageElements.lastIndex)
     }
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        title = element.text()
-        thumbnail_url = "https://fakeimg.pl/200x300/?text=No%20Cover%0AOn%20Search&font_size=62"
-    }
+    override fun searchMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            title = element.text()
+            thumbnail_url = "https://fakeimg.pl/200x300/?text=No%20Cover%0AOn%20Search&font_size=62"
+        }
 
     override fun searchMangaSelector() = ".categories a"
+
     override fun searchMangaNextPageSelector() = null
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-        genre = document.select("p strong").joinToString { it.text() }
-        author = document.select("p > strong").last()?.text()
-        description = buildString {
-            document.select(".b > strong").forEach { element ->
-                val vol = element.previousElementSibling()
-                if (isNotBlank()) {
-                    append("\n\n")
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = document.selectFirst("h1")!!.text()
+            genre = document.select("p strong").joinToString { it.text() }
+            author = document.select("p > strong").last()?.text()
+            description =
+                buildString {
+                    document.select(".b > strong").forEach { element ->
+                        val vol = element.previousElementSibling()
+                        if (isNotBlank()) {
+                            append("\n\n")
+                        }
+                        if (vol?.tagName() == "span") {
+                            append(vol.text(), "\n")
+                        }
+                        append(element.text())
+                    }
                 }
-                if (vol?.tagName() == "span") {
-                    append(vol.text(), "\n")
-                }
-                append(element.text())
-            }
+            thumbnail_url = document.select("p img").attr("abs:src")
         }
-        thumbnail_url = document.select("p img").attr("abs:src")
-    }
 
     override fun chapterListSelector() = ".list-story a"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        name = element.attr("title")
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            name = element.attr("title")
+        }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("body img:not(body div[id=\"logo\"] img)").mapIndexed { idx, element ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("body img:not(body div[id=\"logo\"] img)").mapIndexed { idx, element ->
             Page(idx, "", element.attr("abs:src"))
         }
-    }
 
     private fun String.capitalizeEachWord(): String {
         val result = StringBuilder(length)
@@ -180,14 +205,13 @@ class ReadAllComics : ParsedHttpSource() {
         return result.toString()
     }
 
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element) =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesNextPageSelector() =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 }

@@ -23,18 +23,20 @@ data class ChapterDto(
     @SerialName("chap_link") val chapterLink: String,
     @SerialName("member_type") val memberType: String,
 ) {
-    fun toSChapter() = SChapter.create().apply {
-        url = "/$chapterLink"
+    fun toSChapter() =
+        SChapter.create().apply {
+            url = "/$chapterLink"
 
-        name = postTitle
-        if (memberType.isNotBlank()) {
-            name += " ($memberType)"
+            name = postTitle
+            if (memberType.isNotBlank()) {
+                name += " ($memberType)"
+            }
+
+            date_upload =
+                runCatching {
+                    dateFormat.parse(postModified)!!.time
+                }.getOrDefault(0L)
         }
-
-        date_upload = runCatching {
-            dateFormat.parse(postModified)!!.time
-        }.getOrDefault(0L)
-    }
 }
 
 @Serializable

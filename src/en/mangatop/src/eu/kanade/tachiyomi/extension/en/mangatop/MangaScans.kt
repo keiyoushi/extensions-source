@@ -29,7 +29,6 @@ import java.util.Calendar
 import java.util.Locale
 
 class MangaScans : ParsedHttpSource() {
-
     override val name = "MangaScans"
 
     override val baseUrl = "https://mangascans.to"
@@ -40,13 +39,17 @@ class MangaScans : ParsedHttpSource() {
 
     override val id = 85127596998931837
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::tokenInterceptor)
-        .rateLimit(2)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::tokenInterceptor)
+            .rateLimit(2)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -61,11 +64,12 @@ class MangaScans : ParsedHttpSource() {
         if (request.method == "POST" && request.header("X-CSRF-TOKEN") == null) {
             val newRequest = request.newBuilder()
             val token = getToken()
-            val response = chain.proceed(
-                newRequest
-                    .addHeader("X-CSRF-TOKEN", token)
-                    .build(),
-            )
+            val response =
+                chain.proceed(
+                    newRequest
+                        .addHeader("X-CSRF-TOKEN", token)
+                        .build(),
+                )
 
             if (response.code == 419) {
                 response.close()
@@ -104,21 +108,24 @@ class MangaScans : ParsedHttpSource() {
         val document = response.asJsoup()
         document.updateToken()
 
-        val mangaList = document.select(popularMangaSelector())
-            .map(::popularMangaFromElement)
+        val mangaList =
+            document
+                .select(popularMangaSelector())
+                .map(::popularMangaFromElement)
 
         return MangasPage(mangaList, false)
     }
 
     override fun popularMangaSelector(): String = "aside div > article"
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")!!.imgAttr()
-        with(element.selectFirst("a:has(h3)")!!) {
-            setUrlWithoutDomain(attr("abs:href"))
-            title = text()
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            thumbnail_url = element.selectFirst("img")!!.imgAttr()
+            with(element.selectFirst("a:has(h3)")!!) {
+                setUrlWithoutDomain(attr("abs:href"))
+                title = text()
+            }
         }
-    }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -130,8 +137,10 @@ class MangaScans : ParsedHttpSource() {
         val document = response.asJsoup()
         document.updateToken()
 
-        val mangaList = document.select(latestUpdatesSelector())
-            .map(::latestUpdatesFromElement)
+        val mangaList =
+            document
+                .select(latestUpdatesSelector())
+                .map(::latestUpdatesFromElement)
 
         val hasNextPage = document.selectFirst(latestUpdatesNextPageSelector()) != null
 
@@ -140,68 +149,76 @@ class MangaScans : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = "div > article.manga-item"
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector(): String = "ul.pagination > li.active + li:has(a)"
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val filterList = filters.ifEmpty { getFilterList() }
-        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
-            addQueryParameter("q", query)
-            filterList.filterIsInstance<UriFilter>().forEach {
-                it.addToUri(this)
-            }
-            addQueryParameter("page", page.toString())
-        }.build()
+        val url =
+            "$baseUrl/search"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("q", query)
+                    filterList.filterIsInstance<UriFilter>().forEach {
+                        it.addToUri(this)
+                    }
+                    addQueryParameter("page", page.toString())
+                }.build()
 
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        latestUpdatesParse(response)
+    override fun searchMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
-    override fun searchMangaSelector(): String =
-        throw UnsupportedOperationException()
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String =
-        throw UnsupportedOperationException()
+    override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList = FilterList(
-        TypeFilter(),
-        GenreFilter(),
-        StatusFilter(),
-    )
+    override fun getFilterList(): FilterList =
+        FilterList(
+            TypeFilter(),
+            GenreFilter(),
+            StatusFilter(),
+        )
 
     // =========================== Manga Details ============================
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        thumbnail_url = document.selectFirst("picture img")!!.imgAttr()
-        with(document.selectFirst(".manga-info")!!) {
-            title = selectFirst("h1.page-heading")!!.text()
-            author = selectFirst("ul > li:has(span:contains(Authors))")?.ownText()
-            genre = select("ul > li:has(span:contains(Genres)) a").joinToString { it.text() }
-            status = selectFirst(".text-info").parseStatus()
-            description = selectFirst("#manga-description")?.text()
-                ?.split(".")
-                ?.filterNot { it.contains("MangaTop") }
-                ?.joinToString(".")
-                ?.trim()
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            thumbnail_url = document.selectFirst("picture img")!!.imgAttr()
+            with(document.selectFirst(".manga-info")!!) {
+                title = selectFirst("h1.page-heading")!!.text()
+                author = selectFirst("ul > li:has(span:contains(Authors))")?.ownText()
+                genre = select("ul > li:has(span:contains(Genres)) a").joinToString { it.text() }
+                status = selectFirst(".text-info").parseStatus()
+                description =
+                    selectFirst("#manga-description")
+                        ?.text()
+                        ?.split(".")
+                        ?.filterNot { it.contains("MangaTop") }
+                        ?.joinToString(".")
+                        ?.trim()
+            }
         }
-    }
 
-    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
-        "ongoing" -> SManga.ONGOING
-        "completed" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    private fun Element?.parseStatus(): Int =
+        when (this?.text()?.lowercase()) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
 
     // ============================== Chapters ==============================
 
@@ -209,41 +226,56 @@ class MangaScans : ParsedHttpSource() {
         val document = response.asJsoup()
         document.updateToken()
 
-        val mangaName = document.selectFirst("script:containsData(mangaName)")
-            ?.data()
-            ?.substringAfter("mangaName")
-            ?.substringAfter("'")
-            ?.substringBefore("'")
-            ?: throw Exception("Failed to get form data")
+        val mangaName =
+            document
+                .selectFirst("script:containsData(mangaName)")
+                ?.data()
+                ?.substringAfter("mangaName")
+                ?.substringAfter("'")
+                ?.substringBefore("'")
+                ?: throw Exception("Failed to get form data")
 
-        val postHeaders = apiHeadersBuilder().apply {
-            set("Referer", response.request.url.toString())
-        }.build()
+        val postHeaders =
+            apiHeadersBuilder()
+                .apply {
+                    set("Referer", response.request.url.toString())
+                }.build()
 
-        val postBody = FormBody.Builder().apply {
-            add("mangaIdx", response.request.url.toString().substringAfterLast("-"))
-            add("mangaName", mangaName)
-        }.build()
+        val postBody =
+            FormBody
+                .Builder()
+                .apply {
+                    add(
+                        "mangaIdx",
+                        response.request.url
+                            .toString()
+                            .substringAfterLast("-"),
+                    )
+                    add("mangaName", mangaName)
+                }.build()
 
-        val postResponse = client.newCall(
-            POST("$baseUrl/chapter-list", postHeaders, postBody),
-        ).execute()
+        val postResponse =
+            client
+                .newCall(
+                    POST("$baseUrl/chapter-list", postHeaders, postBody),
+                ).execute()
 
         return super.chapterListParse(postResponse)
     }
 
     override fun chapterListSelector() = "li"
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        element.selectFirst(".text-muted")?.also {
-            date_upload = it.text().parseDate()
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            element.selectFirst(".text-muted")?.also {
+                date_upload = it.text().parseDate()
+            }
+            name = element.selectFirst("span:not(.text-muted)")!!.text()
+            setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
         }
-        name = element.selectFirst("span:not(.text-muted)")!!.text()
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-    }
 
-    private fun String.parseDate(): Long {
-        return if (this.contains("ago")) {
+    private fun String.parseDate(): Long =
+        if (this.contains("ago")) {
             this.parseRelativeDate()
         } else {
             try {
@@ -252,19 +284,22 @@ class MangaScans : ParsedHttpSource() {
                 0L
             }
         }
-    }
 
     private fun String.parseRelativeDate(): Long {
-        val now = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+        val now =
+            Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
 
-        val relativeDate = this.split(" ").firstOrNull()
-            ?.toIntOrNull()
-            ?: return 0L
+        val relativeDate =
+            this
+                .split(" ")
+                .firstOrNull()
+                ?.toIntOrNull()
+                ?: return 0L
 
         when {
             "second" in this -> now.add(Calendar.SECOND, -relativeDate) // parse: 30 seconds ago
@@ -281,16 +316,23 @@ class MangaScans : ParsedHttpSource() {
     // =============================== Pages ================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringBeforeLast(".html")
-            .substringAfterLast("-")
+        val chapterId =
+            chapter.url
+                .substringBeforeLast(".html")
+                .substringAfterLast("-")
 
-        val postHeaders = apiHeadersBuilder().apply {
-            set("Referer", baseUrl + chapter.url)
-        }.build()
+        val postHeaders =
+            apiHeadersBuilder()
+                .apply {
+                    set("Referer", baseUrl + chapter.url)
+                }.build()
 
-        val postBody = FormBody.Builder().apply {
-            add("chapterIdx", chapterId)
-        }.build()
+        val postBody =
+            FormBody
+                .Builder()
+                .apply {
+                    add("chapterIdx", chapterId)
+                }.build()
 
         return POST("$baseUrl/chapter-resources", postHeaders, postBody)
     }
@@ -311,22 +353,22 @@ class MangaScans : ParsedHttpSource() {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PageListResponse>().data.resources.map {
+    override fun pageListParse(response: Response): List<Page> =
+        response.parseAs<PageListResponse>().data.resources.map {
             Page(it.name, imageUrl = it.thumb)
         }
-    }
 
-    override fun pageListParse(document: Document): List<Page> =
-        throw UnsupportedOperationException()
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
     override fun imageUrlParse(document: Document) = ""
 
     override fun imageRequest(page: Page): Request {
-        val imgHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,*/*")
-            add("Host", page.imageUrl!!.toHttpUrl().host)
-        }.build()
+        val imgHeaders =
+            headersBuilder()
+                .apply {
+                    add("Accept", "image/avif,image/webp,*/*")
+                    add("Host", page.imageUrl!!.toHttpUrl().host)
+                }.build()
 
         return GET(page.imageUrl!!, imgHeaders)
     }
@@ -334,25 +376,29 @@ class MangaScans : ParsedHttpSource() {
     // ============================= Utilities ==============================
 
     private fun Document.updateToken() {
-        storedToken = this.selectFirst("head meta[name*=csrf-token]")
+        storedToken = this
+            .selectFirst("head meta[name*=csrf-token]")
             ?.attr("content")
             ?: throw IOException("Failed to update token")
     }
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream(it.body.byteStream())
-    }
+    private inline fun <reified T> Response.parseAs(): T =
+        use {
+            json.decodeFromStream(it.body.byteStream())
+        }
 
-    private fun apiHeadersBuilder() = headersBuilder().apply {
-        add("Accept", "*/*")
-        add("Host", baseUrl.toHttpUrl().host)
-        add("Origin", baseUrl)
-        add("X-Requested-With", "XMLHttpRequest")
-    }
+    private fun apiHeadersBuilder() =
+        headersBuilder().apply {
+            add("Accept", "*/*")
+            add("Host", baseUrl.toHttpUrl().host)
+            add("Origin", baseUrl)
+            add("X-Requested-With", "XMLHttpRequest")
+        }
 
-    private fun Element.imgAttr(): String = when {
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("data-src") -> attr("abs:data-src")
-        else -> attr("abs:src")
-    }
+    private fun Element.imgAttr(): String =
+        when {
+            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+            hasAttr("data-src") -> attr("abs:data-src")
+            else -> attr("abs:src")
+        }
 }

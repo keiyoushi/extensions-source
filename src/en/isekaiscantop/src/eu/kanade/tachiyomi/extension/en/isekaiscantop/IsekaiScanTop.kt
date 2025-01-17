@@ -10,27 +10,25 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 
-class IsekaiScanTop : Madara(
-    "IsekaiScan.top (unoriginal)",
-    "https://isekaiscan.top",
-    "en",
-) {
-
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(
+class IsekaiScanTop :
+    Madara(
+        "IsekaiScan.top (unoriginal)",
+        "https://isekaiscan.top",
+        "en",
+    ) {
+    override fun popularMangaRequest(page: Int): Request =
+        GET(
             url = "$baseUrl/popular-manga?page=$page",
             headers = headers,
             cache = CacheControl.FORCE_NETWORK,
         )
-    }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET(
             url = "$baseUrl/latest-manga?page=$page",
             headers = headers,
             cache = CacheControl.FORCE_NETWORK,
         )
-    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -52,7 +50,12 @@ class IsekaiScanTop : Madara(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val stringArray = document.select("p#arraydata").text().split(",").toTypedArray()
+        val stringArray =
+            document
+                .select("p#arraydata")
+                .text()
+                .split(",")
+                .toTypedArray()
         return stringArray.mapIndexed { index, url ->
             Page(
                 index,

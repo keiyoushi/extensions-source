@@ -27,7 +27,6 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 
 class BlackScans : HttpSource() {
-
     override val name = "Black Scans"
 
     override val baseUrl = "https://blackscans.site"
@@ -36,9 +35,11 @@ class BlackScans : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(API_URL.toHttpUrl(), 2)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimitHost(API_URL.toHttpUrl(), 2)
+            .build()
 
     private val json: Json by injectLazy()
 
@@ -47,13 +48,14 @@ class BlackScans : HttpSource() {
     override fun popularMangaRequest(page: Int) = GET("$API_URL/api/series/", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<List<MangaDto>>().map { manga ->
-            SManga.create().apply {
-                title = manga.title
-                thumbnail_url = "$API_URL/media/${manga.cover}"
-                url = "/series/${manga.code}"
+        val mangas =
+            response.parseAs<List<MangaDto>>().map { manga ->
+                SManga.create().apply {
+                    title = manga.title
+                    thumbnail_url = "$API_URL/media/${manga.cover}"
+                    url = "/series/${manga.code}"
+                }
             }
-        }
         return MangasPage(mangas, false)
     }
 
@@ -65,11 +67,19 @@ class BlackScans : HttpSource() {
 
     // ============================== Search ==============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = popularMangaRequest(page)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = popularMangaRequest(page)
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (query.startsWith(PREFIX_SEARCH)) {
             val mangaCode = query.substringAfter(PREFIX_SEARCH)
             return fetchMangaDetails(SManga.create().apply { url = "/series/$mangaCode" })
@@ -86,11 +96,10 @@ class BlackScans : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        POST("$API_URL/api/serie/", headers, manga.createPostPayload())
+    override fun mangaDetailsRequest(manga: SManga) = POST("$API_URL/api/serie/", headers, manga.createPostPayload())
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<MangaDetailsDto>().let { dto ->
+    override fun mangaDetailsParse(response: Response): SManga =
+        response.parseAs<MangaDetailsDto>().let { dto ->
             SManga.create().apply {
                 title = dto.title
                 description = dto.synopsis
@@ -102,15 +111,13 @@ class BlackScans : HttpSource() {
                 status = dto.status.toMangaStatus()
             }
         }
-    }
 
-    private fun String.toMangaStatus(): Int {
-        return when (this.lowercase()) {
+    private fun String.toMangaStatus(): Int =
+        when (this.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-    }
 
     // ============================== Chapters ============================
 
@@ -139,35 +146,42 @@ class BlackScans : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterCode = chapter.url.substringAfterLast("/")
-        val payload = """{"chapter_code":"$chapterCode"}"""
-            .toRequestBody("application/json".toMediaType())
+        val payload =
+            """{"chapter_code":"$chapterCode"}"""
+                .toRequestBody("application/json".toMediaType())
         return POST("$API_URL/api/chapter/info/", headers, payload)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PagesDto>().images.mapIndexed { index, imageUrl ->
+    override fun pageListParse(response: Response): List<Page> =
+        response.parseAs<PagesDto>().images.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = "$API_URL//media/$imageUrl")
         }
-    }
 
     // ============================== Utils ===============================
 
     @Serializable
-    private class SeriesDto(@SerialName("series_code") val code: String)
+    private class SeriesDto(
+        @SerialName("series_code") val code: String,
+    )
 
     private fun SManga.createPostPayload(field: String = "code"): RequestBody {
         val mangaCode = url.substringAfterLast("/")
         return """{"$field": "$mangaCode"}""".toRequestBody("application/json".toMediaType())
     }
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream(it.body.byteStream())
-    }
-    private inline fun <reified T> RequestBody.parseAs(): T =
-        json.decodeFromString(Buffer().also { writeTo(it) }.readUtf8())
+    private inline fun <reified T> Response.parseAs(): T =
+        use {
+            json.decodeFromStream(it.body.byteStream())
+        }
+
+    private inline fun <reified T> RequestBody.parseAs(): T = json.decodeFromString(Buffer().also { writeTo(it) }.readUtf8())
 
     private fun String.toDate() =
-        try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0 }
+        try {
+            dateFormat.parse(this)!!.time
+        } catch (_: Exception) {
+            0
+        }
 
     companion object {
         const val API_URL = "https://api.blackscans.site"

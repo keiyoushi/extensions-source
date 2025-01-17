@@ -13,7 +13,10 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 class LuraZipInterceptor : ZipInterceptor() {
-    fun decryptFile(encryptedData: ByteArray, keyBytes: ByteArray): ByteArray {
+    fun decryptFile(
+        encryptedData: ByteArray,
+        keyBytes: ByteArray,
+    ): ByteArray {
         val keyHash = MessageDigest.getInstance("SHA-256").digest(keyBytes)
 
         val key: SecretKey = SecretKeySpec(keyHash, "AES")
@@ -29,14 +32,20 @@ class LuraZipInterceptor : ZipInterceptor() {
         return decryptedData
     }
 
-    override fun requestIsZipImage(request: Request): Boolean {
-        return request.url.pathSegments.contains("cap-download")
-    }
+    override fun requestIsZipImage(request: Request): Boolean = request.url.pathSegments.contains("cap-download")
 
-    override fun zipGetByteStream(request: Request, response: Response): InputStream {
-        val keyData = listOf("obra_id", "slug", "cap_id", "cap_slug").joinToString("") {
-            request.url.queryParameterValues(it).first().toString()
-        }.toByteArray(StandardCharsets.UTF_8)
+    override fun zipGetByteStream(
+        request: Request,
+        response: Response,
+    ): InputStream {
+        val keyData =
+            listOf("obra_id", "slug", "cap_id", "cap_slug")
+                .joinToString("") {
+                    request.url
+                        .queryParameterValues(it)
+                        .first()
+                        .toString()
+                }.toByteArray(StandardCharsets.UTF_8)
         val encryptedData = response.body.bytes()
 
         val decryptedData = decryptFile(encryptedData, keyData)

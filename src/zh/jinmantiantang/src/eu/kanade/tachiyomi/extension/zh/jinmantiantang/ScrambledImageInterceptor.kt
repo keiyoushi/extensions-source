@@ -26,20 +26,24 @@ object ScrambledImageInterceptor : Interceptor {
         // 章节ID:220980(包含)之后的漫画(2020.10.27之后)图片进行了分割getRows倒序处理
         val responseBuilder = response.newBuilder()
         val imgIndex: String = pathSegments.last().substringBefore('.')
-        val input = if ("gzip" == response.header("Content-Encoding")) {
-            responseBuilder.headers(
-                response.headers.newBuilder()
-                    .removeAll("Content-Encoding")
-                    .removeAll("Content-Length")
-                    .build(),
-            )
-            GZIPInputStream(response.body.byteStream())
-        } else {
-            response.body.byteStream()
-        }
-        val newBody = input.use {
-            decodeImage(it, getRows(aid, imgIndex))
-        }.toResponseBody(jpegMediaType)
+        val input =
+            if ("gzip" == response.header("Content-Encoding")) {
+                responseBuilder.headers(
+                    response.headers
+                        .newBuilder()
+                        .removeAll("Content-Encoding")
+                        .removeAll("Content-Length")
+                        .build(),
+                )
+                GZIPInputStream(response.body.byteStream())
+            } else {
+                response.body.byteStream()
+            }
+        val newBody =
+            input
+                .use {
+                    decodeImage(it, getRows(aid, imgIndex))
+                }.toResponseBody(jpegMediaType)
         return responseBuilder.body(newBody).build()
     }
 
@@ -54,17 +58,24 @@ object ScrambledImageInterceptor : Interceptor {
         return lastByte.toString(16).last().code
     }
 
-    private fun getRows(aid: Int, imgIndex: String): Int {
-        val modulus = when {
-            aid >= 421926 -> 8
-            aid >= 268850 -> 10
-            else -> return 10
-        }
+    private fun getRows(
+        aid: Int,
+        imgIndex: String,
+    ): Int {
+        val modulus =
+            when {
+                aid >= 421926 -> 8
+                aid >= 268850 -> 10
+                else -> return 10
+            }
         return 2 * (md5LastCharCode(aid.toString() + imgIndex) % modulus) + 2
     }
 
     // 对被分割的图片进行分割,排序处理
-    private fun decodeImage(img: InputStream, rows: Int): ByteArray {
+    private fun decodeImage(
+        img: InputStream,
+        rows: Int,
+    ): ByteArray {
         // 使用bitmap进行图片处理
         val input = BitmapFactory.decodeStream(img)
         // 漫画高度 and width

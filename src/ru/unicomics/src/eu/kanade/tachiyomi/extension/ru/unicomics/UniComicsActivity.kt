@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
+
 /**
  * Springboard that accepts https://unicomics.ru/comics/series/xxx intents and redirects them to
  * the main tachiyomi process. The idea is to not install the intent filter unless
@@ -13,17 +14,17 @@ import kotlin.system.exitProcess
  * things.
  */
 class UniComicsActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 2) {
             val titleid = pathSegments[2]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${UniComics.PREFIX_SLUG_SEARCH}$titleid")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${UniComics.PREFIX_SLUG_SEARCH}$titleid")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

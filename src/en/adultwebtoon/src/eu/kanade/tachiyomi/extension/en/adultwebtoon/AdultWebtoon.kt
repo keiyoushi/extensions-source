@@ -13,14 +13,18 @@ class AdultWebtoon : Madara("Adult Webtoon", "https://adultwebtoon.com", "en") {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun popularMangaNextPageSelector() = "a.next"
+
     override fun searchMangaSelector() = popularMangaSelector()
+
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {
-        val form = FormBody.Builder()
-            .add("action", "ajax_chap")
-            .add("post_id", mangaId)
-            .build()
+        val form =
+            FormBody
+                .Builder()
+                .add("action", "ajax_chap")
+                .add("post_id", mangaId)
+                .build()
 
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }

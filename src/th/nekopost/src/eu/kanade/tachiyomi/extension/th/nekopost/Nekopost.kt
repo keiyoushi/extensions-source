@@ -36,9 +36,7 @@ class Nekopost : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder {
-        return super.headersBuilder().add("Referer", "$baseUrl/")
-    }
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
 
     private val existingProject: HashSet<String> = HashSet()
 
@@ -49,12 +47,13 @@ class Nekopost : HttpSource() {
 
     override val supportsLatest: Boolean = false
 
-    private fun getStatus(status: String) = when (status) {
-        "1" -> SManga.ONGOING
-        "2" -> SManga.COMPLETED
-        "3" -> SManga.LICENSED
-        else -> SManga.UNKNOWN
-    }
+    private fun getStatus(status: String) =
+        when (status) {
+            "1" -> SManga.ONGOING
+            "2" -> SManga.COMPLETED
+            "3" -> SManga.LICENSED
+            else -> SManga.UNKNOWN
+        }
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -64,9 +63,7 @@ class Nekopost : HttpSource() {
 
     override fun imageUrlRequest(page: Page): Request = throw UnsupportedOperationException()
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$projectDataEndpoint/${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$projectDataEndpoint/${manga.url}", headers)
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
@@ -86,11 +83,12 @@ class Nekopost : HttpSource() {
                 initialized = true
             }
 
-            genre = if (projectInfo.projectCategoryUsed != null) {
-                projectInfo.projectCategoryUsed.joinToString(", ") { it.categoryName }
-            } else {
-                ""
-            }
+            genre =
+                if (projectInfo.projectCategoryUsed != null) {
+                    projectInfo.projectCategoryUsed.joinToString(", ") { it.categoryName }
+                } else {
+                    ""
+                }
         }
         return manga
     }
@@ -112,7 +110,8 @@ class Nekopost : HttpSource() {
 
         return projectInfo.projectChapterList!!.map { chapter ->
             SChapter.create().apply {
-                url = "${projectInfo.projectInfo.projectId.toInt()}/${chapter.chapterId}/${projectInfo.projectInfo.projectId.toInt()}_${chapter.chapterId}.json"
+                url =
+                    "${projectInfo.projectInfo.projectId.toInt()}/${chapter.chapterId}/${projectInfo.projectInfo.projectId.toInt()}_${chapter.chapterId}.json"
                 name = chapter.chapterName
                 date_upload = SimpleDateFormat(
                     "yyyy-MM-dd HH:mm:ss",
@@ -124,9 +123,7 @@ class Nekopost : HttpSource() {
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$fileHost/collectManga/${chapter.url}", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("$fileHost/collectManga/${chapter.url}", headers)
 
     override fun getChapterUrl(chapter: SChapter) =
         "$baseUrl/manga/${chapter.url.substringBefore("/")}/${chapter.chapter_number.toString().removeSuffix(".0")}"
@@ -136,17 +133,19 @@ class Nekopost : HttpSource() {
         val chapterInfo: RawChapterInfo = json.decodeFromString(responseBody.string())
 
         return chapterInfo.pageItem.map { page ->
-            val imgUrl: String = if (page.pageName != null) {
-                "$fileHost/collectManga/${chapterInfo.projectId}/${chapterInfo.chapterId}/${page.pageName}"
-            } else {
-                "$fileHost/collectManga/${chapterInfo.projectId}/${chapterInfo.chapterId}/${page.fileName}"
-            }
+            val imgUrl: String =
+                if (page.pageName != null) {
+                    "$fileHost/collectManga/${chapterInfo.projectId}/${chapterInfo.chapterId}/${page.pageName}"
+                } else {
+                    "$fileHost/collectManga/${chapterInfo.projectId}/${chapterInfo.chapterId}/${page.fileName}"
+                }
             Page(
                 index = page.pageNo,
                 imageUrl = imgUrl,
             )
         }
     }
+
     override fun popularMangaRequest(page: Int): Request {
         if (page <= 1) existingProject.clear()
         // API has a bug that sometime it returns null on first page
@@ -157,27 +156,32 @@ class Nekopost : HttpSource() {
         val responseBody = response.body
         val projectList: RawProjectSummaryList = json.decodeFromString(responseBody.string())
 
-        val mangaList: List<SManga> = if (projectList.listChapter != null) {
-            projectList.listChapter.filter { !existingProject.contains(it.projectId) }.map {
-                SManga.create().apply {
-                    url = it.projectId
-                    title = it.projectName
-                    thumbnail_url = "$fileHost/collectManga/${it.projectId}/${it.projectId}_cover.jpg"
-                    initialized = false
-                    status = 0
+        val mangaList: List<SManga> =
+            if (projectList.listChapter != null) {
+                projectList.listChapter.filter { !existingProject.contains(it.projectId) }.map {
+                    SManga.create().apply {
+                        url = it.projectId
+                        title = it.projectName
+                        thumbnail_url = "$fileHost/collectManga/${it.projectId}/${it.projectId}_cover.jpg"
+                        initialized = false
+                        status = 0
+                    }
                 }
+            } else {
+                firstPageNulled = true // API has a bug that sometime it returns null on first page
+                return MangasPage(emptyList(), hasNextPage = false)
             }
-        } else {
-            firstPageNulled = true // API has a bug that sometime it returns null on first page
-            return MangasPage(emptyList(), hasNextPage = false)
-        }
 
         mangaList.forEach { existingProject.add(it.url) }
 
         return MangasPage(mangaList, hasNextPage = true)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val headers = Headers.headersOf("accept", "*/*", "content-type", "text/plain;charset=UTF-8", "origin", baseUrl)
         val requestBody = Json.encodeToString(SearchRequest(query, page)).toRequestBody()
         return POST("$baseUrl/api/explore/search", headers, requestBody)
@@ -188,16 +192,17 @@ class Nekopost : HttpSource() {
         val decrypted = CryptoAES.decrypt(responseBody, "AeyTest")
 
         val projectList: RawProjectSearchSummaryList = json.decodeFromString(decrypted)
-        val mangaList: List<SManga> = projectList.listProject
-            .filter { it.projectType == "m" }
-            .map {
-                SManga.create().apply {
-                    url = it.projectId.toString()
-                    title = it.projectName
-                    status = it.status
-                    thumbnail_url = "$fileHost/collectManga/${it.projectId}/${it.projectId}_cover.jpg?ver=${it.coverVersion}"
+        val mangaList: List<SManga> =
+            projectList.listProject
+                .filter { it.projectType == "m" }
+                .map {
+                    SManga.create().apply {
+                        url = it.projectId.toString()
+                        title = it.projectName
+                        status = it.status
+                        thumbnail_url = "$fileHost/collectManga/${it.projectId}/${it.projectId}_cover.jpg?ver=${it.coverVersion}"
+                    }
                 }
-            }
 
         return MangasPage(mangaList, false)
     }

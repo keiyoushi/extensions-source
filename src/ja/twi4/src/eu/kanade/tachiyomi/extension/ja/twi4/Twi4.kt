@@ -36,10 +36,12 @@ class Twi4 : HttpSource() {
 
     private fun getUrlDomain(): String = baseUrl.substring(0, 22)
 
-    private fun getChromeHeaders(): Headers = headersBuilder().add(
-        "User-Agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.54 Safari/537.36",
-    ).build()
+    private fun getChromeHeaders(): Headers =
+        headersBuilder()
+            .add(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.54 Safari/537.36",
+            ).build()
 
     // Both latest and popular only lists 4 manga in total
     // As the full catalog is consists of less than 50 manga, it is not worth implementing
@@ -49,17 +51,20 @@ class Twi4 : HttpSource() {
         val ret = mutableListOf<SManga>()
         // Manga that are recently updated don't show up on the full catalog
         // So we'll need to parse the recent updates section as well
-        val listings = arrayOf(
-            "#lineup_recent > div> section",
-            "#lineup > div > section:not(.zadankai):not([id])",
-        )
+        val listings =
+            arrayOf(
+                "#lineup_recent > div> section",
+                "#lineup > div > section:not(.zadankai):not([id])",
+            )
         for (listing in listings) {
             val mangas = doc.select(listing)
             for (manga in mangas) {
                 ret.add(
                     SManga.create().apply {
                         thumbnail_url =
-                            getUrlDomain() + manga.select("div.figgroup > figure > a > img")
+                            getUrlDomain() +
+                            manga
+                                .select("div.figgroup > figure > a > img")
                                 .attr("src")
                         setUrlWithoutDomain(
                             getUrlDomain() + manga.select("div.hgroup > h3 > a").attr("href"),
@@ -67,8 +72,9 @@ class Twi4 : HttpSource() {
                         title = manga.select("div.hgroup > h3 > a").text()
                         author = manga.select("div.hgroup > p").text()
                         status =
-                            if (manga.select("ul:first-child > li:last-child > em.is-completed")
-                                .isEmpty()
+                            if (manga
+                                    .select("ul:first-child > li:last-child > em.is-completed")
+                                    .isEmpty()
                             ) {
                                 SManga.ONGOING
                             } else {
@@ -81,12 +87,9 @@ class Twi4 : HttpSource() {
         return MangasPage(ret, false)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl, getChromeHeaders())
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, getChromeHeaders())
 
-    override fun mangaDetailsRequest(manga: SManga): Request =
-        GET(getUrlDomain() + manga.url, getChromeHeaders())
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getUrlDomain() + manga.url, getChromeHeaders())
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
@@ -96,10 +99,17 @@ class Twi4 : HttpSource() {
             // Interestingly the page body has no mention of the title at all. It only exists in <title>
             val titleRegex = Regex("『(.+)』.+ \\| ツイ４ \\| 最前線")
             val match = titleRegex.matchEntire(document.title())
-            title = match?.groups?.get(1)?.value.toString()
+            title =
+                match
+                    ?.groups
+                    ?.get(1)
+                    ?.value
+                    .toString()
             // Twi4 uses the exact same thumbnail at both the main page and manga details
             thumbnail_url =
-                getUrlDomain() + document.select("#introduction > header > div > h2 > img")
+                getUrlDomain() +
+                document
+                    .select("#introduction > header > div > h2 > img")
                     .attr("src")
             description =
                 document.select("#introduction > div > div > p").text()
@@ -131,8 +141,7 @@ class Twi4 : HttpSource() {
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET(getUrlDomain() + manga.url, getChromeHeaders())
+    override fun chapterListRequest(manga: SManga): Request = GET(getUrlDomain() + manga.url, getChromeHeaders())
 
     // They have a <noscript> layout! This is surprising
     // Though their manga pages fails to load as it relies on JS
@@ -142,7 +151,12 @@ class Twi4 : HttpSource() {
         val allChapters = doc.select("#backnumbers > div > ul > li")
         val ret = mutableListOf<SChapter>()
         // Returns the shortened series name from the request URL. Should be good enough for an identifier
-        val series = response.request.url.toUrl().toString().dropLast(1).substringAfterLast("/")
+        val series =
+            response.request.url
+                .toUrl()
+                .toString()
+                .dropLast(1)
+                .substringAfterLast("/")
         val sharedPref = application.getSharedPreferences("source_${id}_time_found:$series", 0)
         val editor = sharedPref.edit()
         for (chapter in allChapters) {
@@ -171,8 +185,7 @@ class Twi4 : HttpSource() {
         return ret
     }
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET(getUrlDomain() + chapter.url, getChromeHeaders())
+    override fun pageListRequest(chapter: SChapter): Request = GET(getUrlDomain() + chapter.url, getChromeHeaders())
 
     override fun pageListParse(response: Response): List<Page> {
         val doc = response.asJsoup()
@@ -185,34 +198,52 @@ class Twi4 : HttpSource() {
         // In this case we need to request an index file and obtain the file suffix
         var imageUrl: String = getUrlDomain() + page.select("div > div > p > img").attr("src")
         if (!validPageTest.matches(page.select("div > div > p > img").attr("src"))) {
-            val requestUrl = response.request.url.toUrl().toString()
+            val requestUrl =
+                response.request.url
+                    .toUrl()
+                    .toString()
             val chapterNum = requestUrl.substringAfterLast("/").take(4).toInt()
             // The index file contains everything about each image. Usually we can find the file name directly from the document
             // This is a failsafe
-            val indexResponse = client.newCall(
-                GET(
-                    requestUrl.substringBeforeLast("/") + "/index.js",
-                    getChromeHeaders(),
-                ),
-            ).execute()
+            val indexResponse =
+                client
+                    .newCall(
+                        GET(
+                            requestUrl.substringBeforeLast("/") + "/index.js",
+                            getChromeHeaders(),
+                        ),
+                    ).execute()
             if (!indexResponse.isSuccessful) {
                 throw Exception("Failed to find pages!")
             }
             // We got a JS file that looks very much like a JSON object
             // A few string manipulation and we can parse the whole thing as JSON!
             val re = Regex("([A-z]+):")
-            val index = indexResponse.body.string().substringAfter("=").dropLast(1)
-                .let { re.replace(it, "\"$1\":") }
+            val index =
+                indexResponse.body
+                    .string()
+                    .substringAfter("=")
+                    .dropLast(1)
+                    .let { re.replace(it, "\"$1\":") }
             indexResponse.close()
             val indexElement = index.let { Json.parseToJsonElement(it) }
             val suffix =
-                indexElement.jsonObject["Items"]?.jsonArray?.get(chapterNum - 1)?.jsonObject?.get("Suffix")?.jsonPrimitive?.content
+                indexElement.jsonObject["Items"]
+                    ?.jsonArray
+                    ?.get(chapterNum - 1)
+                    ?.jsonObject
+                    ?.get("Suffix")
+                    ?.jsonPrimitive
+                    ?.content
             // Twi4's image links are a bit of a mess
             // Because in very rare cases, the image filename *doesn't* come with a suffix
             // So only attach the suffix if there is one
             if (suffix != null) {
-                imageUrl = getUrlDomain() + page.select("div > div > p > img").attr("src")
-                    .dropLast(4) + suffix + ".jpg"
+                imageUrl = getUrlDomain() +
+                    page
+                        .select("div > div > p > img")
+                        .attr("src")
+                        .dropLast(4) + suffix + ".jpg"
             }
         }
         ret.add(
@@ -242,7 +273,8 @@ class Twi4 : HttpSource() {
             if (slug.endsWith("html") || slug.startsWith("zadankai") || slug.startsWith("others")) {
                 return Observable.just(MangasPage(listOf(), false))
             }
-            return client.newCall(GET(baseUrl + slug))
+            return client
+                .newCall(GET(baseUrl + slug))
                 .asObservableSuccess()
                 .map { response -> searchMangaSlug(response, slug) }
         }
@@ -255,25 +287,27 @@ class Twi4 : HttpSource() {
         }
     }
 
-    private fun searchMangaSlug(response: Response, slug: String): MangasPage {
+    private fun searchMangaSlug(
+        response: Response,
+        slug: String,
+    ): MangasPage {
         val details = mangaDetailsParse(response)
         details.setUrlWithoutDomain(baseUrl + slug)
         return MangasPage(listOf(details), false)
     }
 
     // All these functions are unused
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 }

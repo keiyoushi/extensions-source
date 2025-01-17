@@ -29,7 +29,6 @@ import uy.kohesive.injekt.injectLazy
 import kotlin.math.min
 
 class MangaFun : HttpSource() {
-
     override val name = "Manga Fun"
 
     override val baseUrl = "https://mangafun.me"
@@ -42,58 +41,64 @@ class MangaFun : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Origin", baseUrl)
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
+            .add("Origin", baseUrl)
 
     private val json: Json by injectLazy()
 
     private val nextBuildId by lazy {
         val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
 
-        json.parseToJsonElement(
-            document.selectFirst("#__NEXT_DATA__")!!.data(),
-        )
-            .jsonObject["buildId"]!!
+        json
+            .parseToJsonElement(
+                document.selectFirst("#__NEXT_DATA__")!!.data(),
+            ).jsonObject["buildId"]!!
             .jsonPrimitive
             .content
     }
 
     private lateinit var directory: List<MinifiedMangaDto>
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(popularMangaRequest(page))
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        if (page == 1) {
+            client
+                .newCall(popularMangaRequest(page))
                 .asObservableSuccess()
                 .map { popularMangaParse(it) }
         } else {
             Observable.just(parseDirectory(page))
         }
-    }
 
     override fun popularMangaRequest(page: Int) = GET("$apiUrl/title/all", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        directory = response.parseAs<List<MinifiedMangaDto>>()
-            .sortedBy { it.rank }
+        directory =
+            response
+                .parseAs<List<MinifiedMangaDto>>()
+                .sortedBy { it.rank }
         return parseDirectory(1)
     }
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(latestUpdatesRequest(page))
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
+        if (page == 1) {
+            client
+                .newCall(latestUpdatesRequest(page))
                 .asObservableSuccess()
                 .map { latestUpdatesParse(it) }
         } else {
             Observable.just(parseDirectory(page))
         }
-    }
 
     override fun latestUpdatesRequest(page: Int) = popularMangaRequest(page)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        directory = response.parseAs<List<MinifiedMangaDto>>()
-            .sortedByDescending { MangaFunUtils.convertShortTime(it.updatedAt) }
+        directory =
+            response
+                .parseAs<List<MinifiedMangaDto>>()
+                .sortedByDescending { MangaFunUtils.convertShortTime(it.updatedAt) }
         return parseDirectory(1)
     }
 
@@ -107,7 +112,8 @@ class MangaFun : HttpSource() {
             return fetchMangaDetails(SManga.create().apply { url = "/title/$slug" })
                 .map { MangasPage(listOf(it), false) }
         } else if (page == 1) {
-            client.newCall(searchMangaRequest(page, query, filters))
+            client
+                .newCall(searchMangaRequest(page, query, filters))
                 .asObservableSuccess()
                 .map { searchMangaParse(it, query, filters) }
         } else {
@@ -115,17 +121,26 @@ class MangaFun : HttpSource() {
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        popularMangaRequest(page)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = popularMangaRequest(page)
 
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    private fun searchMangaParse(response: Response, query: String, filters: FilterList): MangasPage {
-        directory = response.parseAs<List<MinifiedMangaDto>>()
-            .filter {
-                it.name.contains(query, false) ||
-                    it.alias.any { a -> a.contains(query, false) }
-            }
+    private fun searchMangaParse(
+        response: Response,
+        query: String,
+        filters: FilterList,
+    ): MangasPage {
+        directory =
+            response
+                .parseAs<List<MinifiedMangaDto>>()
+                .filter {
+                    it.name.contains(query, false) ||
+                        it.alias.any { a -> a.contains(query, false) }
+                }
 
         filters.ifEmpty { getFilterList() }.forEach { filter ->
             when (filter) {
@@ -141,13 +156,15 @@ class MangaFun : HttpSource() {
                     }
 
                     if (included.isNotEmpty()) {
-                        directory = directory
-                            .filter { it.genres.any { g -> included.contains(g) } }
+                        directory =
+                            directory
+                                .filter { it.genres.any { g -> included.contains(g) } }
                     }
 
                     if (excluded.isNotEmpty()) {
-                        directory = directory
-                            .filterNot { it.genres.any { g -> excluded.contains(g) } }
+                        directory =
+                            directory
+                                .filterNot { it.genres.any { g -> excluded.contains(g) } }
                     }
                 }
                 is TypeFilter -> {
@@ -162,13 +179,15 @@ class MangaFun : HttpSource() {
                     }
 
                     if (included.isNotEmpty()) {
-                        directory = directory
-                            .filter { included.any { t -> it.titleType == t } }
+                        directory =
+                            directory
+                                .filter { included.any { t -> it.titleType == t } }
                     }
 
                     if (excluded.isNotEmpty()) {
-                        directory = directory
-                            .filterNot { excluded.any { t -> it.titleType == t } }
+                        directory =
+                            directory
+                                .filterNot { excluded.any { t -> it.titleType == t } }
                     }
                 }
                 is StatusFilter -> {
@@ -183,23 +202,26 @@ class MangaFun : HttpSource() {
                     }
 
                     if (included.isNotEmpty()) {
-                        directory = directory
-                            .filter { included.any { t -> it.publishedStatus == t } }
+                        directory =
+                            directory
+                                .filter { included.any { t -> it.publishedStatus == t } }
                     }
 
                     if (excluded.isNotEmpty()) {
-                        directory = directory
-                            .filterNot { excluded.any { t -> it.publishedStatus == t } }
+                        directory =
+                            directory
+                                .filterNot { excluded.any { t -> it.publishedStatus == t } }
                     }
                 }
                 is SortFilter -> {
-                    directory = when (filter.state?.index) {
-                        0 -> directory.sortedBy { it.name }
-                        1 -> directory.sortedBy { it.rank }
-                        2 -> directory.sortedBy { MangaFunUtils.convertShortTime(it.createdAt) }
-                        3 -> directory.sortedBy { MangaFunUtils.convertShortTime(it.updatedAt) }
-                        else -> throw IllegalStateException("Unhandled sort option")
-                    }
+                    directory =
+                        when (filter.state?.index) {
+                            0 -> directory.sortedBy { it.name }
+                            1 -> directory.sortedBy { it.rank }
+                            2 -> directory.sortedBy { MangaFunUtils.convertShortTime(it.createdAt) }
+                            3 -> directory.sortedBy { MangaFunUtils.convertShortTime(it.updatedAt) }
+                            else -> throw IllegalStateException("Unhandled sort option")
+                        }
 
                     if (filter.state?.ascending != true) {
                         directory = directory.reversed()
@@ -222,13 +244,15 @@ class MangaFun : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.parseAs<NextPagePropsWrapperDto>()
-            .pageProps
-            .dehydratedState
-            .queries
-            .first()
-            .state
-            .data
+        val data =
+            response
+                .parseAs<NextPagePropsWrapperDto>()
+                .pageProps
+                .dehydratedState
+                .queries
+                .first()
+                .state
+                .data
 
         return json.decodeFromJsonElement<MangaDto>(data).toSManga()
     }
@@ -236,13 +260,15 @@ class MangaFun : HttpSource() {
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<NextPagePropsWrapperDto>()
-            .pageProps
-            .dehydratedState
-            .queries
-            .first()
-            .state
-            .data
+        val data =
+            response
+                .parseAs<NextPagePropsWrapperDto>()
+                .pageProps
+                .dehydratedState
+                .queries
+                .first()
+                .state
+                .data
 
         val mangaData = json.decodeFromJsonElement<MangaDto>(data)
         return mangaData.chapters.map { it.toSChapter(mangaData.id, mangaData.name) }.reversed()
@@ -271,12 +297,13 @@ class MangaFun : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getFilterList() = FilterList(
-        GenreFilter(),
-        TypeFilter(),
-        StatusFilter(),
-        SortFilter(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            GenreFilter(),
+            TypeFilter(),
+            StatusFilter(),
+            SortFilter(),
+        )
 
     private fun parseDirectory(page: Int): MangasPage {
         val endRange = min((page * 24), directory.size)
@@ -286,8 +313,7 @@ class MangaFun : HttpSource() {
         return MangasPage(manga, hasNextPage)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
     companion object {
         internal const val PREFIX_ID_SEARCH = "id:"

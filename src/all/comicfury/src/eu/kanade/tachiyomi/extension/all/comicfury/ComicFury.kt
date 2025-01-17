@@ -30,26 +30,28 @@ class ComicFury(
     override val lang: String,
     private val siteLang: String = lang, // override lang string used in MangaSearch
     private val extraName: String = "",
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
     override val baseUrl: String = "https://comicfury.com"
     override val name: String = "Comic Fury$extraName" // Used for No Text
     override val supportsLatest: Boolean = true
 
-    override val client = super.client.newBuilder().addInterceptor(TextInterceptor()).build()
+    override val client =
+        super.client
+            .newBuilder()
+            .addInterceptor(TextInterceptor())
+            .build()
 
     /**
      * Archive is on a separate page from manga info
      */
-    override fun chapterListRequest(manga: SManga): Request =
-        GET("$baseUrl/read/${manga.url.substringAfter("?url=")}/archive")
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/read/${manga.url.substringAfter("?url=")}/archive")
 
     /**
      * Open Archive Url instead of the details page
      * Helps with getting past the nfsw pages
      */
-    override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/read/" + manga.url.substringAfter("?url=") + "/archive"
-    }
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/read/" + manga.url.substringAfter("?url=") + "/archive"
 
     /**
      * There are two different ways chapters are setup
@@ -73,20 +75,21 @@ class ComicFury(
     private val nextArchivePageSelector = "#scroll-content > .onsite-viewer-back-link + .archive-pages a"
     private lateinit var currentPage: org.jsoup.nodes.Document
 
-    private fun Element.toSManga(): SChapter {
-        return SChapter.create().apply {
+    private fun Element.toSManga(): SChapter =
+        SChapter.create().apply {
             setUrlWithoutDomain(this@toSManga.attr("abs:href"))
             name = this@toSManga.select(".archive-comic-title").text()
             date_upload = this@toSManga.select(".archive-comic-date").text().toDate()
         }
-    }
 
-    private fun collect(url: String): List<SChapter> {
-        return client.newCall(GET(url, headers)).execute().asJsoup()
+    private fun collect(url: String): List<SChapter> =
+        client
+            .newCall(GET(url, headers))
+            .execute()
+            .asJsoup()
             .also { currentPage = it }
             .select(chapterSelector)
             .map { element -> element.toSManga() }
-    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val jsp = response.asJsoup()
@@ -95,16 +98,20 @@ class ComicFury(
             val chapters = mutableListOf<SChapter>()
             jsp.select(archiveSelector).eachAttr("abs:href").map { url ->
                 chapters.addAll(collect(url))
-                currentPage.select(nextArchivePageSelector).eachAttr("abs:href")
+                currentPage
+                    .select(nextArchivePageSelector)
+                    .eachAttr("abs:href")
                     .mapNotNull { nextUrl -> chapters.addAll(collect(nextUrl)) }
             }
             chapters
                 .mapIndexed { index, sChapter -> sChapter.apply { chapter_number = index.toFloat() } }
                 .reversed()
         } else {
-            jsp.select(chapterSelector).mapIndexed { i, element ->
-                element.toSManga().apply { chapter_number = "0.$i".toFloat() }
-            }.reversed()
+            jsp
+                .select(chapterSelector)
+                .mapIndexed { i, element ->
+                    element.toSManga().apply { chapter_number = "0.$i".toFloat() }
+                }.reversed()
         }
     }
 
@@ -128,7 +135,9 @@ class ComicFury(
                         pages.size,
                         response.request.url.toString(),
                         TextInterceptorHelper.createUrl(
-                            jsp.selectFirst("a.is--comment-author")?.ownText()
+                            jsp
+                                .selectFirst("a.is--comment-author")
+                                ?.ownText()
                                 ?.let { "Author's Notes from $it" }
                                 .orEmpty(),
                             jsp.selectFirst("div.is--comment-content")?.html().orEmpty(),
@@ -171,26 +180,34 @@ class ComicFury(
         }
         return MangasPage(list, (jsp.selectFirst("div.search-next-page") != null))
     }
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val req: HttpUrl.Builder = "$baseUrl/search.php".toHttpUrl().newBuilder()
         req.addQueryParameter("query", query)
         req.addQueryParameter("page", page.toString())
         req.addQueryParameter("language", siteLang)
         filters.forEach {
             when (it) {
-                is TagsFilter -> req.addEncodedQueryParameter(
-                    "tags",
-                    it.state.replace(", ", ","),
-                )
+                is TagsFilter ->
+                    req.addEncodedQueryParameter(
+                        "tags",
+                        it.state.replace(", ", ","),
+                    )
                 is SortFilter -> req.addQueryParameter("sort", it.state.toString())
-                is CompletedComicFilter -> req.addQueryParameter(
-                    "completed",
-                    it.state.toInt().toString(),
-                )
-                is LastUpdatedFilter -> req.addQueryParameter(
-                    "lastupdate",
-                    it.state.toString(),
-                )
+                is CompletedComicFilter ->
+                    req.addQueryParameter(
+                        "completed",
+                        it.state.toInt().toString(),
+                    )
+                is LastUpdatedFilter ->
+                    req.addQueryParameter(
+                        "lastupdate",
+                        it.state.toString(),
+                    )
                 is ViolenceFilter -> req.addQueryParameter("fv", it.state.toString())
                 is NudityFilter -> req.addQueryParameter("fn", it.state.toString())
                 is StrongLangFilter -> req.addQueryParameter("fl", it.state.toString())
@@ -202,90 +219,113 @@ class ComicFury(
         return Request.Builder().url(req.build()).build()
     }
 
-    private fun Boolean.toInt(): Int = if (this) { 0 } else { 1 }
+    private fun Boolean.toInt(): Int =
+        if (this) {
+            0
+        } else {
+            1
+        }
 
     // START OF AUTHOR NOTES //
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
+
     companion object {
         private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
     }
-    private fun showAuthorsNotesPref() =
-        preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
+
+    private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_AUTHORS_NOTES_KEY; title = "Show author's notes"
-            summary = "Enable to see the author's notes at the end of chapters (if they're there)."
-            setDefaultValue(false)
-        }
+        val authorsNotesPref =
+            SwitchPreferenceCompat(screen.context).apply {
+                key = SHOW_AUTHORS_NOTES_KEY
+                title = "Show author's notes"
+                summary = "Enable to see the author's notes at the end of chapters (if they're there)."
+                setDefaultValue(false)
+            }
         screen.addPreference(authorsNotesPref)
     }
     // END OF AUTHOR NOTES //
 
     // START OF FILTERS //
     override fun getFilterList(): FilterList = getFilterList(0)
-    private fun getFilterList(sortIndex: Int): FilterList = FilterList(
-        TagsFilter(),
-        Filter.Separator(),
-        SortFilter(sortIndex),
-        Filter.Separator(),
-        LastUpdatedFilter(),
-        CompletedComicFilter(),
-        Filter.Separator(),
-        Filter.Header("Flags"),
-        ViolenceFilter(),
-        NudityFilter(),
-        StrongLangFilter(),
-        SexualFilter(),
-    )
 
-    internal class SortFilter(index: Int) : Filter.Select<String>(
-        "Sort By",
-        arrayOf("Relevance", "Popularity", "Last Update"),
-        index,
-    )
+    private fun getFilterList(sortIndex: Int): FilterList =
+        FilterList(
+            TagsFilter(),
+            Filter.Separator(),
+            SortFilter(sortIndex),
+            Filter.Separator(),
+            LastUpdatedFilter(),
+            CompletedComicFilter(),
+            Filter.Separator(),
+            Filter.Header("Flags"),
+            ViolenceFilter(),
+            NudityFilter(),
+            StrongLangFilter(),
+            SexualFilter(),
+        )
+
+    internal class SortFilter(
+        index: Int,
+    ) : Filter.Select<String>(
+            "Sort By",
+            arrayOf("Relevance", "Popularity", "Last Update"),
+            index,
+        )
+
     internal class CompletedComicFilter : Filter.CheckBox("Comic Completed", false)
-    internal class LastUpdatedFilter : Filter.Select<String>(
-        "Last Updated",
-        arrayOf("All Time", "This Week", "This Month", "This Year", "Completed Only"),
-        0,
-    )
-    internal class ViolenceFilter : Filter.Select<String>(
-        "Violence",
-        arrayOf("None / Minimal", "Violent Content", "Gore / Graphic"),
-        2,
-    )
-    internal class NudityFilter : Filter.Select<String>(
-        "Frontal Nudity",
-        arrayOf("None", "Occasional", "Frequent"),
-        2,
-    )
-    internal class StrongLangFilter : Filter.Select<String>(
-        "Strong Language",
-        arrayOf("None", "Occasional", "Frequent"),
-        2,
-    )
-    internal class SexualFilter : Filter.Select<String>(
-        "Sexual Content",
-        arrayOf("No Sexual Content", "Sexual Situations", "Strong Sexual Themes"),
-        2,
-    )
+
+    internal class LastUpdatedFilter :
+        Filter.Select<String>(
+            "Last Updated",
+            arrayOf("All Time", "This Week", "This Month", "This Year", "Completed Only"),
+            0,
+        )
+
+    internal class ViolenceFilter :
+        Filter.Select<String>(
+            "Violence",
+            arrayOf("None / Minimal", "Violent Content", "Gore / Graphic"),
+            2,
+        )
+
+    internal class NudityFilter :
+        Filter.Select<String>(
+            "Frontal Nudity",
+            arrayOf("None", "Occasional", "Frequent"),
+            2,
+        )
+
+    internal class StrongLangFilter :
+        Filter.Select<String>(
+            "Strong Language",
+            arrayOf("None", "Occasional", "Frequent"),
+            2,
+        )
+
+    internal class SexualFilter :
+        Filter.Select<String>(
+            "Sexual Content",
+            arrayOf("No Sexual Content", "Sexual Situations", "Strong Sexual Themes"),
+            2,
+        )
+
     internal class TagsFilter : Filter.Text("Tags")
 
     // END OF FILTERS //
 
-    override fun popularMangaRequest(page: Int): Request =
-        searchMangaRequest(page, "", getFilterList(1))
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList(1))
+
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        searchMangaRequest(page, "", getFilterList(2))
+    override fun latestUpdatesRequest(page: Int): Request = searchMangaRequest(page, "", getFilterList(2))
+
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Date stuff
 
@@ -301,10 +341,9 @@ class ComicFury(
         }
     }
 
-    private val date = listOf("dd MMM yyyy hh:mm aa", "dd MMM yyyy", "MMM dd yyyy")
-        .map { SimpleDateFormat(it, Locale.US) }
+    private val date =
+        listOf("dd MMM yyyy hh:mm aa", "dd MMM yyyy", "MMM dd yyyy")
+            .map { SimpleDateFormat(it, Locale.US) }
 
-    private fun SimpleDateFormat.parseTime(string: String): Long {
-        return this.parse(string)?.time ?: 0
-    }
+    private fun SimpleDateFormat.parseTime(string: String): Long = this.parse(string)?.time ?: 0
 }

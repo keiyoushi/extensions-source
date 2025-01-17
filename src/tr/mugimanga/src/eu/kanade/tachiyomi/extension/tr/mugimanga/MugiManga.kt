@@ -8,22 +8,24 @@ import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MugiManga : Madara(
-    "Mugi Manga",
-    "https://mugimanga.com",
-    "tr",
-    SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+class MugiManga :
+    Madara(
+        "Mugi Manga",
+        "https://mugimanga.com",
+        "tr",
+        SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(3)
+            .build()
 
     override val supportsLatest = false
 
     override val useNewChapterEndpoint = true
 
-    override fun pageListParse(document: Document): List<Page> {
-        return super.pageListParse(document).takeIf { it.isNotEmpty() }
+    override fun pageListParse(document: Document): List<Page> =
+        super.pageListParse(document).takeIf { it.isNotEmpty() }
             ?: throw Exception("WebView'de oturum açmanız gerekebilir")
-    }
 }

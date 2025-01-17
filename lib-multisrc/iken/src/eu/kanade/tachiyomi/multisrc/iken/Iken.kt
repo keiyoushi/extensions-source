@@ -22,15 +22,16 @@ abstract class Iken(
     override val lang: String,
     override val baseUrl: String,
 ) : HttpSource() {
-
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
 
     private val json by injectLazy<Json>()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .set("Referer", "$baseUrl/")
 
     private var genres = emptyList<Pair<String, String>>()
     protected val titleCache by lazy {
@@ -40,13 +41,14 @@ abstract class Iken(
         data.posts
             .filterNot { it.isNovel }
             .also { posts ->
-                genres = posts.flatMap {
-                    it.genres.map { genre ->
-                        genre.name to genre.id.toString()
-                    }
-                }.distinct()
-            }
-            .associateBy { it.slug }
+                genres =
+                    posts
+                        .flatMap {
+                            it.genres.map { genre ->
+                                genre.name to genre.id.toString()
+                            }
+                        }.distinct()
+            }.associateBy { it.slug }
     }
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
@@ -54,48 +56,63 @@ abstract class Iken(
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val entries = document.select("aside a:has(img)").mapNotNull {
-            titleCache[it.absUrl("href").substringAfter("series/")]?.toSManga()
-        }
+        val entries =
+            document.select("aside a:has(img)").mapNotNull {
+                titleCache[it.absUrl("href").substringAfter("series/")]?.toSManga()
+            }
 
         return MangasPage(entries, false)
     }
 
     override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
+
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/query".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", page.toString())
-            addQueryParameter("perPage", perPage.toString())
-            addQueryParameter("searchTerm", query.trim())
-            filters.filterIsInstance<UrlPartFilter>().forEach {
-                it.addUrlParameter(this)
-            }
-        }.build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/api/query"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("page", page.toString())
+                    addQueryParameter("perPage", perPage.toString())
+                    addQueryParameter("searchTerm", query.trim())
+                    filters.filterIsInstance<UrlPartFilter>().forEach {
+                        it.addUrlParameter(this)
+                    }
+                }.build()
 
         return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val data = response.parseAs<SearchResponse>()
-        val page = response.request.url.queryParameter("page")!!.toInt()
+        val page =
+            response.request.url
+                .queryParameter("page")!!
+                .toInt()
 
-        val entries = data.posts
-            .filterNot { it.isNovel }
-            .map { it.toSManga() }
+        val entries =
+            data.posts
+                .filterNot { it.isNovel }
+                .map { it.toSManga() }
 
         val hasNextPage = data.totalCount > (page * perPage)
 
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun getFilterList() = FilterList(
-        StatusFilter(),
-        TypeFilter(),
-        GenreFilter(genres),
-        Filter.Header("Open popular mangas if genre filter is empty"),
-    )
+    override fun getFilterList() =
+        FilterList(
+            StatusFilter(),
+            TypeFilter(),
+            GenreFilter(genres),
+            Filter.Header("Open popular mangas if genre filter is empty"),
+        )
 
     override fun getMangaUrl(manga: SManga): String {
         val slug = manga.url.substringBeforeLast("#")
@@ -110,8 +127,7 @@ abstract class Iken(
         return Observable.just(update)
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga): Request {
         val id = manga.url.substringAfterLast("#")
@@ -138,11 +154,9 @@ abstract class Iken(
         }
     }
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }
 
 private const val perPage = 18

@@ -8,7 +8,6 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class HattoriMangaUrlActivity : Activity() {
-
     private val tag = javaClass.simpleName
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,11 +15,12 @@ class HattoriMangaUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
             val item = pathSegments[1]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${HattoriManga.SEARCH_PREFIX}$item")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${HattoriManga.SEARCH_PREFIX}$item")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

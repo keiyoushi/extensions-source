@@ -15,12 +15,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ManhwaHentai : Madara(
-    "Manhwa Hentai",
-    "https://manhwahentai.to",
-    "en",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("eb")),
-) {
+class ManhwaHentai :
+    Madara(
+        "Manhwa Hentai",
+        "https://manhwahentai.to",
+        "en",
+        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("eb")),
+    ) {
     override val mangaDetailsSelectorTitle = "div.post-title .h1"
     override val mangaDetailsSelectorArtist = "div.post-tax-wp-manga-artist a .tag-name"
     override val mangaDetailsSelectorDescription = ".post-meta-title:contains(Description:) + .post-meta-value"
@@ -33,15 +34,19 @@ class ManhwaHentai : Madara(
     override val mangaSubString = "pornhwa"
 
     override fun chapterListSelector() = "li[wire:key=chapter]"
+
     override fun chapterDateSelector() = "div.release p"
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {
-        val url = "$baseUrl/wp-admin/admin-ajax.php".toHttpUrl().newBuilder()
-            .addQueryParameter("action", "get-all-chapters-list")
-            .addQueryParameter("post_id", mangaId)
-            .addQueryParameter("chapters_per_page", "")
-            .addQueryParameter("offset", "0")
-            .build()
+        val url =
+            "$baseUrl/wp-admin/admin-ajax.php"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("action", "get-all-chapters-list")
+                .addQueryParameter("post_id", mangaId)
+                .addQueryParameter("chapters_per_page", "")
+                .addQueryParameter("offset", "0")
+                .build()
 
         return GET(url, xhrHeaders)
     }
@@ -51,10 +56,11 @@ class ManhwaHentai : Madara(
 
         launchIO { countViews(document) }
 
-        val mangaId = document
-            .selectFirst("a[data-action=bookmark]")
-            ?.attr("data-post")
-            ?: throw Exception("Failed to find mangaId")
+        val mangaId =
+            document
+                .selectFirst("a[data-action=bookmark]")
+                ?.attr("data-post")
+                ?: throw Exception("Failed to find mangaId")
 
         val xhrRequest = oldXhrChaptersRequest(mangaId)
         client.newCall(xhrRequest).execute().use { xhrResponse ->
@@ -68,9 +74,10 @@ class ManhwaHentai : Madara(
         val chapter = SChapter.create()
 
         with(element) {
-            chapter.url = selectFirst(chapterUrlSelector)!!.attr("abs:href").let {
-                if (it.endsWith("/")) it else "$it/"
-            }
+            chapter.url =
+                selectFirst(chapterUrlSelector)!!.attr("abs:href").let {
+                    if (it.endsWith("/")) it else "$it/"
+                }
             chapter.name = selectFirst("div:not(.release) p")!!.text()
             chapter.date_upload = parseChapterDate(selectFirst(chapterDateSelector())?.text())
         }
@@ -81,17 +88,18 @@ class ManhwaHentai : Madara(
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
-        val pages = document.selectFirst("#chapter_preloaded_images")!!.data()
-            .substringAfter("chapter_preloaded_images=")
-            .removeSuffix(",]")
-            .let { json.decodeFromString<List<PageDto>>("$it]") }
+        val pages =
+            document
+                .selectFirst("#chapter_preloaded_images")!!
+                .data()
+                .substringAfter("chapter_preloaded_images=")
+                .removeSuffix(",]")
+                .let { json.decodeFromString<List<PageDto>>("$it]") }
 
         return pages.mapIndexed { idx, page ->
             Page(idx, document.location(), page.src.replace("http://", "https://"))
         }
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }

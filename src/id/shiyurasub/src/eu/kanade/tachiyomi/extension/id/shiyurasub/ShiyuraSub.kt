@@ -8,13 +8,13 @@ import okhttp3.Request
 import okhttp3.Response
 
 class ShiyuraSub : ZeistManga("ShiyuraSub", "https://shiyurasub.blogspot.com", "id") {
-
     override val hasFilters = true
     override val hasLanguageFilter = false
 
     override val supportsLatest = false
 
     override fun popularMangaRequest(page: Int): Request = latestUpdatesRequest(page)
+
     override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
     override val pageListSelector = "main.content article.container"
@@ -25,8 +25,10 @@ class ShiyuraSub : ZeistManga("ShiyuraSub", "https://shiyurasub.blogspot.com", "
         return SManga.create().apply {
             thumbnail_url = profileManga.selectFirst("div.grid img")!!.attr("abs:src")
             description = profileManga.select("#synopsis").text()
-            genre = profileManga.select("div.my-5 > a[rel=tag]")
-                .joinToString { it.text() }
+            genre =
+                profileManga
+                    .select("div.my-5 > a[rel=tag]")
+                    .joinToString { it.text() }
         }
     }
 }

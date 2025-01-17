@@ -18,19 +18,19 @@ class ChapterRelease(
     private val title: String,
     @SerialName("team_name") private val teamName: String,
     @SerialName("time_stamp") private val timestamp: Long,
-
     @SerialName("has_rev_link") private val hasRevLink: Boolean,
     @SerialName("support_link") private val supportLink: String,
 ) {
     val isMonetized get() = hasRevLink && supportLink.isNotEmpty()
 
-    fun toSChapter() = SChapter.create().apply {
-        url = "/r/$id"
-        chapter_number = chapter.float
-        date_upload = timestamp * 1000
-        scanlator = teamName
+    fun toSChapter() =
+        SChapter.create().apply {
+            url = "/r/$id"
+            chapter_number = chapter.float
+            date_upload = timestamp * 1000
+            scanlator = teamName
 
-        val chapterName = title.let { if (it.trim() != "") " - $it" else "" }
-        name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
-    }
+            val chapterName = title.let { if (it.trim() != "") " - $it" else "" }
+            name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
+        }
 }

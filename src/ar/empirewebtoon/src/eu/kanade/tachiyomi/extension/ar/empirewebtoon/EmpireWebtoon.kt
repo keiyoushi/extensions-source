@@ -19,14 +19,14 @@ class EmpireWebtoon :
         SimpleDateFormat("d MMMM، yyyy", Locale("ar")),
     ),
     ConfigurableSource {
-
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
             if (prefDefaultBaseUrl != super.baseUrl) {
-                preferences.edit()
+                preferences
+                    .edit()
                     .putString(BASE_URL_PREF, super.baseUrl)
                     .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
                     .apply()
@@ -41,19 +41,20 @@ class EmpireWebtoon :
     override val useNewChapterEndpoint = false
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(super.baseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: ${super.baseUrl}"
+        val baseUrlPref =
+            androidx.preference.EditTextPreference(screen.context).apply {
+                key = BASE_URL_PREF
+                title = BASE_URL_PREF_TITLE
+                summary = BASE_URL_PREF_SUMMARY
+                setDefaultValue(super.baseUrl)
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "Default: ${super.baseUrl}"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                    true
+                }
             }
-        }
         screen.addPreference(baseUrlPref)
     }
 

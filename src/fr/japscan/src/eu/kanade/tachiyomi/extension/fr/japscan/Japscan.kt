@@ -41,8 +41,9 @@ import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class Japscan : ConfigurableSource, ParsedHttpSource() {
-
+class Japscan :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val id: Long = 11
 
     override val name = "Japscan"
@@ -59,9 +60,11 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(1, 2)
+            .build()
 
     companion object {
         val dateFormat by lazy {
@@ -75,13 +78,13 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     private fun chapterListPref() = preferences.getString(SHOW_SPOILER_CHAPTERS, "hide")
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("referer", "$baseUrl/")
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/mangas/?sort=popular&p=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangas/?sort=popular&p=$page", headers)
 
     override fun popularMangaNextPageSelector() = ".pagination > li:last-child:not(.disabled)"
 
@@ -92,15 +95,14 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         element.select("a").first()!!.let {
             manga.setUrlWithoutDomain(it.attr("href"))
             manga.title = it.text()
-            manga.thumbnail_url = "$baseUrl/imgs/${it.attr("href").replace(Regex("/$"),".jpg").replace("manga","mangas")}".lowercase(Locale.ROOT)
+            manga.thumbnail_url =
+                "$baseUrl/imgs/${it.attr("href").replace(Regex("/$"),".jpg").replace("manga","mangas")}".lowercase(Locale.ROOT)
         }
         return manga
     }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/mangas/?sort=updated&p=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/mangas/?sort=updated&p=$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -109,28 +111,40 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isEmpty()) {
-            val url = baseUrl.toHttpUrl().newBuilder().apply {
-                addPathSegment("mangas")
+            val url =
+                baseUrl
+                    .toHttpUrl()
+                    .newBuilder()
+                    .apply {
+                        addPathSegment("mangas")
 
-                filters.forEach { filter ->
-                    when (filter) {
-                        is TextField -> addPathSegment(((page - 1) + filter.state.toInt()).toString())
-                        is PageList -> addPathSegment(((page - 1) + filter.values[filter.state]).toString())
-                        else -> {}
-                    }
-                }
-            }.build()
+                        filters.forEach { filter ->
+                            when (filter) {
+                                is TextField -> addPathSegment(((page - 1) + filter.state.toInt()).toString())
+                                is PageList -> addPathSegment(((page - 1) + filter.values[filter.state]).toString())
+                                else -> {}
+                            }
+                        }
+                    }.build()
 
             return GET(url, headers)
         } else {
-            val formBody = FormBody.Builder()
-                .add("search", query)
-                .build()
-            val searchHeaders = headers.newBuilder()
-                .add("X-Requested-With", "XMLHttpRequest")
-                .build()
+            val formBody =
+                FormBody
+                    .Builder()
+                    .add("search", query)
+                    .build()
+            val searchHeaders =
+                headers
+                    .newBuilder()
+                    .add("X-Requested-With", "XMLHttpRequest")
+                    .build()
 
             return POST("$baseUrl/live-search/", searchHeaders, formBody)
         }
@@ -141,7 +155,9 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     override fun searchMangaSelector(): String = "div.card div.p-2"
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.first() == "live-search") {
+        if (response.request.url.pathSegments
+                .first() == "live-search"
+        ) {
             val jsonResult = json.parseToJsonElement(response.body.string()).jsonArray
 
             val mangaList = jsonResult.map { jsonEl -> searchMangaFromJson(jsonEl.jsonObject) }
@@ -151,31 +167,37 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
         val baseUrlHost = baseUrl.toHttpUrl().host
         val document = response.asJsoup()
-        val manga = document
-            .select(searchMangaSelector())
-            .filter { it ->
-                // Filter out ads masquerading as search results
-                it.select("p a").attr("abs:href").toHttpUrl().host == baseUrlHost
-            }
-            .map(::searchMangaFromElement)
+        val manga =
+            document
+                .select(searchMangaSelector())
+                .filter { it ->
+                    // Filter out ads masquerading as search results
+                    it
+                        .select("p a")
+                        .attr("abs:href")
+                        .toHttpUrl()
+                        .host == baseUrlHost
+                }.map(::searchMangaFromElement)
         val hasNextPage = document.selectFirst(searchMangaNextPageSelector()) != null
 
         return MangasPage(manga, hasNextPage)
     }
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.select("img").attr("abs:src")
-        element.select("p a").let {
-            title = it.text()
-            url = it.attr("href")
+    override fun searchMangaFromElement(element: Element) =
+        SManga.create().apply {
+            thumbnail_url = element.select("img").attr("abs:src")
+            element.select("p a").let {
+                title = it.text()
+                url = it.attr("href")
+            }
         }
-    }
 
-    private fun searchMangaFromJson(jsonObj: JsonObject): SManga = SManga.create().apply {
-        url = jsonObj["url"]!!.jsonPrimitive.content
-        title = jsonObj["name"]!!.jsonPrimitive.content
-        thumbnail_url = baseUrl + jsonObj["image"]!!.jsonPrimitive.content
-    }
+    private fun searchMangaFromJson(jsonObj: JsonObject): SManga =
+        SManga.create().apply {
+            url = jsonObj["url"]!!.jsonPrimitive.content
+            title = jsonObj["name"]!!.jsonPrimitive.content
+            thumbnail_url = baseUrl + jsonObj["image"]!!.jsonPrimitive.content
+        }
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("#main .card-body")!!
@@ -190,9 +212,11 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 "Auteur(s):" -> manga.author = el.text().replace("Auteur(s):", "").trim()
                 "Artiste(s):" -> manga.artist = el.text().replace("Artiste(s):", "").trim()
                 "Genre(s):" -> manga.genre = el.text().replace("Genre(s):", "").trim()
-                "Statut:" -> manga.status = el.text().replace("Statut:", "").trim().let {
-                    parseStatus(it)
-                }
+                "Statut:" ->
+                    manga.status =
+                        el.text().replace("Statut:", "").trim().let {
+                            parseStatus(it)
+                        }
             }
         }
         manga.description = infoElement.select("div:contains(Synopsis) + p").text().orEmpty()
@@ -200,14 +224,20 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         return manga
     }
 
-    private fun parseStatus(status: String) = when {
-        status.contains("En Cours") -> SManga.ONGOING
-        status.contains("Terminé") -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    private fun parseStatus(status: String) =
+        when {
+            status.contains("En Cours") -> SManga.ONGOING
+            status.contains("Terminé") -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
 
-    override fun chapterListSelector() = "#chapters_list > div.collapse > div.chapters_list" +
-        if (chapterListPref() == "hide") { ":not(:has(.badge:contains(SPOILER),.badge:contains(RAW),.badge:contains(VUS)))" } else { "" }
+    override fun chapterListSelector() =
+        "#chapters_list > div.collapse > div.chapters_list" +
+            if (chapterListPref() == "hide") {
+                ":not(:has(.badge:contains(SPOILER),.badge:contains(RAW),.badge:contains(VUS)))"
+            } else {
+                ""
+            }
     // JapScan sometimes uploads some "spoiler preview" chapters, containing 2 or 3 untranslated pictures taken from a raw. Sometimes they also upload full RAWs/US versions and replace them with a translation as soon as available.
     // Those have a span.badge "SPOILER" or "RAW". The additional pseudo selector makes sure to exclude these from the chapter list.
 
@@ -218,13 +248,19 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         chapter.setUrlWithoutDomain(urlElement.attr("href"))
         chapter.name = urlElement.ownText()
         // Using ownText() doesn't include childs' text, like "VUS" or "RAW" badges, in the chapter name.
-        chapter.date_upload = element.selectFirst("span")!!.text().trim().let { parseChapterDate(it) }
+        chapter.date_upload =
+            element
+                .selectFirst("span")!!
+                .text()
+                .trim()
+                .let { parseChapterDate(it) }
         return chapter
     }
 
-    private fun parseChapterDate(date: String) = runCatching {
-        dateFormat.parse(date)!!.time
-    }.getOrDefault(0L)
+    private fun parseChapterDate(date: String) =
+        runCatching {
+            dateFormat.parse(date)!!.time
+        }.getOrDefault(0L)
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(document: Document): List<Page> {
@@ -256,15 +292,16 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
 
-            innerWv.webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(
-                    view: WebView?,
-                    url: String?,
-                ): Boolean {
-                    url ?: return true
-                    return !url.contains("/zjs/")
+            innerWv.webViewClient =
+                object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView?,
+                        url: String?,
+                    ): Boolean {
+                        url ?: return true
+                        return !url.contains("/zjs/")
+                    }
                 }
-            }
 
             innerWv.loadDataWithBaseURL(
                 document.location(),
@@ -295,26 +332,31 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = ""
 
     // Filters
-    private class TextField(name: String) : Filter.Text(name)
+    private class TextField(
+        name: String,
+    ) : Filter.Text(name)
 
-    private class PageList(pages: Array<Int>) : Filter.Select<Int>("Page #", arrayOf(0, *pages))
+    private class PageList(
+        pages: Array<Int>,
+    ) : Filter.Select<Int>("Page #", arrayOf(0, *pages))
 
     // Prefs
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val chapterListPref = androidx.preference.ListPreference(screen.context).apply {
-            key = SHOW_SPOILER_CHAPTERS_Title
-            title = SHOW_SPOILER_CHAPTERS_Title
-            entries = prefsEntries
-            entryValues = prefsEntryValues
-            summary = "%s"
+        val chapterListPref =
+            androidx.preference.ListPreference(screen.context).apply {
+                key = SHOW_SPOILER_CHAPTERS_Title
+                title = SHOW_SPOILER_CHAPTERS_Title
+                entries = prefsEntries
+                entryValues = prefsEntryValues
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = this.findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString(SHOW_SPOILER_CHAPTERS, entry).commit()
+                setOnPreferenceChangeListener { _, newValue ->
+                    val selected = newValue as String
+                    val index = this.findIndexOfValue(selected)
+                    val entry = entryValues[index] as String
+                    preferences.edit().putString(SHOW_SPOILER_CHAPTERS, entry).commit()
+                }
             }
-        }
         screen.addPreference(chapterListPref)
     }
 
@@ -323,7 +365,9 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         return List(length) { charPool.random() }.joinToString("")
     }
 
-    internal class JsInterface(private val latch: CountDownLatch) {
+    internal class JsInterface(
+        private val latch: CountDownLatch,
+    ) {
         private val json: Json by injectLazy()
 
         var images: List<String> = listOf()

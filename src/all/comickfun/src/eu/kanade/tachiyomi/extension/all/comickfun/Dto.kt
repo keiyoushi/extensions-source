@@ -17,12 +17,13 @@ class SearchManga(
     @SerialName("md_covers") val mdCovers: List<MDcovers> = emptyList(),
     @SerialName("cover_url") val cover: String? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
-        // appending # at end as part of migration from slug to hid
-        url = "/comic/$hid#"
-        title = this@SearchManga.title
-        thumbnail_url = parseCover(cover, mdCovers)
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            // appending # at end as part of migration from slug to hid
+            url = "/comic/$hid#"
+            title = this@SearchManga.title
+            thumbnail_url = parseCover(cover, mdCovers)
+        }
 }
 
 @Serializable
@@ -38,12 +39,12 @@ class Manga(
         scorePosition: String = SCORE_POSITION_DEFAULT,
         covers: List<MDcovers>? = null,
         groupTags: Boolean = GROUP_TAGS_DEFAULT,
-    ) =
-        SManga.create().apply {
-            // appennding # at end as part of migration from slug to hid
-            url = "/comic/${comic.hid}#"
-            title = comic.title
-            description = buildString {
+    ) = SManga.create().apply {
+        // appennding # at end as part of migration from slug to hid
+        url = "/comic/${comic.hid}#"
+        title = comic.title
+        description =
+            buildString {
                 if (scorePosition == "top") append(comic.fancyScore)
                 val desc = comic.desc?.beautifyDescription()
                 if (!desc.isNullOrEmpty()) {
@@ -58,9 +59,10 @@ class Manga(
                     if (this.isNotEmpty()) append("\n\n")
                     append("Alternative Titles:\n")
                     append(
-                        comic.altTitles.mapNotNull { title ->
-                            title.title?.let { "• $it" }
-                        }.joinToString("\n"),
+                        comic.altTitles
+                            .mapNotNull { title ->
+                                title.title?.let { "• $it" }
+                            }.joinToString("\n"),
                     )
                 }
                 if (scorePosition == "bottom") {
@@ -69,32 +71,37 @@ class Manga(
                 }
             }
 
-            status = comic.status.parseStatus(comic.translationComplete)
-            thumbnail_url = parseCover(
+        status = comic.status.parseStatus(comic.translationComplete)
+        thumbnail_url =
+            parseCover(
                 comic.cover,
                 covers ?: comic.mdCovers,
             )
-            artist = artists.joinToString { it.name.trim() }
-            author = authors.joinToString { it.name.trim() }
-            genre = buildList {
+        artist = artists.joinToString { it.name.trim() }
+        author = authors.joinToString { it.name.trim() }
+        genre =
+            buildList {
                 comic.origination?.let { add(Genre("Origination", it.name)) }
                 demographic?.let { add(Genre("Demographic", it)) }
                 addAll(
-                    comic.mdGenres.mapNotNull { it.genre }.sortedBy { it.group }
+                    comic.mdGenres
+                        .mapNotNull { it.genre }
+                        .sortedBy { it.group }
                         .sortedBy { it.name },
                 )
                 addAll(genres.sortedBy { it.group }.sortedBy { it.name })
                 if (includeMuTags) {
                     addAll(
-                        comic.muGenres.categories.mapNotNull { it?.category?.title }.sorted()
+                        comic.muGenres.categories
+                            .mapNotNull { it?.category?.title }
+                            .sorted()
                             .map { Genre("Category", it) },
                     )
                 }
-            }
-                .distinctBy { it.name }
+            }.distinctBy { it.name }
                 .filterNot { it.name.isNullOrBlank() || it.group.isNullOrBlank() }
                 .joinToString { if (groupTags) "${it.group}:${it.name?.trim()}" else "${it.name?.trim()}" }
-        }
+    }
 }
 
 @Serializable
@@ -114,23 +121,29 @@ class Comic(
     @SerialName("bayesian_rating") val score: String? = null,
     @SerialName("iso639_1") val isoLang: String? = null,
 ) {
-    val origination = when (country) {
-        "jp" -> Name("Manga")
-        "kr" -> Name("Manhwa")
-        "cn" -> Name("Manhua")
-        else -> null
-    }
-    val fancyScore: String = if (score.isNullOrEmpty()) {
-        ""
-    } else {
-        val stars = score.toBigDecimal().div(BigDecimal(2))
-            .setScale(0, RoundingMode.HALF_UP).toInt()
-        buildString {
-            append("★".repeat(stars))
-            if (stars < 5) append("☆".repeat(5 - stars))
-            append(" $score")
+    val origination =
+        when (country) {
+            "jp" -> Name("Manga")
+            "kr" -> Name("Manhwa")
+            "cn" -> Name("Manhua")
+            else -> null
         }
-    }
+    val fancyScore: String =
+        if (score.isNullOrEmpty()) {
+            ""
+        } else {
+            val stars =
+                score
+                    .toBigDecimal()
+                    .div(BigDecimal(2))
+                    .setScale(0, RoundingMode.HALF_UP)
+                    .toInt()
+            buildString {
+                append("★".repeat(stars))
+                if (stars < 5) append("☆".repeat(5 - stars))
+                append(" $score")
+            }
+        }
 }
 
 @Serializable
@@ -192,12 +205,13 @@ class Chapter(
     private val vol: String = "",
     @SerialName("group_name") val groups: List<String> = emptyList(),
 ) {
-    fun toSChapter(mangaUrl: String) = SChapter.create().apply {
-        url = "$mangaUrl/$hid-chapter-$chap-$lang"
-        name = beautifyChapterName(vol, chap, title)
-        date_upload = createdAt.parseDate()
-        scanlator = groups.joinToString().takeUnless { it.isBlank() } ?: "Unknown"
-    }
+    fun toSChapter(mangaUrl: String) =
+        SChapter.create().apply {
+            url = "$mangaUrl/$hid-chapter-$chap-$lang"
+            name = beautifyChapterName(vol, chap, title)
+            date_upload = createdAt.parseDate()
+            scanlator = groups.joinToString().takeUnless { it.isBlank() } ?: "Unknown"
+        }
 }
 
 @Serializable

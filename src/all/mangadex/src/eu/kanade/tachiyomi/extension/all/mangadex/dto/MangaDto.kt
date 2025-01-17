@@ -19,7 +19,9 @@ typealias MangaDto = ResponseDto<MangaDataDto>
 
 @Serializable
 @SerialName(MDConstants.manga)
-data class MangaDataDto(override val attributes: MangaAttributesDto? = null) : EntityDto()
+data class MangaDataDto(
+    override val attributes: MangaAttributesDto? = null,
+) : EntityDto()
 
 @Serializable
 data class MangaAttributesDto(
@@ -36,7 +38,9 @@ data class MangaAttributesDto(
 ) : AttributesDto()
 
 @Serializable
-enum class ContentRatingDto(val value: String) {
+enum class ContentRatingDto(
+    val value: String,
+) {
     @SerialName("safe")
     SAFE("safe"),
 
@@ -51,7 +55,9 @@ enum class ContentRatingDto(val value: String) {
 }
 
 @Serializable
-enum class PublicationDemographicDto(val value: String) {
+enum class PublicationDemographicDto(
+    val value: String,
+) {
     @SerialName("none")
     NONE("none"),
 
@@ -69,7 +75,9 @@ enum class PublicationDemographicDto(val value: String) {
 }
 
 @Serializable
-enum class StatusDto(val value: String) {
+enum class StatusDto(
+    val value: String,
+) {
     @SerialName("ongoing")
     ONGOING("ongoing"),
 
@@ -85,13 +93,18 @@ enum class StatusDto(val value: String) {
 
 @Serializable
 @SerialName(MDConstants.tag)
-data class TagDto(override val attributes: TagAttributesDto? = null) : EntityDto()
+data class TagDto(
+    override val attributes: TagAttributesDto? = null,
+) : EntityDto()
 
 @Serializable
-data class TagAttributesDto(val group: String) : AttributesDto()
+data class TagAttributesDto(
+    val group: String,
+) : AttributesDto()
 
-typealias LocalizedString = @Serializable(LocalizedStringSerializer::class)
-Map<String, String>
+typealias LocalizedString =
+    @Serializable(LocalizedStringSerializer::class)
+    Map<String, String>
 
 /**
  * Temporary workaround while Dex API still returns arrays instead of objects
@@ -108,7 +121,10 @@ object LocalizedStringSerializer : KSerializer<Map<String, String>> {
             .orEmpty()
     }
 
-    override fun serialize(encoder: Encoder, value: Map<String, String>) {
+    override fun serialize(
+        encoder: Encoder,
+        value: Map<String, String>,
+    ) {
         encoder.encodeSerializableValue(serializer(), value)
     }
 }

@@ -45,20 +45,22 @@ abstract class GigaViewer(
     override val lang: String,
     private val cdnUrl: String = "",
 ) : ParsedHttpSource() {
-
     override val supportsLatest = true
 
     protected val dayOfWeek: String by lazy {
-        Calendar.getInstance()
+        Calendar
+            .getInstance()
             .getDisplayName(Calendar.DAY_OF_WEEK, Calendar.LONG, Locale.US)!!
             .lowercase(Locale.US)
     }
 
     protected open val publisher: String = ""
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Origin", baseUrl)
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("Origin", baseUrl)
+            .add("Referer", baseUrl)
 
     private val json: Json by injectLazy()
 
@@ -66,12 +68,15 @@ abstract class GigaViewer(
 
     override fun popularMangaSelector(): String = "ul.series-list li a"
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("h2.series-list-title")!!.text()
-        thumbnail_url = element.selectFirst("div.series-list-thumb img")!!
-            .attr("data-src")
-        setUrlWithoutDomain(element.attr("href"))
-    }
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            title = element.selectFirst("h2.series-list-title")!!.text()
+            thumbnail_url =
+                element
+                    .selectFirst("div.series-list-thumb img")!!
+                    .attr("data-src")
+            setUrlWithoutDomain(element.attr("href"))
+        }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -84,16 +89,27 @@ abstract class GigaViewer(
     override fun latestUpdatesNextPageSelector(): String? = null
 
     // The search returns 404 when there's no results.
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        client
+            .newCall(searchMangaRequest(page, query, filters))
             .asObservableIgnoreCode(404)
             .map(::searchMangaParse)
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isNotEmpty()) {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
+            val url =
+                "$baseUrl/search"
+                    .toHttpUrl()
+                    .newBuilder()
+                    .addQueryParameter("q", query)
 
             return GET(url.build(), headers)
         }
@@ -104,7 +120,10 @@ abstract class GigaViewer(
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().contains("search")) {
+        if (response.request.url
+                .toString()
+                .contains("search")
+        ) {
             return super.searchMangaParse(response)
         }
 
@@ -113,46 +132,55 @@ abstract class GigaViewer(
 
     override fun searchMangaSelector() = "ul.search-series-list li, ul.series-list li"
 
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("div.title-box p.series-title")!!.text()
-        thumbnail_url = element.selectFirst("div.thmb-container a img")!!.attr("src")
-        setUrlWithoutDomain(element.selectFirst("div.thmb-container a")!!.attr("href"))
-    }
+    override fun searchMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            title = element.selectFirst("div.title-box p.series-title")!!.text()
+            thumbnail_url = element.selectFirst("div.thmb-container a img")!!.attr("src")
+            setUrlWithoutDomain(element.selectFirst("div.thmb-container a")!!.attr("href"))
+        }
 
     override fun searchMangaNextPageSelector(): String? = null
 
     protected open fun mangaDetailsInfoSelector(): String = "section.series-information div.series-header"
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val infoElement = document.selectFirst(mangaDetailsInfoSelector())!!
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            val infoElement = document.selectFirst(mangaDetailsInfoSelector())!!
 
-        title = infoElement.selectFirst("h1.series-header-title")!!.text()
-        author = infoElement.selectFirst("h2.series-header-author")!!.text()
-        artist = author
-        description = infoElement.selectFirst("p.series-header-description")!!.text()
-        thumbnail_url = infoElement.selectFirst("div.series-header-image-wrapper img")!!
-            .attr("data-src")
-    }
+            title = infoElement.selectFirst("h1.series-header-title")!!.text()
+            author = infoElement.selectFirst("h2.series-header-author")!!.text()
+            artist = author
+            description = infoElement.selectFirst("p.series-header-description")!!.text()
+            thumbnail_url =
+                infoElement
+                    .selectFirst("div.series-header-image-wrapper img")!!
+                    .attr("data-src")
+        }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
 
-        val newHeaders = headers.newBuilder()
-            .set("Referer", response.request.url.toString())
-            .build()
+        val newHeaders =
+            headers
+                .newBuilder()
+                .set("Referer", response.request.url.toString())
+                .build()
 
-        var readMoreEndpoint = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("api")
-            .addPathSegment("viewer")
-            .addPathSegment("readable_products")
-            .addQueryParameter("aggregate_id", aggregateId)
-            .addQueryParameter("number_since", Int.MAX_VALUE.toString())
-            .addQueryParameter("number_until", "0")
-            .addQueryParameter("read_more_num", "150")
-            .addQueryParameter("type", "episode")
-            .build()
-            .toString()
+        var readMoreEndpoint =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment("api")
+                .addPathSegment("viewer")
+                .addPathSegment("readable_products")
+                .addQueryParameter("aggregate_id", aggregateId)
+                .addQueryParameter("number_since", Int.MAX_VALUE.toString())
+                .addQueryParameter("number_until", "0")
+                .addQueryParameter("read_more_num", "150")
+                .addQueryParameter("type", "episode")
+                .build()
+                .toString()
 
         val chapters = mutableListOf<SChapter>()
 
@@ -162,10 +190,11 @@ abstract class GigaViewer(
         while (result.code != 404) {
             val jsonResult = json.parseToJsonElement(result.body.string()).jsonObject
             readMoreEndpoint = jsonResult["nextUrl"]!!.jsonPrimitive.content
-            val tempDocument = Jsoup.parse(
-                jsonResult["html"]!!.jsonPrimitive.content,
-                response.request.url.toString(),
-            )
+            val tempDocument =
+                Jsoup.parse(
+                    jsonResult["html"]!!.jsonPrimitive.content,
+                    response.request.url.toString(),
+                )
 
             tempDocument
                 .select("ul.series-episode-list " + chapterListSelector())
@@ -195,32 +224,40 @@ abstract class GigaViewer(
             } else if (chapterListMode == CHAPTER_LIST_LOCKED && element.hasClass("private")) {
                 name = LOCK + name
             }
-            date_upload = info.selectFirst("span.series-episode-list-date")
-                ?.text().orEmpty()
-                .toDate()
+            date_upload =
+                info
+                    .selectFirst("span.series-episode-list-date")
+                    ?.text()
+                    .orEmpty()
+                    .toDate()
             scanlator = publisher
             setUrlWithoutDomain(if (info.tagName() == "a") info.attr("href") else mangaUrl)
         }
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val episode = document.selectFirst("script#episode-json")!!
-            .attr("data-value")
-            .let {
-                try {
-                    json.decodeFromString<GigaViewerEpisodeDto>(it)
-                } catch (e: SerializationException) {
-                    throw Exception("このチャプターは非公開です\nChapter is not available!")
+        val episode =
+            document
+                .selectFirst("script#episode-json")!!
+                .attr("data-value")
+                .let {
+                    try {
+                        json.decodeFromString<GigaViewerEpisodeDto>(it)
+                    } catch (e: SerializationException) {
+                        throw Exception("このチャプターは非公開です\nChapter is not available!")
+                    }
                 }
-            }
 
         return episode.readableProduct.pageStructure.pages
             .filter { it.type == "main" }
             .mapIndexed { i, page ->
-                val imageUrl = page.src.toHttpUrl().newBuilder()
-                    .addQueryParameter("width", page.width.toString())
-                    .addQueryParameter("height", page.height.toString())
-                    .toString()
+                val imageUrl =
+                    page.src
+                        .toHttpUrl()
+                        .newBuilder()
+                        .addQueryParameter("width", page.width.toString())
+                        .addQueryParameter("height", page.height.toString())
+                        .toString()
                 Page(i, document.location(), imageUrl)
             }
     }
@@ -228,21 +265,27 @@ abstract class GigaViewer(
     override fun imageUrlParse(document: Document) = ""
 
     override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", page.url)
-            .build()
+        val newHeaders =
+            headersBuilder()
+                .set("Referer", page.url)
+                .build()
 
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    protected data class Collection(val name: String, val path: String) {
+    protected data class Collection(
+        val name: String,
+        val path: String,
+    ) {
         override fun toString(): String = name
     }
 
-    private class CollectionFilter(val collections: List<Collection>) : Filter.Select<Collection>(
-        "コレクション",
-        collections.toTypedArray(),
-    ) {
+    private class CollectionFilter(
+        val collections: List<Collection>,
+    ) : Filter.Select<Collection>(
+            "コレクション",
+            collections.toTypedArray(),
+        ) {
         val selected: Collection
             get() = collections[state]
     }
@@ -261,10 +304,12 @@ abstract class GigaViewer(
         val width = request.url.queryParameter("width")!!.toInt()
         val height = request.url.queryParameter("height")!!.toInt()
 
-        val newUrl = request.url.newBuilder()
-            .removeAllQueryParameters("width")
-            .removeAllQueryParameters("height")
-            .build()
+        val newUrl =
+            request.url
+                .newBuilder()
+                .removeAllQueryParameters("width")
+                .removeAllQueryParameters("height")
+                .build()
         request = request.newBuilder().url(newUrl).build()
 
         val response = chain.proceed(request)
@@ -276,7 +321,11 @@ abstract class GigaViewer(
         return response.newBuilder().body(body).build()
     }
 
-    protected open fun decodeImage(image: InputStream, width: Int, height: Int): ByteArray {
+    protected open fun decodeImage(
+        image: InputStream,
+        width: Int,
+        height: Int,
+    ): ByteArray {
         val input = BitmapFactory.decodeStream(image)
         val cWidth = (floor(width.toDouble() / (DIVIDE_NUM * MULTIPLE)) * MULTIPLE).toInt()
         val cHeight = (floor(height.toDouble() / (DIVIDE_NUM * MULTIPLE)) * MULTIPLE).toInt()
@@ -305,19 +354,17 @@ abstract class GigaViewer(
         return output.toByteArray()
     }
 
-    private fun Call.asObservableIgnoreCode(code: Int): Observable<Response> {
-        return asObservable().doOnNext { response ->
+    private fun Call.asObservableIgnoreCode(code: Int): Observable<Response> =
+        asObservable().doOnNext { response ->
             if (!response.isSuccessful && response.code != code) {
                 response.close()
                 throw Exception("HTTP error ${response.code}")
             }
         }
-    }
 
-    private fun String.toDate(): Long {
-        return runCatching { DATE_PARSER.parse(this)?.time }
+    private fun String.toDate(): Long =
+        runCatching { DATE_PARSER.parse(this)?.time }
             .getOrNull() ?: 0L
-    }
 
     companion object {
         private val DATE_PARSER by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH) }

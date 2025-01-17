@@ -23,7 +23,6 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class Niceoppai : ParsedHttpSource() {
-
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US)
     override val baseUrl: String = "https://www.niceoppai.net"
 
@@ -32,38 +31,56 @@ class Niceoppai : ParsedHttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .writeTimeout(1, TimeUnit.MINUTES)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(1, TimeUnit.MINUTES)
+            .writeTimeout(1, TimeUnit.MINUTES)
+            .build()
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga_list/all/any/most-popular-monthly/$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga_list/all/any/most-popular-monthly/$page", headers)
+
     override fun popularMangaSelector() = "div.nde"
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("div.det a")!!.text()
-        element.select("div.cvr").let {
-            setUrlWithoutDomain(it.select("a").attr("href"))
-            thumbnail_url = it.select("img").attr("abs:src")
+
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            title = element.selectFirst("div.det a")!!.text()
+            element.select("div.cvr").let {
+                setUrlWithoutDomain(it.select("a").attr("href"))
+                thumbnail_url = it.select("img").attr("abs:src")
+            }
         }
-    }
+
     override fun popularMangaNextPageSelector() = "ul.pgg li a"
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/manga_list/all/any/last-updated/$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga_list/all/any/last-updated/$page", headers)
+
     override fun latestUpdatesSelector() = popularMangaSelector()
+
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val isOrderByFilter = filters.list.first().state != 0
-        val orderByState = if (filters.list.first().state != null) filters.first().state.toString().toInt() else 0
+        val orderByState =
+            if (filters.list.first().state != null) {
+                filters
+                    .first()
+                    .state
+                    .toString()
+                    .toInt()
+            } else {
+                0
+            }
         val orderByString = orderByFilterOptionsValues[orderByState]
 
         return if (isOrderByFilter) {
@@ -72,11 +89,20 @@ class Niceoppai : ParsedHttpSource() {
             GET("$baseUrl/manga_list/search/$query/$orderByString/$page", headers)
         }
     }
+
     override fun searchMangaSelector(): String = popularMangaSelector()
+
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        client
+            .newCall(searchMangaRequest(page, query, filters))
             .asObservableSuccess()
             .map {
                 val document = it.asJsoup()
@@ -87,14 +113,15 @@ class Niceoppai : ParsedHttpSource() {
 
                 MangasPage(mangas, false)
             }
-    }
 
     // Manga summary page
-    private fun getStatus(status: String) = when (status) {
-        "ยังไม่จบ" -> SManga.ONGOING
-        "จบแล้ว" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    private fun getStatus(status: String) =
+        when (status) {
+            "ยังไม่จบ" -> SManga.ONGOING
+            "จบแล้ว" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select("div.det").first()!!
         val titleElement = document.select("h1.ttl").first()!!
@@ -105,7 +132,12 @@ class Niceoppai : ParsedHttpSource() {
             artist = author
             status = getStatus(infoElement.select("p")[9].ownText().replace(": ", ""))
             genre = infoElement.select("p")[5].select("a").joinToString { it.text() }
-            description = infoElement.select("p").first()!!.ownText().replace(": ", "")
+            description =
+                infoElement
+                    .select("p")
+                    .first()!!
+                    .ownText()
+                    .replace(": ", "")
             thumbnail_url = document.select("div.mng_ifo div.cvr_ara img").first()!!.attr("abs:src")
             initialized = true
         }
@@ -115,41 +147,46 @@ class Niceoppai : ParsedHttpSource() {
     private fun parseChapterDate(date: String?): Long {
         date ?: return 0
 
-        fun SimpleDateFormat.tryParse(string: String): Long {
-            return try {
+        fun SimpleDateFormat.tryParse(string: String): Long =
+            try {
                 parse(string)?.time ?: 0
             } catch (_: ParseException) {
                 0
             }
-        }
 
         return when {
             // Handle 'yesterday' and 'today', using midnight
             WordSet("yesterday", "يوم واحد").startsWith(date) -> {
-                Calendar.getInstance().apply {
-                    add(Calendar.DAY_OF_MONTH, -1) // yesterday
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
+                Calendar
+                    .getInstance()
+                    .apply {
+                        add(Calendar.DAY_OF_MONTH, -1) // yesterday
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
             }
             WordSet("today").startsWith(date) -> {
-                Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
+                Calendar
+                    .getInstance()
+                    .apply {
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
             }
             WordSet("يومين").startsWith(date) -> {
-                Calendar.getInstance().apply {
-                    add(Calendar.DAY_OF_MONTH, -2) // day before yesterday
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
+                Calendar
+                    .getInstance()
+                    .apply {
+                        add(Calendar.DAY_OF_MONTH, -2) // day before yesterday
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
             }
             WordSet("ago", "atrás", "önce", "قبل").endsWith(date) -> {
                 parseRelativeDate(date)
@@ -157,14 +194,15 @@ class Niceoppai : ParsedHttpSource() {
 
             date.contains(Regex("""\d(st|nd|rd|th)""")) -> {
                 // Clean date (e.g. 5th December 2019 to 5 December 2019) before parsing it
-                date.split(" ").map {
-                    if (it.contains(Regex("""\d\D\D"""))) {
-                        it.replace(Regex("""\D"""), "")
-                    } else {
-                        it
-                    }
-                }
-                    .let { dateFormat.tryParse(it.joinToString(" ")) }
+                date
+                    .split(" ")
+                    .map {
+                        if (it.contains(Regex("""\d\D\D"""))) {
+                            it.replace(Regex("""\D"""), "")
+                        } else {
+                            it
+                        }
+                    }.let { dateFormat.tryParse(it.joinToString(" ")) }
             }
             else -> dateFormat.tryParse(date)
         }
@@ -177,9 +215,21 @@ class Niceoppai : ParsedHttpSource() {
         val cal = Calendar.getInstance()
 
         return when {
-            WordSet("hari", "gün", "jour", "día", "dia", "day", "วัน", "ngày", "giorni", "أيام").anyWordIn(date) -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
-            WordSet("jam", "saat", "heure", "hora", "hour", "ชั่วโมง", "giờ", "ore", "ساعة").anyWordIn(date) -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
-            WordSet("menit", "dakika", "min", "minute", "minuto", "นาที", "دقائق").anyWordIn(date) -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
+            WordSet("hari", "gün", "jour", "día", "dia", "day", "วัน", "ngày", "giorni", "أيام").anyWordIn(date) ->
+                cal
+                    .apply {
+                        add(Calendar.DAY_OF_MONTH, -number)
+                    }.timeInMillis
+            WordSet("jam", "saat", "heure", "hora", "hour", "ชั่วโมง", "giờ", "ore", "ساعة").anyWordIn(date) ->
+                cal
+                    .apply {
+                        add(Calendar.HOUR, -number)
+                    }.timeInMillis
+            WordSet("menit", "dakika", "min", "minute", "minuto", "นาที", "دقائق").anyWordIn(date) ->
+                cal
+                    .apply {
+                        add(Calendar.MINUTE, -number)
+                    }.timeInMillis
             WordSet("detik", "segundo", "second", "วินาที").anyWordIn(date) -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
             WordSet("week").anyWordIn(date) -> cal.apply { add(Calendar.DAY_OF_MONTH, -number * 7) }.timeInMillis
             WordSet("month").anyWordIn(date) -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
@@ -187,9 +237,16 @@ class Niceoppai : ParsedHttpSource() {
             else -> 0
         }
     }
+
     override fun chapterListSelector() = "ul.lst li.lng_"
+
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
-    private fun chapterFromElementWithIndex(element: Element, idx: Int, manga: SManga): SChapter {
+
+    private fun chapterFromElementWithIndex(
+        element: Element,
+        idx: Int,
+        manga: SManga,
+    ): SChapter {
         val chapter = SChapter.create()
 
         val btn = element.select("a.lst")
@@ -212,16 +269,17 @@ class Niceoppai : ParsedHttpSource() {
         return chapter
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/${manga.url}", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val listPage = document.select("ul.pgg li a").toList()
-            .filter { it.text() != "Next" && it.text() != "Last" }
-            .map { it.select("a").attr("href") }
-            .distinct()
+        val listPage =
+            document
+                .select("ul.pgg li a")
+                .toList()
+                .filter { it.text() != "Next" && it.text() != "Last" }
+                .map { it.select("a").attr("href") }
+                .distinct()
 
         val chList: MutableList<SChapter> = mutableListOf()
         if (listPage.isNotEmpty()) {
@@ -229,10 +287,11 @@ class Niceoppai : ParsedHttpSource() {
                 val res: Response = client.newCall(GET(urlPage, headers)).execute()
                 val mangaDocument = res.asJsoup()
                 if (mangaDocument.select(chapterListSelector()).isEmpty()) {
-                    val createdChapter = SChapter.create().apply {
-                        name = "Chapter 1"
-                        chapter_number = 1.0f
-                    }
+                    val createdChapter =
+                        SChapter.create().apply {
+                            name = "Chapter 1"
+                            chapter_number = 1.0f
+                        }
                     chList += listOf(createdChapter)
                 } else {
                     chList +=
@@ -251,44 +310,89 @@ class Niceoppai : ParsedHttpSource() {
     }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.mng_rdr div#image-container img").mapIndexed { i, img ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("div.mng_rdr div#image-container img").mapIndexed { i, img ->
             if (img.hasAttr("data-src")) {
                 Page(i, "", img.attr("abs:data-src"))
             } else {
                 Page(i, "", img.attr("abs:src"))
             }
         }
-    }
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filter
     private val orderByFilterTitle: String = "Order By เรียกตาม"
-    private val orderByFilterOptions: Array<String> = arrayOf("Name (A-Z)", "Name (Z-A)", "Last Updated", "Oldest Updated", "Most Popular", "Most Popular (Weekly)", "Most Popular (Monthly)", "Least Popular", "Last Added", "Early Added", "Top Rating", "Lowest Rating")
-    private val orderByFilterOptionsValues: Array<String> = arrayOf("name-az", "name-za", "last-updated", "oldest-updated", "most-popular", "most-popular-weekly", "most-popular-monthly", "least-popular", "last-added", "early-added", "top-rating", "lowest-rating")
-    private class OrderByFilter(title: String, options: List<Pair<String, String>>, state: Int = 0) : UriPartFilter(title, options.toTypedArray(), state)
-    override fun getFilterList(): FilterList {
-        val filters = mutableListOf(
-            OrderByFilter(
-                orderByFilterTitle,
-                orderByFilterOptions.zip(orderByFilterOptionsValues),
-                0,
-            ),
+    private val orderByFilterOptions: Array<String> =
+        arrayOf(
+            "Name (A-Z)",
+            "Name (Z-A)",
+            "Last Updated",
+            "Oldest Updated",
+            "Most Popular",
+            "Most Popular (Weekly)",
+            "Most Popular (Monthly)",
+            "Least Popular",
+            "Last Added",
+            "Early Added",
+            "Top Rating",
+            "Lowest Rating",
         )
+    private val orderByFilterOptionsValues: Array<String> =
+        arrayOf(
+            "name-az",
+            "name-za",
+            "last-updated",
+            "oldest-updated",
+            "most-popular",
+            "most-popular-weekly",
+            "most-popular-monthly",
+            "least-popular",
+            "last-added",
+            "early-added",
+            "top-rating",
+            "lowest-rating",
+        )
+
+    private class OrderByFilter(
+        title: String,
+        options: List<Pair<String, String>>,
+        state: Int = 0,
+    ) : UriPartFilter(title, options.toTypedArray(), state)
+
+    override fun getFilterList(): FilterList {
+        val filters =
+            mutableListOf(
+                OrderByFilter(
+                    orderByFilterTitle,
+                    orderByFilterOptions.zip(orderByFilterOptionsValues),
+                    0,
+                ),
+            )
 
         return FilterList(filters)
     }
-    open class UriPartFilter(displayName: String, vals: Array<Pair<String, String>>, state: Int = 0) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state)
+
+    open class UriPartFilter(
+        displayName: String,
+        vals: Array<Pair<String, String>>,
+        state: Int = 0,
+    ) : Filter.Select<String>(
+            displayName,
+            vals
+                .map {
+                    it.first
+                }.toTypedArray(),
+            state,
+        )
 }
 
-class WordSet(private vararg val words: String) {
-    fun anyWordIn(dateString: String): Boolean =
-        words.any { dateString.contains(it, ignoreCase = true) }
+class WordSet(
+    private vararg val words: String,
+) {
+    fun anyWordIn(dateString: String): Boolean = words.any { dateString.contains(it, ignoreCase = true) }
 
-    fun startsWith(dateString: String): Boolean =
-        words.any { dateString.startsWith(it, ignoreCase = true) }
+    fun startsWith(dateString: String): Boolean = words.any { dateString.startsWith(it, ignoreCase = true) }
 
-    fun endsWith(dateString: String): Boolean =
-        words.any { dateString.endsWith(it, ignoreCase = true) }
+    fun endsWith(dateString: String): Boolean = words.any { dateString.endsWith(it, ignoreCase = true) }
 }

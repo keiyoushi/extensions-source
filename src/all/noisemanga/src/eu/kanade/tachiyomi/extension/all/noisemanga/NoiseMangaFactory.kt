@@ -4,10 +4,11 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class NoiseMangaFactory : SourceFactory {
-    override fun createSources(): List<Source> = listOf(
-        NoiseMangaEnglish(),
-        NoiseMangaPortuguese(),
-    )
+    override fun createSources(): List<Source> =
+        listOf(
+            NoiseMangaEnglish(),
+            NoiseMangaPortuguese(),
+        )
 }
 
 class NoiseMangaEnglish : NoiseManga("en")

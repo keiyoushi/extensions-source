@@ -36,26 +36,30 @@ class MangaPlus(
     override val lang: String,
     private val internalLang: String,
     private val langCode: Language,
-) : HttpSource(), ConfigurableSource {
-
+) : HttpSource(),
+    ConfigurableSource {
     override val name = "MANGA Plus by SHUEISHA"
 
     override val baseUrl = "https://mangaplus.shueisha.co.jp"
 
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Origin", baseUrl)
-        .add("Referer", "$baseUrl/")
-        .add("User-Agent", USER_AGENT)
-        .add("SESSION-TOKEN", UUID.randomUUID().toString())
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("Origin", baseUrl)
+            .add("Referer", "$baseUrl/")
+            .add("User-Agent", USER_AGENT)
+            .add("SESSION-TOKEN", UUID.randomUUID().toString())
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(::imageIntercept)
-        .addInterceptor(::thumbnailIntercept)
-        .rateLimitHost(API_URL.toHttpUrl(), 1)
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
-        .build()
+    override val client: OkHttpClient =
+        network.client
+            .newBuilder()
+            .addInterceptor(::imageIntercept)
+            .addInterceptor(::thumbnailIntercept)
+            .rateLimitHost(API_URL.toHttpUrl(), 1)
+            .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            .build()
 
     private val json: Json by injectLazy()
 
@@ -80,15 +84,15 @@ class MangaPlus(
     private val titleCache = mutableMapOf<Int, Title>()
     private lateinit var directory: List<Title>
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(popularMangaRequest(page))
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        if (page == 1) {
+            client
+                .newCall(popularMangaRequest(page))
                 .asObservableSuccess()
                 .map { popularMangaParse(it) }
         } else {
             Observable.just(parseDirectory(page))
         }
-    }
 
     override fun popularMangaRequest(page: Int) =
         GET("$API_URL/title_list/rankingV2?lang=$internalLang&type=hottest&clang=$internalLang&format=json", headers)
@@ -100,32 +104,35 @@ class MangaPlus(
             result.error!!.langPopup(langCode)?.body ?: intl["unknown_error"]
         }
 
-        directory = result.success.titleRankingViewV2!!.rankedTitles
-            .flatMap(RankedTitle::titles)
-            .filter { it.language == langCode }
+        directory =
+            result.success.titleRankingViewV2!!
+                .rankedTitles
+                .flatMap(RankedTitle::titles)
+                .filter { it.language == langCode }
         titleCache.putAll(directory.associateBy(Title::titleId))
 
         return parseDirectory(1)
     }
 
     private fun parseDirectory(page: Int): MangasPage {
-        val pageList = directory
-            .drop((page - 1) * LISTING_ITEMS_PER_PAGE)
-            .take(LISTING_ITEMS_PER_PAGE)
+        val pageList =
+            directory
+                .drop((page - 1) * LISTING_ITEMS_PER_PAGE)
+                .take(LISTING_ITEMS_PER_PAGE)
         val hasNextPage = (page + 1) * LISTING_ITEMS_PER_PAGE <= directory.size
 
         return MangasPage(pageList.map(Title::toSManga), hasNextPage)
     }
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(latestUpdatesRequest(page))
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
+        if (page == 1) {
+            client
+                .newCall(latestUpdatesRequest(page))
                 .asObservableSuccess()
                 .map { latestUpdatesParse(it) }
         } else {
             Observable.just(parseDirectory(page))
         }
-    }
 
     override fun latestUpdatesRequest(page: Int) =
         GET("$API_URL/web/web_homeV4?lang=$internalLang&clang=$internalLang&format=json", headers)
@@ -137,12 +144,14 @@ class MangaPlus(
             result.error!!.langPopup(langCode)?.body ?: intl["unknown_error"]
         }
 
-        directory = result.success.webHomeViewV4!!.groups
-            .flatMap(UpdatedTitleV2Group::titleGroups)
-            .flatMap(OriginalTitleGroup::titles)
-            .map(UpdatedTitle::title)
-            .filter { it.language == langCode }
-            .distinctBy(Title::titleId)
+        directory =
+            result.success.webHomeViewV4!!
+                .groups
+                .flatMap(UpdatedTitleV2Group::titleGroups)
+                .flatMap(OriginalTitleGroup::titles)
+                .map(UpdatedTitle::title)
+                .filter { it.language == langCode }
+                .distinctBy(Title::titleId)
 
         titleCache.putAll(directory.associateBy(Title::titleId))
         titleCache.putAll(
@@ -165,17 +174,21 @@ class MangaPlus(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(searchMangaRequest(page, query, filters))
+    ): Observable<MangasPage> =
+        if (page == 1) {
+            client
+                .newCall(searchMangaRequest(page, query, filters))
                 .asObservableSuccess()
                 .map { searchMangaParse(it, query) }
         } else {
             Observable.just(parseDirectory(page))
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.matches(ID_SEARCH_PATTERN)) {
             return mangaDetailsRequest(query.removePrefix(PREFIX_ID_SEARCH))
         } else if (query.matches(CHAPTER_ID_SEARCH_PATTERN)) {
@@ -187,7 +200,10 @@ class MangaPlus(
 
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    private fun searchMangaParse(response: Response, query: String): MangasPage {
+    private fun searchMangaParse(
+        response: Response,
+        query: String,
+    ): MangasPage {
         val result = response.asMangaPlusResponse()
 
         checkNotNull(result.success) {
@@ -195,9 +211,10 @@ class MangaPlus(
         }
 
         if (result.success.titleDetailView != null) {
-            val mangaPlusTitle = result.success.titleDetailView.title
-                .takeIf { it.language == langCode }
-                ?: return MangasPage(emptyList(), hasNextPage = false)
+            val mangaPlusTitle =
+                result.success.titleDetailView.title
+                    .takeIf { it.language == langCode }
+                    ?: return MangasPage(emptyList(), hasNextPage = false)
 
             return MangasPage(listOf(mangaPlusTitle.toSManga()), hasNextPage = false)
         }
@@ -208,31 +225,35 @@ class MangaPlus(
             val titleId = result.success.mangaViewer.titleId
             val cachedTitle = titleCache[titleId]
 
-            val title = cachedTitle?.toSManga() ?: run {
-                val titleRequest = mangaDetailsRequest(titleId.toString())
-                val titleResult = client.newCall(titleRequest).execute().asMangaPlusResponse()
+            val title =
+                cachedTitle?.toSManga() ?: run {
+                    val titleRequest = mangaDetailsRequest(titleId.toString())
+                    val titleResult = client.newCall(titleRequest).execute().asMangaPlusResponse()
 
-                checkNotNull(titleResult.success) {
-                    titleResult.error!!.langPopup(langCode)?.body ?: intl["unknown_error"]
+                    checkNotNull(titleResult.success) {
+                        titleResult.error!!.langPopup(langCode)?.body ?: intl["unknown_error"]
+                    }
+
+                    titleResult.success.titleDetailView!!
+                        .takeIf { it.title.language == langCode }
+                        ?.toSManga(intl)
                 }
-
-                titleResult.success.titleDetailView!!
-                    .takeIf { it.title.language == langCode }
-                    ?.toSManga(intl)
-            }
 
             return MangasPage(listOfNotNull(title), hasNextPage = false)
         }
 
-        val allTitlesList = result.success.allTitlesViewV2!!.allTitlesGroup
-            .flatMap(AllTitlesGroup::titles)
-            .filter { it.language == langCode }
+        val allTitlesList =
+            result.success.allTitlesViewV2!!
+                .allTitlesGroup
+                .flatMap(AllTitlesGroup::titles)
+                .filter { it.language == langCode }
 
         titleCache.putAll(allTitlesList.associateBy(Title::titleId))
-        directory = allTitlesList.filter { title ->
-            title.name.contains(query, ignoreCase = true) ||
-                title.author.orEmpty().contains(query, ignoreCase = true)
-        }
+        directory =
+            allTitlesList.filter { title ->
+                title.name.contains(query, ignoreCase = true) ||
+                    title.author.orEmpty().contains(query, ignoreCase = true)
+            }
 
         return parseDirectory(1)
     }
@@ -261,9 +282,10 @@ class MangaPlus(
             }
         }
 
-        val titleDetails = result.success.titleDetailView!!
-            .takeIf { it.title.language == langCode }
-            ?: throw Exception(intl["not_available"])
+        val titleDetails =
+            result.success.titleDetailView!!
+                .takeIf { it.title.language == langCode }
+                ?: throw Exception(intl["not_available"])
 
         return titleDetails.toSManga(intl)
     }
@@ -302,12 +324,15 @@ class MangaPlus(
     }
 
     private fun pageListRequest(chapterId: String): Request {
-        val url = "$API_URL/manga_viewer".toHttpUrl().newBuilder()
-            .addQueryParameter("chapter_id", chapterId)
-            .addQueryParameter("split", if (preferences.splitImages()) "yes" else "no")
-            .addQueryParameter("img_quality", preferences.imageQuality())
-            .addQueryParameter("format", "json")
-            .toString()
+        val url =
+            "$API_URL/manga_viewer"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("chapter_id", chapterId)
+                .addQueryParameter("split", if (preferences.splitImages()) "yes" else "no")
+                .addQueryParameter("img_quality", preferences.imageQuality())
+                .addQueryParameter("format", "json")
+                .toString()
 
         return GET(url, headers)
     }
@@ -325,7 +350,8 @@ class MangaPlus(
             }
         }
 
-        return result.success.mangaViewer!!.pages
+        return result.success.mangaViewer!!
+            .pages
             .mapNotNull(MangaPlusPage::mangaPage)
             .mapIndexed { i, page ->
                 val encryptionKey = if (page.encryptionKey == null) "" else "#${page.encryptionKey}"
@@ -336,32 +362,36 @@ class MangaPlus(
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val qualityPref = ListPreference(screen.context).apply {
-            key = "${QUALITY_PREF_KEY}_$lang"
-            title = intl["image_quality"]
-            entries = arrayOf(
-                intl["image_quality_low"],
-                intl["image_quality_medium"],
-                intl["image_quality_high"],
-            )
-            entryValues = QUALITY_PREF_ENTRY_VALUES
-            setDefaultValue(QUALITY_PREF_DEFAULT_VALUE)
-            summary = "%s"
-        }
+        val qualityPref =
+            ListPreference(screen.context).apply {
+                key = "${QUALITY_PREF_KEY}_$lang"
+                title = intl["image_quality"]
+                entries =
+                    arrayOf(
+                        intl["image_quality_low"],
+                        intl["image_quality_medium"],
+                        intl["image_quality_high"],
+                    )
+                entryValues = QUALITY_PREF_ENTRY_VALUES
+                setDefaultValue(QUALITY_PREF_DEFAULT_VALUE)
+                summary = "%s"
+            }
 
-        val splitPref = SwitchPreferenceCompat(screen.context).apply {
-            key = "${SPLIT_PREF_KEY}_$lang"
-            title = intl["split_double_pages"]
-            summary = intl["split_double_pages_summary"]
-            setDefaultValue(SPLIT_PREF_DEFAULT_VALUE)
-        }
+        val splitPref =
+            SwitchPreferenceCompat(screen.context).apply {
+                key = "${SPLIT_PREF_KEY}_$lang"
+                title = intl["split_double_pages"]
+                summary = intl["split_double_pages_summary"]
+                setDefaultValue(SPLIT_PREF_DEFAULT_VALUE)
+            }
 
-        val titlePref = SwitchPreferenceCompat(screen.context).apply {
-            key = "${SUBTITLE_ONLY_KEY}_$lang"
-            title = intl["subtitle_only"]
-            summary = intl["subtitle_only_summary"]
-            setDefaultValue(SUBTITLE_ONLY_DEFAULT_VALUE)
-        }
+        val titlePref =
+            SwitchPreferenceCompat(screen.context).apply {
+                key = "${SUBTITLE_ONLY_KEY}_$lang"
+                title = intl["subtitle_only"]
+                summary = intl["subtitle_only_summary"]
+                setDefaultValue(SUBTITLE_ONLY_DEFAULT_VALUE)
+            }
 
         screen.addPreference(qualityPref)
         screen.addPreference(splitPref)
@@ -381,7 +411,8 @@ class MangaPlus(
         val image = response.body.bytes().decodeXorCipher(encryptionKey)
         val body = image.toResponseBody(contentType.toMediaTypeOrNull())
 
-        return response.newBuilder()
+        return response
+            .newBuilder()
             .body(body)
             .build()
     }
@@ -397,10 +428,12 @@ class MangaPlus(
             return response
         }
 
-        val titleId = request.url.toString()
-            .substringBefore("/$TITLE_THUMBNAIL_PATH")
-            .substringAfterLast("/")
-            .toInt()
+        val titleId =
+            request.url
+                .toString()
+                .substringBefore("/$TITLE_THUMBNAIL_PATH")
+                .substringAfterLast("/")
+                .toInt()
         val title = titleCache[titleId] ?: return response
 
         response.close()
@@ -409,17 +442,20 @@ class MangaPlus(
     }
 
     private fun ByteArray.decodeXorCipher(key: String): ByteArray {
-        val keyStream = key.chunked(2)
-            .map { it.toInt(16) }
+        val keyStream =
+            key
+                .chunked(2)
+                .map { it.toInt(16) }
 
         return mapIndexed { i, byte -> byte.toInt() xor keyStream[i % keyStream.size] }
             .map(Int::toByte)
             .toByteArray()
     }
 
-    private fun Response.asMangaPlusResponse(): MangaPlusResponse = use {
-        json.decodeFromString(body.string())
-    }
+    private fun Response.asMangaPlusResponse(): MangaPlusResponse =
+        use {
+            json.decodeFromString(body.string())
+        }
 
     private fun SharedPreferences.imageQuality(): String = getString("${QUALITY_PREF_KEY}_$lang", QUALITY_PREF_DEFAULT_VALUE)!!
 
@@ -434,8 +470,9 @@ class MangaPlus(
 }
 
 private const val API_URL = "https://jumpg-webapi.tokyo-cdn.com/api"
-private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+private const val USER_AGENT =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
 
 private const val LISTING_ITEMS_PER_PAGE = 20
 

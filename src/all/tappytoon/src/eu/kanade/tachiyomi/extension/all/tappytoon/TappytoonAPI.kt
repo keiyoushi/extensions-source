@@ -27,7 +27,9 @@ class Comic(
 }
 
 @Serializable
-class Name(private val name: String) {
+class Name(
+    private val name: String,
+) {
     override fun toString() = name
 }
 
@@ -43,22 +45,27 @@ class Chapter(
     private val isUserRented: Boolean,
     val createdAt: String,
 ) : Accessible {
-    override fun toString() = buildString {
-        append(title)
-        if (subtitle.isNotEmpty()) {
-            append(" - ")
-            append(subtitle)
+    override fun toString() =
+        buildString {
+            append(title)
+            if (subtitle.isNotEmpty()) {
+                append(" - ")
+                append(subtitle)
+            }
+            if (!isFree && !(isUserUnlocked || isUserRented)) {
+                append(" \uD83D\uDD12")
+            }
         }
-        if (!isFree && !(isUserUnlocked || isUserRented)) {
-            append(" \uD83D\uDD12")
-        }
-    }
 }
 
 @Serializable
-class Media(private val media: List<URL>) : List<URL> by media
+class Media(
+    private val media: List<URL>,
+) : List<URL> by media
 
 @Serializable
-class URL(private val url: String) {
+class URL(
+    private val url: String,
+) {
     override fun toString() = url
 }

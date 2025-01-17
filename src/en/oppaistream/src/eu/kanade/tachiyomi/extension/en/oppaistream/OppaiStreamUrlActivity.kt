@@ -13,11 +13,12 @@ class OppaiStreamUrlActivity : Activity() {
         val uri = intent?.data
         val slug = uri?.getQueryParameter("m")
         if (slug != null) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${OppaiStream.SLUG_SEARCH_PREFIX}$slug")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${OppaiStream.SLUG_SEARCH_PREFIX}$slug")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

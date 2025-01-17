@@ -5,7 +5,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class THResult<T>(val code: Int, val msg: String, val data: T)
+data class THResult<T>(
+    val code: Int,
+    val msg: String,
+    val data: T,
+)
 
 // https://web.hycdn.cn/comic/site/umi.dee612f8.js
 @Serializable
@@ -29,35 +33,40 @@ data class THComic(
         return result.ifEmpty { null }
     }
 
-    private fun getType() = when (type) {
-        2 -> listOf("相簿")
-        3 -> listOf("四格")
-        else -> emptyList() // 1 = Normal
-    }
-
-    fun toSManga() = SManga.create().apply {
-        url = "/api/comic/$cid"
-        title = this@THComic.title
-        author = authors.joinToString("、")
-        thumbnail_url = cover
-        description = getDescription()
-        genre = (getType() + keywords.orEmpty()).joinToString(", ").replace("，", ", ")
-    }
-
-    fun toSChapterList() = episodes!!.map { episode ->
-        SChapter.create().apply {
-            url = "/api/comic/$cid/episode/${episode.cid!!}"
-            name = if (episode.type != 1) {
-                "${EPISODE_TYPES[episode.type]} ${episode.title}"
-            } else if (episode.shortTitle.isNullOrBlank()) {
-                episode.title
-            } else {
-                "${episode.shortTitle} ${episode.title}"
-            }
+    private fun getType() =
+        when (type) {
+            2 -> listOf("相簿")
+            3 -> listOf("四格")
+            else -> emptyList() // 1 = Normal
         }
-    }.apply {
-        this[0].date_upload = (updateTime ?: 0L) * 1000
-    }
+
+    fun toSManga() =
+        SManga.create().apply {
+            url = "/api/comic/$cid"
+            title = this@THComic.title
+            author = authors.joinToString("、")
+            thumbnail_url = cover
+            description = getDescription()
+            genre = (getType() + keywords.orEmpty()).joinToString(", ").replace("，", ", ")
+        }
+
+    fun toSChapterList() =
+        episodes!!
+            .map { episode ->
+                SChapter.create().apply {
+                    url = "/api/comic/$cid/episode/${episode.cid!!}"
+                    name =
+                        if (episode.type != 1) {
+                            "${EPISODE_TYPES[episode.type]} ${episode.title}"
+                        } else if (episode.shortTitle.isNullOrBlank()) {
+                            episode.title
+                        } else {
+                            "${episode.shortTitle} ${episode.title}"
+                        }
+                }
+            }.apply {
+                this[0].date_upload = (updateTime ?: 0L) * 1000
+            }
 
     companion object {
         private val EPISODE_TYPES = arrayOf("", "正篇", "番外", "贺图", "公告")
@@ -75,11 +84,12 @@ data class THRecentUpdate(
 //  val episodeShortTitle: String,
 //  val updateTime: Long
 ) {
-    fun toSManga() = SManga.create().apply {
-        url = "/api/comic/$comicCid"
-        title = this@THRecentUpdate.title
-        thumbnail_url = coverUrl
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            url = "/api/comic/$comicCid"
+            title = this@THRecentUpdate.title
+            thumbnail_url = coverUrl
+        }
 }
 
 @Serializable

@@ -11,26 +11,31 @@ abstract class SelectFilter(
     name: String,
     private val options: List<Pair<String, String>>,
     private val urlParameter: String,
-) : UrlPartFilter, Filter.Select<String>(
-    name,
-    options.map { it.first }.toTypedArray(),
-) {
+) : Filter.Select<String>(
+        name,
+        options.map { it.first }.toTypedArray(),
+    ),
+    UrlPartFilter {
     override fun addUrlParameter(url: HttpUrl.Builder) {
         url.addQueryParameter(urlParameter, options[state].second)
     }
 }
 
-class TriStateFilter(name: String, val id: String) : Filter.TriState(name)
+class TriStateFilter(
+    name: String,
+    val id: String,
+) : Filter.TriState(name)
 
 abstract class TriStateGroupFilter(
     name: String,
     options: List<Pair<String, String>>,
     private val includeUrlParameter: String,
     private val excludeUrlParameter: String,
-) : UrlPartFilter, Filter.Group<TriStateFilter>(
-    name,
-    options.map { TriStateFilter(it.first, it.second) },
-) {
+) : Filter.Group<TriStateFilter>(
+        name,
+        options.map { TriStateFilter(it.first, it.second) },
+    ),
+    UrlPartFilter {
     override fun addUrlParameter(url: HttpUrl.Builder) {
         url.addQueryParameter(
             includeUrlParameter,
@@ -47,44 +52,44 @@ class GenreFilter(
     name: String,
     options: List<Pair<String, String>>,
 ) : TriStateGroupFilter(
-    name,
-    options,
-    "genres",
-    "notGenres",
-)
+        name,
+        options,
+        "genres",
+        "notGenres",
+    )
 
 class ChapterCountFilter(
     name: String,
     options: List<Pair<String, String>>,
 ) : SelectFilter(
-    name,
-    options,
-    "chapter_count",
-)
+        name,
+        options,
+        "chapter_count",
+    )
 
 class StatusFilter(
     name: String,
     options: List<Pair<String, String>>,
 ) : SelectFilter(
-    name,
-    options,
-    "status",
-)
+        name,
+        options,
+        "status",
+    )
 
 class GenderFilter(
     name: String,
     options: List<Pair<String, String>>,
 ) : SelectFilter(
-    name,
-    options,
-    "sex",
-)
+        name,
+        options,
+        "sex",
+    )
 
 class SortFilter(
     name: String,
     options: List<Pair<String, String>>,
 ) : SelectFilter(
-    name,
-    options,
-    "sort",
-)
+        name,
+        options,
+        "sort",
+    )

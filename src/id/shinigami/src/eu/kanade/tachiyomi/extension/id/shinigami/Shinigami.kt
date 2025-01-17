@@ -19,7 +19,9 @@ import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), ConfigurableSource {
+class Shinigami :
+    Madara("Shinigami", "https://shinigami09.com", "id"),
+    ConfigurableSource {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
@@ -34,19 +36,20 @@ class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), Configur
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            this.setDefaultValue(super.baseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: ${super.baseUrl}"
+        val baseUrlPref =
+            androidx.preference.EditTextPreference(screen.context).apply {
+                key = BASE_URL_PREF
+                title = BASE_URL_PREF_TITLE
+                summary = BASE_URL_PREF_SUMMARY
+                this.setDefaultValue(super.baseUrl)
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "Default: ${super.baseUrl}"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                    true
+                }
             }
-        }
         screen.addPreference(baseUrlPref)
     }
 
@@ -55,7 +58,8 @@ class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), Configur
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
             if (prefDefaultBaseUrl != super.baseUrl) {
-                preferences.edit()
+                preferences
+                    .edit()
                     .putString(BASE_URL_PREF, super.baseUrl)
                     .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
                     .apply()
@@ -63,63 +67,85 @@ class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), Configur
         }
     }
 
-    override fun headersBuilder() = super.headersBuilder().apply {
-        add("Sec-Fetch-Dest", "document")
-        add("Sec-Fetch-Mode", "navigate")
-        add("Sec-Fetch-Site", "same-origin")
-        add("Upgrade-Insecure-Requests", "1")
-        add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
-    }
-
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val headers = request.headers.newBuilder().apply {
-                removeAll("X-Requested-With")
-            }.build()
-
-            chain.proceed(request.newBuilder().headers(headers).build())
+    override fun headersBuilder() =
+        super.headersBuilder().apply {
+            add("Sec-Fetch-Dest", "document")
+            add("Sec-Fetch-Mode", "navigate")
+            add("Sec-Fetch-Site", "same-origin")
+            add("Upgrade-Insecure-Requests", "1")
+            add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
         }
-        .rateLimit(3)
-        .build()
+
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val headers =
+                    request.headers
+                        .newBuilder()
+                        .apply {
+                            removeAll("X-Requested-With")
+                        }.build()
+
+                chain.proceed(request.newBuilder().headers(headers).build())
+            }.rateLimit(3)
+            .build()
 
     // Tags are useless as they are just SEO keywords.
     override val mangaDetailsSelectorTag = ""
 
     override val chapterUrlSelector = "div.chapter-link:not([style~=display:\\snone]) a"
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val urlElement = element.selectFirst(chapterUrlSelector)!!
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            val urlElement = element.selectFirst(chapterUrlSelector)!!
 
-        name = urlElement.selectFirst("p.chapter-manhwa-title")?.text()
-            ?: urlElement.ownText()
-        date_upload = urlElement.selectFirst("span.chapter-release-date > i")?.text()
-            .let { parseChapterDate(it) }
+            name = urlElement.selectFirst("p.chapter-manhwa-title")?.text()
+                ?: urlElement.ownText()
+            date_upload =
+                urlElement
+                    .selectFirst("span.chapter-release-date > i")
+                    ?.text()
+                    .let { parseChapterDate(it) }
 
-        val fixedUrl = urlElement.attr("abs:href")
+            val fixedUrl = urlElement.attr("abs:href")
 
-        setUrlWithoutDomain(fixedUrl)
-    }
+            setUrlWithoutDomain(fixedUrl)
+        }
 
     // Page list
     @Serializable
-    data class CDT(val ct: String, val s: String)
+    data class CDT(
+        val ct: String,
+        val s: String,
+    )
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script:containsData(chapter_data)")?.data()
-            ?: throw Exception("chapter_data script not found")
+        val script =
+            document.selectFirst("script:containsData(chapter_data)")?.data()
+                ?: throw Exception("chapter_data script not found")
 
-        val deobfuscated = Deobfuscator.deobfuscateScript(script)
-            ?: throw Exception("Unable to deobfuscate chapter_data script")
+        val deobfuscated =
+            Deobfuscator.deobfuscateScript(script)
+                ?: throw Exception("Unable to deobfuscate chapter_data script")
 
-        val keyMatch = KEY_REGEX.find(deobfuscated)?.groupValues
-            ?: throw Exception("Unable to find key")
+        val keyMatch =
+            KEY_REGEX.find(deobfuscated)?.groupValues
+                ?: throw Exception("Unable to find key")
 
-        val chapterData = json.decodeFromString<CDT>(
-            CHAPTER_DATA_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception("Unable to get chapter data"),
-        )
+        val chapterData =
+            json.decodeFromString<CDT>(
+                CHAPTER_DATA_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception("Unable to get chapter data"),
+            )
         val postId = POST_ID_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception("Unable to get post_id")
-        val otherId = OTHER_ID_REGEX.findAll(script).firstOrNull { it.groupValues[1] != "post" }?.groupValues?.get(2) ?: throw Exception("Unable to get other id")
+        val otherId =
+            OTHER_ID_REGEX
+                .findAll(script)
+                .firstOrNull { it.groupValues[1] != "post" }
+                ?.groupValues
+                ?.get(2)
+                ?: throw Exception("Unable to get other id")
         val key = otherId + keyMatch[1] + postId + keyMatch[2] + postId
         val salt = chapterData.s.decodeHex()
 

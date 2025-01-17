@@ -8,15 +8,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class TaurusFansub : Madara(
-    "Taurus Fansub",
-    "https://taurusmanga.com",
-    "es",
-    dateFormat = SimpleDateFormat("dd/MM/yyy", Locale.ROOT),
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(2, 1, TimeUnit.SECONDS)
-        .build()
+class TaurusFansub :
+    Madara(
+        "Taurus Fansub",
+        "https://taurusmanga.com",
+        "es",
+        dateFormat = SimpleDateFormat("dd/MM/yyy", Locale.ROOT),
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(2, 1, TimeUnit.SECONDS)
+            .build()
 
     override val useNewChapterEndpoint = true
     override val useLoadMoreRequest = LoadMoreStrategy.Always
@@ -28,12 +31,24 @@ class TaurusFansub : Madara(
         manga.genre = document.select("div.site-content div.summary_content div.genres-content").joinToString { it.text() }
         manga.author = document.select("div.site-content div.summary_content div.tags-content").text()
 
-        val stado = document.select("div.site-content div.summary_content div.manga-title div.post-content_item div.summary-content").first()?.text()
-        manga.status = when (stado) {
-            "En Curso" -> { SManga.ONGOING }
-            "Completado" -> { SManga.COMPLETED }
-            else -> { SManga.UNKNOWN }
-        }
+        val stado =
+            document
+                .select(
+                    "div.site-content div.summary_content div.manga-title div.post-content_item div.summary-content",
+                ).first()
+                ?.text()
+        manga.status =
+            when (stado) {
+                "En Curso" -> {
+                    SManga.ONGOING
+                }
+                "Completado" -> {
+                    SManga.COMPLETED
+                }
+                else -> {
+                    SManga.UNKNOWN
+                }
+            }
         manga.artist = document.select("div.site-content div.summary_content div.tags-content").text()
 
         return manga

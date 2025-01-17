@@ -8,13 +8,15 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Natsu : MangaThemesia("Natsu", "https://natsu.id", "id", dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id"))) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(4)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(4)
+            .build()
 
     // manga details
-    override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
-        title = document.selectFirst(seriesThumbnailSelector)!!.attr("title")
-    }
+    override fun mangaDetailsParse(document: Document) =
+        super.mangaDetailsParse(document).apply {
+            title = document.selectFirst(seriesThumbnailSelector)!!.attr("title")
+        }
 }

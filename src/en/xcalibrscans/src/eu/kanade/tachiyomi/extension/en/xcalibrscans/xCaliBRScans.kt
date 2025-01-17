@@ -10,11 +10,12 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class xCaliBRScans : MangaThemesia("xCaliBR Scans", "https://xcalibrscans.com", "en") {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor(AntiScrapInterceptor())
-        .rateLimit(2)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .addInterceptor(AntiScrapInterceptor())
+            .rateLimit(2)
+            .build()
 
     override val hasProjectPage = true
 
@@ -24,7 +25,8 @@ class xCaliBRScans : MangaThemesia("xCaliBR Scans", "https://xcalibrscans.com", 
         val imgUrls = mutableListOf<String>()
 
         // Selects all direct descendant of "div#readerarea"
-        document.select("div#readerarea > *")
+        document
+            .select("div#readerarea > *")
             .forEach { element ->
                 when {
                     element.tagName() == "p" -> {
@@ -43,17 +45,23 @@ class xCaliBRScans : MangaThemesia("xCaliBR Scans", "https://xcalibrscans.com", 
         return imgUrls.mapIndexed { index, imageUrl -> Page(index, document.location(), imageUrl) }
     }
 
-    private fun parseAntiScrapScramble(element: Element, destination: MutableList<String>) {
-        element.select("div.sword")
+    private fun parseAntiScrapScramble(
+        element: Element,
+        destination: MutableList<String>,
+    ) {
+        element
+            .select("div.sword")
             .forEach { swordDiv ->
                 val imgUrls = swordDiv.select("img").map { it.imgAttr() }
                 val urls = imgUrls.joinToString(AntiScrapInterceptor.IMAGE_URLS_SEPARATOR)
-                val url = baseUrl.toHttpUrl()
-                    .newBuilder()
-                    .addQueryParameter("urls", urls)
-                    .fragment(AntiScrapInterceptor.ANTI_SCRAP_FRAGMENT)
-                    .build()
-                    .toString()
+                val url =
+                    baseUrl
+                        .toHttpUrl()
+                        .newBuilder()
+                        .addQueryParameter("urls", urls)
+                        .fragment(AntiScrapInterceptor.ANTI_SCRAP_FRAGMENT)
+                        .build()
+                        .toString()
 
                 destination.add(url)
             }

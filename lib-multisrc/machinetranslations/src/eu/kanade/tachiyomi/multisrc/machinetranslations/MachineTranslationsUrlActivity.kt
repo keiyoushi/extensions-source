@@ -8,9 +8,9 @@ import android.os.Bundle
 import android.util.Log
 import androidx.annotation.RequiresApi
 import kotlin.system.exitProcess
+
 @RequiresApi(Build.VERSION_CODES.O)
 class MachineTranslationsUrlActivity : Activity() {
-
     private val tag = javaClass.simpleName
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -18,11 +18,12 @@ class MachineTranslationsUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
             val item = pathSegments[1]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${MachineTranslations.PREFIX_SEARCH}$item")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${MachineTranslations.PREFIX_SEARCH}$item")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

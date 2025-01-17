@@ -48,14 +48,15 @@ class ProjectSukiReadUrlActivity : Activity() {
             Log.e("PSUARead", "could not handle URI ${intent?.data} from intent $intent")
         }
 
-        val intent = Intent().apply {
-            // tell tachiyomi we want to search for something
-            action = "eu.kanade.tachiyomi.SEARCH"
-            // "filter" for our own extension instead of doing a global search
-            putExtra("filter", packageName)
-            // value that will be passed onto the "query" parameter in fetchSearchManga
-            putExtra("query", "$INTENT_READ_QUERY_PREFIX${intent?.data?.pathSegments?.get(1)}")
-        }
+        val intent =
+            Intent().apply {
+                // tell tachiyomi we want to search for something
+                action = "eu.kanade.tachiyomi.SEARCH"
+                // "filter" for our own extension instead of doing a global search
+                putExtra("filter", packageName)
+                // value that will be passed onto the "query" parameter in fetchSearchManga
+                putExtra("query", "$INTENT_READ_QUERY_PREFIX${intent?.data?.pathSegments?.get(1)}")
+            }
 
         try {
             // actually do the thing

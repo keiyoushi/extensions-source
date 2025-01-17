@@ -23,11 +23,12 @@ class LatestDto(
     private val thumbnail: String? = null,
     val type: String? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
-        url = "/series/comic-$slug#$id"
-        title = name
-        thumbnail_url = thumbnail
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            url = "/series/comic-$slug#$id"
+            title = name
+            thumbnail_url = thumbnail
+        }
 }
 
 @Serializable
@@ -50,27 +51,30 @@ class SeriesDto(
     private val status: SeriesStatusDto? = null,
     private val genres: List<FilterDto>? = null,
 ) {
-    fun toSManga() = SManga.create().apply {
-        url = "/series/comic-$slug#$id"
-        title = name
-        thumbnail_url = cover
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            url = "/series/comic-$slug#$id"
+            title = name
+            thumbnail_url = cover
+        }
 
-    fun toSMangaDetails() = SManga.create().apply {
-        title = name
-        thumbnail_url = cover
-        description = summary
-        status = parseStatus(this@SeriesDto.status?.id)
-        genre = genres?.joinToString { it.name.trim() }
-    }
+    fun toSMangaDetails() =
+        SManga.create().apply {
+            title = name
+            thumbnail_url = cover
+            description = summary
+            status = parseStatus(this@SeriesDto.status?.id)
+            genre = genres?.joinToString { it.name.trim() }
+        }
 
-    private fun parseStatus(statusId: Long?) = when (statusId) {
-        906397890812182531, 911437469204086787 -> SManga.ONGOING
-        906409397258190851 -> SManga.ON_HIATUS
-        906409532796731395, 911793517664960513 -> SManga.COMPLETED
-        906426661911756802, 906428048651190273, 911793767845265410, 911793856861798402 -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
-    }
+    private fun parseStatus(statusId: Long?) =
+        when (statusId) {
+            906397890812182531, 911437469204086787 -> SManga.ONGOING
+            906409397258190851 -> SManga.ON_HIATUS
+            906409532796731395, 911793517664960513 -> SManga.COMPLETED
+            906426661911756802, 906428048651190273, 911793767845265410, 911793856861798402 -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
 }
 
 @Serializable
@@ -90,15 +94,17 @@ class ChapterDto(
     private val name: String,
     @SerialName("published_at") val date: String,
 ) {
-    fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
-        url = "/capitulo/$id/"
-        name = "Capítulo ${this@ChapterDto.name}"
-        date_upload = try {
-            dateFormat.parse(date)?.time ?: 0L
-        } catch (e: Exception) {
-            0L
+    fun toSChapter(dateFormat: SimpleDateFormat) =
+        SChapter.create().apply {
+            url = "/capitulo/$id/"
+            name = "Capítulo ${this@ChapterDto.name}"
+            date_upload =
+                try {
+                    dateFormat.parse(date)?.time ?: 0L
+                } catch (e: Exception) {
+                    0L
+                }
         }
-    }
 }
 
 @Serializable

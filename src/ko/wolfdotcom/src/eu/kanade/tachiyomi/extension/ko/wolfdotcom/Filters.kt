@@ -14,17 +14,15 @@ class FilterData(
     val value: String?,
     private val valueDisplayName: String,
 ) {
-    override fun toString(): String {
-        return "$typeDisplayName: $valueDisplayName"
-    }
+    override fun toString(): String = "$typeDisplayName: $valueDisplayName"
 }
 
 class SearchFilter(
     private val options: List<FilterData>,
 ) : Filter.Select<String>(
-    "필터",
-    options.map { it.toString() }.toTypedArray(),
-),
+        "필터",
+        options.map { it.toString() }.toTypedArray(),
+    ),
     UrlPartFilter {
     override fun addToUrl(url: HttpUrl.Builder) {
         val selected = options[state]
@@ -35,23 +33,24 @@ class SearchFilter(
     }
 }
 
-class SortFilter(default: Int = 0) :
-    Filter.Select<String>(
+class SortFilter(
+    default: Int = 0,
+) : Filter.Select<String>(
         "정렬 기준",
         options.map { it.first }.toTypedArray(),
         default,
     ),
     UrlPartFilter {
-
     override fun addToUrl(url: HttpUrl.Builder) {
         url.addQueryParameter("o", options[state].second)
     }
 
     companion object {
-        private val options = listOf(
-            "최신순" to "n",
-            "인기순" to "f",
-        )
+        private val options =
+            listOf(
+                "최신순" to "n",
+                "인기순" to "f",
+            )
     }
 }
 

@@ -12,7 +12,5 @@ class Ikifeng : Madara("Lector Online", "https://lectorunm.life", "es", SimpleDa
 
     override val useNewChapterEndpoint = true
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 }

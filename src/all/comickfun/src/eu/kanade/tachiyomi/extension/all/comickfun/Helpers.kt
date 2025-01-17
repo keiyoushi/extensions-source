@@ -15,17 +15,17 @@ private val markdownLinksRegex = "\\[([^]]+)]\\(([^)]+)\\)".toRegex()
 private val markdownItalicBoldRegex = "\\*+\\s*([^*]*)\\s*\\*+".toRegex()
 private val markdownItalicRegex = "_+\\s*([^_]*)\\s*_+".toRegex()
 
-internal fun String.beautifyDescription(): String {
-    return Parser.unescapeEntities(this, false)
+internal fun String.beautifyDescription(): String =
+    Parser
+        .unescapeEntities(this, false)
         .substringBefore("---")
         .replace(markdownLinksRegex, "")
         .replace(markdownItalicBoldRegex, "")
         .replace(markdownItalicRegex, "")
         .trim()
-}
 
-internal fun Int?.parseStatus(translationComplete: Boolean?): Int {
-    return when (this) {
+internal fun Int?.parseStatus(translationComplete: Boolean?): Int =
+    when (this) {
         1 -> SManga.ONGOING
         2 -> {
             if (translationComplete == true) {
@@ -38,18 +38,25 @@ internal fun Int?.parseStatus(translationComplete: Boolean?): Int {
         4 -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
-}
 
-internal fun parseCover(thumbnailUrl: String?, mdCovers: List<MDcovers>): String? {
-    val b2key = mdCovers.firstOrNull()?.b2key
-        ?: return thumbnailUrl
+internal fun parseCover(
+    thumbnailUrl: String?,
+    mdCovers: List<MDcovers>,
+): String? {
+    val b2key =
+        mdCovers.firstOrNull()?.b2key
+            ?: return thumbnailUrl
     val vol = mdCovers.firstOrNull()?.vol.orEmpty()
 
     return thumbnailUrl?.replaceAfterLast("/", "$b2key#$vol")
 }
 
-internal fun beautifyChapterName(vol: String, chap: String, title: String): String {
-    return buildString {
+internal fun beautifyChapterName(
+    vol: String,
+    chap: String,
+    title: String,
+): String =
+    buildString {
         if (vol.isNotEmpty()) {
             if (chap.isEmpty()) append("Volume $vol") else append("Vol. $vol")
         }
@@ -60,9 +67,7 @@ internal fun beautifyChapterName(vol: String, chap: String, title: String): Stri
             if (chap.isEmpty()) append(title) else append(": $title")
         }
     }
-}
 
-internal fun String.parseDate(): Long {
-    return runCatching { dateFormat.parse(this)?.time }
+internal fun String.parseDate(): Long =
+    runCatching { dateFormat.parse(this)?.time }
         .getOrNull() ?: 0L
-}

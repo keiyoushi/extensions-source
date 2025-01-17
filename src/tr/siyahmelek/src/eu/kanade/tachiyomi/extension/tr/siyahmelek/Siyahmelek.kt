@@ -4,12 +4,13 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Siyahmelek : Madara(
-    "Gri Melek",
-    "https://grimelek.love",
-    "tr",
-    SimpleDateFormat("dd MMM yyyy", Locale("tr")),
-) {
+class Siyahmelek :
+    Madara(
+        "Gri Melek",
+        "https://grimelek.love",
+        "tr",
+        SimpleDateFormat("dd MMM yyyy", Locale("tr")),
+    ) {
     // Siyahmelek (tr) -> Gri Melek (tr)
     override val id = 6419959498055001014
 

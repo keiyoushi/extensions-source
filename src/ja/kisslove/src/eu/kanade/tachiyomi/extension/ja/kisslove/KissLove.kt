@@ -11,42 +11,51 @@ import org.jsoup.nodes.Element
 import java.util.Calendar
 
 class KissLove : FMReader("KissLove", "https://klz9.com", "ja") {
-
     override val altNameSelector = "li:contains(Other name (s))"
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/manga-list.html?page=$page&sort=last_update")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga-list.html?page=$page&sort=last_update")
 
     override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = MID_URL_REGEX.find(manga.url)
-            ?.groupValues?.get(1)
-            ?: throw Exception("Could not find manga id")
+        val mangaId =
+            MID_URL_REGEX
+                .find(manga.url)
+                ?.groupValues
+                ?.get(1)
+                ?: throw Exception("Could not find manga id")
 
-        val xhrUrl = "$baseUrl/${generateRandomStr(25)}.lstc".toHttpUrl().newBuilder()
-            .addQueryParameter("slug", mangaId)
-            .build()
+        val xhrUrl =
+            "$baseUrl/${generateRandomStr(25)}.lstc"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("slug", mangaId)
+                .build()
 
         return GET(xhrUrl, headers)
     }
 
-    override fun chapterFromElement(element: Element, mangaTitle: String): SChapter {
-        return SChapter.create().apply {
+    override fun chapterFromElement(
+        element: Element,
+        mangaTitle: String,
+    ): SChapter =
+        SChapter.create().apply {
             element.select(chapterUrlSelector).first()!!.let {
                 setUrlWithoutDomain("$baseUrl/${it.attr("href")}")
                 name = it.attr("title")
             }
 
-            date_upload = element.select(chapterTimeSelector)
-                .let { if (it.hasText()) parseChapterDate(it.text()) else 0 }
+            date_upload =
+                element
+                    .select(chapterTimeSelector)
+                    .let { if (it.hasText()) parseChapterDate(it.text()) else 0 }
         }
-    }
 
     private fun parseChapterDate(date: String): Long {
         val value = date.split(' ')[dateValueIndex].toInt()
-        val chapterDate = Calendar.getInstance().apply {
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
+        val chapterDate =
+            Calendar.getInstance().apply {
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
 
         when (date.split(' ')[dateWordIndex]) {
             "mins", "minutes" -> chapterDate.add(Calendar.MINUTE, -value)
@@ -66,20 +75,23 @@ class KissLove : FMReader("KissLove", "https://klz9.com", "ja") {
         val response = client.newCall(request).execute()
         val document = response.asJsoup()
 
-        val chapterId = document.selectFirst("#chapter")
-            ?.`val`()
-            ?: throw Exception("Could not find chapter id")
+        val chapterId =
+            document
+                .selectFirst("#chapter")
+                ?.`val`()
+                ?: throw Exception("Could not find chapter id")
 
-        val xhrUrl = "$baseUrl/${generateRandomStr(30)}.iog".toHttpUrl().newBuilder()
-            .addQueryParameter("cid", chapterId)
-            .build()
+        val xhrUrl =
+            "$baseUrl/${generateRandomStr(30)}.iog"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("cid", chapterId)
+                .build()
 
         return GET(xhrUrl, headers)
     }
 
-    private fun generateRandomStr(length: Int): String {
-        return (1..length).map { TO_PATH_CHARACTERS.random() }.joinToString("")
-    }
+    private fun generateRandomStr(length: Int): String = (1..length).map { TO_PATH_CHARACTERS.random() }.joinToString("")
 
     companion object {
         private val TO_PATH_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"

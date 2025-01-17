@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.mangapark
 
-private fun buildQuery(queryAction: () -> String): String {
-    return queryAction()
+private fun buildQuery(queryAction: () -> String): String =
+    queryAction()
         .trimIndent()
         .replace("%", "$")
-}
 
-val SEARCH_QUERY = buildQuery {
-    """
+val SEARCH_QUERY =
+    buildQuery {
+        """
         query (
             %select: SearchComic_Select
         ) {
@@ -32,10 +32,11 @@ val SEARCH_QUERY = buildQuery {
         	}
         }
     """
-}
+    }
 
-val DETAILS_QUERY = buildQuery {
-    """
+val DETAILS_QUERY =
+    buildQuery {
+        """
         query(
             %id: ID!
         ) {
@@ -58,10 +59,11 @@ val DETAILS_QUERY = buildQuery {
             }
         }
     """
-}
+    }
 
-val CHAPTERS_QUERY = buildQuery {
-    """
+val CHAPTERS_QUERY =
+    buildQuery {
+        """
         query(
             %id: ID!
         ) {
@@ -101,10 +103,11 @@ val CHAPTERS_QUERY = buildQuery {
             }
         }
     """
-}
+    }
 
-val PAGES_QUERY = buildQuery {
-    """
+val PAGES_QUERY =
+    buildQuery {
+        """
         query(
             %id: ID!
         ) {
@@ -119,4 +122,4 @@ val PAGES_QUERY = buildQuery {
             }
         }
     """
-}
+    }

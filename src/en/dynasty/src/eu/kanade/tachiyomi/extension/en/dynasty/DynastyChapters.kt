@@ -14,13 +14,16 @@ class DynastyChapters : DynastyScans() {
     override val name = "Dynasty-Chapters"
     override val searchPrefix = "chapters"
     override val categoryPrefix = "Chapter"
+
     override fun popularMangaInitialUrl() = ""
 
     private fun latestUpdatesInitialUrl(page: Int) = "$baseUrl/search?q=&classes%5B%5D=Chapter&page=$page=$&sort=created_at"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search?q=$query&classes%5B%5D=Chapter&sort=&page=$page", headers)
-    }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = GET("$baseUrl/search?q=$query&classes%5B%5D=Chapter&sort=&page=$page", headers)
 
     override val supportsLatest = true
 
@@ -72,13 +75,16 @@ class DynastyChapters : DynastyScans() {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.baseUri())
         chapter.name = element.select("h3").text()
-        chapter.date_upload = element.select("span.released").firstOrNull()?.text().toDate("MMM dd, yyyy")
+        chapter.date_upload =
+            element
+                .select("span.released")
+                .firstOrNull()
+                ?.text()
+                .toDate("MMM dd, yyyy")
         return chapter
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(latestUpdatesInitialUrl(page), headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(latestUpdatesInitialUrl(page), headers)
 
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 

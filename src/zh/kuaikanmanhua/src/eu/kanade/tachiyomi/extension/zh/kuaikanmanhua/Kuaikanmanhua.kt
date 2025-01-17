@@ -25,7 +25,6 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
 class Kuaikanmanhua : HttpSource() {
-
     override val name = "快看漫画"
 
     override val id: Long = 8099870292642776005
@@ -44,28 +43,34 @@ class Kuaikanmanhua : HttpSource() {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/v1/topic_new/lists/get_by_tag?tag=0&since=${(page - 1) * 10}", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$apiUrl/v1/topic_new/lists/get_by_tag?tag=0&since=${(page - 1) * 10}", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val body = response.body.string()
-        val jsonList = json.parseToJsonElement(body).jsonObject["data"]!!
-            .jsonObject["topics"]!!
-            .jsonArray
+        val jsonList =
+            json
+                .parseToJsonElement(body)
+                .jsonObject["data"]!!
+                .jsonObject["topics"]!!
+                .jsonArray
         return parseMangaJsonArray(jsonList)
     }
 
-    private fun parseMangaJsonArray(jsonList: JsonArray, isSearch: Boolean = false): MangasPage {
-        val mangaList = jsonList.map {
-            val mangaObj = it.jsonObject
+    private fun parseMangaJsonArray(
+        jsonList: JsonArray,
+        isSearch: Boolean = false,
+    ): MangasPage {
+        val mangaList =
+            jsonList.map {
+                val mangaObj = it.jsonObject
 
-            SManga.create().apply {
-                title = mangaObj["title"]!!.jsonPrimitive.content
-                thumbnail_url = mangaObj["vertical_image_url"]!!.jsonPrimitive.content
-                url = "/web/topic/" + mangaObj["id"]!!.jsonPrimitive.int
+                SManga.create().apply {
+                    title = mangaObj["title"]!!.jsonPrimitive.content
+                    thumbnail_url = mangaObj["vertical_image_url"]!!.jsonPrimitive.content
+                    url = "/web/topic/" + mangaObj["id"]!!.jsonPrimitive.int
+                }
             }
-        }
 
         // KKMH does not have pages when you search
         return MangasPage(mangaList, hasNextPage = mangaList.size > 9 && !isSearch)
@@ -73,18 +78,22 @@ class Kuaikanmanhua : HttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/v1/topic_new/lists/get_by_tag?tag=19&since=${(page - 1) * 10}", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$apiUrl/v1/topic_new/lists/get_by_tag?tag=19&since=${(page - 1) * 10}", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (query.startsWith(TOPIC_ID_SEARCH_PREFIX)) {
             val newQuery = query.removePrefix(TOPIC_ID_SEARCH_PREFIX)
-            return client.newCall(GET("$apiUrl/v1/topics/$newQuery"))
+            return client
+                .newCall(GET("$apiUrl/v1/topics/$newQuery"))
                 .asObservableSuccess()
                 .map { response ->
                     val details = mangaDetailsParse(response)
@@ -95,8 +104,12 @@ class Kuaikanmanhua : HttpSource() {
         return super.fetchSearchManga(page, query, filters)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotEmpty()) {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request =
+        if (query.isNotEmpty()) {
             GET("$apiUrl/v1/search/topic?q=$query&size=18", headers)
         } else {
             lateinit var genre: String
@@ -114,7 +127,6 @@ class Kuaikanmanhua : HttpSource() {
             }
             GET("$apiUrl/v1/search/by_tag?since=${(page - 1) * 10}&tag=$genre&sort=1&query_category=%7B%22update_status%22:$status%7D")
         }
-    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val body = response.body.string()
@@ -136,17 +148,20 @@ class Kuaikanmanhua : HttpSource() {
         return Observable.just(sManga)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val data = json.parseToJsonElement(response.body.string())
-            .jsonObject["data"]!!
-            .jsonObject
+    override fun mangaDetailsParse(response: Response): SManga =
+        SManga.create().apply {
+            val data =
+                json
+                    .parseToJsonElement(response.body.string())
+                    .jsonObject["data"]!!
+                    .jsonObject
 
-        title = data["title"]!!.jsonPrimitive.content
-        thumbnail_url = data["vertical_image_url"]!!.jsonPrimitive.content
-        author = data["user"]!!.jsonObject["nickname"]!!.jsonPrimitive.content
-        description = data["description"]!!.jsonPrimitive.content
-        status = data["update_status_code"]!!.jsonPrimitive.int
-    }
+            title = data["title"]!!.jsonPrimitive.content
+            thumbnail_url = data["vertical_image_url"]!!.jsonPrimitive.content
+            author = data["user"]!!.jsonObject["nickname"]!!.jsonPrimitive.content
+            description = data["description"]!!.jsonPrimitive.content
+            status = data["update_status_code"]!!.jsonPrimitive.int
+        }
 
     // Chapters & Pages
 
@@ -158,9 +173,11 @@ class Kuaikanmanhua : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = json.parseToJsonElement(response.body.string())
-            .jsonObject["data"]!!
-            .jsonObject
+        val data =
+            json
+                .parseToJsonElement(response.body.string())
+                .jsonObject["data"]!!
+                .jsonObject
         val chaptersJson = data["comics"]!!.jsonArray
         val chapters = mutableListOf<SChapter>()
 
@@ -194,8 +211,7 @@ class Kuaikanmanhua : HttpSource() {
         return GET(baseUrl + chapter.url)
     }
 
-    private val fixJson: (MatchResult) -> CharSequence = {
-            match: MatchResult ->
+    private val fixJson: (MatchResult) -> CharSequence = { match: MatchResult ->
         val str = match.value
         val out = str[0] + "\"" + str.subSequence(1, str.length - 1) + "\"" + str[str.length - 1]
         out
@@ -204,23 +220,30 @@ class Kuaikanmanhua : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val script = document.selectFirst("script:containsData(comicImages)")!!.data()
-        val images = script.substringAfter("comicImages:")
-            .substringBefore(",is_vip_exclusive")
-            .replace("""(:([^\[\{\"]+?)[\},])""".toRegex(), fixJson)
-            .replace("""([,{]([^\[\{\"]+?)[\}:])""".toRegex(), fixJson)
-            .let { json.parseToJsonElement(it).jsonArray }
-        val variable = script.substringAfter("(function(")
-            .substringBefore("){")
-            .split(",")
-        val value = script.substringAfterLast("}}(")
-            .substringBefore("));")
-            .split(",")
+        val images =
+            script
+                .substringAfter("comicImages:")
+                .substringBefore(",is_vip_exclusive")
+                .replace("""(:([^\[\{\"]+?)[\},])""".toRegex(), fixJson)
+                .replace("""([,{]([^\[\{\"]+?)[\}:])""".toRegex(), fixJson)
+                .let { json.parseToJsonElement(it).jsonArray }
+        val variable =
+            script
+                .substringAfter("(function(")
+                .substringBefore("){")
+                .split(",")
+        val value =
+            script
+                .substringAfterLast("}}(")
+                .substringBefore("));")
+                .split(",")
 
         return images.mapIndexed { index, jsonEl ->
             val urlVar = jsonEl.jsonObject["url"]!!.jsonPrimitive.content
-            val imageUrl = value[variable.indexOf(urlVar)]
-                .replace("\\u002F", "/")
-                .replace("\"", "")
+            val imageUrl =
+                value[variable.indexOf(urlVar)]
+                    .replace("\\u002F", "/")
+                    .replace("\"", "")
 
             Page(index, "", imageUrl)
         }
@@ -228,54 +251,57 @@ class Kuaikanmanhua : HttpSource() {
 
     // Filters
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("注意：不影響按標題搜索"),
-        StatusFilter(),
-        GenreFilter(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            Filter.Header("注意：不影響按標題搜索"),
+            StatusFilter(),
+            GenreFilter(),
+        )
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private class GenreFilter : UriPartFilter(
-        "题材",
-        arrayOf(
-            Pair("全部", "0"),
-            Pair("恋爱", "20"),
-            Pair("古风", "46"),
-            Pair("校园", "47"),
-            Pair("奇幻", "22"),
-            Pair("大女主", "77"),
-            Pair("治愈", "27"),
-            Pair("总裁", "52"),
-            Pair("完结", "40"),
-            Pair("唯美", "58"),
-            Pair("日漫", "57"),
-            Pair("韩漫", "60"),
-            Pair("穿越", "80"),
-            Pair("正能量", "54"),
-            Pair("灵异", "32"),
-            Pair("爆笑", "24"),
-            Pair("都市", "48"),
-            Pair("萌系", "62"),
-            Pair("玄幻", "63"),
-            Pair("日常", "19"),
-            Pair("投稿", "76"),
-        ),
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "题材",
+            arrayOf(
+                Pair("全部", "0"),
+                Pair("恋爱", "20"),
+                Pair("古风", "46"),
+                Pair("校园", "47"),
+                Pair("奇幻", "22"),
+                Pair("大女主", "77"),
+                Pair("治愈", "27"),
+                Pair("总裁", "52"),
+                Pair("完结", "40"),
+                Pair("唯美", "58"),
+                Pair("日漫", "57"),
+                Pair("韩漫", "60"),
+                Pair("穿越", "80"),
+                Pair("正能量", "54"),
+                Pair("灵异", "32"),
+                Pair("爆笑", "24"),
+                Pair("都市", "48"),
+                Pair("萌系", "62"),
+                Pair("玄幻", "63"),
+                Pair("日常", "19"),
+                Pair("投稿", "76"),
+            ),
+        )
 
-    private class StatusFilter : UriPartFilter(
-        "类别",
-        arrayOf(
-            Pair("全部", "1"),
-            Pair("连载中", "2"),
-            Pair("已完结", "3"),
-        ),
-    )
+    private class StatusFilter :
+        UriPartFilter(
+            "类别",
+            arrayOf(
+                Pair("全部", "1"),
+                Pair("连载中", "2"),
+                Pair("已完结", "3"),
+            ),
+        )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(
+        displayName: String,
+        val vals: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 

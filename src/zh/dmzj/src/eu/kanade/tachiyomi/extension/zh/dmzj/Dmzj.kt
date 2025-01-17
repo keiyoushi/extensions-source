@@ -23,7 +23,9 @@ import uy.kohesive.injekt.api.get
  * Dmzj source
  */
 
-class Dmzj : ConfigurableSource, HttpSource() {
+class Dmzj :
+    HttpSource(),
+    ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "动漫之家"
@@ -32,28 +34,36 @@ class Dmzj : ConfigurableSource, HttpSource() {
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(ImageUrlInterceptor)
-        .addInterceptor(CommentsInterceptor)
-        .rateLimit(4)
-        .apply {
-            val interceptors = interceptors()
-            val index = interceptors.indexOfFirst { "Brotli" in it.javaClass.simpleName }
-            if (index >= 0) {
-                interceptors.add(interceptors.removeAt(index))
-            }
-        }
-        .build()
+    override val client: OkHttpClient =
+        network.client
+            .newBuilder()
+            .addInterceptor(ImageUrlInterceptor)
+            .addInterceptor(CommentsInterceptor)
+            .rateLimit(4)
+            .apply {
+                val interceptors = interceptors()
+                val index = interceptors.indexOfFirst { "Brotli" in it.javaClass.simpleName }
+                if (index >= 0) {
+                    interceptors.add(interceptors.removeAt(index))
+                }
+            }.build()
 
     // API v4 randomly fails
-    private val retryClient = network.client.newBuilder()
-        .addInterceptor(RetryInterceptor)
-        .rateLimit(2)
-        .build()
+    private val retryClient =
+        network.client
+            .newBuilder()
+            .addInterceptor(RetryInterceptor)
+            .rateLimit(2)
+            .build()
 
     private fun fetchIdBySlug(slug: String): String {
         val request = GET("https://manhua.dmzj.com/$slug/", headers)
-        val html = client.newCall(request).execute().body.string()
+        val html =
+            client
+                .newCall(request)
+                .execute()
+                .body
+                .string()
         val start = "g_comic_id = \""
         val startIndex = html.indexOf(start) + start.length
         val endIndex = html.indexOf('"', startIndex)
@@ -74,19 +84,24 @@ class Dmzj : ConfigurableSource, HttpSource() {
     override fun latestUpdatesParse(response: Response) = ApiV3.parsePage(response)
 
     private fun searchMangaById(id: String): MangasPage {
-        val idNumber = if (id.all { it.isDigit() }) {
-            id
-        } else {
-            // Chinese Pinyin ID
-            fetchIdBySlug(id)
-        }
+        val idNumber =
+            if (id.all { it.isDigit() }) {
+                id
+            } else {
+                // Chinese Pinyin ID
+                fetchIdBySlug(id)
+            }
 
         val sManga = fetchMangaDetails(idNumber)
 
         return MangasPage(listOf(sManga), false)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         return if (query.isEmpty()) {
             val ranking = filters.filterIsInstance<RankingGroup>().firstOrNull()
             if (ranking != null && ranking.isEnabled) {
@@ -94,8 +109,10 @@ class Dmzj : ConfigurableSource, HttpSource() {
                 return Observable.fromCallable {
                     val result = ApiV4.parseRanking(call.execute())
                     // result has no manga ID if filtered by certain genres; this can be slow
-                    for (manga in result.mangas) if (manga.url.startsWith(PREFIX_ID_SEARCH)) {
-                        manga.url = getMangaUrl(fetchIdBySlug(manga.url.removePrefix(PREFIX_ID_SEARCH)))
+                    for (manga in result.mangas) {
+                        if (manga.url.startsWith(PREFIX_ID_SEARCH)) {
+                            manga.url = getMangaUrl(fetchIdBySlug(manga.url.removePrefix(PREFIX_ID_SEARCH)))
+                        }
                     }
                     result
                 }
@@ -119,13 +136,13 @@ class Dmzj : ConfigurableSource, HttpSource() {
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         val id = manga.url.extractMangaId()
@@ -138,18 +155,17 @@ class Dmzj : ConfigurableSource, HttpSource() {
         return ApiV3.parseMangaDetailsV1(response)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
     override fun getMangaUrl(manga: SManga): String {
         val cid = manga.url.extractMangaId()
         return "$baseUrl/info/$cid.html"
     }
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        throw UnsupportedOperationException()
-    }
+    override fun mangaDetailsParse(response: Response) =
+        SManga.create().apply {
+            throw UnsupportedOperationException()
+        }
 
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
@@ -165,9 +181,7 @@ class Dmzj : ConfigurableSource, HttpSource() {
         }
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl/view/${chapter.url}.html"
 
@@ -175,12 +189,15 @@ class Dmzj : ConfigurableSource, HttpSource() {
         val path = chapter.url
         return Observable.fromCallable {
             val response = retryClient.newCall(GET(ApiV4.chapterImagesUrl(path), headers)).execute()
-            val result = try {
-                ApiV4.parseChapterImages(response, preferences.imageQuality == LOW_RES)
-            } catch (_: Throwable) {
-                client.newCall(GET(ApiV3.chapterImagesUrlV1(path), headers)).execute()
-                    .let(ApiV3::parseChapterImagesV1)
-            }
+            val result =
+                try {
+                    ApiV4.parseChapterImages(response, preferences.imageQuality == LOW_RES)
+                } catch (_: Throwable) {
+                    client
+                        .newCall(GET(ApiV3.chapterImagesUrlV1(path), headers))
+                        .execute()
+                        .let(ApiV3::parseChapterImagesV1)
+                }
             if (preferences.showChapterComments) {
                 result.add(Page(result.size, COMMENTS_FLAG, ApiV3.chapterCommentsUrl(path)))
             }
@@ -188,33 +205,33 @@ class Dmzj : ConfigurableSource, HttpSource() {
         }
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        throw UnsupportedOperationException()
-    }
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
     // see https://github.com/tachiyomiorg/tachiyomi-extensions/issues/10475
     override fun imageRequest(page: Page): Request {
         val url = page.url.takeIf { it.isNotEmpty() }
         val imageUrl = page.imageUrl!!
         if (url == COMMENTS_FLAG) {
-            return GET(imageUrl, headers).newBuilder()
+            return GET(imageUrl, headers)
+                .newBuilder()
                 .tag(CommentsInterceptor.Tag::class, CommentsInterceptor.Tag())
                 .build()
         }
-        val fallbackUrl = when (preferences.imageQuality) {
-            AUTO_RES -> url
-            ORIGINAL_RES -> null
-            LOW_RES -> if (url == null) null else return GET(url, headers)
-            else -> url
-        }
-        return GET(imageUrl, headers).newBuilder()
+        val fallbackUrl =
+            when (preferences.imageQuality) {
+                AUTO_RES -> url
+                ORIGINAL_RES -> null
+                LOW_RES -> if (url == null) null else return GET(url, headers)
+                else -> url
+            }
+        return GET(imageUrl, headers)
+            .newBuilder()
             .tag(ImageUrlInterceptor.Tag::class, ImageUrlInterceptor.Tag(fallbackUrl))
             .build()
     }
 
     // Unused, we can get image urls directly from the chapter page
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun getFilterList() = getFilterListInternal(preferences.isMultiGenreFilter)
 

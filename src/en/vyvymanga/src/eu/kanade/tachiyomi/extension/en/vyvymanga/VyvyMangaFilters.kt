@@ -8,64 +8,74 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.jsoup.nodes.Document
 
-abstract class SelectFilter(displayName: String, private val options: Array<Pair<String, String>>) :
-    Filter.Select<String>(
+abstract class SelectFilter(
+    displayName: String,
+    private val options: Array<Pair<String, String>>,
+) : Filter.Select<String>(
         displayName,
         options.map { it.first }.toTypedArray(),
     ) {
     open val selected get() = options[state].second.takeUnless { it.isEmpty() }
 }
 
-class SearchType : SelectFilter(
-    "Title should contain/begin/end with typed text",
-    arrayOf(
-        Pair("Contain", "0"),
-        Pair("Begin", "1"),
-        Pair("End", "2"),
-    ),
-)
+class SearchType :
+    SelectFilter(
+        "Title should contain/begin/end with typed text",
+        arrayOf(
+            Pair("Contain", "0"),
+            Pair("Begin", "1"),
+            Pair("End", "2"),
+        ),
+    )
 
 class SearchDescription : Filter.CheckBox("Search In Description")
 
-class AuthorSearchType : SelectFilter(
-    "Author should contain/begin/end with typed text",
-    arrayOf(
-        Pair("Contain", "0"),
-        Pair("Begin", "1"),
-        Pair("End", "2"),
-    ),
-)
+class AuthorSearchType :
+    SelectFilter(
+        "Author should contain/begin/end with typed text",
+        arrayOf(
+            Pair("Contain", "0"),
+            Pair("Begin", "1"),
+            Pair("End", "2"),
+        ),
+    )
 
 class AuthorFilter : Filter.Text("Author")
 
-class StatusFilter : SelectFilter(
-    "Status",
-    arrayOf(
-        Pair("All", "2"),
-        Pair("Ongoing", "0"),
-        Pair("Completed", "1"),
-    ),
-)
+class StatusFilter :
+    SelectFilter(
+        "Status",
+        arrayOf(
+            Pair("All", "2"),
+            Pair("Ongoing", "0"),
+            Pair("Completed", "1"),
+        ),
+    )
 
-class SortFilter : SelectFilter(
-    "Sort by",
-    arrayOf(
-        Pair("Viewed", "viewed"),
-        Pair("Scored", "scored"),
-        Pair("Newest", "created_at"),
-        Pair("Latest Update", "updated_at"),
-    ),
-)
+class SortFilter :
+    SelectFilter(
+        "Sort by",
+        arrayOf(
+            Pair("Viewed", "viewed"),
+            Pair("Scored", "scored"),
+            Pair("Newest", "created_at"),
+            Pair("Latest Update", "updated_at"),
+        ),
+    )
 
-class SortType : SelectFilter(
-    "Sort order",
-    arrayOf(
-        Pair("Descending", "desc"),
-        Pair("Ascending", "asc"),
-    ),
-)
+class SortType :
+    SelectFilter(
+        "Sort order",
+        arrayOf(
+            Pair("Descending", "desc"),
+            Pair("Ascending", "asc"),
+        ),
+    )
 
-class Genre(name: String, val id: String) : Filter.TriState(name)
+class Genre(
+    name: String,
+    val id: String,
+) : Filter.TriState(name)
 
 class GenreFilter : Filter.Group<Genre>("Genre", genrePairs.map { Genre(it.name, it.id) })
 
@@ -77,11 +87,17 @@ fun launchIO(block: () -> Unit) = scope.launch { block() }
 
 private var fetchGenresAttempts: Int = 0
 
-fun fetchGenres(baseUrl: String, headers: okhttp3.Headers, client: okhttp3.OkHttpClient) {
+fun fetchGenres(
+    baseUrl: String,
+    headers: okhttp3.Headers,
+    client: okhttp3.OkHttpClient,
+) {
     if (fetchGenresAttempts < 3 && genrePairs.isEmpty()) {
         try {
             genrePairs =
-                client.newCall(genresRequest(baseUrl, headers)).execute()
+                client
+                    .newCall(genresRequest(baseUrl, headers))
+                    .execute()
                     .asJsoup()
                     .let(::parseGenres)
         } catch (_: Exception) {
@@ -91,7 +107,10 @@ fun fetchGenres(baseUrl: String, headers: okhttp3.Headers, client: okhttp3.OkHtt
     }
 }
 
-private fun genresRequest(baseUrl: String, headers: okhttp3.Headers) = GET("$baseUrl/search", headers)
+private fun genresRequest(
+    baseUrl: String,
+    headers: okhttp3.Headers,
+) = GET("$baseUrl/search", headers)
 
 private const val genresSelector = ".check-genre div div:has(.checkbox-genre)"
 

@@ -13,12 +13,21 @@ class NaverWebtoon : NaverComicBase("webtoon") {
     override val name = "Naver Webtoon"
 
     override fun popularMangaRequest(page: Int) = GET("$mobileUrl/$mType/weekday?sort=ALL_READER")
+
     override fun popularMangaSelector() = ".list_toon > [class='item ']"
+
     override fun popularMangaNextPageSelector() = null
+
     override fun popularMangaFromElement(element: Element): SManga {
         val thumb = element.select("img").attr("src")
         val title = element.select("strong").text()
-        val author = element.select("span.author").text().trim().split(" / ").joinToString()
+        val author =
+            element
+                .select("span.author")
+                .text()
+                .trim()
+                .split(" / ")
+                .joinToString()
         val url = element.select("a").attr("href")
 
         val manga = SManga.create()
@@ -30,28 +39,31 @@ class NaverWebtoon : NaverComicBase("webtoon") {
     }
 
     override fun latestUpdatesRequest(page: Int) = GET("$mobileUrl/$mType/weekday?sort=UPDATE")
+
     override fun latestUpdatesSelector() = ".list_toon > [class='item ']"
+
     override fun latestUpdatesNextPageSelector() = null
+
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
 }
 
 class NaverBestChallenge : NaverComicChallengeBase("bestChallenge") {
     override val name = "Naver Webtoon Best Challenge"
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/$mType/list?order=VIEW&page=$page")
+
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/$mType/list?order=UPDATE&page=$page")
 
-    override fun mangaDetailsParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
 }
 
 class NaverChallenge : NaverComicChallengeBase("challenge") {
     override val name = "Naver Webtoon Challenge"
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/$mType/list?order=VIEW&page=$page")
+
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/$mType/list?order=UPDATE&page=$page")
 
     @SuppressLint("SimpleDateFormat")
@@ -68,6 +80,5 @@ class NaverChallenge : NaverComicChallengeBase("challenge") {
         }
     }
 
-    override fun mangaDetailsParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
 }

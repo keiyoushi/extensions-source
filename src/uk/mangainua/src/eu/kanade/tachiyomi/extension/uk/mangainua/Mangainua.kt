@@ -21,7 +21,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Mangainua : ParsedHttpSource() {
-
     // Info
     override val name = "MANGA/in/UA"
     override val baseUrl = "https://manga.in.ua"
@@ -29,28 +28,33 @@ class Mangainua : ParsedHttpSource() {
     override val supportsLatest = true
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        network.cloudflareClient
+            .newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 5)
             .build()
     }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", baseUrl)
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", baseUrl)
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET(baseUrl)
 
     override fun popularMangaSelector() = "div.owl-carousel div.card--big"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("h3.card__title a")!!.run {
-            setUrlWithoutDomain(attr("href"))
-            title = text()
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            element.selectFirst("h3.card__title a")!!.run {
+                setUrlWithoutDomain(attr("href"))
+                title = text()
+            }
+            thumbnail_url =
+                element.selectFirst("img")?.run {
+                    absUrl("data-src").ifEmpty { absUrl("src") }
+                }
         }
-        thumbnail_url = element.selectFirst("img")?.run {
-            absUrl("data-src").ifEmpty { absUrl("src") }
-        }
-    }
 
     override fun popularMangaNextPageSelector() = null
 
@@ -64,22 +68,27 @@ class Mangainua : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = "a:contains(Наступна)"
 
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.length > 2) {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request =
+        if (query.length > 2) {
             POST(
                 "$baseUrl/index.php?do=search",
-                body = FormBody.Builder()
-                    .add("do", "search")
-                    .add("subaction", "search")
-                    .add("story", query)
-                    .add("search_start", page.toString())
-                    .build(),
+                body =
+                    FormBody
+                        .Builder()
+                        .add("do", "search")
+                        .add("subaction", "search")
+                        .add("story", query)
+                        .add("search_start", page.toString())
+                        .build(),
                 headers = headers,
             )
         } else {
             throw Exception("Запит має містити щонайменше 3 символи / The query must contain at least 3 characters")
         }
-    }
 
     override fun searchMangaSelector() = latestUpdatesSelector()
 
@@ -88,32 +97,42 @@ class Mangainua : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("span.UAname")!!.text()
-        description = document.selectFirst("div.item__full-description")!!.text()
-        thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.absUrl("src")
-        status = when (document.getInfoElement("Статус перекладу:")?.text()?.trim()) {
-            "Триває" -> SManga.ONGOING
-            "Покинуто" -> SManga.CANCELLED
-            "Закінчений" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = document.selectFirst("span.UAname")!!.text()
+            description = document.selectFirst("div.item__full-description")!!.text()
+            thumbnail_url = document.selectFirst("div.item__full-sidebar--poster img")?.absUrl("src")
+            status =
+                when (document.getInfoElement("Статус перекладу:")?.text()?.trim()) {
+                    "Триває" -> SManga.ONGOING
+                    "Покинуто" -> SManga.CANCELLED
+                    "Закінчений" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+
+            genre =
+                buildList {
+                    // genres
+                    addAll(
+                        document
+                            .getInfoElement("Жанри:")
+                            ?.select("a")
+                            ?.eachText()
+                            .orEmpty(),
+                    )
+
+                    // additional
+                    val type =
+                        when (document.getInfoElement("Тип:")?.text()) {
+                            "ВЕБМАНХВА" -> "Manhwa"
+                            "МАНХВА" -> "Manhwa"
+                            "МАНЬХВА" -> "Manhua"
+                            "ВЕБМАНЬХВА" -> "Manhua"
+                            else -> "Manga"
+                        }
+                    add(type)
+                }.joinToString()
         }
-
-        genre = buildList {
-            // genres
-            addAll(document.getInfoElement("Жанри:")?.select("a")?.eachText().orEmpty())
-
-            // additional
-            val type = when (document.getInfoElement("Тип:")?.text()) {
-                "ВЕБМАНХВА" -> "Manhwa"
-                "МАНХВА" -> "Manhwa"
-                "МАНЬХВА" -> "Manhua"
-                "ВЕБМАНЬХВА" -> "Manhua"
-                else -> "Manga"
-            }
-            add(type)
-        }.joinToString()
-    }
 
     private fun Document.getInfoElement(text: String): Element? =
         selectFirst("div.item__full-sideba--header:has(div:containsOwn($text)) span.item__full-sidebar--description")
@@ -121,9 +140,7 @@ class Mangainua : ParsedHttpSource() {
     // ============================== Chapters ==============================
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     private fun parseChapterElements(elements: Elements): List<SChapter> {
         var previousChapterName: String? = null
@@ -133,9 +150,11 @@ class Mangainua : ParsedHttpSource() {
                 val urlElement = element.selectFirst("a")!!
                 setUrlWithoutDomain(urlElement.attr("href"))
                 val chapterName = urlElement.ownText().trim()
-                val chapterNumber = element.attr("manga-chappter")
-                    .ifEmpty { chapterName.substringAfter("Розділ").substringBefore("-").trim() }
-                    .toFloatOrNull() ?: 1F
+                val chapterNumber =
+                    element
+                        .attr("manga-chappter")
+                        .ifEmpty { chapterName.substringAfter("Розділ").substringBefore("-").trim() }
+                        .toFloatOrNull() ?: 1F
 
                 if (chapterName.contains("Альтернативний переклад")) {
                     // Alternative translation of the previous chapter
@@ -155,19 +174,22 @@ class Mangainua : ParsedHttpSource() {
             }
         }
     }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val userHash = document.parseUserHash()
         val endpoint = "engine/ajax/controller.php?mod=load_chapters"
         val userHashQuery = document.parseUserHashQuery(endpoint)
         val metaElement = document.selectFirst(Evaluator.Id("linkstocomics"))!!
-        val body = FormBody.Builder()
-            .addEncoded("action", "show")
-            .addEncoded("news_id", metaElement.attr("data-news_id"))
-            .addEncoded("news_category", metaElement.attr("data-news_category"))
-            .addEncoded("this_link", metaElement.attr("data-this_link"))
-            .addEncoded(userHashQuery, userHash)
-            .build()
+        val body =
+            FormBody
+                .Builder()
+                .addEncoded("action", "show")
+                .addEncoded("news_id", metaElement.attr("data-news_id"))
+                .addEncoded("news_category", metaElement.attr("data-news_category"))
+                .addEncoded("this_link", metaElement.attr("data-this_link"))
+                .addEncoded(userHashQuery, userHash)
+                .build()
         val request = POST("$baseUrl/$endpoint", headers, body)
 
         val chaptersDoc = client.newCall(request).execute().use { it.asJsoup() }
@@ -181,8 +203,11 @@ class Mangainua : ParsedHttpSource() {
         val userHashQuery = document.parseUserHashQuery(endpoint)
         val newsId = document.selectFirst(Evaluator.Id("comics"))!!.attr("data-news_id")
         val url = "$baseUrl/$endpoint&news_id=$newsId&action=show&$userHashQuery=$userHash"
-        val pagesDoc = client.newCall(GET(url, headers)).execute()
-            .use { it.asJsoup() }
+        val pagesDoc =
+            client
+                .newCall(GET(url, headers))
+                .execute()
+                .use { it.asJsoup() }
         return pagesDoc.getElementsByTag("img").mapIndexed { index, img ->
             Page(index, imageUrl = img.attr("data-src"))
         }
@@ -196,10 +221,9 @@ class Mangainua : ParsedHttpSource() {
             SimpleDateFormat("dd.MM.yyyy", Locale.ENGLISH)
         }
 
-        private fun String.toDate(): Long {
-            return runCatching { DATE_FORMATTER.parse(trim())?.time }
+        private fun String.toDate(): Long =
+            runCatching { DATE_FORMATTER.parse(trim())?.time }
                 .getOrNull() ?: 0L
-        }
 
         private const val SITE_LOGIN_HASH = "site_login_hash"
 
@@ -211,14 +235,17 @@ class Mangainua : ParsedHttpSource() {
 
         private fun Document.parseUserHashQuery(endpoint: String): String {
             val script = selectFirst("script:containsData($endpoint)")?.data()
-            val queries = script?.run {
-                substringAfter(endpoint).substringAfter('{').substringBefore('}')
-            }
-            val query = queries.orEmpty()
-                .substringBefore(SITE_LOGIN_HASH, "")
-                .substringBeforeLast(':')
-                .trimEnd()
-                .substringAfterLast(' ')
+            val queries =
+                script?.run {
+                    substringAfter(endpoint).substringAfter('{').substringBefore('}')
+                }
+            val query =
+                queries
+                    .orEmpty()
+                    .substringBefore(SITE_LOGIN_HASH, "")
+                    .substringBeforeLast(':')
+                    .trimEnd()
+                    .substringAfterLast(' ')
 
             return query.ifEmpty { throw Exception("Couldn't find user hash query!") }
         }

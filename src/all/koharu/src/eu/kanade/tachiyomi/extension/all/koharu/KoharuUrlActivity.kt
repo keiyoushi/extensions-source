@@ -13,11 +13,12 @@ class KoharuUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 2) {
             val id = "${pathSegments[1]}/${pathSegments[2]}"
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Koharu.PREFIX_ID_KEY_SEARCH}$id")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${Koharu.PREFIX_ID_KEY_SEARCH}$id")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

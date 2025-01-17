@@ -8,9 +8,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 
 object ApiSearch {
-
     fun textSearchUrl(query: String) =
-        "http://sacg.idmzj.com/comicsum/search.php".toHttpUrl().newBuilder()
+        "http://sacg.idmzj.com/comicsum/search.php"
+            .toHttpUrl()
+            .newBuilder()
             .addQueryParameter("s", query)
             .toString()
 
@@ -32,11 +33,12 @@ object ApiSearch {
         private val comic_author: String,
         private val comic_cover: String,
     ) {
-        fun toSManga() = SManga.create().apply {
-            url = getMangaUrl(id.toString())
-            title = comic_name
-            author = comic_author.formatList()
-            thumbnail_url = comic_cover
-        }
+        fun toSManga() =
+            SManga.create().apply {
+                url = getMangaUrl(id.toString())
+                title = comic_name
+                author = comic_author.formatList()
+                thumbnail_url = comic_cover
+            }
     }
 }

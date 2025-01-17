@@ -50,8 +50,8 @@ import kotlin.time.Duration.Companion.seconds
 class Hitomi(
     override val lang: String,
     private val nozomiLang: String,
-) : HttpSource(), ConfigurableSource {
-
+) : HttpSource(),
+    ConfigurableSource {
     override val name = "Hitomi"
 
     private val domain = "hitomi.la"
@@ -64,58 +64,74 @@ class Hitomi(
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::jxlContentTypeInterceptor)
-        .apply {
-            interceptors().add(0, ::streamResetRetry)
-        }
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::jxlContentTypeInterceptor)
+            .apply {
+                interceptors().add(0, ::streamResetRetry)
+            }.build()
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
+
     private fun imageType() = preferences.getString(PREF_IMAGETYPE, "webp")!!
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("referer", "$baseUrl/")
-        .set("origin", baseUrl)
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .set("referer", "$baseUrl/")
+            .set("origin", baseUrl)
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        runBlocking {
-            val entries = getGalleryIDsFromNozomi("popular", "year", nozomiLang, page.nextPageRange())
-                .toMangaList()
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        Observable.fromCallable {
+            runBlocking {
+                val entries =
+                    getGalleryIDsFromNozomi("popular", "year", nozomiLang, page.nextPageRange())
+                        .toMangaList()
 
-            MangasPage(entries, entries.size >= 24)
+                MangasPage(entries, entries.size >= 24)
+            }
         }
-    }
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> = Observable.fromCallable {
-        runBlocking {
-            val entries = getGalleryIDsFromNozomi(null, "index", nozomiLang, page.nextPageRange())
-                .toMangaList()
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
+        Observable.fromCallable {
+            runBlocking {
+                val entries =
+                    getGalleryIDsFromNozomi(null, "index", nozomiLang, page.nextPageRange())
+                        .toMangaList()
 
-            MangasPage(entries, entries.size >= 24)
+                MangasPage(entries, entries.size >= 24)
+            }
         }
-    }
 
     private lateinit var searchResponse: List<Int>
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.fromCallable {
-        runBlocking {
-            if (page == 1) {
-                searchResponse = hitomiSearch(
-                    query.trim(),
-                    filters,
-                    nozomiLang,
-                )
-            }
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        Observable.fromCallable {
+            runBlocking {
+                if (page == 1) {
+                    searchResponse =
+                        hitomiSearch(
+                            query.trim(),
+                            filters,
+                            nozomiLang,
+                        )
+                }
 
-            val end = min(page * 25, searchResponse.size)
-            val entries = searchResponse.subList((page - 1) * 25, end)
-                .toMangaList()
-            MangasPage(entries, end < searchResponse.size)
+                val end = min(page * 25, searchResponse.size)
+                val entries =
+                    searchResponse
+                        .subList((page - 1) * 25, end)
+                        .toMangaList()
+                MangasPage(entries, end < searchResponse.size)
+            }
         }
-    }
 
     override fun getFilterList() = getFilters()
 
@@ -124,17 +140,22 @@ class Hitomi(
         return byteOffset.until(byteOffset + 100)
     }
 
-    private suspend fun getRangedResponse(url: String, range: LongRange?): ByteArray {
-        val request = when (range) {
-            null -> GET(url, headers)
-            else -> {
-                val rangeHeaders = headersBuilder()
-                    .set("Range", "bytes=${range.first}-${range.last}")
-                    .build()
+    private suspend fun getRangedResponse(
+        url: String,
+        range: LongRange?,
+    ): ByteArray {
+        val request =
+            when (range) {
+                null -> GET(url, headers)
+                else -> {
+                    val rangeHeaders =
+                        headersBuilder()
+                            .set("Range", "bytes=${range.first}-${range.last}")
+                            .build()
 
-                GET(url, rangeHeaders, CacheControl.FORCE_NETWORK)
+                    GET(url, rangeHeaders, CacheControl.FORCE_NETWORK)
+                }
             }
-        }
 
         return client.newCall(request).awaitSuccess().use { it.body.bytes() }
     }
@@ -148,11 +169,12 @@ class Hitomi(
             var sortBy: Pair<String?, String> = Pair(null, "index")
             var random = false
 
-            val terms = query
-                .trim()
-                .lowercase()
-                .split(Regex("\\s+"))
-                .toMutableList()
+            val terms =
+                query
+                    .trim()
+                    .lowercase()
+                    .split(Regex("\\s+"))
+                    .toMutableList()
 
             filters.forEach {
                 when (it) {
@@ -163,26 +185,28 @@ class Hitomi(
 
                     is TypeFilter -> {
                         val (activeFilter, inactiveFilters) = it.state.partition { stIt -> stIt.state }
-                        terms += when {
-                            inactiveFilters.size < 5 -> inactiveFilters.map { fil -> "-type:${fil.value}" }
-                            inactiveFilters.size == 5 -> listOf("type:${activeFilter[0].value}")
-                            else -> listOf("type: none")
-                        }
+                        terms +=
+                            when {
+                                inactiveFilters.size < 5 -> inactiveFilters.map { fil -> "-type:${fil.value}" }
+                                inactiveFilters.size == 5 -> listOf("type:${activeFilter[0].value}")
+                                else -> listOf("type: none")
+                            }
                     }
 
                     is TextFilter -> {
                         if (it.state.isNotEmpty()) {
-                            terms += it.state.split(",").filter(String::isNotBlank).map { tag ->
-                                val trimmed = tag.trim()
-                                buildString {
-                                    if (trimmed.startsWith('-')) {
-                                        append("-")
+                            terms +=
+                                it.state.split(",").filter(String::isNotBlank).map { tag ->
+                                    val trimmed = tag.trim()
+                                    buildString {
+                                        if (trimmed.startsWith('-')) {
+                                            append("-")
+                                        }
+                                        append(it.type)
+                                        append(":")
+                                        append(trimmed.lowercase().removePrefix("-"))
                                     }
-                                    append(it.type)
-                                    append(":")
-                                    append(trimmed.lowercase().removePrefix("-"))
                                 }
-                            }
                         }
                     }
                     else -> {}
@@ -204,39 +228,42 @@ class Hitomi(
                 }
             }
 
-            val positiveResults = positiveTerms.map {
-                async {
-                    try {
-                        getGalleryIDsForQuery(it, language)
-                    } catch (e: IllegalArgumentException) {
-                        if (e.message?.equals("HTTP error 404") == true) {
-                            throw Exception("Unknown query: \"$it\"")
-                        } else {
-                            throw e
+            val positiveResults =
+                positiveTerms.map {
+                    async {
+                        try {
+                            getGalleryIDsForQuery(it, language)
+                        } catch (e: IllegalArgumentException) {
+                            if (e.message?.equals("HTTP error 404") == true) {
+                                throw Exception("Unknown query: \"$it\"")
+                            } else {
+                                throw e
+                            }
                         }
                     }
                 }
-            }
 
-            val negativeResults = negativeTerms.map {
-                async {
-                    try {
-                        getGalleryIDsForQuery(it, language)
-                    } catch (e: IllegalArgumentException) {
-                        if (e.message?.equals("HTTP error 404") == true) {
-                            throw Exception("Unknown query: \"$it\"")
-                        } else {
-                            throw e
+            val negativeResults =
+                negativeTerms.map {
+                    async {
+                        try {
+                            getGalleryIDsForQuery(it, language)
+                        } catch (e: IllegalArgumentException) {
+                            if (e.message?.equals("HTTP error 404") == true) {
+                                throw Exception("Unknown query: \"$it\"")
+                            } else {
+                                throw e
+                            }
                         }
                     }
                 }
-            }
 
-            val results = when {
-                positiveTerms.isEmpty() || sortBy != Pair(null, "index")
-                -> getGalleryIDsFromNozomi(sortBy.first, sortBy.second, language)
-                else -> emptySet()
-            }.toMutableSet()
+            val results =
+                when {
+                    positiveTerms.isEmpty() || sortBy != Pair(null, "index")
+                    -> getGalleryIDsFromNozomi(sortBy.first, sortBy.second, language)
+                    else -> emptySet()
+                }.toMutableSet()
 
             fun filterPositive(newResults: Set<Int>) {
                 when {
@@ -330,8 +357,9 @@ class Hitomi(
             "inbuf.byteLength ${inbuf.size} != expected_length $expectedLength"
         }
 
-        for (i in 0.until(numberOfGalleryIDs))
+        for (i in 0.until(numberOfGalleryIDs)) {
             galleryIDs.add(buffer.int)
+        }
 
         return galleryIDs
     }
@@ -373,10 +401,11 @@ class Hitomi(
         }
 
         fun isLeaf(node: Node): Boolean {
-            for (subnode in node.subNodeAddresses)
+            for (subnode in node.subNodeAddresses) {
                 if (subnode != 0L) {
                     return false
                 }
+            }
 
             return true
         }
@@ -402,28 +431,33 @@ class Hitomi(
         language: String,
         range: LongRange? = null,
     ): Set<Int> {
-        val nozomiAddress = when (area) {
-            null -> "$ltnUrl/$tag-$language.nozomi"
-            else -> "$ltnUrl/$area/$tag-$language.nozomi"
-        }
+        val nozomiAddress =
+            when (area) {
+                null -> "$ltnUrl/$tag-$language.nozomi"
+                else -> "$ltnUrl/$area/$tag-$language.nozomi"
+            }
 
         val bytes = getRangedResponse(nozomiAddress, range)
         val nozomi = mutableSetOf<Int>()
 
-        val arrayBuffer = ByteBuffer
-            .wrap(bytes)
-            .order(ByteOrder.BIG_ENDIAN)
+        val arrayBuffer =
+            ByteBuffer
+                .wrap(bytes)
+                .order(ByteOrder.BIG_ENDIAN)
 
-        while (arrayBuffer.hasRemaining())
+        while (arrayBuffer.hasRemaining()) {
             nozomi.add(arrayBuffer.int)
+        }
 
         return nozomi
     }
 
     private val galleriesIndexVersion by lazy {
-        client.newCall(
-            GET("$ltnUrl/galleriesindex/version?_=${System.currentTimeMillis()}", headers),
-        ).execute().use { it.body.string() }
+        client
+            .newCall(
+                GET("$ltnUrl/galleriesindex/version?_=${System.currentTimeMillis()}", headers),
+            ).execute()
+            .use { it.body.string() }
     }
 
     private data class Node(
@@ -433,9 +467,10 @@ class Hitomi(
     )
 
     private fun decodeNode(data: ByteArray): Node {
-        val buffer = ByteBuffer
-            .wrap(data)
-            .order(ByteOrder.BIG_ENDIAN)
+        val buffer =
+            ByteBuffer
+                .wrap(data)
+                .order(ByteOrder.BIG_ENDIAN)
 
         val uData = data.toUByteArray()
 
@@ -482,76 +517,79 @@ class Hitomi(
         return decodeNode(nodedata)
     }
 
-    private fun hashTerm(term: String): UByteArray {
-        return sha256(term.toByteArray()).copyOfRange(0, 4).toUByteArray()
-    }
+    private fun hashTerm(term: String): UByteArray = sha256(term.toByteArray()).copyOfRange(0, 4).toUByteArray()
 
-    private fun sha256(data: ByteArray): ByteArray {
-        return MessageDigest.getInstance("SHA-256").digest(data)
-    }
+    private fun sha256(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(data)
 
-    private suspend fun Collection<Int>.toMangaList() = coroutineScope {
-        map { id ->
-            async {
-                try {
-                    client.newCall(GET("$ltnUrl/galleries/$id.js", headers))
-                        .awaitSuccess()
-                        .parseScriptAs<Gallery>()
-                        .toSManga()
-                } catch (e: IllegalArgumentException) {
-                    if (e.message?.equals("HTTP error 404") == true) {
-                        return@async null
-                    } else {
-                        throw e
+    private suspend fun Collection<Int>.toMangaList() =
+        coroutineScope {
+            map { id ->
+                async {
+                    try {
+                        client
+                            .newCall(GET("$ltnUrl/galleries/$id.js", headers))
+                            .awaitSuccess()
+                            .parseScriptAs<Gallery>()
+                            .toSManga()
+                    } catch (e: IllegalArgumentException) {
+                        if (e.message?.equals("HTTP error 404") == true) {
+                            return@async null
+                        } else {
+                            throw e
+                        }
                     }
                 }
-            }
-        }.awaitAll().filterNotNull()
-    }
-
-    private suspend fun Gallery.toSManga() = SManga.create().apply {
-        title = this@toSManga.title
-        url = galleryurl
-        author = groups?.joinToString { it.formatted } ?: artists?.joinToString { it.formatted }
-        artist = artists?.joinToString { it.formatted }
-        genre = tags?.joinToString { it.formatted }
-        thumbnail_url = files.first().let {
-            val hash = it.hash
-            val imageId = imageIdFromHash(hash)
-            val subDomain = 'a' + subdomainOffset(imageId)
-
-            "https://${subDomain}tn.$domain/webpbigtn/${thumbPathFromHash(hash)}/$hash.webp"
+            }.awaitAll().filterNotNull()
         }
-        description = buildString {
-            japaneseTitle?.let {
-                append("Japanese title: ", it, "\n")
-            }
-            parodys?.joinToString { it.formatted }?.let {
-                append("Series: ", it, "\n")
-            }
-            characters?.joinToString { it.formatted }?.let {
-                append("Characters: ", it, "\n")
-            }
-            append("Type: ", type, "\n")
-            append("Pages: ", files.size, "\n")
-            language?.let { append("Language: ", language) }
+
+    private suspend fun Gallery.toSManga() =
+        SManga.create().apply {
+            title = this@toSManga.title
+            url = galleryurl
+            author = groups?.joinToString { it.formatted } ?: artists?.joinToString { it.formatted }
+            artist = artists?.joinToString { it.formatted }
+            genre = tags?.joinToString { it.formatted }
+            thumbnail_url =
+                files.first().let {
+                    val hash = it.hash
+                    val imageId = imageIdFromHash(hash)
+                    val subDomain = 'a' + subdomainOffset(imageId)
+
+                    "https://${subDomain}tn.$domain/webpbigtn/${thumbPathFromHash(hash)}/$hash.webp"
+                }
+            description =
+                buildString {
+                    japaneseTitle?.let {
+                        append("Japanese title: ", it, "\n")
+                    }
+                    parodys?.joinToString { it.formatted }?.let {
+                        append("Series: ", it, "\n")
+                    }
+                    characters?.joinToString { it.formatted }?.let {
+                        append("Characters: ", it, "\n")
+                    }
+                    append("Type: ", type, "\n")
+                    append("Pages: ", files.size, "\n")
+                    language?.let { append("Language: ", language) }
+                }
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            initialized = true
         }
-        status = SManga.COMPLETED
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        initialized = true
-    }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url
-            .substringAfterLast("-")
-            .substringBefore(".")
+        val id =
+            manga.url
+                .substringAfterLast("-")
+                .substringBefore(".")
 
         return GET("$ltnUrl/galleries/$id.js", headers)
     }
 
-    override fun mangaDetailsParse(response: Response) = runBlocking {
-        response.parseScriptAs<Gallery>().toSManga()
-    }
+    override fun mangaDetailsParse(response: Response) =
+        runBlocking {
+            response.parseScriptAs<Gallery>().toSManga()
+        }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
@@ -565,11 +603,12 @@ class Hitomi(
                 name = "Chapter"
                 url = gallery.galleryurl
                 scanlator = gallery.type
-                date_upload = try {
-                    dateFormat.parse(gallery.date.substringBeforeLast("-"))!!.time
-                } catch (_: ParseException) {
-                    0L
-                }
+                date_upload =
+                    try {
+                        dateFormat.parse(gallery.date.substringBeforeLast("-"))!!.time
+                    } catch (_: ParseException) {
+                        0L
+                    }
             },
         )
     }
@@ -579,55 +618,59 @@ class Hitomi(
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val id = chapter.url
-            .substringAfterLast("-")
-            .substringBefore(".")
+        val id =
+            chapter.url
+                .substringAfterLast("-")
+                .substringBefore(".")
 
         return GET("$ltnUrl/galleries/$id.js", headers)
     }
 
-    override fun pageListParse(response: Response) = runBlocking {
-        val gallery = response.parseScriptAs<Gallery>()
-        val id = gallery.galleryurl
-            .substringAfterLast("-")
-            .substringBefore(".")
+    override fun pageListParse(response: Response) =
+        runBlocking {
+            val gallery = response.parseScriptAs<Gallery>()
+            val id =
+                gallery.galleryurl
+                    .substringAfterLast("-")
+                    .substringBefore(".")
 
-        gallery.files.mapIndexed { idx, img ->
-            val hash = img.hash
+            gallery.files.mapIndexed { idx, img ->
+                val hash = img.hash
 
-            val typePref = imageType()
-            val avif = img.hasavif == 1 && typePref == "avif"
-            val jxl = img.hasjxl == 1 && typePref == "jxl"
+                val typePref = imageType()
+                val avif = img.hasavif == 1 && typePref == "avif"
+                val jxl = img.hasjxl == 1 && typePref == "jxl"
 
-            val commonId = commonImageId()
-            val imageId = imageIdFromHash(hash)
-            val subDomain = 'a' + subdomainOffset(imageId)
+                val commonId = commonImageId()
+                val imageId = imageIdFromHash(hash)
+                val subDomain = 'a' + subdomainOffset(imageId)
 
-            val imageUrl = when {
-                jxl -> "https://${subDomain}a.$domain/jxl/$commonId$imageId/$hash.jxl"
-                avif -> "https://${subDomain}a.$domain/avif/$commonId$imageId/$hash.avif"
-                else -> "https://${subDomain}a.$domain/webp/$commonId$imageId/$hash.webp"
+                val imageUrl =
+                    when {
+                        jxl -> "https://${subDomain}a.$domain/jxl/$commonId$imageId/$hash.jxl"
+                        avif -> "https://${subDomain}a.$domain/avif/$commonId$imageId/$hash.avif"
+                        else -> "https://${subDomain}a.$domain/webp/$commonId$imageId/$hash.webp"
+                    }
+
+                Page(
+                    idx,
+                    "$baseUrl/reader/$id.html",
+                    imageUrl,
+                )
             }
-
-            Page(
-                idx,
-                "$baseUrl/reader/$id.html",
-                imageUrl,
-            )
         }
-    }
 
     override fun imageRequest(page: Page): Request {
-        val imageHeaders = headersBuilder()
-            .set("Accept", "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-            .set("Referer", page.url)
-            .build()
+        val imageHeaders =
+            headersBuilder()
+                .set("Accept", "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+                .set("Referer", page.url)
+                .build()
 
         return GET(page.imageUrl!!, imageHeaders)
     }
 
-    private inline fun <reified T> Response.parseScriptAs(): T =
-        parseAs<T> { it.substringAfter("var galleryinfo = ") }
+    private inline fun <reified T> Response.parseScriptAs(): T = parseAs<T> { it.substringAfter("var galleryinfo = ") }
 
     private inline fun <reified T> Response.parseAs(transform: (String) -> String = { body -> body }): T {
         val body = use { it.body.string() }
@@ -651,26 +694,30 @@ class Hitomi(
     private val subdomainOffsetMap = mutableMapOf<Int, Int>()
     private var commonImageId = ""
 
-    private suspend fun refreshScript() = mutex.withLock {
-        if (scriptLastRetrieval == null || (scriptLastRetrieval!! + 60000) < System.currentTimeMillis()) {
-            val ggScript = client.newCall(
-                GET("$ltnUrl/gg.js?_=${System.currentTimeMillis()}", headers),
-            ).awaitSuccess().use { it.body.string() }
+    private suspend fun refreshScript() =
+        mutex.withLock {
+            if (scriptLastRetrieval == null || (scriptLastRetrieval!! + 60000) < System.currentTimeMillis()) {
+                val ggScript =
+                    client
+                        .newCall(
+                            GET("$ltnUrl/gg.js?_=${System.currentTimeMillis()}", headers),
+                        ).awaitSuccess()
+                        .use { it.body.string() }
 
-            subdomainOffsetDefault = Regex("var o = (\\d)").find(ggScript)!!.groupValues[1].toInt()
-            val o = Regex("o = (\\d); break;").find(ggScript)!!.groupValues[1].toInt()
+                subdomainOffsetDefault = Regex("var o = (\\d)").find(ggScript)!!.groupValues[1].toInt()
+                val o = Regex("o = (\\d); break;").find(ggScript)!!.groupValues[1].toInt()
 
-            subdomainOffsetMap.clear()
-            Regex("case (\\d+):").findAll(ggScript).forEach {
-                val case = it.groupValues[1].toInt()
-                subdomainOffsetMap[case] = o
+                subdomainOffsetMap.clear()
+                Regex("case (\\d+):").findAll(ggScript).forEach {
+                    val case = it.groupValues[1].toInt()
+                    subdomainOffsetMap[case] = o
+                }
+
+                commonImageId = Regex("b: '(.+)'").find(ggScript)!!.groupValues[1]
+
+                scriptLastRetrieval = System.currentTimeMillis()
             }
-
-            commonImageId = Regex("b: '(.+)'").find(ggScript)!!.groupValues[1]
-
-            scriptLastRetrieval = System.currentTimeMillis()
         }
-    }
 
     // m <-- gg.js
     private suspend fun subdomainOffset(imageId: Int): Int {
@@ -691,24 +738,25 @@ class Hitomi(
     }
 
     // real_full_path_from_hash <-- common.js
-    private fun thumbPathFromHash(hash: String): String {
-        return hash.replace(Regex("""^.*(..)(.)$"""), "$2/$1")
-    }
+    private fun thumbPathFromHash(hash: String): String = hash.replace(Regex("""^.*(..)(.)$"""), "$2/$1")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = PREF_IMAGETYPE
-            title = "Images Type"
-            entries = arrayOf("webp", "avif", "jxl")
-            entryValues = arrayOf("webp", "avif", "jxl")
-            summary = "Clear chapter cache to apply changes"
-            setDefaultValue("webp")
-        }.also(screen::addPreference)
+        ListPreference(screen.context)
+            .apply {
+                key = PREF_IMAGETYPE
+                title = "Images Type"
+                entries = arrayOf("webp", "avif", "jxl")
+                entryValues = arrayOf("webp", "avif", "jxl")
+                summary = "Clear chapter cache to apply changes"
+                setDefaultValue("webp")
+            }.also(screen::addPreference)
     }
 
     private fun List<Int>.toBytesList(): ByteArray = this.map { it.toByte() }.toByteArray()
+
     private val signatureOne = listOf(0xFF, 0x0A).toBytesList()
     private val signatureTwo = listOf(0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A).toBytesList()
+
     fun ByteArray.startsWith(byteArray: ByteArray): Boolean {
         if (this.size < byteArray.size) return false
         return this.sliceArray(byteArray.indices).contentEquals(byteArray)
@@ -728,14 +776,15 @@ class Hitomi(
 
         val type = "image/jxl"
         val body = response.body.bytes().toResponseBody(type.toMediaType())
-        return response.newBuilder()
+        return response
+            .newBuilder()
             .body(body)
             .header("Content-Type", type)
             .build()
     }
 
-    private fun streamResetRetry(chain: Interceptor.Chain): Response {
-        return try {
+    private fun streamResetRetry(chain: Interceptor.Chain): Response =
+        try {
             chain.proceed(chain.request())
         } catch (e: StreamResetException) {
             Log.e(name, "reset", e)
@@ -746,14 +795,23 @@ class Hitomi(
                 throw e
             }
         }
-    }
 
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
+
     override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
+
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
+
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
+
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     companion object {

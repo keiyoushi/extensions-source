@@ -6,12 +6,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SarcasmScans : Madara(
-    "Sarcasm Scans",
-    "https://sarcasmscans.com",
-    "tr",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
-) {
+class SarcasmScans :
+    Madara(
+        "Sarcasm Scans",
+        "https://sarcasmscans.com",
+        "tr",
+        dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 

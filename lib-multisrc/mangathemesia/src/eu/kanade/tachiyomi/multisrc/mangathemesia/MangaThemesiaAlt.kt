@@ -29,8 +29,8 @@ abstract class MangaThemesiaAlt(
     mangaUrlDirectory: String = "/manga",
     dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
     private val randomUrlPrefKey: String = "pref_auto_random_url",
-) : MangaThemesia(name, baseUrl, lang, mangaUrlDirectory, dateFormat), ConfigurableSource {
-
+) : MangaThemesia(name, baseUrl, lang, mangaUrlDirectory, dateFormat),
+    ConfigurableSource {
     protected open val listUrl = "$mangaUrlDirectory/list-mode/"
     protected open val listSelector = "div#content div.soralist ul li a.series"
 
@@ -46,12 +46,13 @@ abstract class MangaThemesiaAlt(
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = randomUrlPrefKey
-            title = intl["pref_dynamic_url_title"]
-            summary = intl["pref_dynamic_url_summary"]
-            setDefaultValue(true)
-        }.also(screen::addPreference)
+        SwitchPreferenceCompat(screen.context)
+            .apply {
+                key = randomUrlPrefKey
+                title = intl["pref_dynamic_url_title"]
+                summary = intl["pref_dynamic_url_summary"]
+                setDefaultValue(true)
+            }.also(screen::addPreference)
     }
 
     private fun getRandomUrlPref() = preferences.getBoolean(randomUrlPrefKey, true)
@@ -90,24 +91,26 @@ abstract class MangaThemesiaAlt(
             return document.select(listSelector).associate {
                 val url = it.absUrl("href")
 
-                val slug = url.removeSuffix("/")
-                    .substringAfterLast("/")
+                val slug =
+                    url
+                        .removeSuffix("/")
+                        .substringAfterLast("/")
 
-                val permaSlug = slug
-                    .replaceFirst(slugRegex, "")
+                val permaSlug =
+                    slug
+                        .replaceFirst(slugRegex, "")
 
                 permaSlug to slug
             }
         }
     }
 
-    protected fun getUrlMap(cached: Boolean = false): Map<String, String> {
-        return if (cached && cachedValue == null) {
+    protected fun getUrlMap(cached: Boolean = false): Map<String, String> =
+        if (cached && cachedValue == null) {
             preferences.urlMapCache
         } else {
             runBlocking { getUrlMapInternal() }
         }
-    }
 
     // cache in preference for webview urls
     private var SharedPreferences.urlMapCache: Map<String, String>
@@ -131,29 +134,31 @@ abstract class MangaThemesiaAlt(
         return MangasPage(mangas, mp.hasNextPage)
     }
 
-    protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> {
-        return onEach {
-            val slug = it.url
-                .removeSuffix("/")
-                .substringAfterLast("/")
+    protected fun List<SManga>.toPermanentMangaUrls(): List<SManga> =
+        onEach {
+            val slug =
+                it.url
+                    .removeSuffix("/")
+                    .substringAfterLast("/")
 
-            val permaSlug = slug
-                .replaceFirst(slugRegex, "")
+            val permaSlug =
+                slug
+                    .replaceFirst(slugRegex, "")
 
             it.url = "$mangaUrlDirectory/$permaSlug/"
         }
-    }
 
     protected open val slugRegex = Regex("""^(\d+-)""")
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (!getRandomUrlPref()) return super.mangaDetailsRequest(manga)
 
-        val slug = manga.url
-            .substringBefore("#")
-            .removeSuffix("/")
-            .substringAfterLast("/")
-            .replaceFirst(slugRegex, "")
+        val slug =
+            manga.url
+                .substringBefore("#")
+                .removeSuffix("/")
+                .substringAfterLast("/")
+                .replaceFirst(slugRegex, "")
 
         val randomSlug = getUrlMap()[slug] ?: slug
 
@@ -163,11 +168,12 @@ abstract class MangaThemesiaAlt(
     override fun getMangaUrl(manga: SManga): String {
         if (!getRandomUrlPref()) return super.getMangaUrl(manga)
 
-        val slug = manga.url
-            .substringBefore("#")
-            .removeSuffix("/")
-            .substringAfterLast("/")
-            .replaceFirst(slugRegex, "")
+        val slug =
+            manga.url
+                .substringBefore("#")
+                .removeSuffix("/")
+                .substringAfterLast("/")
+                .replaceFirst(slugRegex, "")
 
         val randomSlug = getUrlMap(true)[slug] ?: slug
 

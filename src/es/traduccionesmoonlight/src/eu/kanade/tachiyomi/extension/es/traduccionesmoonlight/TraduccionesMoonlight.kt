@@ -7,11 +7,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
 import okhttp3.Response
 
-class TraduccionesMoonlight : MangaEsp(
-    "Traducciones Moonlight",
-    "https://traduccionesmoonlight.com",
-    "es",
-) {
+class TraduccionesMoonlight :
+    MangaEsp(
+        "Traducciones Moonlight",
+        "https://traduccionesmoonlight.com",
+        "es",
+    ) {
     // Mangathemesia -> MangaEsp
     override val versionId = 3
 

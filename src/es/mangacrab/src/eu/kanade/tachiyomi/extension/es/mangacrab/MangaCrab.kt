@@ -23,22 +23,23 @@ class MangaCrab :
         SimpleDateFormat("dd/MM/yyyy", Locale("es")),
     ),
     ConfigurableSource {
-
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override val client = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .rateLimit(1, 2)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).rateLimit(1, 2)
+            .build()
 
     override val mangaSubString = "series"
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun chapterListSelector() = "div.listing-chapters_wrap > ul > li"
+
     override val mangaDetailsSelectorDescription = "div.c-page__content div.modal-contenido"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

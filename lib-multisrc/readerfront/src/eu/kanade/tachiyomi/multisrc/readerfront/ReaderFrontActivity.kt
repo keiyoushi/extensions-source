@@ -16,11 +16,12 @@ class ReaderFrontActivity : Activity() {
         super.onCreate(savedInstanceState)
         val segments = intent?.data?.pathSegments
         if (segments != null && segments.size > 2) {
-            val activity = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", STUB_QUERY + segments[2])
-                putExtra("filter", packageName)
-            }
+            val activity =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", STUB_QUERY + segments[2])
+                    putExtra("filter", packageName)
+                }
             try {
                 startActivity(activity)
             } catch (ex: ActivityNotFoundException) {

@@ -8,10 +8,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class ThunderScansFactory : SourceFactory {
-    override fun createSources() = listOf(
-        LavaScans(),
-        ThunderScans(),
-    )
+    override fun createSources() =
+        listOf(
+            LavaScans(),
+            ThunderScans(),
+        )
 }
 
 abstract class ThunderScansBase(
@@ -28,26 +29,27 @@ abstract class ThunderScansBase(
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
     }
 
-    override fun chapterListSelector(): String {
-        return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+    override fun chapterListSelector(): String =
+        paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
             super.chapterListSelector(),
             preferences,
         )
-    }
 }
 
-class LavaScans : ThunderScansBase(
-    "Lava Scans",
-    "https://lavatoons.com",
-    "ar",
-    dateFormat = SimpleDateFormat("MMM d, yyy", Locale("ar")),
-) {
+class LavaScans :
+    ThunderScansBase(
+        "Lava Scans",
+        "https://lavatoons.com",
+        "ar",
+        dateFormat = SimpleDateFormat("MMM d, yyy", Locale("ar")),
+    ) {
     override val id = 3209001028102012989
 }
 
-class ThunderScans : ThunderScansBase(
-    "Thunder Scans",
-    "https://en-thunderscans.com",
-    "en",
-    mangaUrlDirectory = "/comics",
-)
+class ThunderScans :
+    ThunderScansBase(
+        "Thunder Scans",
+        "https://en-thunderscans.com",
+        "en",
+        mangaUrlDirectory = "/comics",
+    )

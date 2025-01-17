@@ -20,7 +20,6 @@ class NoblesseTranslations :
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
     ),
     ConfigurableSource {
-
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
@@ -35,18 +34,19 @@ class NoblesseTranslations :
     override val mangaDetailsSelectorTag = "div.tags-content a.notUsed" // Site uses this for the scanlator
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "URL por defecto:\n${super.baseUrl}"
-            setDefaultValue(super.baseUrl)
-            setOnPreferenceChangeListener { _, newValue ->
-                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also { screen.addPreference(it) }
+        EditTextPreference(screen.context)
+            .apply {
+                key = BASE_URL_PREF
+                title = BASE_URL_PREF_TITLE
+                summary = BASE_URL_PREF_SUMMARY
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "URL por defecto:\n${super.baseUrl}"
+                setDefaultValue(super.baseUrl)
+                setOnPreferenceChangeListener { _, newValue ->
+                    Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
+                    true
+                }
+            }.also { screen.addPreference(it) }
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
@@ -62,7 +62,8 @@ class NoblesseTranslations :
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { defaultBaseUrl ->
             if (defaultBaseUrl != super.baseUrl) {
-                preferences.edit()
+                preferences
+                    .edit()
                     .putString(BASE_URL_PREF, super.baseUrl)
                     .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
                     .apply()

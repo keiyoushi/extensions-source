@@ -7,7 +7,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 
 class MikrokosmosFansub : ZeistManga("Mikrokosmos Fansub", "https://mikrokosmosfb.blogspot.com", "tr") {
-
     override val pageListSelector = "div.check-box script:containsData(content)"
 
     override fun pageListParse(response: Response): List<Page> {

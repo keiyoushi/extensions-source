@@ -3,11 +3,12 @@ package eu.kanade.tachiyomi.extension.en.hunlightscans
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import okhttp3.Response
 
-class HunlightScans : Madara(
-    "Hunlight Scans",
-    "https://hunlight.com",
-    "en",
-) {
+class HunlightScans :
+    Madara(
+        "Hunlight Scans",
+        "https://hunlight.com",
+        "en",
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
 

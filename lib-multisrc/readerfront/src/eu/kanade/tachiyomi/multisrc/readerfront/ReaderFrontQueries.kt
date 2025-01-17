@@ -1,11 +1,16 @@
 package eu.kanade.tachiyomi.multisrc.readerfront
 
-private fun String.encodeUri() =
-    android.net.Uri.encode(trimMargin())!!
+private fun String.encodeUri() = android.net.Uri.encode(trimMargin())!!
 
 internal const val STUB_QUERY = "stub:"
 
-fun works(lang: Int, sort: String, order: String, page: Int, limit: Int) = """{
+fun works(
+    lang: Int,
+    sort: String,
+    order: String,
+    page: Int,
+    limit: Int,
+) = """{
    |works(
    |    orderBy: "$order"
    |    sortBy: "$sort"
@@ -20,7 +25,10 @@ fun works(lang: Int, sort: String, order: String, page: Int, limit: Int) = """{
    |}
 }""".encodeUri()
 
-fun work(lang: Int, stub: String) = """{
+fun work(
+    lang: Int,
+    stub: String,
+) = """{
    |work(
    |  stub: "$stub"
    |  language: $lang
@@ -43,7 +51,10 @@ fun work(lang: Int, stub: String) = """{
    |}
 }""".encodeUri()
 
-fun chaptersByWork(lang: Int, stub: String) = """{
+fun chaptersByWork(
+    lang: Int,
+    stub: String,
+) = """{
    |chaptersByWork(
    |  workStub: "$stub"
    |  languages: [$lang]
@@ -58,7 +69,8 @@ fun chaptersByWork(lang: Int, stub: String) = """{
    |}
 }""".encodeUri()
 
-fun chapterById(id: Int) = """{
+fun chapterById(id: Int) =
+    """{
    |chapterById(
    |  id: $id
    |  showHidden: false

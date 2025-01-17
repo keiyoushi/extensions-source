@@ -21,7 +21,6 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 class Megatokyo : ParsedHttpSource() {
-
     override val name = "Megatokyo"
 
     override val baseUrl = "https://megatokyo.com"
@@ -47,15 +46,13 @@ class Megatokyo : ParsedHttpSource() {
         return Observable.just(MangasPage(arrayListOf(manga), false))
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
-        .map { it.mangas.first().apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        fetchPopularManga(1)
+            .map { it.mangas.first().apply { initialized = true } }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
-    override fun chapterListSelector() =
-        "div.content h2:contains(Comics by Date) + div ul li a[name]"
+    override fun chapterListSelector() = "div.content h2:contains(Comics by Date) + div ul li a[name]"
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
@@ -67,7 +64,8 @@ class Megatokyo : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document) =
-        document.select("#strip img")
+        document
+            .select("#strip img")
             .mapIndexed { i, element ->
                 Page(i, "", "https://megatokyo.com/" + element.attr("src"))
             }
@@ -75,16 +73,24 @@ class Megatokyo : ParsedHttpSource() {
     // certificate wasn't trusted for some reason so trusted all certificates
     private fun getUnsafeOkHttpClient(): OkHttpClient {
         // Create a trust manager that does not validate certificate chains
-        val trustAllCerts = arrayOf<TrustManager>(
-            object : X509TrustManager {
-                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                }
-                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                }
+        val trustAllCerts =
+            arrayOf<TrustManager>(
+                object : X509TrustManager {
+                    override fun checkClientTrusted(
+                        chain: Array<out X509Certificate>?,
+                        authType: String?,
+                    ) {
+                    }
 
-                override fun getAcceptedIssuers() = arrayOf<X509Certificate>()
-            },
-        )
+                    override fun checkServerTrusted(
+                        chain: Array<out X509Certificate>?,
+                        authType: String?,
+                    ) {
+                    }
+
+                    override fun getAcceptedIssuers() = arrayOf<X509Certificate>()
+                },
+            )
 
         // Install the all-trusting trust manager
         val sslContext = SSLContext.getInstance("SSL")
@@ -92,12 +98,18 @@ class Megatokyo : ParsedHttpSource() {
         // Create an ssl socket factory with our all-trusting manager
         val sslSocketFactory = sslContext.socketFactory
 
-        return OkHttpClient.Builder()
+        return OkHttpClient
+            .Builder()
             .sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
-            .hostnameVerifier { _, _ -> true }.build()
+            .hostnameVerifier { _, _ -> true }
+            .build()
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = throw UnsupportedOperationException()
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = throw UnsupportedOperationException()
 
     override fun imageUrlRequest(page: Page) = GET(page.url)
 
@@ -113,8 +125,11 @@ class Megatokyo : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
@@ -130,8 +145,8 @@ class Megatokyo : ParsedHttpSource() {
 
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    private fun String.toDate(): Long {
-        return runCatching { dateParser.parse(this.replace("(\\d+)(st|nd|rd|th)".toRegex(), "$1"))?.time }
-            .onFailure { print("Something wrong happened: ${it.message}") }.getOrNull() ?: 0L
-    }
+    private fun String.toDate(): Long =
+        runCatching { dateParser.parse(this.replace("(\\d+)(st|nd|rd|th)".toRegex(), "$1"))?.time }
+            .onFailure { print("Something wrong happened: ${it.message}") }
+            .getOrNull() ?: 0L
 }

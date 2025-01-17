@@ -15,7 +15,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class Nikkangecchan : ParsedHttpSource() {
-
     override val name = "Nikkangecchan"
 
     override val baseUrl = "https://nikkangecchan.jp"
@@ -24,12 +23,13 @@ class Nikkangecchan : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    private val catalogHeaders = Headers.Builder()
-        .apply {
-            add("User-Agent", USER_AGENT)
-            add("Referer", baseUrl)
-        }
-        .build()
+    private val catalogHeaders =
+        Headers
+            .Builder()
+            .apply {
+                add("User-Agent", USER_AGENT)
+                add("Referer", baseUrl)
+            }.build()
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, catalogHeaders)
 
@@ -48,17 +48,24 @@ class Nikkangecchan : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = null
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return super.fetchSearchManga(page, query, filters)
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        super
+            .fetchSearchManga(page, query, filters)
             .map {
                 val filtered = it.mangas.filter { e -> e.title.contains(query, true) }
                 MangasPage(filtered, false)
             }
-    }
 
     // Does not have search, use complete list (in popular) instead.
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        popularMangaRequest(page)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = popularMangaRequest(page)
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -80,8 +87,7 @@ class Nikkangecchan : ParsedHttpSource() {
 
     override fun chapterListSelector(): String = ".episodeBox"
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        super.chapterListParse(response).reversed()
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun chapterFromElement(element: Element): SChapter {
         val episodePage = element.select(".episode-page").first()!!
@@ -90,24 +96,29 @@ class Nikkangecchan : ParsedHttpSource() {
 
         return SChapter.create().apply {
             name = "$title - $dataTitle"
-            chapter_number = element.select("h4.episodeTitle").first()!!.text().toFloatOrNull() ?: -1f
+            chapter_number = element
+                .select("h4.episodeTitle")
+                .first()!!
+                .text()
+                .toFloatOrNull() ?: -1f
             scanlator = "Akita Publishing"
             setUrlWithoutDomain(baseUrl + episodePage.attr("data-src").substringBeforeLast("/"))
         }
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return Observable.just(listOf(Page(0, chapter.url, "$baseUrl${chapter.url}/image")))
-    }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
+        Observable.just(listOf(Page(0, chapter.url, "$baseUrl${chapter.url}/image")))
 
     override fun imageUrlParse(document: Document) = ""
 
     override fun imageRequest(page: Page): Request {
-        val headers = Headers.Builder()
-            .apply {
-                add("User-Agent", USER_AGENT)
-                add("Referer", baseUrl + page.url.substringBeforeLast("/"))
-            }
+        val headers =
+            Headers
+                .Builder()
+                .apply {
+                    add("User-Agent", USER_AGENT)
+                    add("Referer", baseUrl + page.url.substringBeforeLast("/"))
+                }
 
         return GET(page.imageUrl!!, headers.build())
     }

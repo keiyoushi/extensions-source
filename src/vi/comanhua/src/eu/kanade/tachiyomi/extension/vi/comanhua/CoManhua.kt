@@ -17,28 +17,30 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class CoManhua : WPComics(
-    "CoManhua",
-    "https://comanhuaa.com",
-    "vi",
-    gmtOffset = null,
-) {
+class CoManhua :
+    WPComics(
+        "CoManhua",
+        "https://comanhuaa.com",
+        "vi",
+        gmtOffset = null,
+    ) {
+    private val coManhuaDateFormat =
+        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+        }
 
-    private val coManhuaDateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-    }
-
-    private fun parseChapterDate(dateString: String): Long {
-        return try {
+    private fun parseChapterDate(dateString: String): Long =
+        try {
             coManhuaDateFormat.parse(dateString)?.time ?: 0L
         } catch (e: ParseException) {
             0L
         }
-    }
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(3)
+            .build()
 
     override val popularPath = "truyen-de-cu"
 
@@ -50,20 +52,25 @@ class CoManhua : WPComics(
 
     override fun popularMangaSelector() = "div.pda.manga-list div.manga-item"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("div.manga-title a")?.let {
-            title = it.text()
-            setUrlWithoutDomain(it.attr("abs:href"))
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            element.selectFirst("div.manga-title a")?.let {
+                title = it.text()
+                setUrlWithoutDomain(it.attr("abs:href"))
+            }
+            element.selectFirst("div.manga-image img")?.let { imageOrNull(it)?.let { url -> thumbnail_url = url } }
         }
-        element.selectFirst("div.manga-image img")?.let { imageOrNull(it)?.let { url -> thumbnail_url = url } }
-    }
 
     override fun popularMangaNextPageSelector() = "div.list-pagination a:last-child:not(.active)"
 
     override val searchPath = "tim-truyen"
     override val queryParam = "name"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
 
         url.addQueryParameter("chapter", "")
@@ -100,33 +107,39 @@ class CoManhua : WPComics(
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1.manga-title")!!.text()
-        description = document.selectFirst("div.manga-des")?.text()
-        status = document.selectFirst(".md-title:has(.fa-rss) ~ .md-content")?.text().toStatus()
-        genre = document.select("div.tags span a")?.joinToString { it.text() }
-        document.selectFirst("div.manga-img img")?.let { imageOrNull(it)?.let { url -> thumbnail_url = url } }
-    }
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = document.selectFirst("h1.manga-title")!!.text()
+            description = document.selectFirst("div.manga-des")?.text()
+            status = document.selectFirst(".md-title:has(.fa-rss) ~ .md-content")?.text().toStatus()
+            genre = document.select("div.tags span a")?.joinToString { it.text() }
+            document.selectFirst("div.manga-img img")?.let { imageOrNull(it)?.let { url -> thumbnail_url = url } }
+        }
 
     override fun chapterListSelector() = ".manga .manga-chapters ul li:has(.chapter-name)"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
             element.selectFirst("div.chapter-name a")?.let {
                 name = it.text()
                 setUrlWithoutDomain(it.attr("abs:href"))
             }
             date_upload = element.selectFirst("> :nth-child(3):last-child")?.text()?.let { parseChapterDate(it) } ?: 0L
         }
-    }
 
     override val pageListSelector = ".chapters img.img-chap-item"
 
-    private class GenreFilter(genres: List<Pair<String?, String>>) : Filter.Group<GenreFilter.CheckBox>(
-        "Thể loại",
-        genres.map { CheckBox(it.second, false, it.first ?: "") },
-    ) {
-        class CheckBox(name: String, state: Boolean, val value: String) : Filter.CheckBox(name, state)
+    private class GenreFilter(
+        genres: List<Pair<String?, String>>,
+    ) : Filter.Group<GenreFilter.CheckBox>(
+            "Thể loại",
+            genres.map { CheckBox(it.second, false, it.first ?: "") },
+        ) {
+        class CheckBox(
+            name: String,
+            state: Boolean,
+            val value: String,
+        ) : Filter.CheckBox(name, state)
 
         fun toUriPart(): String = state.filter { it.state }.joinToString(",") { it.value }
     }

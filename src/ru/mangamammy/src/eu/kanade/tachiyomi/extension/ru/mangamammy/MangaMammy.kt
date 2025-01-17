@@ -6,12 +6,13 @@ import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaMammy : Madara(
-    "Manga Mammy",
-    "https://mangamammy.ru",
-    "ru",
-    dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.ROOT),
-) {
+class MangaMammy :
+    Madara(
+        "Manga Mammy",
+        "https://mangamammy.ru",
+        "ru",
+        dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.ROOT),
+    ) {
     override val useNewChapterEndpoint = true
 
     override fun popularMangaSelector() = searchMangaSelector()

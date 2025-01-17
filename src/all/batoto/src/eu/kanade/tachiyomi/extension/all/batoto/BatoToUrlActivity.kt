@@ -8,7 +8,6 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class BatoToUrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val host = intent?.data?.host
@@ -23,11 +22,12 @@ class BatoToUrlActivity : Activity() {
                 exitProcess(1)
             }
 
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", query)
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", query)
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)
@@ -40,8 +40,8 @@ class BatoToUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun fromBatoTo(pathSegments: MutableList<String>): String? {
-        return if (pathSegments.size >= 2) {
+    private fun fromBatoTo(pathSegments: MutableList<String>): String? =
+        if (pathSegments.size >= 2) {
             val path = pathSegments[1] as java.lang.String?
             if (path != null) {
                 var index = -1
@@ -52,11 +52,12 @@ class BatoToUrlActivity : Activity() {
                     }
                 }
 
-                val id = if (index == -1) {
-                    path
-                } else {
-                    path.substring(0, index)
-                }
+                val id =
+                    if (index == -1) {
+                        path
+                    } else {
+                        path.substring(0, index)
+                    }
                 "ID:$id"
             } else {
                 null
@@ -64,5 +65,4 @@ class BatoToUrlActivity : Activity() {
         } else {
             null
         }
-    }
 }

@@ -23,7 +23,9 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.TimeUnit
 
-class Baimangu : ConfigurableSource, ParsedHttpSource() {
+class Baimangu :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "百漫谷"
@@ -35,17 +37,20 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
 
     override val baseUrl = preferences.getString(MAINSITE_URL_PREF, MAINSITE_URL_PREF_DEFAULT)!!
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(
-            baseUrl.toHttpUrl(),
-            preferences.getString(MAINSITE_RATEPERMITS_PREF, MAINSITE_RATEPERMITS_PREF_DEFAULT)!!.toInt(),
-            preferences.getString(MAINSITE_RATEPERIOD_PREF, MAINSITE_RATEPERIOD_PREF_DEFAULT)!!.toLong(),
-            TimeUnit.MILLISECONDS,
-        )
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimitHost(
+                baseUrl.toHttpUrl(),
+                preferences.getString(MAINSITE_RATEPERMITS_PREF, MAINSITE_RATEPERMITS_PREF_DEFAULT)!!.toInt(),
+                preferences.getString(MAINSITE_RATEPERIOD_PREF, MAINSITE_RATEPERIOD_PREF_DEFAULT)!!.toLong(),
+                TimeUnit.MILLISECONDS,
+            ).build()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("Referer", baseUrl)
 
     // The following images don't seem to work, hence we do not bother to retrieve them
     private val invalidCoverImageDomains = arrayOf("serial-online", "res.cocomanga.com")
@@ -53,16 +58,18 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
     // Common
     private var commonSelector = "li.fed-list-item"
     private var commonNextPageSelector = "a.fed-btns-info.fed-rims-info:nth-last-child(4)"
+
     private fun commonMangaFromElement(element: Element): SManga {
         val picElement = element.select("a.fed-list-pics").first()!!
         val picUrl = picElement.attr("data-original")
-        val manga = SManga.create().apply {
-            title = element.select("a.fed-list-title").first()!!.text()
+        val manga =
+            SManga.create().apply {
+                title = element.select("a.fed-list-title").first()!!.text()
 
-            if (!invalidCoverImageDomains.any { picUrl.contains(it) }) {
-                thumbnail_url = picUrl
+                if (!invalidCoverImageDomains.any { picUrl.contains(it) }) {
+                    thumbnail_url = picUrl
+                }
             }
-        }
 
         manga.setUrlWithoutDomain(picElement.attr("href"))
 
@@ -70,21 +77,26 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
     }
 
     // Popular Manga
-    override fun popularMangaRequest(page: Int): Request {
-        return if (page <= 1) {
+    override fun popularMangaRequest(page: Int): Request =
+        if (page <= 1) {
             GET("$baseUrl/fenlei/4.html", headers)
         } else {
             GET("$baseUrl/fenlei/4-$page.html", headers)
         }
-    }
+
     override fun popularMangaNextPageSelector() = commonNextPageSelector
+
     override fun popularMangaSelector() = commonSelector
+
     override fun popularMangaFromElement(element: Element) = commonMangaFromElement(element)
 
     // Latest Updates
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/fenlei/2-$page.html", headers)
+
     override fun latestUpdatesNextPageSelector() = commonNextPageSelector
+
     override fun latestUpdatesSelector() = commonSelector
+
     override fun latestUpdatesFromElement(element: Element) = commonMangaFromElement(element)
 
     // Filter
@@ -92,27 +104,33 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
     // 漫画更新 - 2
     // 更多漫画 - 3
     // 漫画大全 - 4
-    private class ChannelFilter : Filter.Select<String>(
-        "Channel",
-        arrayOf(
-            "最新漫画",
-            "漫画更新",
-            "更多漫画",
-            "漫画大全",
-        ),
-        3, // means 漫画大全 (4)
-    )
+    private class ChannelFilter :
+        Filter.Select<String>(
+            "Channel",
+            arrayOf(
+                "最新漫画",
+                "漫画更新",
+                "更多漫画",
+                "漫画大全",
+            ),
+            3, // means 漫画大全 (4)
+        )
 
     private class SortFilter : Filter.Select<String>("排序", arrayOf("按时间", "按人气", "按评分"), 0)
 
-    override fun getFilterList() = FilterList(
-        ChannelFilter(),
-        SortFilter(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            ChannelFilter(),
+            SortFilter(),
+        )
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotBlank()) {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request =
+        if (query.isNotBlank()) {
             GET("$baseUrl/vodsearch/$query----------$page---", headers)
         } else {
             var channelValue = "4" // 漫画大全
@@ -137,10 +155,11 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
 
             GET(url, headers)
         }
-    }
 
     override fun searchMangaNextPageSelector() = commonNextPageSelector
+
     override fun searchMangaSelector() = "dl.fed-deta-info, $commonSelector"
+
     override fun searchMangaFromElement(element: Element): SManga {
         if (element.tagName() == "li") {
             return commonMangaFromElement(element)
@@ -159,7 +178,12 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
         val picUrl = picElement.attr("data-original")
         val detailElements = document.select("dd.fed-deta-content ul.fed-part-rows")
         return SManga.create().apply {
-            title = document.select("h1.fed-part-eone").first()!!.text().trim()
+            title =
+                document
+                    .select("h1.fed-part-eone")
+                    .first()!!
+                    .text()
+                    .trim()
 
             if (!invalidCoverImageDomains.any { picUrl.contains(it) }) {
                 thumbnail_url = picUrl
@@ -167,29 +191,37 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
 
             // They don't seem to show the status, unless we query from the category, but that may be inaccurate
 
-            author = detailElements.select("li:nth-child(1) a").firstOrNull()?.text()?.trim()
+            author =
+                detailElements
+                    .select("li:nth-child(1) a")
+                    .firstOrNull()
+                    ?.text()
+                    ?.trim()
 
             genre = detailElements.select("li.fed-show-md-block:nth-last-child(2) a:not(:empty)").joinToString { it.text().trim() }
 
             // It has both "简介：" and "简介" in the description
-            description = detailElements.select("li.fed-show-md-block:nth-last-child(1)")
-                .firstOrNull()?.text()?.replace("简介：", "", ignoreCase = true)
-                ?.replace("简介", "", ignoreCase = true)?.trim()
+            description =
+                detailElements
+                    .select("li.fed-show-md-block:nth-last-child(1)")
+                    .firstOrNull()
+                    ?.text()
+                    ?.replace("简介：", "", ignoreCase = true)
+                    ?.replace("简介", "", ignoreCase = true)
+                    ?.trim()
         }
     }
 
     override fun chapterListSelector(): String = "div.fed-play-item ul.fed-part-rows:last-child a"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
             name = element.text().trim()
             setUrlWithoutDomain(element.attr("href"))
         }
-    }
 
     // Reverse the order of the chapter list
-    override fun chapterListParse(response: Response): List<SChapter> =
-        super.chapterListParse(response).reversed()
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -207,14 +239,16 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
     }
 
     private fun extractOScriptUrl(document: Document): String {
-        val theScriptData = document.selectFirst("script:containsData(oScript.src)")?.data()
-            ?: throw Exception("Unable to find OScript")
+        val theScriptData =
+            document.selectFirst("script:containsData(oScript.src)")?.data()
+                ?: throw Exception("Unable to find OScript")
 
         val scriptUrl = theScriptData.substringAfter("txt_url=\"").substringBefore("\"")
         if (scriptUrl.isEmpty()) {
             throw Error("Unable to match for OScript")
         }
-        return scriptUrl.replace("img.manga8.xyz", "img3.manga8.xyz")
+        return scriptUrl
+            .replace("img.manga8.xyz", "img3.manga8.xyz")
             .replace("img2.manga8.xyz", "img4.manga8.xyz")
     }
 
@@ -229,69 +263,73 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
 
         val regex = Regex("src=\"([^>]+)\"")
         val matches = regex.findAll(content, 0)
-        return matches.mapIndexed { i, match ->
-            Page(i, "", match.groupValues[1])
-        }.toList()
+        return matches
+            .mapIndexed { i, match ->
+                Page(i, "", match.groupValues[1])
+            }.toList()
     }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val mainSiteUrlPreference = androidx.preference.EditTextPreference(screen.context).apply {
-            key = MAINSITE_URL_PREF
-            title = MAINSITE_URL_PREF_TITLE
-            summary = MAINSITE_URL_PREF_SUMMARY
+        val mainSiteUrlPreference =
+            androidx.preference.EditTextPreference(screen.context).apply {
+                key = MAINSITE_URL_PREF
+                title = MAINSITE_URL_PREF_TITLE
+                summary = MAINSITE_URL_PREF_SUMMARY
 
-            setDefaultValue(MAINSITE_URL_PREF_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(MAINSITE_URL_PREF, newValue as String).commit()
-                    Toast.makeText(screen.context, TOAST_RESTART, Toast.LENGTH_LONG).show()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
+                setDefaultValue(MAINSITE_URL_PREF_DEFAULT)
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        val setting = preferences.edit().putString(MAINSITE_URL_PREF, newValue as String).commit()
+                        Toast.makeText(screen.context, TOAST_RESTART, Toast.LENGTH_LONG).show()
+                        setting
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
                 }
             }
-        }
 
-        val mainSiteRatePermitsPreference = androidx.preference.ListPreference(screen.context).apply {
-            key = MAINSITE_RATEPERMITS_PREF
-            title = MAINSITE_RATEPERMITS_PREF_TITLE
-            entries = MAINSITE_RATEPERMITS_PREF_ENTRIES_ARRAY
-            entryValues = MAINSITE_RATEPERMITS_PREF_ENTRIES_ARRAY
-            summary = MAINSITE_RATEPERMITS_PREF_SUMMARY
+        val mainSiteRatePermitsPreference =
+            androidx.preference.ListPreference(screen.context).apply {
+                key = MAINSITE_RATEPERMITS_PREF
+                title = MAINSITE_RATEPERMITS_PREF_TITLE
+                entries = MAINSITE_RATEPERMITS_PREF_ENTRIES_ARRAY
+                entryValues = MAINSITE_RATEPERMITS_PREF_ENTRIES_ARRAY
+                summary = MAINSITE_RATEPERMITS_PREF_SUMMARY
 
-            setDefaultValue(MAINSITE_RATEPERMITS_PREF_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(MAINSITE_RATEPERMITS_PREF, newValue as String).commit()
-                    Toast.makeText(screen.context, TOAST_RESTART, Toast.LENGTH_LONG).show()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
+                setDefaultValue(MAINSITE_RATEPERMITS_PREF_DEFAULT)
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        val setting = preferences.edit().putString(MAINSITE_RATEPERMITS_PREF, newValue as String).commit()
+                        Toast.makeText(screen.context, TOAST_RESTART, Toast.LENGTH_LONG).show()
+                        setting
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
                 }
             }
-        }
 
-        val mainSiteRatePeriodPreference = androidx.preference.ListPreference(screen.context).apply {
-            key = MAINSITE_RATEPERIOD_PREF
-            title = MAINSITE_RATEPERIOD_PREF_TITLE
-            entries = MAINSITE_RATEPERIOD_PREF_ENTRIES_ARRAY
-            entryValues = MAINSITE_RATEPERIOD_PREF_ENTRIES_ARRAY
-            summary = MAINSITE_RATEPERIOD_PREF_SUMMARY
+        val mainSiteRatePeriodPreference =
+            androidx.preference.ListPreference(screen.context).apply {
+                key = MAINSITE_RATEPERIOD_PREF
+                title = MAINSITE_RATEPERIOD_PREF_TITLE
+                entries = MAINSITE_RATEPERIOD_PREF_ENTRIES_ARRAY
+                entryValues = MAINSITE_RATEPERIOD_PREF_ENTRIES_ARRAY
+                summary = MAINSITE_RATEPERIOD_PREF_SUMMARY
 
-            setDefaultValue(MAINSITE_RATEPERIOD_PREF_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(MAINSITE_RATEPERIOD_PREF, newValue as String).commit()
-                    Toast.makeText(screen.context, TOAST_RESTART, Toast.LENGTH_LONG).show()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
+                setDefaultValue(MAINSITE_RATEPERIOD_PREF_DEFAULT)
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        val setting = preferences.edit().putString(MAINSITE_RATEPERIOD_PREF, newValue as String).commit()
+                        Toast.makeText(screen.context, TOAST_RESTART, Toast.LENGTH_LONG).show()
+                        setting
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
                 }
             }
-        }
 
         screen.addPreference(mainSiteUrlPreference)
         screen.addPreference(mainSiteRatePermitsPreference)

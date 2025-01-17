@@ -8,13 +8,14 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 class NightScans : MangaThemesiaAlt("NIGHT SCANS", "https://nightsup.net", "en", "/series") {
-
     override val listUrl = "/manga/list-mode"
     override val slugRegex = Regex("""^(\d+(st)?-)""")
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(20, 4, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(20, 4, TimeUnit.SECONDS)
+            .build()
 
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
 
@@ -23,10 +24,9 @@ class NightScans : MangaThemesiaAlt("NIGHT SCANS", "https://nightsup.net", "en",
         paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
     }
 
-    override fun chapterListSelector(): String {
-        return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
+    override fun chapterListSelector(): String =
+        paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
             super.chapterListSelector(),
             preferences,
         )
-    }
 }

@@ -33,17 +33,21 @@ open class MangaFire(
 
     private val json: Json by injectLazy()
 
-    override val client = super.client.newBuilder()
-        .addInterceptor(ImageInterceptor)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .addInterceptor(ImageInterceptor)
+            .build()
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/filter?sort=recently_updated&language[]=$langCode&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/filter?sort=recently_updated&language[]=$langCode&page=$page", headers)
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/filter?sort=most_viewed&language[]=$langCode&page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/filter?sort=most_viewed&language[]=$langCode&page=$page", headers)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
         if (query.isNotBlank()) {
             urlBuilder.addPathSegment("filter").apply {
@@ -99,43 +103,55 @@ open class MangaFire(
             }
         }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val root = document.selectFirst(".info")!!
-        val mangaTitle = root.child(1).ownText()
-        title = mangaTitle
-        description = document.run {
-            val description = selectFirst(Evaluator.Class("description"))!!.ownText()
-            when (val altTitle = root.child(2).ownText()) {
-                "", mangaTitle -> description
-                else -> "$description\n\nAlternative Title: $altTitle"
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            val root = document.selectFirst(".info")!!
+            val mangaTitle = root.child(1).ownText()
+            title = mangaTitle
+            description =
+                document.run {
+                    val description = selectFirst(Evaluator.Class("description"))!!.ownText()
+                    when (val altTitle = root.child(2).ownText()) {
+                        "", mangaTitle -> description
+                        else -> "$description\n\nAlternative Title: $altTitle"
+                    }
+                }
+            thumbnail_url =
+                document
+                    .selectFirst(".poster")!!
+                    .selectFirst("img")!!
+                    .attr("src")
+            status =
+                when (root.child(0).ownText()) {
+                    "Completed" -> SManga.COMPLETED
+                    "Releasing" -> SManga.ONGOING
+                    "On_hiatus" -> SManga.ON_HIATUS
+                    "Discontinued" -> SManga.CANCELLED
+                    else -> SManga.UNKNOWN
+                }
+            with(document.selectFirst(Evaluator.Class("meta"))!!) {
+                author = selectFirst("span:contains(Author:) + span")?.text()
+                val type = selectFirst("span:contains(Type:) + span")?.text()
+                val genres = selectFirst("span:contains(Genres:) + span")?.text()
+                genre = listOfNotNull(type, genres).joinToString()
             }
         }
-        thumbnail_url = document.selectFirst(".poster")!!
-            .selectFirst("img")!!.attr("src")
-        status = when (root.child(0).ownText()) {
-            "Completed" -> SManga.COMPLETED
-            "Releasing" -> SManga.ONGOING
-            "On_hiatus" -> SManga.ON_HIATUS
-            "Discontinued" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
-        with(document.selectFirst(Evaluator.Class("meta"))!!) {
-            author = selectFirst("span:contains(Author:) + span")?.text()
-            val type = selectFirst("span:contains(Type:) + span")?.text()
-            val genres = selectFirst("span:contains(Genres:) + span")?.text()
-            genre = listOfNotNull(type, genres).joinToString()
-        }
-    }
 
     override val chapterType get() = "chapter"
     override val volumeType get() = "volume"
 
-    override fun chapterListRequest(mangaUrl: String, type: String): Request {
+    override fun chapterListRequest(
+        mangaUrl: String,
+        type: String,
+    ): Request {
         val id = mangaUrl.substringAfterLast('.')
         return GET("$baseUrl/ajax/manga/$id/$type/$langCode", headers)
     }
 
-    override fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> {
+    override fun parseChapterElements(
+        response: Response,
+        isVolume: Boolean,
+    ): List<Element> {
         val result = json.decodeFromString<ResponseDto<String>>(response.body.string()).result
         val document = Jsoup.parse(result)
         val selector = if (isVolume) "div.unit" else "ul li"
@@ -162,7 +178,10 @@ open class MangaFire(
         val title_format: String,
     )
 
-    override fun updateChapterList(manga: SManga, chapters: List<SChapter>) {
+    override fun updateChapterList(
+        manga: SManga,
+        chapters: List<SChapter>,
+    ) {
         val request = chapterListRequest(manga.url, chapterType)
         val response = client.newCall(request).execute()
         val result = json.decodeFromString<ResponseDto<String>>(response.body.string()).result
@@ -179,11 +198,12 @@ open class MangaFire(
             if (chapter.chapter_number != number) throw Exception("Chapter number doesn't match. Try updating again.")
             chapter.name = element.select(Evaluator.Tag("span"))[0].ownText()
             val date = element.select(Evaluator.Tag("span"))[1].ownText()
-            chapter.date_upload = try {
-                dateFormat.parse(date)!!.time
-            } catch (_: Throwable) {
-                0
-            }
+            chapter.date_upload =
+                try {
+                    dateFormat.parse(date)!!.time
+                } catch (_: Throwable) {
+                    0
+                }
         }
     }
 
@@ -205,12 +225,19 @@ open class MangaFire(
     }
 
     @Serializable
-    class PageListDto(private val images: List<List<JsonPrimitive>>) {
-        val pages get() = images.map {
-            Image(it[0].content, it[2].int)
-        }
+    class PageListDto(
+        private val images: List<List<JsonPrimitive>>,
+    ) {
+        val pages get() =
+            images.map {
+                Image(it[0].content, it[2].int)
+            }
     }
-    class Image(val url: String, val offset: Int)
+
+    class Image(
+        val url: String,
+        val offset: Int,
+    )
 
     @Serializable
     class ResponseDto<T>(

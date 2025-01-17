@@ -6,7 +6,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 @SerialName(NamiComiConstants.coverArt)
-class CoverArtDto(override val attributes: CoverArtAttributesDto? = null) : EntityDto()
+class CoverArtDto(
+    override val attributes: CoverArtAttributesDto? = null,
+) : EntityDto()
 
 @Serializable
 class CoverArtAttributesDto(

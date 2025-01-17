@@ -13,7 +13,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class NuxScans : ParsedHttpSource() {
-
     override val name = "Nux Scans"
     override val baseUrl = "https://nuxscans.blogspot.com"
     private val baseUrl2 = "https://nuxscans-comics.blogspot.com"
@@ -22,9 +21,7 @@ class NuxScans : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     // popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl2)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl2)
 
     override fun popularMangaSelector() = "#Blog1 .hfeed .hentry .post-content"
 
@@ -48,7 +45,11 @@ class NuxScans : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
 
     // search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
@@ -57,26 +58,21 @@ class NuxScans : ParsedHttpSource() {
     override fun searchMangaNextPageSelector(): String = throw UnsupportedOperationException()
 
     // manga details
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl2 + manga.url)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(baseUrl2 + manga.url)
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        thumbnail_url = document.select("a#unclick").attr("href")
-        title = document.select("div.post-header .post-tag").text()
-        description = document.select(".gridnux .column1 .text-overflow").joinToString("\n") { it.text() }
-    }
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            thumbnail_url = document.select("a#unclick").attr("href")
+            title = document.select("div.post-header .post-tag").text()
+            description = document.select(".gridnux .column1 .text-overflow").joinToString("\n") { it.text() }
+        }
 
     // chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl2 + manga.url)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl2 + manga.url)
 
     override fun chapterListSelector() = ".column1 .text-truncate a"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun chapterFromElement(element: Element): SChapter {
         val urlElement = element.select("a").first()!!

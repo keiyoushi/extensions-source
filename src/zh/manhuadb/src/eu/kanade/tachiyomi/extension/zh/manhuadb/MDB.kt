@@ -23,23 +23,34 @@ abstract class MDB(
     override val baseUrl: String,
     override val lang: String = "zh",
 ) : ParsedHttpSource() {
-
-    override val client = network.cloudflareClient.newBuilder().rateLimit(2).build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(2)
+            .build()
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", baseUrl)
 
     protected abstract fun listUrl(params: String): String
+
     protected abstract fun extractParams(listUrl: String): String
-    protected abstract fun searchUrl(page: Int, query: String): String
+
+    protected abstract fun searchUrl(
+        page: Int,
+        query: String,
+    ): String
 
     override fun popularMangaRequest(page: Int) = GET(listUrl("page-$page"), headers)
+
     override fun popularMangaSelector() = "div.comic-main-section > div.comic-book-unit"
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        val link = element.selectFirst("h2 > a")!!
-        setUrlWithoutDomain(link.attr("href"))
-        title = link.text()
-        thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.absUrl("src")
-    }
+
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            val link = element.selectFirst("h2 > a")!!
+            setUrlWithoutDomain(link.attr("href"))
+            title = link.text()
+            thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.absUrl("src")
+        }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -49,39 +60,57 @@ abstract class MDB(
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
         if (query.isNotEmpty()) {
             val request = GET(searchUrl(page, query), headers)
             client.newCall(request).asObservableSuccess().map { searchMangaParse(it) }
         } else {
-            val params = filters.filterIsInstance<CategoryFilter>().map { it.getParam() }
-                .filterTo(mutableListOf()) { it.isNotEmpty() }.apply { add("page-$page") }
+            val params =
+                filters
+                    .filterIsInstance<CategoryFilter>()
+                    .map { it.getParam() }
+                    .filterTo(mutableListOf()) { it.isNotEmpty() }
+                    .apply { add("page-$page") }
             val request = GET(listUrl(params.joinToString("-")), headers)
             client.newCall(request).asObservableSuccess().map { popularMangaParse(it) }
         }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
     override fun searchMangaSelector() = "div.comic-main-section > div.row > div"
+
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-    final override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+
+    final override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
     protected open fun transformTitle(title: String) = title
+
     protected abstract val authorSelector: String
+
     protected open fun transformDescription(description: String) = description
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = transformTitle(document.selectFirst(Evaluator.Tag("h1"))!!.text())
-        author = document.selectFirst(authorSelector)!!.text()
-        description = transformDescription(document.selectFirst("p.comic_story")!!.text())
-        genre = parseGenre(document).joinToString(", ")
-        status = when (document.selectFirst("a.comic-pub-state")!!.text()) {
-            "连载中" -> SManga.ONGOING
-            "已完结" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = transformTitle(document.selectFirst(Evaluator.Tag("h1"))!!.text())
+            author = document.selectFirst(authorSelector)!!.text()
+            description = transformDescription(document.selectFirst("p.comic_story")!!.text())
+            genre = parseGenre(document).joinToString(", ")
+            status =
+                when (document.selectFirst("a.comic-pub-state")!!.text()) {
+                    "连载中" -> SManga.ONGOING
+                    "已完结" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+            thumbnail_url = document.selectFirst("td.comic-cover > img")!!.absUrl("src")
         }
-        thumbnail_url = document.selectFirst("td.comic-cover > img")!!.absUrl("src")
-    }
 
     protected open fun parseGenre(document: Document): List<String> {
         val list = mutableListOf<String>()
@@ -95,33 +124,49 @@ abstract class MDB(
     }
 
     override fun chapterListSelector() = "#comic-book-list li > a"
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        name = element.attr("title")
-    }
+
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            name = element.attr("title")
+        }
 
     override fun pageListParse(document: Document): List<Page> {
-        val imgData = document.selectFirst("body > script:containsData(img_data)")!!.data()
-            .substringAfter("img_data = ").run {
-                val endIndex = indexOf(this[0], startIndex = 1) // find end quote
-                substring(1, endIndex)
-            }
+        val imgData =
+            document
+                .selectFirst("body > script:containsData(img_data)")!!
+                .data()
+                .substringAfter("img_data = ")
+                .run {
+                    val endIndex = indexOf(this[0], startIndex = 1) // find end quote
+                    substring(1, endIndex)
+                }
         val readerConfig = document.selectFirst(Evaluator.Class("vg-r-data"))!!
         return parseImages(imgData, readerConfig).mapIndexed { i, it ->
             Page(i, imageUrl = it)
         }
     }
 
-    protected abstract fun parseImages(imgData: String, readerConfig: Element): List<String>
+    protected abstract fun parseImages(
+        imgData: String,
+        readerConfig: Element,
+    ): List<String>
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    protected class Category(val name: String, private val values: Array<String>, private val params: List<String>) {
+    protected class Category(
+        val name: String,
+        private val values: Array<String>,
+        private val params: List<String>,
+    ) {
         fun toFilter() = CategoryFilter(name, values, params)
     }
 
-    protected class CategoryFilter(name: String, values: Array<String>, private val params: List<String>) :
-        Filter.Select<String>(name, values) {
+    protected class CategoryFilter(
+        name: String,
+        values: Array<String>,
+        private val params: List<String>,
+    ) : Filter.Select<String>(name, values) {
         fun getParam() = params[state]
     }
 

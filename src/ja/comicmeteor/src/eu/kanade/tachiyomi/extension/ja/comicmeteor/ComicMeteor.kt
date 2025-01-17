@@ -22,7 +22,6 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 class ComicMeteor : ParsedHttpSource() {
-
     override val name = "COMICメテオ"
 
     override val baseUrl = "https://comic-meteor.jp"
@@ -33,24 +32,28 @@ class ComicMeteor : ParsedHttpSource() {
 
     private val json = Injekt.get<Json>()
 
-    override val client = network.client.newBuilder()
-        .addInterceptor(SpeedBinbInterceptor(json))
-        .apply {
-            val interceptors = interceptors()
-            val index = interceptors.indexOfFirst { "Brotli" in it.javaClass.simpleName }
-            if (index >= 0) {
-                interceptors.add(interceptors.removeAt(index))
-            }
-        }
-        .build()
+    override val client =
+        network.client
+            .newBuilder()
+            .addInterceptor(SpeedBinbInterceptor(json))
+            .apply {
+                val interceptors = interceptors()
+                val index = interceptors.indexOfFirst { "Brotli" in it.javaClass.simpleName }
+                if (index >= 0) {
+                    interceptors.add(interceptors.removeAt(index))
+                }
+            }.build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) = GET(
-        "$baseUrl/wp-admin/admin-ajax.php?action=get_flex_titles_for_toppage&page=$page&get_num=16",
-        headers,
-    )
+    override fun popularMangaRequest(page: Int) =
+        GET(
+            "$baseUrl/wp-admin/admin-ajax.php?action=get_flex_titles_for_toppage&page=$page&get_num=16",
+            headers,
+        )
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = Jsoup.parseBodyFragment(response.body.string(), baseUrl)
@@ -62,13 +65,14 @@ class ComicMeteor : ParsedHttpSource() {
 
     override fun popularMangaSelector() = ".update_work_size .update_work_info_img a"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        element.selectFirst("img")!!.let {
-            title = it.attr("alt")
-            thumbnail_url = it.absUrl("src")
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            element.selectFirst("img")!!.let {
+                title = it.attr("alt")
+                thumbnail_url = it.absUrl("src")
+            }
         }
-    }
 
     override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 
@@ -86,22 +90,29 @@ class ComicMeteor : ParsedHttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(searchMangaRequest(page, query, filters))
+    ): Observable<MangasPage> =
+        if (page == 1) {
+            client
+                .newCall(searchMangaRequest(page, query, filters))
                 .asObservableSuccess()
                 .map { searchMangaParse(it) }
         } else {
             Observable.just(parseDirectory(page))
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("comicsearch")
-            .addPathSegment("")
-            .addQueryParameter("search", query)
-            .build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment("comicsearch")
+                .addPathSegment("")
+                .addQueryParameter("search", query)
+                .build()
 
         return GET(url, headers)
     }
@@ -127,27 +138,30 @@ class ComicMeteor : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h2.h2ttl")!!.text()
-        author = document.selectFirst(".work_author_intro_name")
-            ?.text()
-            ?.substringAfter("著者 ：")
-        description = document.selectFirst(".work_story_txt")?.text()
-        genre = document.select(".category_link_box a").joinToString { it.text() }
-        thumbnail_url = document.selectFirst(".latest_info_img img")?.absUrl("src")
-    }
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = document.selectFirst("h2.h2ttl")!!.text()
+            author =
+                document
+                    .selectFirst(".work_author_intro_name")
+                    ?.text()
+                    ?.substringAfter("著者 ：")
+            description = document.selectFirst(".work_story_txt")?.text()
+            genre = document.select(".category_link_box a").joinToString { it.text() }
+            thumbnail_url = document.selectFirst(".latest_info_img img")?.absUrl("src")
+        }
 
     override fun chapterListSelector() = ".work_episode_box .work_episode_table:has(.work_episode_link_orange)"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        name = element.selectFirst(".work_episode_txt")!!.ownText()
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+            name = element.selectFirst(".work_episode_txt")!!.ownText()
+        }
 
     private val reader by lazy { SpeedBinbReader(client, headers, json) }
 
-    override fun pageListParse(document: Document) =
-        reader.pageListParse(document)
+    override fun pageListParse(document: Document) = reader.pageListParse(document)
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }

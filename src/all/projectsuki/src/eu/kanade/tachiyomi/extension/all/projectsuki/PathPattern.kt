@@ -17,7 +17,9 @@ private inline val INFO: Nothing get() = error("INFO")
  *
  * @author Federico d'Alonzo &lt;me@npgx.dev&gt;
  */
-data class PathPattern(val paths: List<Regex?>) {
+data class PathPattern(
+    val paths: List<Regex?>,
+) {
     constructor(vararg paths: Regex?) : this(paths.asList())
 
     init {
@@ -39,13 +41,18 @@ data class PathPattern(val paths: List<Regex?>) {
  *
  * @author Federico d'Alonzo &lt;me@npgx.dev&gt;
  */
-data class PathMatchResult(val doesMatch: Boolean, val matchResults: List<MatchResult?>?) {
-    operator fun get(name: String): MatchGroup? = matchResults?.firstNotNullOfOrNull {
-        it?.groups
-            // this throws if the group by "name" isn't found AND can return null too
-            ?.runCatching { get(name) }
-            ?.getOrNull()
-    }
+data class PathMatchResult(
+    val doesMatch: Boolean,
+    val matchResults: List<MatchResult?>?,
+) {
+    operator fun get(name: String): MatchGroup? =
+        matchResults?.firstNotNullOfOrNull {
+            it
+                ?.groups
+                // this throws if the group by "name" isn't found AND can return null too
+                ?.runCatching { get(name) }
+                ?.getOrNull()
+        }
 
     init {
         if (matchResults?.isEmpty() == true) {
@@ -58,12 +65,17 @@ data class PathMatchResult(val doesMatch: Boolean, val matchResults: List<MatchR
  * @see PathPattern
  * @see PathMatchResult
  */
-fun HttpUrl.matchAgainst(pattern: PathPattern, allowSubPaths: Boolean = false, ignoreEmptySegments: Boolean = true): PathMatchResult {
+fun HttpUrl.matchAgainst(
+    pattern: PathPattern,
+    allowSubPaths: Boolean = false,
+    ignoreEmptySegments: Boolean = true,
+): PathMatchResult {
     val actualSegments: List<String> = if (ignoreEmptySegments) pathSegments.filter { it.isNotBlank() } else pathSegments
-    val sizeReq = when (allowSubPaths) {
-        false -> actualSegments.size == pattern.paths.size
-        true -> actualSegments.size >= pattern.paths.size
-    }
+    val sizeReq =
+        when (allowSubPaths) {
+            false -> actualSegments.size == pattern.paths.size
+            true -> actualSegments.size >= pattern.paths.size
+        }
 
     if (!sizeReq) return PathMatchResult(false, null)
 

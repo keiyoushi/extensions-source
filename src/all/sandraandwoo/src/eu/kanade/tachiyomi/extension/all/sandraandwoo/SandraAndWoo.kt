@@ -31,30 +31,37 @@ abstract class SandraAndWoo(
     protected abstract val archive: String
 
     private val manga: SManga
-        get() = SManga.create().apply {
-            title = name
-            artist = illustrator
-            author = writer
-            description = synopsis
-            genre = genres
-            status = state
-            thumbnail_url = thumbnail
-            setUrlWithoutDomain(archive)
-        }
+        get() =
+            SManga.create().apply {
+                title = name
+                artist = illustrator
+                author = writer
+                description = synopsis
+                genre = genres
+                status = state
+                thumbnail_url = thumbnail
+                setUrlWithoutDomain(archive)
+            }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val mangasPage = MangasPage(listOf(manga), false)
         return Observable.just(mangasPage)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        Observable.just(MangasPage(emptyList(), false))!!
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = Observable.just(MangasPage(emptyList(), false))!!
 
     override fun chapterListSelector() = "#column a"
 
     private fun roundHalfwayUp(x: Float) = (x + floor(x + 1)) / 2
 
-    private fun chapterParse(element: Element, lastChapterNumber: Float): Pair<Float, SChapter> {
+    private fun chapterParse(
+        element: Element,
+        lastChapterNumber: Float,
+    ): Pair<Float, SChapter> {
         val path = URI(element.attr("href")).path
         val dateMatch = CHAPTER_DATE_REGEX.matchEntire(path)!!
         val (_, year, month, day) = dateMatch.groupValues
@@ -72,12 +79,13 @@ abstract class SandraAndWoo(
             } else {
                 roundHalfwayUp(lastChapterNumber)
             }
-        val chapter = SChapter.create().apply {
-            url = path
-            name = title
-            chapter_number = chapterNumber
-            date_upload = date
-        }
+        val chapter =
+            SChapter.create().apply {
+                url = path
+                name = title
+                chapter_number = chapterNumber
+                date_upload = date
+            }
 
         return Pair(chapterNumber, chapter)
     }
@@ -87,9 +95,12 @@ abstract class SandraAndWoo(
 
         val initial = Pair(0f, SChapter.create())
 
-        return elements.runningFold(initial) { previous, element ->
-            chapterParse(element, previous.first)
-        }.drop(1).map { it.second }.reversed()
+        return elements
+            .runningFold(initial) { previous, element ->
+                chapterParse(element, previous.first)
+            }.drop(1)
+            .map { it.second }
+            .reversed()
     }
 
     override fun chapterListParse(response: Response) = chapterListParse(response.asJsoup())
@@ -130,7 +141,11 @@ abstract class SandraAndWoo(
 
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
     override fun searchMangaSelector() = throw UnsupportedOperationException()
     // </editor-fold>

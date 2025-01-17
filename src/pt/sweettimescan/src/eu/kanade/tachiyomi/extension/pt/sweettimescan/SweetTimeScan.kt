@@ -10,16 +10,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class SweetTimeScan : Madara(
-    "Sweet Time Scan",
-    "https://sweetscan.net",
-    "pt-BR",
-    SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+class SweetTimeScan :
+    Madara(
+        "Sweet Time Scan",
+        "https://sweetscan.net",
+        "pt-BR",
+        SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     // The source has novels in text format, so we need to filter them.
     override fun searchMangaParse(response: Response): MangasPage {
@@ -31,9 +33,7 @@ class SweetTimeScan : Madara(
 
     // The site uses some image cache plugin that made the thumbnails don't load.
     // This removes the plugin site base URL and returns the direct image URL.
-    override fun imageFromElement(element: Element): String {
-        return baseUrl + super.imageFromElement(element)?.substringAfter(baseUrl)
-    }
+    override fun imageFromElement(element: Element): String = baseUrl + super.imageFromElement(element)?.substringAfter(baseUrl)
 
     companion object {
         private val NOVEL_REGEX = "novel|livro".toRegex(RegexOption.IGNORE_CASE)

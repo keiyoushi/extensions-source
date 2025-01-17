@@ -5,8 +5,9 @@ import eu.kanade.tachiyomi.extension.all.sandraandwoo.translations.SandraAndWooE
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class SandraAndWooFactory : SourceFactory {
-    override fun createSources() = listOf(
-        SandraAndWooDE(),
-        SandraAndWooEN(),
-    )
+    override fun createSources() =
+        listOf(
+            SandraAndWooDE(),
+            SandraAndWooEN(),
+        )
 }

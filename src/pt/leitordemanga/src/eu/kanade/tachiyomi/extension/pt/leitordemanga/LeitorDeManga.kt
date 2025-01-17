@@ -7,15 +7,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class LeitorDeManga : Madara(
-    "Leitor de Mangá",
-    "https://leitordemanga.com",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
+class LeitorDeManga :
+    Madara(
+        "Leitor de Mangá",
+        "https://leitordemanga.com",
+        "pt-BR",
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
     override val mangaSubString = "ler-manga"
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 }

@@ -20,10 +20,10 @@ open class EternalMangas(
     lang: String,
     private val internalLang: String,
 ) : MangaEsp(
-    "EternalMangas",
-    "https://eternalmangas.com",
-    lang,
-) {
+        "EternalMangas",
+        "https://eternalmangas.com",
+        lang,
+    ) {
     override val useApiSearch = true
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -32,28 +32,27 @@ open class EternalMangas(
         return MangasPage(mangas, false)
     }
 
-    override fun List<SeriesDto>.additionalParse(): List<SeriesDto> {
-        return this.filter { it.language == internalLang }.toMutableList()
-    }
+    override fun List<SeriesDto>.additionalParse(): List<SeriesDto> = this.filter { it.language == internalLang }.toMutableList()
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val body = jsRedirect(response)
+    override fun mangaDetailsParse(response: Response) =
+        SManga.create().apply {
+            val body = jsRedirect(response)
 
-        MANGA_DETAILS_REGEX.find(body)?.groupValues?.get(1)?.let {
-            val unescapedJson = it.unescape()
-            return json.decodeFromString<SeriesDto>(unescapedJson).toSMangaDetails()
+            MANGA_DETAILS_REGEX.find(body)?.groupValues?.get(1)?.let {
+                val unescapedJson = it.unescape()
+                return json.decodeFromString<SeriesDto>(unescapedJson).toSMangaDetails()
+            }
+
+            val document = Jsoup.parse(body)
+            with(document.selectFirst("div#info")!!) {
+                title = select("div:has(p.font-bold:contains(Títuto)) > p.text-sm").text()
+                author = select("div:has(p.font-bold:contains(Autor)) > p.text-sm").text()
+                artist = select("div:has(p.font-bold:contains(Artista)) > p.text-sm").text()
+                genre = select("div:has(p.font-bold:contains(Género)) > p.text-sm > span").joinToString { it.ownText() }
+            }
+            description = document.select("div#sinopsis p").text()
+            thumbnail_url = document.selectFirst("div.contenedor img.object-cover")?.imgAttr()
         }
-
-        val document = Jsoup.parse(body)
-        with(document.selectFirst("div#info")!!) {
-            title = select("div:has(p.font-bold:contains(Títuto)) > p.text-sm").text()
-            author = select("div:has(p.font-bold:contains(Autor)) > p.text-sm").text()
-            artist = select("div:has(p.font-bold:contains(Artista)) > p.text-sm").text()
-            genre = select("div:has(p.font-bold:contains(Género)) > p.text-sm > span").joinToString { it.ownText() }
-        }
-        description = document.select("div#sinopsis p").text()
-        thumbnail_url = document.selectFirst("div.contenedor img.object-cover")?.imgAttr()
-    }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
@@ -70,13 +69,14 @@ open class EternalMangas(
         return document.select("div.contenedor > div.grid > div > a").map {
             SChapter.create().apply {
                 name = it.selectFirst("span.text-sm")!!.text()
-                date_upload = try {
-                    it.selectFirst("span.chapter-date")?.attr("data-date")?.let { date ->
-                        dateFormat.parse(date)?.time
-                    } ?: 0
-                } catch (e: ParseException) {
-                    0
-                }
+                date_upload =
+                    try {
+                        it.selectFirst("span.chapter-date")?.attr("data-date")?.let { date ->
+                            dateFormat.parse(date)?.time
+                        } ?: 0
+                    } catch (e: ParseException) {
+                        0
+                    }
                 setUrlWithoutDomain(it.selectFirst("a")!!.attr("href"))
             }
         }
@@ -101,7 +101,12 @@ open class EternalMangas(
                 form.add(input.attr("name"), input.attr("value"))
             }
 
-            body = client.newCall(POST(action, headers, form.build())).execute().body.string()
+            body =
+                client
+                    .newCall(POST(action, headers, form.build()))
+                    .execute()
+                    .body
+                    .string()
         }
         return body
     }

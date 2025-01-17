@@ -26,7 +26,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class DisasterScans : HttpSource() {
-
     override val name = "Disaster Scans"
 
     override val lang = "en"
@@ -39,26 +38,28 @@ class DisasterScans : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url
-            if (url.fragment == "thumbnail") {
-                val cdnUrl = preferences.getCdnUrl()
-                val requestUrl = url.toString().substringBefore("=") + "="
-                if (cdnUrl != requestUrl) {
-                    val fileId = url.queryParameterValues("fileId").first()
-                    return@addInterceptor chain.proceed(
-                        request.newBuilder()
-                            .url("$cdnUrl$fileId")
-                            .build(),
-                    )
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val url = request.url
+                if (url.fragment == "thumbnail") {
+                    val cdnUrl = preferences.getCdnUrl()
+                    val requestUrl = url.toString().substringBefore("=") + "="
+                    if (cdnUrl != requestUrl) {
+                        val fileId = url.queryParameterValues("fileId").first()
+                        return@addInterceptor chain.proceed(
+                            request
+                                .newBuilder()
+                                .url("$cdnUrl$fileId")
+                                .build(),
+                        )
+                    }
                 }
-            }
-            return@addInterceptor chain.proceed(request)
-        }
-        .rateLimit(1)
-        .build()
+                return@addInterceptor chain.proceed(request)
+            }.rateLimit(1)
+            .build()
 
     private val json: Json by injectLazy()
 
@@ -66,9 +67,7 @@ class DisasterScans : HttpSource() {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/comics/search/comics", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/comics/search/comics", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val comics = response.parseAs<List<ApiSearchComic>>()
@@ -82,24 +81,32 @@ class DisasterScans : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SLUG)) {
+    ): Observable<MangasPage> =
+        if (query.startsWith(PREFIX_SLUG)) {
             val url = "/comics/${query.substringAfter(PREFIX_SLUG)}"
             val manga = SManga.create().apply { this.url = url }
-            client.newCall(mangaDetailsRequest(manga))
+            client
+                .newCall(mangaDetailsRequest(manga))
                 .asObservableSuccess()
                 .map { mangaDetailsParse(it).apply { this.url = url } }
                 .map { MangasPage(listOf(it), false) }
         } else {
-            client.newCall(searchMangaRequest(page, query, filters))
+            client
+                .newCall(searchMangaRequest(page, query, filters))
                 .asObservableSuccess()
                 .map { searchMangaParse(it, query) }
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = popularMangaRequest(page)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = popularMangaRequest(page)
 
-    private fun searchMangaParse(response: Response, query: String): MangasPage {
+    private fun searchMangaParse(
+        response: Response,
+        query: String,
+    ): MangasPage {
         val comics = response.parseAs<List<ApiSearchComic>>()
 
         val cdnUrl = preferences.getCdnUrl()
@@ -110,9 +117,7 @@ class DisasterScans : HttpSource() {
             .let { MangasPage(it, false) }
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiUrl${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val comic = response.parseAs<ApiComic>()
@@ -130,9 +135,11 @@ class DisasterScans : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = response.parseAs<List<ApiChapter>>()
 
-        val mangaUrl = response.request.url.toString()
-            .substringAfter(apiUrl)
-            .replace("chapters", "comics")
+        val mangaUrl =
+            response.request.url
+                .toString()
+                .substringAfter(apiUrl)
+                .replace("chapters", "comics")
 
         return chapters.map { it.toSChapter(mangaUrl) }
     }
@@ -140,9 +147,12 @@ class DisasterScans : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        val chapterPages = document.select("#__NEXT_DATA__").html()
-            .parseAs<NextData<ApiChapterPages>>()
-            .props.pageProps.chapter.pages
+        val chapterPages =
+            document
+                .select("#__NEXT_DATA__")
+                .html()
+                .parseAs<NextData<ApiChapterPages>>()
+                .props.pageProps.chapter.pages
 
         val pages = chapterPages.parseAs<List<String>>()
 
@@ -154,12 +164,15 @@ class DisasterScans : HttpSource() {
     }
 
     private fun updatedCdnUrl(document: Document): String {
-        val cdnUrlFromPage = document.selectFirst("main div.maxWidth img")
-            ?.attr("src")
-            ?.substringBefore("?")
-            ?.let { "$it?fileId=" }
+        val cdnUrlFromPage =
+            document
+                .selectFirst("main div.maxWidth img")
+                ?.attr("src")
+                ?.substringBefore("?")
+                ?.let { "$it?fileId=" }
 
-        return preferences.getCdnUrl()
+        return preferences
+            .getCdnUrl()
             .let {
                 if (it != cdnUrlFromPage && cdnUrlFromPage != null) {
                     preferences.putCdnUrl(cdnUrlFromPage)
@@ -170,15 +183,11 @@ class DisasterScans : HttpSource() {
             }
     }
 
-    private inline fun <reified T> String.parseAs(): T =
-        json.decodeFromString(this)
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
-    private inline fun <reified T> Response.parseAs(): T =
-        body.string().parseAs()
+    private inline fun <reified T> Response.parseAs(): T = body.string().parseAs()
 
-    private fun SharedPreferences.getCdnUrl(): String {
-        return getString(cdnPref, fallbackCdnUrl) ?: fallbackCdnUrl
-    }
+    private fun SharedPreferences.getCdnUrl(): String = getString(cdnPref, fallbackCdnUrl) ?: fallbackCdnUrl
 
     private fun SharedPreferences.putCdnUrl(url: String) {
         edit().putString(cdnPref, url).commit()
@@ -195,15 +204,11 @@ class DisasterScans : HttpSource() {
         const val PREFIX_SLUG = "slug:"
     }
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 }

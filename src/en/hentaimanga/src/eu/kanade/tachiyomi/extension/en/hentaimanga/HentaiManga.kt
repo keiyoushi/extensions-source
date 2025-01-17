@@ -9,13 +9,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HentaiManga : Madara(
-    "Hentai Manga",
-    "https://hentaimanga.me",
-    "en",
-    dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
-) {
-
+class HentaiManga :
+    Madara(
+        "Hentai Manga",
+        "https://hentaimanga.me",
+        "en",
+        dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
+    ) {
     // The website does not flag the content.
     override val filterNonMangaItems = false
     override val useNewChapterEndpoint = false
@@ -24,21 +24,24 @@ class HentaiManga : Madara(
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun popularMangaNextPageSelector() = "a.next"
+
     override fun searchMangaSelector() = "li.movie-item > a"
+
     override fun searchMangaNextPageSelector() = "a.next"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun searchMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             setUrlWithoutDomain(element.absUrl("href"))
             title = element.attr("title")
         }
-    }
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {
-        val form = FormBody.Builder()
-            .add("action", "ajax_chap")
-            .add("post_id", mangaId)
-            .build()
+        val form =
+            FormBody
+                .Builder()
+                .add("action", "ajax_chap")
+                .add("post_id", mangaId)
+                .build()
 
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }

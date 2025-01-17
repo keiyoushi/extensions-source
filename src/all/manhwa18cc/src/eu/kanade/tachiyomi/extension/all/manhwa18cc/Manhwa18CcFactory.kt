@@ -13,11 +13,12 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Manhwa18CcFactory : SourceFactory {
-    override fun createSources(): List<Source> = listOf(
-        Manhwa18CcEN(),
-        Manhwa18CcKO(),
-        Manhwa18CcALL(),
-    )
+    override fun createSources(): List<Source> =
+        listOf(
+            Manhwa18CcEN(),
+            Manhwa18CcKO(),
+            Manhwa18CcALL(),
+        )
 }
 
 class Manhwa18CcALL : Manhwa18Cc("Manhwa18.cc", "https://manhwa18.cc", "all")
@@ -28,6 +29,7 @@ class Manhwa18CcEN : Manhwa18Cc("Manhwa18.cc", "https://manhwa18.cc", "en") {
 
 class Manhwa18CcKO : Manhwa18Cc("Manhwa18.cc", "https://manhwa18.cc", "ko") {
     override fun popularMangaSelector() = "div.manga-item:has(h3 a[title$='Raw'])"
+
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/raw/$page")
 }
 
@@ -36,7 +38,6 @@ abstract class Manhwa18Cc(
     override val baseUrl: String,
     lang: String,
 ) : Madara(name, baseUrl, lang, SimpleDateFormat("dd MMM yyyy", Locale.US)) {
-
     override val fetchGenres = false
 
     override fun popularMangaSelector() = "div.manga-item"
@@ -55,7 +56,11 @@ abstract class Manhwa18Cc(
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         // After searching and go back to popular page, it always sent empty query thus display
         // "No results found" message. So this fix redirect to popular page.
         if (query.isBlank()) return popularMangaRequest(page)
@@ -73,8 +78,8 @@ abstract class Manhwa18Cc(
 
     override val pageListParseSelector = "div.read-content img"
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(pageListParseSelector).mapIndexed { index, element ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select(pageListParseSelector).mapIndexed { index, element ->
             Page(
                 index,
                 document.location(),
@@ -83,5 +88,4 @@ abstract class Manhwa18Cc(
                 },
             )
         }
-    }
 }

@@ -18,14 +18,19 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class RemoteStorageUtils {
-    abstract class GenericInterceptor(private val transparent: Boolean) : Interceptor {
+    abstract class GenericInterceptor(
+        private val transparent: Boolean,
+    ) : Interceptor {
         private val handler = Handler(Looper.getMainLooper())
 
         abstract val jsScript: String
 
         abstract fun urlModifier(originalUrl: String): String
 
-        internal class JsInterface(private val latch: CountDownLatch, var payload: String = "") {
+        internal class JsInterface(
+            private val latch: CountDownLatch,
+            var payload: String = "",
+        ) {
             @JavascriptInterface
             fun passPayload(passedPayload: String) {
                 payload = passedPayload
@@ -45,15 +50,21 @@ class RemoteStorageUtils {
         }
 
         @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
-        private fun proceedWithWebView(request: Request, response: Response): Response {
+        private fun proceedWithWebView(
+            request: Request,
+            response: Response,
+        ): Response {
             val latch = CountDownLatch(1)
 
             var webView: WebView? = null
 
             val origRequestUrl = request.url.toString()
-            val headers = request.headers.toMultimap().mapValues {
-                it.value.getOrNull(0) ?: ""
-            }.toMutableMap()
+            val headers =
+                request.headers
+                    .toMultimap()
+                    .mapValues {
+                        it.value.getOrNull(0) ?: ""
+                    }.toMutableMap()
             val jsInterface = JsInterface(latch)
 
             handler.post {
@@ -70,14 +81,18 @@ class RemoteStorageUtils {
 
                 webview.addJavascriptInterface(jsInterface, "android")
 
-                webview.webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView, url: String) {
-                        view.evaluateJavascript(jsScript) {}
-                        if (transparent) {
-                            latch.countDown()
+                webview.webViewClient =
+                    object : WebViewClient() {
+                        override fun onPageFinished(
+                            view: WebView,
+                            url: String,
+                        ) {
+                            view.evaluateJavascript(jsScript) {}
+                            if (transparent) {
+                                latch.countDown()
+                            }
                         }
                     }
-                }
 
                 webview.loadUrl(urlModifier(origRequestUrl), headers)
             }
@@ -113,9 +128,7 @@ class RemoteStorageUtils {
            tag();
         """
 
-        override fun urlModifier(originalUrl: String): String {
-            return originalUrl.replace("/api/", "/").replace("/series/", "/")
-        }
+        override fun urlModifier(originalUrl: String): String = originalUrl.replace("/api/", "/").replace("/series/", "/")
     }
 
     class HomeInterceptor : GenericInterceptor(false) {
@@ -133,9 +146,7 @@ class RemoteStorageUtils {
            })();
         """
 
-        override fun urlModifier(originalUrl: String): String {
-            return originalUrl
-        }
+        override fun urlModifier(originalUrl: String): String = originalUrl
     }
 
     companion object {

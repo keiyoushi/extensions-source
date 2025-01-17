@@ -14,7 +14,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class Shqqaa : ParsedHttpSource() {
-
     override val name = "مانجا شقاع"
 
     override val baseUrl = "https://www.shqqaa.com"
@@ -26,9 +25,7 @@ class Shqqaa : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga", headers)
 
     override fun popularMangaSelector() = "div.card"
 
@@ -45,9 +42,7 @@ class Shqqaa : ParsedHttpSource() {
     override fun popularMangaNextPageSelector(): String? = null
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/manga/chapters/", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/chapters/", headers)
 
     override fun latestUpdatesSelector(): String = "div.row > div.col-xl-3"
 
@@ -55,7 +50,12 @@ class Shqqaa : ParsedHttpSource() {
         val manga = SManga.create()
         element.select("a").first()!!.let {
             manga.setUrlWithoutDomain("${it.attr("href").substringBeforeLast('/')}/")
-            manga.title = element.select("small").first()!!.text().split(", ")[0]
+            manga.title =
+                element
+                    .select("small")
+                    .first()!!
+                    .text()
+                    .split(", ")[0]
         }
         manga.thumbnail_url = element.select("img").first()!!.attr("data-src")
         return manga
@@ -64,10 +64,19 @@ class Shqqaa : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = null
 
     // Search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = fetchPopularManga(1)
-        .map { mp -> MangasPage(mp.mangas.filter { it.title.contains(query, ignoreCase = true) }, false) }
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        fetchPopularManga(1)
+            .map { mp -> MangasPage(mp.mangas.filter { it.title.contains(query, ignoreCase = true) }, false) }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
@@ -85,17 +94,23 @@ class Shqqaa : ParsedHttpSource() {
         val status = mangaInfo.select("span.badge").first()!!.ownText()
         manga.status = parseStatus(status)
         manga.genre = null
-        manga.description = infoElement.first()!!.select(".text-muted").first()!!.ownText()
+        manga.description =
+            infoElement
+                .first()!!
+                .select(".text-muted")
+                .first()!!
+                .ownText()
         manga.thumbnail_url = mangaInfo.select("img").attr("data-src")
         return manga
     }
 
-    private fun parseStatus(status: String?) = when {
-        status == null -> SManga.UNKNOWN
-        status.contains("مستمر") -> SManga.ONGOING
-        status.contains("منتهي") -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    private fun parseStatus(status: String?) =
+        when {
+            status == null -> SManga.UNKNOWN
+            status.contains("مستمر") -> SManga.ONGOING
+            status.contains("منتهي") -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
 
     // Chapters
     override fun chapterListSelector() = "a.m-1"
@@ -118,6 +133,7 @@ class Shqqaa : ParsedHttpSource() {
         }
         return pages
     }
+
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList()

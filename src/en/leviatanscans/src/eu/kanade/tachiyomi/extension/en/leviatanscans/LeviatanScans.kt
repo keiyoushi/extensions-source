@@ -7,13 +7,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LeviatanScans : Madara(
-    "Leviatan Scans",
-    "https://lscomic.com",
-    "en",
-    dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US),
-) {
-
+class LeviatanScans :
+    Madara(
+        "Leviatan Scans",
+        "https://lscomic.com",
+        "en",
+        dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US),
+    ) {
     override val id = 4055499394183150749
 
     override val mangaDetailsSelectorDescription = "div.manga-summary"
@@ -23,14 +23,11 @@ class LeviatanScans : Madara(
 
     override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium-block)"
 
-    override fun popularMangaFromElement(element: Element) =
-        replaceRandomUrlPartInManga(super.popularMangaFromElement(element))
+    override fun popularMangaFromElement(element: Element) = replaceRandomUrlPartInManga(super.popularMangaFromElement(element))
 
-    override fun latestUpdatesFromElement(element: Element) =
-        replaceRandomUrlPartInManga(super.latestUpdatesFromElement(element))
+    override fun latestUpdatesFromElement(element: Element) = replaceRandomUrlPartInManga(super.latestUpdatesFromElement(element))
 
-    override fun searchMangaFromElement(element: Element) =
-        replaceRandomUrlPartInManga(super.searchMangaFromElement(element))
+    override fun searchMangaFromElement(element: Element) = replaceRandomUrlPartInManga(super.searchMangaFromElement(element))
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = replaceRandomUrlPartInChapter(super.chapterFromElement(element))

@@ -36,17 +36,18 @@ class MangaSwat :
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
     ConfigurableSource {
-
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client = super.client.newBuilder()
-        .addInterceptor(::tokenInterceptor)
-        .rateLimit(1)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .addInterceptor(::tokenInterceptor)
+            .rateLimit(1)
+            .build()
 
     // From Akuma - CSRF token
     private var storedToken: String? = null
@@ -57,11 +58,12 @@ class MangaSwat :
         if (request.method == "POST" && request.header("X-CSRF-TOKEN") == null) {
             val newRequest = request.newBuilder()
             val token = getToken()
-            val response = chain.proceed(
-                newRequest
-                    .addHeader("X-CSRF-TOKEN", token)
-                    .build(),
-            )
+            val response =
+                chain.proceed(
+                    newRequest
+                        .addHeader("X-CSRF-TOKEN", token)
+                        .build(),
+                )
 
             if (response.code == 419) {
                 response.close()
@@ -83,9 +85,11 @@ class MangaSwat :
             return response
         }
 
-        storedToken = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
-            .selectFirst("head meta[name*=csrf-token]")
-            ?.attr("content")
+        storedToken =
+            Jsoup
+                .parse(response.peekBody(Long.MAX_VALUE).string())
+                .selectFirst("head meta[name*=csrf-token]")
+                ?.attr("content")
 
         return response
     }
@@ -99,23 +103,27 @@ class MangaSwat :
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val xhrHeaders = headersBuilder()
-            .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
+        val xhrHeaders =
+            headersBuilder()
+                .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                .add("X-Requested-With", "XMLHttpRequest")
+                .build()
 
-        val formBody = FormBody.Builder()
-            .add("action", "more_manga_home")
-            .add("paged", (page - 1).toString())
-            .build()
+        val formBody =
+            FormBody
+                .Builder()
+                .add("action", "more_manga_home")
+                .add("paged", (page - 1).toString())
+                .build()
 
         return POST("$baseUrl/ajax-request", xhrHeaders, formBody)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return json
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        json
             .decodeFromString<MoreMangaHomeDto>(response.body.string())
-            .html.toResponseBody("text/html".toMediaType())
+            .html
+            .toResponseBody("text/html".toMediaType())
             .let { response.newBuilder().body(it).build() }
             .let { super.latestUpdatesParse(it) }
             .let { page ->
@@ -124,14 +132,20 @@ class MangaSwat :
                     hasNextPage = page.mangas.size >= 24, // info not present
                 )
             }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val request = super.searchMangaRequest(page, query, filters)
         val urlBuilder = request.url.newBuilder()
 
         // remove trailing slash
-        if (request.url.pathSegments.last().isBlank()) {
+        if (request.url.pathSegments
+                .last()
+                .isBlank()
+        ) {
             urlBuilder.removePathSegment(
                 request.url.pathSegments.lastIndex,
             )
@@ -145,19 +159,21 @@ class MangaSwat :
                 .build()
         }
 
-        return request.newBuilder()
+        return request
+            .newBuilder()
             .url(urlBuilder.build())
             .build()
     }
 
-    override val orderByFilterOptions = arrayOf(
-        Pair(intl["order_by_filter_default"], ""),
-        Pair(intl["order_by_filter_az"], "a-z"),
-        Pair(intl["order_by_filter_za"], "z-a"),
-        Pair(intl["order_by_filter_latest_update"], "update"),
-        Pair(intl["order_by_filter_latest_added"], "added"),
-        Pair(intl["order_by_filter_popular"], "popular"),
-    )
+    override val orderByFilterOptions =
+        arrayOf(
+            Pair(intl["order_by_filter_default"], ""),
+            Pair(intl["order_by_filter_az"], "a-z"),
+            Pair(intl["order_by_filter_za"], "z-a"),
+            Pair(intl["order_by_filter_latest_update"], "update"),
+            Pair(intl["order_by_filter_latest_added"], "added"),
+            Pair(intl["order_by_filter_popular"], "popular"),
+        )
 
     override fun searchMangaNextPageSelector() = "a[rel=next]"
 
@@ -178,12 +194,13 @@ class MangaSwat :
 
     override fun chapterListSelector() = "div.bxcl li, ul div:has(span.lchx)"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        val urlElements = element.select("a")
-        setUrlWithoutDomain(urlElements.attr("href"))
-        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.last()!!.text() }
-        date_upload = element.selectFirst(".chapter-date")?.text().parseChapterDate()
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            val urlElements = element.select("a")
+            setUrlWithoutDomain(urlElements.attr("href"))
+            name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.last()!!.text() }
+            date_upload = element.selectFirst(".chapter-date")?.text().parseChapterDate()
+        }
 
     @Serializable
     class TSReader(
@@ -209,19 +226,20 @@ class MangaSwat :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(super.baseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: ${super.baseUrl}"
+        val baseUrlPref =
+            androidx.preference.EditTextPreference(screen.context).apply {
+                key = BASE_URL_PREF
+                title = BASE_URL_PREF_TITLE
+                summary = BASE_URL_PREF_SUMMARY
+                setDefaultValue(super.baseUrl)
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "Default: ${super.baseUrl}"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
-                true
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
+                    true
+                }
             }
-        }
         screen.addPreference(baseUrlPref)
     }
 
@@ -230,7 +248,8 @@ class MangaSwat :
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
             if (prefDefaultBaseUrl != super.baseUrl) {
-                preferences.edit()
+                preferences
+                    .edit()
                     .putString(BASE_URL_PREF, super.baseUrl)
                     .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
                     .apply()

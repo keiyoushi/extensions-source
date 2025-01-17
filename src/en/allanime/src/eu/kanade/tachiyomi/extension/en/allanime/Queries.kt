@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.allanime
 
-private fun buildQuery(queryAction: () -> String): String {
-    return queryAction()
+private fun buildQuery(queryAction: () -> String): String =
+    queryAction()
         .trimIndent()
         .replace("%", "$")
-}
 
-val POPULAR_QUERY: String = buildQuery {
-    """
+val POPULAR_QUERY: String =
+    buildQuery {
+        """
         query (
             %type: VaildPopularTypeEnumType!
             %size: Int!
@@ -35,10 +35,11 @@ val POPULAR_QUERY: String = buildQuery {
             }
         }
     """
-}
+    }
 
-val SEARCH_QUERY: String = buildQuery {
-    """
+val SEARCH_QUERY: String =
+    buildQuery {
+        """
         query (
             %search: SearchInput
             %size: Int
@@ -62,10 +63,11 @@ val SEARCH_QUERY: String = buildQuery {
             }
         }
     """
-}
+    }
 
-val DETAILS_QUERY: String = buildQuery {
-    """
+val DETAILS_QUERY: String =
+    buildQuery {
+        """
         query (%id: String!) {
             manga(_id: %id) {
                 _id
@@ -81,10 +83,11 @@ val DETAILS_QUERY: String = buildQuery {
             }
         }
     """
-}
+    }
 
-val CHAPTERS_QUERY: String = buildQuery {
-    """
+val CHAPTERS_QUERY: String =
+    buildQuery {
+        """
         query (%id: String!, %chapterNumStart: Float!, %chapterNumEnd: Float!) {
             episodeInfos(
                 showId: %id
@@ -97,10 +100,11 @@ val CHAPTERS_QUERY: String = buildQuery {
             }
         }
     """
-}
+    }
 
-val PAGE_QUERY: String = buildQuery {
-    """
+val PAGE_QUERY: String =
+    buildQuery {
+        """
         query (
             %id: String!
             %translationType: VaildTranslationTypeMangaEnumType!
@@ -118,4 +122,4 @@ val PAGE_QUERY: String = buildQuery {
             }
         }
     """
-}
+    }

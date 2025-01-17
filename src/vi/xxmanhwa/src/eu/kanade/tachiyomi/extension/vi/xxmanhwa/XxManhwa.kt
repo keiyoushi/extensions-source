@@ -27,8 +27,9 @@ import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import kotlin.random.Random
 
-class XxManhwa : ParsedHttpSource(), ConfigurableSource {
-
+class XxManhwa :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "XXManhwa"
 
     override val lang = "vi"
@@ -39,8 +40,10 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = false
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
 
@@ -52,13 +55,14 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaSelector() = "div[data-type=story]"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        val a = element.selectFirst("a")!!
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            val a = element.selectFirst("a")!!
 
-        setUrlWithoutDomain(a.attr("abs:href"))
-        title = a.attr("title")
-        thumbnail_url = element.selectFirst("div.posts-list-avt")?.attr("abs:data-img")
-    }
+            setUrlWithoutDomain(a.attr("abs:href"))
+            title = a.attr("title")
+            thumbnail_url = element.selectFirst("div.posts-list-avt")?.attr("abs:data-img")
+        }
 
     override fun popularMangaNextPageSelector() = "div.public-part-page span.current:not(:last-child)"
 
@@ -70,17 +74,25 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("search")
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addPathSegment("search")
 
-            // There's definitely a page parameter somewhere, but none of the search queries I've
-            // tried on this website goes beyond page 1. Even if I forced `page_num` it still
-            // refuses to go to the next page. This is a placeholder.
-            addQueryParameter("page_num", page.toString())
-            addQueryParameter("s", query)
-            addQueryParameter("post_type", "story")
-        }.build()
+                    // There's definitely a page parameter somewhere, but none of the search queries I've
+                    // tried on this website goes beyond page 1. Even if I forced `page_num` it still
+                    // refuses to go to the next page. This is a placeholder.
+                    addQueryParameter("page_num", page.toString())
+                    addQueryParameter("s", query)
+                    addQueryParameter("post_type", "story")
+                }.build()
 
         return GET(url, headers)
     }
@@ -91,21 +103,25 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-        description = document.selectFirst(".summary__content")?.text()
-        thumbnail_url = document.selectFirst("div.col-inner.img-max-width img")?.attr("abs:src")
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = document.selectFirst("h1")!!.text()
+            description = document.selectFirst(".summary__content")?.text()
+            thumbnail_url = document.selectFirst("div.col-inner.img-max-width img")?.attr("abs:src")
 
-        val html = document.html()
-        val genreMap = "[${html.substringAfter("'cat_story': [").substringBefore("],")}]"
-            .parseAs<List<CategoryDto>>()
-            .associate { it.termId to it.name }
-            .toMap()
-        genre = document.selectFirst("div.each-to-taxonomy")
-            ?.attr("data-id")
-            ?.split(",")
-            ?.joinToString { genreMap[it] ?: "Unknown" }
-    }
+            val html = document.html()
+            val genreMap =
+                "[${html.substringAfter("'cat_story': [").substringBefore("],")}]"
+                    .parseAs<List<CategoryDto>>()
+                    .associate { it.termId to it.name }
+                    .toMap()
+            genre =
+                document
+                    .selectFirst("div.each-to-taxonomy")
+                    ?.attr("data-id")
+                    ?.split(",")
+                    ?.joinToString { genreMap[it] ?: "Unknown" }
+        }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val html = response.body.string()
@@ -136,50 +152,69 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
         }
 
         val html = document.html()
-        val body = FormBody.Builder().apply {
-            val mangaId = response.request.url.pathSegments.reversed()[1]
-            val chapterId = response.request.url.pathSegments.last().split("-")[0]
-            val expiry = expiryRegex.find(html)?.groupValues?.get(1)
-                ?: throw Exception("Could not find token expiry")
-            val token = tokenRegex.find(html)?.groupValues?.get(1)
-                ?: throw Exception("Could not find token")
-            val src = document.selectFirst("div.cur p[data-src]")?.attr("data-src")
-                ?: throw Exception("Could not get filename of first image")
-            val iid = buildString {
-                repeat(12) {
-                    append(('2'..'7') + ('a'..'z'))
-                }
-            }
+        val body =
+            FormBody
+                .Builder()
+                .apply {
+                    val mangaId =
+                        response.request.url.pathSegments
+                            .reversed()[1]
+                    val chapterId =
+                        response.request.url.pathSegments
+                            .last()
+                            .split("-")[0]
+                    val expiry =
+                        expiryRegex.find(html)?.groupValues?.get(1)
+                            ?: throw Exception("Could not find token expiry")
+                    val token =
+                        tokenRegex.find(html)?.groupValues?.get(1)
+                            ?: throw Exception("Could not find token")
+                    val src =
+                        document.selectFirst("div.cur p[data-src]")?.attr("data-src")
+                            ?: throw Exception("Could not get filename of first image")
+                    val iid =
+                        buildString {
+                            repeat(12) {
+                                append(('2'..'7') + ('a'..'z'))
+                            }
+                        }
 
-            document.selectFirst("form[method=post] > input[type=hidden]")?.let { csrf ->
-                add(csrf.attr("name"), csrf.attr("value"))
-            }
+                    document.selectFirst("form[method=post] > input[type=hidden]")?.let { csrf ->
+                        add(csrf.attr("name"), csrf.attr("value"))
+                    }
 
-            add("iid", "_0_$iid")
-            add("ipoi", "1")
-            add("sid", chapterId)
-            add("cid", mangaId)
-            add("expiry", expiry)
-            add("token", token)
-            add("src", "/${src.substringAfterLast("/")}")
+                    add("iid", "_0_$iid")
+                    add("ipoi", "1")
+                    add("sid", chapterId)
+                    add("cid", mangaId)
+                    add("expiry", expiry)
+                    add("token", token)
+                    add("src", "/${src.substringAfterLast("/")}")
 
-            val ebeCaptchaKey = html.substringAfter("action_ebe_captcha('").substringBefore("')")
-            val ebeCaptchaRequest = POST(
-                "$baseUrl/$ebeCaptchaKey?_wpnonce=$WP_NONCE",
-                headers,
-                FormBody.Builder().add("nse", Random.nextDouble().toString()).build(),
-            )
-            val ebeCaptchaResponse = client.newCall(ebeCaptchaRequest).execute().asJsoup()
+                    val ebeCaptchaKey = html.substringAfter("action_ebe_captcha('").substringBefore("')")
+                    val ebeCaptchaRequest =
+                        POST(
+                            "$baseUrl/$ebeCaptchaKey?_wpnonce=$WP_NONCE",
+                            headers,
+                            FormBody.Builder().add("nse", Random.nextDouble().toString()).build(),
+                        )
+                    val ebeCaptchaResponse = client.newCall(ebeCaptchaRequest).execute().asJsoup()
 
-            ebeCaptchaResponse.select("input").forEach {
-                add(it.attr("name"), it.attr("value"))
-            }
+                    ebeCaptchaResponse.select("input").forEach {
+                        add(it.attr("name"), it.attr("value"))
+                    }
 
-            add("doing_ajax", "1")
-        }.build()
+                    add("doing_ajax", "1")
+                }.build()
 
         val req = POST("$baseUrl/chaps/img", headers, body)
-        val resp = client.newCall(req).execute().body.string().parseAs<PageDto>()
+        val resp =
+            client
+                .newCall(req)
+                .execute()
+                .body
+                .string()
+                .parseAs<PageDto>()
         val basePageUrl = "https://${resp.media}/${resp.src.substringBeforeLast("/")}/"
 
         return document.select("div.cur p[data-src]").mapIndexed { i, it ->
@@ -194,7 +229,8 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
             if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
+                preferences
+                    .edit()
                     .putString(BASE_URL_PREF, defaultBaseUrl)
                     .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
                     .apply()
@@ -203,26 +239,28 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = KEY_HIDE_PAID_CHAPTERS
-            title = "Ẩn các chương cần tài khoản"
-            summary = "Ẩn các chương truyện cần nạp VIP để đọc.\n$baseUrl/thong-tin-cap-bac-tai-khoan"
-            setDefaultValue(false)
-        }.let(screen::addPreference)
+        SwitchPreferenceCompat(screen.context)
+            .apply {
+                key = KEY_HIDE_PAID_CHAPTERS
+                title = "Ẩn các chương cần tài khoản"
+                summary = "Ẩn các chương truyện cần nạp VIP để đọc.\n$baseUrl/thong-tin-cap-bac-tai-khoan"
+                setDefaultValue(false)
+            }.let(screen::addPreference)
 
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
+        EditTextPreference(screen.context)
+            .apply {
+                key = BASE_URL_PREF
+                title = BASE_URL_PREF_TITLE
+                summary = BASE_URL_PREF_SUMMARY
+                setDefaultValue(defaultBaseUrl)
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "Default: $defaultBaseUrl"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                    true
+                }
+            }.let(screen::addPreference)
     }
 
     private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)

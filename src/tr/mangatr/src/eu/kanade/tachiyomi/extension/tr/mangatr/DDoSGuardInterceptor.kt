@@ -9,8 +9,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 
 // Taken from src/all/akuma.
-class DDoSGuardInterceptor(private val client: OkHttpClient) : Interceptor {
-
+class DDoSGuardInterceptor(
+    private val client: OkHttpClient,
+) : Interceptor {
     private val cookieManager by lazy { CookieManager.getInstance() }
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -23,11 +24,12 @@ class DDoSGuardInterceptor(private val client: OkHttpClient) : Interceptor {
         }
 
         val cookies = cookieManager.getCookie(originalRequest.url.toString())
-        val oldCookie = if (cookies != null && cookies.isNotEmpty()) {
-            cookies.split(";").mapNotNull { Cookie.parse(originalRequest.url, it) }
-        } else {
-            emptyList()
-        }
+        val oldCookie =
+            if (cookies != null && cookies.isNotEmpty()) {
+                cookies.split(";").mapNotNull { Cookie.parse(originalRequest.url, it) }
+            } else {
+                emptyList()
+            }
         val ddg2Cookie = oldCookie.firstOrNull { it.name == "__ddg2_" }
         if (!ddg2Cookie?.value.isNullOrEmpty()) {
             return response
@@ -35,24 +37,32 @@ class DDoSGuardInterceptor(private val client: OkHttpClient) : Interceptor {
 
         response.close()
 
-        val newCookie = getNewCookie(originalRequest.url)
-            ?: return chain.proceed(originalRequest)
+        val newCookie =
+            getNewCookie(originalRequest.url)
+                ?: return chain.proceed(originalRequest)
 
-        val newCookieHeader = (oldCookie + newCookie)
-            .joinToString("; ") { "${it.name}=${it.value}" }
+        val newCookieHeader =
+            (oldCookie + newCookie)
+                .joinToString("; ") { "${it.name}=${it.value}" }
 
-        val modifiedRequest = originalRequest.newBuilder()
-            .header("cookie", newCookieHeader)
-            .build()
+        val modifiedRequest =
+            originalRequest
+                .newBuilder()
+                .header("cookie", newCookieHeader)
+                .build()
 
         return chain.proceed(modifiedRequest)
     }
 
     private fun getNewCookie(url: HttpUrl): Cookie? {
-        val wellKnown = client.newCall(GET(wellKnownUrl))
-            .execute().body.string()
-            .substringAfter("'", "")
-            .substringBefore("'", "")
+        val wellKnown =
+            client
+                .newCall(GET(wellKnownUrl))
+                .execute()
+                .body
+                .string()
+                .substringAfter("'", "")
+                .substringBefore("'", "")
         val checkUrl = "${url.scheme}://${url.host + wellKnown}"
         val response = client.newCall(GET(checkUrl)).execute()
         return response.header("set-cookie")?.let {

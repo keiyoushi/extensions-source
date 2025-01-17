@@ -20,7 +20,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Buttsmithy : HttpSource() {
-
     override val name = "Buttsmithy"
 
     override val baseUrl = "https://incase.buttsmithy.com"
@@ -68,14 +67,15 @@ class Buttsmithy : HttpSource() {
         val currentPageComicPage = currentDoc.select("#comic img").first()!!
         val chapterTitle = currentPageComicPage.attr("alt")
 
-        val chapter = SChapter.create().apply {
+        val chapter =
+            SChapter.create().apply {
             /* the setUrlWithoutDomain method can't be used here because Alfie has another base
              * namespace and when retrieving the pages it is impossible to clearly differentiate an
              * Alfie Chapter from some other comic chapter. */
-            url = currentPageUrl
-            name = chapterTitle
-            chapter_number = pageNr
-        }
+                url = currentPageUrl
+                name = chapterTitle
+                chapter_number = pageNr
+            }
 
         // get the preferences for the current comic
         val seriesPrefs = Injekt.get<Application>().getSharedPreferences("source_${id}_updateTime:${comicTitle.lowercase()}", 0)
@@ -117,32 +117,34 @@ class Buttsmithy : HttpSource() {
         val pageNrRegex = "p*[0-9]+".toRegex()
 
         val currentDoc = client.newCall(GET(currentPageUrl, headers)).execute().asJsoup()
-        val pagesAsChapters = currentDoc.select("article.has-post-thumbnail .post-content")
-            .mapIndexed { index, postElement ->
-                val postTitleElement = postElement.select(".post-info .post-title a")
-                val chapUrl = postTitleElement.attr("href")
-                val title = postTitleElement.text()
-                // this is needed for the MISC chapter where the pages are not numbered
-                val pageNr =
-                    if (pageNrRegex.matches(title)) {
-                        title.substringAfter("p").trim().toFloat()
-                    } else {
-                        index + lastPageNr
-                    }
+        val pagesAsChapters =
+            currentDoc
+                .select("article.has-post-thumbnail .post-content")
+                .mapIndexed { index, postElement ->
+                    val postTitleElement = postElement.select(".post-info .post-title a")
+                    val chapUrl = postTitleElement.attr("href")
+                    val title = postTitleElement.text()
+                    // this is needed for the MISC chapter where the pages are not numbered
+                    val pageNr =
+                        if (pageNrRegex.matches(title)) {
+                            title.substringAfter("p").trim().toFloat()
+                        } else {
+                            index + lastPageNr
+                        }
 
-                val dateString = postElement.select(".post-info .post-date").text()
-                val timeString = postElement.select(".post-info .post-time").text()
-                val date = alfieDateParser.parse("$timeString $dateString")?.time ?: 0L
+                    val dateString = postElement.select(".post-info .post-date").text()
+                    val timeString = postElement.select(".post-info .post-time").text()
+                    val date = alfieDateParser.parse("$timeString $dateString")?.time ?: 0L
 
-                SChapter.create().apply {
+                    SChapter.create().apply {
                     /* Alfie has its own name space and thus can't be handled like other comics.
                      * This means the setUrlWithoutDomain method can't be used */
-                    url = chapUrl
-                    name = title
-                    chapter_number = pageNr
-                    date_upload = date
+                        url = chapUrl
+                        name = title
+                        chapter_number = pageNr
+                        date_upload = date
+                    }
                 }
-            }
 
         allChapters.addAll(pagesAsChapters)
 
@@ -175,9 +177,7 @@ class Buttsmithy : HttpSource() {
         return listOf(alfieChapters, cyoaComics, otherComics).flatten()
     }
 
-    private fun String.lowercase(): String {
-        return this.lowercase(Locale.getDefault())
-    }
+    private fun String.lowercase(): String = this.lowercase(Locale.getDefault())
 
     /**
      * Fetches all chapters of Alfie (one of InCases comics) as separate SManga because this comic
@@ -191,7 +191,9 @@ class Buttsmithy : HttpSource() {
         val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
 
         val chaptersAsSManga: List<SManga> =
-            pageDoc.select("#chapter").select("option.level-0")
+            pageDoc
+                .select("#chapter")
+                .select("option.level-0")
                 .map { chapterElement ->
                     val chapTitle = chapterElement.text().lowercase()
                     val chapUrlName = chapterTitleToChapterUrlName(chapTitle)
@@ -210,24 +212,28 @@ class Buttsmithy : HttpSource() {
         return chaptersAsSManga
     }
 
-    private fun decideAlfieStatusFromTitle(chapTitle: String, mostRecentChapTitle: String): Int {
-        return if (chapTitle == mostRecentChapTitle) {
+    private fun decideAlfieStatusFromTitle(
+        chapTitle: String,
+        mostRecentChapTitle: String,
+    ): Int =
+        if (chapTitle == mostRecentChapTitle) {
             SManga.UNKNOWN
         } else {
             SManga.COMPLETED
         }
-    }
 
-    private fun extractChapterTitleFromPageDoc(doc: Document): String {
-        return doc.select(".comic-chapter a").first()!!.text().lowercase()
-    }
+    private fun extractChapterTitleFromPageDoc(doc: Document): String =
+        doc
+            .select(".comic-chapter a")
+            .first()!!
+            .text()
+            .lowercase()
 
-    private fun chapterTitleToChapterUrlName(chapTitle: String): String {
-        return when (chapTitle.lowercase()) {
+    private fun chapterTitleToChapterUrlName(chapTitle: String): String =
+        when (chapTitle.lowercase()) {
             "chapter 1" -> "chapter-1v2"
             else -> chapTitle.replace(" ", "-").replace(".", "-")
         }
-    }
 
     private fun convertMenuElementToSManga(menuElement: Elements): List<SManga> {
         val comicLinkSelector = ".menu-item-type-custom a[href]"
@@ -254,13 +260,9 @@ class Buttsmithy : HttpSource() {
             }
     }
 
-    private fun generateImageUrlWithText(text: String): String {
-        return "https://fakeimg.pl/800x1236/?text=$text&font=lobster"
-    }
+    private fun generateImageUrlWithText(text: String): String = "https://fakeimg.pl/800x1236/?text=$text&font=lobster"
 
-    private fun generateMangasPage(): MangasPage {
-        return MangasPage(fetchAllComics(), false)
-    }
+    private fun generateMangasPage(): MangasPage = MangasPage(fetchAllComics(), false)
 
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
@@ -273,8 +275,8 @@ class Buttsmithy : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        Observable.just(
             if (manga.title.contains(alfieTitle)) {
                 val pageDoc = client.newCall(GET(baseUrlAlfie, headers)).execute().asJsoup()
                 val mostRecentChapTitle = extractChapterTitleFromPageDoc(pageDoc)
@@ -293,7 +295,6 @@ class Buttsmithy : HttpSource() {
                 manga
             },
         )
-    }
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
 
@@ -309,9 +310,7 @@ class Buttsmithy : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(generateMangasPage())
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(generateMangasPage())
 
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
@@ -319,6 +318,9 @@ class Buttsmithy : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 }

@@ -11,38 +11,49 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import org.jsoup.nodes.Document
 
-class MirrorDesu : MangaThemesia(
-    "MirrorDesu",
-    "https://mirrordesu.one",
-    "id",
-    "/komik",
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(4)
-        .build()
+class MirrorDesu :
+    MangaThemesia(
+        "MirrorDesu",
+        "https://mirrordesu.one",
+        "id",
+        "/komik",
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(4)
+            .build()
 
     override val hasProjectPage = true
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script:containsData(ts_reader)")?.data()
-            ?: return super.pageListParse(document)
+        val script =
+            document.selectFirst("script:containsData(ts_reader)")?.data()
+                ?: return super.pageListParse(document)
 
         val deobfuscatedScript = Deobfuscator.deobfuscateScript(script)!!
 
-        val (dataKey, pwdKey) = obfuscatedNamesRegex.find(deobfuscatedScript)!!
-            .groupValues.let { it[1] to it[2] }
+        val (dataKey, pwdKey) =
+            obfuscatedNamesRegex
+                .find(deobfuscatedScript)!!
+                .groupValues
+                .let { it[1] to it[2] }
 
-        val encData = deobfuscatedScript.substringAfter(dataKey)
-            .substringAfter("\'")
-            .substringBefore("\'")
-            .let { json.decodeFromString<EncryptedDto>(it) }
+        val encData =
+            deobfuscatedScript
+                .substringAfter(dataKey)
+                .substringAfter("\'")
+                .substringBefore("\'")
+                .let { json.decodeFromString<EncryptedDto>(it) }
 
         val unsaltedCiphertext = Base64.decode(encData.cipherText, Base64.DEFAULT)
         val salt = encData.salt.decodeHex()
         val ciphertext = Base64.encodeToString(salted + salt + unsaltedCiphertext, Base64.DEFAULT)
 
-        val pwd = Regex("""let\s*$pwdKey\s*=\s*'(\w+)'""").find(deobfuscatedScript)!!
-            .groupValues[1]
+        val pwd =
+            Regex("""let\s*$pwdKey\s*=\s*'(\w+)'""")
+                .find(deobfuscatedScript)!!
+                .groupValues[1]
 
         val data = CryptoAES.decrypt(ciphertext, pwd)
 

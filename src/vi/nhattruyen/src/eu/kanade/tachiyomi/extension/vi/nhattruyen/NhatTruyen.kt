@@ -13,13 +13,14 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NhatTruyen : WPComics(
-    "NhatTruyen",
-    "https://nhattruyenv.com",
-    "vi",
-    dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
-    gmtOffset = null,
-) {
+class NhatTruyen :
+    WPComics(
+        "NhatTruyen",
+        "https://nhattruyenv.com",
+        "vi",
+        dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
+        gmtOffset = null,
+    ) {
     override val searchPath = "tim-truyen"
 
     /**
@@ -27,14 +28,21 @@ class NhatTruyen : WPComics(
      * That makes both sites always return un-relevant results when searching should return empty.
      */
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().endsWith("/$searchPath")) {
+        if (response.request.url
+                .toString()
+                .endsWith("/$searchPath")
+        ) {
             return MangasPage(mangas = emptyList(), hasNextPage = false)
         }
         return super.searchMangaParse(response)
     }
 
     // Advanced search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isBlank()) {
             val url = "$baseUrl/tim-truyen-nang-cao".toHttpUrl().newBuilder()
 
@@ -62,12 +70,18 @@ class NhatTruyen : WPComics(
         }
     }
 
-    private class AdvancedGenre(val id: String, name: String) : Filter.TriState(name)
+    private class AdvancedGenre(
+        val id: String,
+        name: String,
+    ) : Filter.TriState(name)
 
-    private class AdvancedGenreFilter(name: String, advancedGenres: List<AdvancedGenre>) : Filter.Group<AdvancedGenre>(
-        name,
-        advancedGenres.map { AdvancedGenre(it.id, it.name) },
-    ) {
+    private class AdvancedGenreFilter(
+        name: String,
+        advancedGenres: List<AdvancedGenre>,
+    ) : Filter.Group<AdvancedGenre>(
+            name,
+            advancedGenres.map { AdvancedGenre(it.id, it.name) },
+        ) {
         val included: List<String>
             get() = state.filter { it.isIncluded() }.map { it.id }
 
@@ -83,7 +97,9 @@ class NhatTruyen : WPComics(
         if (fetchAdvancedGenresAttempts < 3 && advancedGenresList.isEmpty()) {
             try {
                 advancedGenresList =
-                    client.newCall(advancedGenresRequest()).execute()
+                    client
+                        .newCall(advancedGenresRequest())
+                        .execute()
                         .asJsoup()
                         .let(::parseAdvancedGenres)
             } catch (_: Exception) {
@@ -107,20 +123,24 @@ class NhatTruyen : WPComics(
         }
     }
 
-    private class ChaptersNumFilter : UriPartFilter(
-        "Số lượng chapter",
-        listOf(
-            Pair("1", "> 0 chapter"),
-            Pair("50", ">= 50 chapter"),
-            Pair("100", ">= 100 chapter"),
-            Pair("200", ">= 200 chapter"),
-            Pair("300", ">= 300 chapter"),
-            Pair("400", ">= 400 chapter"),
-            Pair("500", ">= 500 chapter"),
-        ),
-    )
+    private class ChaptersNumFilter :
+        UriPartFilter(
+            "Số lượng chapter",
+            listOf(
+                Pair("1", "> 0 chapter"),
+                Pair("50", ">= 50 chapter"),
+                Pair("100", ">= 100 chapter"),
+                Pair("200", ">= 200 chapter"),
+                Pair("300", ">= 300 chapter"),
+                Pair("400", ">= 400 chapter"),
+                Pair("500", ">= 500 chapter"),
+            ),
+        )
 
-    private class AdvancedStatusFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
+    private class AdvancedStatusFilter(
+        name: String,
+        pairs: List<Pair<String?, String>>,
+    ) : UriPartFilter(name, pairs)
 
     private fun getAdvancedStatusList(): List<Pair<String?, String>> =
         listOf(
@@ -129,29 +149,31 @@ class NhatTruyen : WPComics(
             Pair("2", intl["STATUS_COMPLETED"]),
         )
 
-    private class GenderFilter : UriPartFilter(
-        "Dành cho",
-        listOf(
-            Pair("-1", "Tất cả"),
-            Pair("1", "Con gái"),
-            Pair("2", "Con trai"),
-        ),
-    )
+    private class GenderFilter :
+        UriPartFilter(
+            "Dành cho",
+            listOf(
+                Pair("-1", "Tất cả"),
+                Pair("1", "Con gái"),
+                Pair("2", "Con trai"),
+            ),
+        )
 
-    private class OrderFilter : UriPartFilter(
-        "Sắp xếp theo",
-        listOf(
-            Pair("0", "Chapter mới"),
-            Pair("15", "Truyện mới"),
-            Pair("10", "Xem nhiều nhất"),
-            Pair("11", "Xem nhiều nhất tháng"),
-            Pair("12", "Xem nhiều nhất tuần"),
-            Pair("13", "Xem nhiều nhất hôm nay"),
-            Pair("20", "Theo dõi nhiều nhất"),
-            Pair("25", "Bình luận nhiều nhất"),
-            Pair("30", "Số chapter nhiều nhất"),
-        ),
-    )
+    private class OrderFilter :
+        UriPartFilter(
+            "Sắp xếp theo",
+            listOf(
+                Pair("0", "Chapter mới"),
+                Pair("15", "Truyện mới"),
+                Pair("10", "Xem nhiều nhất"),
+                Pair("11", "Xem nhiều nhất tháng"),
+                Pair("12", "Xem nhiều nhất tuần"),
+                Pair("13", "Xem nhiều nhất hôm nay"),
+                Pair("20", "Theo dõi nhiều nhất"),
+                Pair("25", "Bình luận nhiều nhất"),
+                Pair("30", "Số chapter nhiều nhất"),
+            ),
+        )
 
     override fun getFilterList(): FilterList {
         launchIO { fetchAdvancedGenres() }

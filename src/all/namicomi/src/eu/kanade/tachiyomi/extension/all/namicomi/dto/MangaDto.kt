@@ -10,7 +10,9 @@ typealias MangaDto = ResponseDto<MangaDataDto>
 
 @Serializable
 @SerialName(NamiComiConstants.manga)
-class MangaDataDto(override val attributes: MangaAttributesDto? = null) : EntityDto()
+class MangaDataDto(
+    override val attributes: MangaAttributesDto? = null,
+) : EntityDto()
 
 @Serializable
 class MangaAttributesDto(
@@ -25,7 +27,9 @@ class MangaAttributesDto(
 ) : AttributesDto
 
 @Serializable
-enum class ContentRatingDto(val value: String) {
+enum class ContentRatingDto(
+    val value: String,
+) {
     @SerialName("safe")
     SAFE("safe"),
 
@@ -37,7 +41,9 @@ enum class ContentRatingDto(val value: String) {
 }
 
 @Serializable
-enum class StatusDto(val value: String) {
+enum class StatusDto(
+    val value: String,
+) {
     @SerialName("ongoing")
     ONGOING("ongoing"),
 
@@ -52,7 +58,9 @@ enum class StatusDto(val value: String) {
 }
 
 @Serializable
-sealed class AbstractTagDto(override val attributes: TagAttributesDto? = null) : EntityDto()
+sealed class AbstractTagDto(
+    override val attributes: TagAttributesDto? = null,
+) : EntityDto()
 
 @Serializable
 @SerialName(NamiComiConstants.tag)
@@ -67,4 +75,6 @@ class PrimaryTagDto : AbstractTagDto()
 class SecondaryTagDto : AbstractTagDto()
 
 @Serializable
-class TagAttributesDto(val group: String) : AttributesDto
+class TagAttributesDto(
+    val group: String,
+) : AttributesDto

@@ -5,16 +5,17 @@ import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import kotlin.random.Random
 
-fun getPreferencesInternal(context: Context) = arrayOf(
-    ListPreference(context).apply {
-        val count = IMAGE_CDN.size
-        key = IMAGE_CDN_PREF
-        title = "图片分流（重启生效）"
-        summary = "%s"
-        entries = Array(count) { "分流 ${it + 1}" }
-        entryValues = Array(count) { "$it" }
-    },
-)
+fun getPreferencesInternal(context: Context) =
+    arrayOf(
+        ListPreference(context).apply {
+            val count = IMAGE_CDN.size
+            key = IMAGE_CDN_PREF
+            title = "图片分流（重启生效）"
+            summary = "%s"
+            entries = Array(count) { "分流 ${it + 1}" }
+            entryValues = Array(count) { "$it" }
+        },
+    )
 
 val SharedPreferences.imageCdn: String
     get() {

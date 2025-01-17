@@ -52,11 +52,15 @@ data class LOLPages(
 }
 
 @Serializable
-data class LOLImage(private val uri: String) {
+data class LOLImage(
+    private val uri: String,
+) {
     override fun toString() = uri
 }
 
 @Serializable
-data class LOLChampion(private val name: String) {
+data class LOLChampion(
+    private val name: String,
+) {
     override fun toString() = name
 }

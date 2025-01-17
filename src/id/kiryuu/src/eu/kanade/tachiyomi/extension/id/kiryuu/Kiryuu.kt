@@ -13,29 +13,34 @@ class Kiryuu : MangaThemesia("Kiryuu", "https://kiryuu.one", "id", dateFormat = 
     // Formerly "Kiryuu (WP Manga Stream)"
     override val id = 3639673976007021338
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-            val mime = response.headers["Content-Type"]
-            if (response.isSuccessful) {
-                if (mime != "application/octet-stream") {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                val mime = response.headers["Content-Type"]
+                if (response.isSuccessful) {
+                    if (mime != "application/octet-stream") {
+                        return@addInterceptor response
+                    }
+                    // Fix image content type
+                    val type = IMG_CONTENT_TYPE.toMediaType()
+                    val body = response.body.bytes().toResponseBody(type)
                     return@addInterceptor response
+                        .newBuilder()
+                        .body(body)
+                        .header("Content-Type", IMG_CONTENT_TYPE)
+                        .build()
                 }
-                // Fix image content type
-                val type = IMG_CONTENT_TYPE.toMediaType()
-                val body = response.body.bytes().toResponseBody(type)
-                return@addInterceptor response.newBuilder().body(body)
-                    .header("Content-Type", IMG_CONTENT_TYPE).build()
-            }
-            response
-        }
-        .rateLimit(4)
-        .build()
+                response
+            }.rateLimit(4)
+            .build()
 
     // manga details
-    override fun mangaDetailsParse(document: Document) = super.mangaDetailsParse(document).apply {
-        title = document.selectFirst(seriesThumbnailSelector)!!.attr("title")
-    }
+    override fun mangaDetailsParse(document: Document) =
+        super.mangaDetailsParse(document).apply {
+            title = document.selectFirst(seriesThumbnailSelector)!!.attr("title")
+        }
 
     override val hasProjectPage = true
 }

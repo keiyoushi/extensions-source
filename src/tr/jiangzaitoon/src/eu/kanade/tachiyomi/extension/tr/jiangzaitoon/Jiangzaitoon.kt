@@ -6,16 +6,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class Jiangzaitoon : Madara(
-    "Jiangzaitoon",
-    "https://jiangzaitoon.one",
-    "tr",
-    SimpleDateFormat("d MMM yyy", Locale("tr")),
-) {
+class Jiangzaitoon :
+    Madara(
+        "Jiangzaitoon",
+        "https://jiangzaitoon.one",
+        "tr",
+        SimpleDateFormat("d MMM yyy", Locale("tr")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val client: OkHttpClient by lazy {
-        super.client.newBuilder()
+        super.client
+            .newBuilder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(3, TimeUnit.MINUTES) // aka shit source
             .build()

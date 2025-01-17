@@ -8,17 +8,17 @@ import android.util.Log
 import kotlin.system.exitProcess
 
 class TaoSectUrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
             val projectSlug = pathSegments[1]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", TaoSect.SLUG_PREFIX_SEARCH + projectSlug)
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", TaoSect.SLUG_PREFIX_SEARCH + projectSlug)
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

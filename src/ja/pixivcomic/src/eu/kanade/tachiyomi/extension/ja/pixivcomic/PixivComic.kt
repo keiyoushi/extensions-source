@@ -43,24 +43,29 @@ class PixivComic : HttpSource() {
         randomString()
     }
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(ShuffledImageInterceptor(key))
-        .addNetworkInterceptor(::tagInterceptor)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(ShuffledImageInterceptor(key))
+            .addNetworkInterceptor(::tagInterceptor)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("X-Requested-With", "pixivcomic")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
+            .add("X-Requested-With", "pixivcomic")
 
     override fun popularMangaRequest(page: Int): Request {
         if (page == 1) alreadyLoadedPopularMangaIds.clear()
         popularMangaCountRequested = POPULAR_MANGA_COUNT_PER_PAGE * page
 
-        val url = apiBuilder()
-            .addPathSegments("rankings/popularity")
-            .addQueryParameter("label", "総合")
-            .addQueryParameter("count", popularMangaCountRequested.toString())
-            .build()
+        val url =
+            apiBuilder()
+                .addPathSegments("rankings/popularity")
+                .addQueryParameter("label", "総合")
+                .addQueryParameter("count", popularMangaCountRequested.toString())
+                .build()
 
         return GET(url, headers)
     }
@@ -68,26 +73,29 @@ class PixivComic : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val popular = json.decodeFromString<ApiResponse<Popular>>(response.body.string())
 
-        val mangas = popular.data.ranking.filterNot {
-            alreadyLoadedPopularMangaIds.contains(it.id)
-        }.map { manga ->
-            SManga.create().apply {
-                title = manga.title
-                thumbnail_url = manga.mainImageUrl
-                url = manga.id.toString()
+        val mangas =
+            popular.data.ranking
+                .filterNot {
+                    alreadyLoadedPopularMangaIds.contains(it.id)
+                }.map { manga ->
+                    SManga.create().apply {
+                        title = manga.title
+                        thumbnail_url = manga.mainImageUrl
+                        url = manga.id.toString()
 
-                alreadyLoadedPopularMangaIds.add(manga.id)
-            }
-        }
+                        alreadyLoadedPopularMangaIds.add(manga.id)
+                    }
+                }
 
         return MangasPage(mangas, popular.data.ranking.size == popularMangaCountRequested)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = apiBuilder()
-            .addPathSegments("works/recent_updates")
-            .addQueryParameter("page", page.toString())
-            .build()
+        val url =
+            apiBuilder()
+                .addPathSegments("works/recent_updates")
+                .addQueryParameter("page", page.toString())
+                .build()
 
         return GET(url, headers)
     }
@@ -95,18 +103,23 @@ class PixivComic : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val latest = json.decodeFromString<ApiResponse<Latest>>(response.body.string())
 
-        val mangas = latest.data.officialWorks.map { manga ->
-            SManga.create().apply {
-                title = manga.name
-                thumbnail_url = manga.image.main
-                url = manga.id.toString()
+        val mangas =
+            latest.data.officialWorks.map { manga ->
+                SManga.create().apply {
+                    title = manga.name
+                    thumbnail_url = manga.image.main
+                    url = manga.id.toString()
+                }
             }
-        }
 
         return MangasPage(mangas, latest.data.nextPageNumber != null)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val apiBuilder = apiBuilder()
 
         when {
@@ -173,10 +186,11 @@ class PixivComic : HttpSource() {
     private class Category : Filter.Select<String>("Category", categories)
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = apiBuilder()
-            .addPathSegments("works/v5")
-            .addPathSegment(manga.url)
-            .build()
+        val url =
+            apiBuilder()
+                .addPathSegments("works/v5")
+                .addPathSegment(manga.url)
+                .build()
 
         return GET(url, headers)
     }
@@ -198,21 +212,25 @@ class PixivComic : HttpSource() {
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("works")
-            .addPathSegment(manga.url)
-            .build()
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment("works")
+                .addPathSegment(manga.url)
+                .build()
 
         return url.toString()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val url = apiBuilder()
-            .addPathSegment("works")
-            .addPathSegment(manga.url)
-            .addPathSegments("episodes/v2")
-            .addQueryParameter("order", "desc")
-            .build()
+        val url =
+            apiBuilder()
+                .addPathSegment("works")
+                .addPathSegment(manga.url)
+                .addPathSegments("episodes/v2")
+                .addQueryParameter("order", "desc")
+                .build()
 
         return GET(url, headers)
     }
@@ -220,45 +238,57 @@ class PixivComic : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = json.decodeFromString<ApiResponse<Chapters>>(response.body.string())
 
-        return chapters.data.episodes.filter { episodeInfo ->
-            episodeInfo.episode != null
-        }.mapIndexed { i, episodeInfo ->
-            SChapter.create().apply {
-                val episode = episodeInfo.episode!!
+        return chapters.data.episodes
+            .filter { episodeInfo ->
+                episodeInfo.episode != null
+            }.mapIndexed { i, episodeInfo ->
+                SChapter.create().apply {
+                    val episode = episodeInfo.episode!!
 
-                name = episode.numberingTitle.plus(": ${episode.subTitle}")
-                url = episode.id.toString()
-                date_upload = episode.readStartAt
-                chapter_number = i.toFloat()
+                    name = episode.numberingTitle.plus(": ${episode.subTitle}")
+                    url = episode.id.toString()
+                    date_upload = episode.readStartAt
+                    chapter_number = i.toFloat()
+                }
             }
-        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("viewer/stories")
-            .addPathSegment(chapter.url)
-            .build()
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments("viewer/stories")
+                .addPathSegment(chapter.url)
+                .build()
 
         return url.toString()
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val doc = client.newCall(GET(getChapterUrl(chapter), headers)).execute().asJsoup()
-        val salt = doc.selectFirst("script#__NEXT_DATA__")!!.data().let {
-            json.decodeFromString<JsonElement>(it).jsonObject["props"]!!.jsonObject["pageProps"]!!
-                .jsonObject["salt"]!!.jsonPrimitive.content
-        }
-        val url = apiBuilder()
-            .addPathSegment("episodes")
-            .addPathSegment(chapter.url)
-            .addPathSegment("read_v4")
-            .build()
+        val salt =
+            doc.selectFirst("script#__NEXT_DATA__")!!.data().let {
+                json
+                    .decodeFromString<JsonElement>(it)
+                    .jsonObject["props"]!!
+                    .jsonObject["pageProps"]!!
+                    .jsonObject["salt"]!!
+                    .jsonPrimitive.content
+            }
+        val url =
+            apiBuilder()
+                .addPathSegment("episodes")
+                .addPathSegment(chapter.url)
+                .addPathSegment("read_v4")
+                .build()
         val timeAndHash = getTimeAndHash(salt)
-        val header = headers.newBuilder()
-            .add("X-Client-Time", timeAndHash.first)
-            .add("X-Client-Hash", timeAndHash.second)
-            .build()
+        val header =
+            headers
+                .newBuilder()
+                .add("X-Client-Time", timeAndHash.first)
+                .add("X-Client-Hash", timeAndHash.second)
+                .build()
 
         return GET(url, header)
     }
@@ -271,50 +301,51 @@ class PixivComic : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
-        val header = headers.newBuilder()
-            .add("X-Cobalt-Thumber-Parameter-GridShuffle-Key", key)
-            .build()
+        val header =
+            headers
+                .newBuilder()
+                .add("X-Cobalt-Thumber-Parameter-GridShuffle-Key", key)
+                .build()
 
         return GET(page.imageUrl!!, header)
     }
 
-    private fun apiBuilder(): HttpUrl.Builder {
-        return baseUrl.toHttpUrl()
+    private fun apiBuilder(): HttpUrl.Builder =
+        baseUrl
+            .toHttpUrl()
             .newBuilder()
             .addPathSegments("api/app")
-    }
 
     companion object {
         private const val POPULAR_MANGA_COUNT_PER_PAGE = 30
         private const val TAG_HEADER_TEXT = "Can only filter 1 type (Category or Tag) at a time"
         private const val CATEGORY_HEADER_TEXT = "This filter by Category is ignored if Tag isn't at blank"
-        private val categories = arrayOf(
-            "恋愛",
-            "動物",
-            "グルメ",
-            "ファンタジー",
-            "ホラー・ミステリー",
-            "アクション",
-            "エッセイ",
-            "ギャグ・コメディ",
-            "日常",
-            "ヒューマンドラマ",
-            "スポーツ",
-            "お仕事",
-            "BL",
-            "TL",
-            "百合",
-            "pixivコミック限定",
-            "映像化",
-            "コミカライズ",
-            "タテヨミ",
-            "読み切り",
-            "その他",
-        )
+        private val categories =
+            arrayOf(
+                "恋愛",
+                "動物",
+                "グルメ",
+                "ファンタジー",
+                "ホラー・ミステリー",
+                "アクション",
+                "エッセイ",
+                "ギャグ・コメディ",
+                "日常",
+                "ヒューマンドラマ",
+                "スポーツ",
+                "お仕事",
+                "BL",
+                "TL",
+                "百合",
+                "pixivコミック限定",
+                "映像化",
+                "コミカライズ",
+                "タテヨミ",
+                "読み切り",
+                "その他",
+            )
     }
 }

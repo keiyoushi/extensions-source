@@ -6,9 +6,9 @@ abstract class SelectFilter(
     name: String,
     private val options: List<Pair<String, String>>,
 ) : Filter.Select<String>(
-    name,
-    options.map { it.first }.toTypedArray(),
-) {
+        name,
+        options.map { it.first }.toTypedArray(),
+    ) {
     val selected get() = options[state].second
 }
 
@@ -31,10 +31,13 @@ class SortFilter : SelectFilter("Sort by", sortFilterOptions) {
         }
 }
 
-private val sortFilterOptions = listOf(
-    Pair("Trending", "sort/trending"),
-    Pair("Newest", "sort/newest"),
-    Pair("Popular", "sort/popular"),
-)
+private val sortFilterOptions =
+    listOf(
+        Pair("Trending", "sort/trending"),
+        Pair("Newest", "sort/newest"),
+        Pair("Popular", "sort/popular"),
+    )
 
-class TagFilter(options: List<Pair<String, String>>) : SelectFilter("Tags", options)
+class TagFilter(
+    options: List<Pair<String, String>>,
+) : SelectFilter("Tags", options)

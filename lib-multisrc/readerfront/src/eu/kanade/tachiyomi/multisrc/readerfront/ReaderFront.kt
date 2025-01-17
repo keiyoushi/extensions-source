@@ -34,19 +34,18 @@ abstract class ReaderFront(
 
     open val apiUrl = baseUrl.replaceFirst("://", "://api.")
 
-    abstract fun getImageCDN(path: String, width: Int = 350): String
+    abstract fun getImageCDN(
+        path: String,
+        width: Int = 350,
+    ): String
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$apiUrl?query=${works(i18n.id, "updatedAt", "DESC", page, 12)}", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl?query=${works(i18n.id, "updatedAt", "DESC", page, 12)}", headers)
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$apiUrl?query=${works(i18n.id, "stub", "ASC", page, 120)}", headers)
+    override fun popularMangaRequest(page: Int) = GET("$apiUrl?query=${works(i18n.id, "stub", "ASC", page, 120)}", headers)
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$apiUrl?query=${work(i18n.id, manga.url)}", headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl?query=${work(i18n.id, manga.url)}", headers)
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$apiUrl?query=${chaptersByWork(i18n.id, manga.url)}#${manga.url}", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$apiUrl?query=${chaptersByWork(i18n.id, manga.url)}#${manga.url}", headers)
 
     override fun pageListRequest(chapter: SChapter): Request {
         val jsonObj = json.parseToJsonElement(chapter.url).jsonObject
@@ -55,16 +54,17 @@ abstract class ReaderFront(
     }
 
     override fun latestUpdatesParse(response: Response) =
-        response.parse<List<Work>>("works").map {
-            SManga.create().apply {
-                url = it.stub
-                title = it.toString()
-                thumbnail_url = getImageCDN(it.thumbnail_path)
-            }
-        }.let { MangasPage(it, false) }
+        response
+            .parse<List<Work>>("works")
+            .map {
+                SManga.create().apply {
+                    url = it.stub
+                    title = it.toString()
+                    thumbnail_url = getImageCDN(it.thumbnail_path)
+                }
+            }.let { MangasPage(it, false) }
 
-    override fun popularMangaParse(response: Response) =
-        latestUpdatesParse(response)
+    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
 
     override fun mangaDetailsParse(response: Response) =
         response.parse<Work>("work").let {
@@ -75,22 +75,24 @@ abstract class ReaderFront(
                 description = it.description
                 author = it.authors!!.joinToString()
                 artist = it.artists!!.joinToString()
-                genre = buildString {
-                    if (it.adult!!) append("18+, ")
-                    append(it.demographic_name!!)
-                    if (it.genres!!.isNotEmpty()) {
+                genre =
+                    buildString {
+                        if (it.adult!!) append("18+, ")
+                        append(it.demographic_name!!)
+                        if (it.genres!!.isNotEmpty()) {
+                            append(", ")
+                            it.genres.joinTo(this, transform = i18n::get)
+                        }
                         append(", ")
-                        it.genres.joinTo(this, transform = i18n::get)
+                        append(it.type!!)
                     }
-                    append(", ")
-                    append(it.type!!)
-                }
-                status = when {
-                    it.licensed!! -> SManga.LICENSED
-                    it.status_name == "on_going" -> SManga.ONGOING
-                    it.status_name == "completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
+                status =
+                    when {
+                        it.licensed!! -> SManga.LICENSED
+                        it.status_name == "on_going" -> SManga.ONGOING
+                        it.status_name == "completed" -> SManga.COMPLETED
+                        else -> SManga.UNKNOWN
+                    }
                 initialized = true
             }
         }
@@ -99,13 +101,14 @@ abstract class ReaderFront(
         val stub = response.request.url.fragment ?: ""
         return response.parse<List<Release>>("chaptersByWork").map {
             SChapter.create().apply {
-                val jsonObject = buildJsonObject {
-                    put("id", it.id)
-                    put("stub", stub)
-                    put("volume", it.volume)
-                    put("chapter", it.chapter)
-                    put("subchapter", it.subchapter)
-                }
+                val jsonObject =
+                    buildJsonObject {
+                        put("id", it.id)
+                        put("stub", stub)
+                        put("volume", it.volume)
+                        put("chapter", it.chapter)
+                        put("subchapter", it.subchapter)
+                    }
                 url = json.encodeToString(jsonObject)
                 name = it.toString()
                 chapter_number = it.number
@@ -132,23 +135,27 @@ abstract class ReaderFront(
         return "$baseUrl/read/$stub/$lang/$volume/$chpter.$subChpter"
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        client.newCall(popularMangaRequest(page)).asObservableSuccess().map { res ->
-            popularMangaParse(res).let { mp ->
-                when {
-                    query.isBlank() -> mp
-                    !query.startsWith(STUB_QUERY) -> mp.filter {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = client.newCall(popularMangaRequest(page)).asObservableSuccess().map { res ->
+        popularMangaParse(res).let { mp ->
+            when {
+                query.isBlank() -> mp
+                !query.startsWith(STUB_QUERY) ->
+                    mp.filter {
                         it.title.contains(query, true)
                     }
-                    else -> mp.filter {
+                else ->
+                    mp.filter {
                         it.url == query.substringAfter(STUB_QUERY)
                     }
-                }
             }
-        }!!
+        }
+    }!!
 
-    private inline fun MangasPage.filter(predicate: (SManga) -> Boolean) =
-        copy(mangas.filter(predicate))
+    private inline fun MangasPage.filter(predicate: (SManga) -> Boolean) = copy(mangas.filter(predicate))
 
     private inline fun <reified T> Response.parse(name: String) =
         json.parseToJsonElement(body.string()).jsonObject.run {
@@ -164,12 +171,13 @@ abstract class ReaderFront(
 
     private inline val JsonElement.content get() = jsonPrimitive.content
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

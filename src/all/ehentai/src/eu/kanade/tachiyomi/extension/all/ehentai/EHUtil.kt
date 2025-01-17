@@ -11,22 +11,22 @@ import kotlin.math.pow
  * Return null if String is blank, otherwise returns the original String
  * @returns null if the String is blank, otherwise returns the original String
  */
-fun String?.nullIfBlank(): String? = if (isNullOrBlank()) {
-    null
-} else {
-    this
-}
+fun String?.nullIfBlank(): String? =
+    if (isNullOrBlank()) {
+        null
+    } else {
+        this
+    }
 
 /**
  * Ignores any exceptions thrown inside a block
  */
-fun <T> ignore(expr: () -> T): T? {
-    return try {
+fun <T> ignore(expr: () -> T): T? =
+    try {
         expr()
     } catch (t: Throwable) {
         null
     }
-}
 
 /**
  * Use '+' to append Strings onto a StringBuilder
@@ -38,7 +38,10 @@ operator fun StringBuilder.plusAssign(other: String) {
 /**
  * Converts bytes into a human readable String
  */
-fun humanReadableByteCount(bytes: Long, si: Boolean): String {
+fun humanReadableByteCount(
+    bytes: Long,
+    si: Boolean,
+): String {
     val unit = if (si) 1000 else 1024
     if (bytes < unit) return "$bytes B"
     val exp = (ln(bytes.toDouble()) / ln(unit.toDouble())).toInt()

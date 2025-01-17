@@ -73,45 +73,57 @@ class TsuminoUtils {
             return stringBuilder.toString()
         }
 
-        fun getCollection(document: Document, selector: String): List<SChapter> {
-            return document.select(selector).map { element ->
-                SChapter.create().apply {
-                    val chapterNum = element.select("span")[0].text()
-                    val chapterName = element.select("span")[1].text()
-                    name = "$chapterNum. $chapterName"
-                    scanlator = getGroups(document)
-                    url = element.attr("href").replace("entry", "Read/Index")
-                }
-            }.reversed()
-        }
+        fun getCollection(
+            document: Document,
+            selector: String,
+        ): List<SChapter> =
+            document
+                .select(selector)
+                .map { element ->
+                    SChapter.create().apply {
+                        val chapterNum = element.select("span")[0].text()
+                        val chapterName = element.select("span")[1].text()
+                        name = "$chapterNum. $chapterName"
+                        scanlator = getGroups(document)
+                        url = element.attr("href").replace("entry", "Read/Index")
+                    }
+                }.reversed()
 
-        fun getChapter(document: Document, response: Response): List<SChapter> {
+        fun getChapter(
+            document: Document,
+            response: Response,
+        ): List<SChapter> {
             val chapterList = mutableListOf<SChapter>()
-            val chapter = SChapter.create().apply {
-                name = "Chapter"
-                scanlator = getGroups(document)
-                chapter_number = 1f
-                url = response.request.url.encodedPath
-                    .replace("entry", "Read/Index")
-            }
+            val chapter =
+                SChapter.create().apply {
+                    name = "Chapter"
+                    scanlator = getGroups(document)
+                    chapter_number = 1f
+                    url =
+                        response.request.url.encodedPath
+                            .replace("entry", "Read/Index")
+                }
             chapterList.add(chapter)
             return chapterList
         }
 
         fun cfDecodeEmails(document: Document) {
-            document.select(".__cf_email__")
+            document
+                .select(".__cf_email__")
                 .map { it to cfDecodeEmail(it.attr("data-cfemail")) }
                 .forEach { (element, plaintext) -> element.text(plaintext) }
         }
 
         private fun cfDecodeEmail(encoded: String): String {
-            val encodedList = encoded
-                .chunked(2)
-                .map { it.toIntOrNull(16) }
+            val encodedList =
+                encoded
+                    .chunked(2)
+                    .map { it.toIntOrNull(16) }
 
-            val key = encodedList
-                .firstOrNull()
-                ?: return ""
+            val key =
+                encodedList
+                    .firstOrNull()
+                    ?: return ""
 
             return encodedList
                 .drop(1)

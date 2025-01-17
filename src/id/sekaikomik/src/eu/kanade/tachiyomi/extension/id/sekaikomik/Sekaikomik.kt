@@ -6,13 +6,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Sekaikomik : MangaThemesia(
-    "Sekaikomik",
-    "https://sekaikomik.guru",
-    "id",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
-) {
-
+class Sekaikomik :
+    MangaThemesia(
+        "Sekaikomik",
+        "https://sekaikomik.guru",
+        "id",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
+    ) {
     private val junkDescriptionPattern = """ Link Download : .*""".toRegex()
 
     override fun mangaDetailsParse(document: Document): SManga {

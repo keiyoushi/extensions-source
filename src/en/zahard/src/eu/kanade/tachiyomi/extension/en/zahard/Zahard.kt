@@ -6,12 +6,13 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
-class Zahard : MangaThemesia(
-    "Zahard",
-    "https://zahard.xyz",
-    "en",
-    mangaUrlDirectory = "/library",
-) {
+class Zahard :
+    MangaThemesia(
+        "Zahard",
+        "https://zahard.xyz",
+        "en",
+        mangaUrlDirectory = "/library",
+    ) {
     override val versionId = 2
 
     override val supportsLatest = false
@@ -22,12 +23,19 @@ class Zahard : MangaThemesia(
 
     override fun chapterListSelector() = "#chapterlist > ul > a"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment(mangaUrlDirectory.substring(1))
-            .addQueryParameter("search", query)
-            .addQueryParameter("page", page.toString())
-            .build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment(mangaUrlDirectory.substring(1))
+                .addQueryParameter("search", query)
+                .addQueryParameter("page", page.toString())
+                .build()
 
         return GET(url, headers)
     }

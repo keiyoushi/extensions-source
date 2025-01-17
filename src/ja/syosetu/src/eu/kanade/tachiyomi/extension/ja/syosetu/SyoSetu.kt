@@ -12,11 +12,13 @@ import org.jsoup.select.Evaluator
 class SyoSetu : MangaRawTheme("SyoSetu", "https://syosetu.gs") {
     // syosetu.top doesn't have a popular manga page redirect to latest manga request
     override fun popularMangaRequest(page: Int): Request {
-        val url = baseUrl + if (page > 1) {
-            "/page/$page/"
-        } else {
-            ""
-        }
+        val url =
+            baseUrl +
+                if (page > 1) {
+                    "/page/$page/"
+                } else {
+                    ""
+                }
 
         return GET(url, headers)
     }
@@ -31,15 +33,24 @@ class SyoSetu : MangaRawTheme("SyoSetu", "https://syosetu.gs") {
     }
 
     override fun popularMangaSelector() = "article"
+
     override fun popularMangaNextPageSelector() = ".next.page-numbers"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (page > 1) {
-                addPathSegments("page/$page/")
-            }
-            addQueryParameter("s", query)
-        }.build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    if (page > 1) {
+                        addPathSegments("page/$page/")
+                    }
+                    addQueryParameter("s", query)
+                }.build()
         return GET(url, headers)
     }
 
@@ -49,6 +60,7 @@ class SyoSetu : MangaRawTheme("SyoSetu", "https://syosetu.gs") {
         }
 
     override fun chapterListSelector() = ".chaplist a"
+
     override fun String.sanitizeChapter() = substringAfterLast(" - ")
 
     override fun pageSelector() = Evaluator.Tag("figure")

@@ -13,25 +13,27 @@ fun Document.parseGenres() {
     val container = select(Evaluator.Class("container__link-list--genre-btn")).lastOrNull() ?: return
     val items = container.children().ifEmpty { return }
     val list = ArrayList<Genre>(items.size + 1).apply { add(Genre("全て", null)) }
-    genreList = items.mapTo(list) {
-        val link = it.child(0)
-        Genre(link.text(), link.attr("href"))
-    }
+    genreList =
+        items.mapTo(list) {
+            val link = it.child(0)
+            Genre(link.text(), link.attr("href"))
+        }
 }
 
 val filterList: FilterList
     get() {
-        val list = buildList(5) {
-            if (genreList.isEmpty()) {
-                add(Filter.Header("Press 'Reset' to attempt to show the genres"))
-            } else {
-                add(Filter.Header("Genre (ignored for text search)"))
-                add(GenreFilter(genreList))
+        val list =
+            buildList(5) {
+                if (genreList.isEmpty()) {
+                    add(Filter.Header("Press 'Reset' to attempt to show the genres"))
+                } else {
+                    add(Filter.Header("Genre (ignored for text search)"))
+                    add(GenreFilter(genreList))
+                }
+                add(Filter.Separator())
+                add(StatusFilter())
+                add(SortFilter())
             }
-            add(Filter.Separator())
-            add(StatusFilter())
-            add(SortFilter())
-        }
         return FilterList(list)
     }
 
@@ -50,15 +52,21 @@ fun HttpUrl.Builder.addQueries(filters: FilterList): HttpUrl.Builder {
     return this
 }
 
-class Genre(val name: String, val path: String?)
+class Genre(
+    val name: String,
+    val path: String?,
+)
 
-class GenreFilter(private val list: List<Genre>) :
-    Filter.Select<String>("Genre", list.map { it.name }.toTypedArray()) {
+class GenreFilter(
+    private val list: List<Genre>,
+) : Filter.Select<String>("Genre", list.map { it.name }.toTypedArray()) {
     val path get() = list[state].path
 }
 
-abstract class QueryFilter(name: String, values: Array<String>) :
-    Filter.Select<String>(name, values) {
+abstract class QueryFilter(
+    name: String,
+    values: Array<String>,
+) : Filter.Select<String>(name, values) {
     abstract fun addQueryTo(builder: HttpUrl.Builder)
 }
 

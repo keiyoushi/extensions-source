@@ -20,8 +20,9 @@ import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class MangaAe : ParsedHttpSource(), ConfigurableSource {
-
+class MangaAe :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "مانجا العرب"
 
     override val baseUrl by lazy {
@@ -39,28 +40,34 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(2)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
-        .set("Origin", baseUrl)
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .set("Referer", "$baseUrl/")
+            .set("Origin", baseUrl)
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga/page:$page", headers)
 
     override fun popularMangaSelector() = "div.mangacontainer"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")?.run {
-            attr("data-pagespeed-lazy-src").ifEmpty { attr("src") }
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            thumbnail_url =
+                element.selectFirst("img")?.run {
+                    attr("data-pagespeed-lazy-src").ifEmpty { attr("src") }
+                }
+            element.selectFirst("div.mangacontainer a.manga")!!.run {
+                title = text()
+                setUrlWithoutDomain(absUrl("href"))
+            }
         }
-        element.selectFirst("div.mangacontainer a.manga")!!.run {
-            title = text()
-            setUrlWithoutDomain(absUrl("href"))
-        }
-    }
 
     override fun popularMangaNextPageSelector() = "div.pagination a:last-child:not(.active)"
 
@@ -69,28 +76,36 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesSelector() = "div.popular-manga-container"
 
-    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")?.run {
-            attr("data-pagespeed-lazy-src").ifEmpty { attr("src") }
+    override fun latestUpdatesFromElement(element: Element) =
+        SManga.create().apply {
+            thumbnail_url =
+                element.selectFirst("img")?.run {
+                    attr("data-pagespeed-lazy-src").ifEmpty { attr("src") }
+                }
+            setUrlWithoutDomain(element.selectFirst("a:has(img)")!!.attr("href"))
+            title = element.selectFirst("a:last-child")!!.text()
         }
-        setUrlWithoutDomain(element.selectFirst("a:has(img)")!!.attr("href"))
-        title = element.selectFirst("a:last-child")!!.text()
-    }
 
     override fun latestUpdatesNextPageSelector() = null
 
     // =============================== Search ===============================
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = buildString {
-            append("$baseUrl/manga/search:$query|page:$page")
-            filters.firstOrNull { it is OrderByFilter }
-                ?.takeUnless { it.state == 0 }
-                ?.also {
-                    val filter = it as OrderByFilter
-                    append("|order:${filter.toUriPart()}")
-                }
-            append("|arrange:minus")
-        }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            buildString {
+                append("$baseUrl/manga/search:$query|page:$page")
+                filters
+                    .firstOrNull { it is OrderByFilter }
+                    ?.takeUnless { it.state == 0 }
+                    ?.also {
+                        val filter = it as OrderByFilter
+                        append("|order:${filter.toUriPart()}")
+                    }
+                append("|arrange:minus")
+            }
         return GET(url.toHttpUrl(), headers)
     }
 
@@ -101,63 +116,68 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val infoElement = document.selectFirst("div.indexcontainer")!!
-        // Essential info, a NPE may be understandable
-        with(infoElement) {
-            title = selectFirst("h1.EnglishName")!!.text().removeSurrounding("(", ")")
-            author = selectFirst("div.manga-details-author h4")?.text()
-            artist = author
-            thumbnail_url = selectFirst("img.manga-cover")?.attr("src")
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            val infoElement = document.selectFirst("div.indexcontainer")!!
+            // Essential info, a NPE may be understandable
+            with(infoElement) {
+                title = selectFirst("h1.EnglishName")!!.text().removeSurrounding("(", ")")
+                author = selectFirst("div.manga-details-author h4")?.text()
+                artist = author
+                thumbnail_url = selectFirst("img.manga-cover")?.attr("src")
+            }
+
+            // Additional info
+            infoElement.selectFirst("div.manga-details-extended")?.run {
+                status = parseStatus(selectFirst("td h4")?.text().orEmpty())
+                genre = select("a[href*=tag]").eachText().joinToString()
+                description = selectFirst("h4[style*=overflow-y]")?.text()
+            }
         }
 
-        // Additional info
-        infoElement.selectFirst("div.manga-details-extended")?.run {
-            status = parseStatus(selectFirst("td h4")?.text().orEmpty())
-            genre = select("a[href*=tag]").eachText().joinToString()
-            description = selectFirst("h4[style*=overflow-y]")?.text()
+    private fun parseStatus(status: String) =
+        when {
+            status.contains("مستمرة") -> SManga.ONGOING
+            status.contains("مكتملة") -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
-    }
-
-    private fun parseStatus(status: String) = when {
-        status.contains("مستمرة") -> SManga.ONGOING
-        status.contains("مكتملة") -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
 
     // ============================== Chapters ==============================
     override fun chapterListSelector() = "ul.new-manga-chapters > li a"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href").removeSuffix("/1/") + "/0/allpages")
-        name = "\u061C" + element.text() // Add unicode ARABIC LETTER MARK to ensure all titles are right to left
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("href").removeSuffix("/1/") + "/0/allpages")
+            name = "\u061C" + element.text() // Add unicode ARABIC LETTER MARK to ensure all titles are right to left
+        }
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#showchaptercontainer img").mapIndexed { index, item ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("div#showchaptercontainer img").mapIndexed { index, item ->
             Page(index, "", item.attr("src"))
         }
-    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // ============================== Filters ===============================
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(
+        displayName: String,
+        val vals: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
-    private class OrderByFilter : UriPartFilter(
-        "الترتيب حسب",
-        arrayOf(
-            Pair("اختيار", ""),
-            Pair("اسم المانجا", "english_name"),
-            Pair("تاريخ النشر", "release_date"),
-            Pair("عدد الفصول", "chapter_count"),
-            Pair("الحالة", "status"),
-        ),
-    )
+    private class OrderByFilter :
+        UriPartFilter(
+            "الترتيب حسب",
+            arrayOf(
+                Pair("اختيار", ""),
+                Pair("اسم المانجا", "english_name"),
+                Pair("تاريخ النشر", "release_date"),
+                Pair("عدد الفصول", "chapter_count"),
+                Pair("الحالة", "status"),
+            ),
+        )
 
     override fun getFilterList() = FilterList(OrderByFilter())
 
@@ -166,28 +186,30 @@ class MangaAe : ParsedHttpSource(), ConfigurableSource {
         private const val RESTART_TACHIYOMI = "أعد تشغيل التطبيق لتمكين الإعدادات الجديدة."
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "تعديل الرابط"
-        internal val MIRROR_PREF_ENTRY_VALUES = arrayOf(
-            "https://mangaae.com",
-            "https://mangaat.com",
-            "https://mngaar.com",
-        )
+        internal val MIRROR_PREF_ENTRY_VALUES =
+            arrayOf(
+                "https://mangaae.com",
+                "https://mangaat.com",
+                "https://mngaar.com",
+            )
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val mirrorPref = ListPreference(screen.context).apply {
-            key = MIRROR_PREF_KEY
-            title = MIRROR_PREF_TITLE
-            entries = MIRROR_PREF_ENTRY_VALUES
-            entryValues = MIRROR_PREF_ENTRY_VALUES
-            setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
-            summary = "%s"
+        val mirrorPref =
+            ListPreference(screen.context).apply {
+                key = MIRROR_PREF_KEY
+                title = MIRROR_PREF_TITLE
+                entries = MIRROR_PREF_ENTRY_VALUES
+                entryValues = MIRROR_PREF_ENTRY_VALUES
+                setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
-                true
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
+                    true
+                }
             }
-        }
         screen.addPreference(mirrorPref)
     }
 }

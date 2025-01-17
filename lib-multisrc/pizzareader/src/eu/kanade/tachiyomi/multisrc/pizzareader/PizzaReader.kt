@@ -26,7 +26,6 @@ abstract class PizzaReader(
     private val apiPath: String = "/api",
     private val dateParser: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ITALY),
 ) : HttpSource() {
-
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
@@ -35,46 +34,56 @@ abstract class PizzaReader(
 
     protected open val json: Json by injectLazy()
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("Referer", baseUrl)
-    }
+    override fun headersBuilder() =
+        Headers.Builder().apply {
+            add("Referer", baseUrl)
+        }
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$apiUrl/comics", headers)
+    override fun popularMangaRequest(page: Int) = GET("$apiUrl/comics", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PizzaResultsDto>(response.body.string())
 
-        val comicList = result.comics
-            .map(::popularMangaFromObject)
+        val comicList =
+            result.comics
+                .map(::popularMangaFromObject)
 
         return MangasPage(comicList, hasNextPage = false)
     }
 
-    protected open fun popularMangaFromObject(comic: PizzaComicDto): SManga = SManga.create().apply {
-        title = comic.title
-        thumbnail_url = comic.thumbnail
-        url = comic.url
-    }
+    protected open fun popularMangaFromObject(comic: PizzaComicDto): SManga =
+        SManga.create().apply {
+            title = comic.title
+            thumbnail_url = comic.thumbnail
+            url = comic.url
+        }
 
     override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = json.decodeFromString<PizzaResultsDto>(response.body.string())
 
-        val comicList = result.comics
-            .filter { comic -> comic.lastChapter != null }
-            .sortedByDescending { comic -> comic.lastChapter!!.publishedOn }
-            .map(::popularMangaFromObject)
-            .take(10)
+        val comicList =
+            result.comics
+                .filter { comic -> comic.lastChapter != null }
+                .sortedByDescending { comic -> comic.lastChapter!!.publishedOn }
+                .map(::popularMangaFromObject)
+                .take(10)
 
         return MangasPage(comicList, hasNextPage = false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchUrl = "$apiUrl/search/".toHttpUrl().newBuilder()
-            .addPathSegment(query)
-            .toString()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val searchUrl =
+            "$apiUrl/search/"
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment(query)
+                .toString()
 
         return GET(searchUrl, headers)
     }
@@ -83,21 +92,24 @@ abstract class PizzaReader(
 
     // Workaround to allow "Open in browser" to use the real URL
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client.newCall(chapterListRequest(manga)).asObservableSuccess()
+        client
+            .newCall(chapterListRequest(manga))
+            .asObservableSuccess()
             .map { mangaDetailsParse(it).apply { initialized = true } }
 
-    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
-        val result = json.decodeFromString<PizzaResultDto>(response.body.string())
-        val comic = result.comic!!
+    override fun mangaDetailsParse(response: Response): SManga =
+        SManga.create().apply {
+            val result = json.decodeFromString<PizzaResultDto>(response.body.string())
+            val comic = result.comic!!
 
-        title = comic.title
-        author = comic.author
-        artist = comic.artist
-        description = comic.description
-        genre = comic.genres.joinToString(", ") { it.name }
-        status = comic.status.toStatus()
-        thumbnail_url = comic.thumbnail
-    }
+            title = comic.title
+            author = comic.author
+            artist = comic.artist
+            description = comic.description
+            genre = comic.genres.joinToString(", ") { it.name }
+            status = comic.status.toStatus()
+            thumbnail_url = comic.thumbnail
+        }
 
     override fun chapterListRequest(manga: SManga) = GET(apiUrl + manga.url, headers)
 
@@ -109,15 +121,18 @@ abstract class PizzaReader(
             .map(::chapterFromObject)
     }
 
-    protected open fun chapterFromObject(chapter: PizzaChapterDto): SChapter = SChapter.create().apply {
-        name = chapter.fullTitle
-        chapter_number = (chapter.chapter ?: -1).toFloat() +
-            ("0." + (chapter.subchapter?.toString() ?: "0")).toFloat()
-        date_upload = chapter.publishedOn.toDate()
-        scanlator = chapter.teams.filterNotNull()
-            .joinToString(" & ") { it.name }
-        url = chapter.url
-    }
+    protected open fun chapterFromObject(chapter: PizzaChapterDto): SChapter =
+        SChapter.create().apply {
+            name = chapter.fullTitle
+            chapter_number = (chapter.chapter ?: -1).toFloat() +
+                ("0." + (chapter.subchapter?.toString() ?: "0")).toFloat()
+            date_upload = chapter.publishedOn.toDate()
+            scanlator =
+                chapter.teams
+                    .filterNotNull()
+                    .joinToString(" & ") { it.name }
+            url = chapter.url
+        }
 
     override fun pageListRequest(chapter: SChapter) = GET(apiUrl + chapter.url, headers)
 
@@ -129,19 +144,19 @@ abstract class PizzaReader(
 
     override fun imageUrlParse(response: Response): String = ""
 
-    protected open fun String.toDate(): Long {
-        return runCatching { dateParser.parse(this)?.time }
+    protected open fun String.toDate(): Long =
+        runCatching { dateParser.parse(this)?.time }
             .getOrNull() ?: 0L
-    }
 
-    protected open fun String.toStatus(): Int = when (substring(0, 7)) {
-        "In cors" -> SManga.ONGOING
-        "On goin" -> SManga.ONGOING
-        "Complet" -> SManga.COMPLETED
-        "Conclus" -> SManga.COMPLETED
-        "Conclud" -> SManga.COMPLETED
-        "Licenzi" -> SManga.LICENSED
-        "License" -> SManga.LICENSED
-        else -> SManga.UNKNOWN
-    }
+    protected open fun String.toStatus(): Int =
+        when (substring(0, 7)) {
+            "In cors" -> SManga.ONGOING
+            "On goin" -> SManga.ONGOING
+            "Complet" -> SManga.COMPLETED
+            "Conclus" -> SManga.COMPLETED
+            "Conclud" -> SManga.COMPLETED
+            "Licenzi" -> SManga.LICENSED
+            "License" -> SManga.LICENSED
+            else -> SManga.UNKNOWN
+        }
 }

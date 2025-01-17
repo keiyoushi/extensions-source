@@ -8,7 +8,9 @@ import java.text.DateFormat.getDateTimeInstance
 import java.util.Date
 
 @Serializable
-class Result<T>(val root: T)
+class Result<T>(
+    val root: T,
+)
 
 // Manga
 @Serializable
@@ -25,23 +27,26 @@ class Magazine(
     val announcement: Announcement? = null,
     val items: List<Story> = emptyList(),
 ) {
-    fun toSManga() = SManga.create().apply {
-        url = "${alias!!}#$id"
-        title = this@Magazine.title
-        thumbnail_url = squareImage!!.url
-    }
-
-    fun toSMangaDetails() = toSManga().apply {
-        author = this@Magazine.author?.penName
-        val flagsText = flags?.toText()
-        description = generateDescription(flagsText)
-        status = when {
-            flags?.isFinish == true -> SManga.COMPLETED
-            !flagsText.isNullOrEmpty() -> SManga.ONGOING
-            else -> SManga.UNKNOWN
+    fun toSManga() =
+        SManga.create().apply {
+            url = "${alias!!}#$id"
+            title = this@Magazine.title
+            thumbnail_url = squareImage!!.url
         }
-        initialized = true
-    }
+
+    fun toSMangaDetails() =
+        toSManga().apply {
+            author = this@Magazine.author?.penName
+            val flagsText = flags?.toText()
+            description = generateDescription(flagsText)
+            status =
+                when {
+                    flags?.isFinish == true -> SManga.COMPLETED
+                    !flagsText.isNullOrEmpty() -> SManga.ONGOING
+                    else -> SManga.UNKNOWN
+                }
+            initialized = true
+        }
 
     private fun generateDescription(flagsText: String?): String {
         val result = mutableListOf<String>()
@@ -56,11 +61,12 @@ class Magazine(
         return items.map {
             SChapter.create().apply {
                 url = "${alias!!}#$id/${it.id ?: it.storyId}"
-                name = buildString {
-                    if (it.kind != "free") append("🔒 ")
-                    append(it.title)
-                    if (it.subtitle != null) append(' ').append(it.subtitle)
-                }
+                name =
+                    buildString {
+                        if (it.kind != "free") append("🔒 ")
+                        append(it.title)
+                        if (it.subtitle != null) append(' ').append(it.subtitle)
+                    }
                 val time = it.releaseStart ?: -1
                 date_upload = time
                 if (time > now) scanlator = getDateTimeInstance().format(Date(time)) + '~'
@@ -70,7 +76,9 @@ class Magazine(
 }
 
 fun String.alias() = this.substringBefore('#')
+
 fun String.mangaId() = this.substringAfter('#')
+
 fun String.chapterDir(): Pair<String, String> =
     with(this.substringAfter('#')) {
         // this == [mangaId-UUID]/[chapterId-UUID]
@@ -100,16 +108,24 @@ class Story(
 }
 
 @Serializable
-class File(val url: String)
+class File(
+    val url: String,
+)
 
 @Serializable
-class Author(val penName: String? = null)
+class Author(
+    val penName: String? = null,
+)
 
 @Serializable
-class Top(val boxes: List<Box>)
+class Top(
+    val boxes: List<Box>,
+)
 
 @Serializable
-class Box(val panels: List<Magazine>)
+class Box(
+    val panels: List<Magazine>,
+)
 
 @Serializable
 class Flags(
@@ -120,12 +136,10 @@ class Flags(
     val isFriday: Boolean = false,
     val isSaturday: Boolean = false,
     val isSunday: Boolean = false,
-
     val isWeekly: Boolean = false,
     val isEveryOtherWeek: Boolean = false,
     val isThreeConsecutiveWeeks: Boolean = false,
     val isMonthly: Boolean = false,
-
     val isFinish: Boolean = false,
 //  val isMGAward: Boolean = false,
 //  val isNew: Boolean = false,
@@ -153,7 +167,9 @@ class Flags(
 }
 
 @Serializable
-class Announcement(val text: String)
+class Announcement(
+    val text: String,
+)
 
 @Serializable
 class Directory(

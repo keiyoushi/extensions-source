@@ -7,19 +7,21 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class OrigamiOrpheans : MangaThemesia(
-    "Origami Orpheans",
-    "https://origami-orpheans.com",
-    "pt-BR",
-    dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
-) {
-
+class OrigamiOrpheans :
+    MangaThemesia(
+        "Origami Orpheans",
+        "https://origami-orpheans.com",
+        "pt-BR",
+        dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
+    ) {
     // Scanlator migrated from Madara to WpMangaReader.
     override val versionId = 2
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     override val altNamePrefix = "Nomes alternativos: "
 }

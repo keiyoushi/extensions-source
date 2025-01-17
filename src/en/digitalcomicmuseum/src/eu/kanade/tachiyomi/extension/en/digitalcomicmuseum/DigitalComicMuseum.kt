@@ -18,15 +18,17 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class DigitalComicMuseum() : ParsedHttpSource() {
+class DigitalComicMuseum : ParsedHttpSource() {
     override val baseUrl = "https://digitalcomicmuseum.com"
     override val lang = "en"
     override val name = "Digital Comic Museum"
     override val supportsLatest = true
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor(::errorIntercept)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .addInterceptor(::errorIntercept)
+            .build()
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
@@ -39,21 +41,19 @@ class DigitalComicMuseum() : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = "img[alt=Next]"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/stats.php?ACT=latest&start=${page - 1}00&limit=100")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/stats.php?ACT=latest&start=${page - 1}00&limit=100")
 
     override fun latestUpdatesSelector() = "tbody > .mainrow"
 
     // Popular
 
     override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
+
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
+
     override fun popularMangaSelector() = latestUpdatesSelector()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/stats.php?ACT=topdl&start=${page - 1}00&limit=100")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/stats.php?ACT=topdl&start=${page - 1}00&limit=100")
 
     // Search
 
@@ -66,20 +66,32 @@ class DigitalComicMuseum() : ParsedHttpSource() {
     }
 
     override fun searchMangaNextPageSelector() = "Not supported"
+
     override fun searchMangaSelector() = "#search-results tbody > tr"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val requestBody: RequestBody = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart("terms", query)
-            .build()
-        val requestHeaders: Headers = Headers.Builder()
-            .addAll(headers)
-            .add("Content-Type", "multipart/form-data")
-            .build()
-        val url = "$baseUrl/index.php".toHttpUrl().newBuilder()
-            .addQueryParameter("ACT", "dosearch")
-            .build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val requestBody: RequestBody =
+            MultipartBody
+                .Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("terms", query)
+                .build()
+        val requestHeaders: Headers =
+            Headers
+                .Builder()
+                .addAll(headers)
+                .add("Content-Type", "multipart/form-data")
+                .build()
+        val url =
+            "$baseUrl/index.php"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("ACT", "dosearch")
+                .build()
         return POST(url.toString(), requestHeaders, requestBody)
     }
 
@@ -118,9 +130,7 @@ class DigitalComicMuseum() : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String {
-        return document.select("body > a:nth-of-type(2) > img").attr("src")
-    }
+    override fun imageUrlParse(document: Document): String = document.select("body > a:nth-of-type(2) > img").attr("src")
 
     // Interceptor
     private fun errorIntercept(chain: Interceptor.Chain): Response {

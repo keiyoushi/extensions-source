@@ -28,9 +28,11 @@ class Hachi : HttpSource() {
     override val name = "Hachi"
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::buildIdOutdatedInterceptor)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::buildIdOutdatedInterceptor)
+            .build()
 
     private fun buildIdOutdatedInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -51,13 +53,17 @@ class Hachi : HttpSource() {
             buildId = fetchBuildId(document)
 
             // Redo request with new buildId
-            val url = request.url.newBuilder()
-                .setPathSegment(2, buildId)
-                .fragment("DO_NOT_RETRY")
-                .build()
-            val newRequest = request.newBuilder()
-                .url(url)
-                .build()
+            val url =
+                request.url
+                    .newBuilder()
+                    .setPathSegment(2, buildId)
+                    .fragment("DO_NOT_RETRY")
+                    .build()
+            val newRequest =
+                request
+                    .newBuilder()
+                    .url(url)
+                    .build()
 
             return chain.proceed(newRequest)
         }
@@ -70,19 +76,22 @@ class Hachi : HttpSource() {
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiBaseUrl/article".toHttpUrl().newBuilder()
-            .addQueryParameter("page", (page - 1).toString())
-            .addQueryParameter("size", "28")
-            .addQueryParameter("property", "views")
-            .addQueryParameter("direction", "desc")
-            .addQueryParameter("query", "")
-            .addQueryParameter("fields", "title")
-            .addQueryParameter("tagMode", "false")
-            .addQueryParameter("type", "")
-            .addQueryParameter("status", "")
-            .addQueryParameter("chapterCount", "4")
-            .addQueryParameter("mature", "true")
-            .build()
+        val url =
+            "$apiBaseUrl/article"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("page", (page - 1).toString())
+                .addQueryParameter("size", "28")
+                .addQueryParameter("property", "views")
+                .addQueryParameter("direction", "desc")
+                .addQueryParameter("query", "")
+                .addQueryParameter("fields", "title")
+                .addQueryParameter("tagMode", "false")
+                .addQueryParameter("type", "")
+                .addQueryParameter("status", "")
+                .addQueryParameter("chapterCount", "4")
+                .addQueryParameter("mature", "true")
+                .build()
 
         return GET(url, headers)
     }
@@ -91,19 +100,22 @@ class Hachi : HttpSource() {
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiBaseUrl/article".toHttpUrl().newBuilder()
-            .addQueryParameter("page", (page - 1).toString())
-            .addQueryParameter("size", "28")
-            .addQueryParameter("property", "latestChapterDate")
-            .addQueryParameter("direction", "desc")
-            .addQueryParameter("query", "")
-            .addQueryParameter("fields", "title")
-            .addQueryParameter("tagMode", "false")
-            .addQueryParameter("type", "")
-            .addQueryParameter("status", "")
-            .addQueryParameter("chapterCount", "4")
-            .addQueryParameter("mature", "true")
-            .build()
+        val url =
+            "$apiBaseUrl/article"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("page", (page - 1).toString())
+                .addQueryParameter("size", "28")
+                .addQueryParameter("property", "latestChapterDate")
+                .addQueryParameter("direction", "desc")
+                .addQueryParameter("query", "")
+                .addQueryParameter("fields", "title")
+                .addQueryParameter("tagMode", "false")
+                .addQueryParameter("type", "")
+                .addQueryParameter("status", "")
+                .addQueryParameter("chapterCount", "4")
+                .addQueryParameter("mature", "true")
+                .build()
 
         return GET(url, headers)
     }
@@ -120,11 +132,12 @@ class Hachi : HttpSource() {
             return super.fetchSearchManga(page, query, filters)
         }
 
-        val request = mangaDetailsRequest(
-            SManga.create().apply {
-                url = "/article/${query.substringAfter(SEARCH_PREFIX)}"
-            },
-        )
+        val request =
+            mangaDetailsRequest(
+                SManga.create().apply {
+                    url = "/article/${query.substringAfter(SEARCH_PREFIX)}"
+                },
+            )
 
         return client.newCall(request).asObservableSuccess().map { response ->
             val details = mangaDetailsParse(response)
@@ -132,57 +145,72 @@ class Hachi : HttpSource() {
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiBaseUrl/article".toHttpUrl().newBuilder().apply {
-            addQueryParameter("page", (page - 1).toString())
-            addQueryParameter("size", "28")
-            addQueryParameter("direction", "desc")
-            addQueryParameter("query", query)
-            addQueryParameter("fields", "title")
-            addQueryParameter("tagMode", "false")
-            addQueryParameter("type", "")
-            addQueryParameter("status", "")
-            addQueryParameter("chapterCount", "4")
-            addQueryParameter("mature", "true")
-        }.build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$apiBaseUrl/article"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("page", (page - 1).toString())
+                    addQueryParameter("size", "28")
+                    addQueryParameter("direction", "desc")
+                    addQueryParameter("query", query)
+                    addQueryParameter("fields", "title")
+                    addQueryParameter("tagMode", "false")
+                    addQueryParameter("type", "")
+                    addQueryParameter("status", "")
+                    addQueryParameter("chapterCount", "4")
+                    addQueryParameter("mature", "true")
+                }.build()
 
         return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<ArticleResponseDto>()
-        val mangas = dto.content.map { manga ->
-            SManga.create().apply {
-                setUrlWithoutDomain("/article/${manga.link}")
-                title = manga.title
-                artist = manga.artist
-                author = manga.author
-                description = manga.summary
-                genre = manga.tags.joinToString()
-                status = manga.status.parseStatus()
-                thumbnail_url = manga.coverImage
-                initialized = true
+        val mangas =
+            dto.content.map { manga ->
+                SManga.create().apply {
+                    setUrlWithoutDomain("/article/${manga.link}")
+                    title = manga.title
+                    artist = manga.artist
+                    author = manga.author
+                    description = manga.summary
+                    genre = manga.tags.joinToString()
+                    status = manga.status.parseStatus()
+                    thumbnail_url = manga.coverImage
+                    initialized = true
+                }
             }
-        }
 
         return MangasPage(mangas, !dto.last)
     }
 
     // Details
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = patternMangaUrl.find(manga.url)?.groups?.get("slug")?.value
-            ?: throw Exception("Failed to find manga from URL")
+        val slug =
+            patternMangaUrl
+                .find(manga.url)
+                ?.groups
+                ?.get("slug")
+                ?.value
+                ?: throw Exception("Failed to find manga from URL")
 
-        val url = "$baseUrl/_next/data/$buildId/article/$slug.json".toHttpUrl().newBuilder()
-            .addQueryParameter("url", slug)
-            .build()
+        val url =
+            "$baseUrl/_next/data/$buildId/article/$slug.json"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("url", slug)
+                .build()
 
         return GET(url, headers)
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return super.mangaDetailsRequest(manga).url.toString()
-    }
+    override fun getMangaUrl(manga: SManga): String = super.mangaDetailsRequest(manga).url.toString()
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<DetailsResponseDto>()
@@ -193,32 +221,35 @@ class Hachi : HttpSource() {
             artist = dto.pageProps.article.artist
             author = dto.pageProps.article.author
             description = dto.pageProps.article.summary
-            genre = dto.pageProps.article.tags.joinToString()
-            status = dto.pageProps.article.status.parseStatus()
+            genre =
+                dto.pageProps.article.tags
+                    .joinToString()
+            status =
+                dto.pageProps.article.status
+                    .parseStatus()
             thumbnail_url = dto.pageProps.article.coverImage
             initialized = true
         }
     }
 
     // Chapters
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<DetailsResponseDto>()
-        val chapters = dto.pageProps.chapters.map { chapter ->
-            SChapter.create().apply {
-                val chapterNumber = chapter.chapterNumber.toString().removeSuffix(".0")
-                setUrlWithoutDomain("/article/${dto.pageProps.article.link}/chapter/$chapterNumber")
-                name = "Chapter $chapterNumber"
+        val chapters =
+            dto.pageProps.chapters.map { chapter ->
+                SChapter.create().apply {
+                    val chapterNumber = chapter.chapterNumber.toString().removeSuffix(".0")
+                    setUrlWithoutDomain("/article/${dto.pageProps.article.link}/chapter/$chapterNumber")
+                    name = "Chapter $chapterNumber"
 
-                date_upload = runCatching {
-                    dateFormat.parse(chapter.createdAt)?.time
-                }.getOrNull() ?: 0
-                chapter_number = chapter.chapterNumber
+                    date_upload = runCatching {
+                        dateFormat.parse(chapter.createdAt)?.time
+                    }.getOrNull() ?: 0
+                    chapter_number = chapter.chapterNumber
+                }
             }
-        }
 
         return chapters
     }
@@ -229,18 +260,18 @@ class Hachi : HttpSource() {
         val slug = matchGroups["slug"]!!.value
         val number = matchGroups["number"]!!.value
 
-        val url = "$baseUrl/_next/data/$buildId/article/$slug/chapter/$number.json".toHttpUrl()
-            .newBuilder()
-            .addQueryParameter("url", slug)
-            .addQueryParameter("number", number)
-            .build()
+        val url =
+            "$baseUrl/_next/data/$buildId/article/$slug/chapter/$number.json"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("url", slug)
+                .addQueryParameter("number", number)
+                .build()
 
         return GET(url, headers)
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return super.pageListRequest(chapter).url.toString()
-    }
+    override fun getChapterUrl(chapter: SChapter): String = super.pageListRequest(chapter).url.toString()
 
     override fun pageListParse(response: Response): List<Page> {
         val dto = response.parseAs<ChapterResponseDto>()
@@ -253,22 +284,24 @@ class Hachi : HttpSource() {
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // Other
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    private fun String.parseStatus() = when (this.lowercase()) {
-        "ongoing" -> SManga.ONGOING
-        "completed" -> SManga.COMPLETED
-        "dropped" -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
-    }
+    private fun String.parseStatus() =
+        when (this.lowercase()) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            "dropped" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
 
     private fun fetchBuildId(document: Document? = null): String {
-        val realDocument = document
-            ?: client.newCall(GET(baseUrl, headers)).execute().use { it.asJsoup() }
+        val realDocument =
+            document
+                ?: client.newCall(GET(baseUrl, headers)).execute().use { it.asJsoup() }
 
-        val nextData = realDocument.selectFirst("script#__NEXT_DATA__")?.data()
-            ?: throw Exception("Failed to find __NEXT_DATA__")
+        val nextData =
+            realDocument.selectFirst("script#__NEXT_DATA__")?.data()
+                ?: throw Exception("Failed to find __NEXT_DATA__")
 
         val dto = json.decodeFromString<NextDataDto>(nextData)
         return dto.buildId

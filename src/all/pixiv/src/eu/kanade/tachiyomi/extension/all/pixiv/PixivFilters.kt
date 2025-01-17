@@ -20,7 +20,9 @@ internal class PixivFilters : MutableList<Filter<*>> by mutableListOf() {
     private val usersFilter = object : Filter.Text("Users") {}.also(::add)
     private val ratingFilter = object : Filter.Select<String>("Rating", RATING_VALUES, 0) {}.also(::add)
 
-    init { add(Filter.Header("(the following are ignored when the users filter is in use)")) }
+    init {
+        add(Filter.Header("(the following are ignored when the users filter is in use)"))
+    }
 
     private val orderFilter = object : Filter.Sort("Order", arrayOf("Date posted")) {}.also(::add)
     private val dateBeforeFilter = object : Filter.Text("Posted before") {}.also(::add)
@@ -52,6 +54,7 @@ internal class PixivFilters : MutableList<Filter<*>> by mutableListOf() {
     }
 
     val rating: String? get() = RATING_PARAMS[ratingFilter.state]
+
     fun makeRatingPredicate() = RATING_PREDICATES[ratingFilter.state]
 
     val order: String? get() = orderFilter.state?.ascending?.let { "date" }

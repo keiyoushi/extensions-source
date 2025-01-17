@@ -6,17 +6,17 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class GrabberZone : Madara(
-    "Grabber Zone",
-    "https://grabber.zone",
-    "all",
-    SimpleDateFormat("dd.MM.yyyy", Locale.ENGLISH),
-) {
+class GrabberZone :
+    Madara(
+        "Grabber Zone",
+        "https://grabber.zone",
+        "all",
+        SimpleDateFormat("dd.MM.yyyy", Locale.ENGLISH),
+    ) {
     override val mangaSubString = "comics"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
+    override fun chapterFromElement(element: Element): SChapter =
+        super.chapterFromElement(element).apply {
             name = element.selectFirst("a + a")!!.text()
         }
-    }
 }

@@ -4,12 +4,13 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ToonFr : Madara(
-    "Toon FR",
-    "https://toonfr.com",
-    "fr",
-    dateFormat = SimpleDateFormat("MMM d", Locale("fr")),
-) {
+class ToonFr :
+    Madara(
+        "Toon FR",
+        "https://toonfr.com",
+        "fr",
+        dateFormat = SimpleDateFormat("MMM d", Locale("fr")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 

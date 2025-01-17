@@ -22,7 +22,9 @@ data class Series<T : Any>(
 }
 
 @Serializable
-data class Title(private val title: Name) {
+data class Title(
+    private val title: Name,
+) {
     override fun toString() = title.toString()
 }
 
@@ -56,17 +58,22 @@ data class Episode(
     val timestamp: Long
         get() = createdAt.timestamp
 
-    override fun toString() = buildString {
-        append(data?.title ?: "Episode $ord")
-        if (lockData.isLocked) append(" \uD83D\uDD12")
-    }
+    override fun toString() =
+        buildString {
+            append(data?.title ?: "Episode $ord")
+            if (lockData.isLocked) append(" \uD83D\uDD12")
+        }
 }
 
 @Serializable
-data class Data(val title: String? = null)
+data class Data(
+    val title: String? = null,
+)
 
 @Serializable
-data class LockData(private val state: Int) {
+data class LockData(
+    private val state: Int,
+) {
     // TODO: check for more unlocked states
     val isLocked: Boolean
         get() = state !in arrayOf(110, 130)
@@ -90,22 +97,30 @@ data class Description(
 
 @Serializable
 @Suppress("PrivatePropertyName")
-data class Cover(private val `1280x1840_480`: Image) {
+data class Cover(
+    private val `1280x1840_480`: Image,
+) {
     override fun toString() = `1280x1840_480`.toString()
 }
 
 @Serializable
-data class Image(private val downloadUrl: String) {
+data class Image(
+    private val downloadUrl: String,
+) {
     override fun toString() = downloadUrl
 }
 
 @Serializable
-data class Tag(private val name: Name) {
+data class Tag(
+    private val name: Name,
+) {
     override fun toString() = name.toString()
 }
 
 @Serializable
-data class Name(private val en: String) {
+data class Name(
+    private val en: String,
+) {
     override fun toString() = en
 }
 

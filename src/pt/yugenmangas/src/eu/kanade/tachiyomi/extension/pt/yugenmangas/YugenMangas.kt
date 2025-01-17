@@ -26,7 +26,6 @@ import uy.kohesive.injekt.injectLazy
 import java.util.concurrent.TimeUnit
 
 class YugenMangas : HttpSource() {
-
     override val name = "Yugen Mangás"
 
     override val baseUrl = "https://yugenmangasbr.voblog.xyz"
@@ -35,32 +34,40 @@ class YugenMangas : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     override val versionId = 2
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("Referer", "$baseUrl/")
 
     val apiHeaders by lazy { apiHeadersBuilder().build() }
 
-    private fun apiHeadersBuilder(): Headers.Builder = headersBuilder()
-        .add("Accept", "application/json, text/plain, */*")
-        .add("Origin", baseUrl)
-        .add("Sec-Fetch-Dest", "empty")
-        .add("Sec-Fetch-Mode", "no-cors")
-        .add("Sec-Fetch-Site", "same-site")
+    private fun apiHeadersBuilder(): Headers.Builder =
+        headersBuilder()
+            .add("Accept", "application/json, text/plain, */*")
+            .add("Origin", baseUrl)
+            .add("Sec-Fetch-Dest", "empty")
+            .add("Sec-Fetch-Mode", "no-cors")
+            .add("Sec-Fetch-Site", "same-site")
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$BASE_API/widgets/sort_and_filter/".toHttpUrl().newBuilder()
-            .addQueryParameter("page", "$page")
-            .addQueryParameter("sort", "views")
-            .addQueryParameter("order", "desc")
-            .build()
+        val url =
+            "$BASE_API/widgets/sort_and_filter/"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("page", "$page")
+                .addQueryParameter("sort", "views")
+                .addQueryParameter("order", "desc")
+                .build()
 
         return GET(url, apiHeaders)
     }
@@ -71,9 +78,7 @@ class YugenMangas : HttpSource() {
         return MangasPage(mangaList, hasNextPage = dto.hasNext())
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$BASE_API/widgets/home/updates/", apiHeaders)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$BASE_API/widgets/home/updates/", apiHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<LatestUpdatesDto>()
@@ -81,7 +86,11 @@ class YugenMangas : HttpSource() {
         return MangasPage(mangaList, hasNextPage = false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val payload = json.encodeToString(SearchDto(query)).toRequestBody(JSON_MEDIA_TYPE)
         return POST("$BASE_API/widgets/search/", apiHeaders, payload)
     }
@@ -96,11 +105,12 @@ class YugenMangas : HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<MangaDetailsDto>().toSManga()
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDetailsDto>().toSManga()
 
-    private fun chapterListRequest(manga: SManga, page: Int): Request {
+    private fun chapterListRequest(
+        manga: SManga,
+        page: Int,
+    ): Request {
         val code = manga.url.substringAfterLast("/")
         val payload = json.encodeToString(SeriesDto(code)).toRequestBody(JSON_MEDIA_TYPE)
         return POST("$BASE_API/series/chapters/get-series-chapters/?page=$page", apiHeaders, payload)
@@ -119,8 +129,7 @@ class YugenMangas : HttpSource() {
         return Observable.just(chapters)
     }
 
-    private fun Response.getSeriesCode(): SeriesDto =
-        this.request.body!!.parseAs<SeriesDto>()
+    private fun Response.getSeriesCode(): SeriesDto = this.request.body!!.parseAs<SeriesDto>()
 
     override fun pageListRequest(chapter: SChapter): Request {
         val code = chapter.url.substringAfterLast("/")
@@ -135,25 +144,26 @@ class YugenMangas : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PageListDto>().images.mapIndexed { index, imageUrl ->
+    override fun pageListParse(response: Response): List<Page> =
+        response.parseAs<PageListDto>().images.mapIndexed { index, imageUrl ->
             Page(index, baseUrl, "$BASE_MEDIA/$imageUrl")
         }
-    }
 
     override fun imageUrlParse(response: Response) = ""
 
     override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", page.url)
-            .build()
+        val newHeaders =
+            headersBuilder()
+                .set("Referer", page.url)
+                .build()
 
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(it.body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T =
+        use {
+            json.decodeFromString(it.body.string())
+        }
 
     private inline fun <reified T> RequestBody.parseAs(): T {
         val jsonString = Buffer().also { writeTo(it) }.readUtf8()

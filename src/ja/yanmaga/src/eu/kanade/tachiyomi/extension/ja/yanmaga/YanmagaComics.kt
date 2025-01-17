@@ -14,22 +14,21 @@ import org.jsoup.select.Elements
 import rx.Observable
 
 class YanmagaComics : Yanmaga("search-item-category--comics") {
-
     override val name = "ヤンマガ（マンガ）"
 
     override val supportsLatest = true
 
     private lateinit var directory: Elements
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return if (page == 1) {
-            client.newCall(popularMangaRequest(page))
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        if (page == 1) {
+            client
+                .newCall(popularMangaRequest(page))
                 .asObservableSuccess()
                 .map { popularMangaParse(it) }
         } else {
             Observable.just(parseDirectory(page))
         }
-    }
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/comics", headers)
 
@@ -50,11 +49,12 @@ class YanmagaComics : Yanmaga("search-item-category--comics") {
 
     override fun popularMangaSelector() = "a.ga-comics-book-item"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        title = element.selectFirst(".mod-book-title")!!.text()
-        thumbnail_url = element.selectFirst(".mod-book-image img")?.absUrl("data-src")
-    }
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            title = element.selectFirst(".mod-book-title")!!.text()
+            thumbnail_url = element.selectFirst(".mod-book-image img")?.absUrl("data-src")
+        }
 
     override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
 
@@ -70,11 +70,13 @@ class YanmagaComics : Yanmaga("search-item-category--comics") {
         }
 
         val offset = (page - 1) * LATEST_UPDATES_PER_PAGE
-        val headers = headers.newBuilder()
-            .set("Referer", pageUrl)
-            .set("X-CSRF-Token", latestUpdatesCsrfToken!!)
-            .set("X-Requested-With", "XMLHttpRequest")
-            .build()
+        val headers =
+            headers
+                .newBuilder()
+                .set("Referer", pageUrl)
+                .set("X-CSRF-Token", latestUpdatesCsrfToken!!)
+                .set("X-Requested-With", "XMLHttpRequest")
+                .build()
 
         return GET("${latestUpdatesMoreUrl!!}?offset=$offset", headers)
     }
@@ -92,15 +94,18 @@ class YanmagaComics : Yanmaga("search-item-category--comics") {
                 latestUpdatesCount = it.attr("data-count").toInt()
             }
 
-            val manga = document.select(latestUpdatesSelector())
-                .map { latestUpdatesFromElement(it) }
+            val manga =
+                document
+                    .select(latestUpdatesSelector())
+                    .map { latestUpdatesFromElement(it) }
             val hasNextPage = latestUpdatesCount > LATEST_UPDATES_PER_PAGE
 
             MangasPage(manga, hasNextPage)
         } else {
             val offset = url.queryParameter("offset")!!.toInt()
-            val manga = parseInsertAdjacentHtmlScript(response.body.string())
-                .map { latestUpdatesFromElement(Jsoup.parseBodyFragment(it, pageUrl)) }
+            val manga =
+                parseInsertAdjacentHtmlScript(response.body.string())
+                    .map { latestUpdatesFromElement(Jsoup.parseBodyFragment(it, pageUrl)) }
             val hasNextPage = offset + LATEST_UPDATES_PER_PAGE < latestUpdatesCount
 
             MangasPage(manga, hasNextPage)
@@ -109,26 +114,29 @@ class YanmagaComics : Yanmaga("search-item-category--comics") {
 
     override fun latestUpdatesSelector() = "#comic-episodes-newer > div"
 
-    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        title = element.selectFirst(".text-wrapper h2")!!.text()
-        thumbnail_url = element.selectFirst(".img-bg-wrapper")?.absUrl("data-bg")
-    }
+    override fun latestUpdatesFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+            title = element.selectFirst(".text-wrapper h2")!!.text()
+            thumbnail_url = element.selectFirst(".img-bg-wrapper")?.absUrl("data-bg")
+        }
 
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst(".detailv2-outline-title")!!.text()
-        author = document.select(".detailv2-outline-author-item a").joinToString { it.text() }
-        description = document.selectFirst(".detailv2-description")?.text()
-        genre = document.select(".detailv2-tag .ga-tag").joinToString { it.text() }
-        thumbnail_url = document.selectFirst(".detailv2-thumbnail-image img")?.absUrl("src")
-        status = if (document.selectFirst(".detailv2-link-note") != null) {
-            SManga.ONGOING
-        } else {
-            SManga.COMPLETED
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = document.selectFirst(".detailv2-outline-title")!!.text()
+            author = document.select(".detailv2-outline-author-item a").joinToString { it.text() }
+            description = document.selectFirst(".detailv2-description")?.text()
+            genre = document.select(".detailv2-tag .ga-tag").joinToString { it.text() }
+            thumbnail_url = document.selectFirst(".detailv2-thumbnail-image img")?.absUrl("src")
+            status =
+                if (document.selectFirst(".detailv2-link-note") != null) {
+                    SManga.ONGOING
+                } else {
+                    SManga.COMPLETED
+                }
         }
-    }
 }
 
 private const val LATEST_UPDATES_PER_PAGE = 12

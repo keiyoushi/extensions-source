@@ -42,8 +42,7 @@ class HentaiFantasy : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "div.group"
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/most_downloaded/$page/", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/most_downloaded/$page/", headers)
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -59,18 +58,19 @@ class HentaiFantasy : ParsedHttpSource() {
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/latest/$page/", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/latest/$page/", headers)
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val tags = mutableListOf<String>()
         val paths = mutableListOf<String>()
         for (filter in if (filters.isEmpty()) getFilterList() else filters) {
@@ -81,8 +81,7 @@ class HentaiFantasy : ParsedHttpSource() {
                         .map {
                             paths.add(it.name.lowercase().replace(" ", "_"))
                             it.id.toString()
-                        }
-                        .forEach { tags.add(it) }
+                        }.forEach { tags.add(it) }
                 else -> {}
             }
         }
@@ -92,30 +91,30 @@ class HentaiFantasy : ParsedHttpSource() {
             throw Exception("Inserisci almeno tre caratteri")
         }
 
-        val form = FormBody.Builder().apply {
-            if (!searchTags) {
-                add("search", query)
-            } else {
-                tags.forEach {
-                    add("tag[]", it)
+        val form =
+            FormBody.Builder().apply {
+                if (!searchTags) {
+                    add("search", query)
+                } else {
+                    tags.forEach {
+                        add("tag[]", it)
+                    }
                 }
             }
-        }
 
-        val searchPath = if (!searchTags) {
-            "search"
-        } else if (paths.size == 1) {
-            "tag/${paths[0]}/$page"
-        } else {
-            "search_tags"
-        }
+        val searchPath =
+            if (!searchTags) {
+                "search"
+            } else if (paths.size == 1) {
+                "tag/${paths[0]}/$page"
+            } else {
+                "search_tags"
+            }
 
         return POST("$baseUrl/$searchPath", headers, form.build())
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
@@ -123,12 +122,25 @@ class HentaiFantasy : ParsedHttpSource() {
         val manga = SManga.create()
         val genres = mutableListOf<String>()
         document.select("div#tablelist > div.row").forEach { row ->
-            when (row.select("div.cell > b").first()!!.text().trim()) {
+            when (
+                row
+                    .select("div.cell > b")
+                    .first()!!
+                    .text()
+                    .trim()
+            ) {
                 "Autore" -> manga.author = row.select("div.cell > a").text().trim()
-                "Genere", "Tipo" -> row.select("div.cell > a > span.label").forEach {
-                    genres.add(it.text().trim())
-                }
-                "Descrizione" -> manga.description = row.select("div.cell").last()!!.text().trim()
+                "Genere", "Tipo" ->
+                    row.select("div.cell > a > span.label").forEach {
+                        genres.add(it.text().trim())
+                    }
+                "Descrizione" ->
+                    manga.description =
+                        row
+                            .select("div.cell")
+                            .last()!!
+                            .text()
+                            .trim()
             }
         }
         manga.genre = genres.joinToString(", ")
@@ -153,15 +165,17 @@ class HentaiFantasy : ParsedHttpSource() {
         return chapter
     }
 
-    private fun parseChapterDate(date: String): Long {
-        return when (date) {
+    private fun parseChapterDate(date: String): Long =
+        when (date) {
             "Oggi" -> {
                 Calendar.getInstance().timeInMillis
             }
             "Ieri" -> {
-                Calendar.getInstance().apply {
-                    add(Calendar.DAY_OF_YEAR, -1)
-                }.timeInMillis
+                Calendar
+                    .getInstance()
+                    .apply {
+                        add(Calendar.DAY_OF_YEAR, -1)
+                    }.timeInMillis
             }
             else -> {
                 try {
@@ -171,7 +185,6 @@ class HentaiFantasy : ParsedHttpSource() {
                 }
             }
         }
-    }
 
     override fun pageListRequest(chapter: SChapter) = POST(baseUrl + chapter.url, headers)
 
@@ -189,70 +202,77 @@ class HentaiFantasy : ParsedHttpSource() {
         return pages
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        throw Exception("Not used")
-    }
+    override fun pageListParse(document: Document): List<Page> = throw Exception("Not used")
 
     override fun imageUrlRequest(page: Page) = GET(page.url)
 
     override fun imageUrlParse(document: Document) = ""
 
-    private class Tag(name: String, val id: Int) : Filter.CheckBox(name)
-    private class TagList(title: String, tags: List<Tag>) : Filter.Group<Tag>(title, tags)
+    private class Tag(
+        name: String,
+        val id: Int,
+    ) : Filter.CheckBox(name)
 
-    override fun getFilterList() = FilterList(
-        TagList("Generi", getTagList()),
-    )
+    private class TagList(
+        title: String,
+        tags: List<Tag>,
+    ) : Filter.Group<Tag>(title, tags)
+
+    override fun getFilterList() =
+        FilterList(
+            TagList("Generi", getTagList()),
+        )
 
     // Tags: 47
     // $("select[name='tag[]']:eq(0) > option").map((i, el) => `Tag("${$(el).text().trim()}", ${$(el).attr("value")})`).get().sort().join(",\n")
     // on https://www.hentaifantasy.it/search/
-    private fun getTagList() = listOf(
-        Tag("Ahegao", 56),
-        Tag("Anal", 28),
-        Tag("Ashikoki", 12),
-        Tag("Bestiality", 24),
-        Tag("Bizzare", 44),
-        Tag("Bondage", 30),
-        Tag("Cheating", 33),
-        Tag("Chubby", 57),
-        Tag("Dark Skin", 39),
-        Tag("Demon Girl", 43),
-        Tag("Femdom", 38),
-        Tag("Forced", 46),
-        Tag("Full color", 52),
-        Tag("Furry", 36),
-        Tag("Futanari", 18),
-        Tag("Group", 34),
-        Tag("Guro", 8),
-        Tag("Harem", 41),
-        Tag("Housewife", 51),
-        Tag("Incest", 11),
-        Tag("Lolicon", 20),
-        Tag("Maid", 55),
-        Tag("Milf", 31),
-        Tag("Monster Girl", 15),
-        Tag("Nurse", 49),
-        Tag("Oppai", 25),
-        Tag("Paizuri", 42),
-        Tag("Pettanko", 35),
-        Tag("Pissing", 32),
-        Tag("Public", 53),
-        Tag("Rape", 21),
-        Tag("Schoolgirl", 27),
-        Tag("Shotacon", 26),
-        Tag("Stockings", 40),
-        Tag("Swimsuit", 47),
-        Tag("Tanlines", 48),
-        Tag("Teacher", 50),
-        Tag("Tentacle", 23),
-        Tag("Toys", 45),
-        Tag("Trap", 29),
-        Tag("Tsundere", 54),
-        Tag("Uncensored", 59),
-        Tag("Vanilla", 19),
-        Tag("Yandere", 58),
-        Tag("Yaoi", 22),
-        Tag("Yuri", 14),
-    )
+    private fun getTagList() =
+        listOf(
+            Tag("Ahegao", 56),
+            Tag("Anal", 28),
+            Tag("Ashikoki", 12),
+            Tag("Bestiality", 24),
+            Tag("Bizzare", 44),
+            Tag("Bondage", 30),
+            Tag("Cheating", 33),
+            Tag("Chubby", 57),
+            Tag("Dark Skin", 39),
+            Tag("Demon Girl", 43),
+            Tag("Femdom", 38),
+            Tag("Forced", 46),
+            Tag("Full color", 52),
+            Tag("Furry", 36),
+            Tag("Futanari", 18),
+            Tag("Group", 34),
+            Tag("Guro", 8),
+            Tag("Harem", 41),
+            Tag("Housewife", 51),
+            Tag("Incest", 11),
+            Tag("Lolicon", 20),
+            Tag("Maid", 55),
+            Tag("Milf", 31),
+            Tag("Monster Girl", 15),
+            Tag("Nurse", 49),
+            Tag("Oppai", 25),
+            Tag("Paizuri", 42),
+            Tag("Pettanko", 35),
+            Tag("Pissing", 32),
+            Tag("Public", 53),
+            Tag("Rape", 21),
+            Tag("Schoolgirl", 27),
+            Tag("Shotacon", 26),
+            Tag("Stockings", 40),
+            Tag("Swimsuit", 47),
+            Tag("Tanlines", 48),
+            Tag("Teacher", 50),
+            Tag("Tentacle", 23),
+            Tag("Toys", 45),
+            Tag("Trap", 29),
+            Tag("Tsundere", 54),
+            Tag("Uncensored", 59),
+            Tag("Vanilla", 19),
+            Tag("Yandere", 58),
+            Tag("Yaoi", 22),
+            Tag("Yuri", 14),
+        )
 }

@@ -2,7 +2,9 @@ package eu.kanade.tachiyomi.extension.all.danbooru
 import eu.kanade.tachiyomi.source.model.Filter
 
 internal class FilterTags : Filter.Text("Tags")
+
 internal class FilterDescription : Filter.Text("Description")
+
 internal class FilterIsDeleted : Filter.CheckBox("Deleted")
 
 internal class FilterCategory : Filter.Select<String>("Category", values, 1) {
@@ -23,6 +25,9 @@ internal class FilterOrder : Filter.Sort("Order", values, Selection(0, false)) {
     val selected: String? get() = state?.let { keys[it.index] }
 }
 
-internal fun FilterOrder(key: String?, ascending: Boolean = false) = FilterOrder().apply {
+internal fun FilterOrder(
+    key: String?,
+    ascending: Boolean = false,
+) = FilterOrder().apply {
     state = Filter.Sort.Selection(FilterOrder.keys.indexOf(key), ascending)
 }

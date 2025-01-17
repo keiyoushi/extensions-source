@@ -18,11 +18,12 @@ class EHUrlActivity : Activity() {
         if (pathSegments != null && pathSegments.size > 2) {
             val id = pathSegments[1]
             val key = pathSegments[2]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${EHentai.PREFIX_ID_SEARCH}$id/$key")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${EHentai.PREFIX_ID_SEARCH}$id/$key")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

@@ -17,7 +17,6 @@ import kotlin.system.exitProcess
  * the usual search screen from working.
  */
 class BilibiliUrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -26,11 +25,12 @@ class BilibiliUrlActivity : Activity() {
             // Mobile site of https://manga.bilibili.com starts with path "m"
             val titleId = if (pathSegments[0] == "m") pathSegments[2] else pathSegments[1]
 
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", Bilibili.PREFIX_ID_SEARCH + titleId)
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", Bilibili.PREFIX_ID_SEARCH + titleId)
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

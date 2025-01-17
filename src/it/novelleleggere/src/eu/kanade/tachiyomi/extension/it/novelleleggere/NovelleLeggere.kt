@@ -12,7 +12,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class NovelleLeggere : ParsedHttpSource() {
-
     // Info
     override val name: String = "Novelle Leggere"
     override val baseUrl: String = "https://www.novelleleggere.com"
@@ -23,59 +22,68 @@ class NovelleLeggere : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl)
 
     override fun popularMangaNextPageSelector(): String? = null
+
     override fun popularMangaSelector(): String = "table:contains(Manga) tr:gt(0)"
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        val a = element.select("a").first()!!
-        title = a.text()
-        setUrlWithoutDomain(a.attr("abs:href"))
-    }
+
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            val a = element.select("a").first()!!
+            title = a.text()
+            setUrlWithoutDomain(a.attr("abs:href"))
+        }
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     override fun latestUpdatesNextPageSelector(): String = throw UnsupportedOperationException()
+
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        throw UnsupportedOperationException()
+
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw Exception("Search Not Supported")
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw Exception("Search Not Supported")
 
     override fun searchMangaNextPageSelector(): String = throw Exception("Search Not Supported")
+
     override fun searchMangaSelector(): String = throw Exception("Search Not Supported")
-    override fun searchMangaFromElement(element: Element): SManga =
-        throw Exception("Search Not Supported")
+
+    override fun searchMangaFromElement(element: Element): SManga = throw Exception("Search Not Supported")
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        thumbnail_url = document.select("div.post-content img").first()!!.attr("abs:src")
-        title = document.select("div.post-content h3").text().trim()
-        description =
-            document.select("div.post-content div:contains(Trama) div.su-spoiler-content").text()
-                .trim()
-    }
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            thumbnail_url = document.select("div.post-content img").first()!!.attr("abs:src")
+            title = document.select("div.post-content h3").text().trim()
+            description =
+                document
+                    .select("div.post-content div:contains(Trama) div.su-spoiler-content")
+                    .text()
+                    .trim()
+        }
 
     // Chapters
-    override fun chapterListSelector(): String =
-        "div.post-content div:contains(Capitoli) div.su-spoiler-content ul li a"
+    override fun chapterListSelector(): String = "div.post-content div:contains(Capitoli) div.su-spoiler-content ul li a"
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        name = element.text().trim()
-        setUrlWithoutDomain(element.attr("abs:href"))
-    }
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            name = element.text().trim()
+            setUrlWithoutDomain(element.attr("abs:href"))
+        }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
-        document.select("div.post-content p>img, div.post-content figure>img").forEachIndexed { index, element ->
-            add(Page(index, "", element.attr("abs:src").substringBefore("?")))
+    override fun pageListParse(document: Document): List<Page> =
+        mutableListOf<Page>().apply {
+            document.select("div.post-content p>img, div.post-content figure>img").forEachIndexed { index, element ->
+                add(Page(index, "", element.attr("abs:src").substringBefore("?")))
+            }
         }
-    }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 }

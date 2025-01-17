@@ -5,10 +5,14 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class EncryptedResponse(val data: String)
+class EncryptedResponse(
+    val data: String,
+)
 
 @Serializable
-class MangaDataAction<T>(val mangaDataAction: T)
+class MangaDataAction<T>(
+    val mangaDataAction: T,
+)
 
 @Serializable
 class LatestChaptersDto(
@@ -32,11 +36,12 @@ class BrowseManga(
     private val cover: String? = null,
     @SerialName("is_novel") val isNovel: Boolean,
 ) {
-    fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
-        url = "/mangas/$id"
-        title = this@BrowseManga.title
-        thumbnail_url = cover?.let { createThumbnail(id.toString(), cover) }
-    }
+    fun toSManga(createThumbnail: (String, String) -> String) =
+        SManga.create().apply {
+            url = "/mangas/$id"
+            title = this@BrowseManga.title
+            thumbnail_url = cover?.let { createThumbnail(id.toString(), cover) }
+        }
 }
 
 @Serializable
@@ -73,53 +78,61 @@ class Manga(
     @SerialName("japanese") private val jpTitle: String? = null,
     @SerialName("english") private val enTitle: String? = null,
 ) {
-    fun toSManga(createThumbnail: (String, String) -> String) = SManga.create().apply {
-        title = this@Manga.title
-        thumbnail_url = cover?.let { createThumbnail(id.toString(), cover) }
-        artist = artists.joinToString { it.name }
-        author = authors.joinToString { it.name }
-        status = when (this@Manga.status) {
-            2 -> SManga.ONGOING
-            3 -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    fun toSManga(createThumbnail: (String, String) -> String) =
+        SManga.create().apply {
+            title = this@Manga.title
+            thumbnail_url = cover?.let { createThumbnail(id.toString(), cover) }
+            artist = artists.joinToString { it.name }
+            author = authors.joinToString { it.name }
+            status =
+                when (this@Manga.status) {
+                    2 -> SManga.ONGOING
+                    3 -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+            genre =
+                buildList {
+                    type.title?.let { add(it) }
+                    add(type.name)
+                    categories.forEach { add(it.name) }
+                }.joinToString()
+            description =
+                buildString {
+                    summary
+                        .orEmpty()
+                        .ifEmpty { "لم يتم اضافة قصة بعد" }
+                        .also { append(it) }
+
+                    when (tlStatus) {
+                        0 -> "منتهية"
+                        1 -> "مستمرة"
+                        2 -> "متوقفة"
+                        else -> "مجهول"
+                    }.also {
+                        append("\n\n")
+                        append("حالة الترجمة")
+                        append(":\n• ")
+                        append(it)
+                    }
+
+                    val titles =
+                        listOfNotNull(synonyms, arTitle, jpTitle, enTitle)
+                            .filterNot(String::isEmpty)
+
+                    if (titles.isNotEmpty()) {
+                        append("\n\n")
+                        append("مسميّات أخرى")
+                        append(":\n• ")
+                        append(titles.joinToString("\n• "))
+                    }
+                }
         }
-        genre = buildList {
-            type.title?.let { add(it) }
-            add(type.name)
-            categories.forEach { add(it.name) }
-        }.joinToString()
-        description = buildString {
-            summary.orEmpty()
-                .ifEmpty { "لم يتم اضافة قصة بعد" }
-                .also { append(it) }
-
-            when (tlStatus) {
-                0 -> "منتهية"
-                1 -> "مستمرة"
-                2 -> "متوقفة"
-                else -> "مجهول"
-            }.also {
-                append("\n\n")
-                append("حالة الترجمة")
-                append(":\n• ")
-                append(it)
-            }
-
-            val titles = listOfNotNull(synonyms, arTitle, jpTitle, enTitle)
-                .filterNot(String::isEmpty)
-
-            if (titles.isNotEmpty()) {
-                append("\n\n")
-                append("مسميّات أخرى")
-                append(":\n• ")
-                append(titles.joinToString("\n• "))
-            }
-        }
-    }
 }
 
 @Serializable
-class NameDto(val name: String)
+class NameDto(
+    val name: String,
+)
 
 @Serializable
 class TypeDto(

@@ -4,12 +4,13 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class InovaScanManga : Madara(
-    "Inova Scans Manga",
-    "https://inovascanmanga.com",
-    "fr",
-    SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH),
-) {
+class InovaScanManga :
+    Madara(
+        "Inova Scans Manga",
+        "https://inovascanmanga.com",
+        "fr",
+        SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH),
+    ) {
     override val useNewChapterEndpoint = true
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always

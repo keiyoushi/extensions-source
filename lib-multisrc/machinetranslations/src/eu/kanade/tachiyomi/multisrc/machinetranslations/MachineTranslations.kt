@@ -30,16 +30,17 @@ abstract class MachineTranslations(
     override val baseUrl: String,
     val language: Language,
 ) : ParsedHttpSource() {
-
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
     override val lang = language.lang
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(ComposedImageInterceptor(baseUrl, language))
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(ComposedImageInterceptor(baseUrl, language))
+            .build()
 
     // ============================== Popular ===============================
 
@@ -67,9 +68,16 @@ abstract class MachineTranslations(
 
     // =========================== Search ============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/search"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("page", page.toString())
 
         if (query.isNotBlank()) {
             url.addQueryParameter("query", query)
@@ -96,7 +104,11 @@ abstract class MachineTranslations(
         return GET(url.build(), headers)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (query.startsWith(PREFIX_SEARCH)) {
             val slug = query.removePrefix(PREFIX_SEARCH)
             return fetchMangaDetails(SManga.create().apply { url = "/comics/$slug" }).map { manga ->
@@ -109,57 +121,66 @@ abstract class MachineTranslations(
 
     override fun searchMangaSelector() = "section h2 + div > div"
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.selectFirst("h3")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-    }
+    override fun searchMangaFromElement(element: Element) =
+        SManga.create().apply {
+            title = element.selectFirst("h3")!!.text()
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        }
 
     override fun searchMangaNextPageSelector() = "a[href*=search]:contains(Next)"
 
     // =========================== Manga Details ============================
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-        description = document.selectFirst("p:has(span:contains(Synopsis))")?.ownText()
-        author = document.selectFirst("p:has(span:contains(Author))")?.ownText()
-        genre = document.select("h2:contains(Genres) + div span").joinToString { it.text() }
-        thumbnail_url = document.selectFirst("img.object-cover")?.absUrl("src")
-        document.selectFirst("p:has(span:contains(Status))")?.ownText()?.let {
-            status = when (it.lowercase()) {
-                "ongoing" -> SManga.ONGOING
-                "complete" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = document.selectFirst("h1")!!.text()
+            description = document.selectFirst("p:has(span:contains(Synopsis))")?.ownText()
+            author = document.selectFirst("p:has(span:contains(Author))")?.ownText()
+            genre = document.select("h2:contains(Genres) + div span").joinToString { it.text() }
+            thumbnail_url = document.selectFirst("img.object-cover")?.absUrl("src")
+            document.selectFirst("p:has(span:contains(Status))")?.ownText()?.let {
+                status =
+                    when (it.lowercase()) {
+                        "ongoing" -> SManga.ONGOING
+                        "complete" -> SManga.COMPLETED
+                        else -> SManga.UNKNOWN
+                    }
             }
+            setUrlWithoutDomain(document.location())
         }
-        setUrlWithoutDomain(document.location())
-    }
 
     // ============================== Chapters ==============================
     override fun chapterListSelector() = "section li"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        element.selectFirst("a")!!.let {
-            name = it.ownText()
-            setUrlWithoutDomain(it.absUrl("href"))
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            element.selectFirst("a")!!.let {
+                name = it.ownText()
+                setUrlWithoutDomain(it.absUrl("href"))
+            }
+            date_upload = parseChapterDate(element.selectFirst("span")?.text())
         }
-        date_upload = parseChapterDate(element.selectFirst("span")?.text())
-    }
 
     // =============================== Pages ================================
 
     override fun pageListParse(document: Document): List<Page> {
-        val pages = document.selectFirst("div#json-data")
-            ?.ownText()?.parseAs<List<PageDto>>()
-            ?: throw Exception("Pages not found")
+        val pages =
+            document
+                .selectFirst("div#json-data")
+                ?.ownText()
+                ?.parseAs<List<PageDto>>()
+                ?: throw Exception("Pages not found")
 
         return pages.mapIndexed { index, dto ->
-            val imageUrl = when {
-                dto.imageUrl.startsWith("http") -> dto.imageUrl
-                else -> "https://${dto.imageUrl}"
-            }
-            val fragment = json.encodeToString<List<Dialog>>(
-                dto.dialogues.filter { it.getTextBy(language).isNotBlank() },
-            )
+            val imageUrl =
+                when {
+                    dto.imageUrl.startsWith("http") -> dto.imageUrl
+                    else -> "https://${dto.imageUrl}"
+                }
+            val fragment =
+                json.encodeToString<List<Dialog>>(
+                    dto.dialogues.filter { it.getTextBy(language).isNotBlank() },
+                )
             Page(index, imageUrl = "$imageUrl#$fragment")
         }
     }
@@ -170,7 +191,11 @@ abstract class MachineTranslations(
 
     private fun parseChapterDate(date: String?): Long {
         date ?: return 0
-        return try { dateFormat.parse(date)!!.time } catch (_: Exception) { parseRelativeDate(date) }
+        return try {
+            dateFormat.parse(date)!!.time
+        } catch (_: Exception) {
+            parseRelativeDate(date)
+        }
     }
 
     private fun parseRelativeDate(date: String): Long {
@@ -187,18 +212,17 @@ abstract class MachineTranslations(
         }
     }
 
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
     // =============================== Filters ================================
 
     override fun getFilterList(): FilterList {
-        val filters = mutableListOf<Filter<*>>(
-            SelectionList("Sort", sortByList),
-            Filter.Separator(),
-            GenreList(title = "Genres", genres = genreList),
-        )
+        val filters =
+            mutableListOf<Filter<*>>(
+                SelectionList("Sort", sortByList),
+                Filter.Separator(),
+                GenreList(title = "Genres", genres = genreList),
+            )
 
         return FilterList(filters)
     }

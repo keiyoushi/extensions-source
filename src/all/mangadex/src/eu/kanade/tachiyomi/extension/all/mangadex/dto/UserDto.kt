@@ -6,7 +6,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 @SerialName(MDConstants.user)
-data class UserDto(override val attributes: UserAttributes? = null) : EntityDto()
+data class UserDto(
+    override val attributes: UserAttributes? = null,
+) : EntityDto()
 
 @Serializable
-data class UserAttributes(val username: String) : AttributesDto()
+data class UserAttributes(
+    val username: String,
+) : AttributesDto()

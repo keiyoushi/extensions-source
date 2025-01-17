@@ -20,36 +20,52 @@ abstract class MangaCatalog(
     override val baseUrl: String,
     override val lang: String,
 ) : ParsedHttpSource() {
-    open val sourceList = listOf(
-        Pair("$name", "$baseUrl"),
-    ).sortedBy { it.first }.distinctBy { it.second }
+    open val sourceList =
+        listOf(
+            Pair("$name", "$baseUrl"),
+        ).sortedBy { it.first }.distinctBy { it.second }
 
     // Info
 
     override val supportsLatest: Boolean = false
 
     // Popular
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(sourceList.map { popularMangaFromPair(it.first, it.second) }, false))
-    }
-    private fun popularMangaFromPair(name: String, sourceurl: String): SManga = SManga.create().apply {
-        title = name
-        url = sourceurl
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        Observable.just(MangasPage(sourceList.map { popularMangaFromPair(it.first, it.second) }, false))
+
+    private fun popularMangaFromPair(
+        name: String,
+        sourceurl: String,
+    ): SManga =
+        SManga.create().apply {
+            title = name
+            url = sourceurl
+        }
+
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+
     override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
+
     override fun popularMangaSelector(): String = throw UnsupportedOperationException()
+
     override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+
     override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
+
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
+
     override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         val mangas = mutableListOf<SManga>()
         sourceList.map {
             if (it.first.contains(query)) {
@@ -59,45 +75,51 @@ abstract class MangaCatalog(
         return Observable.just(MangasPage(mangas, false))
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
+
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+
     override fun searchMangaSelector() = throw UnsupportedOperationException()
+
     override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Get Override
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
+
+    override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
+
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val info = document.select("div.bg-bg-secondary > div.px-6 > div.flex-col").text()
-        title = document.select("div.container > h1").text()
-        description = if ("Description" in info) info.substringAfter("Description").trim() else info
-        thumbnail_url = document.select("div.flex > img").attr("src")
-    }
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            val info = document.select("div.bg-bg-secondary > div.px-6 > div.flex-col").text()
+            title = document.select("div.container > h1").text()
+            description = if ("Description" in info) info.substringAfter("Description").trim() else info
+            thumbnail_url = document.select("div.flex > img").attr("src")
+        }
     // Chapters
 
     override fun chapterListSelector(): String = "div.w-full > div.bg-bg-secondary > div.grid"
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val name1 = element.select(".col-span-4 > a").text()
-        val name2 = element.select(".text-xs:not(a)").text()
-        if (name2 == "") {
-            name = name1
-        } else {
-            name = "$name1 - $name2"
+
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            val name1 = element.select(".col-span-4 > a").text()
+            val name2 = element.select(".text-xs:not(a)").text()
+            if (name2 == "") {
+                name = name1
+            } else {
+                name = "$name1 - $name2"
+            }
+            url = element.select(".col-span-4 > a").attr("abs:href")
+            date_upload = System.currentTimeMillis()
         }
-        url = element.select(".col-span-4 > a").attr("abs:href")
-        date_upload = System.currentTimeMillis()
-    }
 
     // Pages
 

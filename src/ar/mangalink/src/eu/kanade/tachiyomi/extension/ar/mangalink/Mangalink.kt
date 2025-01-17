@@ -19,7 +19,6 @@ class Mangalink :
         SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
     ConfigurableSource {
-
     override val chapterUrlSuffix = ""
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val baseUrl by lazy { getPrefBaseUrl() }
@@ -37,27 +36,30 @@ class Mangalink :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            this.setDefaultValue(super.baseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: ${super.baseUrl}"
+        val baseUrlPref =
+            androidx.preference.EditTextPreference(screen.context).apply {
+                key = BASE_URL_PREF
+                title = BASE_URL_PREF_TITLE
+                summary = BASE_URL_PREF_SUMMARY
+                this.setDefaultValue(super.baseUrl)
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "Default: ${super.baseUrl}"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
-                true
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
+                    true
+                }
             }
-        }
         screen.addPreference(baseUrlPref)
     }
+
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
             if (prefDefaultBaseUrl != super.baseUrl) {
-                preferences.edit()
+                preferences
+                    .edit()
                     .putString(BASE_URL_PREF, super.baseUrl)
                     .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
                     .apply()

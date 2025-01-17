@@ -7,16 +7,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class LimboScan : Madara(
-    "Limbo Scan",
-    "https://limboscan.com.br",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+class LimboScan :
+    Madara(
+        "Limbo Scan",
+        "https://limboscan.com.br",
+        "pt-BR",
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     override val mangaSubString = "obras"
 

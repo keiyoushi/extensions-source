@@ -4,16 +4,25 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SHList<T>(val pagination: SHPagination, val data: T)
+data class SHList<T>(
+    val pagination: SHPagination,
+    val data: T,
+)
 
 @Serializable
-data class SHPagination(val next: Int?)
+data class SHPagination(
+    val next: Int?,
+)
 
 @Serializable
-data class SHWrapper(val `object`: SHObject)
+data class SHWrapper(
+    val `object`: SHObject,
+)
 
 @Serializable
-data class SHDataAlbum(val albums: List<SHObject>)
+data class SHDataAlbum(
+    val albums: List<SHObject>,
+)
 
 @Serializable
 data class SHObject(
@@ -22,24 +31,36 @@ data class SHObject(
     val slug: String,
     val title: String,
 ) {
-    fun toSManga() = SManga.create().apply {
-        url = "/${series.slug}/$slug"
-        title = this@SHObject.title
-        thumbnail_url = preview.sizes.thumb
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            url = "/${series.slug}/$slug"
+            title = this@SHObject.title
+            thumbnail_url = preview.sizes.thumb
+        }
 }
 
 @Serializable
-data class SHImage(val page_num: Int, val sizes: SHSizes)
+data class SHImage(
+    val page_num: Int,
+    val sizes: SHSizes,
+)
 
 @Serializable
-data class SHSizes(val full: String, val thumb: String)
+data class SHSizes(
+    val full: String,
+    val thumb: String,
+)
 
 @Serializable
-data class SHTag(val slug: String, val title: String)
+data class SHTag(
+    val slug: String,
+    val title: String,
+)
 
 @Serializable
-data class SHAlbum(val data: SHData)
+data class SHAlbum(
+    val data: SHData,
+)
 
 @Serializable
 data class SHData(
@@ -59,7 +80,9 @@ data class SHData(
 }
 
 @Serializable
-data class SHAlbumPages(val data: SHPagesData)
+data class SHAlbumPages(
+    val data: SHPagesData,
+)
 
 @Serializable
 data class SHPagesData(

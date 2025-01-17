@@ -42,40 +42,43 @@ open class Webtoons(
     open val localeForCookie: String = lang,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH),
 ) : ParsedHttpSource() {
-
     override val supportsLatest = true
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .cookieJar(
-            object : CookieJar {
-                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {}
-                override fun loadForRequest(url: HttpUrl): List<Cookie> {
-                    return listOf<Cookie>(
-                        Cookie.Builder()
-                            .domain("www.webtoons.com")
-                            .path("/")
-                            .name("ageGatePass")
-                            .value("true")
-                            .name("locale")
-                            .value(localeForCookie)
-                            .name("needGDPR")
-                            .value("false")
-                            .build(),
-                    )
-                }
-            },
-        )
-        .addInterceptor(::sslRetryInterceptor)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .cookieJar(
+                object : CookieJar {
+                    override fun saveFromResponse(
+                        url: HttpUrl,
+                        cookies: List<Cookie>,
+                    ) {}
+
+                    override fun loadForRequest(url: HttpUrl): List<Cookie> =
+                        listOf<Cookie>(
+                            Cookie
+                                .Builder()
+                                .domain("www.webtoons.com")
+                                .path("/")
+                                .name("ageGatePass")
+                                .value("true")
+                                .name("locale")
+                                .value(localeForCookie)
+                                .name("needGDPR")
+                                .value("false")
+                                .build(),
+                        )
+                },
+            ).addInterceptor(::sslRetryInterceptor)
+            .build()
 
     // m.webtoons.com throws an SSL error that can be solved by a simple retry
-    private fun sslRetryInterceptor(chain: Interceptor.Chain): Response {
-        return try {
+    private fun sslRetryInterceptor(chain: Interceptor.Chain): Response =
+        try {
             chain.proceed(chain.request())
         } catch (e: SocketException) {
             chain.proceed(chain.request())
         }
-    }
 
     private val day: String
         get() {
@@ -99,12 +102,16 @@ open class Webtoons(
 
     override fun latestUpdatesSelector() = "div#dailyList > $day li > a"
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "https://www.webtoons.com/$langCode/")
+    override fun headersBuilder(): Headers.Builder =
+        super
+            .headersBuilder()
+            .add("Referer", "https://www.webtoons.com/$langCode/")
 
-    protected val mobileHeaders: Headers = super.headersBuilder()
-        .add("Referer", "https://m.webtoons.com")
-        .build()
+    protected val mobileHeaders: Headers =
+        super
+            .headersBuilder()
+            .add("Referer", "https://m.webtoons.com")
+            .build()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/$langCode/dailySchedule", headers)
 
@@ -131,7 +138,8 @@ open class Webtoons(
         return MangasPage(mangas.distinctBy { it.url }, false)
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/$langCode/dailySchedule?sortOrder=UPDATE&webtoonCompleteType=ONGOING", headers)
+    override fun latestUpdatesRequest(page: Int) =
+        GET("$baseUrl/$langCode/dailySchedule?sortOrder=UPDATE&webtoonCompleteType=ONGOING", headers)
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -149,7 +157,11 @@ open class Webtoons(
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (!query.startsWith(URL_SEARCH_PREFIX)) {
             return super.fetchSearchManga(page, query, filters)
         }
@@ -157,10 +169,11 @@ open class Webtoons(
         val emptyResult = Observable.just(MangasPage(emptyList(), false))
 
         // given a url to either a webtoon or an episode, returns a url path to corresponding webtoon
-        fun webtoonPath(u: HttpUrl) = when {
-            langCode == u.pathSegments[0] -> "/${u.pathSegments[0]}/${u.pathSegments[1]}/${u.pathSegments[2]}/list"
-            else -> "/${u.pathSegments[0]}/${u.pathSegments[1]}/list" // dongmanmanhua doesn't include langCode
-        }
+        fun webtoonPath(u: HttpUrl) =
+            when {
+                langCode == u.pathSegments[0] -> "/${u.pathSegments[0]}/${u.pathSegments[1]}/${u.pathSegments[2]}/list"
+                else -> "/${u.pathSegments[0]}/${u.pathSegments[1]}/list" // dongmanmanhua doesn't include langCode
+            }
 
         return query.substringAfter(URL_SEARCH_PREFIX).toHttpUrlOrNull()?.let { url ->
             val title_no = url.queryParameter("title_no")
@@ -178,7 +191,11 @@ open class Webtoons(
         } ?: emptyResult
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$baseUrl/$langCode/search?keyword=$query".toHttpUrl().newBuilder()
         val uriPart = (filters.find { it is SearchType } as? SearchType)?.toUriPart() ?: ""
 
@@ -197,8 +214,17 @@ open class Webtoons(
     open fun parseDetailsThumbnail(document: Document): String? {
         val picElement = document.select("#content > div.cont_box > div.detail_body")
         val discoverPic = document.select("#content > div.cont_box > div.detail_header > span.thmb")
-        return picElement.attr("style").substringAfter("url(").substringBeforeLast(")")
-            .ifBlank { discoverPic.select("img").not("[alt='Representative image']").first()?.attr("src") }
+        return picElement
+            .attr("style")
+            .substringAfter("url(")
+            .substringBeforeLast(")")
+            .ifBlank {
+                discoverPic
+                    .select("img")
+                    .not("[alt='Representative image']")
+                    .first()
+                    ?.attr("src")
+            }
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -213,41 +239,52 @@ open class Webtoons(
             ?: detailElement.select(".author_area").first()?.ownText() ?: manga.author
         manga.genre = detailElement.select(".genre").joinToString(", ") { it.text() }
         manga.description = infoElement.select("p.summary").text()
-        manga.status = infoElement.select("p.day_info").firstOrNull()?.text().orEmpty().toStatus()
+        manga.status =
+            infoElement
+                .select("p.day_info")
+                .firstOrNull()
+                ?.text()
+                .orEmpty()
+                .toStatus()
         manga.thumbnail_url = parseDetailsThumbnail(document)
         return manga
     }
 
-    open fun String.toStatus(): Int = when {
-        contains("UP") -> SManga.ONGOING
-        contains("COMPLETED") -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    open fun String.toStatus(): Int =
+        when {
+            contains("UP") -> SManga.ONGOING
+            contains("COMPLETED") -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
 
     override fun imageUrlParse(document: Document): String = document.select("img").first()!!.attr("src")
 
     // Filters
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
+    override fun getFilterList(): FilterList =
+        FilterList(
             Header("Query can not be blank"),
             Separator(),
             SearchType(getOfficialList()),
         )
-    }
 
     override fun chapterListSelector() = "ul#_episodeList li[id*=episode]"
 
-    private class SearchType(vals: Array<Pair<String, String>>) : UriPartFilter("Official or Challenge", vals)
+    private class SearchType(
+        vals: Array<Pair<String, String>>,
+    ) : UriPartFilter("Official or Challenge", vals)
 
-    private fun getOfficialList() = arrayOf(
-        Pair("Any", ""),
-        Pair("Official only", "WEBTOON"),
-        Pair("Challenge only", "CHALLENGE"),
-    )
+    private fun getOfficialList() =
+        arrayOf(
+            Pair("Any", ""),
+            Pair("Official only", "WEBTOON"),
+            Pair("Challenge only", "CHALLENGE"),
+        )
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(
+        displayName: String,
+        private val vals: Array<Pair<String, String>>,
+    ) : Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
@@ -268,20 +305,21 @@ open class Webtoons(
         return chapter
     }
 
-    open fun chapterParseDate(date: String): Long {
-        return try {
+    open fun chapterParseDate(date: String): Long =
+        try {
             dateFormat.parse(date)?.time ?: 0
         } catch (e: ParseException) {
             0
         }
-    }
 
     override fun chapterListRequest(manga: SManga) = GET("https://m.webtoons.com" + manga.url, mobileHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
         var pages = document.select("div#_imageList > img").mapIndexed { i, element -> Page(i, "", element.attr("data-url")) }
 
-        if (pages.isNotEmpty()) { return pages }
+        if (pages.isNotEmpty()) {
+            return pages
+        }
 
         val docString = document.toString()
 

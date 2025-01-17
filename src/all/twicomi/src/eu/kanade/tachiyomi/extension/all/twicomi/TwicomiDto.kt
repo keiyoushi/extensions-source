@@ -8,9 +8,10 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
-    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
-}
+val dateFormat =
+    SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Tokyo")
+    }
 
 @Serializable
 class TwicomiResponse<T>(
@@ -29,23 +30,25 @@ class MangaListItem(
     val author: AuthorDto,
     val tweet: TweetDto,
 ) {
-    internal fun toSManga() = SManga.create().apply {
-        val tweetAuthor = this@MangaListItem.author
-        val timestamp = runCatching {
-            dateFormat.parse(tweet.tweetCreateTime)!!.time
-        }.getOrDefault(0L)
-        val extraData = "$timestamp,${tweet.attachImageUrls.joinToString()}"
+    internal fun toSManga() =
+        SManga.create().apply {
+            val tweetAuthor = this@MangaListItem.author
+            val timestamp =
+                runCatching {
+                    dateFormat.parse(tweet.tweetCreateTime)!!.time
+                }.getOrDefault(0L)
+            val extraData = "$timestamp,${tweet.attachImageUrls.joinToString()}"
 
-        url = "/manga/${tweetAuthor.screenName}/${tweet.tweetId}#$extraData"
-        title = tweet.tweetText.split("\n").first()
-        author = "${tweetAuthor.name} (@${tweetAuthor.screenName})"
-        description = tweet.tweetText
-        genre = (tweet.hashTags + tweet.tags).joinToString()
-        status = SManga.COMPLETED
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        thumbnail_url = tweet.attachImageUrls.firstOrNull()
-        initialized = true
-    }
+            url = "/manga/${tweetAuthor.screenName}/${tweet.tweetId}#$extraData"
+            title = tweet.tweetText.split("\n").first()
+            author = "${tweetAuthor.name} (@${tweetAuthor.screenName})"
+            description = tweet.tweetText
+            genre = (tweet.hashTags + tweet.tags).joinToString()
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            thumbnail_url = tweet.attachImageUrls.firstOrNull()
+            initialized = true
+        }
 }
 
 @Serializable
@@ -78,14 +81,15 @@ class AuthorDto(
     val flg: Int,
     val edited: AuthorEditedDto,
 ) {
-    internal fun toSManga() = SManga.create().apply {
-        url = "/author/$screenName"
-        title = name
-        author = screenName
-        description = this@AuthorDto.description
-        thumbnail_url = profileImage
-        initialized = true
-    }
+    internal fun toSManga() =
+        SManga.create().apply {
+            url = "/author/$screenName"
+            title = name
+            author = screenName
+            description = this@AuthorDto.description
+            thumbnail_url = profileImage
+            initialized = true
+        }
 }
 
 @Serializable

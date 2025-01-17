@@ -13,35 +13,39 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class Manhastro : Madara(
-    "Manhastro",
-    "https://manhastro.com",
-    "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-) {
-
+class Manhastro :
+    Madara(
+        "Manhastro",
+        "https://manhastro.com",
+        "pt-BR",
+        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    ) {
     override val mangaSubString = "lermanga"
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-            val mime = response.headers["Content-Type"]
-            if (response.isSuccessful) {
-                if (mime != "application/octet-stream") {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1)
+            .readTimeout(1, TimeUnit.MINUTES)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                val mime = response.headers["Content-Type"]
+                if (response.isSuccessful) {
+                    if (mime != "application/octet-stream") {
+                        return@addInterceptor response
+                    }
+                    // Fix image content type
+                    val type = IMG_CONTENT_TYPE.toMediaType()
+                    val body = response.body.bytes().toResponseBody(type)
                     return@addInterceptor response
+                        .newBuilder()
+                        .body(body)
+                        .header("Content-Type", IMG_CONTENT_TYPE)
+                        .build()
                 }
-                // Fix image content type
-                val type = IMG_CONTENT_TYPE.toMediaType()
-                val body = response.body.bytes().toResponseBody(type)
-                return@addInterceptor response.newBuilder().body(body)
-                    .header("Content-Type", IMG_CONTENT_TYPE).build()
-            }
-            response
-        }
-        .build()
+                response
+            }.build()
 
     override val useNewChapterEndpoint = true
 
@@ -51,15 +55,21 @@ class Manhastro : Madara(
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.selectFirst("script:containsData(imageLinks)")?.data()
-            ?.let { imageLinksPattern.find(it)?.groups?.get(1)?.value }
-            ?.let { json.decodeFromString<List<String>>(it) }
+    override fun pageListParse(document: Document): List<Page> =
+        document
+            .selectFirst("script:containsData(imageLinks)")
+            ?.data()
+            ?.let {
+                imageLinksPattern
+                    .find(it)
+                    ?.groups
+                    ?.get(1)
+                    ?.value
+            }?.let { json.decodeFromString<List<String>>(it) }
             ?.mapIndexed { i, imageUrlEncoded ->
                 val imageUrl = String(Base64.decode(imageUrlEncoded, Base64.DEFAULT))
                 Page(i, document.location(), imageUrl)
             } ?: emptyList()
-    }
 
     private val imageLinksPattern = """var\s+?imageLinks\s*?=\s*?(\[.*]);""".toRegex()
 

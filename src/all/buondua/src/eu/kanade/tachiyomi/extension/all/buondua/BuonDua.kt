@@ -14,7 +14,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BuonDua() : ParsedHttpSource() {
+class BuonDua : ParsedHttpSource() {
     override val baseUrl = "https://buondua.com"
     override val lang = "all"
     override val name = "Buon Dua"
@@ -31,25 +31,30 @@ class BuonDua() : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = ".pagination-next:not([disabled])"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/?start=${20 * (page - 1)}")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/?start=${20 * (page - 1)}")
 
     override fun latestUpdatesSelector() = ".blog > div"
 
     // Popular
     override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
+
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/hot?start=${20 * (page - 1)}")
-    }
+
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/hot?start=${20 * (page - 1)}")
+
     override fun popularMangaSelector() = latestUpdatesSelector()
 
     // Search
 
     override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
+
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val tagFilter = filters.findInstance<TagFilter>()!!
         return when {
             query.isNotEmpty() -> GET("$baseUrl/?search=$query&start=${20 * (page - 1)}")
@@ -57,6 +62,7 @@ class BuonDua() : ParsedHttpSource() {
             else -> popularMangaRequest(page)
         }
     }
+
     override fun searchMangaSelector() = latestUpdatesSelector()
 
     // Details
@@ -77,7 +83,8 @@ class BuonDua() : ParsedHttpSource() {
         chapter.setUrlWithoutDomain(element.select(".is-current").first()!!.attr("abs:href"))
         chapter.chapter_number = 0F
         chapter.name = element.select(".article-header").text()
-        chapter.date_upload = SimpleDateFormat("H:m DD-MM-yyyy", Locale.US).parse(element.select(".article-info > small").text())?.time ?: 0L
+        chapter.date_upload =
+            SimpleDateFormat("H:m DD-MM-yyyy", Locale.US).parse(element.select(".article-info > small").text())?.time ?: 0L
         return chapter
     }
 
@@ -90,10 +97,11 @@ class BuonDua() : ParsedHttpSource() {
         val pages = mutableListOf<Page>()
 
         numpages.forEachIndexed { index, page ->
-            val doc = when (index) {
-                0 -> document
-                else -> client.newCall(GET(page.attr("abs:href"))).execute().asJsoup()
-            }
+            val doc =
+                when (index) {
+                    0 -> document
+                    else -> client.newCall(GET(page.attr("abs:href"))).execute().asJsoup()
+                }
             doc.select(".article-fulltext img").forEach {
                 val itUrl = it.attr("abs:src")
                 pages.add(Page(pages.size, "", itUrl))
@@ -105,11 +113,12 @@ class BuonDua() : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
-    override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        TagFilter(),
-    )
+    override fun getFilterList(): FilterList =
+        FilterList(
+            Filter.Header("NOTE: Ignored if using text search!"),
+            Filter.Separator(),
+            TagFilter(),
+        )
 
     class TagFilter : Filter.Text("Tag ID")
 

@@ -14,7 +14,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class Collectedcurios : ParsedHttpSource() {
-
     override val name = "Collected Curios"
 
     override val baseUrl = "https://www.collectedcurios.com"
@@ -23,8 +22,8 @@ class Collectedcurios : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        Observable.just(
             MangasPage(
                 arrayListOf(
                     SManga.create().apply {
@@ -36,7 +35,6 @@ class Collectedcurios : ParsedHttpSource() {
                         description = "Sequential Art webcomic."
                         thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Sequential_Art_Button.jpg"
                     },
-
                     SManga.create().apply {
                         title = "Battle Bunnies"
                         artist = "Jolly Jack aka Phillip M Jackson"
@@ -46,7 +44,6 @@ class Collectedcurios : ParsedHttpSource() {
                         description = "Battle Bunnies webcomic."
                         thumbnail_url = "https://www.collectedcurios.com/images/CC_2011_Battle_Bunnies_Button.jpg"
                     },
-
                     /*
                     SManga.create().apply {
                         title = "Spider and Scorpion"
@@ -62,26 +59,31 @@ class Collectedcurios : ParsedHttpSource() {
                 false,
             ),
         )
-    }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return fetchPopularManga(1)
-    }
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = fetchPopularManga(1)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(manga)
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val responseJs = response.asJsoup()
 
         val chapters =
             if (responseJs.selectFirst("img[title=Last]") == null) {
-                responseJs.selectFirst("input[title=Jump to number]")
-                    ?.attr("value")?.toInt()
+                responseJs
+                    .selectFirst("input[title=Jump to number]")
+                    ?.attr("value")
+                    ?.toInt()
             } else {
-                responseJs.selectFirst("img[title=Last]")?.parent()
-                    ?.attr("href")?.substringAfter("=")?.toInt()
+                responseJs
+                    .selectFirst("img[title=Last]")
+                    ?.parent()
+                    ?.attr("href")
+                    ?.substringAfter("=")
+                    ?.toInt()
             }
 
         var chapterList = mutableListOf<SChapter>()
@@ -101,9 +103,10 @@ class Collectedcurios : ParsedHttpSource() {
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        name = element.selectFirst(".w3-round")?.attr("value") ?: "Chapter"
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            name = element.selectFirst(".w3-round")?.attr("value") ?: "Chapter"
+        }
 
     override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
@@ -134,7 +137,11 @@ class Collectedcurios : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 

@@ -31,12 +31,13 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 abstract class DynastyScans : ParsedHttpSource() {
-
     override val baseUrl = "https://dynasty-scans.com"
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1, TimeUnit.SECONDS)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimitHost(baseUrl.toHttpUrl(), 1, 1, TimeUnit.SECONDS)
+            .build()
 
     abstract fun popularMangaInitialUrl(): String
 
@@ -60,9 +61,7 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     protected fun popularMangaInitialUrl(page: Int) = "$baseUrl/search?q=&classes%5B%5D=$categoryPrefix&page=$page=$&sort="
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(popularMangaInitialUrl(page), headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(popularMangaInitialUrl(page), headers)
 
     override fun popularMangaSelector() = searchMangaSelector()
 
@@ -75,11 +74,16 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (query.startsWith("manga:")) {
             return if (query.startsWith("manga:$searchPrefix:")) {
                 val newQuery = query.removePrefix("manga:$searchPrefix:")
-                client.newCall(GET("$baseUrl/$searchPrefix/$newQuery"))
+                client
+                    .newCall(GET("$baseUrl/$searchPrefix/$newQuery"))
                     .asObservableSuccess()
                     .map { response ->
                         val details = mangaDetailsParse(response)
@@ -104,15 +108,24 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = "div.pagination > ul > li.active + li > a"
 
-    private fun buildListfromResponse(): List<Node> {
-        return client.newCall(
-            Request.Builder().headers(headers)
-                .url(popularMangaInitialUrl()).build(),
-        ).execute().asJsoup()
-            .select("div#main").first { it.hasText() }.childNodes()
-    }
+    private fun buildListfromResponse(): List<Node> =
+        client
+            .newCall(
+                Request
+                    .Builder()
+                    .headers(headers)
+                    .url(popularMangaInitialUrl())
+                    .build(),
+            ).execute()
+            .asJsoup()
+            .select("div#main")
+            .first { it.hasText() }
+            .childNodes()
 
-    protected fun parseHeader(document: Document, manga: SManga): Boolean {
+    protected fun parseHeader(
+        document: Document,
+        manga: SManga,
+    ): Boolean {
         manga.title = document.selectFirst("div.tags > h2.tag-title > b")!!.text()
         val elements = document.selectFirst("div.tags > h2.tag-title")!!.getElementsByTag("a")
         if (elements.isEmpty()) {
@@ -124,25 +137,33 @@ abstract class DynastyScans : ParsedHttpSource() {
             manga.artist = elements[0].text()
             manga.author = elements[1].text()
         }
-        manga.status = document.select("div.tags > h2.tag-title > small").text().let {
-            when {
-                it.contains("Ongoing") -> SManga.ONGOING
-                it.contains("Completed") -> SManga.COMPLETED
-                it.contains("Licensed") -> SManga.LICENSED
-                else -> SManga.UNKNOWN
+        manga.status =
+            document.select("div.tags > h2.tag-title > small").text().let {
+                when {
+                    it.contains("Ongoing") -> SManga.ONGOING
+                    it.contains("Completed") -> SManga.COMPLETED
+                    it.contains("Licensed") -> SManga.LICENSED
+                    else -> SManga.UNKNOWN
+                }
             }
-        }
         return true
     }
 
-    protected fun parseGenres(document: Document, manga: SManga, select: String = "div.tags > div.tag-tags a") {
+    protected fun parseGenres(
+        document: Document,
+        manga: SManga,
+        select: String = "div.tags > div.tag-tags a",
+    ) {
         val tagElements = document.select(select)
         val doujinElements = document.select("div.tags >  h2.tag-title > small > a[href*=doujins]")
         tagElements.addAll(doujinElements)
         parseGenres(tagElements, manga)
     }
 
-    protected fun parseGenres(elements: Elements, manga: SManga) {
+    protected fun parseGenres(
+        elements: Elements,
+        manga: SManga,
+    ) {
         if (!elements.isEmpty()) {
             val genres = mutableListOf<String>()
             elements.forEach {
@@ -152,7 +173,10 @@ abstract class DynastyScans : ParsedHttpSource() {
         }
     }
 
-    protected fun parseDescription(document: Document, manga: SManga) {
+    protected fun parseDescription(
+        document: Document,
+        manga: SManga,
+    ) {
         manga.description = document.select("div.tags > div.row div.description").text()
     }
 
@@ -172,9 +196,7 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     override fun chapterListSelector() = "div.span10 > dl.chapter-list > dd"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).asReversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).asReversed()
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
@@ -188,10 +210,11 @@ abstract class DynastyScans : ParsedHttpSource() {
                 chapter.name += " and ${nodes[nodes.indexOfPartial(" and ") + 1]}"
             }
         }
-        chapter.date_upload = nodes[nodes.indexOfPartial("released")]
-            .substringAfter("released ")
-            .replace("\'", "")
-            .toDate("MMM dd yy")
+        chapter.date_upload =
+            nodes[nodes.indexOfPartial("released")]
+                .substringAfter("released ")
+                .replace("\'", "")
+                .toDate("MMM dd yy")
         return chapter
     }
 
@@ -204,9 +227,15 @@ abstract class DynastyScans : ParsedHttpSource() {
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return try {
-            val imageUrl = document.select("script").last()!!.html().substringAfter("var pages = [").substringBefore("];")
+    override fun pageListParse(document: Document): List<Page> =
+        try {
+            val imageUrl =
+                document
+                    .select("script")
+                    .last()!!
+                    .html()
+                    .substringAfter("var pages = [")
+                    .substringBefore("];")
 
             json.parseToJsonElement("[$imageUrl]").jsonArray.mapIndexed { index, it ->
                 Page(index, imageUrl = "$baseUrl${it.jsonObject["image"]!!.jsonPrimitive.content}")
@@ -215,10 +244,11 @@ abstract class DynastyScans : ParsedHttpSource() {
             e.printStackTrace()
             emptyList()
         }
-    }
 
-    class InternalList(nodes: List<Node>, type: String) : ArrayList<String>() {
-
+    class InternalList(
+        nodes: List<Node>,
+        type: String,
+    ) : ArrayList<String>() {
         init {
             if (type == "text") {
                 for (node in nodes) {
@@ -226,7 +256,9 @@ abstract class DynastyScans : ParsedHttpSource() {
                         if (node.text() != " " && !node.text().contains("\n")) {
                             this.add(node.text())
                         }
-                    } else if (node is Element) this.add(node.text())
+                    } else if (node is Element) {
+                        this.add(node.text())
+                    }
                 }
             }
             if (type == "src") {
@@ -247,23 +279,25 @@ abstract class DynastyScans : ParsedHttpSource() {
             }
         }
 
-        fun indexOfPartial(partial: String): Int {
-            return (0..this.lastIndex).firstOrNull { this[it].contains(partial) }
+        fun indexOfPartial(partial: String): Int =
+            (0..this.lastIndex).firstOrNull { this[it].contains(partial) }
                 ?: -1
-        }
     }
 
-    data class Validate(val _isManga: Boolean, val _pos: Int)
+    data class Validate(
+        val _isManga: Boolean,
+        val _pos: Int,
+    )
 
     override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
-    override fun latestUpdatesSelector() = ""
-    override fun latestUpdatesNextPageSelector() = ""
-    override fun imageUrlParse(document: Document): String = ""
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return popularMangaRequest(page)
-    }
+    override fun latestUpdatesSelector() = ""
+
+    override fun latestUpdatesNextPageSelector() = ""
+
+    override fun imageUrlParse(document: Document): String = ""
+
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
 }

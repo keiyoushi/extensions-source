@@ -16,28 +16,40 @@ object ImageInterceptor : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val url = chain.request().url
-        val key = url.queryParameter("key")
-            ?: return chain.proceed(chain.request())
+        val key =
+            url.queryParameter("key")
+                ?: return chain.proceed(chain.request())
         val iv = url.queryParameter("iv")!!
 
-        val response = chain.proceed(
-            chain.request().newBuilder().url(
-                url.newBuilder()
-                    .removeAllQueryParameters("key")
-                    .removeAllQueryParameters("iv")
-                    .build(),
-            ).build(),
-        )
+        val response =
+            chain.proceed(
+                chain
+                    .request()
+                    .newBuilder()
+                    .url(
+                        url
+                            .newBuilder()
+                            .removeAllQueryParameters("key")
+                            .removeAllQueryParameters("iv")
+                            .build(),
+                    ).build(),
+            )
 
-        val body = response.body.bytes()
-            .decode(key.decodeHex(), iv.decodeHex())
+        val body =
+            response.body
+                .bytes()
+                .decode(key.decodeHex(), iv.decodeHex())
 
-        return response.newBuilder()
+        return response
+            .newBuilder()
             .body(body)
             .build()
     }
 
-    private fun ByteArray.decode(key: ByteArray, iv: ByteArray) = AES.let {
+    private fun ByteArray.decode(
+        key: ByteArray,
+        iv: ByteArray,
+    ) = AES.let {
         it.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
         it.doFinal(this).toResponseBody(mediaType)
     }

@@ -22,69 +22,86 @@ class Comicabc : ParsedHttpSource() {
     // Popular
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/comic/h-$page.html", headers)
+
     override fun popularMangaNextPageSelector(): String = "div.pager a span.mdi-skip-next"
+
     override fun popularMangaSelector(): String = ".container .row a.comicpic_col6"
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("li.nowraphide")!!.text()
-        setUrlWithoutDomain(element.attr("abs:href"))
-        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-    }
+
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            title = element.selectFirst("li.nowraphide")!!.text()
+            setUrlWithoutDomain(element.attr("abs:href"))
+            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+        }
 
     // Latest
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic/u-$page.html", headers)
+
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+
     override fun latestUpdatesSelector() = ".container .row .cat2_list a"
+
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/member/search.aspx?key=$query&page=$page", headers)
-    }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = GET("$baseUrl/member/search.aspx?key=$query&page=$page", headers)
 
     override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
+
     override fun searchMangaSelector(): String = popularMangaSelector()
+
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".item_content_box .h2")!!.text()
-        thumbnail_url = document.selectFirst(".item-cover img")!!.attr("abs:src")
-        author = document.selectFirst(".item_content_box .item-info-author")?.text()?.substringAfter("作者: ")
-        artist = author
-        description = document.selectFirst(".item_content_box .item_info_detail")?.text()
-        status = when (document.selectFirst(".item_content_box .item-info-status")?.text()) {
-            "連載中" -> SManga.ONGOING
-            "已完結" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
+            title = document.selectFirst(".item_content_box .h2")!!.text()
+            thumbnail_url = document.selectFirst(".item-cover img")!!.attr("abs:src")
+            author = document.selectFirst(".item_content_box .item-info-author")?.text()?.substringAfter("作者: ")
+            artist = author
+            description = document.selectFirst(".item_content_box .item_info_detail")?.text()
+            status =
+                when (document.selectFirst(".item_content_box .item-info-status")?.text()) {
+                    "連載中" -> SManga.ONGOING
+                    "已完結" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
-    }
 
     // Chapters
 
     override fun chapterListSelector(): String = "#chapters a"
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val onclick = element.attr("onclick")
-        val comicId = onclick.substringAfter("cview('").substringBefore("-")
-        val chapterId = onclick.substringAfter("-").substringBefore(".html")
-        url = "/online/new-$comicId.html?ch=$chapterId"
-        name = element.text()
-    }
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            val onclick = element.attr("onclick")
+            val comicId = onclick.substringAfter("cview('").substringBefore("-")
+            val chapterId = onclick.substringAfter("-").substringBefore(".html")
+            url = "/online/new-$comicId.html?ch=$chapterId"
+            name = element.text()
+        }
+
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     // Pages
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val url = response.request.url.toString()
-        val script = document.selectFirst("script:containsData(function request)")!!.data()
-            .replace("document.location", "\"$url\"")
-            .replace("\$(\"#comics-pics\").html(xx);", "")
-            .substringBefore("\$(\"#pt,#ptb\")")
+        val script =
+            document
+                .selectFirst("script:containsData(function request)")!!
+                .data()
+                .replace("document.location", "\"$url\"")
+                .replace("\$(\"#comics-pics\").html(xx);", "")
+                .substringBefore("\$(\"#pt,#ptb\")")
         val quickJs = QuickJs.create()
         val variableName = script.substringAfter("img  s=\"").substringBefore("'")
         val images = quickJs.evaluate(nview + script + lazyloadx.format(variableName)) as Array<*>
@@ -95,6 +112,7 @@ class Comicabc : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
+
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     companion object {

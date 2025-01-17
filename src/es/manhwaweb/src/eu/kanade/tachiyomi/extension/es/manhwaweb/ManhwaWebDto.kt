@@ -22,11 +22,12 @@ class PopularComicDto(
     private val name: String,
     @SerialName("imagen") private val thumbnail: String,
 ) {
-    fun toSManga() = SManga.create().apply {
-        title = name
-        thumbnail_url = thumbnail
-        url = slug.removePrefix("/")
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            title = name
+            thumbnail_url = thumbnail
+            url = slug.removePrefix("/")
+        }
 }
 
 @Serializable
@@ -49,12 +50,13 @@ class LatestComicDto(
     @SerialName("name_manhwa") private val name: String,
     @SerialName("img") private val thumbnail: String,
 ) {
-    fun toSManga() = SManga.create().apply {
-        title = name
-        thumbnail_url = thumbnail
-        val type = if (platform == "toptoon" || platform == "lezhin") "manhwa" else "manga"
-        url = "$type/$slug"
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            title = name
+            thumbnail_url = thumbnail
+            val type = if (platform == "toptoon" || platform == "lezhin") "manhwa" else "manga"
+            url = "$type/$slug"
+        }
 }
 
 @Serializable
@@ -70,12 +72,13 @@ class SearchComicDto(
     @SerialName("the_real_name") private val name: String,
     @SerialName("_imagen") private val thumbnail: String,
 ) {
-    fun toSManga() = SManga.create().apply {
-        title = name
-        thumbnail_url = thumbnail
-        val type = if (platform == "toptoon" || platform == "lezhin") "manhwa" else "manga"
-        url = "$type/$slug"
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            title = name
+            thumbnail_url = thumbnail
+            val type = if (platform == "toptoon" || platform == "lezhin") "manhwa" else "manga"
+            url = "$type/$slug"
+        }
 }
 
 @Serializable
@@ -88,24 +91,26 @@ class ComicDetailsDto(
     @SerialName("_categoris") private val genres: List<Map<Int, String>>,
     @SerialName("_extras") private val extras: ComicDetailsExtrasDto,
 ) {
-    fun toSManga() = SManga.create().apply {
-        title = this@ComicDetailsDto.title
-        thumbnail_url = thumbnail
-        description = this@ComicDetailsDto.description
-        if (!alternativeName.isNullOrBlank()) {
-            if (!description.isNullOrBlank()) description += "\n\n"
-            description += "Nombres alternativos: $alternativeName"
+    fun toSManga() =
+        SManga.create().apply {
+            title = this@ComicDetailsDto.title
+            thumbnail_url = thumbnail
+            description = this@ComicDetailsDto.description
+            if (!alternativeName.isNullOrBlank()) {
+                if (!description.isNullOrBlank()) description += "\n\n"
+                description += "Nombres alternativos: $alternativeName"
+            }
+            status = parseStatus(this@ComicDetailsDto.status)
+            genre = genres.joinToString { it.values.first() }
+            author = extras.authors.joinToString()
         }
-        status = parseStatus(this@ComicDetailsDto.status)
-        genre = genres.joinToString { it.values.first() }
-        author = extras.authors.joinToString()
-    }
 
-    private fun parseStatus(status: String) = when (status) {
-        "publicandose" -> SManga.ONGOING
-        "finalizado" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    private fun parseStatus(status: String) =
+        when (status) {
+            "publicandose" -> SManga.ONGOING
+            "finalizado" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
 }
 
 @Serializable

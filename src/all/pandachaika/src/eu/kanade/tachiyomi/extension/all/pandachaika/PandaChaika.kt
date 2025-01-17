@@ -28,7 +28,6 @@ class PandaChaika(
     override val lang: String = "all",
     private val searchLang: String = "",
 ) : HttpSource() {
-
     override val name = "PandaChaika"
 
     override val baseUrl = "https://panda.chaika.moe"
@@ -37,10 +36,11 @@ class PandaChaika(
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
-        .newBuilder()
-        .addInterceptor(::Intercept)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::Intercept)
+            .build()
 
     private val json: Json by injectLazy()
 
@@ -48,41 +48,50 @@ class PandaChaika(
     private val ehentaiRegex = Regex("""(?:https?://)?e-hentai\.org/g/""")
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseSearchUrl/?tags=$searchLang&sort=rating&apply=&json=&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseSearchUrl/?tags=$searchLang&sort=rating&apply=&json=&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseSearchUrl/?tags=$searchLang&sort=public_date&apply=&json=&page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$baseSearchUrl/?tags=$searchLang&sort=public_date&apply=&json=&page=$page", headers)
 
-    private fun parsePageRange(query: String, minPages: Int = 1, maxPages: Int = 9999): Pair<Int, Int> {
+    private fun parsePageRange(
+        query: String,
+        minPages: Int = 1,
+        maxPages: Int = 9999,
+    ): Pair<Int, Int> {
         val num = query.filter(Char::isDigit).toIntOrNull() ?: -1
+
         fun limitedNum(number: Int = num): Int = number.coerceIn(minPages, maxPages)
 
         if (num < 0) return minPages to maxPages
         return when (query.firstOrNull()) {
             '<' -> 1 to if (query[1] == '=') limitedNum() else limitedNum(num + 1)
             '>' -> limitedNum(if (query[1] == '=') num else num + 1) to maxPages
-            '=' -> when (query[1]) {
-                '>' -> limitedNum() to maxPages
-                '<' -> 1 to limitedNum(maxPages)
-                else -> limitedNum() to limitedNum()
-            }
+            '=' ->
+                when (query[1]) {
+                    '>' -> limitedNum() to maxPages
+                    '<' -> 1 to limitedNum(maxPages)
+                    else -> limitedNum() to limitedNum()
+                }
             else -> limitedNum() to limitedNum()
         }
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return when {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        when {
             query.startsWith(PREFIX_ID_SEARCH) -> {
                 val id = query.removePrefix(PREFIX_ID_SEARCH).toInt()
-                client.newCall(GET("$baseUrl/api?archive=$id", headers))
+                client
+                    .newCall(GET("$baseUrl/api?archive=$id", headers))
                     .asObservable()
                     .map { response ->
                         searchMangaByIdParse(response, id)
@@ -91,59 +100,93 @@ class PandaChaika(
             query.startsWith(PREFIX_EHEN_ID_SEARCH) -> {
                 val id = query.removePrefix(PREFIX_EHEN_ID_SEARCH).replace(ehentaiRegex, "")
                 val baseLink = "https://e-hentai.org/g/"
-                val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
-                    addQueryParameter("qsearch", baseLink + id)
-                    addQueryParameter("json", "")
-                }.build()
-                client.newCall(GET(fullLink, headers))
+                val fullLink =
+                    baseSearchUrl
+                        .toHttpUrl()
+                        .newBuilder()
+                        .apply {
+                            addQueryParameter("qsearch", baseLink + id)
+                            addQueryParameter("json", "")
+                        }.build()
+                client
+                    .newCall(GET(fullLink, headers))
                     .asObservableSuccess()
                     .map {
-                        val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
+                        val archive =
+                            it
+                                .parseAs<ArchiveResponse>()
+                                .archives
+                                .getOrNull(0)
+                                ?.toSManga() ?: throw Exception("Not Found")
                         MangasPage(listOf(archive), false)
                     }
             }
             query.startsWith(PREFIX_FAK_ID_SEARCH) -> {
                 val slug = query.removePrefix(PREFIX_FAK_ID_SEARCH).replace(fakkuRegex, "")
                 val baseLink = "https://www.fakku.net/hentai/"
-                val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
-                    addQueryParameter("qsearch", baseLink + slug)
-                    addQueryParameter("json", "")
-                }.build()
-                client.newCall(GET(fullLink, headers))
+                val fullLink =
+                    baseSearchUrl
+                        .toHttpUrl()
+                        .newBuilder()
+                        .apply {
+                            addQueryParameter("qsearch", baseLink + slug)
+                            addQueryParameter("json", "")
+                        }.build()
+                client
+                    .newCall(GET(fullLink, headers))
                     .asObservableSuccess()
                     .map {
-                        val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
+                        val archive =
+                            it
+                                .parseAs<ArchiveResponse>()
+                                .archives
+                                .getOrNull(0)
+                                ?.toSManga() ?: throw Exception("Not Found")
                         MangasPage(listOf(archive), false)
                     }
             }
             query.startsWith(PREFIX_SOURCE_SEARCH) -> {
                 val url = query.removePrefix(PREFIX_SOURCE_SEARCH)
-                client.newCall(GET("$baseSearchUrl/?qsearch=$url&json=", headers))
+                client
+                    .newCall(GET("$baseSearchUrl/?qsearch=$url&json=", headers))
                     .asObservableSuccess()
                     .map {
-                        val archive = it.parseAs<ArchiveResponse>().archives.getOrNull(0)?.toSManga() ?: throw Exception("Not Found")
+                        val archive =
+                            it
+                                .parseAs<ArchiveResponse>()
+                                .archives
+                                .getOrNull(0)
+                                ?.toSManga() ?: throw Exception("Not Found")
                         MangasPage(listOf(archive), false)
                     }
             }
 
             else -> super.fetchSearchManga(page, query, filters)
         }
-    }
 
-    private fun searchMangaByIdParse(response: Response, id: Int = 0): MangasPage {
+    private fun searchMangaByIdParse(
+        response: Response,
+        id: Int = 0,
+    ): MangasPage {
         val title = response.parseAs<Archive>().title
-        val fullLink = baseSearchUrl.toHttpUrl().newBuilder().apply {
-            addQueryParameter("qsearch", title)
-            addQueryParameter("json", "")
-        }.build()
-        val archive = client.newCall(GET(fullLink, headers))
-            .execute()
-            .parseAs<ArchiveResponse>().archives
-            .find {
-                it.id == id
-            }
-            ?.toSManga()
-            ?: throw Exception("Invalid ID")
+        val fullLink =
+            baseSearchUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("qsearch", title)
+                    addQueryParameter("json", "")
+                }.build()
+        val archive =
+            client
+                .newCall(GET(fullLink, headers))
+                .execute()
+                .parseAs<ArchiveResponse>()
+                .archives
+                .find {
+                    it.id == id
+                }?.toSManga()
+                ?: throw Exception("Invalid ID")
 
         return MangasPage(listOf(archive), false)
     }
@@ -158,85 +201,89 @@ class PandaChaika(
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseSearchUrl.toHttpUrl().newBuilder().apply {
-            val tags = mutableListOf<String>()
-            var reason = ""
-            var uploader = ""
-            var pagesMin = 1
-            var pagesMax = 9999
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            baseSearchUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    val tags = mutableListOf<String>()
+                    var reason = ""
+                    var uploader = ""
+                    var pagesMin = 1
+                    var pagesMax = 9999
 
-            tags.add(searchLang)
+                    tags.add(searchLang)
 
-            filters.forEach {
-                when (it) {
-                    is SortFilter -> {
-                        addQueryParameter("sort", it.getValue())
-                        addQueryParameter("asc_desc", if (it.state!!.ascending) "asc" else "desc")
-                    }
+                    filters.forEach {
+                        when (it) {
+                            is SortFilter -> {
+                                addQueryParameter("sort", it.getValue())
+                                addQueryParameter("asc_desc", if (it.state!!.ascending) "asc" else "desc")
+                            }
 
-                    is SelectFilter -> {
-                        addQueryParameter("category", it.vals[it.state].replace("All", ""))
-                    }
+                            is SelectFilter -> {
+                                addQueryParameter("category", it.vals[it.state].replace("All", ""))
+                            }
 
-                    is PageFilter -> {
-                        if (it.state.isNotBlank()) {
-                            val (min, max) = parsePageRange(it.state)
-                            pagesMin = min
-                            pagesMax = max
-                        }
-                    }
+                            is PageFilter -> {
+                                if (it.state.isNotBlank()) {
+                                    val (min, max) = parsePageRange(it.state)
+                                    pagesMin = min
+                                    pagesMax = max
+                                }
+                            }
 
-                    is TextFilter -> {
-                        if (it.state.isNotEmpty()) {
-                            when (it.type) {
-                                "reason" -> reason = it.state
-                                "uploader" -> uploader = it.state
-                                else -> {
-                                    it.state.split(",").filter(String::isNotBlank).map { tag ->
-                                        val trimmed = tag.trim()
-                                        tags.add(
-                                            buildString {
-                                                if (trimmed.startsWith('-')) append("-")
-                                                append(it.type)
-                                                if (it.type.isNotBlank()) append(":")
-                                                append(trimmed.lowercase().removePrefix("-"))
-                                            },
-                                        )
+                            is TextFilter -> {
+                                if (it.state.isNotEmpty()) {
+                                    when (it.type) {
+                                        "reason" -> reason = it.state
+                                        "uploader" -> uploader = it.state
+                                        else -> {
+                                            it.state.split(",").filter(String::isNotBlank).map { tag ->
+                                                val trimmed = tag.trim()
+                                                tags.add(
+                                                    buildString {
+                                                        if (trimmed.startsWith('-')) append("-")
+                                                        append(it.type)
+                                                        if (it.type.isNotBlank()) append(":")
+                                                        append(trimmed.lowercase().removePrefix("-"))
+                                                    },
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
+                            else -> {}
                         }
                     }
-                    else -> {}
-                }
-            }
 
-            addQueryParameter("title", query)
-            addQueryParameter("tags", tags.joinToString())
-            addQueryParameter("filecount_from", pagesMin.toString())
-            addQueryParameter("filecount_to", pagesMax.toString())
-            addQueryParameter("reason", reason)
-            addQueryParameter("uploader", uploader)
-            addQueryParameter("page", page.toString())
-            addQueryParameter("apply", "")
-            addQueryParameter("json", "")
-        }.build()
+                    addQueryParameter("title", query)
+                    addQueryParameter("tags", tags.joinToString())
+                    addQueryParameter("filecount_from", pagesMin.toString())
+                    addQueryParameter("filecount_to", pagesMax.toString())
+                    addQueryParameter("reason", reason)
+                    addQueryParameter("uploader", uploader)
+                    addQueryParameter("page", page.toString())
+                    addQueryParameter("apply", "")
+                    addQueryParameter("json", "")
+                }.build()
 
         return GET(url, headers)
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/api?archive=${manga.url}", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl/api?archive=${manga.url}", headers)
 
     override fun getFilterList() = getFilters()
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(manga.apply { initialized = true })
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga.apply { initialized = true })
 
     // Chapters
 
@@ -253,6 +300,7 @@ class PandaChaika(
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/archive/${manga.url}"
+
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
 
     // Pages
@@ -273,17 +321,19 @@ class PandaChaika(
     }
 
     private fun getZipType(url: String): Pair<String, BigInteger> {
-        val request = Request.Builder()
-            .url(url)
-            .headers(headers)
-            .method("HEAD", null)
-            .build()
+        val request =
+            Request
+                .Builder()
+                .url(url)
+                .headers(headers)
+                .method("HEAD", null)
+                .build()
 
-        val contentLength = (
-            client.newCall(request).execute().header("content-length")
-                ?: throw Exception("Could not get Content-Length of URL")
-            )
-            .toBigInteger()
+        val contentLength =
+            (
+                client.newCall(request).execute().header("content-length")
+                    ?: throw Exception("Could not get Content-Length of URL")
+            ).toBigInteger()
 
         return (if (contentLength > Int.MAX_VALUE.toBigInteger()) "zip64" else "zip") to contentLength
     }
@@ -299,7 +349,9 @@ class PandaChaika(
             var type = filename.substringAfterLast('.').lowercase()
             type = if (type == "jpg") "jpeg" else type
 
-            Response.Builder().body(byteArray.toResponseBody("image/$type".toMediaType()))
+            Response
+                .Builder()
+                .body(byteArray.toResponseBody("image/$type".toMediaType()))
                 .request(chain.request())
                 .protocol(Protocol.HTTP_1_0)
                 .code(200)
@@ -310,20 +362,16 @@ class PandaChaika(
         }
     }
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
-    private fun Zip.toJson(): String {
-        return json.encodeToString(this)
-    }
+    private fun Zip.toJson(): String = json.encodeToString(this)
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     companion object {

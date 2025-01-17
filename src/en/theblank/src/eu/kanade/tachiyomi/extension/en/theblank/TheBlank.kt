@@ -22,19 +22,20 @@ class TheBlank :
         dateFormat = SimpleDateFormat("dd/MM/yy", Locale.US),
     ),
     ConfigurableSource {
-
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override val client = super.client.newBuilder()
-        .rateLimit(1)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(1)
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).build()
 
     override val useNewChapterEndpoint = true
     override val useLoadMoreRequest = LoadMoreStrategy.Always
+
     override fun chapterListSelector() = "li.wp-manga-chapter:not(.vip-permission)"
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

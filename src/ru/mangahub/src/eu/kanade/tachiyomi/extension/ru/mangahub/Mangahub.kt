@@ -23,7 +23,6 @@ import kotlin.math.absoluteValue
 import kotlin.random.Random
 
 open class Mangahub : ParsedHttpSource() {
-
     override val name = "Mangahub"
 
     override val baseUrl = "https://mangahub.ru"
@@ -32,10 +31,12 @@ open class Mangahub : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor(::confirmAgeInterceptor)
-        .rateLimit(2)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::confirmAgeInterceptor)
+            .rateLimit(2)
+            .build()
 
     private fun confirmAgeInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -47,31 +48,41 @@ open class Mangahub : ParsedHttpSource() {
             return response
         }
 
-        val document = Jsoup.parse(
-            response.peekBody(Long.MAX_VALUE).string(),
-            request.url.toString(),
-        )
+        val document =
+            Jsoup.parse(
+                response.peekBody(Long.MAX_VALUE).string(),
+                request.url.toString(),
+            )
 
-        val formElement = document.selectFirst("#confirm_age__token")
-            ?: return response
+        val formElement =
+            document.selectFirst("#confirm_age__token")
+                ?: return response
 
-        val formBody = FormBody.Builder()
-            .addEncoded(formElement.attr("name"), formElement.attr("value"))
-            .build()
+        val formBody =
+            FormBody
+                .Builder()
+                .addEncoded(formElement.attr("name"), formElement.attr("value"))
+                .build()
 
-        val confirmAgeRequest = request.newBuilder()
-            .method("POST", formBody)
-            .build()
+        val confirmAgeRequest =
+            request
+                .newBuilder()
+                .method("POST", formBody)
+                .build()
 
         return client.newCall(confirmAgeRequest).execute()
     }
 
     private val userAgentRandomizer = "${Random.nextInt().absoluteValue}"
 
-    override fun headersBuilder() = Headers.Builder().apply {
-        add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.$userAgentRandomizer")
-        add("Referer", baseUrl)
-    }
+    override fun headersBuilder() =
+        Headers.Builder().apply {
+            add(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.$userAgentRandomizer",
+            )
+            add("Referer", baseUrl)
+        }
 
     override fun popularMangaRequest(page: Int): Request {
         val pageStr = if (page > 1) "?page=$page" else ""
@@ -95,31 +106,32 @@ open class Mangahub : ParsedHttpSource() {
         return manga
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun popularMangaNextPageSelector() = ".page-link:contains(→)"
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/manga".toHttpUrl().newBuilder().apply {
-            addQueryParameter("query", query)
-            if (page > 1) addQueryParameter("page", page.toString())
-        }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/search/manga".toHttpUrl().newBuilder().apply {
+                addQueryParameter("query", query)
+                if (page > 1) addQueryParameter("page", page.toString())
+            }
         return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl + ("/chapters/" + manga.url.removePrefix("/title/")), headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET(baseUrl + ("/chapters/" + manga.url.removePrefix("/title/")), headers)
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
@@ -131,10 +143,11 @@ open class Mangahub : ParsedHttpSource() {
         return manga
     }
 
-    private fun parseStatus(elements: String): Int = when {
-        elements.contains("Переведена") or elements.contains("Выпуск завершен") -> SManga.COMPLETED
-        else -> SManga.ONGOING
-    }
+    private fun parseStatus(elements: String): Int =
+        when {
+            elements.contains("Переведена") or elements.contains("Выпуск завершен") -> SManga.COMPLETED
+            else -> SManga.ONGOING
+        }
 
     override fun chapterListSelector() = "div.py-2.px-3"
 
@@ -142,14 +155,18 @@ open class Mangahub : ParsedHttpSource() {
         val urlElement = element.select("div.align-items-center > a").first()!!
         val chapter = SChapter.create()
         chapter.name = urlElement.text()
-        chapter.date_upload = element.select("div.text-muted").text().let {
-            SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(it)?.time ?: 0L
-        }
+        chapter.date_upload =
+            element.select("div.text-muted").text().let {
+                SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(it)?.time ?: 0L
+            }
         chapter.setUrlWithoutDomain(urlElement.attr("href"))
         return chapter
     }
 
-    override fun prepareNewChapter(chapter: SChapter, manga: SManga) {
+    override fun prepareNewChapter(
+        chapter: SChapter,
+        manga: SManga,
+    ) {
         val basic = Regex("(Глава\\s)((\\d|\\.)+)")
         when {
             basic.containsMatchIn(chapter.name) -> {
@@ -171,10 +188,12 @@ open class Mangahub : ParsedHttpSource() {
     override fun imageUrlParse(document: Document) = ""
 
     override fun imageRequest(page: Page): Request {
-        val imgHeader = Headers.Builder()
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 6.3; WOW64)")
-            .add("Referer", baseUrl)
-            .build()
+        val imgHeader =
+            Headers
+                .Builder()
+                .add("User-Agent", "Mozilla/5.0 (Windows NT 6.3; WOW64)")
+                .add("Referer", baseUrl)
+                .build()
 
         return GET(page.imageUrl!!, imgHeader)
     }

@@ -4,7 +4,10 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class CDT(val ct: String, val s: String)
+class CDT(
+    val ct: String,
+    val s: String,
+)
 
 @Serializable
 class Chapter(

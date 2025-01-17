@@ -6,17 +6,18 @@ import eu.kanade.tachiyomi.source.model.FilterList
 
 fun getFilters(preferences: SharedPreferences): FilterList {
     val langData = preferences.langData
-    val list: List<Filter<*>> = if (langData.isEmpty()) {
-        listOf(Filter.Header("Tap 'Reset' to load languages"))
-    } else {
-        buildList(langData.size + 1) {
-            add(Filter.Header("Languages"))
-            val lang = preferences.lang.toHashSet()
-            langData.mapTo(this) {
-                LangFilter(it.key, "${it.name} (${it.progress})", it.key in lang)
+    val list: List<Filter<*>> =
+        if (langData.isEmpty()) {
+            listOf(Filter.Header("Tap 'Reset' to load languages"))
+        } else {
+            buildList(langData.size + 1) {
+                add(Filter.Header("Languages"))
+                val lang = preferences.lang.toHashSet()
+                langData.mapTo(this) {
+                    LangFilter(it.key, "${it.name} (${it.progress})", it.key in lang)
+                }
             }
         }
-    }
     return FilterList(list)
 }
 
@@ -27,4 +28,8 @@ fun SharedPreferences.saveFrom(filters: FilterList) {
     edit().setLang(result).apply()
 }
 
-class LangFilter(val key: String, name: String, state: Boolean) : Filter.CheckBox(name, state)
+class LangFilter(
+    val key: String,
+    name: String,
+    state: Boolean,
+) : Filter.CheckBox(name, state)

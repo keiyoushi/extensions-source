@@ -13,11 +13,12 @@ class TencentComicsUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 3) {
             val id = pathSegments[3]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${TencentComics.ID_SEARCH_PREFIX}$id")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${TencentComics.ID_SEARCH_PREFIX}$id")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

@@ -10,12 +10,13 @@ fun parseDateInternal(source: String): Long {
     if (recentRegex.matches(source)) {
         val date = fullDateFormat.format(Date())
         val time = timeFormat.parse(date + ' ' + source.substring(3))!!.time
-        val offset = when (source[0]) {
-            '今' -> 0L
-            '昨' -> 86400000L
-            '前' -> 86400000L * 2
-            else -> 0L // impossible
-        }
+        val offset =
+            when (source[0]) {
+                '今' -> 0L
+                '昨' -> 86400000L
+                '前' -> 86400000L * 2
+                else -> 0L // impossible
+            }
         return time - offset
     }
 
@@ -34,5 +35,4 @@ private val timeFormat by lazy { cstFormat("yyyy-MM-dd hh:mm") }
 private val shortDateFormat by lazy { cstFormat("yyyy MM月dd") }
 private val fullDateFormat by lazy { cstFormat("yyyy-MM-dd") }
 
-private fun cstFormat(pattern: String) =
-    SimpleDateFormat(pattern, Locale.ENGLISH).apply { timeZone = TimeZone.getTimeZone("GMT+8") }
+private fun cstFormat(pattern: String) = SimpleDateFormat(pattern, Locale.ENGLISH).apply { timeZone = TimeZone.getTimeZone("GMT+8") }

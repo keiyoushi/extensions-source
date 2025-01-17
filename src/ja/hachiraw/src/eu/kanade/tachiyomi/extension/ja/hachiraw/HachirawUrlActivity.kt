@@ -14,11 +14,12 @@ class HachirawUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
 
         if (pathSegments != null && pathSegments.size > 1) {
-            val intent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Hachiraw.PREFIX_SLUG_SEARCH}${pathSegments[1]}")
-                putExtra("filter", packageName)
-            }
+            val intent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${Hachiraw.PREFIX_SLUG_SEARCH}${pathSegments[1]}")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(intent)

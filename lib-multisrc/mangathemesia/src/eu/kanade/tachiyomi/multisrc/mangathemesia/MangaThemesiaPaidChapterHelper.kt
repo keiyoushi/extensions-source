@@ -9,18 +9,25 @@ class MangaThemesiaPaidChapterHelper(
     private val hidePaidChaptersPrefKey: String = "pref_hide_paid_chapters",
     private val lockedChapterSelector: String = "a[data-bs-target='#lockedChapterModal']",
 ) {
-    fun addHidePaidChaptersPreferenceToScreen(screen: PreferenceScreen, intl: Intl) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = hidePaidChaptersPrefKey
-            title = intl["pref_hide_paid_chapters_title"]
-            summary = intl["pref_hide_paid_chapters_summary"]
-            setDefaultValue(true)
-        }.also(screen::addPreference)
+    fun addHidePaidChaptersPreferenceToScreen(
+        screen: PreferenceScreen,
+        intl: Intl,
+    ) {
+        SwitchPreferenceCompat(screen.context)
+            .apply {
+                key = hidePaidChaptersPrefKey
+                title = intl["pref_hide_paid_chapters_title"]
+                summary = intl["pref_hide_paid_chapters_summary"]
+                setDefaultValue(true)
+            }.also(screen::addPreference)
     }
 
     fun getHidePaidChaptersPref(preferences: SharedPreferences) = preferences.getBoolean(hidePaidChaptersPrefKey, true)
 
-    fun getChapterListSelectorBasedOnHidePaidChaptersPref(baseChapterListSelector: String, preferences: SharedPreferences): String {
+    fun getChapterListSelectorBasedOnHidePaidChaptersPref(
+        baseChapterListSelector: String,
+        preferences: SharedPreferences,
+    ): String {
         if (!getHidePaidChaptersPref(preferences)) {
             return baseChapterListSelector
         }

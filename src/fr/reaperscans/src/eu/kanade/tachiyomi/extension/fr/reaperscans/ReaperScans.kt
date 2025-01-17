@@ -4,11 +4,12 @@ import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document
 
-class ReaperScans : Keyoapp(
-    "Reaper Scans",
-    "https://reaper-scans.fr",
-    "fr",
-) {
+class ReaperScans :
+    Keyoapp(
+        "Reaper Scans",
+        "https://reaper-scans.fr",
+        "fr",
+    ) {
     override val dateSelector = ".text-xs.w-fit"
 
     override fun mangaDetailsParse(document: Document): SManga =

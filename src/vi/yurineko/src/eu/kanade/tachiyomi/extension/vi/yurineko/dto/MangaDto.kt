@@ -28,42 +28,48 @@ data class MangaDto(
     val lastChapter: ChapterDto? = null,
     val chapters: List<ChapterDto>? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
-        val dto = this@MangaDto
-        url = "/manga/${dto.id}"
-        title = dto.originalName
-        author = dto.author.joinToString(", ") { author -> author.name }
+    fun toSManga(): SManga =
+        SManga.create().apply {
+            val dto = this@MangaDto
+            url = "/manga/${dto.id}"
+            title = dto.originalName
+            author = dto.author.joinToString(", ") { author -> author.name }
 
-        val descElem = Jsoup.parseBodyFragment(dto.description)
-        description = if (descElem.select("p").any()) {
-            Jsoup.parse(dto.description).select("p").joinToString("\n") {
-                it.run {
-                    select(Evaluator.Tag("br")).prepend("\\n")
-                    this.text().replace("\\n", "\n").replace("\n ", "\n")
+            val descElem = Jsoup.parseBodyFragment(dto.description)
+            description =
+                if (descElem.select("p").any()) {
+                    Jsoup
+                        .parse(dto.description)
+                        .select("p")
+                        .joinToString("\n") {
+                            it.run {
+                                select(Evaluator.Tag("br")).prepend("\\n")
+                                this.text().replace("\\n", "\n").replace("\n ", "\n")
+                            }
+                        }.trim()
+                } else {
+                    dto.description
                 }
-            }.trim()
-        } else {
-            dto.description
-        }
 
-        if (dto.otherName.isNotEmpty()) {
-            description = "Tên khác: ${dto.otherName}\n\n" + description
-        }
+            if (dto.otherName.isNotEmpty()) {
+                description = "Tên khác: ${dto.otherName}\n\n" + description
+            }
 
-        genre = dto.tag.joinToString(", ") { tag -> tag.name }
-        status = when (dto.status) {
-            1 -> SManga.UNKNOWN // "Chưa ra mắt" -> Not released
-            2 -> SManga.COMPLETED
-            3 -> SManga.UNKNOWN // "Sắp ra mắt" -> Upcoming
-            4 -> SManga.ONGOING
-            5 -> SManga.CANCELLED // "Ngừng dịch" -> source not translating it anymomre
-            6 -> SManga.ON_HIATUS
-            7 -> SManga.CANCELLED // "Ngừng xuất bản" -> No more publications
-            else -> SManga.UNKNOWN
+            genre = dto.tag.joinToString(", ") { tag -> tag.name }
+            status =
+                when (dto.status) {
+                    1 -> SManga.UNKNOWN // "Chưa ra mắt" -> Not released
+                    2 -> SManga.COMPLETED
+                    3 -> SManga.UNKNOWN // "Sắp ra mắt" -> Upcoming
+                    4 -> SManga.ONGOING
+                    5 -> SManga.CANCELLED // "Ngừng dịch" -> source not translating it anymomre
+                    6 -> SManga.ON_HIATUS
+                    7 -> SManga.CANCELLED // "Ngừng xuất bản" -> No more publications
+                    else -> SManga.UNKNOWN
+                }
+            thumbnail_url = "https://storage.yurineko.my/" + dto.thumbnail
+            initialized = true
         }
-        thumbnail_url = "https://storage.yurineko.my/" + dto.thumbnail
-        initialized = true
-    }
 }
 
 @Serializable

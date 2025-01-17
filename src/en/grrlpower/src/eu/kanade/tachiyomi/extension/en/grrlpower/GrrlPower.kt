@@ -32,35 +32,41 @@ class GrrlPower(
     override val lang: String = "en",
     override val name: String = "Grrl Power Comic",
     override val supportsLatest: Boolean = false,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource(),
+    ConfigurableSource {
     private val comicAuthor = "David Barrack"
     private val startingYear = 2010
     private val currentYear = Calendar.getInstance().get(Calendar.YEAR)
     private val dateFormat = SimpleDateFormat("MMM dd yyyy", Locale.US)
 
-    override val client = super.client.newBuilder().addInterceptor(TextInterceptor()).build()
+    override val client =
+        super.client
+            .newBuilder()
+            .addInterceptor(TextInterceptor())
+            .build()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(
-        MangasPage(
-            listOf(
-                SManga.create().apply {
-                    artist = comicAuthor
-                    author = comicAuthor
-                    description = "Grrl Power is a comic about a crazy nerdette that becomes a" +
-                        " superheroine. Humor, action, cheesecake, beefcake, 'splosions," +
-                        " and maybe some drama. Possibly ninjas. "
-                    genre = "superhero, humor, action"
-                    initialized = true
-                    status = SManga.ONGOING
-                    // Thumbnail Found On The TvTropes Page for the comic
-                    thumbnail_url = "https://static.tvtropes.org/pmwiki/pub/images/rsz_grrl_power.png"
-                    title = "Grrl Power"
-                    url = "/archive"
-                },
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        Observable.just(
+            MangasPage(
+                listOf(
+                    SManga.create().apply {
+                        artist = comicAuthor
+                        author = comicAuthor
+                        description = "Grrl Power is a comic about a crazy nerdette that becomes a" +
+                            " superheroine. Humor, action, cheesecake, beefcake, 'splosions," +
+                            " and maybe some drama. Possibly ninjas. "
+                        genre = "superhero, humor, action"
+                        initialized = true
+                        status = SManga.ONGOING
+                        // Thumbnail Found On The TvTropes Page for the comic
+                        thumbnail_url = "https://static.tvtropes.org/pmwiki/pub/images/rsz_grrl_power.png"
+                        title = "Grrl Power"
+                        url = "/archive"
+                    },
+                ),
+                false,
             ),
-            false,
-        ),
-    )!!
+        )!!
 
     /**
      There are separate pages for each year.
@@ -85,7 +91,11 @@ class GrrlPower(
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val year = response.request.url.toString().substringAfter('=').toInt()
+        val year =
+            response.request.url
+                .toString()
+                .substringAfter('=')
+                .toInt()
         return response.asJsoup().getElementsByClass("archive-date").map {
             val date = dateFormat.parse("${it.text()} $year")
             val link = it.nextElementSibling()!!.child(0)
@@ -124,42 +134,49 @@ class GrrlPower(
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
+
     companion object {
         private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
     }
-    private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_AUTHORS_NOTES_KEY
-            title = "Show author's notes"
-            summary = "Enable to see the author's notes at the end of chapters (if they're there)."
-            setDefaultValue(false)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean(SHOW_AUTHORS_NOTES_KEY, checkValue).commit()
+    private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val authorsNotesPref =
+            SwitchPreferenceCompat(screen.context).apply {
+                key = SHOW_AUTHORS_NOTES_KEY
+                title = "Show author's notes"
+                summary = "Enable to see the author's notes at the end of chapters (if they're there)."
+                setDefaultValue(false)
+
+                setOnPreferenceChangeListener { _, newValue ->
+                    val checkValue = newValue as Boolean
+                    preferences.edit().putBoolean(SHOW_AUTHORS_NOTES_KEY, checkValue).commit()
+                }
             }
-        }
         screen.addPreference(authorsNotesPref)
     } // End of Preferences
 
     // This can be called when the user refreshes the comic even if initialized is true
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
-    override fun popularMangaRequest(page: Int): Request =
-        throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
+
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }

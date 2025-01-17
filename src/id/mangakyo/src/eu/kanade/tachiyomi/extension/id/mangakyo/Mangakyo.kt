@@ -6,17 +6,19 @@ import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Mangakyo : MangaThemesia(
-    "Mangakyo",
-    "https://mangakyo.vip",
-    "id",
-    "/komik",
-    SimpleDateFormat("MMM d, yyyy", Locale("id")),
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(4)
-        .build()
+class Mangakyo :
+    MangaThemesia(
+        "Mangakyo",
+        "https://mangakyo.vip",
+        "id",
+        "/komik",
+        SimpleDateFormat("MMM d, yyyy", Locale("id")),
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(4)
+            .build()
 
     override val seriesTitleSelector = ".ts-breadcrumb li:last-child span"
     override val seriesAuthorSelector = ".infotable tr:contains(Pengarang) td:last-child"

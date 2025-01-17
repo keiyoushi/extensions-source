@@ -39,13 +39,15 @@ class Mangaforfreecom : Madara("Mangaforfree.com", "https://mangaforfree.com", "
         val sslContext = SSLContext.getInstance("SSL")
         sslContext.init(null, trustAllCerts, java.security.SecureRandom())
         val sslSocketFactory = sslContext.socketFactory
-        return super.client.newBuilder()
+        return super.client
+            .newBuilder()
             .sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
-            .hostnameVerifier { _, _ -> true }.build()
+            .hostnameVerifier { _, _ -> true }
+            .build()
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return super.pageListParse(document)
+    override fun pageListParse(document: Document): List<Page> =
+        super
+            .pageListParse(document)
             .onEach { it.imageUrl = it.imageUrl!!.replace("http://", "https://") }
-    }
 }

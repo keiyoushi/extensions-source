@@ -13,15 +13,18 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import rx.Observable
 
-class MangaCan : MangaThemesia(
-    "Manga Can",
-    "https://mangacanblog.com",
-    "id",
-    "/",
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+class MangaCan :
+    MangaThemesia(
+        "Manga Can",
+        "https://mangacanblog.com",
+        "id",
+        "/",
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(3)
+            .build()
 
     override val supportsLatest = false
 
@@ -29,14 +32,19 @@ class MangaCan : MangaThemesia(
 
     override val pageSelector = "div.images img"
 
-    override fun imageRequest(page: Page): Request {
-        return super.imageRequest(page).newBuilder()
+    override fun imageRequest(page: Page): Request =
+        super
+            .imageRequest(page)
+            .newBuilder()
             .removeHeader("Referer")
             .addHeader("Referer", "$baseUrl/")
             .build()
-    }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX).not()) return super.fetchSearchManga(page, query, filters)
         val url = query.substringAfter(URL_SEARCH_PREFIX)
         return fetchMangaDetails(SManga.create().apply { setUrlWithoutDomain(url) })
@@ -46,28 +54,36 @@ class MangaCan : MangaThemesia(
             }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         var selected = ""
         with(filters.filterIsInstance<GenreFilter>()) {
-            selected = when {
-                isNotEmpty() -> firstOrNull { it.selectedValue().isNotBlank() }?.selectedValue() ?: ""
-                else -> ""
-            }
+            selected =
+                when {
+                    isNotEmpty() -> firstOrNull { it.selectedValue().isNotBlank() }?.selectedValue() ?: ""
+                    else -> ""
+                }
         }
 
         if (query.isBlank() && selected.isBlank()) {
             return super.searchMangaRequest(page, query, filters)
         }
 
-        val url = if (query.isNotBlank()) {
-            baseUrl.toHttpUrl().newBuilder()
-                .addPathSegment("cari")
-                .addPathSegment(query.trim().replace(SPACES_REGEX, "-").lowercase())
-                .addPathSegment("$page.html")
-                .build()
-        } else {
-            "$baseUrl$selected".toHttpUrl()
-        }
+        val url =
+            if (query.isNotBlank()) {
+                baseUrl
+                    .toHttpUrl()
+                    .newBuilder()
+                    .addPathSegment("cari")
+                    .addPathSegment(query.trim().replace(SPACES_REGEX, "-").lowercase())
+                    .addPathSegment("$page.html")
+                    .build()
+            } else {
+                "$baseUrl$selected".toHttpUrl()
+            }
 
         return GET(url, headers)
     }
@@ -89,21 +105,21 @@ class MangaCan : MangaThemesia(
         return FilterList(filters)
     }
 
-    override fun parseGenres(document: Document): List<GenreData> {
-        return mutableListOf(GenreData("All", "")).apply {
-            this += document.select(".textwidget.custom-html-widget a").map { element ->
-                GenreData(element.text(), element.attr("href"))
-            }
+    override fun parseGenres(document: Document): List<GenreData> =
+        mutableListOf(GenreData("All", "")).apply {
+            this +=
+                document.select(".textwidget.custom-html-widget a").map { element ->
+                    GenreData(element.text(), element.attr("href"))
+                }
         }
-    }
 
     private class GenreFilter(
         name: String,
         options: Array<Pair<String, String>>,
     ) : SelectFilter(
-        name,
-        options,
-    )
+            name,
+            options,
+        )
 
     companion object {
         val SPACES_REGEX = "\\s+".toRegex()

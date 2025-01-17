@@ -24,7 +24,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Explosm : HttpSource() {
-
     override val name = "Cyanide & Happiness"
 
     override val baseUrl = "https://explosm.net"
@@ -38,36 +37,45 @@ class Explosm : HttpSource() {
     private val archivePage = "$baseUrl/comics"
 
     private fun getArchiveAllYears(response: Response): JsonObject {
-        val jsonPath = response.asJsoup()
-            .select("head > script").last()?.attr("src")
-            ?.replace("static", "data")
-            ?.replaceAfterLast("/", "comics.json")
-            ?: throw Exception("Error at last() in getArchiveAllYears")
-        val json = client.newCall(GET(baseUrl + jsonPath, headers)).execute().body.string()
-        return Json.decodeFromString<JsonObject>(json)["pageProps"]
-            ?.jsonObject?.get("comicArchiveData")
+        val jsonPath =
+            response
+                .asJsoup()
+                .select("head > script")
+                .last()
+                ?.attr("src")
+                ?.replace("static", "data")
+                ?.replaceAfterLast("/", "comics.json")
+                ?: throw Exception("Error at last() in getArchiveAllYears")
+        val json =
+            client
+                .newCall(GET(baseUrl + jsonPath, headers))
+                .execute()
+                .body
+                .string()
+        return Json
+            .decodeFromString<JsonObject>(json)["pageProps"]
+            ?.jsonObject
+            ?.get("comicArchiveData")
             ?.jsonObject
             ?: throw Exception("Error while returning getArchiveAllYears")
     }
 
     // Popular
 
-    override fun popularMangaRequest(page: Int): Request {
-        return (GET(archivePage, headers))
-    }
+    override fun popularMangaRequest(page: Int): Request = (GET(archivePage, headers))
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val eachYearAsAManga = getArchiveAllYears(response)
-            .map { year ->
-                SManga.create().apply {
-                    initialized = true
-                    title = "C&H " + year.key // year
-                    url = year.key // need key here
-                    thumbnail_url = "https://vhx.imgix.net/vitalyuncensored/assets/13ea3806-5ebf-4987-bcf1-82af2b689f77/S2E4_Still1.jpg"
-                    author = "Explosm.net"
-                }
-            }
-            .reversed()
+        val eachYearAsAManga =
+            getArchiveAllYears(response)
+                .map { year ->
+                    SManga.create().apply {
+                        initialized = true
+                        title = "C&H " + year.key // year
+                        url = year.key // need key here
+                        thumbnail_url = "https://vhx.imgix.net/vitalyuncensored/assets/13ea3806-5ebf-4987-bcf1-82af2b689f77/S2E4_Still1.jpg"
+                        author = "Explosm.net"
+                    }
+                }.reversed()
 
         return MangasPage(eachYearAsAManga, false)
     }
@@ -80,22 +88,26 @@ class Explosm : HttpSource() {
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(manga)
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
 
     // for webview
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/comics#${manga.url}-01")
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/comics#${manga.url}-01")
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
@@ -103,34 +115,39 @@ class Explosm : HttpSource() {
 
     private val date = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
-    private fun JsonElement?.getContent(key: String): String {
-        return this?.jsonObject?.get(key)?.jsonPrimitive?.content ?: throw Exception("Error getting chapter content from $key")
-    }
+    private fun JsonElement?.getContent(key: String): String =
+        this
+            ?.jsonObject
+            ?.get(key)
+            ?.jsonPrimitive
+            ?.content ?: throw Exception("Error getting chapter content from $key")
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         var chapterCount = 0F
-        return client.newCall(GET(archivePage, headers))
+        return client
+            .newCall(GET(archivePage, headers))
             .asObservableSuccess()
             .map { response ->
-                getArchiveAllYears(response)[manga.url]?.jsonObject
+                getArchiveAllYears(response)[manga.url]
+                    ?.jsonObject
                     ?.map { month ->
                         month.value.jsonArray.map { comic ->
                             chapterCount++
                             SChapter.create().apply {
                                 name = comic.getContent("slug")
                                 // we get the url for page.imageurl here
-                                url = if (comic.getContent("file_static") != "null") {
-                                    comic.getContent("file_static")
-                                } else {
-                                    "https://files.explosm.net/comics/${comic.getContent("file")}"
-                                }
+                                url =
+                                    if (comic.getContent("file_static") != "null") {
+                                        comic.getContent("file_static")
+                                    } else {
+                                        "https://files.explosm.net/comics/${comic.getContent("file")}"
+                                    }
                                 date_upload = date.parse(comic.getContent("publish_at"))?.time ?: 0L
                                 scanlator = comic.getContent("author_name")
                                 chapter_number = chapterCount // so no "missing chapters" warning in app
                             }
                         }
-                    }
-                    ?.flatten()
+                    }?.flatten()
                     ?.reversed()
                     ?: throw Exception("Error with main jsonObject")
             }
@@ -140,9 +157,7 @@ class Explosm : HttpSource() {
 
     // Pages
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        return Observable.just(listOf(Page(0, "", chapter.url)))
-    }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.just(listOf(Page(0, "", chapter.url)))
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 

@@ -19,7 +19,9 @@ private const val SHUFFLE_SALT = "4wXCKprMMoxnyJ3PocJFs4CYbfnbazNe"
 private const val BYTES_PER_PIXEL = 4
 private const val GRID_SIZE = 32
 
-internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
+internal class ShuffledImageInterceptor(
+    private val key: String,
+) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
@@ -28,10 +30,13 @@ internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
             return response
         }
 
-        val imageBody = response.body.byteStream()
-            .toDeShuffledImage(key)
+        val imageBody =
+            response.body
+                .byteStream()
+                .toDeShuffledImage(key)
 
-        return response.newBuilder()
+        return response
+            .newBuilder()
             .body(imageBody)
             .build()
     }
@@ -126,9 +131,10 @@ internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
 
         for (i in 0 until verticalGridTotal) {
             val gridArray = grid2DArray[i]
-            val indexOfIndexGridArray = gridArray.mapIndexed { index, _ ->
-                gridArray.indexOf(index)
-            }
+            val indexOfIndexGridArray =
+                gridArray.mapIndexed { index, _ ->
+                    gridArray.indexOf(index)
+                }
             grid2DArray[i] = indexOfIndexGridArray.toTypedArray()
         }
 
@@ -166,13 +172,14 @@ internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
 
     @OptIn(ExperimentalUnsignedTypes::class)
     private fun UByteArray.first16ByteBecome4UInt(): UIntArray {
-        val binaries = this.copyOfRange(0, 16).map {
-            var binaryString = Integer.toBinaryString(it.toInt())
-            for (i in binaryString.length until 8) {
-                binaryString = "0$binaryString"
+        val binaries =
+            this.copyOfRange(0, 16).map {
+                var binaryString = Integer.toBinaryString(it.toInt())
+                for (i in binaryString.length until 8) {
+                    binaryString = "0$binaryString"
+                }
+                return@map binaryString
             }
-            return@map binaryString
-        }
 
         return UIntArray(4) { i ->
             val binariesIndexStart = i * 4
@@ -185,7 +192,9 @@ internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
-    private class HashAlgorithm(val hashArray: UIntArray) {
+    private class HashAlgorithm(
+        val hashArray: UIntArray,
+    ) {
         init {
             if (hashArray.all { it == 0u }) {
                 hashArray[0] = 1u
@@ -206,8 +215,9 @@ internal class ShuffledImageInterceptor(private val key: String) : Interceptor {
             return e
         }
 
-        private fun shiftOr(value: UInt, by: Int): UInt {
-            return (((value shl (by % 32))) or (value.toInt() ushr (32 - by)).toUInt())
-        }
+        private fun shiftOr(
+            value: UInt,
+            by: Int,
+        ): UInt = (((value shl (by % 32))) or (value.toInt() ushr (32 - by)).toUInt())
     }
 }

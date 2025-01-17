@@ -4,16 +4,25 @@ import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 
 interface QueryParameterFilter {
-    fun toQueryParameter(url: HttpUrl.Builder, query: String)
+    fun toQueryParameter(
+        url: HttpUrl.Builder,
+        query: String,
+    )
 }
 
-class Tag(val id: String, name: String) : Filter.TriState(name)
+class Tag(
+    val id: String,
+    name: String,
+) : Filter.TriState(name)
 
-class CountryFilter(countries: List<Tag>) :
-    Filter.Group<Tag>("País", countries),
+class CountryFilter(
+    countries: List<Tag>,
+) : Filter.Group<Tag>("País", countries),
     QueryParameterFilter {
-
-    override fun toQueryParameter(url: HttpUrl.Builder, query: String) {
+    override fun toQueryParameter(
+        url: HttpUrl.Builder,
+        query: String,
+    ) {
         state
             .groupBy { it.state }
             .entries
@@ -29,11 +38,14 @@ class CountryFilter(countries: List<Tag>) :
     }
 }
 
-class StatusFilter(status: List<Tag>) :
-    Filter.Group<Tag>("Status", status),
+class StatusFilter(
+    status: List<Tag>,
+) : Filter.Group<Tag>("Status", status),
     QueryParameterFilter {
-
-    override fun toQueryParameter(url: HttpUrl.Builder, query: String) {
+    override fun toQueryParameter(
+        url: HttpUrl.Builder,
+        query: String,
+    ) {
         state
             .groupBy { it.state }
             .entries
@@ -49,11 +61,14 @@ class StatusFilter(status: List<Tag>) :
     }
 }
 
-class GenreFilter(genres: List<Tag>) :
-    Filter.Group<Tag>("Gêneros", genres),
+class GenreFilter(
+    genres: List<Tag>,
+) : Filter.Group<Tag>("Gêneros", genres),
     QueryParameterFilter {
-
-    override fun toQueryParameter(url: HttpUrl.Builder, query: String) {
+    override fun toQueryParameter(
+        url: HttpUrl.Builder,
+        query: String,
+    ) {
         state
             .groupBy { it.state }
             .entries
@@ -69,20 +84,25 @@ class GenreFilter(genres: List<Tag>) :
     }
 }
 
-class SortFilter(private val sortings: List<Tag>, private val default: Int) :
-    Filter.Sort(
+class SortFilter(
+    private val sortings: List<Tag>,
+    private val default: Int,
+) : Filter.Sort(
         "Ordem",
         sortings.map { it.name }.toTypedArray(),
         Selection(default, false),
     ),
     QueryParameterFilter {
-
-    override fun toQueryParameter(url: HttpUrl.Builder, query: String) {
-        val orderBy = if (state == null) {
-            sortings[default].id
-        } else {
-            sortings[state!!.index].id
-        }
+    override fun toQueryParameter(
+        url: HttpUrl.Builder,
+        query: String,
+    ) {
+        val orderBy =
+            if (state == null) {
+                sortings[default].id
+            } else {
+                sortings[state!!.index].id
+            }
         val order = if (state?.ascending == true) "asc" else "desc"
 
         url.addQueryParameter("order", order)
@@ -90,9 +110,13 @@ class SortFilter(private val sortings: List<Tag>, private val default: Int) :
     }
 }
 
-class FeaturedFilter : Filter.TriState("Mostrar destaques"), QueryParameterFilter {
-
-    override fun toQueryParameter(url: HttpUrl.Builder, query: String) {
+class FeaturedFilter :
+    Filter.TriState("Mostrar destaques"),
+    QueryParameterFilter {
+    override fun toQueryParameter(
+        url: HttpUrl.Builder,
+        query: String,
+    ) {
         if (query.isEmpty()) {
             if (state == STATE_INCLUDE) {
                 url.addQueryParameter("destaque", "1")
@@ -103,9 +127,13 @@ class FeaturedFilter : Filter.TriState("Mostrar destaques"), QueryParameterFilte
     }
 }
 
-class NsfwFilter : Filter.TriState("Mostrar conteúdo +18"), QueryParameterFilter {
-
-    override fun toQueryParameter(url: HttpUrl.Builder, query: String) {
+class NsfwFilter :
+    Filter.TriState("Mostrar conteúdo +18"),
+    QueryParameterFilter {
+    override fun toQueryParameter(
+        url: HttpUrl.Builder,
+        query: String,
+    ) {
         if (state == STATE_INCLUDE) {
             url.addQueryParameter("mais_18", "1")
         } else if (state == STATE_EXCLUDE) {

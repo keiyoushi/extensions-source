@@ -12,11 +12,12 @@ class PeachScanUrlActivity : Activity() {
         super.onCreate(savedInstanceState)
         val path = intent?.data?.path
         if (path != null) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${PeachScan.URL_SEARCH_PREFIX}$path")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${PeachScan.URL_SEARCH_PREFIX}$path")
+                    putExtra("filter", packageName)
+                }
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {

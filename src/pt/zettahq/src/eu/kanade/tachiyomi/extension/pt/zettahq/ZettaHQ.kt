@@ -17,7 +17,6 @@ import rx.Observable
 import java.text.Normalizer
 
 class ZettaHQ : ParsedHttpSource() {
-
     override val name = "ZettaHQ"
 
     override val baseUrl = "https://zettahq.com"
@@ -40,24 +39,32 @@ class ZettaHQ : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = ".next.page-numbers"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst("h3 a")!!.let { anchor ->
-            title = anchor.text()
-            setUrlWithoutDomain(anchor.absUrl("href"))
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            element.selectFirst("h3 a")!!.let { anchor ->
+                title = anchor.text()
+                setUrlWithoutDomain(anchor.absUrl("href"))
+            }
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-    }
 
     // ============================== Popular ==============================
 
     override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
     override fun latestUpdatesSelector() = throw UnsupportedOperationException()
 
     // ============================== Search ==============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$baseUrl/".toHttpUrl().newBuilder()
 
         var isCategoryEnable = false
@@ -70,10 +77,11 @@ class ZettaHQ : ParsedHttpSource() {
             .forEach { filter ->
                 when (filter) {
                     is GenreList -> {
-                        val genresSelected = filter.state
-                            .filter { it.state }
-                            .joinToString("+") { it.id }
-                            .takeIf(String::isNotEmpty) ?: return@forEach
+                        val genresSelected =
+                            filter.state
+                                .filter { it.state }
+                                .joinToString("+") { it.id }
+                                .takeIf(String::isNotEmpty) ?: return@forEach
 
                         if (isCategoryEnable) {
                             url.addQueryParameter("tag", genresSelected)
@@ -81,7 +89,8 @@ class ZettaHQ : ParsedHttpSource() {
                             return@forEach
                         }
 
-                        url.addPathSegment("tag")
+                        url
+                            .addPathSegment("tag")
                             .addPathSegment(genresSelected)
 
                         isGenreEnable = isGenreEnable.not()
@@ -95,7 +104,8 @@ class ZettaHQ : ParsedHttpSource() {
                             return@forEach
                         }
 
-                        url.addPathSegment(filter.query)
+                        url
+                            .addPathSegment(filter.query)
                             .addPathSegment(selected)
 
                         when {
@@ -112,14 +122,19 @@ class ZettaHQ : ParsedHttpSource() {
                 }
             }
 
-        url.addPathSegment("page")
+        url
+            .addPathSegment("page")
             .addPathSegment(page.toString())
             .addQueryParameter("s", query)
 
         return GET(url.build(), headers)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (query.startsWith(PREFIX_SEARCH)) {
             val slug = query.substringAfter(PREFIX_SEARCH)
             return fetchMangaDetails(SManga.create().apply { url = "/$slug" })
@@ -129,41 +144,45 @@ class ZettaHQ : ParsedHttpSource() {
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
+
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     // ============================== Details ==============================
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-        thumbnail_url = document.selectFirst(".content-container article img:first-child")?.absUrl("src")
-        genre = document.select(".tags > a.tag").joinToString { it.text() }
-        author = document.selectFirst("strong:contains(Autor) + a")?.text()
-        status = SManga.COMPLETED
-        setUrlWithoutDomain(document.location())
-    }
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            title = document.selectFirst("h1")!!.text()
+            thumbnail_url = document.selectFirst(".content-container article img:first-child")?.absUrl("src")
+            genre = document.select(".tags > a.tag").joinToString { it.text() }
+            author = document.selectFirst("strong:contains(Autor) + a")?.text()
+            status = SManga.COMPLETED
+            setUrlWithoutDomain(document.location())
+        }
 
     // ============================== Chapters ==============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val chapters = listOf(
-            SChapter.create().apply {
-                name = "Capítulo Único"
-                url = manga.url
-            },
-        )
+        val chapters =
+            listOf(
+                SChapter.create().apply {
+                    name = "Capítulo Único"
+                    url = manga.url
+                },
+            )
         return Observable.just(chapters)
     }
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
     // =============================== Pages ===============================
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".content-container article img").mapIndexed { index, element ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select(".content-container article img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }
-    }
 
     override fun imageUrlParse(document: Document) = ""
 
@@ -172,17 +191,18 @@ class ZettaHQ : ParsedHttpSource() {
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>()
         if (genreList.isNotEmpty()) {
-            filters += listOf(
-                SelectFilter(title = "Categorias", vals = categoryList, query = "category", priority = 3),
-                Filter.Separator(),
-                SelectFilter(title = "Personagens", vals = characterList, query = "personagem"),
-                Filter.Separator(),
-                SelectFilter(title = "Autor", vals = authorList, query = "autor", priority = 1),
-                Filter.Separator(),
-                SelectFilter(title = "Paródia", vals = parodyList, query = "parodia"),
-                Filter.Separator(),
-                GenreList(title = "Gêneros", genres = genreList, priority = 2),
-            )
+            filters +=
+                listOf(
+                    SelectFilter(title = "Categorias", vals = categoryList, query = "category", priority = 3),
+                    Filter.Separator(),
+                    SelectFilter(title = "Personagens", vals = characterList, query = "personagem"),
+                    Filter.Separator(),
+                    SelectFilter(title = "Autor", vals = authorList, query = "autor", priority = 1),
+                    Filter.Separator(),
+                    SelectFilter(title = "Paródia", vals = parodyList, query = "parodia"),
+                    Filter.Separator(),
+                    GenreList(title = "Gêneros", genres = genreList, priority = 2),
+                )
         } else {
             filters += listOf(Filter.Header("Aperte 'Redefinir' para tentar mostrar os filtros"))
         }
@@ -196,9 +216,11 @@ class ZettaHQ : ParsedHttpSource() {
     private var genreList = emptyList<Genre>()
 
     private fun getFilters() {
-        val document = client.newCall(GET("$baseUrl/busca-avancada/", headers))
-            .execute()
-            .asJsoup()
+        val document =
+            client
+                .newCall(GET("$baseUrl/busca-avancada/", headers))
+                .execute()
+                .asJsoup()
 
         categoryList = parseOptions(document, "ofcategory")
         authorList = parseOptions(document, "ofautor")
@@ -207,30 +229,36 @@ class ZettaHQ : ParsedHttpSource() {
         genreList = parseGenres(document)
     }
 
-    private fun parseGenres(document: Document): List<Genre> {
-        return document.select(".cat-item > label")
+    private fun parseGenres(document: Document): List<Genre> =
+        document
+            .select(".cat-item > label")
             .map { label ->
                 Genre(
                     name = label.text(),
                     id = label.text().normalize(),
                 )
             }
-    }
 
-    private fun parseOptions(document: Document, attr: String): Array<Pair<String, String>> {
+    private fun parseOptions(
+        document: Document,
+        attr: String,
+    ): Array<Pair<String, String>> {
         val options = mutableListOf("Todos" to "")
 
-        options += document.select("select[name*=$attr] option").map { option ->
-            option.text() to option.text().normalize()
-        }
+        options +=
+            document.select("select[name*=$attr] option").map { option ->
+                option.text() to option.text().normalize()
+            }
 
         return options.toTypedArray()
     }
 
-    private fun String.normalize() = this
-        .lowercase().trim()
-        .replace(SPACE_REGEX, "-")
-        .removeAccents()
+    private fun String.normalize() =
+        this
+            .lowercase()
+            .trim()
+            .replace(SPACE_REGEX, "-")
+            .removeAccents()
 
     private fun String.removeAccents(): String {
         val normalized = Normalizer.normalize(this, Normalizer.Form.NFD)
@@ -241,14 +269,31 @@ class ZettaHQ : ParsedHttpSource() {
         val priority: Int
     }
 
-    private class GenreList(title: String, genres: List<Genre>, override val priority: Int = 0) :
-        Sort, Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) })
+    private class GenreList(
+        title: String,
+        genres: List<Genre>,
+        override val priority: Int = 0,
+    ) : Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) }),
+        Sort
 
-    private class GenreCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class Genre(val name: String, val id: String = name)
+    private class GenreCheckBox(
+        name: String,
+        val id: String = name,
+    ) : Filter.CheckBox(name)
 
-    private open class SelectFilter(title: String, private val vals: Array<Pair<String, String>>, state: Int = 0, val query: String = "", override val priority: Int = 0) :
-        Sort, Filter.Select<String>(title, vals.map { it.first }.toTypedArray(), state) {
+    private class Genre(
+        val name: String,
+        val id: String = name,
+    )
+
+    private open class SelectFilter(
+        title: String,
+        private val vals: Array<Pair<String, String>>,
+        state: Int = 0,
+        val query: String = "",
+        override val priority: Int = 0,
+    ) : Filter.Select<String>(title, vals.map { it.first }.toTypedArray(), state),
+        Sort {
         fun selected() = vals[state].second
     }
 

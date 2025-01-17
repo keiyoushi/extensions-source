@@ -23,32 +23,42 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.Date
 
-class QuestionableContent : ParsedHttpSource(), ConfigurableSource {
-
+class QuestionableContent :
+    ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "Questionable Content"
     override val baseUrl = "https://www.questionablecontent.net"
 
     override val lang = "en"
 
     override val supportsLatest = false
-    override val client: OkHttpClient = super.client.newBuilder().addInterceptor(TextInterceptor()).build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .addInterceptor(TextInterceptor())
+            .build()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val manga = SManga.create().apply {
-            title = name
-            artist = AUTHOR
-            author = AUTHOR
-            status = SManga.ONGOING
-            url = "/archive.php"
-            description = "An internet comic strip about romance and robots"
-            thumbnail_url = "https://i.ibb.co/ZVL9ncS/qc-teh.png"
-            initialized = true
-        }
+        val manga =
+            SManga.create().apply {
+                title = name
+                artist = AUTHOR
+                author = AUTHOR
+                status = SManga.ONGOING
+                url = "/archive.php"
+                description = "An internet comic strip about romance and robots"
+                thumbnail_url = "https://i.ibb.co/ZVL9ncS/qc-teh.png"
+                initialized = true
+            }
 
         return Observable.just(MangasPage(arrayListOf(manga), false))
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
     override fun fetchMangaDetails(manga: SManga) = fetchPopularManga(1).map { it.mangas.first() }
 
@@ -70,8 +80,7 @@ class QuestionableContent : ParsedHttpSource(), ConfigurableSource {
         return chapters
     }
 
-    override fun chapterListSelector() =
-        """div#container a[href^="view.php?comic="]"""
+    override fun chapterListSelector() = """div#container a[href^="view.php?comic="]"""
 
     override fun chapterFromElement(element: Element): SChapter {
         val urlregex =
@@ -87,7 +96,15 @@ class QuestionableContent : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val pages = document.select("#strip").mapIndexed { i, element -> Page(i, "", baseUrl + element.attr("src").substring(1)) }.toMutableList()
+        val pages =
+            document
+                .select("#strip")
+                .mapIndexed {
+                    i,
+                    element,
+                    ->
+                    Page(i, "", baseUrl + element.attr("src").substring(1))
+                }.toMutableList()
         if (showAuthorsNotesPref()) {
             val str = document.selectFirst("#newspost")?.html()
             if (!str.isNullOrEmpty()) {
@@ -106,13 +123,15 @@ class QuestionableContent : ParsedHttpSource(), ConfigurableSource {
 
     // Author's Notes, Based On Implementation In GrrlPower Extension
     private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_AUTHORS_NOTES_KEY
-            title = "Show author's notes"
-            summary = "Enable to see the author's notes at the end of chapters (if they're there)."
-            setDefaultValue(false)
-        }
+        val authorsNotesPref =
+            SwitchPreferenceCompat(screen.context).apply {
+                key = SHOW_AUTHORS_NOTES_KEY
+                title = "Show author's notes"
+                summary = "Enable to see the author's notes at the end of chapters (if they're there)."
+                setDefaultValue(false)
+            }
         screen.addPreference(authorsNotesPref)
     }
 
@@ -128,7 +147,11 @@ class QuestionableContent : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 

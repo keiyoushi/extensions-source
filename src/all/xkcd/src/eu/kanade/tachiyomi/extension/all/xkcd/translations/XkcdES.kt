@@ -30,6 +30,5 @@ class XkcdES : Xkcd("https://es.xkcd.com", "es") {
             }
         }
 
-    override fun String.numbered(number: Any) =
-        throw UnsupportedOperationException()
+    override fun String.numbered(number: Any) = throw UnsupportedOperationException()
 }

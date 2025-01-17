@@ -10,11 +10,13 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 class Solarmtl(
     language: Language,
 ) : MachineTranslations(
-    name = "Solar Machine Translations",
-    baseUrl = "https://solarmtl.com",
-    language,
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(2)
-        .build()
+        name = "Solar Machine Translations",
+        baseUrl = "https://solarmtl.com",
+        language,
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(2)
+            .build()
 }

@@ -13,19 +13,21 @@ class VizUrlActivity : Activity() {
         val pathSegments: List<String>? = intent?.data?.pathSegments
         if (!pathSegments.isNullOrEmpty() && pathSegments.size >= 3) {
             // Have to use .equals, otherwise get an error 'Didn't find class "kotlin.jvm.internal.Intrinsics"'
-            val seriesSlug = if (pathSegments[2].equals("chapter") && contains(pathSegments[1], "-chapter-")) {
-                substringBeforeLast(pathSegments[1], "-chapter-")
-            } else {
-                pathSegments[2]
-            }
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra(
-                    "query",
-                    "${Viz.PREFIX_URL_SEARCH}/${pathSegments[0]}/chapters/$seriesSlug",
-                )
-                putExtra("filter", packageName)
-            }
+            val seriesSlug =
+                if (pathSegments[2].equals("chapter") && contains(pathSegments[1], "-chapter-")) {
+                    substringBeforeLast(pathSegments[1], "-chapter-")
+                } else {
+                    pathSegments[2]
+                }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra(
+                        "query",
+                        "${Viz.PREFIX_URL_SEARCH}/${pathSegments[0]}/chapters/$seriesSlug",
+                    )
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)
@@ -40,7 +42,11 @@ class VizUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun containsAt(haystack: String, startIndex: Int, needle: String): Boolean {
+    private fun containsAt(
+        haystack: String,
+        startIndex: Int,
+        needle: String,
+    ): Boolean {
         for (i in 0 until needle.length) {
             if (needle[i] != haystack[startIndex + i]) {
                 return false
@@ -49,7 +55,10 @@ class VizUrlActivity : Activity() {
         return true
     }
 
-    private fun contains(haystack: String, needle: String): Boolean {
+    private fun contains(
+        haystack: String,
+        needle: String,
+    ): Boolean {
         if (needle.length > haystack.length) {
             return false
         }
@@ -61,7 +70,10 @@ class VizUrlActivity : Activity() {
         return false
     }
 
-    private fun substringBeforeLast(haystack: String, needle: String): String {
+    private fun substringBeforeLast(
+        haystack: String,
+        needle: String,
+    ): String {
         if (needle.length > haystack.length) {
             return haystack
         }

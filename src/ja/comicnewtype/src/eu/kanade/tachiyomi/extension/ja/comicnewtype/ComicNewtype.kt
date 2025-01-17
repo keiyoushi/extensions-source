@@ -39,22 +39,26 @@ class ComicNewtype : HttpSource() {
         }
 
         val list = document.selectFirst(Evaluator.Class("content__col-list--common"))!!
-        val mangas = list.children().map {
-            val eyeCatcher = it.selectFirst(Evaluator.Class("catch__txt"))!!.ownText()
-            val root = it.selectFirst(Evaluator.Tag("a"))!!
-            SManga.create().apply {
-                url = root.attr("href")
-                title = root.selectFirst(Evaluator.Class("detail__txt--ttl"))!!.text()
-                author = root.selectFirst(Evaluator.Class("detail__txt--info"))!!.ownText()
-                thumbnail_url = baseUrl + root.selectFirst(Evaluator.Tag("img"))!!
-                    .attr("src").removeSuffix("/w250/")
-                val genreText = root.selectFirst(Evaluator.Class("detail__txt--label"))!!.ownText()
-                if (genreText.isNotEmpty()) {
-                    genre = genreText.substring(1).replace("#", ", ")
+        val mangas =
+            list.children().map {
+                val eyeCatcher = it.selectFirst(Evaluator.Class("catch__txt"))!!.ownText()
+                val root = it.selectFirst(Evaluator.Tag("a"))!!
+                SManga.create().apply {
+                    url = root.attr("href")
+                    title = root.selectFirst(Evaluator.Class("detail__txt--ttl"))!!.text()
+                    author = root.selectFirst(Evaluator.Class("detail__txt--info"))!!.ownText()
+                    thumbnail_url = baseUrl +
+                        root
+                            .selectFirst(Evaluator.Tag("img"))!!
+                            .attr("src")
+                            .removeSuffix("/w250/")
+                    val genreText = root.selectFirst(Evaluator.Class("detail__txt--label"))!!.ownText()
+                    if (genreText.isNotEmpty()) {
+                        genre = genreText.substring(1).replace("#", ", ")
+                    }
+                    description = eyeCatcher
                 }
-                description = eyeCatcher
             }
-        }
         return MangasPage(mangas, false)
     }
 
@@ -62,37 +66,59 @@ class ComicNewtype : HttpSource() {
 
     override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val path = when {
-            query.isNotBlank() -> "/search/$query/"
-            else -> filters.genrePath ?: "/contents/"
-        }
-        val url = baseUrl.toHttpUrl().newBuilder(path)!!.addQueries(filters).build()
-        return Request.Builder().url(url).headers(headers).build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val path =
+            when {
+                query.isNotBlank() -> "/search/$query/"
+                else -> filters.genrePath ?: "/contents/"
+            }
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder(path)!!
+                .addQueries(filters)
+                .build()
+        return Request
+            .Builder()
+            .url(url)
+            .headers(headers)
+            .build()
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val root = response.asJsoup().selectFirst(Evaluator.Class("pc__list--contents"))!!
-        title = root.selectFirst(Evaluator.Tag("h1"))!!.ownText()
-        author = root.selectFirst(Evaluator.Class("contents__info"))!!.ownText()
-        // This one is horizontal. Prefer the square one from manga list.
-        // thumbnail_url = baseUrl + root.selectFirst(Evaluator.Class("contents__thumb-comic"))
-        //     .child(0).attr("src").removeSuffix("/w500/")
-        genre = root.selectFirst(Evaluator.Class("container__link-list--genre-btn"))
-            ?.run { children().joinToString { it.text() } }
+    override fun mangaDetailsParse(response: Response) =
+        SManga.create().apply {
+            val root = response.asJsoup().selectFirst(Evaluator.Class("pc__list--contents"))!!
+            title = root.selectFirst(Evaluator.Tag("h1"))!!.ownText()
+            author = root.selectFirst(Evaluator.Class("contents__info"))!!.ownText()
+            // This one is horizontal. Prefer the square one from manga list.
+            // thumbnail_url = baseUrl + root.selectFirst(Evaluator.Class("contents__thumb-comic"))
+            //     .child(0).attr("src").removeSuffix("/w500/")
+            genre =
+                root
+                    .selectFirst(Evaluator.Class("container__link-list--genre-btn"))
+                    ?.run { children().joinToString { it.text() } }
 
-        val updates = root.selectFirst(Evaluator.Class("contents__date--info-comic"))!!
-            .textNodes().filterNot { it.isBlank }.joinToString("  ||  ") { it.text() }
-        val isCompleted = (updates == "連載終了")
-        status = if (isCompleted) SManga.COMPLETED else SManga.ONGOING
-        description = buildString {
-            if (!isCompleted) append(updates).append("\n\n")
-            append(root.selectFirst(Evaluator.Class("contents__txt-catch"))!!.ownText()).append("\n\n")
-            append(root.selectFirst(Evaluator.Class("contents__txt--desc"))!!.ownText())
+            val updates =
+                root
+                    .selectFirst(Evaluator.Class("contents__date--info-comic"))!!
+                    .textNodes()
+                    .filterNot { it.isBlank }
+                    .joinToString("  ||  ") { it.text() }
+            val isCompleted = (updates == "連載終了")
+            status = if (isCompleted) SManga.COMPLETED else SManga.ONGOING
+            description =
+                buildString {
+                    if (!isCompleted) append(updates).append("\n\n")
+                    append(root.selectFirst(Evaluator.Class("contents__txt-catch"))!!.ownText()).append("\n\n")
+                    append(root.selectFirst(Evaluator.Class("contents__txt--desc"))!!.ownText())
+                }
         }
-    }
 
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url + "more/1/", headers)
 
@@ -118,10 +144,11 @@ class ComicNewtype : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> =
         Json.parseToJsonElement(response.body.string()).jsonArray.mapIndexed { index, jsonElement ->
-            val path = when (jsonElement) {
-                is JsonArray -> jsonElement[0]
-                else -> jsonElement
-            }.jsonPrimitive.content
+            val path =
+                when (jsonElement) {
+                    is JsonArray -> jsonElement[0]
+                    else -> jsonElement
+                }.jsonPrimitive.content
             val newPath = path.removeSuffix("/h1200q75nc/")
             Page(index, imageUrl = baseUrl + newPath)
         }

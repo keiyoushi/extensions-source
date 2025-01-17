@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 
 class ManhuaES : Madara("Manhua ES", "https://manhuaes.com", "en") {
-
     // The website does not flag the content.
     override val filterNonMangaItems = false
 
@@ -25,9 +24,12 @@ class ManhuaES : Madara("Manhua ES", "https://manhuaes.com", "en") {
     }
 
     private fun isReleasedChapter(chapter: SChapter): Boolean {
-        val document = client.newCall(
-            GET(chapter.url, headersBuilder().build()),
-        ).execute().asJsoup()
+        val document =
+            client
+                .newCall(
+                    GET(chapter.url, headersBuilder().build()),
+                ).execute()
+                .asJsoup()
 
         return document.select(pageListParseSelector).isNotEmpty()
     }

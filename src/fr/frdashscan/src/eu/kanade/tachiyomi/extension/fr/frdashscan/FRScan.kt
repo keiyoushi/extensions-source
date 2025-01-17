@@ -11,20 +11,27 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class FRScan : Madara("FR-Scan", "https://fr-scan.com", "fr", dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.FRANCE)) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
     override val useNewChapterEndpoint = true
 
     override val chapterUrlSuffix = ""
 
     override fun pageListParse(document: Document): List<Page> {
-        val chapterPreloaded = document.selectFirst("#chapter_preloaded_images")
-            ?: return super.pageListParse(document)
+        val chapterPreloaded =
+            document.selectFirst("#chapter_preloaded_images")
+                ?: return super.pageListParse(document)
 
-        val content = CHAPTER_PAGES_REGEX.find(chapterPreloaded.data())?.groups?.get("pages")!!.value
+        val content =
+            CHAPTER_PAGES_REGEX
+                .find(chapterPreloaded.data())
+                ?.groups
+                ?.get("pages")!!
+                .value
         val pages = json.decodeFromString<List<String>>(content)
 
         return pages.mapIndexed { index, imageUrl ->

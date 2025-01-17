@@ -8,12 +8,12 @@ class SelectFilter(
     private val options: List<Pair<String, String>>,
     private val queryParam: String,
 ) : Filter.Select<String>(
-    name,
-    buildList {
-        add("")
-        addAll(options.map { it.first })
-    }.toTypedArray(),
-) {
+        name,
+        buildList {
+            add("")
+            addAll(options.map { it.first })
+        }.toTypedArray(),
+    ) {
     fun addFilterParameter(url: HttpUrl.Builder) {
         if (state == 0) return
 

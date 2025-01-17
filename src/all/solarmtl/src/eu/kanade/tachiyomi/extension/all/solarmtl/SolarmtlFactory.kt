@@ -10,8 +10,9 @@ class SolarmtlFactory : SourceFactory {
     override fun createSources() = languageList.map(::Solarmtl)
 }
 
-private val languageList = listOf(
-    Language("en"),
-    Language("fr"),
-    Language("pt-BR", "pt"),
-)
+private val languageList =
+    listOf(
+        Language("en"),
+        Language("fr"),
+        Language("pt-BR", "pt"),
+    )

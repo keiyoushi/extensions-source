@@ -20,8 +20,7 @@ class KingsOfDarkness : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "#SITE_PAGES div.wixui-image"
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/proyectos", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/proyectos", headers)
 
     override fun popularMangaFromElement(element: Element) =
         SManga.create().apply {
@@ -30,13 +29,15 @@ class KingsOfDarkness : ParsedHttpSource() {
             thumbnail_url = element.selectFirst("img")!!.image
         }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        fetchPopularManga(page).map { mp ->
-            mp.copy(mp.mangas.filter { it.title.contains(query, true) })
-        }!!
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = fetchPopularManga(page).map { mp ->
+        mp.copy(mp.mangas.filter { it.title.contains(query, true) })
+    }!!
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET(manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url, headers)
 
     override fun mangaDetailsParse(document: Document) =
         SManga.create().apply {
@@ -51,8 +52,7 @@ class KingsOfDarkness : ParsedHttpSource() {
 
     override fun chapterListSelector() = "#SITE_PAGES a[target=_self]"
 
-    override fun chapterListRequest(manga: SManga) =
-        GET(manga.url, headers)
+    override fun chapterListRequest(manga: SManga) = GET(manga.url, headers)
 
     override fun chapterFromElement(element: Element) =
         SChapter.create().apply {
@@ -61,8 +61,7 @@ class KingsOfDarkness : ParsedHttpSource() {
             chapter_number = name.substring(3).toFloat()
         }
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET(chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter) = GET(chapter.url, headers)
 
     override fun pageListParse(document: Document) =
         document.select("#SITE_PAGES img").mapIndexed { idx, el ->
@@ -76,11 +75,9 @@ class KingsOfDarkness : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -88,12 +85,13 @@ class KingsOfDarkness : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector(): String? = null
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element) =
-        throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(document: Document) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }

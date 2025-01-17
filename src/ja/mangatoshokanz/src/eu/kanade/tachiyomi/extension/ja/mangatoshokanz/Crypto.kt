@@ -17,12 +17,11 @@ import javax.crypto.Cipher
 
 private val json: Json by injectLazy()
 
-internal fun getKeys(): KeyPair {
-    return KeyPairGenerator.getInstance("RSA").run {
+internal fun getKeys(): KeyPair =
+    KeyPairGenerator.getInstance("RSA").run {
         initialize(RSAKeyGenParameterSpec(512, RSAKeyGenParameterSpec.F4))
         generateKeyPair()
     }
-}
 
 internal fun PublicKey.toPem(): String {
     val base64Encoded = Base64.encodeToString(encoded, Base64.DEFAULT)
@@ -40,10 +39,11 @@ internal fun Response.decryptPages(privateKey: PrivateKey): Decrypted {
     val biDecoded = Base64.decode(encrypted.bi, Base64.DEFAULT)
     val ekDecoded = Base64.decode(encrypted.ek, Base64.DEFAULT)
 
-    val ekDecrypted = Cipher.getInstance("RSA/ECB/PKCS1Padding").run {
-        init(Cipher.DECRYPT_MODE, privateKey)
-        doFinal(ekDecoded)
-    }
+    val ekDecrypted =
+        Cipher.getInstance("RSA/ECB/PKCS1Padding").run {
+            init(Cipher.DECRYPT_MODE, privateKey)
+            doFinal(ekDecoded)
+        }
     val dataDecrypted = CryptoAES.decrypt(encrypted.data, ekDecrypted, biDecoded)
 
     return json.decodeFromString<Decrypted>(dataDecrypted)

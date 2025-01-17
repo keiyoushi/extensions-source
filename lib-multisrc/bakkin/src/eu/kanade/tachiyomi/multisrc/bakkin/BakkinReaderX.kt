@@ -26,12 +26,14 @@ abstract class BakkinReaderX(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-) : ConfigurableSource, HttpSource() {
+) : HttpSource(),
+    ConfigurableSource {
     override val supportsLatest = false
 
-    private val userAgent = "Mozilla/5.0 (" +
-        "Android ${Build.VERSION.RELEASE}; Mobile) " +
-        "Tachiyomi/${AppInfo.getVersionName()}"
+    private val userAgent =
+        "Mozilla/5.0 (" +
+            "Android ${Build.VERSION.RELEASE}; Mobile) " +
+            "Tachiyomi/${AppInfo.getVersionName()}"
 
     protected val preferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
@@ -49,31 +51,36 @@ abstract class BakkinReaderX(
             rx.Observable.just(block(seriesCache))!!
         } else {
             client.newCall(GET(mainUrl, headers)).asObservableSuccess().map {
-                seriesCache = json.parseToJsonElement(it.body.string())
-                    .jsonObject.values.map(json::decodeFromJsonElement)
+                seriesCache =
+                    json
+                        .parseToJsonElement(it.body.string())
+                        .jsonObject.values
+                        .map(json::decodeFromJsonElement)
                 block(seriesCache)
             }!!
         }
 
-    private fun List<Series>.search(query: String) =
-        if (query.isBlank()) this else filter { it.toString().contains(query, true) }
+    private fun List<Series>.search(query: String) = if (query.isBlank()) this else filter { it.toString().contains(query, true) }
 
-    override fun headersBuilder() =
-        Headers.Builder().add("User-Agent", userAgent)
+    override fun headersBuilder() = Headers.Builder().add("User-Agent", userAgent)
 
-    override fun fetchPopularManga(page: Int) =
-        fetchSearchManga(page, "", FilterList())
+    override fun fetchPopularManga(page: Int) = fetchSearchManga(page, "", FilterList())
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        observableSeries { series ->
-            series.search(query).map {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = observableSeries { series ->
+        series
+            .search(query)
+            .map {
                 SManga.create().apply {
                     url = it.dir
                     title = it.toString()
                     thumbnail_url = baseUrl + it.cover
                 }
             }.let { MangasPage(it, false) }
-        }
+    }
 
     override fun fetchMangaDetails(manga: SManga) =
         observableSeries { series ->
@@ -84,30 +91,35 @@ abstract class BakkinReaderX(
                     thumbnail_url = baseUrl + it.cover
                     initialized = true
                     author = it.author
-                    status = when (it.status) {
-                        "Ongoing" -> SManga.ONGOING
-                        "Completed" -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
+                    status =
+                        when (it.status) {
+                            "Ongoing" -> SManga.ONGOING
+                            "Completed" -> SManga.COMPLETED
+                            else -> SManga.UNKNOWN
+                        }
                 }
             }
         }
 
     override fun fetchChapterList(manga: SManga) =
         observableSeries { series ->
-            series.first { it.dir == manga.url }.map { chapter ->
-                SChapter.create().apply {
-                    url = chapter.dir
-                    name = chapter.toString()
-                    chapter_number = chapter.number
-                    date_upload = 0L
-                }
-            }.reversed()
+            series
+                .first { it.dir == manga.url }
+                .map { chapter ->
+                    SChapter.create().apply {
+                        url = chapter.dir
+                        name = chapter.toString()
+                        chapter_number = chapter.number
+                        date_upload = 0L
+                    }
+                }.reversed()
         }
 
     override fun fetchPageList(chapter: SChapter) =
         observableSeries { series ->
-            series.flatten().first { it.dir == chapter.url }
+            series
+                .flatten()
+                .first { it.dir == chapter.url }
                 .mapIndexed { idx, page -> Page(idx, "", baseUrl + page) }
         }
 
@@ -119,50 +131,44 @@ abstract class BakkinReaderX(
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = "quality"
-            summary = "%s"
-            title = "Image quality"
-            entries = arrayOf("Original", "Compressed")
-            entryValues = arrayOf("?fullsize", "")
-            setDefaultValue("")
+        ListPreference(screen.context)
+            .apply {
+                key = "quality"
+                summary = "%s"
+                title = "Image quality"
+                entries = arrayOf("Original", "Compressed")
+                entryValues = arrayOf("?fullsize", "")
+                setDefaultValue("")
 
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(key, newValue as String).commit()
-            }
-        }.let(screen::addPreference)
+                setOnPreferenceChangeListener { _, newValue ->
+                    preferences.edit().putString(key, newValue as String).commit()
+                }
+            }.let(screen::addPreference)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsRequest(manga: SManga) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsRequest(manga: SManga) = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun pageListParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

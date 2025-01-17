@@ -44,27 +44,32 @@ class Zip(
     private val url: String,
     private val centralDirectoryRecords: List<CentralDirectoryRecord>,
 ) {
-    fun files(): List<String> {
-        return centralDirectoryRecords.map {
+    fun files(): List<String> =
+        centralDirectoryRecords.map {
             it.filename
         }
-    }
 
-    fun fetch(path: String, client: OkHttpClient): ByteArray {
-        val file = centralDirectoryRecords.find { it.filename == path }
-            ?: throw Exception("File not found in  ZIP: $path")
+    fun fetch(
+        path: String,
+        client: OkHttpClient,
+    ): ByteArray {
+        val file =
+            centralDirectoryRecords.find { it.filename == path }
+                ?: throw Exception("File not found in  ZIP: $path")
 
         val MAX_LOCAL_FILE_HEADER_SIZE = 256 + 32 + 30 + 100
 
-        val headersBuilder = Headers.Builder()
-            .set(
-                "Range",
-                "bytes=${file.localFileHeaderRelativeOffset}-${
-                file.localFileHeaderRelativeOffset +
-                    file.compressedSize +
-                    MAX_LOCAL_FILE_HEADER_SIZE
-                }",
-            ).build()
+        val headersBuilder =
+            Headers
+                .Builder()
+                .set(
+                    "Range",
+                    "bytes=${file.localFileHeaderRelativeOffset}-${
+                        file.localFileHeaderRelativeOffset +
+                            file.compressedSize +
+                            MAX_LOCAL_FILE_HEADER_SIZE
+                    }",
+                ).build()
 
         val request = GET(url, headersBuilder)
 
@@ -72,8 +77,9 @@ class Zip(
 
         val byteArray = response.body.byteStream().use { it.readBytes() }
 
-        val localFile = parseLocalFile(byteArray, file.compressedSize)
-            ?: throw Exception("Failed to parse local file header in ZIP")
+        val localFile =
+            parseLocalFile(byteArray, file.compressedSize)
+                ?: throw Exception("Failed to parse local file header in ZIP")
 
         return if (localFile.compressionMethod == 0) {
             localFile.compressedData
@@ -100,14 +106,18 @@ class ZipHandler(
         )
     }
 
-    private fun fetchEndOfCentralDirectory(zipByteLength: BigInteger, zipType: String): EndOfCentralDirectory {
+    private fun fetchEndOfCentralDirectory(
+        zipByteLength: BigInteger,
+        zipType: String,
+    ): EndOfCentralDirectory {
         val EOCD_MAX_BYTES = 128.toBigInteger()
         val eocdInitialOffset = maxOf(0.toBigInteger(), zipByteLength - EOCD_MAX_BYTES)
 
-        val headers = additionalHeaders
-            .newBuilder()
-            .set("Range", "bytes=$eocdInitialOffset-$zipByteLength")
-            .build()
+        val headers =
+            additionalHeaders
+                .newBuilder()
+                .set("Range", "bytes=$eocdInitialOffset-$zipByteLength")
+                .build()
         val request = GET(url, headers)
 
         val response = client.newCall(request).execute()
@@ -128,14 +138,16 @@ class ZipHandler(
     }
 
     private fun fetchCentralDirectoryRecords(endOfCentralDirectory: EndOfCentralDirectory): List<CentralDirectoryRecord> {
-        val headersBuilder = Headers.Builder()
-            .set(
-                "Range",
-                "bytes=${endOfCentralDirectory.centralDirectoryByteOffset}-${
-                endOfCentralDirectory.centralDirectoryByteOffset +
-                    endOfCentralDirectory.centralDirectoryByteSize
-                }",
-            ).build()
+        val headersBuilder =
+            Headers
+                .Builder()
+                .set(
+                    "Range",
+                    "bytes=${endOfCentralDirectory.centralDirectoryByteOffset}-${
+                        endOfCentralDirectory.centralDirectoryByteOffset +
+                            endOfCentralDirectory.centralDirectoryByteSize
+                    }",
+                ).build()
 
         val request = GET(url, headersBuilder)
 
@@ -148,7 +160,6 @@ class ZipHandler(
 }
 
 object ZipParser {
-
     fun parseAllCDs(buffer: ByteArray): List<CentralDirectoryRecord> {
         val cds = ArrayList<CentralDirectoryRecord>()
         val view = ByteBuffer.wrap(buffer).order(LITTLE_ENDIAN)
@@ -223,7 +234,10 @@ object ZipParser {
         return null
     }
 
-    fun parseLocalFile(buffer: ByteArray, compressedSizeOverride: Int = 0): LocalFileHeader? {
+    fun parseLocalFile(
+        buffer: ByteArray,
+        compressedSizeOverride: Int = 0,
+    ): LocalFileHeader? {
         val MIN_LOCAL_FILE_LENGTH = 30
 
         val view = ByteBuffer.wrap(buffer).order(LITTLE_ENDIAN)
@@ -239,17 +253,18 @@ object ZipParser {
                 val headerEndOffset = i + 30 + filenameLength + extraFieldLength
                 val regularCompressedSize = view.getInt(i + 18)
 
-                val compressedData = if (hasDataDescriptor) {
-                    buffer.copyOfRange(
-                        headerEndOffset,
-                        headerEndOffset + compressedSizeOverride,
-                    )
-                } else {
-                    buffer.copyOfRange(
-                        headerEndOffset,
-                        headerEndOffset + regularCompressedSize,
-                    )
-                }
+                val compressedData =
+                    if (hasDataDescriptor) {
+                        buffer.copyOfRange(
+                            headerEndOffset,
+                            headerEndOffset + compressedSizeOverride,
+                        )
+                    } else {
+                        buffer.copyOfRange(
+                            headerEndOffset,
+                            headerEndOffset + regularCompressedSize,
+                        )
+                    }
 
                 return LocalFileHeader(
                     compressedData = compressedData,

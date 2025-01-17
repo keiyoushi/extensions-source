@@ -13,11 +13,12 @@ class DisasterScansUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
             val slug = pathSegments[1]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${DisasterScans.PREFIX_SLUG}$slug")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${DisasterScans.PREFIX_SLUG}$slug")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

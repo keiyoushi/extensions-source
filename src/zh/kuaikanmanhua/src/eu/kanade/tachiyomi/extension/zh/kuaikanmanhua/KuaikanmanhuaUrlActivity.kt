@@ -13,15 +13,17 @@ class KuaikanmanhuaUrlActivity : Activity() {
         val host = intent?.data?.host
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
-            val id = when (host) {
-                "m.kuaikanmanhua.com" -> pathSegments[1]
-                else -> pathSegments[2]
-            }
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Kuaikanmanhua.TOPIC_ID_SEARCH_PREFIX}$id")
-                putExtra("filter", packageName)
-            }
+            val id =
+                when (host) {
+                    "m.kuaikanmanhua.com" -> pathSegments[1]
+                    else -> pathSegments[2]
+                }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${Kuaikanmanhua.TOPIC_ID_SEARCH_PREFIX}$id")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

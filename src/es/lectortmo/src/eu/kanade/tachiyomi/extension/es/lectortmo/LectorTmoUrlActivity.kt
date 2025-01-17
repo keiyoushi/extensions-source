@@ -17,11 +17,12 @@ class LectorTmoUrlActivity : Activity() {
             val id = pathSegments[2]
             val slug = pathSegments[3]
 
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "slug:$type/$id/$slug")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "slug:$type/$id/$slug")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

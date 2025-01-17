@@ -33,9 +33,11 @@ class LadronCorps : HttpSource() {
 
     override val supportsLatest: Boolean = false
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(3)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(3)
+            .build()
 
     private val json by injectLazy<Json>()
 
@@ -46,66 +48,82 @@ class LadronCorps : HttpSource() {
     }
 
     private val apiHeaders: Headers by lazy {
-        headers.newBuilder()
+        headers
+            .newBuilder()
             .set("Authorization", authorization)
             .build()
     }
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response): MangasPage {
         val posts = response.parseAs<PopularMangaContainerDto>().posts
 
-        val mangas = posts.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = "${it.cover.url}"
-                url = "${it.url}"
+        val mangas =
+            posts.map {
+                SManga.create().apply {
+                    title = it.title
+                    thumbnail_url = "${it.cover.url}"
+                    url = "${it.url}"
+                }
             }
-        }
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/blog-frontend-adapter-public/v2/post-feed-page".toHttpUrl().newBuilder()
-            .addQueryParameter("includeContent", "false")
-            .addQueryParameter("languageCode", lang)
-            .addQueryParameter("page", "$page")
-            .addQueryParameter("pageSize", "20")
-            .addQueryParameter("type", "ALL_POSTS")
-            .build()
+        val url =
+            "$baseUrl/blog-frontend-adapter-public/v2/post-feed-page"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("includeContent", "false")
+                .addQueryParameter("languageCode", lang)
+                .addQueryParameter("page", "$page")
+                .addQueryParameter("pageSize", "20")
+                .addQueryParameter("type", "ALL_POSTS")
+                .build()
         return GET(url, apiHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val posts = response.parseAs<SearchDto>().posts
 
-        val mangas = posts.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = it.cover.url
-                url = it.url
+        val mangas =
+            posts.map {
+                SManga.create().apply {
+                    title = it.title
+                    thumbnail_url = it.cover.url
+                    url = it.url
+                }
             }
-        }
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/_api/communities-blog-node-api/_api/search".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/_api/communities-blog-node-api/_api/search"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("q", query)
+                .build()
         return GET(url, apiHeaders)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val manga = SManga.create().apply {
-                url = "/post/${query.substringAfter(URL_SEARCH_PREFIX)}"
-            }
+            val manga =
+                SManga.create().apply {
+                    url = "/post/${query.substringAfter(URL_SEARCH_PREFIX)}"
+                }
             return fetchMangaDetails(manga).asObservable().map {
                 MangasPage(listOf(it), false)
             }
@@ -114,21 +132,26 @@ class LadronCorps : HttpSource() {
         return super.fetchSearchManga(page, query, filters)
     }
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val document = response.asJsoup()
-        title = document.selectFirst("h1")!!.text()
-        description = document.select("div[data-hook='post-description'] p > span")
-            .joinToString("\n".repeat(2)) { it.text() }
+    override fun mangaDetailsParse(response: Response) =
+        SManga.create().apply {
+            val document = response.asJsoup()
+            title = document.selectFirst("h1")!!.text()
+            description =
+                document
+                    .select("div[data-hook='post-description'] p > span")
+                    .joinToString("\n".repeat(2)) { it.text() }
 
-        genre = document.select("#post-footer li a")
-            .joinToString { it.text() }
+            genre =
+                document
+                    .select("#post-footer li a")
+                    .joinToString { it.text() }
 
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
 
-        status = SManga.COMPLETED
+            status = SManga.COMPLETED
 
-        setUrlWithoutDomain(document.location())
-    }
+            setUrlWithoutDomain(document.location())
+        }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -149,16 +172,20 @@ class LadronCorps : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun Element.imgAttr(): String = when {
-        hasAttr("data-pin-media") -> absUrl("data-pin-media")
-        else -> absUrl("src")
-    }
+    private fun Element.imgAttr(): String =
+        when {
+            hasAttr("data-pin-media") -> absUrl("data-pin-media")
+            else -> absUrl("src")
+        }
 
     private fun parseDate(date: String): Long =
-        try { dateFormat.parse(dateSanitize(date))!!.time } catch (_: Exception) { parseRelativeDate(date) }
+        try {
+            dateFormat.parse(dateSanitize(date))!!.time
+        } catch (_: Exception) {
+            parseRelativeDate(date)
+        }
 
     private fun parseRelativeDate(date: String): Long {
         val number = RELATIVE_DATE_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
@@ -174,9 +201,10 @@ class LadronCorps : HttpSource() {
     private fun dateSanitize(date: String): String =
         if (D_MMM_REGEX.matches(date)) "$date ${Calendar.getInstance().get(Calendar.YEAR)}" else date
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T =
+        use {
+            json.decodeFromString(body.string())
+        }
 
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"

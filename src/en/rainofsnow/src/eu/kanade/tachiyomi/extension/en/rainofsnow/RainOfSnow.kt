@@ -19,8 +19,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-open class RainOfSnow() : ParsedHttpSource() {
-
+open class RainOfSnow : ParsedHttpSource() {
     override val name = "Rain Of Snow"
 
     override val baseUrl = "https://rainofsnow.com"
@@ -29,15 +28,15 @@ open class RainOfSnow() : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(2)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .rateLimit(2)
+            .build()
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/comics/page/$page")
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/comics/page/$page")
 
     override fun popularMangaSelector() = ".box .minbox"
 
@@ -51,7 +50,11 @@ open class RainOfSnow() : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = ".page-numbers .next"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isNotEmpty()) {
             val url = "$baseUrl/".toHttpUrl().newBuilder()
             url.addQueryParameter("s", query)
@@ -101,9 +104,7 @@ open class RainOfSnow() : ParsedHttpSource() {
         return super.chapterListRequest(manga)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
     override fun chapterListSelector() = "#chapter li"
 
@@ -111,7 +112,10 @@ open class RainOfSnow() : ParsedHttpSource() {
         val chapter = SChapter.create()
         chapter.url = element.select("a").attr("abs:href")
         chapter.name = element.select("a").text()
-        chapter.date_upload = element.select("small").firstOrNull()?.text()
+        chapter.date_upload = element
+            .select("small")
+            .firstOrNull()
+            ?.text()
             ?.let { parseChapterDate(it) } ?: 0
         return chapter
     }
@@ -120,7 +124,9 @@ open class RainOfSnow() : ParsedHttpSource() {
         var parsedDate = 0L
         try {
             parsedDate = SimpleDateFormat("MMM dd, yyyy", Locale.US).parse(date)?.time ?: 0L
-        } catch (e: ParseException) { /*nothing to do, parsedDate is initialized with 0L*/ }
+        } catch (e: ParseException) {
+            // nothing to do, parsedDate is initialized with 0L
+        }
         return parsedDate
     }
 
@@ -131,37 +137,47 @@ open class RainOfSnow() : ParsedHttpSource() {
         return super.pageListRequest(chapter)
     }
 
-    override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
-        document.select("[style=display: block;] img").forEachIndexed { index, element ->
-            add(Page(index, "", element.attr("abs:data-src")))
+    override fun pageListParse(document: Document): List<Page> =
+        mutableListOf<Page>().apply {
+            document.select("[style=display: block;] img").forEachIndexed { index, element ->
+                add(Page(index, "", element.attr("abs:data-src")))
+            }
         }
-    }
 
     // Filters
-    override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        AlbumTypeSelectFilter(),
-    )
-    private class AlbumTypeSelectFilter() : UriPartFilter(
-        "Type",
-        arrayOf(
-            Pair("All", ""),
-            Pair("Manga", "95"),
-            Pair("Manhua", "115"),
-            Pair("Manhwa", "105"),
-            Pair("Vietnamese Comic", "306"),
-        ),
-    )
+    override fun getFilterList(): FilterList =
+        FilterList(
+            Filter.Header("NOTE: Ignored if using text search!"),
+            Filter.Separator(),
+            AlbumTypeSelectFilter(),
+        )
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private class AlbumTypeSelectFilter :
+        UriPartFilter(
+            "Type",
+            arrayOf(
+                Pair("All", ""),
+                Pair("Manga", "95"),
+                Pair("Manhua", "115"),
+                Pair("Manhwa", "105"),
+                Pair("Vietnamese Comic", "306"),
+            ),
+        )
+
+    private open class UriPartFilter(
+        displayName: String,
+        val vals: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
     override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
     override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }

@@ -21,20 +21,22 @@ data class MangaDto(
 ) {
     val cleanUrl get() = url.removePathPrefix()
 
-    fun toSManga() = SManga.create().apply {
-        url = cleanUrl
-        title = Entities.unescape(name)
-        author = Entities.unescape(this@MangaDto.author)
-        description = Entities.unescape(content)
-        genre = tags.joinToString()
-        status = when {
-            '连' in serialize || isUpdating(addtime) -> SManga.ONGOING
-            '完' in serialize -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    fun toSManga() =
+        SManga.create().apply {
+            url = cleanUrl
+            title = Entities.unescape(name)
+            author = Entities.unescape(this@MangaDto.author)
+            description = Entities.unescape(content)
+            genre = tags.joinToString()
+            status =
+                when {
+                    '连' in serialize || isUpdating(addtime) -> SManga.ONGOING
+                    '完' in serialize -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+            thumbnail_url = "$pic#$id"
+            initialized = true
         }
-        thumbnail_url = "$pic#$id"
-        initialized = true
-    }
 
     companion object {
         private val dateFormat by lazy { getDateFormat() }
@@ -47,16 +49,24 @@ data class MangaDto(
 }
 
 @Serializable
-class ChapterDto(val id: String, private val name: String, private val link: String) {
-    fun toSChapter(date: Long) = SChapter.create().apply {
-        url = link.removePathPrefix()
-        name = Entities.unescape(this@ChapterDto.name)
-        date_upload = date
-    }
+class ChapterDto(
+    val id: String,
+    private val name: String,
+    private val link: String,
+) {
+    fun toSChapter(date: Long) =
+        SChapter.create().apply {
+            url = link.removePathPrefix()
+            name = Entities.unescape(this@ChapterDto.name)
+            date_upload = date
+        }
 }
 
 @Serializable
-class ChapterDataDto(val id: String, private val addtime: String) {
+class ChapterDataDto(
+    val id: String,
+    private val addtime: String,
+) {
     val date get() = dateFormat.parse(addtime)?.time ?: 0
 
     companion object {
@@ -65,6 +75,8 @@ class ChapterDataDto(val id: String, private val addtime: String) {
 }
 
 @Serializable
-class ResultDto<T>(val data: T)
+class ResultDto<T>(
+    val data: T,
+)
 
 fun getDateFormat() = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)

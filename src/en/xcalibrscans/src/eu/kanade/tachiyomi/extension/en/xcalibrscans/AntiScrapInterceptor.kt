@@ -12,32 +12,34 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
 
 class AntiScrapInterceptor : Interceptor {
-
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         if (request.url.fragment != ANTI_SCRAP_FRAGMENT) {
             return chain.proceed(request)
         }
 
-        val imageUrls = request.url
-            .queryParameter("urls").orEmpty()
-            .split(IMAGE_URLS_SEPARATOR)
+        val imageUrls =
+            request.url
+                .queryParameter("urls")
+                .orEmpty()
+                .split(IMAGE_URLS_SEPARATOR)
 
         var width = 0
         var height = 0
 
-        val imageBitmaps = imageUrls.map { imageUrl ->
-            val newRequest = request.newBuilder().url(imageUrl).build()
-            val response = chain.proceed(newRequest)
+        val imageBitmaps =
+            imageUrls.map { imageUrl ->
+                val newRequest = request.newBuilder().url(imageUrl).build()
+                val response = chain.proceed(newRequest)
 
-            val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
-            response.close()
+                val bitmap = BitmapFactory.decodeStream(response.body.byteStream())
+                response.close()
 
-            width += bitmap.width
-            height = bitmap.height
+                width += bitmap.width
+                height = bitmap.height
 
-            bitmap
-        }
+                bitmap
+            }
 
         val mergedBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         Canvas(mergedBitmap).apply {
@@ -59,7 +61,8 @@ class AntiScrapInterceptor : Interceptor {
         val baos = ByteArrayOutputStream()
         mergedBitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
 
-        return Response.Builder()
+        return Response
+            .Builder()
             .code(200)
             .protocol(Protocol.HTTP_1_1)
             .request(request)

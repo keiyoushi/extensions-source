@@ -8,7 +8,6 @@ import okhttp3.FormBody
 import okhttp3.Response
 
 class TempleScanEsp : MangaEsp("Temple Scan", "https://templescanesp.net", "es") {
-
     // Site moved from custom theme to MangaEsp
     override val versionId = 3
 

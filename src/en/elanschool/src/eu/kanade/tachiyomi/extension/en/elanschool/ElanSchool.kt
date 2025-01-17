@@ -13,7 +13,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class ElanSchool : HttpSource() {
-
     override val name = "Elan School"
 
     override val lang = "en"
@@ -23,23 +22,30 @@ class ElanSchool : HttpSource() {
     override val supportsLatest = false
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val manga = SManga.create().apply {
-            url = "/chapters/?dps_paged=$page"
-            title = "Elan School"
-            thumbnail_url = "$baseUrl/wp-content/uploads/2018/11/The-Elan-School-Comic-1cNEW-1-768x1491.jpg"
-            description = "A 16 year old boy named Joe gets indoctrinated into a sick cult that is run by imprisoned teenagers. Based on the true story of the Elan School."
-            status = SManga.ONGOING
-            author = "Joe Nobody"
-            artist = "Joe Nobody"
-        }
+        val manga =
+            SManga.create().apply {
+                url = "/chapters/?dps_paged=$page"
+                title = "Elan School"
+                thumbnail_url = "$baseUrl/wp-content/uploads/2018/11/The-Elan-School-Comic-1cNEW-1-768x1491.jpg"
+                description =
+                    "A 16 year old boy named Joe gets indoctrinated into a sick cult that is run by imprisoned teenagers. Based on the true story of the Elan School."
+                status = SManga.ONGOING
+                author = "Joe Nobody"
+                artist = "Joe Nobody"
+            }
 
         return Observable.just(MangasPage(listOf(manga), false))
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) = fetchPopularManga(page)
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = fetchPopularManga(page)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = fetchPopularManga(1)
-        .map { it.mangas.first().apply { initialized = true } }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        fetchPopularManga(1)
+            .map { it.mangas.first().apply { initialized = true } }
 
     private fun chapterNextPageSelector() = "a.next"
 
@@ -48,9 +54,10 @@ class ElanSchool : HttpSource() {
         var document = response.asJsoup()
 
         while (true) {
-            val chapters = document.select(chapterListSelector()).map {
-                chapterFromElement(it)
-            }
+            val chapters =
+                document.select(chapterListSelector()).map {
+                    chapterFromElement(it)
+                }
             if (chapters.isEmpty()) {
                 break
             }
@@ -71,12 +78,11 @@ class ElanSchool : HttpSource() {
 
     private fun chapterListSelector() = "div.listing-item > a.title"
 
-    private fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
+    private fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
             name = element.text()
             setUrlWithoutDomain(element.attr("href"))
         }
-    }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
@@ -85,27 +91,23 @@ class ElanSchool : HttpSource() {
         }
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

@@ -33,13 +33,14 @@ class Tag(
     private val male: JsonPrimitive?,
     private val tag: String,
 ) {
-    val formatted get() = if (female?.content == "1") {
-        tag.toCamelCase() + " ♀"
-    } else if (male?.content == "1") {
-        tag.toCamelCase() + " ♂"
-    } else {
-        tag.toCamelCase()
-    }
+    val formatted get() =
+        if (female?.content == "1") {
+            tag.toCamelCase() + " ♀"
+        } else if (male?.content == "1") {
+            tag.toCamelCase() + " ♂"
+        } else {
+            tag.toCamelCase()
+        }
 }
 
 @Serializable

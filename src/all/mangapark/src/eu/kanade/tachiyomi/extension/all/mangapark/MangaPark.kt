@@ -39,8 +39,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class MangaPark(
     override val lang: String,
     private val siteLang: String = lang,
-) : HttpSource(), ConfigurableSource {
-
+) : HttpSource(),
+    ConfigurableSource {
     override val name = "MangaPark"
 
     override val supportsLatest = true
@@ -59,40 +59,51 @@ class MangaPark(
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::siteSettingsInterceptor)
-        .addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
-        .rateLimitHost(apiUrl.toHttpUrl(), 1)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::siteSettingsInterceptor)
+            .addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
+            .rateLimitHost(apiUrl.toHttpUrl(), 1)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.POPULAR)
+
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.LATEST)
+
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val payload = GraphQL(
-            SearchVariables(
-                SearchPayload(
-                    page = page,
-                    size = size,
-                    query = query.takeUnless(String::isEmpty),
-                    incGenres = filters.firstInstanceOrNull<GenreFilter>()?.included,
-                    excGenres = filters.firstInstanceOrNull<GenreFilter>()?.excluded,
-                    incTLangs = listOf(siteLang),
-                    incOLangs = filters.firstInstanceOrNull<OriginalLanguageFilter>()?.checked,
-                    sortby = filters.firstInstanceOrNull<SortFilter>()?.selected,
-                    chapCount = filters.firstInstanceOrNull<ChapterCountFilter>()?.selected,
-                    origStatus = filters.firstInstanceOrNull<OriginalStatusFilter>()?.selected,
-                    siteStatus = filters.firstInstanceOrNull<UploadStatusFilter>()?.selected,
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val payload =
+            GraphQL(
+                SearchVariables(
+                    SearchPayload(
+                        page = page,
+                        size = size,
+                        query = query.takeUnless(String::isEmpty),
+                        incGenres = filters.firstInstanceOrNull<GenreFilter>()?.included,
+                        excGenres = filters.firstInstanceOrNull<GenreFilter>()?.excluded,
+                        incTLangs = listOf(siteLang),
+                        incOLangs = filters.firstInstanceOrNull<OriginalLanguageFilter>()?.checked,
+                        sortby = filters.firstInstanceOrNull<SortFilter>()?.selected,
+                        chapCount = filters.firstInstanceOrNull<ChapterCountFilter>()?.selected,
+                        origStatus = filters.firstInstanceOrNull<OriginalStatusFilter>()?.selected,
+                        siteStatus = filters.firstInstanceOrNull<UploadStatusFilter>()?.selected,
+                    ),
                 ),
-            ),
-            SEARCH_QUERY,
-        ).toJsonRequestBody()
+                SEARCH_QUERY,
+            ).toJsonRequestBody()
 
         return POST(apiUrl, headers, payload)
     }
@@ -100,7 +111,9 @@ class MangaPark(
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SearchResponse>()
 
-        val entries = result.data.searchComics.items.map { it.data.toSManga() }
+        val entries =
+            result.data.searchComics.items
+                .map { it.data.toSManga() }
         val hasNextPage = entries.size == size
 
         return MangasPage(entries, hasNextPage)
@@ -111,22 +124,31 @@ class MangaPark(
 
     private fun getGenres() {
         if (genreCache.isEmpty() && genreFetchAttempt < 3) {
-            val elements = runCatching {
-                client.newCall(GET("$baseUrl/search", headers)).execute()
-                    .use { it.asJsoup() }
-                    .select("div.flex-col:contains(Genres) div.whitespace-nowrap")
-            }.getOrNull().orEmpty()
+            val elements =
+                runCatching {
+                    client
+                        .newCall(GET("$baseUrl/search", headers))
+                        .execute()
+                        .use { it.asJsoup() }
+                        .select("div.flex-col:contains(Genres) div.whitespace-nowrap")
+                }.getOrNull().orEmpty()
 
-            genreCache = elements.mapNotNull {
-                val name = it.selectFirst("span.whitespace-nowrap")
-                    ?.text()?.takeUnless(String::isEmpty)
-                    ?: return@mapNotNull null
+            genreCache =
+                elements.mapNotNull {
+                    val name =
+                        it
+                            .selectFirst("span.whitespace-nowrap")
+                            ?.text()
+                            ?.takeUnless(String::isEmpty)
+                            ?: return@mapNotNull null
 
-                val key = it.attr("q:key")
-                    .takeUnless(String::isEmpty) ?: return@mapNotNull null
+                    val key =
+                        it
+                            .attr("q:key")
+                            .takeUnless(String::isEmpty) ?: return@mapNotNull null
 
-                Pair(name, key)
-            }
+                    Pair(name, key)
+                }
             genreFetchAttempt++
         }
     }
@@ -136,19 +158,21 @@ class MangaPark(
             runCatching(::getGenres)
         }
 
-        val filters = mutableListOf<Filter<*>>(
-            SortFilter(),
-            OriginalLanguageFilter(),
-            OriginalStatusFilter(),
-            UploadStatusFilter(),
-            ChapterCountFilter(),
-        )
+        val filters =
+            mutableListOf<Filter<*>>(
+                SortFilter(),
+                OriginalLanguageFilter(),
+                OriginalStatusFilter(),
+                UploadStatusFilter(),
+                ChapterCountFilter(),
+            )
 
         if (genreCache.isEmpty()) {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header("Press 'reset' to attempt to load genres"),
-            )
+            filters +=
+                listOf(
+                    Filter.Separator(),
+                    Filter.Header("Press 'reset' to attempt to load genres"),
+                )
         } else {
             filters.addAll(1, listOf(GenreFilter(genreCache)))
         }
@@ -157,10 +181,11 @@ class MangaPark(
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val payload = GraphQL(
-            IdVariables(manga.url.substringAfterLast("#")),
-            DETAILS_QUERY,
-        ).toJsonRequestBody()
+        val payload =
+            GraphQL(
+                IdVariables(manga.url.substringAfterLast("#")),
+                DETAILS_QUERY,
+            ).toJsonRequestBody()
 
         return POST(apiUrl, headers, payload)
     }
@@ -168,16 +193,18 @@ class MangaPark(
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<DetailsResponse>()
 
-        return result.data.comic.data.toSManga()
+        return result.data.comic.data
+            .toSManga()
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBeforeLast("#")
 
     override fun chapterListRequest(manga: SManga): Request {
-        val payload = GraphQL(
-            IdVariables(manga.url.substringAfterLast("#")),
-            CHAPTERS_QUERY,
-        ).toJsonRequestBody()
+        val payload =
+            GraphQL(
+                IdVariables(manga.url.substringAfterLast("#")),
+                CHAPTERS_QUERY,
+            ).toJsonRequestBody()
 
         return POST(apiUrl, headers, payload)
     }
@@ -186,21 +213,25 @@ class MangaPark(
         val result = response.parseAs<ChapterListResponse>()
 
         return if (preference.getBoolean(DUPLICATE_CHAPTER_PREF_KEY, false)) {
-            result.data.chapterList.flatMap {
-                it.data.dupChapters.map { it.data.toSChapter() }
-            }.reversed()
+            result.data.chapterList
+                .flatMap {
+                    it.data.dupChapters.map { it.data.toSChapter() }
+                }.reversed()
         } else {
-            result.data.chapterList.map { it.data.toSChapter() }.reversed()
+            result.data.chapterList
+                .map { it.data.toSChapter() }
+                .reversed()
         }
     }
 
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url.substringBeforeLast("#")
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val payload = GraphQL(
-            IdVariables(chapter.url.substringAfterLast("#")),
-            PAGES_QUERY,
-        ).toJsonRequestBody()
+        val payload =
+            GraphQL(
+                IdVariables(chapter.url.substringAfterLast("#")),
+                PAGES_QUERY,
+            ).toJsonRequestBody()
 
         return POST(apiUrl, headers, payload)
     }
@@ -214,36 +245,35 @@ class MangaPark(
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = MIRROR_PREF_KEY
-            title = "Preferred Mirror"
-            entries = mirrors
-            entryValues = mirrors
-            setDefaultValue(MIRROR_PREF_DEFAULT)
-            summary = "%s"
+        ListPreference(screen.context)
+            .apply {
+                key = MIRROR_PREF_KEY
+                title = "Preferred Mirror"
+                entries = mirrors
+                entryValues = mirrors
+                setDefaultValue(MIRROR_PREF_DEFAULT)
+                summary = "%s"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart Tachiyomi to apply changes", Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also(screen::addPreference)
+                setOnPreferenceChangeListener { _, _ ->
+                    Toast.makeText(screen.context, "Restart Tachiyomi to apply changes", Toast.LENGTH_LONG).show()
+                    true
+                }
+            }.also(screen::addPreference)
 
-        SwitchPreferenceCompat(screen.context).apply {
-            key = DUPLICATE_CHAPTER_PREF_KEY
-            title = "Fetch Duplicate Chapters"
-            summary = "Refresh chapter list to apply changes"
-            setDefaultValue(false)
-        }.also(screen::addPreference)
+        SwitchPreferenceCompat(screen.context)
+            .apply {
+                key = DUPLICATE_CHAPTER_PREF_KEY
+                title = "Fetch Duplicate Chapters"
+                summary = "Refresh chapter list to apply changes"
+                setDefaultValue(false)
+            }.also(screen::addPreference)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use { body.string() }.let(json::decodeFromString)
+    private inline fun <reified T> Response.parseAs(): T = use { body.string() }.let(json::decodeFromString)
 
-    private inline fun <reified T> List<*>.firstInstanceOrNull(): T? =
-        filterIsInstance<T>().firstOrNull()
+    private inline fun <reified T> List<*>.firstInstanceOrNull(): T? = filterIsInstance<T>().firstOrNull()
 
-    private inline fun <reified T : Any> T.toJsonRequestBody() =
-        json.encodeToString(this).toRequestBody(JSON_MEDIA_TYPE)
+    private inline fun <reified T : Any> T.toJsonRequestBody() = json.encodeToString(this).toRequestBody(JSON_MEDIA_TYPE)
 
     private val cookiesNotSet = AtomicBoolean(true)
     private val latch = CountDownLatch(1)
@@ -274,9 +304,7 @@ class MangaPark(
         return chain.proceed(request)
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
         private const val size = 24
@@ -284,22 +312,23 @@ class MangaPark(
 
         private const val MIRROR_PREF_KEY = "pref_mirror"
         private const val MIRROR_PREF_DEFAULT = "mangapark.net"
-        private val mirrors = arrayOf(
-            "mangapark.net",
-            "mangapark.com",
-            "mangapark.org",
-            "mangapark.me",
-            "mangapark.io",
-            "mangapark.to",
-            "comicpark.org",
-            "comicpark.to",
-            "readpark.org",
-            "readpark.net",
-            "parkmanga.com",
-            "parkmanga.net",
-            "parkmanga.org",
-            "mpark.to",
-        )
+        private val mirrors =
+            arrayOf(
+                "mangapark.net",
+                "mangapark.com",
+                "mangapark.org",
+                "mangapark.me",
+                "mangapark.io",
+                "mangapark.to",
+                "comicpark.org",
+                "comicpark.to",
+                "readpark.org",
+                "readpark.net",
+                "parkmanga.com",
+                "parkmanga.net",
+                "parkmanga.org",
+                "mpark.to",
+            )
 
         private const val DUPLICATE_CHAPTER_PREF_KEY = "pref_dup_chapters"
     }

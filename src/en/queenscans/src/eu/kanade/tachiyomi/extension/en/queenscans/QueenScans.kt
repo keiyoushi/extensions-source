@@ -6,9 +6,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
 
 class QueenScans : MangaThemesia("Fairy Manga", "https://fairymanga.com", "en") {
-    override val client = super.client.newBuilder()
-        .rateLimit(2)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(2)
+            .build()
 
     override val id = 4680104728999154642
 

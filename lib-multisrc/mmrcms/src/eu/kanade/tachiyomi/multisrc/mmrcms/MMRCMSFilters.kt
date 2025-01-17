@@ -8,7 +8,11 @@ interface UriFilter {
     fun addToUri(builder: HttpUrl.Builder)
 }
 
-class TextFilter(name: String, private val param: String) : Filter.Text(name), UriFilter {
+class TextFilter(
+    name: String,
+    private val param: String,
+) : Filter.Text(name),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         builder.addQueryParameter(param, state)
     }
@@ -20,7 +24,8 @@ class UriPartFilter(
     private val vals: Array<Pair<String, String>>,
     private val firstIsUnspecified: Boolean = true,
     defaultValue: Int = 0,
-) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), defaultValue), UriFilter {
+) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), defaultValue),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         if (state == 0 && firstIsUnspecified) {
             return
@@ -30,13 +35,17 @@ class UriPartFilter(
     }
 }
 
-class UriMultiSelectOption(name: String, val value: String) : Filter.CheckBox(name)
+class UriMultiSelectOption(
+    name: String,
+    val value: String,
+) : Filter.CheckBox(name)
 
 class UriMultiSelectFilter(
     name: String,
     private val param: String,
     private val vals: Array<Pair<String, String>>,
-) : Filter.Group<UriMultiSelectOption>(name, vals.map { UriMultiSelectOption(it.first, it.second) }), UriFilter {
+) : Filter.Group<UriMultiSelectOption>(name, vals.map { UriMultiSelectOption(it.first, it.second) }),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         val checked = state.filter { it.state }
 
@@ -52,8 +61,7 @@ class SortFilter(
     intl: Intl,
     private val sortables: Array<Pair<String, String>>,
     selection: Selection = Selection(0, true),
-) :
-    Filter.Sort(
+) : Filter.Sort(
         intl["sort_by_filter_title"],
         sortables.map { it.first }.toTypedArray(),
         selection,

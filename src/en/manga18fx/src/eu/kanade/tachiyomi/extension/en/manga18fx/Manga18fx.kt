@@ -18,12 +18,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 // The site isn't actually based on Madara but reproduces it very well
-class Manga18fx : Madara(
-    "Manga18fx",
-    "https://manga18fx.com",
-    "en",
-    SimpleDateFormat("dd MMM yy", Locale.ENGLISH),
-) {
+class Manga18fx :
+    Madara(
+        "Manga18fx",
+        "https://manga18fx.com",
+        "en",
+        SimpleDateFormat("dd MMM yy", Locale.ENGLISH),
+    ) {
     override val id = 3157287889751723714
 
     override val fetchGenres = false
@@ -39,32 +40,42 @@ class Manga18fx : Madara(
         return MangasPage(mangas, false)
     }
 
-    private fun mangaFromElement(element: Element) = SManga.create().apply {
-        url = element.attr("href")
-        title = element.attr("title")
-        thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.attr("data-src")
-    }
+    private fun mangaFromElement(element: Element) =
+        SManga.create().apply {
+            url = element.attr("href")
+            title = element.attr("title")
+            thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.attr("data-src")
+        }
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/page/$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
         loadGenres(document)
-        val mangas = document.select(Evaluator.Class("bsx-item")).map {
-            mangaFromElement(it.selectFirst(Evaluator.Tag("a"))!!)
-        }
+        val mangas =
+            document.select(Evaluator.Class("bsx-item")).map {
+                mangaFromElement(it.selectFirst(Evaluator.Tag("a"))!!)
+            }
         val nextButton = document.selectFirst(Evaluator.Class("next"))
         val hasNextPage = nextButton != null && nextButton.hasClass("disabled").not()
         return MangasPage(mangas, hasNextPage)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        super.fetchSearchManga(page, query, filters).doOnNext {
-            for (manga in it.mangas)
-                manga.url = manga.url.removeSuffix("/")
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = super.fetchSearchManga(page, query, filters).doOnNext {
+        for (manga in it.mangas) {
+            manga.url = manga.url.removeSuffix("/")
         }
+    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isEmpty()) {
             filters.forEach { filter ->
                 if (filter is GenreFilter) {
@@ -74,10 +85,13 @@ class Manga18fx : Madara(
             return latestUpdatesRequest(page)
         }
 
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .addQueryParameter("page", page.toString())
-            .build()
+        val url =
+            "$baseUrl/search"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("page", page.toString())
+                .build()
 
         return GET(url, headers)
     }
@@ -94,39 +108,43 @@ class Manga18fx : Madara(
 
     override fun chapterDateSelector() = "span.chapter-time"
 
-    class GenreFilter(val vals: List<Pair<String, String>>) :
-        Filter.Select<String>("Genre", vals.map { it.first }.toTypedArray())
+    class GenreFilter(
+        val vals: List<Pair<String, String>>,
+    ) : Filter.Select<String>("Genre", vals.map { it.first }.toTypedArray())
 
     private fun loadGenres(document: Document) {
-        genresList = document.select(".header-bottom li a").map {
-            val href = it.attr("href")
-            val url = if (href.startsWith("http")) href else "$baseUrl/$href"
+        genresList =
+            document.select(".header-bottom li a").map {
+                val href = it.attr("href")
+                val url = if (href.startsWith("http")) href else "$baseUrl/$href"
 
-            Pair(it.text(), url)
-        }
+                Pair(it.text(), url)
+            }
     }
 
     private var genresList: List<Pair<String, String>> = emptyList()
-    private var hardCodedTypes: List<Pair<String, String>> = listOf(
-        Pair("Manhwa", "$baseUrl/manga-genre/manhwa"),
-        Pair("Manhua", "$baseUrl/manga-genre/manhua"),
-        Pair("Raw", "$baseUrl/manga-genre/raw"),
-    )
+    private var hardCodedTypes: List<Pair<String, String>> =
+        listOf(
+            Pair("Manhwa", "$baseUrl/manga-genre/manhwa"),
+            Pair("Manhua", "$baseUrl/manga-genre/manhua"),
+            Pair("Raw", "$baseUrl/manga-genre/raw"),
+        )
 
     override fun getFilterList(): FilterList {
-        val filters = buildList(2) {
-            add(Filter.Header("Filters are ignored for text search!"))
+        val filters =
+            buildList(2) {
+                add(Filter.Header("Filters are ignored for text search!"))
 
-            if (genresList.isNotEmpty()) {
-                add(
-                    GenreFilter(hardCodedTypes + genresList),
-                )
-            } else {
-                add(
-                    Filter.Header("Wait for mangas to load then tap Reset"),
-                )
+                if (genresList.isNotEmpty()) {
+                    add(
+                        GenreFilter(hardCodedTypes + genresList),
+                    )
+                } else {
+                    add(
+                        Filter.Header("Wait for mangas to load then tap Reset"),
+                    )
+                }
             }
-        }
 
         return FilterList(filters)
     }

@@ -11,14 +11,15 @@ object MangaDexIntl {
     const val SPANISH = "es"
     const val RUSSIAN = "ru"
 
-    val AVAILABLE_LANGS = setOf(
-        ENGLISH,
-        BRAZILIAN_PORTUGUESE,
-        PORTUGUESE,
-        SPANISH,
-        SPANISH_LATAM,
-        RUSSIAN,
-    )
+    val AVAILABLE_LANGS =
+        setOf(
+            ENGLISH,
+            BRAZILIAN_PORTUGUESE,
+            PORTUGUESE,
+            SPANISH,
+            SPANISH_LATAM,
+            RUSSIAN,
+        )
 
     const val MANGADEX_NAME = "MangaDex"
 }

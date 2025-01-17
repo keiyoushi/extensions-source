@@ -6,12 +6,13 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class KoreliScans : Madara(
-    "Koreli Scans",
-    "https://koreliscans.com",
-    "tr",
-    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
-) {
+class KoreliScans :
+    Madara(
+        "Koreli Scans",
+        "https://koreliscans.com",
+        "tr",
+        dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 

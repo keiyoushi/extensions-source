@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.all.pururin
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
-fun getFilters(): FilterList {
-    return FilterList(
+fun getFilters(): FilterList =
+    FilterList(
         SelectFilter("Sort by", getSortsList),
         TypeFilter("Types"),
         Filter.Separator(),
@@ -24,9 +24,10 @@ fun getFilters(): FilterList {
         Filter.Header("Filter by pages, for example: (>20)"),
         PageFilter("Pages"),
     )
-}
-internal class TypeFilter(name: String) :
-    Filter.Group<CheckBoxFilter>(
+
+internal class TypeFilter(
+    name: String,
+) : Filter.Group<CheckBoxFilter>(
         name,
         listOf(
             Pair("Artbook", "17783"),
@@ -38,20 +39,34 @@ internal class TypeFilter(name: String) :
         ).map { CheckBoxFilter(it.first, it.second, true) },
     )
 
-internal open class CheckBoxFilter(name: String, val value: String, state: Boolean) : Filter.CheckBox(name, state)
+internal open class CheckBoxFilter(
+    name: String,
+    val value: String,
+    state: Boolean,
+) : Filter.CheckBox(name, state)
 
-internal open class PageFilter(name: String) : Filter.Text(name)
+internal open class PageFilter(
+    name: String,
+) : Filter.Text(name)
 
-internal open class TextFilter(name: String, val type: String) : Filter.Text(name)
+internal open class TextFilter(
+    name: String,
+    val type: String,
+) : Filter.Text(name)
 
-internal open class SelectFilter(name: String, val vals: List<Pair<String, String>>, state: Int = 0) :
-    Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+internal open class SelectFilter(
+    name: String,
+    val vals: List<Pair<String, String>>,
+    state: Int = 0,
+) : Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
     fun getValue() = vals[state].second
 }
-private val getSortsList: List<Pair<String, String>> = listOf(
-    Pair("Newest", "newest"),
-    Pair("Most Popular", "most-popular"),
-    Pair("Highest Rated", "highest-rated"),
-    Pair("Most Viewed", "most-viewed"),
-    Pair("Title", "title"),
-)
+
+private val getSortsList: List<Pair<String, String>> =
+    listOf(
+        Pair("Newest", "newest"),
+        Pair("Most Popular", "most-popular"),
+        Pair("Highest Rated", "highest-rated"),
+        Pair("Most Viewed", "most-viewed"),
+        Pair("Title", "title"),
+    )

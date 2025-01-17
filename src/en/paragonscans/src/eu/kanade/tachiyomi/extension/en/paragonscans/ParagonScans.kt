@@ -5,12 +5,13 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class ParagonScans : Madara(
-    "Paragon Scans",
-    "https://paragonscans.com",
-    "en",
-    dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
-) {
+class ParagonScans :
+    Madara(
+        "Paragon Scans",
+        "https://paragonscans.com",
+        "en",
+        dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
+    ) {
     override val useNewChapterEndpoint = true
     override val mangaSubString = "mangax"
 
@@ -23,8 +24,9 @@ class ParagonScans : Madara(
         }
 
         val (amountStr, unit) = splitDate
-        val amount = amountStr.toIntOrNull()
-            ?: return super.parseChapterDate(date)
+        val amount =
+            amountStr.toIntOrNull()
+                ?: return super.parseChapterDate(date)
 
         val cal = Calendar.getInstance()
         return when (unit) {

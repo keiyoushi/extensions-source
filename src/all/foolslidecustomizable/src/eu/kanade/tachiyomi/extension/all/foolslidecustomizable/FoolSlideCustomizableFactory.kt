@@ -18,25 +18,26 @@ class FoolSlideCustomizable : FoolSlide("FoolSlide Customizable", "", "other") {
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super.setupPreferenceScreen(screen)
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF_TITLE
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(DEFAULT_BASEURL)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $DEFAULT_BASEURL"
+        EditTextPreference(screen.context)
+            .apply {
+                key = BASE_URL_PREF_TITLE
+                title = BASE_URL_PREF_TITLE
+                summary = BASE_URL_PREF_SUMMARY
+                setDefaultValue(DEFAULT_BASEURL)
+                dialogTitle = BASE_URL_PREF_TITLE
+                dialogMessage = "Default: $DEFAULT_BASEURL"
 
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res = preferences.edit().putString(BASE_URL_PREF, newValue as String).commit()
-                    Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
+                setOnPreferenceChangeListener { _, newValue ->
+                    try {
+                        val res = preferences.edit().putString(BASE_URL_PREF, newValue as String).commit()
+                        Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
+                        res
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
                 }
-            }
-        }.let(screen::addPreference)
+            }.let(screen::addPreference)
     }
 
     companion object {

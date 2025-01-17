@@ -26,12 +26,13 @@ class Manga(
     @ProtoNumber(4) private val cover: String,
     @ProtoNumber(14) private val description: String,
 ) {
-    fun toSManga(cdnUrl: String): SManga = SManga.create().apply {
-        url = "/manga/$id"
-        title = this@Manga.title
-        thumbnail_url = cdnUrl + cover
-        description = this@Manga.description
-    }
+    fun toSManga(cdnUrl: String): SManga =
+        SManga.create().apply {
+            url = "/manga/$id"
+            title = this@Manga.title
+            thumbnail_url = cdnUrl + cover
+            description = this@Manga.description
+        }
 }
 
 @Serializable
@@ -41,10 +42,11 @@ class MangaDetailsResponse(
     @ProtoNumber(4) private val authors: List<Author>,
     @ProtoNumber(7) private val tags: List<Name>,
 ) {
-    fun toSManga(cdnUrl: String) = manga.toSManga(cdnUrl).apply {
-        genre = tags.joinToString { it.name }
-        author = authors.joinToString { it.author.name }
-    }
+    fun toSManga(cdnUrl: String) =
+        manga.toSManga(cdnUrl).apply {
+            genre = tags.joinToString { it.name }
+            author = authors.joinToString { it.author.name }
+        }
 }
 
 @Serializable
@@ -69,19 +71,22 @@ class Chapter(
     @ProtoNumber(5) private val points: Point,
     @ProtoNumber(8) private val date: String = "",
 ) {
-    fun toSChapter() = SChapter.create().apply {
-        url = "/manga/viewer/$id"
-        name = if (points.amount > 0) {
-            "\uD83D\uDD12 $title" // lock emoji
-        } else {
-            title
+    fun toSChapter() =
+        SChapter.create().apply {
+            url = "/manga/viewer/$id"
+            name =
+                if (points.amount > 0) {
+                    "\uD83D\uDD12 $title" // lock emoji
+                } else {
+                    title
+                }
+            date_upload =
+                try {
+                    dateFormat.parse(date)!!.time
+                } catch (_: ParseException) {
+                    0L
+                }
         }
-        date_upload = try {
-            dateFormat.parse(date)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
-    }
 }
 
 private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH)

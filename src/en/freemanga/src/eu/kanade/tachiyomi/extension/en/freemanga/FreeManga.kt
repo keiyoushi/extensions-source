@@ -6,8 +6,9 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 class FreeManga : Madara("Free Manga", "https://freemanga.me", "en") {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 1, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 1, TimeUnit.SECONDS)
+            .build()
 }

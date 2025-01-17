@@ -26,10 +26,14 @@ object ScrambledImageInterceptor : Interceptor {
 
         // /_next/static/chunks/pages/books/%5Bbookid%5D/%5Bid%5D-6f60a589e82dc8db.js
         // Scrambled images are reversed by blocks. Remainder is included in the bottom (scrambled) block.
-        val blocks = url.removeSuffix(SCRAMBLED_SUFFIX).substringAfterLast('/').removeSuffix(".jpg")
-            .let { Base64.decode(it, Base64.DEFAULT) }
-            .let { MessageDigest.getInstance("MD5").digest(it) } // thread-safe
-            .let { it.last().toPositiveInt() % 10 + 5 }
+        val blocks =
+            url
+                .removeSuffix(SCRAMBLED_SUFFIX)
+                .substringAfterLast('/')
+                .removeSuffix(".jpg")
+                .let { Base64.decode(it, Base64.DEFAULT) }
+                .let { MessageDigest.getInstance("MD5").digest(it) } // thread-safe
+                .let { it.last().toPositiveInt() % 10 + 5 }
         val blockHeight = height / blocks
         var iy = blockHeight * (blocks - 1)
         var cy = 0
@@ -49,6 +53,8 @@ object ScrambledImageInterceptor : Interceptor {
     }
 
     private val jpegMediaType = "image/jpeg".toMediaType()
+
     private fun Byte.toPositiveInt() = toInt() and 0xFF
+
     const val SCRAMBLED_SUFFIX = "#scrambled"
 }

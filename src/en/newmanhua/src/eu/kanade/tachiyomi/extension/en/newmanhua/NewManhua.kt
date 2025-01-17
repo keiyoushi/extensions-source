@@ -4,15 +4,17 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 
-class NewManhua : Madara(
-    "NewManhua",
-    "https://newmanhua.com",
-    "en",
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1)
-        .build()
+class NewManhua :
+    Madara(
+        "NewManhua",
+        "https://newmanhua.com",
+        "en",
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(1)
+            .build()
 
     override val useNewChapterEndpoint = true
 

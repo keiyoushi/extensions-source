@@ -9,8 +9,9 @@ object NamiComiConstants {
     const val mangaLimit = 20
 
     val whitespaceRegex = "\\s".toRegex()
-    val dateFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss+SSS", Locale.US)
-        .apply { timeZone = TimeZone.getTimeZone("UTC") }
+    val dateFormatter =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss+SSS", Locale.US)
+            .apply { timeZone = TimeZone.getTimeZone("UTC") }
 
     const val lockSymbol = "🔒"
 
@@ -42,16 +43,22 @@ object NamiComiConstants {
 
     // Preferences
     private const val coverQualityPref = "thumbnailQuality"
+
     fun getCoverQualityPreferenceKey(extLang: String): String = "${coverQualityPref}_$extLang"
+
     fun getCoverQualityPreferenceEntries(intl: Intl) =
         arrayOf(intl["cover_quality_original"], intl["cover_quality_medium"], intl["cover_quality_low"])
+
     fun getCoverQualityPreferenceEntryValues() = arrayOf("", ".512.jpg", ".256.jpg")
+
     fun getCoverQualityPreferenceDefaultValue() = getCoverQualityPreferenceEntryValues()[0]
 
     private const val dataSaverPref = "dataSaver"
+
     fun getDataSaverPreferenceKey(extLang: String): String = "${dataSaverPref}_$extLang"
 
     private const val showLockedChaptersPref = "showLockedChapters"
+
     fun getShowLockedChaptersPreferenceKey(extLang: String): String = "${showLockedChaptersPref}_$extLang"
 
     // Tag types

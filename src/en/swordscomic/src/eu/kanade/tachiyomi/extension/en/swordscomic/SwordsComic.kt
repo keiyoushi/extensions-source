@@ -16,7 +16,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class SwordsComic : HttpSource() {
-
     override val name = "Swords Comic"
 
     override val baseUrl = "https://swordscomic.com"
@@ -27,8 +26,8 @@ class SwordsComic : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    private fun createManga(): SManga {
-        return SManga.create().apply {
+    private fun createManga(): SManga =
+        SManga.create().apply {
             title = "Swords Comic"
             url = "/archive/pages/"
             author = "Matthew Wills"
@@ -36,13 +35,10 @@ class SwordsComic : HttpSource() {
             description = "A webcomic about swords and the heroes who wield them"
             thumbnail_url = "https://swordscomic.com/media/ArgoksEdgeEmote.png"
         }
-    }
 
     // Popular
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return Observable.just(MangasPage(listOf(createManga()), false))
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = Observable.just(MangasPage(listOf(createManga()), false))
 
     override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
@@ -56,34 +52,43 @@ class SwordsComic : HttpSource() {
 
     // Search
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     // Details
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(createManga().apply { initialized = true })
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(createManga().apply { initialized = true })
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
     // Chapters
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.asJsoup().select("a.archive-tile")
+    override fun chapterListParse(response: Response): List<SChapter> =
+        response
+            .asJsoup()
+            .select("a.archive-tile")
             .map { element ->
                 SChapter.create().apply {
                     name = element.select("strong").text()
                     setUrlWithoutDomain(element.attr("href"))
-                    date_upload = element.select("small").text()
-                        .let { SimpleDateFormat("dd MMM yyyy", Locale.US).parse(it)?.time ?: 0L }
+                    date_upload =
+                        element
+                            .select("small")
+                            .text()
+                            .let { SimpleDateFormat("dd MMM yyyy", Locale.US).parse(it)?.time ?: 0L }
                 }
-            }
-            .reversed()
-    }
+            }.reversed()
 
     // Pages
 
@@ -106,7 +111,10 @@ class SwordsComic : HttpSource() {
             builder.append("+")
         }
 
-        return listOf(Page(0, "", imageElement.attr("abs:src")), Page(1, "", "https://fakeimg.pl/1800x2252/978B65/000000/?text=$builder&font_size=60&font=comic+sans"))
+        return listOf(
+            Page(0, "", imageElement.attr("abs:src")),
+            Page(1, "", "https://fakeimg.pl/1800x2252/978B65/000000/?text=$builder&font_size=60&font=comic+sans"),
+        )
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

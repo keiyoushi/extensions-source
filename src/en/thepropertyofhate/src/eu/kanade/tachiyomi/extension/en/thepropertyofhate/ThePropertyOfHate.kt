@@ -25,42 +25,42 @@ class ThePropertyOfHate : HttpSource() {
 
     // the one and only manga entry
     private val manga: SManga
-        get() = SManga.create().apply {
-            title = "The Property of Hate"
-            thumbnail_url = "https://pbs.twimg.com/media/DOBCcMiWkAA8Hvu.jpg"
-            artist = "Sarah Jolley"
-            author = "Sarah Jolley"
-            status = SManga.UNKNOWN
-            url = baseUrl
-        }
+        get() =
+            SManga.create().apply {
+                title = "The Property of Hate"
+                thumbnail_url = "https://pbs.twimg.com/media/DOBCcMiWkAA8Hvu.jpg"
+                artist = "Sarah Jolley"
+                author = "Sarah Jolley"
+                status = SManga.UNKNOWN
+                url = baseUrl
+            }
 
-    override fun fetchPopularManga(page: Int) =
-        Observable.just(MangasPage(listOf(manga), false))!!
+    override fun fetchPopularManga(page: Int) = Observable.just(MangasPage(listOf(manga), false))!!
 
     // write the data again to avoid bugs in backup restore
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        Observable.just(this.manga.also { it.initialized = true })!!
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(this.manga.also { it.initialized = true })!!
 
     // needed for the webview
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl, headers)
 
     // no real base url for this comic so must read the first chapter's link
-    override fun chapterListRequest(manga: SManga) =
-        GET(baseUrl + firstChapterUrl, headers)
+    override fun chapterListRequest(manga: SManga) = GET(baseUrl + firstChapterUrl, headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        val chapters = mutableListOf(
-            // must hard code the first one
-            SChapter.create().apply {
-                url = firstChapterUrl
-                chapter_number = 1f
-                name = "The Hook"
-            },
-        )
+        val chapters =
+            mutableListOf(
+                // must hard code the first one
+                SChapter.create().apply {
+                    url = firstChapterUrl
+                    chapter_number = 1f
+                    name = "The Hook"
+                },
+            )
 
-        document.select("select > option:not(:first-child)")
+        document
+            .select("select > option:not(:first-child)")
             .mapIndexed { num, opt ->
                 SChapter.create().apply {
                     setUrlWithoutDomain(opt.attr("value"))
@@ -73,30 +73,28 @@ class ThePropertyOfHate : HttpSource() {
     }
 
     override fun pageListParse(response: Response) =
-        response.asJsoup().select("select > optgroup > option")
+        response
+            .asJsoup()
+            .select("select > optgroup > option")
             .mapIndexed { num, opt -> Page(num, opt.absUrl("value")) }
 
-    override fun imageUrlParse(response: Response): String =
-        response.asJsoup().selectFirst(".comic_comic > img")!!.absUrl("src")
+    override fun imageUrlParse(response: Response): String = response.asJsoup().selectFirst(".comic_comic > img")!!.absUrl("src")
 
-    override fun popularMangaRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw Exception("Search functionality is not available.")
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw Exception("Search functionality is not available.")
 }

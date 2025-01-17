@@ -26,28 +26,31 @@ open class WebtoonsSrc(
     langCode: String = lang,
     override val localeForCookie: String = lang,
     dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH),
-) : ConfigurableSource, Webtoons(name, baseUrl, lang, langCode, localeForCookie, dateFormat) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .addInterceptor(TextInterceptor())
-        .build()
+) : Webtoons(name, baseUrl, lang, langCode, localeForCookie, dateFormat),
+    ConfigurableSource {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .addInterceptor(TextInterceptor())
+            .build()
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_AUTHORS_NOTES_KEY
-            title = "Show author's notes"
-            summary = "Enable to see the author's notes at the end of chapters (if they're there)."
-            setDefaultValue(false)
+        val authorsNotesPref =
+            SwitchPreferenceCompat(screen.context).apply {
+                key = SHOW_AUTHORS_NOTES_KEY
+                title = "Show author's notes"
+                summary = "Enable to see the author's notes at the end of chapters (if they're there)."
+                setDefaultValue(false)
 
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean(SHOW_AUTHORS_NOTES_KEY, checkValue).commit()
+                setOnPreferenceChangeListener { _, newValue ->
+                    val checkValue = newValue as Boolean
+                    preferences.edit().putBoolean(SHOW_AUTHORS_NOTES_KEY, checkValue).commit()
+                }
             }
-        }
         screen.addPreference(authorsNotesPref)
     }
 
@@ -62,15 +65,18 @@ open class WebtoonsSrc(
             if (note.isNotEmpty()) {
                 val creator = document.select("div.creator_note a.author_name span").text().trim()
 
-                pages = pages + Page(
-                    pages.size,
-                    "",
-                    TextInterceptorHelper.createUrl("Author's Notes from $creator", note),
-                )
+                pages = pages +
+                    Page(
+                        pages.size,
+                        "",
+                        TextInterceptorHelper.createUrl("Author's Notes from $creator", note),
+                    )
             }
         }
 
-        if (pages.isNotEmpty()) { return pages }
+        if (pages.isNotEmpty()) {
+            return pages
+        }
 
         val docString = document.toString()
 

@@ -8,9 +8,7 @@ class AuthDto(
     @SerialName("apps")
     val tokens: Map<String, TokenDto>,
 ) {
-    fun randomToken(): String {
-        return tokens.values.random().value
-    }
+    fun randomToken(): String = tokens.values.random().value
 
     @Serializable
     class TokenDto(
@@ -20,14 +18,20 @@ class AuthDto(
 }
 
 @Serializable
-class PopularMangaContainerDto(val postFeedPage: Post) {
+class PopularMangaContainerDto(
+    val postFeedPage: Post,
+) {
     val posts: List<PopularMangaDto> get() = postFeedPage.posts.posts
 
     @Serializable
-    class Post(val posts: Posts)
+    class Post(
+        val posts: Posts,
+    )
 
     @Serializable
-    class Posts(val posts: List<PopularMangaDto>)
+    class Posts(
+        val posts: List<PopularMangaDto>,
+    )
 }
 
 @Serializable
@@ -52,9 +56,7 @@ class PopularMangaDto(
         private val url: String?,
         private val path: String?,
     ) {
-        override fun toString(): String {
-            return url ?: path!!
-        }
+        override fun toString(): String = url ?: path!!
     }
 }
 
@@ -89,9 +91,7 @@ class SearchMangaDto(
         private val id: String?,
         private val file_name: String?,
     ) {
-        override fun toString(): String {
-            return id ?: file_name!!
-        }
+        override fun toString(): String = id ?: file_name!!
     }
 
     companion object {

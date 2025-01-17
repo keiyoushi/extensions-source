@@ -9,21 +9,26 @@ interface UriFilter {
     fun addToUri(builder: HttpUrl.Builder)
 }
 
-internal class TypeSelect : Filter.Select<String>(
-    "Search for",
-    arrayOf(
-        Komga.TYPE_SERIES,
-        Komga.TYPE_READLISTS,
-    ),
-)
+internal class TypeSelect :
+    Filter.Select<String>(
+        "Search for",
+        arrayOf(
+            Komga.TYPE_SERIES,
+            Komga.TYPE_READLISTS,
+        ),
+    )
 
-internal class SeriesSort(selection: Selection? = null) : Filter.Sort(
-    "Sort",
-    arrayOf("Relevance", "Alphabetically", "Date added", "Date updated", "Random"),
-    selection ?: Selection(0, false),
-)
+internal class SeriesSort(
+    selection: Selection? = null,
+) : Filter.Sort(
+        "Sort",
+        arrayOf("Relevance", "Alphabetically", "Date added", "Date updated", "Random"),
+        selection ?: Selection(0, false),
+    )
 
-internal class UnreadFilter : Filter.CheckBox("Unread", false), UriFilter {
+internal class UnreadFilter :
+    Filter.CheckBox("Unread", false),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         if (!state) {
             return
@@ -34,7 +39,9 @@ internal class UnreadFilter : Filter.CheckBox("Unread", false), UriFilter {
     }
 }
 
-internal class InProgressFilter : Filter.CheckBox("In Progress", false), UriFilter {
+internal class InProgressFilter :
+    Filter.CheckBox("In Progress", false),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         if (!state) {
             return
@@ -44,7 +51,9 @@ internal class InProgressFilter : Filter.CheckBox("In Progress", false), UriFilt
     }
 }
 
-internal class ReadFilter : Filter.CheckBox("Read", false), UriFilter {
+internal class ReadFilter :
+    Filter.CheckBox("Read", false),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         if (!state) {
             return
@@ -58,22 +67,26 @@ internal class LibraryFilter(
     libraries: List<LibraryDto>,
     defaultLibraries: Set<String>,
 ) : UriMultiSelectFilter(
-    "Libraries",
-    "library_id",
-    libraries.map {
-        UriMultiSelectOption(it.name, it.id).apply {
-            state = defaultLibraries.contains(it.id)
-        }
-    },
-)
+        "Libraries",
+        "library_id",
+        libraries.map {
+            UriMultiSelectOption(it.name, it.id).apply {
+                state = defaultLibraries.contains(it.id)
+            }
+        },
+    )
 
-internal class UriMultiSelectOption(name: String, val id: String = name) : Filter.CheckBox(name, false)
+internal class UriMultiSelectOption(
+    name: String,
+    val id: String = name,
+) : Filter.CheckBox(name, false)
 
 internal open class UriMultiSelectFilter(
     name: String,
     private val param: String,
     genres: List<UriMultiSelectOption>,
-) : Filter.Group<UriMultiSelectOption>(name, genres), UriFilter {
+) : Filter.Group<UriMultiSelectOption>(name, genres),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         val whatToInclude = state.filter { it.state }.map { it.id }
 
@@ -83,12 +96,15 @@ internal open class UriMultiSelectFilter(
     }
 }
 
-internal class AuthorFilter(val author: AuthorDto) : Filter.CheckBox(author.name, false)
+internal class AuthorFilter(
+    val author: AuthorDto,
+) : Filter.CheckBox(author.name, false)
 
 internal class AuthorGroup(
     role: String,
     authors: List<AuthorFilter>,
-) : Filter.Group<AuthorFilter>(role.replaceFirstChar { it.titlecase() }, authors), UriFilter {
+) : Filter.Group<AuthorFilter>(role.replaceFirstChar { it.titlecase() }, authors),
+    UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         val authorToInclude = state.filter { it.state }.map { it.author }
 
@@ -102,4 +118,7 @@ internal class CollectionSelect(
     val collections: List<CollectionFilterEntry>,
 ) : Filter.Select<String>("Collection", collections.map { it.name }.toTypedArray())
 
-internal data class CollectionFilterEntry(val name: String, val id: String? = null)
+internal data class CollectionFilterEntry(
+    val name: String,
+    val id: String? = null,
+)

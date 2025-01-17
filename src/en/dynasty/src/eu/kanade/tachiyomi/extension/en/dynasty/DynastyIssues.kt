@@ -7,7 +7,6 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 
 class DynastyIssues : DynastyScans() {
-
     override val name = "Dynasty-Issues"
 
     override val searchPrefix = "issues"
@@ -16,9 +15,11 @@ class DynastyIssues : DynastyScans() {
 
     override fun popularMangaInitialUrl() = ""
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search?q=$query&classes%5B%5D=Issue&sort=&page=$page", headers)
-    }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = GET("$baseUrl/search?q=$query&classes%5B%5D=Issue&sort=&page=$page", headers)
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()

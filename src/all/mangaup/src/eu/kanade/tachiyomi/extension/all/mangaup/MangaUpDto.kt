@@ -29,12 +29,12 @@ data class MangaUpTitle(
     val genres: List<MangaUpGenre> = emptyList(),
     val chapters: List<MangaUpChapter> = emptyList(),
 ) {
-
     private val fullDescription: String
-        get() = buildString {
-            description?.let { append(it) }
-            copyright?.let { append("\n\n" + it.replace("(C)", "© ")) }
-        }
+        get() =
+            buildString {
+                description?.let { append(it) }
+                copyright?.let { append("\n\n" + it.replace("(C)", "© ")) }
+            }
 
     private val isFinished: Boolean
         get() = chapters.any { it.mainName.contains("final chapter", ignoreCase = true) }
@@ -42,15 +42,16 @@ data class MangaUpTitle(
     val readableChapters: List<MangaUpChapter>
         get() = chapters.filter(MangaUpChapter::isReadable).reversed()
 
-    fun toSManga(): SManga = SManga.create().apply {
-        title = name
-        author = authorName
-        description = fullDescription.trim()
-        genre = genres.joinToString { it.name }
-        status = if (isFinished) SManga.COMPLETED else SManga.ONGOING
-        thumbnail_url = mainThumbnailUrl ?: thumbnailUrl
-        url = "/manga/$id"
-    }
+    fun toSManga(): SManga =
+        SManga.create().apply {
+            title = name
+            author = authorName
+            description = fullDescription.trim()
+            genre = genres.joinToString { it.name }
+            status = if (isFinished) SManga.COMPLETED else SManga.ONGOING
+            thumbnail_url = mainThumbnailUrl ?: thumbnailUrl
+            url = "/manga/$id"
+        }
 }
 
 @Serializable
@@ -69,16 +70,16 @@ data class MangaUpChapter(
     val badge: MangaUpBadge = MangaUpBadge.FREE,
     val available: Boolean = false,
 ) {
-
     val isReadable: Boolean
         get() = badge == MangaUpBadge.FREE && available
 
-    fun toSChapter(titleId: Int): SChapter = SChapter.create().apply {
-        name = mainName.replace(WRONG_SPACING_REGEX, "-$1") +
-            if (!subName.isNullOrEmpty()) ": $subName" else ""
-        date_upload = (published * 1000L).takeIf { it <= Date().time } ?: 0L
-        url = "/manga/$titleId/$id"
-    }
+    fun toSChapter(titleId: Int): SChapter =
+        SChapter.create().apply {
+            name = mainName.replace(WRONG_SPACING_REGEX, "-$1") +
+                if (!subName.isNullOrEmpty()) ": $subName" else ""
+            date_upload = (published * 1000L).takeIf { it <= Date().time } ?: 0L
+            url = "/manga/$titleId/$id"
+        }
 
     companion object {
         private val WRONG_SPACING_REGEX = "\\s+-(\\d+)$".toRegex()

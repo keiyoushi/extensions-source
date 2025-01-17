@@ -16,17 +16,16 @@ class Mangalay : ParsedHttpSource() {
     override val lang = "id"
     override val supportsLatest = false
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/2013/04/daftar-baca-komik_20.html", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/2013/04/daftar-baca-komik_20.html", headers)
 
     override fun popularMangaSelector() = ".post-body table"
 
-    override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a").first()!!.attr("href"))
-        title = element.select(".tr-caption").text()
-        thumbnail_url = element.select("img").attr("src")
-    }
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.select("a").first()!!.attr("href"))
+            title = element.select(".tr-caption").text()
+            thumbnail_url = element.select("img").attr("src")
+        }
 
     override fun popularMangaNextPageSelector(): String? = null
 
@@ -34,19 +33,20 @@ class Mangalay : ParsedHttpSource() {
 
     override fun chapterListSelector() = ".post-body span > a"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.attr("href"))
-        name = element.select("b").text()
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.attr("href"))
+            name = element.select("b").text()
+        }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(".separator img")
+    override fun pageListParse(document: Document): List<Page> =
+        document
+            .select(".separator img")
             .dropLast(1) // :last-child not working somehow
             .mapIndexed { index, element ->
                 val url = element.attr("src")
                 Page(index, "", url)
             }
-    }
 
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
 
@@ -56,7 +56,11 @@ class Mangalay : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 

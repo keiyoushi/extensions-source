@@ -11,20 +11,23 @@ import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 
-class MangaTales : Gmanga(
-    "Manga Tales",
-    "https://www.mangatales.com",
-    "ar",
-    "https://media.mangatales.com",
-) {
-    override fun createThumbnail(mangaId: String, cover: String): String {
-        return "$cdnUrl/uploads/manga/cover/$mangaId/large_$cover"
-    }
+class MangaTales :
+    Gmanga(
+        "Manga Tales",
+        "https://www.mangatales.com",
+        "ar",
+        "https://media.mangatales.com",
+    ) {
+    override fun createThumbnail(
+        mangaId: String,
+        cover: String,
+    ): String = "$cdnUrl/uploads/manga/cover/$mangaId/large_$cover"
 
-    override fun getTypesFilter() = listOf(
-        TagFilterData("1", "عربية", Filter.TriState.STATE_INCLUDE),
-        TagFilterData("2", "إنجليزي", Filter.TriState.STATE_INCLUDE),
-    )
+    override fun getTypesFilter() =
+        listOf(
+            TagFilterData("1", "عربية", Filter.TriState.STATE_INCLUDE),
+            TagFilterData("2", "إنجليزي", Filter.TriState.STATE_INCLUDE),
+        )
 
     override fun chaptersRequest(manga: SManga): Request {
         val mangaId = manga.url.substringAfterLast("/")
@@ -38,9 +41,12 @@ class MangaTales : Gmanga(
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.asJsoup()
-            .select(".js-react-on-rails-component").html()
-            .parseAs<ReaderDto>()
+        val data =
+            response
+                .asJsoup()
+                .select(".js-react-on-rails-component")
+                .html()
+                .parseAs<ReaderDto>()
 
         return data.readerDataAction.readerData.release.pages
             .mapIndexed { idx, img ->

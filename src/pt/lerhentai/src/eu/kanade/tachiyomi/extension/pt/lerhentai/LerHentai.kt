@@ -6,18 +6,18 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class LerHentai : Madara(
-    "Ler Hentai",
-    "https://lerhentai.com",
-    "pt-BR",
-    dateFormat = SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("pt", "BR")),
-) {
+class LerHentai :
+    Madara(
+        "Ler Hentai",
+        "https://lerhentai.com",
+        "pt-BR",
+        dateFormat = SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("pt", "BR")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = false
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return super.mangaDetailsParse(document).apply {
+    override fun mangaDetailsParse(document: Document): SManga =
+        super.mangaDetailsParse(document).apply {
             description = description?.removePrefix("Sinopse\n\n")
         }
-    }
 }

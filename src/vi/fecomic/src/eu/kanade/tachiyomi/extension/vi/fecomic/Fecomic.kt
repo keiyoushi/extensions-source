@@ -8,12 +8,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Fecomic : Madara(
-    "Fecomic",
-    "https://mangasup.net",
-    "vi",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
-) {
+class Fecomic :
+    Madara(
+        "Fecomic",
+        "https://mangasup.net",
+        "vi",
+        dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = false
 
@@ -23,42 +24,41 @@ class Fecomic : Madara(
     override val mangaDetailsSelectorDescription = "div.desc div.more"
     override val mangaDetailsSelectorGenre = "div.genres a"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return super.popularMangaFromElement(element).apply {
+    override fun popularMangaFromElement(element: Element): SManga =
+        super.popularMangaFromElement(element).apply {
             // Skip 301 redirect
             url = url.asHttps()
             thumbnail_url = thumbnail_url.asHttpsOrNull()
         }
-    }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return super.searchMangaFromElement(element).apply {
+    override fun searchMangaFromElement(element: Element): SManga =
+        super.searchMangaFromElement(element).apply {
             // Skip 301 redirect
             url = url.asHttps()
             thumbnail_url = thumbnail_url.asHttpsOrNull()
         }
-    }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
+    override fun chapterFromElement(element: Element): SChapter =
+        super.chapterFromElement(element).apply {
             // Skip 301 redirect
             val httpUrl = url.toHttpUrl()
             // Removes trailing slash, keeps query parameters
             if (httpUrl.pathSegments.lastOrNull()?.isEmpty() == true) {
-                url = httpUrl.newBuilder().removePathSegment(httpUrl.pathSegments.size - 1).build().toString()
+                url =
+                    httpUrl
+                        .newBuilder()
+                        .removePathSegment(httpUrl.pathSegments.size - 1)
+                        .build()
+                        .toString()
             }
         }
-    }
 
-    private fun String.asHttps(): String {
-        return if (this.startsWith("http://")) {
+    private fun String.asHttps(): String =
+        if (this.startsWith("http://")) {
             "https://${this.removePrefix("http://")}"
         } else {
             this
         }
-    }
 
-    private fun String?.asHttpsOrNull(): String? {
-        return this?.asHttps()
-    }
+    private fun String?.asHttpsOrNull(): String? = this?.asHttps()
 }

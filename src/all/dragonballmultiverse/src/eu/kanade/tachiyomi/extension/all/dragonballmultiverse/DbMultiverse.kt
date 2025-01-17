@@ -12,8 +12,10 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-abstract class DbMultiverse(override val lang: String, private val internalLang: String) : ParsedHttpSource() {
-
+abstract class DbMultiverse(
+    override val lang: String,
+    private val internalLang: String,
+) : ParsedHttpSource() {
     override val name =
         if (internalLang.endsWith("_PA")) {
             "Dragon Ball Multiverse Parody"
@@ -34,25 +36,24 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
 
     override fun chapterListSelector(): String = ".cadrelect.chapter p a[href*=-]"
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return super.chapterListParse(response).reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("#balloonsimg")
+    override fun pageListParse(document: Document): List<Page> =
+        document
+            .select("#balloonsimg")
             .let { e ->
                 listOf(
                     if (e.hasAttr("src")) {
                         Page(1, "", e.attr("abs:src"))
                     } else {
-                        e.attr("style")
+                        e
+                            .attr("style")
                             .substringAfter("(")
                             .substringBefore(")")
                             .let { Page(1, "", baseUrl + it) }
                     },
                 )
             }
-    }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         // site hosts three titles that can be read by the app
@@ -61,24 +62,27 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
             .let { Observable.just(MangasPage(it, hasNextPage = false)) }
     }
 
-    private fun createManga(type: String) = SManga.create().apply {
-        title = when (type) {
-            "comic" -> "DB Multiverse"
-            "namekseijin" -> "Namekseijin Densetsu"
-            "strip" -> "Minicomic"
-            else -> name
+    private fun createManga(type: String) =
+        SManga.create().apply {
+            title =
+                when (type) {
+                    "comic" -> "DB Multiverse"
+                    "namekseijin" -> "Namekseijin Densetsu"
+                    "strip" -> "Minicomic"
+                    else -> name
+                }
+            status = SManga.ONGOING
+            url = "/$internalLang/chapters.html?comic=$type"
+            description =
+                "Dragon Ball Multiverse (DBM) is a free online comic, made by a whole team of fans. It's our personal sequel to DBZ."
+            thumbnail_url = "$baseUrl/imgs/read/$type.jpg"
         }
-        status = SManga.ONGOING
-        url = "/$internalLang/chapters.html?comic=$type"
-        description = "Dragon Ball Multiverse (DBM) is a free online comic, made by a whole team of fans. It's our personal sequel to DBZ."
-        thumbnail_url = "$baseUrl/imgs/read/$type.jpg"
-    }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return manga.apply {
-            initialized = true
-        }.let { Observable.just(it) }
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        manga
+            .apply {
+                initialized = true
+            }.let { Observable.just(it) }
 
     override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
 
@@ -92,13 +96,21 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
 
     override fun popularMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
     override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
     override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 

@@ -18,16 +18,18 @@ class DmzjUrlActivity : Activity() {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 0) {
-            val titleId = if (pathSegments.size > 1) {
-                pathSegments[1] // [m,www].dmzj.com/info/{titleId}
-            } else {
-                pathSegments[0] // manhua.dmzj.com/{titleId}
-            }
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "$PREFIX_ID_SEARCH$titleId")
-                putExtra("filter", packageName)
-            }
+            val titleId =
+                if (pathSegments.size > 1) {
+                    pathSegments[1] // [m,www].dmzj.com/info/{titleId}
+                } else {
+                    pathSegments[0] // manhua.dmzj.com/{titleId}
+                }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "$PREFIX_ID_SEARCH$titleId")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

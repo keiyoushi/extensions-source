@@ -14,45 +14,63 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-class CatharsisFantasy : MangaThemesia(
-    "Catharsis Fantasy",
-    "https://catharsisfantasy.com",
-    "es",
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .ignoreAllSSLErrors()
-        .build()
+class CatharsisFantasy :
+    MangaThemesia(
+        "Catharsis Fantasy",
+        "https://catharsisfantasy.com",
+        "es",
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(3)
+            .ignoreAllSSLErrors()
+            .build()
 
     private val iframeSelector: String = "#mangaIframe"
 
-    override fun pageListParse(document: Document): List<Page> {
-        return super.pageListParse(
+    override fun pageListParse(document: Document): List<Page> =
+        super.pageListParse(
             document.takeIf { it.select(iframeSelector).isEmpty() }
                 ?: fetchIframeDocumentPageList(document),
         )
-    }
 
     private fun fetchIframeDocumentPageList(document: Document): Document {
-        val pagesUrl = document.selectFirst(iframeSelector)!!
-            .absUrl("src")
+        val pagesUrl =
+            document
+                .selectFirst(iframeSelector)!!
+                .absUrl("src")
 
-        return client.newCall(GET(pagesUrl, headers))
-            .execute().asJsoup()
+        return client
+            .newCall(GET(pagesUrl, headers))
+            .execute()
+            .asJsoup()
     }
 
     private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
-        val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
-        object : X509TrustManager {
-            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-            override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-            override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-        }
+        val naiveTrustManager =
+            @SuppressLint("CustomX509TrustManager")
+            object : X509TrustManager {
+                override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
 
-        val insecureSocketFactory = SSLContext.getInstance("TLSv1.2").apply {
-            val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
-            init(null, trustAllCerts, SecureRandom())
-        }.socketFactory
+                override fun checkClientTrusted(
+                    certs: Array<X509Certificate>,
+                    authType: String,
+                ) = Unit
+
+                override fun checkServerTrusted(
+                    certs: Array<X509Certificate>,
+                    authType: String,
+                ) = Unit
+            }
+
+        val insecureSocketFactory =
+            SSLContext
+                .getInstance("TLSv1.2")
+                .apply {
+                    val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
+                    init(null, trustAllCerts, SecureRandom())
+                }.socketFactory
 
         sslSocketFactory(insecureSocketFactory, naiveTrustManager)
         hostnameVerifier { _, _ -> true }

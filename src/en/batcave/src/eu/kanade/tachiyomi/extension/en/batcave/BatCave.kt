@@ -25,7 +25,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class BatCave : HttpSource() {
-
     override val name = "BatCave"
     override val lang = "en"
     override val supportsLatest = true
@@ -34,57 +33,81 @@ class BatCave : HttpSource() {
     private val json: Json by injectLazy()
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.POPULAR)
+
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.LATEST)
+
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isNotBlank()) {
-            val url = "$baseUrl/search/".toHttpUrl().newBuilder().apply {
-                addPathSegment(query.trim())
-                if (page > 1) {
-                    addPathSegments("page/$page/")
-                }
-            }.build()
+            val url =
+                "$baseUrl/search/"
+                    .toHttpUrl()
+                    .newBuilder()
+                    .apply {
+                        addPathSegment(query.trim())
+                        if (page > 1) {
+                            addPathSegments("page/$page/")
+                        }
+                    }.build()
 
             return GET(url, headers)
         }
 
         var filtersApplied = false
 
-        val url = "$baseUrl/comix/".toHttpUrl().newBuilder().apply {
-            filters.get<YearFilter>()?.addFilterToUrl(this)
-                ?.also { filtersApplied = it }
-            filters.get<PublisherFilter>()?.addFilterToUrl(this)
-                ?.also { filtersApplied = filtersApplied || it }
-            filters.get<GenreFilter>()?.addFilterToUrl(this)
-                ?.also { filtersApplied = filtersApplied || it }
+        val url =
+            "$baseUrl/comix/"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    filters
+                        .get<YearFilter>()
+                        ?.addFilterToUrl(this)
+                        ?.also { filtersApplied = it }
+                    filters
+                        .get<PublisherFilter>()
+                        ?.addFilterToUrl(this)
+                        ?.also { filtersApplied = filtersApplied || it }
+                    filters
+                        .get<GenreFilter>()
+                        ?.addFilterToUrl(this)
+                        ?.also { filtersApplied = filtersApplied || it }
 
-            if (filtersApplied) {
-                setPathSegment(0, "ComicList")
-            }
-            if (page > 1) {
-                addPathSegments("page/$page/")
-            }
-        }.build().toString()
+                    if (filtersApplied) {
+                        setPathSegment(0, "ComicList")
+                    }
+                    if (page > 1) {
+                        addPathSegments("page/$page/")
+                    }
+                }.build()
+                .toString()
 
         val sort = filters.get<SortFilter>()!!
 
         return if (sort.getSort() == "") {
             GET(url, headers)
         } else {
-            val form = FormBody.Builder().apply {
-                add("dlenewssortby", sort.getSort())
-                add("dledirection", sort.getDirection())
-                if (filtersApplied) {
-                    add("set_new_sort", "dle_sort_xfilter")
-                    add("set_direction_sort", "dle_direction_xfilter")
-                } else {
-                    add("set_new_sort", "dle_sort_cat_1")
-                    add("set_direction_sort", "dle_direction_cat_1")
-                }
-            }.build()
+            val form =
+                FormBody
+                    .Builder()
+                    .apply {
+                        add("dlenewssortby", sort.getSort())
+                        add("dledirection", sort.getDirection())
+                        if (filtersApplied) {
+                            add("set_new_sort", "dle_sort_xfilter")
+                            add("set_direction_sort", "dle_direction_xfilter")
+                        } else {
+                            add("set_new_sort", "dle_sort_cat_1")
+                            add("set_direction_sort", "dle_direction_cat_1")
+                        }
+                    }.build()
 
             POST(url, headers, form)
         }
@@ -95,11 +118,12 @@ class BatCave : HttpSource() {
     private var filterParseFailed = false
 
     override fun getFilterList(): FilterList {
-        val filters: MutableList<Filter<*>> = mutableListOf(
-            Filter.Header("Doesn't work with text search"),
-            SortFilter(),
-            YearFilter(),
-        )
+        val filters: MutableList<Filter<*>> =
+            mutableListOf(
+                Filter.Header("Doesn't work with text search"),
+                SortFilter(),
+                YearFilter(),
+            )
         if (publishers.isNotEmpty()) {
             filters.add(
                 PublisherFilter(publishers),
@@ -133,20 +157,26 @@ class BatCave : HttpSource() {
             return
         }
 
-        val data = try {
-            script.data()
-                .substringAfter("=")
-                .trim()
-                .removeSuffix(";")
-                .parseAs<XFilters>()
-        } catch (e: SerializationException) {
-            Log.e(name, "filters", e)
-            filterParseFailed = true
-            return
-        }
+        val data =
+            try {
+                script
+                    .data()
+                    .substringAfter("=")
+                    .trim()
+                    .removeSuffix(";")
+                    .parseAs<XFilters>()
+            } catch (e: SerializationException) {
+                Log.e(name, "filters", e)
+                filterParseFailed = true
+                return
+            }
 
-        publishers = data.filterItems.publisher.values.map { it.value to it.id }
-        genres = data.filterItems.genre.values.map { it.value to it.id }
+        publishers =
+            data.filterItems.publisher.values
+                .map { it.value to it.id }
+        genres =
+            data.filterItems.genre.values
+                .map { it.value to it.id }
         filterParseFailed = false
 
         return
@@ -157,17 +187,22 @@ class BatCave : HttpSource() {
         if (response.request.url.pathSegments[0] != "search") {
             parseFilters(document)
         }
-        val entries = document.select("#dle-content > .readed").map { element ->
-            SManga.create().apply {
-                with(element.selectFirst(".readed__title > a")!!) {
-                    setUrlWithoutDomain(absUrl("href"))
-                    title = ownText()
+        val entries =
+            document.select("#dle-content > .readed").map { element ->
+                SManga.create().apply {
+                    with(element.selectFirst(".readed__title > a")!!) {
+                        setUrlWithoutDomain(absUrl("href"))
+                        title = ownText()
+                    }
+                    thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
                 }
-                thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
             }
-        }
-        val hasNextPage = document.selectFirst("div.pagination__pages")
-            ?.children()?.last()?.tagName() == "a"
+        val hasNextPage =
+            document
+                .selectFirst("div.pagination__pages")
+                ?.children()
+                ?.last()
+                ?.tagName() == "a"
 
         return MangasPage(entries, hasNextPage)
     }
@@ -180,32 +215,37 @@ class BatCave : HttpSource() {
             thumbnail_url = document.selectFirst("div.page__poster img")?.absUrl("src")
             description = document.selectFirst("div.page__text")?.wholeText()
             author = document.selectFirst(".page__list > li:has(> div:contains(Publisher))")?.ownText()
-            status = when (document.selectFirst(".page__list > li:has(> div:contains(release type))")?.ownText()?.trim()) {
-                "Ongoing" -> SManga.ONGOING
-                "Complete" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+            status =
+                when (document.selectFirst(".page__list > li:has(> div:contains(release type))")?.ownText()?.trim()) {
+                    "Ongoing" -> SManga.ONGOING
+                    "Complete" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val data = document.selectFirst(".page__chapters-list script:containsData(__DATA__)")!!.data()
-            .substringAfter("=")
-            .trim()
-            .removeSuffix(";")
-            .parseAs<Chapters>()
+        val data =
+            document
+                .selectFirst(".page__chapters-list script:containsData(__DATA__)")!!
+                .data()
+                .substringAfter("=")
+                .trim()
+                .removeSuffix(";")
+                .parseAs<Chapters>()
 
         return data.chapters.map { chap ->
             SChapter.create().apply {
                 url = "/reader/${data.comicId}/${chap.id}${data.xhash}"
                 name = chap.title
                 chapter_number = chap.number
-                date_upload = try {
-                    dateFormat.parse(chap.date)?.time ?: 0
-                } catch (_: ParseException) {
-                    0
-                }
+                date_upload =
+                    try {
+                        dateFormat.parse(chap.date)?.time ?: 0
+                    } catch (_: ParseException) {
+                        0
+                    }
             }
         }
     }
@@ -214,26 +254,23 @@ class BatCave : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val data = document.selectFirst("script:containsData(__DATA__)")!!.data()
-            .substringAfter("=")
-            .trim()
-            .removeSuffix(";")
-            .parseAs<Images>()
+        val data =
+            document
+                .selectFirst("script:containsData(__DATA__)")!!
+                .data()
+                .substringAfter("=")
+                .trim()
+                .removeSuffix(";")
+                .parseAs<Images>()
 
         return data.images.mapIndexed { idx, img ->
             Page(idx, imageUrl = baseUrl + img.trim())
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private inline fun <reified T> FilterList.get(): T? {
-        return filterIsInstance<T>().firstOrNull()
-    }
+    private inline fun <reified T> FilterList.get(): T? = filterIsInstance<T>().firstOrNull()
 
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 }

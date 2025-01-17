@@ -37,14 +37,14 @@ class ComposedImageInterceptor(
     baseUrl: String,
     val language: Language,
 ) : Interceptor {
-
     private val json: Json by injectLazy()
 
-    private val fontFamily: MutableMap<String, Pair<String, Typeface?>> = mutableMapOf(
-        "sub" to Pair<String, Typeface?>("$baseUrl/images/sub.ttf", null),
-        "sfx" to Pair<String, Typeface?>("$baseUrl/images/sfx.ttf", null),
-        "normal" to Pair<String, Typeface?>("$baseUrl/images/normal.ttf", null),
-    )
+    private val fontFamily: MutableMap<String, Pair<String, Typeface?>> =
+        mutableMapOf(
+            "sub" to Pair<String, Typeface?>("$baseUrl/images/sub.ttf", null),
+            "sfx" to Pair<String, Typeface?>("$baseUrl/images/sfx.ttf", null),
+            "normal" to Pair<String, Typeface?>("$baseUrl/images/normal.ttf", null),
+        )
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -54,12 +54,15 @@ class ComposedImageInterceptor(
             return chain.proceed(request)
         }
 
-        val dialogues = request.url.fragment?.parseAs<List<Dialog>>()
-            ?: throw IOException("Dialogues not found")
+        val dialogues =
+            request.url.fragment?.parseAs<List<Dialog>>()
+                ?: throw IOException("Dialogues not found")
 
-        val imageRequest = request.newBuilder()
-            .url(url)
-            .build()
+        val imageRequest =
+            request
+                .newBuilder()
+                .url(url)
+                .build()
 
         // Load the fonts before opening the connection to load the image,
         // so there aren't two open connections inside the interceptor.
@@ -71,8 +74,10 @@ class ComposedImageInterceptor(
             return response
         }
 
-        val bitmap = BitmapFactory.decodeStream(response.body.byteStream())!!
-            .copy(Bitmap.Config.ARGB_8888, true)
+        val bitmap =
+            BitmapFactory
+                .decodeStream(response.body.byteStream())!!
+                .copy(Bitmap.Config.ARGB_8888, true)
 
         val canvas = Canvas(bitmap)
 
@@ -85,20 +90,24 @@ class ComposedImageInterceptor(
 
         val output = ByteArrayOutputStream()
 
-        val ext = url.substringBefore("#")
-            .substringAfterLast(".")
-            .lowercase()
-        val format = when (ext) {
-            "png" -> Bitmap.CompressFormat.PNG
-            "jpeg", "jpg" -> Bitmap.CompressFormat.JPEG
-            else -> Bitmap.CompressFormat.WEBP
-        }
+        val ext =
+            url
+                .substringBefore("#")
+                .substringAfterLast(".")
+                .lowercase()
+        val format =
+            when (ext) {
+                "png" -> Bitmap.CompressFormat.PNG
+                "jpeg", "jpg" -> Bitmap.CompressFormat.JPEG
+                else -> Bitmap.CompressFormat.WEBP
+            }
 
         bitmap.compress(format, 100, output)
 
         val responseBody = output.toByteArray().toResponseBody(mediaType)
 
-        return response.newBuilder()
+        return response
+            .newBuilder()
             .body(responseBody)
             .build()
     }
@@ -148,15 +157,14 @@ class ComposedImageInterceptor(
      *   val typeface: TypeFace? = loadFont("filename.ttf")
      * }</pre>
      */
-    private fun loadFont(fontName: String): Typeface? {
-        return try {
+    private fun loadFont(fontName: String): Typeface? =
+        try {
             this::class.java.classLoader!!
                 .getResourceAsStream("assets/fonts/$fontName")
                 .toTypeface(fontName)
         } catch (e: Exception) {
             null
         }
-    }
 
     /**
      * Loads a remote font and converts it into a usable font object.
@@ -164,7 +172,10 @@ class ComposedImageInterceptor(
      * This function makes an HTTP request to download a font from a specified remote URL.
      * It then converts the response into a usable font object.
      */
-    private fun loadRemoteFont(fontUrl: String, chain: Interceptor.Chain): Typeface? {
+    private fun loadRemoteFont(
+        fontUrl: String,
+        chain: Interceptor.Chain,
+    ): Typeface? {
         return try {
             val request = GET(fontUrl, chain.request().headers)
             val response = chain.proceed(request)
@@ -192,7 +203,11 @@ class ComposedImageInterceptor(
     /**
      * Adjust the text to the center of the dialog box when feasible.
      */
-    private fun getYAxis(textPaint: TextPaint, dialog: Dialog, dialogBox: StaticLayout): Float {
+    private fun getYAxis(
+        textPaint: TextPaint,
+        dialog: Dialog,
+        dialogBox: StaticLayout,
+    ): Float {
         val fontHeight = textPaint.fontMetrics.let { it.bottom - it.top }
 
         val dialogBoxLineCount = dialog.height / fontHeight
@@ -206,7 +221,11 @@ class ComposedImageInterceptor(
         }
     }
 
-    private fun createDialogBox(dialog: Dialog, textPaint: TextPaint, bitmap: Bitmap): StaticLayout {
+    private fun createDialogBox(
+        dialog: Dialog,
+        textPaint: TextPaint,
+        bitmap: Bitmap,
+    ): StaticLayout {
         var dialogBox = createBoxLayout(dialog, textPaint)
 
         /**
@@ -233,20 +252,28 @@ class ComposedImageInterceptor(
         return dialogBox
     }
 
-    private fun createBoxLayout(dialog: Dialog, textPaint: TextPaint): StaticLayout {
+    private fun createBoxLayout(
+        dialog: Dialog,
+        textPaint: TextPaint,
+    ): StaticLayout {
         val text = dialog.getTextBy(language)
 
-        return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, dialog.width.toInt()).apply {
-            setAlignment(Layout.Alignment.ALIGN_CENTER)
-            setIncludePad(false)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
-            }
-        }.build()
+        return StaticLayout.Builder
+            .obtain(text, 0, text.length, textPaint, dialog.width.toInt())
+            .apply {
+                setAlignment(Layout.Alignment.ALIGN_CENTER)
+                setIncludePad(false)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
+                }
+            }.build()
     }
 
     // Invert color in black dialog box.
-    private fun TextPaint.adjustTextColor(dialog: Dialog, bitmap: Bitmap) {
+    private fun TextPaint.adjustTextColor(
+        dialog: Dialog,
+        bitmap: Bitmap,
+    ) {
         val pixelColor = bitmap.getPixel(dialog.centerX.toInt(), dialog.centerY.toInt())
         val inverseColor = (Color.WHITE - pixelColor) or Color.BLACK
 
@@ -257,11 +284,14 @@ class ComposedImageInterceptor(
         color = inverseColor
     }
 
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
-    private fun Canvas.draw(layout: StaticLayout, dialog: Dialog, x: Float, y: Float) {
+    private fun Canvas.draw(
+        layout: StaticLayout,
+        dialog: Dialog,
+        x: Float,
+        y: Float,
+    ) {
         save()
         translate(x, y)
         rotate(dialog.angle)
@@ -283,7 +313,10 @@ class ComposedImageInterceptor(
      * different the two colors are.
      *
      */
-    private fun colorDistance(colorA: Int, colorB: Int): Double {
+    private fun colorDistance(
+        colorA: Int,
+        colorB: Int,
+    ): Double {
         val a = Color.valueOf(colorA)
         val b = Color.valueOf(colorB)
 

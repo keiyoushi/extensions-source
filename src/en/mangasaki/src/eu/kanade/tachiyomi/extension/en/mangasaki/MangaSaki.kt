@@ -21,7 +21,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class MangaSaki : ParsedHttpSource() {
-
     override val name = "MangaSaki"
 
     override val baseUrl = "https://www.mangasaki.org"
@@ -31,9 +30,7 @@ class MangaSaki : ParsedHttpSource() {
     override val supportsLatest = true
 
     // popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/directory/hot?page=${page - 1}", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/directory/hot?page=${page - 1}", headers)
 
     override fun popularMangaSelector() = ".directory_list tbody tr"
 
@@ -50,9 +47,7 @@ class MangaSaki : ParsedHttpSource() {
     override fun popularMangaNextPageSelector() = "li.pager-next a"
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/directory/new?page=${page - 1}", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/directory/new?page=${page - 1}", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -63,8 +58,12 @@ class MangaSaki : ParsedHttpSource() {
     // search
     private var searchMode: Boolean = false
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotEmpty()) {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request =
+        if (query.isNotEmpty()) {
             searchMode = true
             GET("$baseUrl/search/node/$query?page=${page - 1}", headers)
         } else {
@@ -80,15 +79,13 @@ class MangaSaki : ParsedHttpSource() {
             }
             GET(url, headers)
         }
-    }
 
-    override fun searchMangaSelector(): String {
-        return if (!searchMode) {
+    override fun searchMangaSelector(): String =
+        if (!searchMode) {
             "div.view-content div.views-row"
         } else {
             "ol.search-results li.search-result"
         }
-    }
 
     override fun searchMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -117,11 +114,12 @@ class MangaSaki : ParsedHttpSource() {
         manga.thumbnail_url = document.select("div.field-name-field-image2 div.field-item img").attr("src")
 
         val statusText = document.select("div.field-name-field-status div.field-item").text()
-        manga.status = when {
-            statusText.contains("Ongoing", true) -> SManga.ONGOING
-            statusText.contains("Complete", true) -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+        manga.status =
+            when {
+                statusText.contains("Ongoing", true) -> SManga.ONGOING
+                statusText.contains("Complete", true) -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
 
         return manga
     }
@@ -129,9 +127,10 @@ class MangaSaki : ParsedHttpSource() {
     // chapters
     override fun chapterListRequest(manga: SManga) = chapterListRequest(manga.url, 1)
 
-    private fun chapterListRequest(url: String, page: Int): Request {
-        return GET("$baseUrl$url?page=${page - 1}", headers)
-    }
+    private fun chapterListRequest(
+        url: String,
+        page: Int,
+    ): Request = GET("$baseUrl$url?page=${page - 1}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         var document = response.asJsoup()
@@ -158,22 +157,27 @@ class MangaSaki : ParsedHttpSource() {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.select("a").attr("href"))
         chapter.name = element.select("a").text()
-        chapter.date_upload = try {
-            element.select("td").last()?.text()?.let {
-                dateFormat.parse(it)?.time ?: 0L
-            } ?: 0L
-        } catch (_: ParseException) {
-            0L
-        }
+        chapter.date_upload =
+            try {
+                element.select("td").last()?.text()?.let {
+                    dateFormat.parse(it)?.time ?: 0L
+                } ?: 0L
+            } catch (_: ParseException) {
+                0L
+            }
 
         return chapter
     }
 
     // pages
     override fun pageListParse(document: Document): List<Page> {
-        val jsonString = document.select("script:containsData(showmanga)").first()!!.data()
-            .substringAfter("(Drupal.settings, ")
-            .substringBeforeLast(");")
+        val jsonString =
+            document
+                .select("script:containsData(showmanga)")
+                .first()!!
+                .data()
+                .substringAfter("(Drupal.settings, ")
+                .substringBeforeLast(");")
 
         return parseJSON(jsonString).mapIndexed { i, it ->
             Page(i, imageUrl = it)
@@ -182,68 +186,70 @@ class MangaSaki : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        GenreFilter(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            Filter.Header("NOTE: Ignored if using text search!"),
+            Filter.Separator(),
+            GenreFilter(),
+        )
 
-    private class GenreFilter : UriPartFilter(
-        "Category",
-        arrayOf(
-            Pair("Action", "action"),
-            Pair("Adult", "adult"),
-            Pair("Adventure", "adventure"),
-            Pair("Comedy", "comedy"),
-            Pair("Crime", "crime"),
-            Pair("Drama", "drama"),
-            Pair("Dungeons", "dungeons"),
-            Pair("Ecchi", "ecchi"),
-            Pair("Fantasy", "fantasy"),
-            Pair("GenderBender", "genderbender"),
-            Pair("Gender Bender", "gender-bender"),
-            Pair("Harem", "harem"),
-            Pair("Hentai", "hentai"),
-            Pair("Historical", "historical"),
-            Pair("Horror", "horror"),
-            Pair("Isekai", "isekai"),
-            Pair("Josei", "josei"),
-            Pair("Lolicon", "lolicon"),
-            Pair("Magical Girls", "magical-girls"),
-            Pair("MartialArts", "martialarts"),
-            Pair("Martial Arts", "martial-arts"),
-            Pair("Mature", "mature"),
-            Pair("Mecha", "mecha"),
-            Pair("Medical", "medical"),
-            Pair("N/A", "na"),
-            Pair("Philosophical", "philosophical"),
-            Pair("Psychological", "psychological"),
-            Pair("SchoolLife", "schoollife"),
-            Pair("School Life", "school-life"),
-            Pair("Sci-fi", "sci-fi"),
-            Pair("Sci-fi Shounen", "sci-fi-shounen"),
-            Pair("Seinen", "seinen"),
-            Pair("Shotacon", "shotacon"),
-            Pair("Shoujo", "shoujo"),
-            Pair("ShoujoAi", "shoujoai"),
-            Pair("Shoujo Ai", "shoujo-ai"),
-            Pair("Shounen", "shounen"),
-            Pair("ShounenAi", "shounenai"),
-            Pair("Shounen-Ai", "shounen-ai"),
-            Pair("SliceofLife", "slicelife"),
-            Pair("Slice of Life", "slice-life"),
-            Pair("Smut", "smut"),
-            Pair("Sports", "sports"),
-            Pair("Superhero", "superhero"),
-            Pair("Supernatural", "supernatural"),
-            Pair("System", "system"),
-            Pair("Thriller", "thriller"),
-            Pair("Tragedy", "tragedy"),
-            Pair("Webtoons", "webtoons"),
-            Pair("Wuxia", "wuxia"),
-            Pair("Yuri", "yuri"),
-        ),
-    )
+    private class GenreFilter :
+        UriPartFilter(
+            "Category",
+            arrayOf(
+                Pair("Action", "action"),
+                Pair("Adult", "adult"),
+                Pair("Adventure", "adventure"),
+                Pair("Comedy", "comedy"),
+                Pair("Crime", "crime"),
+                Pair("Drama", "drama"),
+                Pair("Dungeons", "dungeons"),
+                Pair("Ecchi", "ecchi"),
+                Pair("Fantasy", "fantasy"),
+                Pair("GenderBender", "genderbender"),
+                Pair("Gender Bender", "gender-bender"),
+                Pair("Harem", "harem"),
+                Pair("Hentai", "hentai"),
+                Pair("Historical", "historical"),
+                Pair("Horror", "horror"),
+                Pair("Isekai", "isekai"),
+                Pair("Josei", "josei"),
+                Pair("Lolicon", "lolicon"),
+                Pair("Magical Girls", "magical-girls"),
+                Pair("MartialArts", "martialarts"),
+                Pair("Martial Arts", "martial-arts"),
+                Pair("Mature", "mature"),
+                Pair("Mecha", "mecha"),
+                Pair("Medical", "medical"),
+                Pair("N/A", "na"),
+                Pair("Philosophical", "philosophical"),
+                Pair("Psychological", "psychological"),
+                Pair("SchoolLife", "schoollife"),
+                Pair("School Life", "school-life"),
+                Pair("Sci-fi", "sci-fi"),
+                Pair("Sci-fi Shounen", "sci-fi-shounen"),
+                Pair("Seinen", "seinen"),
+                Pair("Shotacon", "shotacon"),
+                Pair("Shoujo", "shoujo"),
+                Pair("ShoujoAi", "shoujoai"),
+                Pair("Shoujo Ai", "shoujo-ai"),
+                Pair("Shounen", "shounen"),
+                Pair("ShounenAi", "shounenai"),
+                Pair("Shounen-Ai", "shounen-ai"),
+                Pair("SliceofLife", "slicelife"),
+                Pair("Slice of Life", "slice-life"),
+                Pair("Smut", "smut"),
+                Pair("Sports", "sports"),
+                Pair("Superhero", "superhero"),
+                Pair("Supernatural", "supernatural"),
+                Pair("System", "system"),
+                Pair("Thriller", "thriller"),
+                Pair("Tragedy", "tragedy"),
+                Pair("Webtoons", "webtoons"),
+                Pair("Wuxia", "wuxia"),
+                Pair("Yuri", "yuri"),
+            ),
+        )
 
     private val json: Json by injectLazy()
 
@@ -252,14 +258,20 @@ class MangaSaki : ParsedHttpSource() {
         return jsonData.showmanga.paths.filter { it.contains("mangasaki") }
     }
 
-    private open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(
+        displayName: String,
+        private val vals: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
     @Serializable
-    class JSONData(val showmanga: ShowMangaData)
+    class JSONData(
+        val showmanga: ShowMangaData,
+    )
 
     @Serializable
-    class ShowMangaData(val paths: List<String>)
+    class ShowMangaData(
+        val paths: List<String>,
+    )
 }

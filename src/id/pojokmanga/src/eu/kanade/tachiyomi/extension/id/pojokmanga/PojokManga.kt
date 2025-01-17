@@ -13,16 +13,21 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class PojokManga : Madara("Pojok Manga", "https://pojokmanga.info", "id", SimpleDateFormat("MMM dd, yyyy", Locale.US)) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(10, 2, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(10, 2, TimeUnit.SECONDS)
+            .build()
 
     override val useNewChapterEndpoint = true
 
     override val mangaSubString = "komik"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         var url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder()
         url.addQueryParameter("s", query)
         url.addQueryParameter("post_type", "wp-manga")
@@ -65,7 +70,9 @@ class PojokManga : Madara("Pojok Manga", "https://pojokmanga.info", "id", Simple
                     filter.state
                         .filter { it.state }
                         .let { list ->
-                            if (list.isNotEmpty()) { list.forEach { genre -> url.addQueryParameter("genre[]", genre.id) } }
+                            if (list.isNotEmpty()) {
+                                list.forEach { genre -> url.addQueryParameter("genre[]", genre.id) }
+                            }
                         }
                 }
                 is ProjectFilter -> {
@@ -83,23 +90,25 @@ class PojokManga : Madara("Pojok Manga", "https://pojokmanga.info", "id", Simple
 
     override val mangaDetailsSelectorTag = "#toNotBeUsed"
 
-    protected class ProjectFilter : UriPartFilter(
-        "Filter Project",
-        arrayOf(
-            Pair("Show all manga", ""),
-            Pair("Show only project manga", "project-filter-on"),
-        ),
-    )
+    protected class ProjectFilter :
+        UriPartFilter(
+            "Filter Project",
+            arrayOf(
+                Pair("Show all manga", ""),
+                Pair("Show only project manga", "project-filter-on"),
+            ),
+        )
 
     override fun getFilterList(): FilterList {
         val filters = super.getFilterList().toMutableList()
 
-        filters += listOf(
-            Filter.Separator(),
-            Filter.Header("NOTE: cant be used with other filter!"),
-            Filter.Header("$name Project List page"),
-            ProjectFilter(),
-        )
+        filters +=
+            listOf(
+                Filter.Separator(),
+                Filter.Header("NOTE: cant be used with other filter!"),
+                Filter.Header("$name Project List page"),
+                ProjectFilter(),
+            )
 
         return FilterList(filters)
     }

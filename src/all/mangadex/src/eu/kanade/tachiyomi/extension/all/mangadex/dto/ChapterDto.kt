@@ -10,7 +10,9 @@ typealias ChapterDto = ResponseDto<ChapterDataDto>
 
 @Serializable
 @SerialName(MDConstants.chapter)
-data class ChapterDataDto(override val attributes: ChapterAttributesDto? = null) : EntityDto()
+data class ChapterDataDto(
+    override val attributes: ChapterAttributesDto? = null,
+) : EntityDto()
 
 @Serializable
 data class ChapterAttributesDto(
@@ -21,7 +23,6 @@ data class ChapterAttributesDto(
     val publishAt: String,
     val externalUrl: String?,
 ) : AttributesDto() {
-
     /**
      * Returns true if the chapter is from an external website and have no pages.
      */

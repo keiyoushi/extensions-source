@@ -10,10 +10,11 @@ class SnowmtlFactory : SourceFactory {
     override fun createSources() = languageList.map(::Snowmtl)
 }
 
-private val languageList = listOf(
-    Language("en"),
-    Language("es"),
-    Language("id"),
-    Language("it"),
-    Language("pt-BR", "pt"),
-)
+private val languageList =
+    listOf(
+        Language("en"),
+        Language("es"),
+        Language("id"),
+        Language("it"),
+        Language("pt-BR", "pt"),
+    )

@@ -19,7 +19,6 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
 class ManhwaWeb : HttpSource() {
-
     override val name = "ManhwaWeb"
 
     override val baseUrl = "https://manhwaweb.com"
@@ -32,22 +31,27 @@ class ManhwaWeb : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(2)
+            .build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
+    override fun headersBuilder(): Headers.Builder =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
+            .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
 
     override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/manhwa/nuevos", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadPopularDto>(response.body.string())
-        val mangas = (result.data.weekly + result.data.total)
-            .distinctBy { it.slug }
-            .sortedByDescending { it.views }
-            .map { it.toSManga() }
+        val mangas =
+            (result.data.weekly + result.data.total)
+                .distinctBy { it.slug }
+                .sortedByDescending { it.views }
+                .map { it.toSManga() }
 
         return MangasPage(mangas, false)
     }
@@ -56,17 +60,25 @@ class ManhwaWeb : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadLatestDto>(response.body.string())
-        val mangas = (result.data.esp + result.data.raw18 + result.data.esp18)
-            .distinctBy { it.slug }
-            .sortedByDescending { it.latestChapterDate }
-            .map { it.toSManga() }
+        val mangas =
+            (result.data.esp + result.data.raw18 + result.data.esp18)
+                .distinctBy { it.slug }
+                .sortedByDescending { it.latestChapterDate }
+                .map { it.toSManga() }
 
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/manhwa/library".toHttpUrl().newBuilder()
-            .addQueryParameter("buscar", query)
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$apiUrl/manhwa/library"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("buscar", query)
 
         filters.forEach { filter ->
             when (filter) {
@@ -75,9 +87,10 @@ class ManhwaWeb : HttpSource() {
                 is StatusFilter -> url.addQueryParameter("estado", filter.toUriPart())
                 is EroticFilter -> url.addQueryParameter("erotico", filter.toUriPart())
                 is GenreFilter -> {
-                    val genres = filter.state
-                        .filter { it.state }
-                        .joinToString("a") { it.id.toString() }
+                    val genres =
+                        filter.state
+                            .filter { it.state }
+                            .joinToString("a") { it.id.toString() }
                     url.addQueryParameter("generes", genres)
                 }
 
@@ -98,8 +111,8 @@ class ManhwaWeb : HttpSource() {
         return GET(url.build(), headers)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
+    override fun getFilterList(): FilterList =
+        FilterList(
             TypeFilter(),
             DemographyFilter(),
             StatusFilter(),
@@ -109,7 +122,6 @@ class ManhwaWeb : HttpSource() {
             Filter.Separator(),
             SortByFilter("Ordenar por", getSortProperties()),
         )
-    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadSearchDto>(response.body.string())
@@ -124,8 +136,7 @@ class ManhwaWeb : HttpSource() {
         return GET("$apiUrl/manhwa/see/$slug", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        json.decodeFromString<ComicDetailsDto>(response.body.string()).toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = json.decodeFromString<ComicDetailsDto>(response.body.string()).toSManga()
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
@@ -138,13 +149,14 @@ class ManhwaWeb : HttpSource() {
         return chapters.sortedByDescending { it.chapter_number }
     }
 
-    private fun ChapterDto.toSChapter() = SChapter.create().apply {
-        name = "Capítulo ${number.toString().removeSuffix(".0")}"
-        chapter_number = number
-        date_upload = createdAt ?: 0
-        url = espUrl ?: rawUrl!!
-        scanlator = if (espUrl != null) "Esp" else "Raw"
-    }
+    private fun ChapterDto.toSChapter() =
+        SChapter.create().apply {
+            name = "Capítulo ${number.toString().removeSuffix(".0")}"
+            chapter_number = number
+            date_upload = createdAt ?: 0
+            url = espUrl ?: rawUrl!!
+            scanlator = if (espUrl != null) "Esp" else "Raw"
+        }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val slug = chapter.url.removeSuffix("/").substringAfterLast("/")
@@ -153,7 +165,8 @@ class ManhwaWeb : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val result = json.decodeFromString<PayloadPageDto>(response.body.string())
-        return result.data.images.filter { it.isNotBlank() }
+        return result.data.images
+            .filter { it.isNotBlank() }
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
     }
 

@@ -23,63 +23,87 @@ class Xinmeitulu : ParsedHttpSource() {
     override val name = "Xinmeitulu"
     override val supportsLatest = false
 
-    override val client = network.cloudflareClient.newBuilder().addInterceptor(::contentTypeIntercept).build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::contentTypeIntercept)
+            .build()
 
     // Latest
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+
     override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+
     override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Popular
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/page/$page")
+
     override fun popularMangaNextPageSelector() = ".next"
+
     override fun popularMangaSelector() = ".container > .row > div:has(figure)"
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("figure > a").attr("abs:href"))
-        title = element.select("figcaption").text()
-        thumbnail_url = element.select("img").attr("abs:data-original-")
-        genre = element.select("a.tag").joinToString(", ") { it.text() }
-    }
+
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.select("figure > a").attr("abs:href"))
+            title = element.select("figcaption").text()
+            thumbnail_url = element.select("img").attr("abs:data-original-")
+            genre = element.select("a.tag").joinToString(", ") { it.text() }
+        }
 
     // Search
 
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/page/$page?s=$query", headers)
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith("SLUG:")) {
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
+    override fun searchMangaSelector() = popularMangaSelector()
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = GET("$baseUrl/page/$page?s=$query", headers)
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        if (query.startsWith("SLUG:")) {
             val slug = query.removePrefix("SLUG:")
-            client.newCall(GET("$baseUrl/photo/$slug", headers)).asObservableSuccess()
+            client
+                .newCall(GET("$baseUrl/photo/$slug", headers))
+                .asObservableSuccess()
                 .map { response -> MangasPage(listOf(mangaDetailsParse(response.asJsoup())), false) }
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
     // Details
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        setUrlWithoutDomain(document.selectFirst("link[rel=canonical]")!!.attr("abs:href"))
-        title = document.select(".container > h1").text()
-        description = document.select(".container > *:not(div)").text()
-        status = SManga.COMPLETED
-        thumbnail_url = document.selectFirst("figure img")!!.attr("abs:data-original")
-    }
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            setUrlWithoutDomain(document.selectFirst("link[rel=canonical]")!!.attr("abs:href"))
+            title = document.select(".container > h1").text()
+            description = document.select(".container > *:not(div)").text()
+            status = SManga.COMPLETED
+            thumbnail_url = document.selectFirst("figure img")!!.attr("abs:data-original")
+        }
 
     // Chapters
 
     override fun chapterListSelector() = "html"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("link[rel=canonical]")!!.attr("abs:href"))
-        name = element.select(".container > h1").text()
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.selectFirst("link[rel=canonical]")!!.attr("abs:href"))
+            name = element.select(".container > h1").text()
+        }
 
     override fun pageListParse(document: Document) =
         document.select(".container > div > figure img").mapIndexed { index, element ->

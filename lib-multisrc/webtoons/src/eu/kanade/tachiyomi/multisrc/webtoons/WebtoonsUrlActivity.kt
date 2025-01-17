@@ -17,17 +17,17 @@ import kotlin.system.exitProcess
  * the usual search screen from working.
  */
 class WebtoonsUrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         val title_no = intent?.data?.getQueryParameter("title_no")
         if (pathSegments != null && pathSegments.size >= 3 && title_no != null) {
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Webtoons.URL_SEARCH_PREFIX}${intent?.data?.toString()}")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${Webtoons.URL_SEARCH_PREFIX}${intent?.data?.toString()}")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

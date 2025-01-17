@@ -17,26 +17,26 @@ import kotlin.system.exitProcess
  * the usual search screen from working.
  */
 class MangadexUrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
             val titleId = pathSegments[1]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                with(pathSegments[0]) {
-                    when {
-                        equals("chapter") -> putExtra("query", MDConstants.prefixChSearch + titleId)
-                        equals("group") -> putExtra("query", MDConstants.prefixGrpSearch + titleId)
-                        equals("user") -> putExtra("query", MDConstants.prefixUsrSearch + titleId)
-                        equals("author") -> putExtra("query", MDConstants.prefixAuthSearch + titleId)
-                        equals("list") -> putExtra("query", MDConstants.prefixListSearch + titleId)
-                        else -> putExtra("query", MDConstants.prefixIdSearch + titleId)
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    with(pathSegments[0]) {
+                        when {
+                            equals("chapter") -> putExtra("query", MDConstants.prefixChSearch + titleId)
+                            equals("group") -> putExtra("query", MDConstants.prefixGrpSearch + titleId)
+                            equals("user") -> putExtra("query", MDConstants.prefixUsrSearch + titleId)
+                            equals("author") -> putExtra("query", MDConstants.prefixAuthSearch + titleId)
+                            equals("list") -> putExtra("query", MDConstants.prefixListSearch + titleId)
+                            else -> putExtra("query", MDConstants.prefixIdSearch + titleId)
+                        }
                     }
+                    putExtra("filter", packageName)
                 }
-                putExtra("filter", packageName)
-            }
 
             try {
                 startActivity(mainIntent)

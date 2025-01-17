@@ -18,7 +18,6 @@ class TranslationInterceptor(
     private val source: Language,
     private val translator: TranslatorEngine,
 ) : Interceptor {
-
     private val json: Json by injectLazy()
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -29,14 +28,17 @@ class TranslationInterceptor(
             return chain.proceed(request)
         }
 
-        val dialogues = request.url.fragment?.parseAs<List<Dialog>>()
-            ?: return chain.proceed(request)
+        val dialogues =
+            request.url.fragment?.parseAs<List<Dialog>>()
+                ?: return chain.proceed(request)
 
         val translated = translationOptimized(dialogues)
 
-        val newRequest = request.newBuilder()
-            .url("${url.substringBeforeLast("#")}#${json.encodeToString(translated)}")
-            .build()
+        val newRequest =
+            request
+                .newBuilder()
+                .url("${url.substringBeforeLast("#")}#${json.encodeToString(translated)}")
+                .build()
 
         return chain.proceed(newRequest)
     }
@@ -51,9 +53,10 @@ class TranslationInterceptor(
     private fun translationOptimized(dialogues: List<Dialog>): List<Dialog> {
         val mapping = buildMap(dialogues)
 
-        val tokens = tokenizeAssociatedDialog(mapping).flatMap { token ->
-            translator.translate(source.origin, source.target, token).split(delimiter)
-        }
+        val tokens =
+            tokenizeAssociatedDialog(mapping).flatMap { token ->
+                translator.translate(source.origin, source.target, token).split(delimiter)
+            }
 
         return replaceDialoguesWithTranslations(tokens, mapping)
     }
@@ -67,9 +70,10 @@ class TranslationInterceptor(
         val text = list.last()
 
         mapping[key]?.second?.dialog?.copy(
-            textByLanguage = mapOf(
-                "text" to text,
-            ),
+            textByLanguage =
+                mapOf(
+                    "text" to text,
+                ),
         )
     }
 
@@ -90,16 +94,19 @@ class TranslationInterceptor(
      * @param dialogues List of Dialog objects to be mapped.
      * @return Map where the key is the dialog identifier and the value is a pair containing the identifier and the associated dialog.
      */
-    private fun buildMap(dialogues: List<Dialog>): Map<String, Pair<String, AssociatedDialog>> {
-        return dialogues.map {
-            val payload = json.encodeToString<List<String>>(listOf(it.hashCode().toString(), it.text))
-                .encode()
-            it.hashCode().toString() to AssociatedDialog(it, payload)
-        }.associateBy { it.first }
-    }
+    private fun buildMap(dialogues: List<Dialog>): Map<String, Pair<String, AssociatedDialog>> =
+        dialogues
+            .map {
+                val payload =
+                    json
+                        .encodeToString<List<String>>(listOf(it.hashCode().toString(), it.text))
+                        .encode()
+                it.hashCode().toString() to AssociatedDialog(it, payload)
+            }.associateBy { it.first }
 
     // Prevents the translator's response from removing quotation marks from some texts
     private fun String.encode() = "\"${this}\""
+
     private fun String.decode() = this.substringAfter("\"").substringBeforeLast("\"")
 
     private val delimiter: String = "|"
@@ -113,20 +120,21 @@ class TranslationInterceptor(
     private fun tokenizeText(texts: List<String>): List<String> {
         val tokenized = mutableListOf<String>()
 
-        val remainingText = buildString(translator.capacity) {
-            texts.forEach { text ->
-                if (length + text.length + delimiter.length > capacity()) {
-                    tokenized += toString()
-                    clear()
-                }
+        val remainingText =
+            buildString(translator.capacity) {
+                texts.forEach { text ->
+                    if (length + text.length + delimiter.length > capacity()) {
+                        tokenized += toString()
+                        clear()
+                    }
 
-                if (isNotEmpty()) {
-                    append(delimiter)
-                }
+                    if (isNotEmpty()) {
+                        append(delimiter)
+                    }
 
-                append(text)
+                    append(text)
+                }
             }
-        }
 
         if (remainingText.isNotEmpty()) {
             tokenized += remainingText
@@ -134,9 +142,7 @@ class TranslationInterceptor(
         return tokenized
     }
 
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 }
 
 private class AssociatedDialog(

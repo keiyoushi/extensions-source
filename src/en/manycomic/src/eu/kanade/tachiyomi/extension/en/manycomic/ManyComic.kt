@@ -17,15 +17,21 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
     override fun popularMangaNextPageSelector() = ".wp-pagenavi .next"
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {
-        val form = FormBody.Builder()
-            .add("action", "ajax_chap")
-            .add("post_id", mangaId)
-            .build()
+        val form =
+            FormBody
+                .Builder()
+                .add("action", "ajax_chap")
+                .add("post_id", mangaId)
+                .build()
 
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
 
-    override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
         val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
 
@@ -50,61 +56,67 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
         return GET(url.build(), headers)
     }
 
-    override fun parseGenres(document: Document): List<Genre> {
-        return document.selectFirst(".manga-genres-class-name div.genres")
+    override fun parseGenres(document: Document): List<Genre> =
+        document
+            .selectFirst(".manga-genres-class-name div.genres")
             ?.select("li>a")
             .orEmpty()
             .map { a ->
                 Genre(
                     name = a.ownText(),
-                    id = a.attr("abs:href")
-                        .removeSuffix("/")
-                        .substringAfterLast("/"),
+                    id =
+                        a
+                            .attr("abs:href")
+                            .removeSuffix("/")
+                            .substringAfterLast("/"),
                 )
             }
-    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres_() }
 
-        val filters: MutableList<Filter<out Any>> = mutableListOf(
-            OrderByFilter(
-                title = intl["order_by_filter_title"],
-                options = orderByFilterOptions.toList(),
-                state = 0,
-            ),
-        )
-
-        if (genresList.isNotEmpty()) {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header("Genre filter is ignored when searching by title"),
-                GenreFilter(
-                    title = intl["genre_filter_title"],
-                    options = genresList,
+        val filters: MutableList<Filter<out Any>> =
+            mutableListOf(
+                OrderByFilter(
+                    title = intl["order_by_filter_title"],
+                    options = orderByFilterOptions.toList(),
                     state = 0,
                 ),
             )
+
+        if (genresList.isNotEmpty()) {
+            filters +=
+                listOf(
+                    Filter.Separator(),
+                    Filter.Header("Genre filter is ignored when searching by title"),
+                    GenreFilter(
+                        title = intl["genre_filter_title"],
+                        options = genresList,
+                        state = 0,
+                    ),
+                )
         } else if (fetchGenres) {
-            filters += listOf(
-                Filter.Separator(),
-                Filter.Header(intl["genre_missing_warning"]),
-            )
+            filters +=
+                listOf(
+                    Filter.Separator(),
+                    Filter.Header(intl["genre_missing_warning"]),
+                )
         }
 
         return FilterList(filters)
     }
 
-    override val orderByFilterOptions: Map<String, String> = mapOf(
-        intl["order_by_filter_latest"] to "latest",
-        intl["order_by_filter_az"] to "alphabet",
-        intl["order_by_filter_rating"] to "rating",
-        intl["order_by_filter_trending"] to "trending",
-        intl["order_by_filter_views"] to "views",
-        intl["order_by_filter_new"] to "new-manga",
-    )
+    override val orderByFilterOptions: Map<String, String> =
+        mapOf(
+            intl["order_by_filter_latest"] to "latest",
+            intl["order_by_filter_az"] to "alphabet",
+            intl["order_by_filter_rating"] to "rating",
+            intl["order_by_filter_trending"] to "trending",
+            intl["order_by_filter_views"] to "views",
+            intl["order_by_filter_new"] to "new-manga",
+        )
 
     private var genresList: List<Genre> = emptyList()
     private var fetchGenresAttempts: Int = 0
@@ -113,7 +125,9 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
         if (fetchGenres && fetchGenresAttempts < 3 && genresList.isEmpty()) {
             try {
                 genresList = listOf(Genre("<All>", "")) +
-                    client.newCall(genresRequest()).execute()
+                    client
+                        .newCall(genresRequest())
+                        .execute()
                         .use { parseGenres(it.asJsoup()) }
             } catch (_: Exception) {
             } finally {
@@ -122,6 +136,9 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
         }
     }
 
-    private class GenreFilter(title: String, options: List<Genre>, state: Int = 0) :
-        UriPartFilter(title, options.map { Pair(it.name, it.id) }.toTypedArray(), state)
+    private class GenreFilter(
+        title: String,
+        options: List<Genre>,
+        state: Int = 0,
+    ) : UriPartFilter(title, options.map { Pair(it.name, it.id) }.toTypedArray(), state)
 }

@@ -8,16 +8,19 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import java.io.IOException
 
-class ElarcPage : MangaThemesia(
-    "Elarc Toon",
-    "https://elarctoons.biz",
-    "en",
-) {
+class ElarcPage :
+    MangaThemesia(
+        "Elarc Toon",
+        "https://elarctoons.biz",
+        "en",
+    ) {
     override val id = 5482125641807211052
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::dynamicUrlInterceptor)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::dynamicUrlInterceptor)
+            .build()
 
     private var dynamicUrlUpdated: Long = 0
     private val dynamicUrlValidity: Long = 10 * 60 // 10 minutes
@@ -39,13 +42,17 @@ class ElarcPage : MangaThemesia(
             if (request.url.pathSegments[0] != mangaUrlDirectory.substring(1)) {
                 // Need to rewrite URL
 
-                val newUrl = request.url.newBuilder()
-                    .setPathSegment(0, mangaUrlDirectory.substring(1))
-                    .build()
+                val newUrl =
+                    request.url
+                        .newBuilder()
+                        .setPathSegment(0, mangaUrlDirectory.substring(1))
+                        .build()
 
-                val newRequest = request.newBuilder()
-                    .url(newUrl)
-                    .build()
+                val newRequest =
+                    request
+                        .newBuilder()
+                        .url(newUrl)
+                        .build()
 
                 return chain.proceed(newRequest)
             }
@@ -59,14 +66,21 @@ class ElarcPage : MangaThemesia(
             return response
         }
 
-        val document = Jsoup.parse(
-            response.peekBody(Long.MAX_VALUE).string(),
-            request.url.toString(),
-        )
+        val document =
+            Jsoup.parse(
+                response.peekBody(Long.MAX_VALUE).string(),
+                request.url.toString(),
+            )
 
-        document.selectFirst(".serieslist > ul > li a.series")
+        document
+            .selectFirst(".serieslist > ul > li a.series")
             ?.let {
-                val mangaUrlDirectory = it.attr("abs:href").toHttpUrl().pathSegments.first()
+                val mangaUrlDirectory =
+                    it
+                        .attr("abs:href")
+                        .toHttpUrl()
+                        .pathSegments
+                        .first()
                 setMangaUrlDirectory("/$mangaUrlDirectory")
                 dynamicUrlUpdated = timeNow
             }

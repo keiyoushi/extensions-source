@@ -12,7 +12,11 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
 
-internal fun getPreferenceList(context: Context, preferences: SharedPreferences, isUrlUpdated: Boolean) = arrayOf(
+internal fun getPreferenceList(
+    context: Context,
+    preferences: SharedPreferences,
+    isUrlUpdated: Boolean,
+) = arrayOf(
     ListPreference(context).apply {
         key = MAINSITE_RATELIMIT_PREF
         title = "在限制时间内（下个设置项）允许的请求数量。"
@@ -22,7 +26,6 @@ internal fun getPreferenceList(context: Context, preferences: SharedPreferences,
 
         setDefaultValue(MAINSITE_RATELIMIT_PREF_DEFAULT)
     },
-
     ListPreference(context).apply {
         key = MAINSITE_RATELIMIT_PERIOD
         title = "限制持续时间。单位秒"
@@ -32,7 +35,6 @@ internal fun getPreferenceList(context: Context, preferences: SharedPreferences,
 
         setDefaultValue(MAINSITE_RATELIMIT_PERIOD_DEFAULT)
     },
-
     ListPreference(context).apply {
         val urlList = preferences.urlList
         val fullList = SITE_ENTRIES_ARRAY + urlList
@@ -47,7 +49,6 @@ internal fun getPreferenceList(context: Context, preferences: SharedPreferences,
 
         setDefaultValue("0")
     },
-
     EditTextPreference(context).apply {
         key = BLOCK_PREF
         title = "屏蔽词列表"
@@ -77,20 +78,22 @@ internal const val MAINSITE_RATELIMIT_PERIOD_DEFAULT = 3.toString()
 
 private const val USE_MIRROR_URL_PREF = "useMirrorWebsitePreference"
 
-private val SITE_ENTRIES_ARRAY_DESCRIPTION get() = arrayOf(
-    "主站",
-    "海外分流",
-    "东南亚线路1",
-    "东南亚线路2",
-)
+private val SITE_ENTRIES_ARRAY_DESCRIPTION get() =
+    arrayOf(
+        "主站",
+        "海外分流",
+        "东南亚线路1",
+        "东南亚线路2",
+    )
 
 // Please also update AndroidManifest
-private val SITE_ENTRIES_ARRAY get() = arrayOf(
-    "18comic.vip",
-    "18comic.org",
-    "jmcomic.me",
-    "jmcomic1.me",
-)
+private val SITE_ENTRIES_ARRAY get() =
+    arrayOf(
+        "18comic.vip",
+        "18comic.org",
+        "jmcomic.me",
+        "jmcomic1.me",
+    )
 
 private const val DEFAULT_LIST = "18comic-cn.vip,18comic-c.xyz,18comic-c.art"
 private const val DEFAULT_LIST_PREF = "defaultBaseUrlList"
@@ -102,7 +105,8 @@ private val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_L
 fun getSharedPreferences(id: Long): SharedPreferences {
     val preferences: SharedPreferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     if (preferences.getString(DEFAULT_LIST_PREF, "")!! == DEFAULT_LIST) return preferences
-    preferences.edit()
+    preferences
+        .edit()
         .remove("overrideBaseUrl")
         .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
         .setUrlList(DEFAULT_LIST, preferences.mirrorIndex)
@@ -110,14 +114,19 @@ fun getSharedPreferences(id: Long): SharedPreferences {
     return preferences
 }
 
-fun SharedPreferences.Editor.setUrlList(urlList: String, oldIndex: Int): SharedPreferences.Editor {
+fun SharedPreferences.Editor.setUrlList(
+    urlList: String,
+    oldIndex: Int,
+): SharedPreferences.Editor {
     putString(URL_LIST_PREF, urlList)
     val maxIndex = SITE_ENTRIES_ARRAY.size + urlList.count { it == ',' }
     if (oldIndex in 0..maxIndex) return this
     return putString(USE_MIRROR_URL_PREF, maxIndex.toString())
 }
 
-class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interceptor {
+class UpdateUrlInterceptor(
+    private val preferences: SharedPreferences,
+) : Interceptor {
     private val baseUrl = "https://" + preferences.baseUrl
     var isUpdated = false
 
@@ -125,15 +134,16 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
         val request = chain.request()
         if (!request.url.toString().startsWith(baseUrl)) return chain.proceed(request)
 
-        val failedResponse = try {
-            val response = chain.proceed(request)
-            if (response.isSuccessful) return response
-            response.close()
-            Result.success(response)
-        } catch (e: Throwable) {
-            if (chain.call().isCanceled() || e.message?.contains("Cloudflare") == true) throw e
-            Result.failure(e)
-        }
+        val failedResponse =
+            try {
+                val response = chain.proceed(request)
+                if (response.isSuccessful) return response
+                response.close()
+                Result.success(response)
+            } catch (e: Throwable) {
+                if (chain.call().isCanceled() || e.message?.contains("Cloudflare") == true) throw e
+                Result.failure(e)
+            }
 
         if (isUpdated || updateUrl(chain)) {
             throw IOException("镜像网址已自动更新，请在插件设置中选择合适的镜像网址并重启应用（如果反复提示，可能是服务器故障）")
@@ -144,18 +154,20 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
     @Synchronized
     private fun updateUrl(chain: Interceptor.Chain): Boolean {
         if (isUpdated) return true
-        val response = try {
-            chain.proceed(GET("https://stevenyomi.github.io/source-domains/jmcomic.txt"))
-        } catch (_: Throwable) {
-            return false
-        }
+        val response =
+            try {
+                chain.proceed(GET("https://stevenyomi.github.io/source-domains/jmcomic.txt"))
+            } catch (_: Throwable) {
+                return false
+            }
         if (!response.isSuccessful) {
             response.close()
             return false
         }
         val newList = response.body.string()
         if (newList != preferences.getString(URL_LIST_PREF, "")!!) {
-            preferences.edit()
+            preferences
+                .edit()
                 .setUrlList(newList, preferences.mirrorIndex)
                 .apply()
         }

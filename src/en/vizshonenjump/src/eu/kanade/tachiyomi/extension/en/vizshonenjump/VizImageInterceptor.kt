@@ -22,13 +22,17 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 
 class VizImageInterceptor : Interceptor {
-
     private val json: Json by injectLazy()
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
 
-        if (!chain.request().url.toString().contains(IMAGE_URL_ENDPOINT)) {
+        if (!chain
+                .request()
+                .url
+                .toString()
+                .contains(IMAGE_URL_ENDPOINT)
+        ) {
             return response
         }
 
@@ -42,23 +46,28 @@ class VizImageInterceptor : Interceptor {
 
         val imageBody = imageResponse.decodeImage()
 
-        return imageResponse.newBuilder()
+        return imageResponse
+            .newBuilder()
             .body(imageBody)
             .build()
     }
 
-    private fun imageUrlParse(response: Response): String {
-        return response.use { json.decodeFromString<VizPageUrlDto>(it.body.string()) }
-            .data?.values?.firstOrNull() ?: throw IOException(FAILED_TO_FETCH_PAGE_URL)
-    }
+    private fun imageUrlParse(response: Response): String =
+        response
+            .use { json.decodeFromString<VizPageUrlDto>(it.body.string()) }
+            .data
+            ?.values
+            ?.firstOrNull() ?: throw IOException(FAILED_TO_FETCH_PAGE_URL)
 
     private fun imageRequest(url: String): Request {
-        val headers = Headers.Builder()
-            .add("Accept", "*/*")
-            .add("Origin", "https://www.viz.com")
-            .add("Referer", "https://www.viz.com/")
-            .add("User-Agent", Viz.USER_AGENT)
-            .build()
+        val headers =
+            Headers
+                .Builder()
+                .add("Accept", "*/*")
+                .add("Origin", "https://www.viz.com")
+                .add("Referer", "https://www.viz.com/")
+                .add("User-Agent", Viz.USER_AGENT)
+                .build()
 
         return GET(url, headers)
     }
@@ -66,15 +75,17 @@ class VizImageInterceptor : Interceptor {
     private fun Response.decodeImage(): ResponseBody {
         // See: https://stackoverflow.com/a/5924132
         // See: https://github.com/tachiyomiorg/tachiyomi-extensions/issues/2678#issuecomment-645857603
-        val byteOutputStream = ByteArrayOutputStream()
-            .apply { body.byteStream().copyTo(this) }
+        val byteOutputStream =
+            ByteArrayOutputStream()
+                .apply { body.byteStream().copyTo(this) }
         val contentType = headers["Content-Type"]?.toMediaType()
 
         val byteInputStreamForImage = ByteArrayInputStream(byteOutputStream.toByteArray())
         val byteInputStreamForMetadata = ByteArrayInputStream(byteOutputStream.toByteArray())
 
-        val imageData = byteInputStreamForMetadata.getImageData().getOrNull()
-            ?: return byteOutputStream.toByteArray().toResponseBody(contentType)
+        val imageData =
+            byteInputStreamForMetadata.getImageData().getOrNull()
+                ?: return byteOutputStream.toByteArray().toResponseBody(contentType)
 
         val input = BitmapFactory.decodeStream(byteInputStreamForImage)
         val width = input.width
@@ -163,27 +174,36 @@ class VizImageInterceptor : Interceptor {
         drawBitmap(from, srcRect, dstRect, null)
     }
 
-    private fun ByteArrayInputStream.getImageData(): Result<ImageData?> = runCatching {
-        val metadata = ImageMetadataReader.readMetadata(this)
+    private fun ByteArrayInputStream.getImageData(): Result<ImageData?> =
+        runCatching {
+            val metadata = ImageMetadataReader.readMetadata(this)
 
-        val keyDir = metadata.directories
-            .firstOrNull { it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_UNIQUE_ID) }
-        val metaUniqueId = keyDir?.getString(ExifSubIFDDirectory.TAG_IMAGE_UNIQUE_ID)
-            ?: return@runCatching null
+            val keyDir =
+                metadata.directories
+                    .firstOrNull { it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_UNIQUE_ID) }
+            val metaUniqueId =
+                keyDir?.getString(ExifSubIFDDirectory.TAG_IMAGE_UNIQUE_ID)
+                    ?: return@runCatching null
 
-        val sizeDir = metadata.directories.firstOrNull {
-            it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_WIDTH) &&
-                it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_HEIGHT)
+            val sizeDir =
+                metadata.directories.firstOrNull {
+                    it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_WIDTH) &&
+                        it.containsTag(ExifSubIFDDirectory.TAG_IMAGE_HEIGHT)
+                }
+            val metaWidth = sizeDir?.getInt(ExifSubIFDDirectory.TAG_IMAGE_WIDTH) ?: COMMON_WIDTH
+            val metaHeight = sizeDir?.getInt(ExifSubIFDDirectory.TAG_IMAGE_HEIGHT) ?: COMMON_HEIGHT
+
+            ImageData(metaWidth, metaHeight, metaUniqueId)
         }
-        val metaWidth = sizeDir?.getInt(ExifSubIFDDirectory.TAG_IMAGE_WIDTH) ?: COMMON_WIDTH
-        val metaHeight = sizeDir?.getInt(ExifSubIFDDirectory.TAG_IMAGE_HEIGHT) ?: COMMON_HEIGHT
 
-        ImageData(metaWidth, metaHeight, metaUniqueId)
-    }
-
-    private data class ImageData(val width: Int, val height: Int, val uniqueId: String) {
+    private data class ImageData(
+        val width: Int,
+        val height: Int,
+        val uniqueId: String,
+    ) {
         val key: List<Int> by lazy {
-            uniqueId.split(":")
+            uniqueId
+                .split(":")
                 .map { it.toInt(16) }
         }
     }

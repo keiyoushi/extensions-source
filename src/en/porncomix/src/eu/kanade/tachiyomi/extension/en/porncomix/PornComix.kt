@@ -17,13 +17,21 @@ class PornComix : Madara("PornComix", " https://porncomix.online", "en") {
     override val useNewChapterEndpoint = true
     override val chapterUrlSuffix = ""
     override val fetchGenres = false
+
     override fun getFilterList() = FilterList()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val form = FormBody.Builder().apply {
-            add("action", "wp-manga-search-manga")
-            add("title", query)
-        }.build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val form =
+            FormBody
+                .Builder()
+                .apply {
+                    add("action", "wp-manga-search-manga")
+                    add("title", query)
+                }.build()
 
         return POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, form)
     }
@@ -31,15 +39,18 @@ class PornComix : Madara("PornComix", " https://porncomix.online", "en") {
     override fun searchMangaParse(response: Response): MangasPage {
         val data = json.parseToJsonElement(response.body.string())
 
-        val entries = data.jsonObject["data"]!!.jsonArray.filter {
-            it.jsonObject["type"]!!.jsonPrimitive.content == "manga"
-        }.map {
-            val obj = it.jsonObject
-            SManga.create().apply {
-                title = obj["title"]!!.jsonPrimitive.content
-                setUrlWithoutDomain(obj["url"]!!.jsonPrimitive.content)
-            }
-        }
+        val entries =
+            data.jsonObject["data"]!!
+                .jsonArray
+                .filter {
+                    it.jsonObject["type"]!!.jsonPrimitive.content == "manga"
+                }.map {
+                    val obj = it.jsonObject
+                    SManga.create().apply {
+                        title = obj["title"]!!.jsonPrimitive.content
+                        setUrlWithoutDomain(obj["url"]!!.jsonPrimitive.content)
+                    }
+                }
 
         return MangasPage(entries, false)
     }

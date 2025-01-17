@@ -24,7 +24,6 @@ import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
 
 class ComicFans : HttpSource() {
-
     override val name = "Comic Fans"
 
     override val baseUrl = "https://comicfans.io"
@@ -35,19 +34,24 @@ class ComicFans : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(2)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
-    private fun apiHeadersBuilder() = headersBuilder().apply {
-        add("Accept", "*/*")
-        add("Host", apiUrl.toHttpUrl().host)
-        add("Origin", baseUrl)
-        add("site-domain", "www.${baseUrl.toHttpUrl().host}")
-    }
+    private fun apiHeadersBuilder() =
+        headersBuilder().apply {
+            add("Accept", "*/*")
+            add("Host", apiUrl.toHttpUrl().host)
+            add("Origin", baseUrl)
+            add("site-domain", "www.${baseUrl.toHttpUrl().host}")
+        }
 
     private val apiHeaders by lazy { apiHeadersBuilder().build() }
 
@@ -56,22 +60,27 @@ class ComicFans : HttpSource() {
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
-        val body = buildJsonObject {
-            put("conditionJson", "{\"title\":\"You may also like\",\"maxSize\":15}")
-            put("pageNumber", page)
-            put("pageSize", 30)
-        }.let(json::encodeToString).toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+        val body =
+            buildJsonObject {
+                put("conditionJson", "{\"title\":\"You may also like\",\"maxSize\":15}")
+                put("pageNumber", page)
+                put("pageSize", 30)
+            }.let(json::encodeToString).toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
 
-        val popularHeaders = apiHeadersBuilder().apply {
-            set("Accept", "application/json")
-        }.build()
+        val popularHeaders =
+            apiHeadersBuilder()
+                .apply {
+                    set("Accept", "application/json")
+                }.build()
 
         return POST("$apiUrl/books/custom/MostPopularLocal#$page", popularHeaders, body)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<ListDataDto<MangaDto>>().data
-        val hasNextPage = response.request.url.fragment!!.toInt() < data.totalPages
+        val hasNextPage =
+            response.request.url.fragment!!
+                .toInt() < data.totalPages
 
         return MangasPage(data.list.map { it.toSManga(cdnUrl) }, hasNextPage)
     }
@@ -83,123 +92,137 @@ class ComicFans : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val mangaList = document.select(
-            "div:has(>.block-title-bar > .title:contains(New Updates))" +
-                "> .book-container > .book",
-        ).map { element ->
-            SManga.create().apply {
-                thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-                with(element.selectFirst(".book-name > a")!!) {
-                    title = text()
-                    setUrlWithoutDomain(attr("abs:href"))
+        val mangaList =
+            document
+                .select(
+                    "div:has(>.block-title-bar > .title:contains(New Updates))" +
+                        "> .book-container > .book",
+                ).map { element ->
+                    SManga.create().apply {
+                        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+                        with(element.selectFirst(".book-name > a")!!) {
+                            title = text()
+                            setUrlWithoutDomain(attr("abs:href"))
+                        }
+                    }
                 }
-            }
-        }
 
         return MangasPage(mangaList, false)
     }
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/books".toHttpUrl().newBuilder().apply {
-            addQueryParameter("pageNumber", page.toString())
-            addQueryParameter("pageSize", "20")
-            fragment(page.toString())
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$apiUrl/books"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("pageNumber", page.toString())
+                    addQueryParameter("pageSize", "20")
+                    fragment(page.toString())
 
-            if (query.isNotBlank()) {
-                addPathSegment("search")
-                addQueryParameter("keyWord", query)
-            } else {
-                filters.getUriPart<GenreFilter>()?.let {
-                    addQueryParameter("genre", it)
-                }
-                filters.getUriPart<LastUpdateFilter>()?.let {
-                    addQueryParameter("withinDay", it)
-                }
-                filters.getUriPart<StatusFilter>()?.let {
-                    addQueryParameter("status", it)
-                }
-            }
-        }.build()
+                    if (query.isNotBlank()) {
+                        addPathSegment("search")
+                        addQueryParameter("keyWord", query)
+                    } else {
+                        filters.getUriPart<GenreFilter>()?.let {
+                            addQueryParameter("genre", it)
+                        }
+                        filters.getUriPart<LastUpdateFilter>()?.let {
+                            addQueryParameter("withinDay", it)
+                        }
+                        filters.getUriPart<StatusFilter>()?.let {
+                            addQueryParameter("status", it)
+                        }
+                    }
+                }.build()
 
         return GET(url, apiHeaders)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // =============================== Filters ==============================
 
-    override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("Text search ignores filters"),
-        Filter.Separator(),
-        GenreFilter(),
-        LastUpdateFilter(),
-        StatusFilter(),
-    )
+    override fun getFilterList(): FilterList =
+        FilterList(
+            Filter.Header("Text search ignores filters"),
+            Filter.Separator(),
+            GenreFilter(),
+            LastUpdateFilter(),
+            StatusFilter(),
+        )
 
     // =========================== Manga Details ============================
 
     override fun getMangaUrl(manga: SManga): String = baseUrl + manga.url
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val bookId = manga.url.substringAfter("/comic/")
-            .substringBefore("-")
+        val bookId =
+            manga.url
+                .substringAfter("/comic/")
+                .substringBefore("-")
 
         return GET("$apiUrl/books/$bookId", apiHeaders)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<DataDto<MangaDto>>().data.toSManga(cdnUrl)
-    }
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<DataDto<MangaDto>>().data.toSManga(cdnUrl)
 
     // ============================== Chapters ==============================
 
     override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     override fun chapterListRequest(manga: SManga): Request {
-        val bookId = manga.url.substringAfter("/comic/")
-            .substringBefore("-")
+        val bookId =
+            manga.url
+                .substringAfter("/comic/")
+                .substringBefore("-")
 
         return GET("$apiUrl/chapters/page?sortDirection=ASC&bookId=$bookId&pageNumber=1&pageSize=9999", apiHeaders)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<ListDataDto<ChapterDto>>().data.list.mapIndexed { index, chapterDto ->
-            chapterDto.toSChapter(index + 1)
-        }.reversed()
-    }
+    override fun chapterListParse(response: Response): List<SChapter> =
+        response
+            .parseAs<ListDataDto<ChapterDto>>()
+            .data.list
+            .mapIndexed { index, chapterDto ->
+                chapterDto.toSChapter(index + 1)
+            }.reversed()
 
     // =============================== Pages ================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfter("/episode/")
-            .substringBefore("-")
+        val chapterId =
+            chapter.url
+                .substringAfter("/episode/")
+                .substringBefore("-")
 
         return GET("$apiUrl/chapters/$chapterId", apiHeaders)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<DataDto<PageDataDto>>().data.comicImageList.map {
+    override fun pageListParse(response: Response): List<Page> =
+        response.parseAs<DataDto<PageDataDto>>().data.comicImageList.map {
             Page(it.sortNum, imageUrl = "$cdnUrl/${it.imageUrl}")
         }
-    }
 
     override fun imageRequest(page: Page): Request {
-        val imgHeaders = headersBuilder().apply {
-            add("Accept", "image/avif,image/webp,*/*")
-            add("Host", page.imageUrl!!.toHttpUrl().host)
-        }.build()
+        val imgHeaders =
+            headersBuilder()
+                .apply {
+                    add("Accept", "image/avif,image/webp,*/*")
+                    add("Host", page.imageUrl!!.toHttpUrl().host)
+                }.build()
 
         return GET(page.imageUrl!!, imgHeaders)
     }
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
 
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())
 }

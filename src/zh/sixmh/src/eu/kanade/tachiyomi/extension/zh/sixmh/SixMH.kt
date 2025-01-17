@@ -26,11 +26,16 @@ class SixMH : MCCMS("六漫画", "https://www.liumanhua.com") {
     }
 
     override fun getMangaUrl(manga: SManga) = "https://m.liumanhua.com" + manga.url
+
     override fun getChapterUrl(chapter: SChapter) = "https://m.liumanhua.com" + chapter.url
 
     override fun pageListParse(response: Response): List<Page> {
         val encodedData = dataRegex.find(response.body.string())?.groupValues?.get(1) ?: ""
-        val cid = response.request.url.pathSegments.last().removeSuffix(".html").toIntOrNull() ?: 0
+        val cid =
+            response.request.url.pathSegments
+                .last()
+                .removeSuffix(".html")
+                .toIntOrNull() ?: 0
         val decodedData = decodeData(encodedData, cid)
         val images = json.decodeFromString<List<Image>>(decodedData)
         return images.mapIndexed { index, image -> Page(index, imageUrl = image.url) }

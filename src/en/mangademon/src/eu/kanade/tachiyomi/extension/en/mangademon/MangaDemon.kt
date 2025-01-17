@@ -21,7 +21,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class MangaDemon : ParsedHttpSource() {
-
     override val versionId = 2
 
     override val lang = "en"
@@ -29,57 +28,70 @@ class MangaDemon : ParsedHttpSource() {
     override val name = "Manga Demon"
     override val baseUrl = "https://demonicscans.org"
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(1)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/advanced.php?list=$page&status=all&orderby=VIEWS%20DESC", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/advanced.php?list=$page&status=all&orderby=VIEWS%20DESC", headers)
 
     override fun popularMangaNextPageSelector() = "div.pagination > ul > a > li:contains(Next)"
 
     override fun popularMangaSelector() = "div#advanced-content > div.advanced-element"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.encodedAttr("href"))
-        title = element.selectFirst("h1")!!.ownText()
-        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-    }
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.selectFirst("a")!!.encodedAttr("href"))
+            title = element.selectFirst("h1")!!.ownText()
+            thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+        }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/lastupdates.php?list=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/lastupdates.php?list=$page", headers)
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun latestUpdatesSelector() = "div#updates-container > div.updates-element"
 
-    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        with(element.selectFirst("div.updates-element-info")!!) {
-            setUrlWithoutDomain(selectFirst("a")!!.encodedAttr("href"))
-            title = selectFirst("a")!!.ownText()
+    override fun latestUpdatesFromElement(element: Element) =
+        SManga.create().apply {
+            with(element.selectFirst("div.updates-element-info")!!) {
+                setUrlWithoutDomain(selectFirst("a")!!.encodedAttr("href"))
+                title = selectFirst("a")!!.ownText()
+            }
+            thumbnail_url = element.selectFirst("div.thumb img")!!.attr("abs:src")
         }
-        thumbnail_url = element.selectFirst("div.thumb img")!!.attr("abs:src")
-    }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.isNotEmpty()) {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> =
+        if (query.isNotEmpty()) {
             super.fetchSearchManga(page, query, filters)
         } else {
-            client.newCall(filterSearchRequest(page, filters))
+            client
+                .newCall(filterSearchRequest(page, filters))
                 .asObservableSuccess()
                 .map(::filterSearchParse)
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search.php".toHttpUrl().newBuilder()
-            .addQueryParameter("manga", query)
-            .build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/search.php"
+                .toHttpUrl()
+                .newBuilder()
+                .addQueryParameter("manga", query)
+                .build()
         return GET(url, headers)
     }
 
@@ -87,32 +99,40 @@ class MangaDemon : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = null
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.encodedAttr("href"))
-        title = element.selectFirst("div.seach-right > div")!!.ownText()
-        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-    }
+    override fun searchMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.encodedAttr("href"))
+            title = element.selectFirst("div.seach-right > div")!!.ownText()
+            thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+        }
 
-    private fun filterSearchRequest(page: Int, filters: FilterList): Request {
-        val url = "$baseUrl/advanced.php".toHttpUrl().newBuilder().apply {
-            addQueryParameter("list", page.toString())
-            filters.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> {
-                        filter.checked.forEach { genre ->
-                            addQueryParameter("genre[]", genre)
+    private fun filterSearchRequest(
+        page: Int,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/advanced.php"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    addQueryParameter("list", page.toString())
+                    filters.forEach { filter ->
+                        when (filter) {
+                            is GenreFilter -> {
+                                filter.checked.forEach { genre ->
+                                    addQueryParameter("genre[]", genre)
+                                }
+                            }
+                            is StatusFilter -> {
+                                addQueryParameter("status", filter.selected)
+                            }
+                            is SortFilter -> {
+                                addQueryParameter("orderby", filter.selected)
+                            }
+                            else -> {}
                         }
                     }
-                    is StatusFilter -> {
-                        addQueryParameter("status", filter.selected)
-                    }
-                    is SortFilter -> {
-                        addQueryParameter("orderby", filter.selected)
-                    }
-                    else -> {}
-                }
-            }
-        }.build()
+                }.build()
 
         return GET(url, headers)
     }
@@ -121,45 +141,46 @@ class MangaDemon : ParsedHttpSource() {
 
     override fun getFilterList() = getFilters()
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        with(document.selectFirst("div#manga-info-container")!!) {
-            title = selectFirst("h1.big-fat-titles")!!.ownText()
-            thumbnail_url = selectFirst("div#manga-page img")!!.attr("abs:src")
-            genre = select("div.genres-list > li").joinToString { it.text() }
-            description = selectFirst("div#manga-info-rightColumn > div > div.white-font")!!.text()
-            author = select("div#manga-info-stats > div:has(> li:eq(0):contains(Author)) > li:eq(1)").text()
-            status = parseStatus(select("div#manga-info-stats > div:has(> li:eq(0):contains(Status)) > li:eq(1)").text())
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            with(document.selectFirst("div#manga-info-container")!!) {
+                title = selectFirst("h1.big-fat-titles")!!.ownText()
+                thumbnail_url = selectFirst("div#manga-page img")!!.attr("abs:src")
+                genre = select("div.genres-list > li").joinToString { it.text() }
+                description = selectFirst("div#manga-info-rightColumn > div > div.white-font")!!.text()
+                author = select("div#manga-info-stats > div:has(> li:eq(0):contains(Author)) > li:eq(1)").text()
+                status = parseStatus(select("div#manga-info-stats > div:has(> li:eq(0):contains(Status)) > li:eq(1)").text())
+            }
         }
-    }
 
-    private fun parseStatus(status: String?) = when {
-        status == null -> SManga.UNKNOWN
-        status.contains("Ongoing", ignoreCase = true) -> SManga.ONGOING
-        status.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
+    private fun parseStatus(status: String?) =
+        when {
+            status == null -> SManga.UNKNOWN
+            status.contains("Ongoing", ignoreCase = true) -> SManga.ONGOING
+            status.contains("Completed", ignoreCase = true) -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
 
     override fun chapterListSelector() = "div#chapters-list a.chplinks"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        setUrlWithoutDomain(element.encodedAttr("href"))
-        name = element.ownText()
-        date_upload = parseDate(element.selectFirst("span")?.ownText())
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            setUrlWithoutDomain(element.encodedAttr("href"))
+            name = element.ownText()
+            date_upload = parseDate(element.selectFirst("span")?.ownText())
+        }
 
-    private fun parseDate(dateStr: String?): Long {
-        return try {
+    private fun parseDate(dateStr: String?): Long =
+        try {
             dateStr?.let { DATE_FORMATTER.parse(it)?.time } ?: 0
         } catch (_: ParseException) {
             0L
         }
-    }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div > img.imgholder").mapIndexed { i, element ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("div > img.imgholder").mapIndexed { i, element ->
             Page(i, "", element.attr("abs:src"))
         }
-    }
 
     private fun Element.encodedAttr(attribute: String) = URLEncoder.encode(attr(attribute), "UTF-8")
 

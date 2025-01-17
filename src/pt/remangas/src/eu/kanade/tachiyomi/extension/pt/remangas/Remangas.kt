@@ -24,20 +24,20 @@ class Remangas :
         SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
     ),
     ConfigurableSource {
-
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .rateLimit(4)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).rateLimit(4)
+            .build()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)

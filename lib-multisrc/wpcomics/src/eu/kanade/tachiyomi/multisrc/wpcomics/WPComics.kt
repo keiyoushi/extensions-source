@@ -28,48 +28,45 @@ abstract class WPComics(
     protected val dateFormat: SimpleDateFormat = SimpleDateFormat("HH:mm - dd/MM/yyyy Z", Locale.US),
     protected val gmtOffset: String? = "+0500",
 ) : ParsedHttpSource() {
-
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
-    open val intl = Intl(
-        language = lang,
-        baseLanguage = "en",
-        availableLanguages = setOf("en", "vi", "ja"),
-        classLoader = this::class.java.classLoader!!,
-    )
+    open val intl =
+        Intl(
+            language = lang,
+            baseLanguage = "en",
+            availableLanguages = setOf("en", "vi", "ja"),
+            classLoader = this::class.java.classLoader!!,
+        )
 
     protected fun List<String>.doesInclude(thisWord: String): Boolean = this.any { it.contains(thisWord, ignoreCase = true) }
 
     // Popular
     open val popularPath = "hot"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/$popularPath" + if (page > 1) "?page=$page" else "", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/$popularPath" + if (page > 1) "?page=$page" else "", headers)
 
     override fun popularMangaSelector() = "div.items div.item"
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             element.select("h3 a").let {
                 title = it.text()
                 setUrlWithoutDomain(it.attr("abs:href"))
             }
             thumbnail_url = imageOrNull(element.select("div.image:first-of-type img").first()!!)
         }
-    }
 
     override fun popularMangaNextPageSelector() = "a.next-page, a[rel=next]"
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl + if (page > 1) "?page=$page" else "", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -81,7 +78,11 @@ abstract class WPComics(
     protected open val searchPath = "tim-truyen"
     protected open val queryParam = "keyword"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
 
         filters.forEach { filter ->
@@ -103,21 +104,20 @@ abstract class WPComics(
 
     override fun searchMangaSelector() = "div.items div.item"
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun searchMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             element.select("h3 a").let {
                 title = it.text()
                 setUrlWithoutDomain(it.attr("abs:href"))
             }
             thumbnail_url = imageOrNull(element.select("div.image a img").first()!!)
         }
-    }
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
             document.select("article#item-detail").let { info ->
                 author = info.select("li.author p.col-xs-8").text()
                 status = info.select("li.status p.col-xs-8").text().toStatus()
@@ -128,7 +128,6 @@ abstract class WPComics(
                 thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
             }
         }
-    }
 
     open fun String?.toStatus(): Int {
         val ongoingWords = listOf("Ongoing", "Updating", "Đang tiến hành", "Đang cập nhật", "連載中")
@@ -144,15 +143,14 @@ abstract class WPComics(
     // Chapters
     override fun chapterListSelector() = "div.list-chapter li.row:not(.heading)"
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return SChapter.create().apply {
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
             element.select("a").let {
                 name = it.text()
                 setUrlWithoutDomain(it.attr("href"))
             }
             date_upload = element.select("div.col-xs-4").text().toDate()
         }
-    }
 
     protected val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
 
@@ -220,18 +218,25 @@ abstract class WPComics(
 
     open val pageListSelector = "div.page-chapter > img, li.blocks-gallery-item img"
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(pageListSelector).mapNotNull { img -> imageOrNull(img) }
+    override fun pageListParse(document: Document): List<Page> =
+        document
+            .select(pageListSelector)
+            .mapNotNull { img -> imageOrNull(img) }
             .distinct()
             .mapIndexed { i, image -> Page(i, "", image) }
-    }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
-    protected class StatusFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
+    protected class StatusFilter(
+        name: String,
+        pairs: List<Pair<String?, String>>,
+    ) : UriPartFilter(name, pairs)
 
-    protected class GenreFilter(name: String, pairs: List<Pair<String?, String>>) : UriPartFilter(name, pairs)
+    protected class GenreFilter(
+        name: String,
+        pairs: List<Pair<String?, String>>,
+    ) : UriPartFilter(name, pairs)
 
     protected open fun getStatusList(): List<Pair<String?, String>> =
         listOf(
@@ -252,7 +257,9 @@ abstract class WPComics(
         if (fetchGenresAttempts < 3 && genreList.isEmpty()) {
             try {
                 genreList =
-                    client.newCall(genresRequest()).execute()
+                    client
+                        .newCall(genresRequest())
+                        .execute()
                         .asJsoup()
                         .let(::parseGenres)
             } catch (_: Exception) {
@@ -274,7 +281,8 @@ abstract class WPComics(
             add(Pair(null, intl["STATUS_ALL"]))
             items.mapTo(this) {
                 Pair(
-                    it.attr("href")
+                    it
+                        .attr("href")
                         .removeSuffix("/")
                         .substringAfterLast(genresUrlDelimiter),
                     it.text(),
@@ -295,8 +303,10 @@ abstract class WPComics(
         )
     }
 
-    protected open class UriPartFilter(displayName: String, private val pairs: List<Pair<String?, String>>) :
-        Filter.Select<String>(displayName, pairs.map { it.second }.toTypedArray()) {
+    protected open class UriPartFilter(
+        displayName: String,
+        private val pairs: List<Pair<String?, String>>,
+    ) : Filter.Select<String>(displayName, pairs.map { it.second }.toTypedArray()) {
         fun toUriPart() = pairs[state].first
     }
 }

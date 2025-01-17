@@ -13,7 +13,6 @@ data class SaikaiScanResultDto<T>(
     val data: T? = null,
     val meta: SaikaiScanMetaDto? = null,
 ) {
-
     val hasNextPage: Boolean
         get() = meta !== null && meta.currentPage < meta.lastPage
 }
@@ -39,23 +38,26 @@ data class SaikaiScanStoryDto(
     val synopsis: String,
     val title: String,
 ) {
-
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@SaikaiScanStoryDto.title
-        author = authors.joinToString { it.name }
-        artist = artists.joinToString { it.name }
-        genre = genres.joinToString { it.name }
-        status = when (this@SaikaiScanStoryDto.status?.name) {
-            "Concluído" -> SManga.COMPLETED
-            "Em Andamento" -> SManga.ONGOING
-            else -> SManga.UNKNOWN
+    fun toSManga(): SManga =
+        SManga.create().apply {
+            title = this@SaikaiScanStoryDto.title
+            author = authors.joinToString { it.name }
+            artist = artists.joinToString { it.name }
+            genre = genres.joinToString { it.name }
+            status =
+                when (this@SaikaiScanStoryDto.status?.name) {
+                    "Concluído" -> SManga.COMPLETED
+                    "Em Andamento" -> SManga.ONGOING
+                    else -> SManga.UNKNOWN
+                }
+            description =
+                Jsoup
+                    .parseBodyFragment(synopsis)
+                    .select("p")
+                    .joinToString("\n\n") { it.text() }
+            thumbnail_url = "${SaikaiScan.IMAGE_SERVER_URL}/$image"
+            url = "/comics/$slug"
         }
-        description = Jsoup.parseBodyFragment(synopsis)
-            .select("p")
-            .joinToString("\n\n") { it.text() }
-        thumbnail_url = "${SaikaiScan.IMAGE_SERVER_URL}/$image"
-        url = "/comics/$slug"
-    }
 }
 
 @Serializable
@@ -83,16 +85,16 @@ data class SaikaiScanReleaseDto(
     val slug: String,
     val title: String? = "",
 ) {
-
-    fun toSChapter(storySlug: String): SChapter = SChapter.create().apply {
-        name = "Capítulo $chapter" +
-            (if (this@SaikaiScanReleaseDto.title.isNullOrEmpty().not()) " - ${this@SaikaiScanReleaseDto.title}" else "")
-        chapter_number = chapter.toFloatOrNull() ?: -1f
-        date_upload = runCatching { DATE_FORMATTER.parse(publishedAt)?.time }
-            .getOrNull() ?: 0L
-        scanlator = SaikaiScan.SOURCE_NAME
-        url = "/ler/comics/$storySlug/$id/$slug"
-    }
+    fun toSChapter(storySlug: String): SChapter =
+        SChapter.create().apply {
+            name = "Capítulo $chapter" +
+                (if (this@SaikaiScanReleaseDto.title.isNullOrEmpty().not()) " - ${this@SaikaiScanReleaseDto.title}" else "")
+            chapter_number = chapter.toFloatOrNull() ?: -1f
+            date_upload = runCatching { DATE_FORMATTER.parse(publishedAt)?.time }
+                .getOrNull() ?: 0L
+            scanlator = SaikaiScan.SOURCE_NAME
+            url = "/ler/comics/$storySlug/$id/$slug"
+        }
 
     companion object {
         private val DATE_FORMATTER by lazy {
@@ -102,4 +104,6 @@ data class SaikaiScanReleaseDto(
 }
 
 @Serializable
-data class SaikaiScanReleaseImageDto(val image: String)
+data class SaikaiScanReleaseImageDto(
+    val image: String,
+)

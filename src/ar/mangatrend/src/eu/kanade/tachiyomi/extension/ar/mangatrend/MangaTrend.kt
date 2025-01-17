@@ -5,13 +5,16 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaTrend : MangaThemesia(
-    "Manga Trend",
-    "https://mangaatrend.net",
-    "ar",
-    dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("ar")),
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+class MangaTrend :
+    MangaThemesia(
+        "Manga Trend",
+        "https://mangaatrend.net",
+        "ar",
+        dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("ar")),
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(3)
+            .build()
 }

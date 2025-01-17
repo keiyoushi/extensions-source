@@ -14,7 +14,6 @@ import kotlin.system.exitProcess
  * Guya URL whilst on mobile.
  */
 class GuyaUrlActivity : Activity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val host = intent?.data?.host
@@ -29,11 +28,12 @@ class GuyaUrlActivity : Activity() {
                 exitProcess(1)
             }
 
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", query)
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", query)
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)
@@ -46,12 +46,11 @@ class GuyaUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun fromGuya(pathSegments: MutableList<String>): String? {
-        return if (pathSegments.size >= 3) {
+    private fun fromGuya(pathSegments: MutableList<String>): String? =
+        if (pathSegments.size >= 3) {
             val slug = pathSegments[2]
             "${Guya.SLUG_PREFIX}$slug"
         } else {
             null
         }
-    }
 }

@@ -20,7 +20,6 @@ import java.util.Locale
 import kotlin.math.min
 
 class Manhwa18 : HttpSource() {
-
     override val baseUrl = "https://manhwa18.com"
     private val apiUrl = "https://cdn3.manhwa18.com/api/v1"
     override val lang = "en"
@@ -32,9 +31,7 @@ class Manhwa18 : HttpSource() {
     private val json: Json by injectLazy()
 
     // popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/get-data-products?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/get-data-products?page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<MangaListBrowse>(response.body.string()).browseList
@@ -47,9 +44,8 @@ class Manhwa18 : HttpSource() {
     }
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/get-data-products-in-filter?arange=new-updated?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$apiUrl/get-data-products-in-filter?arange=new-updated?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -60,22 +56,26 @@ class Manhwa18 : HttpSource() {
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.isBlank()) {
-            client.newCall(filterMangaRequest(page, filters))
+    ): Observable<MangasPage> =
+        if (query.isBlank()) {
+            client
+                .newCall(filterMangaRequest(page, filters))
                 .asObservableSuccess()
                 .map { response ->
                     popularMangaParse(response)
                 }
         } else {
             if (page == 1 || searchMangaCache == null) {
-                searchMangaCache = super.fetchSearchManga(page, query, filters)
-                    .toBlocking()
-                    .last()
+                searchMangaCache =
+                    super
+                        .fetchSearchManga(page, query, filters)
+                        .toBlocking()
+                        .last()
             }
 
             // Handling a large manga list
-            Observable.just(searchMangaCache!!)
+            Observable
+                .just(searchMangaCache!!)
                 .map { mangaPage ->
                     val mangas = mangaPage.mangas
 
@@ -91,48 +91,56 @@ class Manhwa18 : HttpSource() {
                     )
                 }
         }
-    }
 
-    private fun filterMangaRequest(page: Int, filters: FilterList): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("get-data-products-in-filter")
-            addQueryParameter("page", page.toString())
+    private fun filterMangaRequest(
+        page: Int,
+        filters: FilterList,
+    ): Request {
+        val url =
+            apiUrl.toHttpUrl().newBuilder().apply {
+                addPathSegments("get-data-products-in-filter")
+                addQueryParameter("page", page.toString())
 
-            filters.forEach { filter ->
-                when (filter) {
-                    is CategoryFilter -> {
-                        if (filter.checked.isNotBlank()) {
-                            addQueryParameter("category", filter.checked)
+                filters.forEach { filter ->
+                    when (filter) {
+                        is CategoryFilter -> {
+                            if (filter.checked.isNotBlank()) {
+                                addQueryParameter("category", filter.checked)
+                            }
                         }
-                    }
-                    is GenreFilter -> {
-                        if (filter.checked.isNotBlank()) {
-                            addQueryParameter("type", filter.checked)
+                        is GenreFilter -> {
+                            if (filter.checked.isNotBlank()) {
+                                addQueryParameter("type", filter.checked)
+                            }
                         }
-                    }
-                    is NationFilter -> {
-                        if (filter.checked.isNotBlank()) {
-                            addQueryParameter("nation", filter.checked)
+                        is NationFilter -> {
+                            if (filter.checked.isNotBlank()) {
+                                addQueryParameter("nation", filter.checked)
+                            }
                         }
+                        is SortFilter -> {
+                            addQueryParameter("arrange", filter.getValue())
+                        }
+                        is StatusFilter -> {
+                            addQueryParameter("is_complete", filter.getValue())
+                        }
+                        else -> {}
                     }
-                    is SortFilter -> {
-                        addQueryParameter("arrange", filter.getValue())
-                    }
-                    is StatusFilter -> {
-                        addQueryParameter("is_complete", filter.getValue())
-                    }
-                    else -> {}
                 }
             }
-        }
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("get-search-suggest")
-            addPathSegments(query)
-        }
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            apiUrl.toHttpUrl().newBuilder().apply {
+                addPathSegments("get-search-suggest")
+                addPathSegments(query)
+            }
         return GET(url.build(), headers)
     }
 
@@ -160,14 +168,10 @@ class Manhwa18 : HttpSource() {
         }
     }
 
-    override fun getMangaUrl(manga: SManga): String {
-        return "${baseUrl}${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga): String = "${baseUrl}${manga.url}"
 
     // chapter list
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
-    }
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaDetail = json.decodeFromString<MangaDetail>(response.body.string())
@@ -183,15 +187,14 @@ class Manhwa18 : HttpSource() {
         } ?: emptyList()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        return "${baseUrl}${chapter.url}"
-    }
+    override fun getChapterUrl(chapter: SChapter): String = "${baseUrl}${chapter.url}"
 
     // page list
     override fun pageListRequest(chapter: SChapter): Request {
-        val slug = chapter.url
-            .removePrefix("/")
-            .substringAfter('/')
+        val slug =
+            chapter.url
+                .removePrefix("/")
+                .substringAfter('/')
         return GET("$apiUrl/get-episode/$slug", headers)
     }
 
@@ -203,14 +206,11 @@ class Manhwa18 : HttpSource() {
     }
 
     // unused
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    private fun String.parseDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(this)?.time }
+    private fun String.parseDate(): Long =
+        runCatching { DATE_FORMATTER.parse(this)?.time }
             .getOrNull() ?: 0L
-    }
 
     companion object {
         private val DATE_FORMATTER by lazy {

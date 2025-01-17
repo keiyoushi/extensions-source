@@ -10,18 +10,23 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class GourmetScans : Madara(
-    "Gourmet Scans",
-    "https://gourmetsupremacy.com",
-    "en",
-) {
+class GourmetScans :
+    Madara(
+        "Gourmet Scans",
+        "https://gourmetsupremacy.com",
+        "en",
+    ) {
     override val mangaSubString = "project"
 
     override val useNewChapterEndpoint = false
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
 
         val filterList = if (filters.isEmpty()) getFilterList() else filters
@@ -61,50 +66,53 @@ class GourmetScans : Madara(
     override fun genresRequest(): Request = GET("$baseUrl/$mangaSubString", headers)
 
     override fun parseGenres(document: Document): List<Genre> {
-        genresList = document.select("div.row.genres ul li a")
-            .orEmpty()
-            .map { li ->
-                Pair(
-                    li.text(),
-                    li.attr("href").split("/").last { it.isNotBlank() },
-                )
-            }
+        genresList =
+            document
+                .select("div.row.genres ul li a")
+                .orEmpty()
+                .map { li ->
+                    Pair(
+                        li.text(),
+                        li.attr("href").split("/").last { it.isNotBlank() },
+                    )
+                }
 
         return emptyList()
     }
 
     private var genresList: List<Pair<String, String>> = emptyList()
 
-    class GenreFilter(vals: List<Pair<String, String>>) :
-        UriPartFilter("Genre", vals.toTypedArray())
+    class GenreFilter(
+        vals: List<Pair<String, String>>,
+    ) : UriPartFilter("Genre", vals.toTypedArray())
 
     override fun getFilterList(): FilterList {
-        val filters = buildList(4) {
-            add(YearFilter(intl["year_filter_title"]))
-            add(
-                OrderByFilter(
-                    title = intl["order_by_filter_title"],
-                    options = orderByFilterOptions.map { Pair(it.key, it.value) },
-                    state = 0,
-                ),
-            )
-            add(Filter.Separator())
+        val filters =
+            buildList(4) {
+                add(YearFilter(intl["year_filter_title"]))
+                add(
+                    OrderByFilter(
+                        title = intl["order_by_filter_title"],
+                        options = orderByFilterOptions.map { Pair(it.key, it.value) },
+                        state = 0,
+                    ),
+                )
+                add(Filter.Separator())
 
-            if (genresList.isEmpty()) {
-                add(Filter.Header(intl["genre_missing_warning"]))
-            } else {
-                add(GenreFilter(listOf(Pair("<select>", "")) + genresList))
+                if (genresList.isEmpty()) {
+                    add(Filter.Header(intl["genre_missing_warning"]))
+                } else {
+                    add(GenreFilter(listOf(Pair("<select>", "")) + genresList))
+                }
             }
-        }
 
         return FilterList(filters)
     }
 
     // Chapters
 
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
+    override fun chapterFromElement(element: Element): SChapter =
+        super.chapterFromElement(element).apply {
             url = this.url.substringBefore("?style=list")
         }
-    }
 }

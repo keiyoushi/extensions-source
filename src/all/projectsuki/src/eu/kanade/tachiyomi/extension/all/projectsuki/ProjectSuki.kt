@@ -59,29 +59,32 @@ internal val homepageUrl: HttpUrl = "https://projectsuki.com".toHttpUrl()
 internal val homepageUri: URI = homepageUrl.toUri()
 
 /** PATTERN: `https://projectsuki.com/book/<bookid>`  */
-internal val bookUrlPattern = PathPattern(
-    """book""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<bookid>.+)""".toRegex(RegexOption.IGNORE_CASE),
-)
+internal val bookUrlPattern =
+    PathPattern(
+        """book""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<bookid>.+)""".toRegex(RegexOption.IGNORE_CASE),
+    )
 
 /** PATTERN: `https://projectsuki.com/browse/<pagenum>` */
 @Suppress("unused")
-internal val browsePattern = PathPattern(
-    """browse""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<pagenum>\d+)""".toRegex(RegexOption.IGNORE_CASE),
-)
+internal val browsePattern =
+    PathPattern(
+        """browse""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<pagenum>\d+)""".toRegex(RegexOption.IGNORE_CASE),
+    )
 
 /**
  * PATTERN: `https://projectsuki.com/read/<bookid>/<chapterid>/<startpage>`
  *
  * `<startpage>` is actually a filter of sorts that will remove pages &lt; `<startpage>`'s value.
  */
-internal val chapterUrlPattern = PathPattern(
-    """read""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<bookid>.+)""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<chapterid>.+)""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<startpage>.+)""".toRegex(RegexOption.IGNORE_CASE),
-)
+internal val chapterUrlPattern =
+    PathPattern(
+        """read""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<bookid>.+)""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<chapterid>.+)""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<startpage>.+)""".toRegex(RegexOption.IGNORE_CASE),
+    )
 
 /**
  * PATTERNS:
@@ -90,44 +93,50 @@ internal val chapterUrlPattern = PathPattern(
  *  - `https://projectsuki.com/images/gallery/<bookid>/<thumbwidth>-thumb`
  *  - `https://projectsuki.com/images/gallery/<bookid>/<thumbwidth>-thumb.<thumbextension>`
  */
-internal val thumbnailUrlPattern = PathPattern(
-    """images""".toRegex(RegexOption.IGNORE_CASE),
-    """gallery""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<bookid>.+)""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<thumbwidth>\d+-)?thumb(?:\.(?<thumbextension>.+))?""".toRegex(RegexOption.IGNORE_CASE),
-)
+internal val thumbnailUrlPattern =
+    PathPattern(
+        """images""".toRegex(RegexOption.IGNORE_CASE),
+        """gallery""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<bookid>.+)""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<thumbwidth>\d+-)?thumb(?:\.(?<thumbextension>.+))?""".toRegex(RegexOption.IGNORE_CASE),
+    )
 
 /** PATTERN: `https://projectsuki.com/images/gallery/<bookid>/<uuid>/<pagenum>` */
-internal val pageUrlPattern = PathPattern(
-    """images""".toRegex(RegexOption.IGNORE_CASE),
-    """gallery""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<bookid>.+)""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<uuid>.+)""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<pagenum>.+)""".toRegex(RegexOption.IGNORE_CASE),
-)
+internal val pageUrlPattern =
+    PathPattern(
+        """images""".toRegex(RegexOption.IGNORE_CASE),
+        """gallery""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<bookid>.+)""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<uuid>.+)""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<pagenum>.+)""".toRegex(RegexOption.IGNORE_CASE),
+    )
 
 /** PATTERN: `https://projectsuki.com/genre/<genre>` */
-internal val genreSearchUrlPattern = PathPattern(
-    """genre""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<genre>.+)""".toRegex(RegexOption.IGNORE_CASE),
-)
+internal val genreSearchUrlPattern =
+    PathPattern(
+        """genre""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<genre>.+)""".toRegex(RegexOption.IGNORE_CASE),
+    )
 
 /** PATTERN: `https://projectsuki.com/group/<groupid>` */
 @Suppress("unused")
-internal val groupUrlPattern = PathPattern(
-    """group""".toRegex(RegexOption.IGNORE_CASE),
-    """(?<groupid>.+)""".toRegex(RegexOption.IGNORE_CASE),
-)
+internal val groupUrlPattern =
+    PathPattern(
+        """group""".toRegex(RegexOption.IGNORE_CASE),
+        """(?<groupid>.+)""".toRegex(RegexOption.IGNORE_CASE),
+    )
 
 /**
  * Used on the website when there's an image loading error, could be used in extension.
  */
 @Suppress("unused")
-internal val emptyImageUrl: HttpUrl = homepageUrl.newBuilder()
-    .addPathSegment("images")
-    .addPathSegment("gallery")
-    .addPathSegment("empty.jpg")
-    .build()
+internal val emptyImageUrl: HttpUrl =
+    homepageUrl
+        .newBuilder()
+        .addPathSegment("images")
+        .addPathSegment("gallery")
+        .addPathSegment("empty.jpg")
+        .build()
 
 /**
  * Removes the [URL's](https://en.wikipedia.org/wiki/URL) host and scheme/protocol,
@@ -152,10 +161,16 @@ internal val reportPrefix: String
  * Simple named exception to differentiate it with all other "unexpected" exceptions.
  * @see unexpectedErrorCatchingLazy
  */
-internal class ProjectSukiException(message: String, cause: Throwable? = null) : Exception(message, cause)
+internal class ProjectSukiException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
 
 /** Throws a [ProjectSukiException], which will get caught by Tachiyomi: the message will be exposed as a [toast][android.widget.Toast]. */
-internal inline fun reportErrorToUser(locationHint: String? = null, message: () -> String): Nothing {
+internal inline fun reportErrorToUser(
+    locationHint: String? = null,
+    message: () -> String,
+): Nothing =
     throw ProjectSukiException(
         buildString {
             append("[")
@@ -167,7 +182,6 @@ internal inline fun reportErrorToUser(locationHint: String? = null, message: () 
             }
         },
     )
-}
 
 /** Used when chapters don't have a [Language][DataExtractor.ChaptersTableColumnDataType.Language] column (if that ever happens). */
 internal const val UNKNOWN_LANGUAGE: String = "unknown"
@@ -180,8 +194,9 @@ internal const val UNKNOWN_LANGUAGE: String = "unknown"
  * @author Federico d'Alonzo &lt;me@npgx.dev&gt;
  */
 @Suppress("unused")
-class ProjectSuki : HttpSource(), ConfigurableSource {
-
+class ProjectSuki :
+    HttpSource(),
+    ConfigurableSource {
     override val name: String = "Project Suki"
     override val baseUrl: String = homepageUri.toASCIIString()
     override val lang: String = "all"
@@ -191,11 +206,12 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
     private val preferences = ProjectSukiPreferences(id)
 
     /** See [Kotlinx-Serialization](https://github.com/Kotlin/kotlinx.serialization). */
-    private val json: Json = Json {
-        ignoreUnknownKeys = true
-        explicitNulls = true
-        encodeDefaults = true
-    }
+    private val json: Json =
+        Json {
+            ignoreUnknownKeys = true
+            explicitNulls = true
+            encodeDefaults = true
+        }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         with(preferences) { screen.configure() }
@@ -208,13 +224,14 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
      * (this is a permalink, check for updated version),
      * most client options are already set as they should be, including the [Cache][okhttp3.Cache].
      */
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(
-            userAgentType = preferences.shared.getPrefUAType(),
-            customUA = preferences.shared.getPrefCustomUA(),
-        )
-        .rateLimit(2, 1, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .setRandomUserAgent(
+                userAgentType = preferences.shared.getPrefUAType(),
+                customUA = preferences.shared.getPrefCustomUA(),
+            ).rateLimit(2, 1, TimeUnit.SECONDS)
+            .build()
 
     /**
      * Specify what request will be sent to the server.
@@ -224,13 +241,15 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
      *
      * Using the default [HttpSource]'s [Headers](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers).
      */
-    override fun popularMangaRequest(page: Int) = GET(
-        homepageUrl.newBuilder()
-            .addPathSegment("browse")
-            .addPathSegment((page - 1).toString()) // starts at 0
-            .build(),
-        headers,
-    )
+    override fun popularMangaRequest(page: Int) =
+        GET(
+            homepageUrl
+                .newBuilder()
+                .addPathSegment("browse")
+                .addPathSegment((page - 1).toString()) // starts at 0
+                .build(),
+            headers,
+        )
 
     /** Whether or not this extension supports the "Latest" tab. */
     override val supportsLatest: Boolean get() = true
@@ -245,17 +264,23 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
      */
     private inline fun <reified T> HttpUrl.Builder.applyPSFilter(
         from: FilterList,
-    ): HttpUrl.Builder where T : Filter<*>, T : ProjectSukiFilters.ProjectSukiFilter = apply {
-        from.firstNotNullOfOrNull { it as? T }?.run { applyFilter() }
-    }
+    ): HttpUrl.Builder where T : Filter<*>, T : ProjectSukiFilters.ProjectSukiFilter =
+        apply {
+            from.firstNotNullOfOrNull { it as? T }?.run { applyFilter() }
+        }
 
     /**
      * Same concept as [popularMangaRequest], but is sent to [https://projectsuki.com/search](https://projectsuki.com/search).
      * This is the [Full-Site][ProjectSukiFilters.SearchMode.FULL_SITE] variant of search, it *will* return results that have no chapters.
      */
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET(
-            homepageUrl.newBuilder()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request =
+        GET(
+            homepageUrl
+                .newBuilder()
                 .addPathSegment("search")
                 .addQueryParameter("page", (page - 1).toString())
                 .addQueryParameter("q", query)
@@ -266,7 +291,6 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
                 .build(),
             headers,
         )
-    }
 
     /**
      * Handles the server's [Response] that was returned from [popularMangaRequest]'s [Request].
@@ -297,13 +321,14 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
         val extractor = DataExtractor(document)
         val books: Set<DataExtractor.PSBook> = extractor.books
 
-        val mangas: List<SManga> = books.map { book ->
-            SManga.create().apply {
-                this.url = book.bookUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${book.bookUrl}" }
-                this.title = book.rawTitle
-                this.thumbnail_url = book.thumbnail.toUri().toASCIIString()
+        val mangas: List<SManga> =
+            books.map { book ->
+                SManga.create().apply {
+                    this.url = book.bookUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${book.bookUrl}" }
+                    this.title = book.rawTitle
+                    this.thumbnail_url = book.thumbnail.toUri().toASCIIString()
+                }
             }
-        }
 
         return MangasPage(
             mangas = mangas,
@@ -328,13 +353,14 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
         val books: Set<DataExtractor.PSBook> = extractor.books
 
         return MangasPage(
-            mangas = books.map { book ->
-                SManga.create().apply {
-                    this.url = book.bookUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${book.bookUrl}" }
-                    this.title = book.rawTitle
-                    this.thumbnail_url = book.thumbnail.toUri().toASCIIString()
-                }
-            },
+            mangas =
+                books.map { book ->
+                    SManga.create().apply {
+                        this.url = book.bookUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${book.bookUrl}" }
+                        this.title = book.rawTitle
+                        this.thumbnail_url = book.thumbnail.toUri().toASCIIString()
+                    }
+                },
             hasNextPage = false,
         )
     }
@@ -351,18 +377,26 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
      * But if you need to replace the default search behaviour (e.g. because of an [Url Activity][ProjectSukiSearchUrlActivity]),
      * you might need to override this function.
      */
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val searchMode: ProjectSukiFilters.SearchMode = filters.filterIsInstance<ProjectSukiFilters.SearchModeFilter>()
-            .singleOrNull()
-            ?.state
-            ?.let { ProjectSukiFilters.SearchMode[it] } ?: ProjectSukiFilters.SearchMode.SMART
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        val searchMode: ProjectSukiFilters.SearchMode =
+            filters
+                .filterIsInstance<ProjectSukiFilters.SearchModeFilter>()
+                .singleOrNull()
+                ?.state
+                ?.let { ProjectSukiFilters.SearchMode[it] } ?: ProjectSukiFilters.SearchMode.SMART
 
         fun BookID.toMangasPageObservable(): Observable<MangasPage> {
-            val rawSManga = SManga.create().apply {
-                url = bookIDToURL().rawRelative ?: reportErrorToUser { "Could not create relative url for bookID: $this" }
-            }
+            val rawSManga =
+                SManga.create().apply {
+                    url = bookIDToURL().rawRelative ?: reportErrorToUser { "Could not create relative url for bookID: $this" }
+                }
 
-            return client.newCall(mangaDetailsRequest(rawSManga))
+            return client
+                .newCall(mangaDetailsRequest(rawSManga))
                 .asObservableSuccess()
                 .map { response -> mangaDetailsParse(response) }
                 .map { manga -> MangasPage(listOf(manga), hasNextPage = false) }
@@ -382,7 +416,8 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
                 val rawUrl = """${homepageUri.toASCIIString()}/search?$urlQuery"""
                 val url = rawUrl.toHttpUrlOrNull() ?: reportErrorToUser { "Invalid search url: $rawUrl" }
 
-                client.newCall(GET(url, headers))
+                client
+                    .newCall(GET(url, headers))
                     .asObservableSuccess()
                     .map { response -> searchMangaParse(response, overrideHasNextPage = false) }
             }
@@ -433,7 +468,8 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
                     )
                 }
 
-                client.newCall(ProjectSukiAPI.bookSearchRequest(json, headers))
+                client
+                    .newCall(ProjectSukiAPI.bookSearchRequest(json, headers))
                     .asObservableSuccess()
                     .map { response -> ProjectSukiAPI.parseBookSearchResponse(json, response) }
                     .map { data -> SmartBookSearchHandler(query, data).mangasPage }
@@ -441,33 +477,35 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
 
             // use result from https://projectsuki.com/api/book/search
             searchMode == ProjectSukiFilters.SearchMode.SIMPLE -> {
-                client.newCall(ProjectSukiAPI.bookSearchRequest(json, headers))
+                client
+                    .newCall(ProjectSukiAPI.bookSearchRequest(json, headers))
                     .asObservableSuccess()
                     .map { response -> ProjectSukiAPI.parseBookSearchResponse(json, response) }
                     .map { data -> data.simpleSearchMangasPage(query) }
             }
 
             // use https://projectsuki.com/search
-            else -> client.newCall(searchMangaRequest(page, query, filters))
-                .asObservableSuccess()
-                .map { response -> searchMangaParse(response) }
+            else ->
+                client
+                    .newCall(searchMangaRequest(page, query, filters))
+                    .asObservableSuccess()
+                    .map { response -> searchMangaParse(response) }
         }
     }
 
-    private fun filterList(vararg sequences: Sequence<Filter<*>>): FilterList {
-        return FilterList(sequences.asSequence().flatten().toList())
-    }
+    private fun filterList(vararg sequences: Sequence<Filter<*>>): FilterList = FilterList(sequences.asSequence().flatten().toList())
 
     /**
      * Should return a fresh [FilterList] containing fresh (new) instances
      * of all the filters you want to be available.
      * Otherwise things like the reset button won't work.
      */
-    override fun getFilterList(): FilterList = filterList(
-        ProjectSukiFilters.headersSequence(preferences),
-        ProjectSukiFilters.filtersSequence(preferences),
-        ProjectSukiFilters.footersSequence(preferences),
-    )
+    override fun getFilterList(): FilterList =
+        filterList(
+            ProjectSukiFilters.headersSequence(preferences),
+            ProjectSukiFilters.filtersSequence(preferences),
+            ProjectSukiFilters.footersSequence(preferences),
+        )
 
     /**
      * Very similar to [popularMangaParse].
@@ -481,19 +519,23 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
     override fun searchMangaParse(response: Response): MangasPage = searchMangaParse(response, null)
 
     /** [searchMangaParse] extended with [overrideHasNextPage]. */
-    private fun searchMangaParse(response: Response, overrideHasNextPage: Boolean? = null): MangasPage {
+    private fun searchMangaParse(
+        response: Response,
+        overrideHasNextPage: Boolean? = null,
+    ): MangasPage {
         val document = response.asJsoup()
 
         val extractor = DataExtractor(document)
         val books: Set<DataExtractor.PSBook> = extractor.books
 
-        val mangas = books.map { book ->
-            SManga.create().apply {
-                this.url = book.bookUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${book.bookUrl}" }
-                this.title = book.rawTitle
-                this.thumbnail_url = book.thumbnail.toUri().toASCIIString()
+        val mangas =
+            books.map { book ->
+                SManga.create().apply {
+                    this.url = book.bookUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${book.bookUrl}" }
+                    this.title = book.rawTitle
+                    this.thumbnail_url = book.thumbnail.toUri().toASCIIString()
+                }
             }
-        }
 
         return MangasPage(
             mangas = mangas,
@@ -531,53 +573,64 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
         return SManga.create().apply {
             url = data.book.bookUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${data.book.bookUrl}" }
             title = data.book.rawTitle
-            thumbnail_url = data.book.thumbnail.toUri().toASCIIString()
+            thumbnail_url =
+                data.book.thumbnail
+                    .toUri()
+                    .toASCIIString()
 
             author = data.details[DataExtractor.BookDetail.Author]?.detailData
             artist = data.details[DataExtractor.BookDetail.Artist]?.detailData
-            status = when (data.details[DataExtractor.BookDetail.Status]?.detailData?.trim()?.lowercase(Locale.US)) {
-                "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                "hiatus" -> SManga.ON_HIATUS
-                "cancelled" -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
+            status =
+                when (
+                    data.details[DataExtractor.BookDetail.Status]
+                        ?.detailData
+                        ?.trim()
+                        ?.lowercase(Locale.US)
+                ) {
+                    "ongoing" -> SManga.ONGOING
+                    "completed" -> SManga.COMPLETED
+                    "hiatus" -> SManga.ON_HIATUS
+                    "cancelled" -> SManga.CANCELLED
+                    else -> SManga.UNKNOWN
+                }
 
-            description = buildString {
-                if (data.alertData.isNotEmpty()) {
-                    appendLine("Alerts have been found, refreshing the book/manga later might help in removing them.")
-                    appendLine()
+            description =
+                buildString {
+                    if (data.alertData.isNotEmpty()) {
+                        appendLine("Alerts have been found, refreshing the book/manga later might help in removing them.")
+                        appendLine()
 
-                    data.alertData.forEach {
-                        appendLine(it)
+                        data.alertData.forEach {
+                            appendLine(it)
+                            appendLine()
+                        }
+
+                        appendLine(DESCRIPTION_DIVIDER)
+                        appendLine()
+
                         appendLine()
                     }
+
+                    appendLine(data.description)
+                    appendLine()
 
                     appendLine(DESCRIPTION_DIVIDER)
                     appendLine()
 
-                    appendLine()
+                    data.details.values.forEach { (label, value) ->
+                        append(label)
+                        append("  ")
+                        append(value.trim())
+
+                        appendLine()
+                    }
                 }
 
-                appendLine(data.description)
-                appendLine()
-
-                appendLine(DESCRIPTION_DIVIDER)
-                appendLine()
-
-                data.details.values.forEach { (label, value) ->
-                    append(label)
-                    append("  ")
-                    append(value.trim())
-
-                    appendLine()
+            update_strategy =
+                when (status) {
+                    SManga.CANCELLED, SManga.COMPLETED, SManga.PUBLISHING_FINISHED -> UpdateStrategy.ONLY_FETCH_ONCE
+                    else -> UpdateStrategy.ALWAYS_UPDATE
                 }
-            }
-
-            update_strategy = when (status) {
-                SManga.CANCELLED, SManga.COMPLETED, SManga.PUBLISHING_FINISHED -> UpdateStrategy.ONLY_FETCH_ONCE
-                else -> UpdateStrategy.ALWAYS_UPDATE
-            }
 
             genre = data.details[DataExtractor.BookDetail.Genre]!!.detailData
         }
@@ -604,7 +657,8 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
         val blLangs: Set<String> = preferences.blacklistedLanguages()
         val wlLangs: Set<String> = preferences.whitelistedLanguages()
 
-        return bookChapters.asSequence()
+        return bookChapters
+            .asSequence()
             .flatMap { (_, chapters) -> chapters }
             .filter { it.chapterLanguage !in blLangs }
             .filter { wlLangs.isEmpty() || it.chapterLanguage == UNKNOWN_LANGUAGE || it.chapterLanguage in wlLangs }
@@ -613,27 +667,27 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
                 compareByDescending<DataExtractor.BookChapter> { chapter -> chapter.chapterNumber }
                     .thenBy { chapter -> chapter.chapterGroup }
                     .thenBy { chapter -> chapter.chapterLanguage },
-            )
-            .map { bookChapter ->
+            ).map { bookChapter ->
                 SChapter.create().apply {
                     url = bookChapter.chapterUrl.rawRelative ?: reportErrorToUser { "Could not relativize ${bookChapter.chapterUrl}" }
                     name = bookChapter.chapterTitle
                     date_upload = bookChapter.chapterDateAdded?.time ?: 0L
                     scanlator = """${bookChapter.chapterGroup} | ${bookChapter.chapterLanguage.replaceFirstChar(Char::uppercaseChar)}"""
-                    chapter_number = bookChapter.chapterNumber!!.let { (main, sub) ->
-                        // no fractional part, log(0) is -Inf (technically undefined)
-                        if (sub == 0u) return@let main.toFloat()
+                    chapter_number =
+                        bookChapter.chapterNumber!!.let { (main, sub) ->
+                            // no fractional part, log(0) is -Inf (technically undefined)
+                            if (sub == 0u) return@let main.toFloat()
 
-                        val subD = sub.toDouble()
-                        // 1 + floor(log10(subD)) finds the number of digits (in base 10) "subD" has
-                        // see https://www.wolframalpha.com/input?i=LogLinearPlot+y%3D1+%2B+floor%28log10%28x%29%29%2C+where+x%3D1+to+10%5E9
-                        val digits: Double = 1.0 + floor(log10(subD))
-                        val fractional: Double = subD / 10.0.pow(digits)
-                        // this basically creates a float that has "main" as integral part and "sub" as fractional part
-                        // see https://www.wolframalpha.com/input?i=LogLinearPlot+y%3Dx+%2F+10%5E%281+%2B+floor%28log10%28x%29%29%29%2C+where+x%3D0+to+10%5E9
-                        // the lines look curved because it's a logarithmic plot in the x-axis, but they're straight in a linear plot
-                        (main.toDouble() + fractional).toFloat()
-                    }
+                            val subD = sub.toDouble()
+                            // 1 + floor(log10(subD)) finds the number of digits (in base 10) "subD" has
+                            // see https://www.wolframalpha.com/input?i=LogLinearPlot+y%3D1+%2B+floor%28log10%28x%29%29%2C+where+x%3D1+to+10%5E9
+                            val digits: Double = 1.0 + floor(log10(subD))
+                            val fractional: Double = subD / 10.0.pow(digits)
+                            // this basically creates a float that has "main" as integral part and "sub" as fractional part
+                            // see https://www.wolframalpha.com/input?i=LogLinearPlot+y%3Dx+%2F+10%5E%281+%2B+floor%28log10%28x%29%29%29%2C+where+x%3D0+to+10%5E9
+                            // the lines look curved because it's a logarithmic plot in the x-axis, but they're straight in a linear plot
+                            (main.toDouble() + fractional).toFloat()
+                        }
                 }
             }
     }
@@ -656,26 +710,30 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
             reportErrorToUser { "chapter url ${chapter.url} does not match expected pattern" }
         }
 
-        return client.newCall(ProjectSukiAPI.chapterPagesRequest(json, headers, pathMatch["bookid"]!!.value, pathMatch["chapterid"]!!.value))
-            .asObservableSuccess()
+        return client
+            .newCall(
+                ProjectSukiAPI.chapterPagesRequest(json, headers, pathMatch["bookid"]!!.value, pathMatch["chapterid"]!!.value),
+            ).asObservableSuccess()
             .map { ProjectSukiAPI.parseChapterPagesResponse(json, it) }
     }
 
     /**
      * Not used in this extension, as [Page.imageUrl] is set directly.
      */
-    override fun imageUrlParse(response: Response): String = reportErrorToUser {
-        // give a hint on who called this method
-        "invalid ${Thread.currentThread().stackTrace.take(3)}"
-    }
+    override fun imageUrlParse(response: Response): String =
+        reportErrorToUser {
+            // give a hint on who called this method
+            "invalid ${Thread.currentThread().stackTrace.take(3)}"
+        }
 
     /**
      * Not used in this extension, as we override [fetchPageList] to modify the default behaviour.
      */
-    override fun pageListParse(response: Response): List<Page> = reportErrorToUser("ProjectSuki.pageListParse") {
-        // give a hint on who called this method
-        "invalid ${Thread.currentThread().stackTrace.asSequence().drop(1).take(3).toList()}"
-    }
+    override fun pageListParse(response: Response): List<Page> =
+        reportErrorToUser("ProjectSuki.pageListParse") {
+            // give a hint on who called this method
+            "invalid ${Thread.currentThread().stackTrace.asSequence().drop(1).take(3).toList()}"
+        }
 
     companion object {
         private const val DESCRIPTION_DIVIDER: String = "/=/-/=/-/=/-/=/-/=/-/=/-/=/-/=/"

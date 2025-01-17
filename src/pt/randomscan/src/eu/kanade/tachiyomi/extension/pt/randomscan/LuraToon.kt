@@ -35,7 +35,9 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlin.getValue
 
-class LuraToon : HttpSource(), ConfigurableSource {
+class LuraToon :
+    HttpSource(),
+    ConfigurableSource {
     override val baseUrl = "https://luratoons.net"
     override val name = "Lura Toon"
     override val lang = "pt-BR"
@@ -48,109 +50,131 @@ class LuraToon : HttpSource(), ConfigurableSource {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client = network.cloudflareClient
-        .newBuilder()
-        .addInterceptor(::loggedVerifyInterceptor)
-        .addInterceptor(LuraZipInterceptor()::zipImageInterceptor)
-        .rateLimit(3)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(::loggedVerifyInterceptor)
+            .addInterceptor(LuraZipInterceptor()::zipImageInterceptor)
+            .rateLimit(3)
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).build()
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
+
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/api/autocomplete/$query", headers)
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = GET("$baseUrl/api/autocomplete/$query", headers)
+
     override fun chapterListRequest(manga: SManga) = GET("$baseUrl/api/obra/${manga.url.trimStart('/')}", headers)
+
     override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
     }
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
-        val data = response.parseAs<Manga>()
-        title = data.titulo
-        author = data.autor
-        artist = data.artista
-        genre = data.generos.joinToString(", ") { it.name }
-        status = when (data.status) {
-            "Em Lançamento" -> SManga.ONGOING
-            "Finalizado" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(response: Response) =
+        SManga.create().apply {
+            val data = response.parseAs<Manga>()
+            title = data.titulo
+            author = data.autor
+            artist = data.artista
+            genre = data.generos.joinToString(", ") { it.name }
+            status =
+                when (data.status) {
+                    "Em Lançamento" -> SManga.ONGOING
+                    "Finalizado" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+            thumbnail_url = "$baseUrl${data.capa}"
+
+            val category = data.tipo
+            val synopsis = data.sinopse
+            description = "Tipo: $category\n\n$synopsis"
         }
-        thumbnail_url = "$baseUrl${data.capa}"
 
-        val category = data.tipo
-        val synopsis = data.sinopse
-        description = "Tipo: $category\n\n$synopsis"
-    }
-
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString<T>(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<T>(body.string())
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.parseAs<MainPage>()
 
-        val mangas = document.lancamentos.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = "$baseUrl${it.capa}"
-                setUrlWithoutDomain("/${it.slug}/")
+        val mangas =
+            document.lancamentos.map {
+                SManga.create().apply {
+                    title = it.title
+                    thumbnail_url = "$baseUrl${it.capa}"
+                    setUrlWithoutDomain("/${it.slug}/")
+                }
             }
-        }
 
         return MangasPage(mangas, document.lancamentos.isNotEmpty())
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga))
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        client
+            .newCall(chapterListRequest(manga))
             .asObservable()
             .map { response ->
                 chapterListParse(manga, response)
             }
-    }
 
-    fun chapterListParse(manga: SManga, response: Response): List<SChapter> {
+    fun chapterListParse(
+        manga: SManga,
+        response: Response,
+    ): List<SChapter> {
         if (response.code == 404) {
             throw Exception("Capitulos não encontrados, tente migrar o manga, alguns nomes da LuraToon mudaram")
         }
 
         val comics = response.parseAs<Manga>()
 
-        return comics.caps.sortedByDescending {
-            it.num
-        }.map { chapterFromElement(manga, it) }
+        return comics.caps
+            .sortedByDescending {
+                it.num
+            }.map { chapterFromElement(manga, it) }
     }
 
-    private fun chapterFromElement(manga: SManga, capitulo: Capitulo) = SChapter.create().apply {
+    private fun chapterFromElement(
+        manga: SManga,
+        capitulo: Capitulo,
+    ) = SChapter.create().apply {
         val capSlug = capitulo.slug.trimStart('/')
         val mangaUrl = manga.url.trimEnd('/').trimStart('/')
         setUrlWithoutDomain("/api/obra/$mangaUrl/$capSlug")
         name = capitulo.num.toString().removeSuffix(".0")
-        date_upload = runCatching {
-            dateFormat.parse(capitulo.data)!!.time
-        }.getOrDefault(0L)
+        date_upload =
+            runCatching {
+                dateFormat.parse(capitulo.data)!!.time
+            }.getOrDefault(0L)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val capitulo = response.parseAs<CapituloPagina>()
         val pathSegments = response.request.url.pathSegments
         return (0 until capitulo.files).map { i ->
-            Page(i, baseUrl, "$baseUrl/api/cap-download/${capitulo.obra.id}/${capitulo.id}/$i?obra_id=${capitulo.obra.id}&cap_id=${capitulo.id}&slug=${pathSegments[2]}&cap_slug=${pathSegments[3]}")
+            Page(
+                i,
+                baseUrl,
+                "$baseUrl/api/cap-download/${capitulo.obra.id}/${capitulo.id}/$i?obra_id=${capitulo.obra.id}&cap_id=${capitulo.id}&slug=${pathSegments[2]}&cap_slug=${pathSegments[3]}",
+            )
         }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<SearchResponse>().obras.map {
-            SManga.create().apply {
-                title = it.titulo
-                thumbnail_url = "$baseUrl${it.capa}"
-                setUrlWithoutDomain("/${it.slug}/")
+        val mangas =
+            response.parseAs<SearchResponse>().obras.map {
+                SManga.create().apply {
+                    title = it.titulo
+                    thumbnail_url = "$baseUrl${it.capa}"
+                    setUrlWithoutDomain("/${it.slug}/")
+                }
             }
-        }
 
         return MangasPage(mangas, false)
     }
@@ -158,13 +182,14 @@ class LuraToon : HttpSource(), ConfigurableSource {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.parseAs<MainPage>()
 
-        val mangas = document.top_10.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = "$baseUrl${it.capa}"
-                setUrlWithoutDomain("/${it.slug}/")
+        val mangas =
+            document.top_10.map {
+                SManga.create().apply {
+                    title = it.title
+                    thumbnail_url = "$baseUrl${it.capa}"
+                    setUrlWithoutDomain("/${it.slug}/")
+                }
             }
-        }
 
         return MangasPage(mangas, false)
     }
@@ -172,7 +197,10 @@ class LuraToon : HttpSource(), ConfigurableSource {
     private fun loggedVerifyInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
         val pathSegments = response.request.url.pathSegments
-        if (response.request.url.pathSegments.contains("login") || pathSegments.isEmpty()) {
+        if (response.request.url.pathSegments
+                .contains("login") ||
+            pathSegments.isEmpty()
+        ) {
             throw Exception("Faça o login na WebView para acessar o contéudo")
         }
         if (response.code == 429) {
@@ -181,9 +209,10 @@ class LuraToon : HttpSource(), ConfigurableSource {
         return response
     }
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault()).apply {
-        timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
-    }
+    private val dateFormat =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault()).apply {
+            timeZone = TimeZone.getTimeZone("America/Sao_Paulo")
+        }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 

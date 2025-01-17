@@ -21,19 +21,21 @@ class ChapterRelease(
     @SerialName("team_name") private val teamName: String,
     @SerialName("created_at") private val createdAt: String,
 ) {
-    fun toSChapter() = SChapter.create().apply {
-        url = "/r/$id"
-        chapter_number = chapter.float
-        date_upload = try {
-            dateFormat.parse(createdAt)!!.time
-        } catch (_: Exception) {
-            0L
-        }
-        scanlator = teamName
+    fun toSChapter() =
+        SChapter.create().apply {
+            url = "/r/$id"
+            chapter_number = chapter.float
+            date_upload =
+                try {
+                    dateFormat.parse(createdAt)!!.time
+                } catch (_: Exception) {
+                    0L
+                }
+            scanlator = teamName
 
-        val chapterName = title.let { if (it.trim() != "") " - $it" else "" }
-        name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
-    }
+            val chapterName = title.let { if (it.trim() != "") " - $it" else "" }
+            name = "${chapter_number.let { if (it % 1 > 0) it else it.toInt() }}$chapterName"
+        }
 }
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)

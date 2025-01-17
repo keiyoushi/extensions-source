@@ -38,7 +38,11 @@ import java.io.IOException
 import java.security.MessageDigest
 import kotlin.math.max
 
-open class LANraragi(private val suffix: String = "") : ConfigurableSource, UnmeteredSource, HttpSource() {
+open class LANraragi(
+    private val suffix: String = "",
+) : HttpSource(),
+    ConfigurableSource,
+    UnmeteredSource {
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val lang = "all"
@@ -64,7 +68,8 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
             randomArchiveID = getRandomID(randQuery)
         }
 
-        return client.newCall(GET(uri.toString(), headers))
+        return client
+            .newCall(GET(uri.toString(), headers))
             .asObservableSuccess()
             .map { mangaDetailsParse(it).apply { initialized = true } }
     }
@@ -106,11 +111,13 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         val prefClearNew = preferences.getBoolean(NEW_ONLY_KEY, NEW_ONLY_DEFAULT)
 
         if (archive.isnew == "true" && prefClearNew) {
-            val clearNew = Request.Builder()
-                .url("$baseUrl/api/archives/${archive.arcid}/isnew")
-                .headers(headers)
-                .delete()
-                .build()
+            val clearNew =
+                Request
+                    .Builder()
+                    .url("$baseUrl/api/archives/${archive.arcid}/isnew")
+                    .headers(headers)
+                    .delete()
+                    .build()
 
             client.newCall(clearNew).execute()
         }
@@ -130,9 +137,7 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         )
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val archivePage = json.decodeFromString<ArchivePage>(response.body.string())
@@ -145,13 +150,9 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException("imageUrlParse is unused")
 
-    override fun popularMangaRequest(page: Int): Request {
-        return searchMangaRequest(page, "", FilterList())
-    }
+    override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList())
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return searchMangaParse(response)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val filters = mutableListOf<Filter<*>>()
@@ -167,16 +168,18 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         return searchMangaRequest(page, "", FilterList(filters))
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return searchMangaParse(response)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     private var lastResultCount: Int = 100
     private var lastRecordsFiltered: Int = 0
     private var maxResultCount: Int = 0
     private var totalRecords: Int = 0
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val uri = getApiUriBuilder("/api/search")
         var startPageOffset = 0
 
@@ -219,7 +222,9 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         totalRecords = jsonResult.recordsTotal
 
         if (lastResultCount > 1 && currentStart == 0) {
-            val randQuery = response.request.url.encodedQuery.toString()
+            val randQuery =
+                response.request.url.encodedQuery
+                    .toString()
             randomArchiveID = getRandomID(randQuery)
 
             archives.add(
@@ -239,40 +244,58 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         return MangasPage(archives, currentStart + lastResultCount < lastRecordsFiltered)
     }
 
-    private fun archiveToSManga(archive: Archive) = SManga.create().apply {
-        url = "/reader?id=${archive.arcid}"
-        title = archive.title
-        description = if (archive.summary.isNullOrBlank()) archive.title else archive.summary
-        thumbnail_url = getThumbnailUri(archive.arcid)
-        genre = archive.tags?.replace(",", ", ")
-        artist = getArtist(archive.tags)
-        author = artist
-        status = SManga.COMPLETED
-    }
-
-    override fun headersBuilder() = Headers.Builder().apply {
-        if (apiKey.isNotEmpty()) {
-            val apiKey64 = Base64.encodeToString(apiKey.toByteArray(), Base64.NO_WRAP)
-            add("Authorization", "Bearer $apiKey64")
+    private fun archiveToSManga(archive: Archive) =
+        SManga.create().apply {
+            url = "/reader?id=${archive.arcid}"
+            title = archive.title
+            description = if (archive.summary.isNullOrBlank()) archive.title else archive.summary
+            thumbnail_url = getThumbnailUri(archive.arcid)
+            genre = archive.tags?.replace(",", ", ")
+            artist = getArtist(archive.tags)
+            author = artist
+            status = SManga.COMPLETED
         }
-    }
 
-    private class DescendingOrder(overrideState: Boolean = false) : Filter.CheckBox("Descending Order", overrideState)
-    private class NewArchivesOnly(overrideState: Boolean = false) : Filter.CheckBox("New Archives Only", overrideState)
+    override fun headersBuilder() =
+        Headers.Builder().apply {
+            if (apiKey.isNotEmpty()) {
+                val apiKey64 = Base64.encodeToString(apiKey.toByteArray(), Base64.NO_WRAP)
+                add("Authorization", "Bearer $apiKey64")
+            }
+        }
+
+    private class DescendingOrder(
+        overrideState: Boolean = false,
+    ) : Filter.CheckBox("Descending Order", overrideState)
+
+    private class NewArchivesOnly(
+        overrideState: Boolean = false,
+    ) : Filter.CheckBox("New Archives Only", overrideState)
+
     private class UntaggedArchivesOnly : Filter.CheckBox("Untagged Archives Only", false)
-    private class StartingPage(stats: String) : Filter.Text("Starting Page$stats", "")
-    private class SortByNamespace(defaultText: String = "") : Filter.Text("Sort by (namespace)", defaultText)
-    private class CategorySelect(categories: Array<Pair<String?, String>>) : UriPartFilter("Category", categories)
 
-    override fun getFilterList() = FilterList(
-        CategorySelect(getCategoryPairs(categories)),
-        Filter.Separator(),
-        DescendingOrder(),
-        NewArchivesOnly(),
-        UntaggedArchivesOnly(),
-        StartingPage(startingPageStats()),
-        SortByNamespace(),
-    )
+    private class StartingPage(
+        stats: String,
+    ) : Filter.Text("Starting Page$stats", "")
+
+    private class SortByNamespace(
+        defaultText: String = "",
+    ) : Filter.Text("Sort by (namespace)", defaultText)
+
+    private class CategorySelect(
+        categories: Array<Pair<String?, String>>,
+    ) : UriPartFilter("Category", categories)
+
+    override fun getFilterList() =
+        FilterList(
+            CategorySelect(getCategoryPairs(categories)),
+            Filter.Separator(),
+            DescendingOrder(),
+            NewArchivesOnly(),
+            UntaggedArchivesOnly(),
+            StartingPage(startingPageStats()),
+            SortByNamespace(),
+        )
 
     private var categories = emptyList<Category>()
 
@@ -289,43 +312,75 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(HOSTNAME_KEY, HOSTNAME_DEFAULT)!!
+
     private fun getPrefAPIKey(): String = preferences.getString(APIKEY_KEY, "")!!
+
     private fun getPrefLatestNS(): String = preferences.getString(SORT_BY_NS_KEY, SORT_BY_NS_DEFAULT)!!
+
     private fun getPrefCustomLabel(): String = preferences.getString(CUSTOM_LABEL_KEY, suffix)!!.ifBlank { suffix }
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         if (suffix == "1") {
-            ListPreference(screen.context).apply {
-                key = EXTRA_SOURCES_COUNT_KEY
-                title = "Number of extra sources"
-                summary = "Number of additional sources to create. There will always be at least one LANraragi source."
-                entries = EXTRA_SOURCES_ENTRIES
-                entryValues = EXTRA_SOURCES_ENTRIES
+            ListPreference(screen.context)
+                .apply {
+                    key = EXTRA_SOURCES_COUNT_KEY
+                    title = "Number of extra sources"
+                    summary = "Number of additional sources to create. There will always be at least one LANraragi source."
+                    entries = EXTRA_SOURCES_ENTRIES
+                    entryValues = EXTRA_SOURCES_ENTRIES
 
-                setDefaultValue(EXTRA_SOURCES_COUNT_DEFAULT)
-                setOnPreferenceChangeListener { _, newValue ->
-                    try {
-                        val setting = preferences.edit().putString(EXTRA_SOURCES_COUNT_KEY, newValue as String).commit()
-                        Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
-                        setting
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        false
+                    setDefaultValue(EXTRA_SOURCES_COUNT_DEFAULT)
+                    setOnPreferenceChangeListener { _, newValue ->
+                        try {
+                            val setting = preferences.edit().putString(EXTRA_SOURCES_COUNT_KEY, newValue as String).commit()
+                            Toast.makeText(screen.context, "Restart Tachiyomi to apply new setting.", Toast.LENGTH_LONG).show()
+                            setting
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            false
+                        }
                     }
-                }
-            }.also(screen::addPreference)
+                }.also(screen::addPreference)
         }
         screen.addPreference(screen.editTextPreference(HOSTNAME_KEY, "Hostname", HOSTNAME_DEFAULT, baseUrl, refreshSummary = true))
         screen.addPreference(screen.editTextPreference(APIKEY_KEY, "API Key", "", "Required if No-Fun Mode is enabled.", true))
-        screen.addPreference(screen.editTextPreference(CUSTOM_LABEL_KEY, "Custom Label", "", "Show the given label for the source instead of the default."))
-        screen.addPreference(screen.checkBoxPreference(CLEAR_NEW_KEY, "Clear New status", CLEAR_NEW_DEFAULT, "Clear an entry's New status when its details are viewed."))
+        screen.addPreference(
+            screen.editTextPreference(CUSTOM_LABEL_KEY, "Custom Label", "", "Show the given label for the source instead of the default."),
+        )
+        screen.addPreference(
+            screen.checkBoxPreference(
+                CLEAR_NEW_KEY,
+                "Clear New status",
+                CLEAR_NEW_DEFAULT,
+                "Clear an entry's New status when its details are viewed.",
+            ),
+        )
         screen.addPreference(screen.checkBoxPreference(NEW_ONLY_KEY, "Latest - New Only", NEW_ONLY_DEFAULT))
-        screen.addPreference(screen.editTextPreference(SORT_BY_NS_KEY, "Latest - Sort by Namespace", SORT_BY_NS_DEFAULT, "Sort by the given namespace for Latest, such as date_added."))
-        screen.addPreference(screen.editTextPreference(URL_TAG_PREFIX_KEY, "Set tag prefix to get WebView URL", URL_TAG_PREFIX_DEFAULT, "Example: 'source:' will try to get the URL from the first tag starting with 'source:' and it will open it in the WebView. Leave empty for the default behavior."))
+        screen.addPreference(
+            screen.editTextPreference(
+                SORT_BY_NS_KEY,
+                "Latest - Sort by Namespace",
+                SORT_BY_NS_DEFAULT,
+                "Sort by the given namespace for Latest, such as date_added.",
+            ),
+        )
+        screen.addPreference(
+            screen.editTextPreference(
+                URL_TAG_PREFIX_KEY,
+                "Set tag prefix to get WebView URL",
+                URL_TAG_PREFIX_DEFAULT,
+                "Example: 'source:' will try to get the URL from the first tag starting with 'source:' and it will open it in the WebView. Leave empty for the default behavior.",
+            ),
+        )
     }
 
-    private fun androidx.preference.PreferenceScreen.checkBoxPreference(key: String, title: String, default: Boolean, summary: String = ""): androidx.preference.CheckBoxPreference {
-        return androidx.preference.CheckBoxPreference(context).apply {
+    private fun androidx.preference.PreferenceScreen.checkBoxPreference(
+        key: String,
+        title: String,
+        default: Boolean,
+        summary: String = "",
+    ): androidx.preference.CheckBoxPreference =
+        androidx.preference.CheckBoxPreference(context).apply {
             this.key = key
             this.title = title
             this.summary = summary
@@ -335,10 +390,16 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
                 preferences.edit().putBoolean(this.key, newValue as Boolean).commit()
             }
         }
-    }
 
-    private fun androidx.preference.PreferenceScreen.editTextPreference(key: String, title: String, default: String, summary: String, isPassword: Boolean = false, refreshSummary: Boolean = false): androidx.preference.EditTextPreference {
-        return androidx.preference.EditTextPreference(context).apply {
+    private fun androidx.preference.PreferenceScreen.editTextPreference(
+        key: String,
+        title: String,
+        default: String,
+        summary: String,
+        isPassword: Boolean = false,
+        refreshSummary: Boolean = false,
+    ): androidx.preference.EditTextPreference =
+        androidx.preference.EditTextPreference(context).apply {
             this.key = key
             this.title = title
             this.summary = summary
@@ -369,7 +430,6 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
                 }
             }
         }
-    }
 
     // Helper
     private fun getRandomID(query: String): String {
@@ -381,24 +441,27 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         return (archive?.get("arcid") ?: archive?.get("id"))?.jsonPrimitive?.content ?: ""
     }
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String?, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
+    open class UriPartFilter(
+        displayName: String,
+        private val vals: Array<Pair<String?, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
         fun toUriPart() = vals[state].first
     }
 
     private fun getCategories() {
-        Single.fromCallable {
-            client.newCall(GET("$baseUrl/api/categories", headers)).execute()
-        }
-            .subscribeOn(Schedulers.io())
+        Single
+            .fromCallable {
+                client.newCall(GET("$baseUrl/api/categories", headers)).execute()
+            }.subscribeOn(Schedulers.io())
             .observeOn(Schedulers.io())
             .subscribe(
                 {
-                    categories = try {
-                        json.decodeFromString(it.body.string())
-                    } catch (e: Exception) {
-                        emptyList()
-                    }
+                    categories =
+                        try {
+                            json.decodeFromString(it.body.string())
+                        } catch (e: Exception) {
+                            emptyList()
+                        }
                 },
                 {},
             )
@@ -420,17 +483,13 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
                         val pinned = if (it.pinned == "1") pin else ""
                         Pair(it.id, "$pinned${it.name}")
                     },
-            )
-            .toTypedArray()
+            ).toTypedArray()
     }
 
-    private fun startingPageStats(): String {
-        return if (maxResultCount > 0 && totalRecords > 0) " ($maxResultCount / $lastRecordsFiltered items)" else ""
-    }
+    private fun startingPageStats(): String =
+        if (maxResultCount > 0 && totalRecords > 0) " ($maxResultCount / $lastRecordsFiltered items)" else ""
 
-    private fun getApiUriBuilder(path: String): Uri.Builder {
-        return Uri.parse("$baseUrl$path").buildUpon()
-    }
+    private fun getApiUriBuilder(path: String): Uri.Builder = Uri.parse("$baseUrl$path").buildUpon()
 
     private fun getThumbnailUri(id: String): String {
         val uri = getApiUriBuilder("/api/archives/$id/thumbnail")
@@ -438,23 +497,23 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         return uri.toString()
     }
 
-    private tailrec fun getTopResponse(response: Response): Response {
-        return if (response.priorResponse == null) response else getTopResponse(response.priorResponse!!)
-    }
+    private tailrec fun getTopResponse(response: Response): Response =
+        if (response.priorResponse == null) response else getTopResponse(response.priorResponse!!)
 
-    private fun getStart(response: Response): Int {
-        return getTopResponse(response).request.url.queryParameter("start")!!.toInt()
-    }
+    private fun getStart(response: Response): Int =
+        getTopResponse(response)
+            .request.url
+            .queryParameter("start")!!
+            .toInt()
 
-    private fun getReaderId(url: String): String {
-        return Regex("""/reader\?id=(\w{40})""").find(url)?.groupValues?.get(1) ?: ""
-    }
+    private fun getReaderId(url: String): String = Regex("""/reader\?id=(\w{40})""").find(url)?.groupValues?.get(1) ?: ""
 
-    private fun getThumbnailId(url: String): String {
-        return Regex("""/(\w{40})/thumbnail""").find(url)?.groupValues?.get(1) ?: ""
-    }
+    private fun getThumbnailId(url: String): String = Regex("""/(\w{40})/thumbnail""").find(url)?.groupValues?.get(1) ?: ""
 
-    private fun getNSTag(tags: String?, tag: String): List<String>? {
+    private fun getNSTag(
+        tags: String?,
+        tag: String,
+    ): List<String>? {
         tags?.split(',')?.forEach {
             if (it.contains(':')) {
                 val temp = it.trim().split(":", limit = 2)
@@ -473,14 +532,15 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
     }
 
     // Headers (currently auth) are done in headersBuilder
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .dns(Dns.SYSTEM)
-        .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-            if (response.code == 401) throw IOException("If the server is in No-Fun Mode make sure the extension's API Key is correct.")
-            response
-        }
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .dns(Dns.SYSTEM)
+            .addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                if (response.code == 401) throw IOException("If the server is in No-Fun Mode make sure the extension's API Key is correct.")
+                response
+            }.build()
 
     init {
         if (baseUrl.isNotBlank()) {

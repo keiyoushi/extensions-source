@@ -22,7 +22,6 @@ class Hentai3(
     override val lang: String = "all",
     private val searchLang: String = "",
 ) : HttpSource() {
-
     override val name = "3Hentai"
 
     override val baseUrl = "https://3hentai.net"
@@ -31,14 +30,18 @@ class Hentai3(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("referer", "$baseUrl/")
-        .set("origin", baseUrl)
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .set("referer", "$baseUrl/")
+            .set("origin", baseUrl)
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&pages=$page&"}sort=popular", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request =
+        GET(
+            "$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/${if (page > 1) page else ""}?" else "search?q=pages%3A>0&pages=$page&"}sort=popular",
+            headers,
+        )
 
     override fun popularMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -49,24 +52,26 @@ class Hentai3(
         return MangasPage(mangas, hasNextPage)
     }
 
-    private fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    private fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             title = element.selectFirst("div")!!.ownText()
             setUrlWithoutDomain(element.absUrl("href"))
             thumbnail_url = element.selectFirst("img:not([class])")!!.absUrl("src")
         }
-    }
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/$page" else "search?q=pages%3A>0&pages=$page"}", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$baseUrl/${if (searchLang.isNotEmpty()) "language/$searchLang/$page" else "search?q=pages%3A>0&pages=$page"}", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val tags = mutableListOf<String>()
         var singleTag: Pair<String, String>? = null
         var sort = ""
@@ -99,28 +104,33 @@ class Hentai3(
             }
         }
 
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            if (singleTag != null) {
-                addPathSegment(singleTag!!.first)
-                addPathSegment(singleTag!!.second)
-                if (page > 1) addPathSegment(page.toString())
-            } else {
-                addPathSegment("search")
-                addQueryParameter(
-                    "q",
-                    when {
-                        tags.isNotEmpty() -> tags.joinToString()
-                        query.isNotEmpty() -> query
-                        else -> "page:>0"
-                    },
-                )
-                if (page > 1) addQueryParameter("page", page.toString())
-            }
-            addQueryParameter("sort", sort)
-        }.build()
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    if (singleTag != null) {
+                        addPathSegment(singleTag!!.first)
+                        addPathSegment(singleTag!!.second)
+                        if (page > 1) addPathSegment(page.toString())
+                    } else {
+                        addPathSegment("search")
+                        addQueryParameter(
+                            "q",
+                            when {
+                                tags.isNotEmpty() -> tags.joinToString()
+                                query.isNotEmpty() -> query
+                                else -> "page:>0"
+                            },
+                        )
+                        if (page > 1) addQueryParameter("page", page.toString())
+                    }
+                    addQueryParameter("sort", sort)
+                }.build()
 
         return GET(url, headers)
     }
+
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     // Details
@@ -128,11 +138,12 @@ class Hentai3(
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
 
-        fun String.capitalizeEach() = this.split(" ").joinToString(" ") { s ->
-            s.replaceFirstChar { sr ->
-                if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
+        fun String.capitalizeEach() =
+            this.split(" ").joinToString(" ") { s ->
+                s.replaceFirstChar { sr ->
+                    if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
+                }
             }
-        }
         return SManga.create().apply {
             val authors = document.select("a[href*=/groups/]").eachText().joinToString()
             val artists = document.select("a[href*=/artists/]").eachText().joinToString()
@@ -140,40 +151,43 @@ class Hentai3(
             title = document.select("h1 > span").text()
             author = authors.ifEmpty { artists }
             artist = artists.ifEmpty { authors }
-            genre = document.select("a[href*=/tags/]").eachText().joinToString {
-                val capitalized = it.capitalizeEach()
-                if (capitalized.contains("male")) {
-                    capitalized.replace("(female)", "♀").replace("(male)", "♂")
-                } else {
-                    "$capitalized ◊"
-                }
-            }
-
-            description = buildString {
-                document.select("a[href*=/characters/]").eachText().joinToString().ifEmpty { null }?.let {
-                    append("Characters: ", it.capitalizeEach(), "\n\n")
-                }
-                document.select("a[href*=/series/]").eachText().joinToString().ifEmpty { null }?.let {
-                    append("Series: ", it.capitalizeEach(), "\n\n")
-                }
-                document.select("a[href*=/groups/]").eachText().joinToString().ifEmpty { null }?.let {
-                    append("Groups: ", it.capitalizeEach(), "\n\n")
-                }
-                document.select("a[href*=/language/]").eachText().joinToString().ifEmpty { null }?.let {
-                    append("Languages: ", it.capitalizeEach(), "\n\n")
+            genre =
+                document.select("a[href*=/tags/]").eachText().joinToString {
+                    val capitalized = it.capitalizeEach()
+                    if (capitalized.contains("male")) {
+                        capitalized.replace("(female)", "♀").replace("(male)", "♂")
+                    } else {
+                        "$capitalized ◊"
+                    }
                 }
 
-                append(document.select("div.tag-container:contains(pages:)").text(), "\n")
-            }
+            description =
+                buildString {
+                    document.select("a[href*=/characters/]").eachText().joinToString().ifEmpty { null }?.let {
+                        append("Characters: ", it.capitalizeEach(), "\n\n")
+                    }
+                    document.select("a[href*=/series/]").eachText().joinToString().ifEmpty { null }?.let {
+                        append("Series: ", it.capitalizeEach(), "\n\n")
+                    }
+                    document.select("a[href*=/groups/]").eachText().joinToString().ifEmpty { null }?.let {
+                        append("Groups: ", it.capitalizeEach(), "\n\n")
+                    }
+                    document.select("a[href*=/language/]").eachText().joinToString().ifEmpty { null }?.let {
+                        append("Languages: ", it.capitalizeEach(), "\n\n")
+                    }
+
+                    append(document.select("div.tag-container:contains(pages:)").text(), "\n")
+                }
             thumbnail_url = document.selectFirst("img[src*=thumbnail].w-96")?.absUrl("src")
             status = SManga.COMPLETED
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
-    val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    val dateFormat =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZZZZZ", Locale.ENGLISH).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
 
     // Chapters
 
@@ -183,11 +197,12 @@ class Hentai3(
             SChapter.create().apply {
                 name = "Chapter"
                 setUrlWithoutDomain(response.request.url.toString())
-                date_upload = try {
-                    dateFormat.parse(doc.select("time").text())!!.time
-                } catch (_: ParseException) {
-                    0L
-                }
+                date_upload =
+                    try {
+                        dateFormat.parse(doc.select("time").text())!!.time
+                    } catch (_: ParseException) {
+                        0L
+                    }
             },
         )
     }
@@ -203,5 +218,6 @@ class Hentai3(
     }
 
     override fun getFilterList() = getFilters()
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

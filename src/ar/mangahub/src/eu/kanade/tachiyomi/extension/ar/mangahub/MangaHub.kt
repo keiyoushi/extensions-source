@@ -3,14 +3,17 @@ package eu.kanade.tachiyomi.extension.ar.mangahub
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class MangaHub : ZeistManga(
-    "MangaHub",
-    "https://www.mangahub.link",
-    "ar",
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
+class MangaHub :
+    ZeistManga(
+        "MangaHub",
+        "https://www.mangahub.link",
+        "ar",
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(3)
+            .build()
 
     override val popularMangaSelector = "div#PopularPosts2 article"
     override val popularMangaSelectorTitle = "h3"

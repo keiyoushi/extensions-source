@@ -15,43 +15,47 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class DragonTranslationNet : Madara("DragonTranslation.net", "https://dragontranslation.net", "es") {
-
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/mangas?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangas?page=$page", headers)
 
     override fun popularMangaSelector() = "div:has(> div.series-card)"
 
     override fun popularMangaNextPageSelector() = "li.page-item a[rel=next]"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("div.series-box a").attr("href"))
-        thumbnail_url = element.select("img.thumb-img").attr("abs:src")
-        title = element.select(".series-title").text()
-    }
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.select("div.series-box a").attr("href"))
+            thumbnail_url = element.select("img.thumb-img").attr("abs:src")
+            title = element.select(".series-title").text()
+        }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val latestMangaContainer = document.selectFirst("div.d-flex:has(div.series-card)")
-        val mangaList = latestMangaContainer!!.select("> div").map { element ->
-            SManga.create().apply {
-                setUrlWithoutDomain(element.select("div.series-box a").attr("href"))
-                title = element.select(".series-title").text()
-                thumbnail_url = element.select("img.thumb-img").attr("abs:src")
+        val mangaList =
+            latestMangaContainer!!.select("> div").map { element ->
+                SManga.create().apply {
+                    setUrlWithoutDomain(element.select("div.series-box a").attr("href"))
+                    title = element.select(".series-title").text()
+                    thumbnail_url = element.select("img.thumb-img").attr("abs:src")
+                }
             }
-        }
         return MangasPage(mangaList, false)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("mangas")
-            .addQueryParameter("buscar", query)
-            .addQueryParameter("page", page.toString())
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegment("mangas")
+                .addQueryParameter("buscar", query)
+                .addQueryParameter("page", page.toString())
 
         return GET(url.build(), headers)
     }
@@ -78,13 +82,12 @@ class DragonTranslationNet : Madara("DragonTranslation.net", "https://dragontran
         return chapter
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div#chapter_imgs img").mapIndexed { index, element ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("div#chapter_imgs img").mapIndexed { index, element ->
             Page(
                 index,
                 document.location(),
                 element.attr("abs:src"),
             )
         }
-    }
 }

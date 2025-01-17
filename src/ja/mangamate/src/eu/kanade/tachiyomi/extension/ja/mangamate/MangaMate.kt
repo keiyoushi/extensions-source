@@ -23,18 +23,18 @@ class MangaMate :
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("ja")),
     ),
     ConfigurableSource {
-
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override val client = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
-        .rateLimit(3)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .setRandomUserAgent(
+                preferences.getPrefUAType(),
+                preferences.getPrefCustomUA(),
+            ).rateLimit(3)
+            .build()
 
     override val seriesAuthorSelector = ".fmed b:contains(作者) + span"
 

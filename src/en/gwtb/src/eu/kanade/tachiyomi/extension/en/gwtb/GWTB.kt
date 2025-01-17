@@ -32,42 +32,42 @@ class GWTB : HttpSource() {
         listOf(Page(0, "", response.asJsoup().selectFirst(".comic_title + img")!!.absUrl("src")))
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        SManga.create().apply {
-            title = name
-            url = "/index.php"
-            author = "Kimmo Lemetti"
-            artist = "Kimmo Lemetti"
-            thumbnail_url = "$baseUrl/images/yarr.jpg"
-            description = "Because war can be boring too."
-        }.let { Observable.just(MangasPage(listOf(it), false)) }
+        SManga
+            .create()
+            .apply {
+                title = name
+                url = "/index.php"
+                author = "Kimmo Lemetti"
+                artist = "Kimmo Lemetti"
+                thumbnail_url = "$baseUrl/images/yarr.jpg"
+                description = "Because war can be boring too."
+            }.let { Observable.just(MangasPage(listOf(it), false)) }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
-        fetchPopularManga(page)
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = fetchPopularManga(page)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        Observable.just(manga.apply { initialized = true })
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga.apply { initialized = true })
 
-    override fun latestUpdatesRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun popularMangaRequest(page: Int) =
-        throw UnsupportedOperationException()
+    override fun popularMangaRequest(page: Int) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ) = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun popularMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun mangaDetailsParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }

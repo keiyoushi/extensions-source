@@ -27,7 +27,6 @@ import java.util.Locale
 import java.util.TimeZone
 
 class Doujins : HttpSource() {
-
     override val baseUrl: String = "https://doujins.com"
 
     override val lang: String = "en"
@@ -38,12 +37,17 @@ class Doujins : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return listOf(
+    override fun chapterListParse(response: Response): List<SChapter> =
+        listOf(
             SChapter.create().apply {
                 val element = response.asJsoup()
                 name = "Chapter"
-                scanlator = element.select("div.folder-message:contains(Translated)").text().substringAfter("by:").trim()
+                scanlator =
+                    element
+                        .select("div.folder-message:contains(Translated)")
+                        .text()
+                        .substringAfter("by:")
+                        .trim()
                 setUrlWithoutDomain(response.request.url.toString())
 
                 val dateAndPageCountString = element.select(".text-md-right.text-sm-left > .folder-message").text()
@@ -58,12 +62,11 @@ class Doujins : HttpSource() {
                 }
             },
         )
-    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return MangasPage(
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        MangasPage(
             json.decodeFromString<JsonObject>(response.body.string())["folders"]!!.jsonArray.map {
                 SManga.create().apply {
                     setUrlWithoutDomain(it.jsonObject["link"]!!.jsonPrimitive.content)
@@ -76,22 +79,24 @@ class Doujins : HttpSource() {
             },
             true,
         )
-    }
 
     private fun getLatestPageUrl(page: Int): String {
-        val endDate = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-            add(Calendar.DATE, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-            add(Calendar.DATE, -PAGE_DAYS * (page - 1))
-        }
+        val endDate =
+            Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                add(Calendar.DATE, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                add(Calendar.DATE, -PAGE_DAYS * (page - 1))
+            }
 
         val endDateSec = endDate.timeInMillis / 1000
-        val startDateSec = endDate.apply {
-            add(Calendar.DATE, -PAGE_DAYS)
-        }.timeInMillis / 1000
+        val startDateSec =
+            endDate
+                .apply {
+                    add(Calendar.DATE, -PAGE_DAYS)
+                }.timeInMillis / 1000
 
         return "$baseUrl/folders?start=$startDateSec&end=$endDateSec"
     }
@@ -104,7 +109,12 @@ class Doujins : HttpSource() {
             title = document.select(".folder-title a").last()!!.text()
             artist = document.select(".gallery-artist a").joinToString { it.text() }
             author = artist
-            genre = document.select(".tag-area").first()!!.select("a").joinToString { it.text() }
+            genre =
+                document
+                    .select(".tag-area")
+                    .first()!!
+                    .select("a")
+                    .joinToString { it.text() }
         }
     }
 
@@ -122,7 +132,11 @@ class Doujins : HttpSource() {
 
     override fun searchMangaParse(response: Response) = parseGalleryPage(response.asJsoup())
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val seriesFilter = filterList.findInstance<SeriesFilter>()!!
         val sortFilter = filterList.findInstance<SortFilter>()!!
@@ -148,8 +162,14 @@ class Doujins : HttpSource() {
                 SManga.create().apply {
                     setUrlWithoutDomain(it.attr("href"))
                     title = it.select("div.title .text").text()
-                    artist = it.parent()!!.nextElementSibling()!!.select(".single-line strong").last()
-                        ?.text()?.substringAfter("Artist: ")
+                    artist =
+                        it
+                            .parent()!!
+                            .nextElementSibling()!!
+                            .select(".single-line strong")
+                            .last()
+                            ?.text()
+                            ?.substringAfter("Artist: ")
                     author = artist
                     thumbnail_url = it.select("img").attr("srcset")
                 }
@@ -162,92 +182,95 @@ class Doujins : HttpSource() {
         )
     }
 
-    override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("Text search ignores series and period filters"),
-        Filter.Separator(),
+    override fun getFilterList(): FilterList =
+        FilterList(
+            Filter.Header("Text search ignores series and period filters"),
+            Filter.Separator(),
+            Filter.Header("Series filter overrides period filter"),
+            SeriesFilter(),
+            Filter.Separator(),
+            Filter.Header("Period filter only applies at initial page"),
+            PopularityPeriodFilter(),
+            Filter.Separator(),
+            Filter.Header("Sort only works with text search and series filter"),
+            SortFilter(),
+        )
 
-        Filter.Header("Series filter overrides period filter"),
-        SeriesFilter(),
-        Filter.Separator(),
+    private class SeriesFilter :
+        UriPartFilter(
+            "Series",
+            arrayOf(
+                Pair("None", ""),
+                Pair("Doujins - Original Series", "/doujins-original-series-19934"),
+                Pair("Hentai Magazine Chapters", "/hentai-magazine-chapters-2766"),
+                Pair("Hentai Manga", "/hentai-manga-19"),
+                Pair("Fate Grand Order", "/fate-grand-order-doujins-28615"),
+                Pair("CG Sets - Original Series", "/cg-sets-original-series-14865"),
+                Pair("Touhou", "/touhou-doujins-7748"),
+                Pair("Naruto", "/naruto-doujins-5761"),
+                Pair("Kantai Collection", "/kantai-collection-doujins-22720"),
+                Pair("Hentai Game CG-Sets", "/hentai-game-cg-sets-2422"),
+                Pair("One Piece", "/one-piece-doujins-6080"),
+                Pair("Granblue Fantasy", "/granblue-fantasy-doujins-28177"),
+                Pair("Azur Lane", "/azur-lane-doujins-34298"),
+                Pair("Sword Art Online", "/sword-art-online-doujins-7246"),
+                Pair("Idolmaster", "/idolmaster-4281"),
+                Pair("My Hero Academia", "/my-hero-academia-doujins-28744"),
+                Pair("Love Live", "/love-live-doujins-21865"),
+                Pair("Pokemon", "/pokemon-doujins-6393"),
+                Pair("Dragon Ball", "/dragon-ball-doujins-1238"),
+                Pair("CGs - Mixed Series", "/cgs-mixed-series-35311"),
+                Pair("Doujins - Mixed Series", "/doujins-mixed-series-20091"),
+                Pair("Hentai Magazine Chapters", "/hentai-magazine-chapters-2766"),
+                Pair("Hentai Magazine Chapters - Super-Shorts", "/hentai-magazine-chapters-super-shorts-19933"),
+                Pair("Hentai Manga", "/hentai-manga-19"),
+            ),
+        )
 
-        Filter.Header("Period filter only applies at initial page"),
-        PopularityPeriodFilter(),
-        Filter.Separator(),
+    private class SortFilter :
+        UriPartFilter(
+            "Sort",
+            arrayOf(
+                Pair("Newest First", ""),
+                Pair("Oldest First", "created_at"),
+                Pair("Alphabetical", "name"),
+                Pair("Rating", "-cached_score"),
+                Pair("Popularity", "-cached_views"),
+            ),
+        )
 
-        Filter.Header("Sort only works with text search and series filter"),
-        SortFilter(),
-    )
+    private class PopularityPeriodFilter :
+        UriPartFilter(
+            "Period",
+            arrayOf(
+                Pair("This Month", "/top"),
+                Pair("This Year", "/top/year"),
+                Pair("All Time", "/top/all"),
+            ),
+        )
 
-    private class SeriesFilter : UriPartFilter(
-        "Series",
-        arrayOf(
-            Pair("None", ""),
-            Pair("Doujins - Original Series", "/doujins-original-series-19934"),
-            Pair("Hentai Magazine Chapters", "/hentai-magazine-chapters-2766"),
-            Pair("Hentai Manga", "/hentai-manga-19"),
-            Pair("Fate Grand Order", "/fate-grand-order-doujins-28615"),
-            Pair("CG Sets - Original Series", "/cg-sets-original-series-14865"),
-            Pair("Touhou", "/touhou-doujins-7748"),
-            Pair("Naruto", "/naruto-doujins-5761"),
-            Pair("Kantai Collection", "/kantai-collection-doujins-22720"),
-            Pair("Hentai Game CG-Sets", "/hentai-game-cg-sets-2422"),
-            Pair("One Piece", "/one-piece-doujins-6080"),
-            Pair("Granblue Fantasy", "/granblue-fantasy-doujins-28177"),
-            Pair("Azur Lane", "/azur-lane-doujins-34298"),
-            Pair("Sword Art Online", "/sword-art-online-doujins-7246"),
-            Pair("Idolmaster", "/idolmaster-4281"),
-            Pair("My Hero Academia", "/my-hero-academia-doujins-28744"),
-            Pair("Love Live", "/love-live-doujins-21865"),
-            Pair("Pokemon", "/pokemon-doujins-6393"),
-            Pair("Dragon Ball", "/dragon-ball-doujins-1238"),
-            Pair("CGs - Mixed Series", "/cgs-mixed-series-35311"),
-            Pair("Doujins - Mixed Series", "/doujins-mixed-series-20091"),
-            Pair("Hentai Magazine Chapters", "/hentai-magazine-chapters-2766"),
-            Pair("Hentai Magazine Chapters - Super-Shorts", "/hentai-magazine-chapters-super-shorts-19933"),
-            Pair("Hentai Manga", "/hentai-manga-19"),
-        ),
-    )
-
-    private class SortFilter : UriPartFilter(
-        "Sort",
-        arrayOf(
-            Pair("Newest First", ""),
-            Pair("Oldest First", "created_at"),
-            Pair("Alphabetical", "name"),
-            Pair("Rating", "-cached_score"),
-            Pair("Popularity", "-cached_views"),
-        ),
-    )
-
-    private class PopularityPeriodFilter : UriPartFilter(
-        "Period",
-        arrayOf(
-            Pair("This Month", "/top"),
-            Pair("This Year", "/top/year"),
-            Pair("All Time", "/top/all"),
-        ),
-    )
-
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    private open class UriPartFilter(
+        displayName: String,
+        val vals: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
-    private fun SimpleDateFormat.parseOrNull(string: String): Date? {
-        return try {
+    private fun SimpleDateFormat.parseOrNull(string: String): Date? =
+        try {
             parse(string)
         } catch (e: ParseException) {
             null
         }
-    }
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
     companion object {
         private const val PAGE_DAYS = 3
         private val ORDINAL_SUFFIXES = listOf("th", "st", "nd", "rd")
-        private val MANGA_DETAILS_DATE_FORMAT = ORDINAL_SUFFIXES.map {
-            SimpleDateFormat("MMMM dd'$it', yyyy", Locale.US)
-        }
+        private val MANGA_DETAILS_DATE_FORMAT =
+            ORDINAL_SUFFIXES.map {
+                SimpleDateFormat("MMMM dd'$it', yyyy", Locale.US)
+            }
     }
 }

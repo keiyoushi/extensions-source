@@ -13,19 +13,22 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class EveriaClub() : ParsedHttpSource() {
+class EveriaClub : ParsedHttpSource() {
     override val baseUrl = "https://everia.club"
     override val lang = "all"
     override val name = "Everia.club"
     override val supportsLatest = true
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     private val Element.imgSrc: String
-        get() = attr("data-lazy-src")
-            .ifEmpty { attr("data-src") }
-            .ifEmpty { attr("src") }
+        get() =
+            attr("data-lazy-src")
+                .ifEmpty { attr("data-src") }
+                .ifEmpty { attr("src") }
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
@@ -37,9 +40,8 @@ class EveriaClub() : ParsedHttpSource() {
     }
 
     override fun latestUpdatesNextPageSelector() = ".next"
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/page/$page/")
-    }
+
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page/")
 
     override fun latestUpdatesSelector() = "#blog-entries > article"
 
@@ -53,13 +55,21 @@ class EveriaClub() : ParsedHttpSource() {
     }
 
     override fun popularMangaNextPageSelector(): String? = null
+
     override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
+
     override fun popularMangaSelector() = ".wli_popular_posts-class li"
 
     // Search
     override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
+
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val tagFilter = filterList.findInstance<TagFilter>()!!
         val categoryFilter = filterList.findInstance<CategoryFilter>()!!
@@ -111,16 +121,16 @@ class EveriaClub() : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
-    override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Only one filter will be applied!"),
-        Filter.Separator(),
-        CategoryFilter(),
-        TagFilter(),
-    )
+    override fun getFilterList(): FilterList =
+        FilterList(
+            Filter.Header("NOTE: Only one filter will be applied!"),
+            Filter.Separator(),
+            CategoryFilter(),
+            TagFilter(),
+        )
 
     open class UriPartFilter(
         displayName: String,
@@ -129,19 +139,20 @@ class EveriaClub() : ParsedHttpSource() {
         fun toUriPart() = valuePair[state].second
     }
 
-    class CategoryFilter : UriPartFilter(
-        "Category",
-        arrayOf(
-            Pair("Any", ""),
-            Pair("Gravure", "/gravure"),
-            Pair("Aidol", "/aidol"),
-            Pair("Magazine", "/magazine"),
-            Pair("Korea", "/korea"),
-            Pair("Thailand", "/thailand"),
-            Pair("Chinese", "/chinese"),
-            Pair("Cosplay", "/cosplay"),
-        ),
-    )
+    class CategoryFilter :
+        UriPartFilter(
+            "Category",
+            arrayOf(
+                Pair("Any", ""),
+                Pair("Gravure", "/gravure"),
+                Pair("Aidol", "/aidol"),
+                Pair("Magazine", "/magazine"),
+                Pair("Korea", "/korea"),
+                Pair("Thailand", "/thailand"),
+                Pair("Chinese", "/chinese"),
+                Pair("Cosplay", "/cosplay"),
+            ),
+        )
 
     class TagFilter : Filter.Text("Tag")
 

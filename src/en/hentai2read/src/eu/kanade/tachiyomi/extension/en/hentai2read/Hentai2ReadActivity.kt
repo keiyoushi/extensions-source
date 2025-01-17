@@ -18,11 +18,12 @@ class Hentai2ReadActivity : Activity() {
         if (pathSegments != null) {
             // TODO: filter standard paths
             val id = pathSegments[0]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Hentai2Read.PREFIX_ID_SEARCH}$id")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${Hentai2Read.PREFIX_ID_SEARCH}$id")
+                    putExtra("filter", packageName)
+                }
 
             try {
                 startActivity(mainIntent)

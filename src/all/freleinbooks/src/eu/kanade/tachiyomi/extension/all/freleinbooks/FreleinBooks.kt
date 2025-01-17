@@ -14,19 +14,22 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class FreleinBooks() : ParsedHttpSource() {
+class FreleinBooks : ParsedHttpSource() {
     override val baseUrl = "https://books.frelein.my.id"
     override val lang = "all"
     override val name = "Frelein Books"
     override val supportsLatest = true
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     private val Element.imgSrc: String
-        get() = attr("data-lazy-src")
-            .ifEmpty { attr("data-src") }
-            .ifEmpty { attr("src") }
+        get() =
+            attr("data-lazy-src")
+                .ifEmpty { attr("data-src") }
+                .ifEmpty { attr("src") }
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
@@ -38,8 +41,9 @@ class FreleinBooks() : ParsedHttpSource() {
     }
 
     override fun latestUpdatesNextPageSelector() = ".olderLink"
-    override fun latestUpdatesRequest(page: Int): Request {
-        return if (page == 1) {
+
+    override fun latestUpdatesRequest(page: Int): Request =
+        if (page == 1) {
             GET(baseUrl)
         } else {
             val dateParam = page * 7 * 2
@@ -51,7 +55,6 @@ class FreleinBooks() : ParsedHttpSource() {
             // now the date is 14 days back
             GET("$baseUrl/search?updated-max=${formatter.format(calendar.time)}T12:38:00%2B07:00&max-results=12&start=12&by-date=false")
         }
-    }
 
     override fun latestUpdatesSelector() = ".blogPosts > article"
 
@@ -65,13 +68,21 @@ class FreleinBooks() : ParsedHttpSource() {
     }
 
     override fun popularMangaNextPageSelector(): String? = null
+
     override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
+
     override fun popularMangaSelector() = ".itemPopulars article"
 
     // Search
     override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
+
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val tagFilter = filterList.findInstance<TagFilter>()!!
         val groupFilter = filterList.findInstance<GroupFilter>()!!
@@ -93,9 +104,14 @@ class FreleinBooks() : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.title = document.select(".postTitle").text()
-        manga.description = "Read ${document.select(".postTitle").text()} \n \nNote: If you encounters error when opening the magazine, please press the WebView button then leave a comment on our web so we can update it soon."
-        manga.genre = document.select(".labelLink > a")
-            .joinToString(", ") { it.text() }
+        manga.description =
+            "Read ${document.select(
+                ".postTitle",
+            ).text()} \n \nNote: If you encounters error when opening the magazine, please press the WebView button then leave a comment on our web so we can update it soon."
+        manga.genre =
+            document
+                .select(".labelLink > a")
+                .joinToString(", ") { it.text() }
         manga.status = SManga.COMPLETED
         return manga
     }
@@ -143,19 +159,19 @@ class FreleinBooks() : ParsedHttpSource() {
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Filters
 
-    override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Only one filter will be applied!"),
-        Filter.Separator(),
-        GroupFilter(),
-        MagazineFilter(),
-        FashionMagazineFilter(),
-        TagFilter(),
-    )
+    override fun getFilterList(): FilterList =
+        FilterList(
+            Filter.Header("NOTE: Only one filter will be applied!"),
+            Filter.Separator(),
+            GroupFilter(),
+            MagazineFilter(),
+            FashionMagazineFilter(),
+            TagFilter(),
+        )
 
     open class UriPartFilter(
         displayName: String,
@@ -164,94 +180,97 @@ class FreleinBooks() : ParsedHttpSource() {
         fun toUriPart() = valuePair[state].second
     }
 
-    class MagazineFilter : UriPartFilter(
-        "Magazine",
-        arrayOf(
-            Pair("Any", ""),
-            Pair("B.L.T.", "B.L.T."),
-            Pair("BIG ONE GIRLS", "BIG ONE GIRLS"),
-            Pair("BOMB!", "BOMB!"),
-            Pair("BRODY", "BRODY"),
-            Pair("BUBKA", "BUBKA"),
-            Pair("ENTAME", "ENTAME"),
-            Pair("EX Taishu", "EX Taishu"),
-            Pair("FINEBOYS", "FINEBOYS"),
-            Pair("FLASH", "FLASH"),
-            Pair("Fine", "Fine"),
-            Pair("Friday", "Friday"),
-            Pair("HINA_SATSU", "HINA_SATSU"),
-            Pair("IDOL AND READ", "IDOL AND READ"),
-            Pair("Kadokawa Scene 07", "Kadokawa Scene 07"),
-            Pair("Monthly Basketball", "Monthly Basketball"),
-            Pair("Monthly Young Magazine", "Monthly Young Magazine"),
-            Pair("NOGI_SATSU", "NOGI_SATSU"),
-            Pair("Nylon Japan", "Nylon Japan"),
-            Pair("Platinum FLASH", "Platinum FLASH"),
-            Pair("Shonen Magazine", "Shonen Magazine"),
-            Pair("Shukan Post", "Shukan Post"),
-            Pair("TOKYO NEWS MOOK", "TOKYO NEWS MOOK"),
-            Pair("TV LIFE,Tarzan", "TV LIFE,Tarzan"),
-            Pair("Tokyo Calendar", "Tokyo Calendar"),
-            Pair("Top Yell NEO", "Top Yell NEO"),
-            Pair("UTB", "UTB"),
-            Pair("Weekly Playboy", "Weekly Playboy"),
-            Pair("Weekly SPA", "Weekly SPA"),
-            Pair("Weekly SPA!", "Weekly SPA!"),
-            Pair("Weekly Shonen Champion", "Weekly Shonen Champion"),
-            Pair("Weekly Shonen Magazine", "Weekly Shonen Magazine"),
-            Pair("Weekly Shonen Sunday", "Weekly Shonen Sunday"),
-            Pair("Weekly Shounen Magazine", "Weekly Shounen Magazine"),
-            Pair("Weekly The Television Plus", "Weekly The Television Plus"),
-            Pair("Weekly Zero Jump", "Weekly Zero Jump"),
-            Pair("Yanmaga Web", "Yanmaga Web"),
-            Pair("Young Animal", "Young Animal"),
-            Pair("Young Champion", "Young Champion"),
-            Pair("Young Gangan", "Young Gangan"),
-            Pair("Young Jump", "Young Jump"),
-            Pair("Young Magazine", "Young Magazine"),
-            Pair("blt graph.", "blt graph."),
-            Pair("mini", "mini"),
-        ),
-    )
+    class MagazineFilter :
+        UriPartFilter(
+            "Magazine",
+            arrayOf(
+                Pair("Any", ""),
+                Pair("B.L.T.", "B.L.T."),
+                Pair("BIG ONE GIRLS", "BIG ONE GIRLS"),
+                Pair("BOMB!", "BOMB!"),
+                Pair("BRODY", "BRODY"),
+                Pair("BUBKA", "BUBKA"),
+                Pair("ENTAME", "ENTAME"),
+                Pair("EX Taishu", "EX Taishu"),
+                Pair("FINEBOYS", "FINEBOYS"),
+                Pair("FLASH", "FLASH"),
+                Pair("Fine", "Fine"),
+                Pair("Friday", "Friday"),
+                Pair("HINA_SATSU", "HINA_SATSU"),
+                Pair("IDOL AND READ", "IDOL AND READ"),
+                Pair("Kadokawa Scene 07", "Kadokawa Scene 07"),
+                Pair("Monthly Basketball", "Monthly Basketball"),
+                Pair("Monthly Young Magazine", "Monthly Young Magazine"),
+                Pair("NOGI_SATSU", "NOGI_SATSU"),
+                Pair("Nylon Japan", "Nylon Japan"),
+                Pair("Platinum FLASH", "Platinum FLASH"),
+                Pair("Shonen Magazine", "Shonen Magazine"),
+                Pair("Shukan Post", "Shukan Post"),
+                Pair("TOKYO NEWS MOOK", "TOKYO NEWS MOOK"),
+                Pair("TV LIFE,Tarzan", "TV LIFE,Tarzan"),
+                Pair("Tokyo Calendar", "Tokyo Calendar"),
+                Pair("Top Yell NEO", "Top Yell NEO"),
+                Pair("UTB", "UTB"),
+                Pair("Weekly Playboy", "Weekly Playboy"),
+                Pair("Weekly SPA", "Weekly SPA"),
+                Pair("Weekly SPA!", "Weekly SPA!"),
+                Pair("Weekly Shonen Champion", "Weekly Shonen Champion"),
+                Pair("Weekly Shonen Magazine", "Weekly Shonen Magazine"),
+                Pair("Weekly Shonen Sunday", "Weekly Shonen Sunday"),
+                Pair("Weekly Shounen Magazine", "Weekly Shounen Magazine"),
+                Pair("Weekly The Television Plus", "Weekly The Television Plus"),
+                Pair("Weekly Zero Jump", "Weekly Zero Jump"),
+                Pair("Yanmaga Web", "Yanmaga Web"),
+                Pair("Young Animal", "Young Animal"),
+                Pair("Young Champion", "Young Champion"),
+                Pair("Young Gangan", "Young Gangan"),
+                Pair("Young Jump", "Young Jump"),
+                Pair("Young Magazine", "Young Magazine"),
+                Pair("blt graph.", "blt graph."),
+                Pair("mini", "mini"),
+            ),
+        )
 
-    class FashionMagazineFilter : UriPartFilter(
-        "Fashion Magazine",
-        arrayOf(
-            Pair("Any", ""),
-            Pair("BAILA", "BAILA"),
-            Pair("Biteki", "Biteki"),
-            Pair("CLASSY", "CLASSY"),
-            Pair("CanCam", "CanCam"),
-            Pair("JJ", "JJ"),
-            Pair("LARME", "LARME"),
-            Pair("MARQUEE", "MARQUEE"),
-            Pair("Maquia", "Maquia"),
-            Pair("Men's non-no", "Men's non-no"),
-            Pair("More", "More"),
-            Pair("Oggi", "Oggi"),
-            Pair("Ray", "Ray"),
-            Pair("Seventeen", "Seventeen"),
-            Pair("Sweet", "Sweet"),
-            Pair("VOCE", "VOCE"),
-            Pair("ViVi", "ViVi"),
-            Pair("With", "With"),
-            Pair("aR", "aR"),
-            Pair("anan", "anan"),
-            Pair("bis", "bis"),
-            Pair("non-no", "non-no"),
-        ),
-    )
+    class FashionMagazineFilter :
+        UriPartFilter(
+            "Fashion Magazine",
+            arrayOf(
+                Pair("Any", ""),
+                Pair("BAILA", "BAILA"),
+                Pair("Biteki", "Biteki"),
+                Pair("CLASSY", "CLASSY"),
+                Pair("CanCam", "CanCam"),
+                Pair("JJ", "JJ"),
+                Pair("LARME", "LARME"),
+                Pair("MARQUEE", "MARQUEE"),
+                Pair("Maquia", "Maquia"),
+                Pair("Men's non-no", "Men's non-no"),
+                Pair("More", "More"),
+                Pair("Oggi", "Oggi"),
+                Pair("Ray", "Ray"),
+                Pair("Seventeen", "Seventeen"),
+                Pair("Sweet", "Sweet"),
+                Pair("VOCE", "VOCE"),
+                Pair("ViVi", "ViVi"),
+                Pair("With", "With"),
+                Pair("aR", "aR"),
+                Pair("anan", "anan"),
+                Pair("bis", "bis"),
+                Pair("non-no", "non-no"),
+            ),
+        )
 
-    class GroupFilter : UriPartFilter(
-        "Group",
-        arrayOf(
-            Pair("Any", ""),
-            Pair("Hinatazaka46", "Hinatazaka46"),
-            Pair("Nogizaka46", "Nogizaka46"),
-            Pair("Sakurazaka46", "Sakurazaka46"),
-            Pair("Keyakizaka46", "Keyakizaka46"),
-        ),
-    )
+    class GroupFilter :
+        UriPartFilter(
+            "Group",
+            arrayOf(
+                Pair("Any", ""),
+                Pair("Hinatazaka46", "Hinatazaka46"),
+                Pair("Nogizaka46", "Nogizaka46"),
+                Pair("Sakurazaka46", "Sakurazaka46"),
+                Pair("Keyakizaka46", "Keyakizaka46"),
+            ),
+        )
 
     class TagFilter : Filter.Text("Tag")
 

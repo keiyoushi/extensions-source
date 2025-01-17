@@ -5,17 +5,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-class MangaNoon : MangaThemesia(
-    "مانجا نون",
-    "https://vrnoin.site",
-    "ar",
-) {
-
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
+class MangaNoon :
+    MangaThemesia(
+        "مانجا نون",
+        "https://vrnoin.site",
+        "ar",
+    ) {
+    override fun chapterFromElement(element: Element): SChapter =
+        super.chapterFromElement(element).apply {
             date_upload = element.selectFirst(".chapterdate")?.text().parseChapterDate()
         }
-    }
 
     // From Galaxy
     override fun String?.parseChapterDate(): Long {

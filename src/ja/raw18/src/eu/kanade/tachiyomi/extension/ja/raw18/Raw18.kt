@@ -26,8 +26,8 @@ class Raw18 : WPComics("Raw18", "https://raw18.net", "ja", SimpleDateFormat("yyy
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return SManga.create().apply {
+    override fun mangaDetailsParse(document: Document): SManga =
+        SManga.create().apply {
             document.selectFirst("article#item-detail").let { info ->
                 author = info?.selectFirst("li.author p.col-xs-8")?.text()
                 status = info?.selectFirst("li.status p.col-xs-8")?.text().toStatus()
@@ -36,20 +36,27 @@ class Raw18 : WPComics("Raw18", "https://raw18.net", "ja", SimpleDateFormat("yyy
                 thumbnail_url = imageOrNull(info?.selectFirst("div.col-image img")!!)
             }
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/manga".toHttpUrl().newBuilder().apply {
-            filters.ifEmpty { getFilterList() }.forEach { filter ->
-                when (filter) {
-                    is GenreFilter -> filter.toUriPart()?.let { addQueryParameter("genre", it) }
-                    is StatusFilter -> filter.toUriPart()?.let { addQueryParameter("status", it) }
-                    else -> {}
-                }
-            }
-            addQueryParameter(queryParam, query)
-            addQueryParameter("page", page.toString())
-        }.build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val url =
+            "$baseUrl/search/manga"
+                .toHttpUrl()
+                .newBuilder()
+                .apply {
+                    filters.ifEmpty { getFilterList() }.forEach { filter ->
+                        when (filter) {
+                            is GenreFilter -> filter.toUriPart()?.let { addQueryParameter("genre", it) }
+                            is StatusFilter -> filter.toUriPart()?.let { addQueryParameter("status", it) }
+                            else -> {}
+                        }
+                    }
+                    addQueryParameter(queryParam, query)
+                    addQueryParameter("page", page.toString())
+                }.build()
 
         return GET(url, headers)
     }
@@ -114,21 +121,20 @@ class Raw18 : WPComics("Raw18", "https://raw18.net", "ja", SimpleDateFormat("yyy
         }
     }
 
-    override fun getStatusList(): List<Pair<String?, String>> {
-        return listOf(
+    override fun getStatusList(): List<Pair<String?, String>> =
+        listOf(
             Pair(null, "全て"),
             Pair("ongoing", "Ongoing"),
         )
-    }
 
-    override fun parseGenres(document: Document): List<Pair<String?, String>> {
-        return buildList {
+    override fun parseGenres(document: Document): List<Pair<String?, String>> =
+        buildList {
             add(null to "全てのジャンル")
             document.select(genresSelector).mapTo(this) { element ->
-                element.attr("href")
+                element
+                    .attr("href")
                     .removeSuffix("/")
                     .substringAfterLast(genresUrlDelimiter) to element.text()
             }
         }
-    }
 }

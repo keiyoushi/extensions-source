@@ -9,12 +9,13 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SirenKomik : MangaThemesia(
-    "Siren Komik",
-    "https://sirenkomik.my.id",
-    "id",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
-) {
+class SirenKomik :
+    MangaThemesia(
+        "Siren Komik",
+        "https://sirenkomik.my.id",
+        "id",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
+    ) {
     override val id = 8457447675410081142
 
     override val hasProjectPage = true
@@ -30,11 +31,12 @@ class SirenKomik : MangaThemesia(
     // Overridden since MangeThemesia doesn't search for jsonData in script tags, because it finds the bait images with the default selector
     override val pageSelector: String = ":not(*)"
 
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        name = element.selectFirst(".nomer-chapter")!!.text()
-        date_upload = element.selectFirst(".tgl-chapter")?.text().parseChapterDate()
-        setUrlWithoutDomain(element.absUrl("href"))
-    }
+    override fun chapterFromElement(element: Element) =
+        SChapter.create().apply {
+            name = element.selectFirst(".nomer-chapter")!!.text()
+            date_upload = element.selectFirst(".tgl-chapter")?.text().parseChapterDate()
+            setUrlWithoutDomain(element.absUrl("href"))
+        }
 
     override fun pageListParse(document: Document): List<Page> {
         // Get external JS for image urls
@@ -44,9 +46,11 @@ class SirenKomik : MangaThemesia(
             return super.pageListParse(document)
         }
 
-        val scriptResponse = client.newCall(
-            GET(scriptUrl, headers),
-        ).execute()
+        val scriptResponse =
+            client
+                .newCall(
+                    GET(scriptUrl, headers),
+                ).execute()
 
         // Inject external JS
         scriptEl.text(scriptResponse.body.string())

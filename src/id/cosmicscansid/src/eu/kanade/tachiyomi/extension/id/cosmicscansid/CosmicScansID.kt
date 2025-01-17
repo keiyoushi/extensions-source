@@ -10,27 +10,36 @@ import okhttp3.Request
 import org.jsoup.select.Elements
 import java.util.concurrent.TimeUnit
 
-class CosmicScansID : MangaThemesia(
-    "CosmicScans.id",
-    "https://cosmic345.co",
-    "id",
-) {
-
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(20, 4, TimeUnit.SECONDS)
-        .build()
+class CosmicScansID :
+    MangaThemesia(
+        "CosmicScans.id",
+        "https://cosmic345.co",
+        "id",
+    ) {
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(20, 4, TimeUnit.SECONDS)
+            .build()
 
     override val hasProjectPage = true
 
     // search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isBlank()) {
             return super.searchMangaRequest(page, query, filters)
         }
 
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("page/$page/")
-            .addQueryParameter("s", query)
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments("page/$page/")
+                .addQueryParameter("s", query)
 
         return GET(url.build())
     }
@@ -39,6 +48,7 @@ class CosmicScansID : MangaThemesia(
 
     // manga details
     override val seriesDescriptionSelector = ".entry-content[itemprop=description] :not(a,p:has(a))"
+
     override fun Elements.imgAttr(): String = this.first()?.imgAttr() ?: ""
 
     // pages

@@ -28,36 +28,33 @@ class Mitaku : ParsedHttpSource() {
 
     override fun popularMangaSelector() = "div.cm-primary article"
 
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
 
-        title = element.selectFirst("a")!!.attr("title")
+            title = element.selectFirst("a")!!.attr("title")
 
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-    }
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        }
 
     override fun popularMangaNextPageSelector() = "div.wp-pagenavi a.page.larger"
 
     // =============================== Latest ===============================
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun latestUpdatesSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun latestUpdatesNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
 
     // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val filterList = if (filters.isEmpty()) getFilterList() else filters
         val tagFilter = filterList.findInstance<TagFilter>()!!
         val categoryFilter = filterList.findInstance<CategoryFilter>()!!
@@ -68,18 +65,24 @@ class Mitaku : ParsedHttpSource() {
                 GET(url, headers)
             }
             query.isEmpty() && tagFilter.state.isNotEmpty() -> {
-                val url = baseUrl.toHttpUrl().newBuilder()
-                    .addPathSegment("tag")
-                    .addPathSegment(tagFilter.toUriPart())
-                    .addPathSegment("page")
-                    .addPathSegment(page.toString())
-                    .build()
+                val url =
+                    baseUrl
+                        .toHttpUrl()
+                        .newBuilder()
+                        .addPathSegment("tag")
+                        .addPathSegment(tagFilter.toUriPart())
+                        .addPathSegment("page")
+                        .addPathSegment(page.toString())
+                        .build()
                 GET(url, headers)
             }
             query.isNotEmpty() -> {
-                val url = "$baseUrl/page/$page/".toHttpUrl().newBuilder()
-                    .addQueryParameter("s", query)
-                    .build()
+                val url =
+                    "$baseUrl/page/$page/"
+                        .toHttpUrl()
+                        .newBuilder()
+                        .addQueryParameter("s", query)
+                        .build()
                 GET(url, headers)
             }
             else -> latestUpdatesRequest(page)
@@ -92,35 +95,33 @@ class Mitaku : ParsedHttpSource() {
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        status = SManga.COMPLETED
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        with(document.selectFirst("article")!!) {
-            title = selectFirst("h1")!!.text()
-            val catGenres = select("span.cat-links a").joinToString { it.text() }
-            val tagGenres = select("span.tag-links a").joinToString { it.text() }
-            genre = listOf(catGenres, tagGenres).filter { it.isNotEmpty() }.joinToString()
+    override fun mangaDetailsParse(document: Document) =
+        SManga.create().apply {
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            with(document.selectFirst("article")!!) {
+                title = selectFirst("h1")!!.text()
+                val catGenres = select("span.cat-links a").joinToString { it.text() }
+                val tagGenres = select("span.tag-links a").joinToString { it.text() }
+                genre = listOf(catGenres, tagGenres).filter { it.isNotEmpty() }.joinToString()
+            }
         }
-    }
 
     // ============================== Chapters ==============================
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val chapter = SChapter.create().apply {
-            url = manga.url
-            chapter_number = 1F
-            name = "Chapter"
-        }
+        val chapter =
+            SChapter.create().apply {
+                url = manga.url
+                chapter_number = 1F
+                name = "Chapter"
+            }
 
         return Observable.just(listOf(chapter))
     }
 
-    override fun chapterListSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListSelector(): String = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
 
@@ -133,9 +134,7 @@ class Mitaku : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     open class UriPartFilter(
         displayName: String,
@@ -144,27 +143,28 @@ class Mitaku : ParsedHttpSource() {
         fun toUriPart() = valuePair[state].second
     }
 
-    class CategoryFilter : UriPartFilter(
-        "Category",
-        arrayOf(
-            Pair("Any", ""),
-            Pair("Ero Cosplay", "/ero-cosplay"),
-            Pair("Nude", "/nude"),
-            Pair("Sexy Set", "/sexy-set"),
-            Pair("Online Video", "/online-video"),
-        ),
-    )
-    override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Only one tag search"),
-        Filter.Separator(),
-        CategoryFilter(),
-        TagFilter(),
-    )
+    class CategoryFilter :
+        UriPartFilter(
+            "Category",
+            arrayOf(
+                Pair("Any", ""),
+                Pair("Ero Cosplay", "/ero-cosplay"),
+                Pair("Nude", "/nude"),
+                Pair("Sexy Set", "/sexy-set"),
+                Pair("Online Video", "/online-video"),
+            ),
+        )
+
+    override fun getFilterList(): FilterList =
+        FilterList(
+            Filter.Header("NOTE: Only one tag search"),
+            Filter.Separator(),
+            CategoryFilter(),
+            TagFilter(),
+        )
 
     class TagFilter : Filter.Text("Tag") {
-        fun toUriPart(): String {
-            return state.trim().lowercase().replace(" ", "-")
-        }
+        fun toUriPart(): String = state.trim().lowercase().replace(" ", "-")
     }
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T

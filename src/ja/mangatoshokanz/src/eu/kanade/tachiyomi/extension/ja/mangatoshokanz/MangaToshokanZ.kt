@@ -25,13 +25,17 @@ class MangaToshokanZ : HttpSource() {
     override val name = "マンガ図書館Z"
     override val baseUrl = "https://www.mangaz.com"
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addNetworkInterceptor(::r18Interceptor)
-        .build()
+    override val client =
+        network.cloudflareClient
+            .newBuilder()
+            .addNetworkInterceptor(::r18Interceptor)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        // author/illustrator name might just show blank if language not set to japan
-        .add("cookie", "_LANG_=ja")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            // author/illustrator name might just show blank if language not set to japan
+            .add("cookie", "_LANG_=ja")
 
     private val keys: KeyPair by lazy {
         getKeys()
@@ -50,10 +54,12 @@ class MangaToshokanZ : HttpSource() {
         if (request.url.host == "r18.mangaz.com" && isR18.not()) {
             val url = "https://r18.mangaz.com/attention/r18/yes"
 
-            val r18Request = Request.Builder()
-                .url(url)
-                .head()
-                .build()
+            val r18Request =
+                Request
+                    .Builder()
+                    .url(url)
+                    .head()
+                    .build()
 
             isR18 = true
             client.newCall(r18Request).execute().close()
@@ -70,16 +76,21 @@ class MangaToshokanZ : HttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val header = headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
+        val header =
+            headers
+                .newBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .build()
 
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("title/addpage_renewal")
-            .addQueryParameter("type", "official")
-            .addQueryParameter("sort", "new")
-            .addQueryParameter("page", page.toString())
-            .build()
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments("title/addpage_renewal")
+                .addQueryParameter("type", "official")
+                .addQueryParameter("sort", "new")
+                .addQueryParameter("page", page.toString())
+                .build()
 
         return GET(url, header)
     }
@@ -89,15 +100,24 @@ class MangaToshokanZ : HttpSource() {
         return MangasPage(mangas, mangas.size == 50)
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val header = headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
+        val header =
+            headers
+                .newBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .build()
 
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("title/addpage_renewal")
-            .addQueryParameter("query", query)
-            .addQueryParameter("page", page.toString())
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments("title/addpage_renewal")
+                .addQueryParameter("query", query)
+                .addQueryParameter("page", page.toString())
 
         filters.forEach { filter ->
             when (filter) {
@@ -121,24 +141,27 @@ class MangaToshokanZ : HttpSource() {
 
     override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
 
-    private fun Response.toMangas(selector: String): List<SManga> {
-        return asJsoup().selectFirst(selector)!!.children().filter { child ->
-            child.`is`("li")
-        }.filterNot { li ->
-            // discard manga that in the middle of asking for license progress, it can't be read
-            li.selectFirst(".iconConsent") != null
-        }.map { li ->
-            SManga.create().apply {
-                val a = li.selectFirst("h4 > a")!!
-                url = a.attr("href").substringAfterLast("/")
-                title = a.text()
+    private fun Response.toMangas(selector: String): List<SManga> =
+        asJsoup()
+            .selectFirst(selector)!!
+            .children()
+            .filter { child ->
+                child.`is`("li")
+            }.filterNot { li ->
+                // discard manga that in the middle of asking for license progress, it can't be read
+                li.selectFirst(".iconConsent") != null
+            }.map { li ->
+                SManga.create().apply {
+                    val a = li.selectFirst("h4 > a")!!
+                    url = a.attr("href").substringAfterLast("/")
+                    title = a.text()
 
-                thumbnail_url = li.selectFirst("a > img")!!.attr("data-src").ifBlank {
-                    li.selectFirst("a > img")!!.attr("src")
+                    thumbnail_url =
+                        li.selectFirst("a > img")!!.attr("data-src").ifBlank {
+                            li.selectFirst("a > img")!!.attr("src")
+                        }
                 }
             }
-        }
-    }
 
     override fun getFilterList() = FilterList(Category(), Sort())
 
@@ -160,10 +183,13 @@ class MangaToshokanZ : HttpSource() {
         // example: https://www.mangaz.com/series/detail/224931 (manga url)
         //          https://books.j-comi.jp/Books/224/224932/thumb160_1713230205.jpg (thumbnail url)
         val bookId = manga.thumbnail_url!!.substringBeforeLast("/").substringAfterLast("/")
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("book/detail")
-            .addPathSegment(bookId)
-            .build()
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments("book/detail")
+                .addPathSegment(bookId)
+                .build()
 
         return GET(url, headers)
     }
@@ -192,21 +218,25 @@ class MangaToshokanZ : HttpSource() {
             }
             description = document.selectFirst(".wordbreak")?.text()
             genre = document.select(".inductionTags a").joinToString { it.text() }
-            status = when {
-                document.selectFirst("p.iconContinues") != null -> SManga.ONGOING
-                document.selectFirst("p.iconEnd") != null -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+            status =
+                when {
+                    document.selectFirst("p.iconContinues") != null -> SManga.ONGOING
+                    document.selectFirst("p.iconEnd") != null -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
     }
 
     // we want series/detail/id over book/detail/id in here since book/detail/id have problem
     // where if the name of the chapter become too long the end become ellipsis (...)
     override fun chapterListRequest(manga: SManga): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("series/detail")
-            .addPathSegment(manga.url)
-            .build()
+        val url =
+            baseUrl
+                .toHttpUrl()
+                .newBuilder()
+                .addPathSegments("series/detail")
+                .addPathSegment(manga.url)
+                .build()
 
         return GET(url, headers)
     }
@@ -215,7 +245,9 @@ class MangaToshokanZ : HttpSource() {
         val document = response.asJsoup()
 
         // if it's single chapter, it will be redirected back to book/detail/id
-        if (response.request.url.pathSegments.first() == "book") {
+        if (response.request.url.pathSegments
+                .first() == "book"
+        ) {
             return listOf(
                 SChapter.create().apply {
                     name = document.selectFirst(".GA4_booktitle")!!.text()
@@ -227,50 +259,61 @@ class MangaToshokanZ : HttpSource() {
         }
 
         // if it's multiple chapters
-        return document.select(".itemList li").reversed().mapIndexed { i, li ->
-            SChapter.create().apply {
-                name = li.selectFirst(".title")!!.text()
-                url = li.selectFirst("a")!!.attr("href").substringAfterLast("/")
-                chapter_number = i.toFloat()
-                date_upload = 0
-            }
-        }.reversed()
+        return document
+            .select(".itemList li")
+            .reversed()
+            .mapIndexed { i, li ->
+                SChapter.create().apply {
+                    name = li.selectFirst(".title")!!.text()
+                    url = li.selectFirst("a")!!.attr("href").substringAfterLast("/")
+                    chapter_number = i.toFloat()
+                    date_upload = 0
+                }
+            }.reversed()
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val ticket = getTicket(chapter.url)
         val pem = keys.public.toPem()
 
-        val url = virgoBuilder()
-            .addPathSegment("docx")
-            .addPathSegment(chapter.url.plus(".json"))
-            .build()
+        val url =
+            virgoBuilder()
+                .addPathSegment("docx")
+                .addPathSegment(chapter.url.plus(".json"))
+                .build()
 
-        val header = headers.newBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .add("Cookie", "virgo!__ticket=$ticket")
-            .build()
+        val header =
+            headers
+                .newBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .add("Cookie", "virgo!__ticket=$ticket")
+                .build()
 
-        val body = FormBody.Builder()
-            .add("__serial", _serial)
-            .add("__ticket", ticket)
-            .add("pub", pem)
-            .build()
+        val body =
+            FormBody
+                .Builder()
+                .add("__serial", _serial)
+                .add("__ticket", ticket)
+                .add("pub", pem)
+                .build()
 
         return POST(url.toString(), header, body)
     }
 
     private fun getTicket(chapterId: String): String {
-        val ticketUrl = virgoBuilder()
-            .addPathSegments("view")
-            .addPathSegment(chapterId)
-            .build()
+        val ticketUrl =
+            virgoBuilder()
+                .addPathSegments("view")
+                .addPathSegment(chapterId)
+                .build()
 
-        val ticketRequest = Request.Builder()
-            .url(ticketUrl)
-            .headers(headers)
-            .head()
-            .build()
+        val ticketRequest =
+            Request
+                .Builder()
+                .url(ticketUrl)
+                .headers(headers)
+                .head()
+                .build()
 
         try {
             client.newCall(ticketRequest).execute().close()
@@ -278,61 +321,67 @@ class MangaToshokanZ : HttpSource() {
             throw Exception("Fail to retrieve ticket")
         }
 
-        return client.cookieJar.loadForRequest(ticketUrl).find { cookie ->
-            cookie.name == "virgo!__ticket"
-        }?.value ?: throw Exception("Fail to retrieve ticket from cookie")
+        return client.cookieJar
+            .loadForRequest(ticketUrl)
+            .find { cookie ->
+                cookie.name == "virgo!__ticket"
+            }?.value ?: throw Exception("Fail to retrieve ticket from cookie")
     }
 
     private fun getSerial(): String {
-        val url = virgoBuilder()
-            .addPathSegment("app.js")
-            .build()
+        val url =
+            virgoBuilder()
+                .addPathSegment("app.js")
+                .build()
 
-        val response = try {
-            client.newCall(GET(url, headers)).execute()
-        } catch (_: Exception) {
-            throw Exception("Fail to retrieve serial")
-        }
+        val response =
+            try {
+                client.newCall(GET(url, headers)).execute()
+            } catch (_: Exception) {
+                throw Exception("Fail to retrieve serial")
+            }
 
         val appJsString = response.body.string()
         return appJsString.substringAfter("__serial = \"").substringBefore("\";")
     }
 
-    private fun virgoBuilder(): HttpUrl.Builder {
-        return baseUrl.toHttpUrl().newBuilder()
+    private fun virgoBuilder(): HttpUrl.Builder =
+        baseUrl
+            .toHttpUrl()
+            .newBuilder()
             .host("vw.mangaz.com")
             .addPathSegment("virgo")
-    }
 
     override fun pageListParse(response: Response): List<Page> {
         val decrypted = response.decryptPages(keys.private)
 
         return decrypted.images.mapIndexed { i, image ->
-            val imageUrl = StringBuilder(decrypted.location.base)
-                .append(decrypted.location.st)
-                .append(image.file.substringBefore("."))
-                .append(".jpg")
+            val imageUrl =
+                StringBuilder(decrypted.location.base)
+                    .append(decrypted.location.st)
+                    .append(image.file.substringBefore("."))
+                    .append(".jpg")
 
             Page(i, imageUrl = imageUrl.toString())
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     companion object {
-        private val categories = arrayOf(
-            "All",
-            "Mens",
-            "Womens",
-            "TL",
-            "BL",
-            "R18",
-        )
-        private val sortBy = arrayOf(
-            "Popular",
-            "New",
-        )
+        private val categories =
+            arrayOf(
+                "All",
+                "Mens",
+                "Womens",
+                "TL",
+                "BL",
+                "R18",
+            )
+        private val sortBy =
+            arrayOf(
+                "Popular",
+                "New",
+            )
     }
 }

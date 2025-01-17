@@ -20,28 +20,37 @@ data class ContentInfo(
 }
 
 @Serializable
-data class Thumbnail(private val url: String) {
+data class Thumbnail(
+    private val url: String,
+) {
     override fun toString() = url
 }
 
 @Serializable
-data class Author(private val name: String, private val role: String) {
+data class Author(
+    private val name: String,
+    private val role: String,
+) {
     val isAuthor: Boolean
-        get() = role == "creator" ||
-            role == "writer" ||
-            role == "original_creator"
+        get() =
+            role == "creator" ||
+                role == "writer" ||
+                role == "original_creator"
 
     val isArtist: Boolean
-        get() = role == "creator" ||
-            role == "artist" ||
-            role == "studio" ||
-            role == "assistant"
+        get() =
+            role == "creator" ||
+                role == "artist" ||
+                role == "studio" ||
+                role == "assistant"
 
     override fun toString() = name
 }
 
 @Serializable
-data class Genre(private val name: String) {
+data class Genre(
+    private val name: String,
+) {
     override fun toString() = name
 }
 
@@ -59,10 +68,15 @@ data class Chapter(
 }
 
 @Serializable
-data class SalesConfig(val free: Boolean)
+data class SalesConfig(
+    val free: Boolean,
+)
 
 @Serializable
-data class Activity(val rented: Boolean, val unlocked: Boolean) {
+data class Activity(
+    val rented: Boolean,
+    val unlocked: Boolean,
+) {
     inline val owned: Boolean
         get() = rented || unlocked
 }

@@ -21,7 +21,6 @@ import rx.schedulers.Schedulers
 import uy.kohesive.injekt.injectLazy
 
 class ZeroScans : HttpSource() {
-
     override val name: String = "Zero Scans"
 
     override val lang: String = "en"
@@ -43,23 +42,21 @@ class ZeroScans : HttpSource() {
         return super.fetchLatestUpdates(page)
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/$API_PATH/new-chapters")
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/$API_PATH/new-chapters")
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val newChapters = response.parseAs<NewChaptersResponseDto>()
 
-        val titlesList = newChapters.all.mapNotNull {
-            comicList.firstOrNull { comic -> comic.slug == it.slug }
-        }.map { comic -> zsHelper.zsComicEntryToSManga(comic) }
+        val titlesList =
+            newChapters.all
+                .mapNotNull {
+                    comicList.firstOrNull { comic -> comic.slug == it.slug }
+                }.map { comic -> zsHelper.zsComicEntryToSManga(comic) }
 
         return MangasPage(titlesList, false)
     }
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return fetchSearchManga(page, query = "", filters = getFilterList())
-    }
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> = fetchSearchManga(page, query = "", filters = getFilterList())
 
     override fun fetchSearchManga(
         page: Int,
@@ -113,36 +110,42 @@ class ZeroScans : HttpSource() {
         return Observable.just(MangasPage(comics, hasNextPage))
     }
 
-    private fun getRankingsIfNeeded(type: String?, ascending: Boolean): List<SManga>? {
+    private fun getRankingsIfNeeded(
+        type: String?,
+        ascending: Boolean,
+    ): List<SManga>? {
         if (type.isNullOrBlank()) return null
 
-        val rankingEntries = when (type) {
-            "weekly" -> {
-                if (!ascending) {
-                    rankings.weekly.reversed()
-                } else {
-                    rankings.weekly
+        val rankingEntries =
+            when (type) {
+                "weekly" -> {
+                    if (!ascending) {
+                        rankings.weekly.reversed()
+                    } else {
+                        rankings.weekly
+                    }
+                }
+                "monthly" -> {
+                    if (!ascending) {
+                        rankings.monthly.reversed()
+                    } else {
+                        rankings.monthly
+                    }
+                }
+                else -> {
+                    if (!ascending) {
+                        rankings.allTime.reversed()
+                    } else {
+                        rankings.allTime
+                    }
                 }
             }
-            "monthly" -> {
-                if (!ascending) {
-                    rankings.monthly.reversed()
-                } else {
-                    rankings.monthly
-                }
-            }
-            else -> {
-                if (!ascending) {
-                    rankings.allTime.reversed()
-                } else {
-                    rankings.allTime
-                }
-            }
-        }
 
-        val titlesList = rankingEntries.mapNotNull { rankingEntry ->
-            comicList.firstOrNull { rankingEntry.slug == it.slug }
-        }.map { comic -> zsHelper.zsComicEntryToSManga(comic) }
+        val titlesList =
+            rankingEntries
+                .mapNotNull { rankingEntry ->
+                    comicList.firstOrNull { rankingEntry.slug == it.slug }
+                }.map { comic -> zsHelper.zsComicEntryToSManga(comic) }
 
         return titlesList
     }
@@ -152,8 +155,10 @@ class ZeroScans : HttpSource() {
         val mangaSlug = "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
 
         try {
-            val comic = comicList.first { comic -> comic.slug == mangaSlug }
-                .let { zsHelper.zsComicEntryToSManga(it) }
+            val comic =
+                comicList
+                    .first { comic -> comic.slug == mangaSlug }
+                    .let { zsHelper.zsComicEntryToSManga(it) }
 
             return Observable.just(comic)
         } catch (e: NoSuchElementException) {
@@ -185,20 +190,24 @@ class ZeroScans : HttpSource() {
         }
     }
 
-    private fun zsChapterListRequest(page: Int, manga: SManga): Request {
+    private fun zsChapterListRequest(
+        page: Int,
+        manga: SManga,
+    ): Request {
         val mangaId = "$baseUrl${manga.url}".toHttpUrl().queryParameter("id")
         return GET("$baseUrl/$API_PATH/comic/$mangaId/chapters?sort=desc&page=$page")
     }
 
-    private fun zsChapterListParse(response: Response): ZeroScansChapterPage {
-        return response.parseAs<ZeroScansResponseDto<ZeroScansChaptersResponseDto>>()
-            .data.let {
+    private fun zsChapterListParse(response: Response): ZeroScansChapterPage =
+        response
+            .parseAs<ZeroScansResponseDto<ZeroScansChaptersResponseDto>>()
+            .data
+            .let {
                 ZeroScansChapterPage(
                     it.data,
                     it.currentPage < it.lastPage,
                 )
             }
-    }
 
     class ZeroScansChapterPage(
         val chapters: List<ZeroScansChapterDto>,
@@ -228,18 +237,20 @@ class ZeroScans : HttpSource() {
         val allQualityZSPages = response.parseAs<ZeroScansResponseDto<ZeroScansPageResponseDto>>().data.chapter
 
         val highResZSPages = allQualityZSPages.highQuality.takeIf { it.isNotEmpty() } ?: allQualityZSPages.goodQuality
-        val pages = highResZSPages.mapIndexed { index, url ->
-            Page(index, imageUrl = url)
-        }
+        val pages =
+            highResZSPages.mapIndexed { index, url ->
+                Page(index, imageUrl = url)
+            }
 
         return pages
     }
 
     // Fetch Comics, Genres, Statuses and Rankings on creating source
     init {
-        Single.fromCallable {
-            runCatching { updateComicsData() }
-        }.subscribeOn(Schedulers.io())
+        Single
+            .fromCallable {
+                runCatching { updateComicsData() }
+            }.subscribeOn(Schedulers.io())
             .observeOn(Schedulers.io())
             .subscribe({}, {})
     }
@@ -253,78 +264,100 @@ class ZeroScans : HttpSource() {
         if (statusList.isNotEmpty()) {
             filters.add(StatusFilter(statusList))
         }
-        filters += listOf(
-            SortFilter(sortList),
-            RankingsHeader(),
-            RankingsHeader2(),
-            RankingsFilter(rankingList),
-        )
+        filters +=
+            listOf(
+                SortFilter(sortList),
+                RankingsHeader(),
+                RankingsHeader2(),
+                RankingsFilter(rankingList),
+            )
 
         return FilterList(filters)
     }
 
-    class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
-    class Genre(name: String, val id: Int) : Filter.TriState(name)
+    class GenreFilter(
+        genres: List<Genre>,
+    ) : Filter.Group<Genre>("Genre", genres)
+
+    class Genre(
+        name: String,
+        val id: Int,
+    ) : Filter.TriState(name)
 
     private var genreList: List<Genre> = emptyList()
 
-    class StatusFilter(statuses: List<Status>) : Filter.Group<Status>("Status", statuses)
-    class Status(name: String, val id: Int) : Filter.TriState(name)
+    class StatusFilter(
+        statuses: List<Status>,
+    ) : Filter.Group<Status>("Status", statuses)
+
+    class Status(
+        name: String,
+        val id: Int,
+    ) : Filter.TriState(name)
 
     private var statusList: List<Status> = emptyList()
 
-    class SortFilter(sorts: List<ZeroScans.Sort>) :
-        Filter.Sort("Sort by", sorts.map { it.name }.toTypedArray(), Selection(3, false))
+    class SortFilter(
+        sorts: List<ZeroScans.Sort>,
+    ) : Filter.Sort("Sort by", sorts.map { it.name }.toTypedArray(), Selection(3, false))
 
-    class Sort(val name: String, val type: String)
-
-    private val sortList = listOf(
-        Sort("Alphabetic", "alphabetic"),
-        Sort("Rating", "rating"),
-        Sort("Chapter Count", "chapter_count"),
-        Sort("Bookmark Count", "bookmark_count"),
-        Sort("View Count", "view_count"),
+    class Sort(
+        val name: String,
+        val type: String,
     )
 
-    class RankingsHeader :
-        Filter.Header("Note: Genre, Sort, Status filter and Search query")
-    class RankingsHeader2 :
-        Filter.Header("are not applied to rankings")
+    private val sortList =
+        listOf(
+            Sort("Alphabetic", "alphabetic"),
+            Sort("Rating", "rating"),
+            Sort("Chapter Count", "chapter_count"),
+            Sort("Bookmark Count", "bookmark_count"),
+            Sort("View Count", "view_count"),
+        )
 
-    class RankingsFilter(rankings: List<Ranking>) :
-        Filter.Sort("Rankings", rankings.map { it.name }.toTypedArray(), Selection(0, false))
+    class RankingsHeader : Filter.Header("Note: Genre, Sort, Status filter and Search query")
 
-    class Ranking(val name: String, val type: String? = null)
+    class RankingsHeader2 : Filter.Header("are not applied to rankings")
 
-    private val rankingList = listOf(
-        Ranking("None"),
-        Ranking("All Time", "all-time"),
-        Ranking("Weekly", "weekly"),
-        Ranking("Monthly", "monthly"),
+    class RankingsFilter(
+        rankings: List<Ranking>,
+    ) : Filter.Sort("Rankings", rankings.map { it.name }.toTypedArray(), Selection(0, false))
+
+    class Ranking(
+        val name: String,
+        val type: String? = null,
     )
+
+    private val rankingList =
+        listOf(
+            Ranking("None"),
+            Ranking("All Time", "all-time"),
+            Ranking("Weekly", "weekly"),
+            Ranking("Monthly", "monthly"),
+        )
 
     // Helpers
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(it.body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T =
+        use {
+            json.decodeFromString(it.body.string())
+        }
 
-    private fun comicsDataRequest(): Request {
-        return GET("$baseUrl/$API_PATH/comics")
-    }
+    private fun comicsDataRequest(): Request = GET("$baseUrl/$API_PATH/comics")
 
-    private fun comicsDataParse(response: Response): ZeroScansComicsDataDto {
-        return response.parseAs<ZeroScansResponseDto<ZeroScansComicsDataDto>>().data
-    }
+    private fun comicsDataParse(response: Response): ZeroScansComicsDataDto =
+        response.parseAs<ZeroScansResponseDto<ZeroScansComicsDataDto>>().data
 
     private fun updateComicsData() {
         val response = client.newCall(comicsDataRequest()).execute()
         comicsDataParse(response).let {
-            genreList = it.genres.map { genreDto ->
-                Genre(genreDto.name, genreDto.id)
-            }
-            statusList = it.statuses.map { statusDto ->
-                Status(statusDto.name, statusDto.id)
-            }
+            genreList =
+                it.genres.map { genreDto ->
+                    Genre(genreDto.name, genreDto.id)
+                }
+            statusList =
+                it.statuses.map { statusDto ->
+                    Status(statusDto.name, statusDto.id)
+                }
             comicList = it.comics
             rankings = it.rankings
         }
@@ -337,8 +370,11 @@ class ZeroScans : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 

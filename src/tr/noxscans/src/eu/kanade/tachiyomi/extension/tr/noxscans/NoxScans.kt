@@ -13,12 +13,13 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class NoxScans : MangaThemesia(
-    "NoxScans",
-    "https://www.noxscans.com",
-    "tr",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
-) {
+class NoxScans :
+    MangaThemesia(
+        "NoxScans",
+        "https://www.noxscans.com",
+        "tr",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
+    ) {
     companion object {
         private val IMAGE_EXTENSIONS = listOf(".webp", ".jpg", ".jpeg", ".png", ".gif")
         private const val ROBOT_VERIFICATION_ERROR =
@@ -44,29 +45,32 @@ class NoxScans : MangaThemesia(
 
         return document.selectFirst(formSelector)?.let { robotForm ->
             val formUrl = robotForm.absUrl("action").takeIf(String::isNotBlank) ?: document.location()
-            val input = robotForm.selectFirst("input")!!.let {
-                it.attr("name") to it.attr("value")
-            }
+            val input =
+                robotForm.selectFirst("input")!!.let {
+                    it.attr("name") to it.attr("value")
+                }
 
-            val formBody = FormBody.Builder()
-                .add(input.first, input.second)
-                .build()
+            val formBody =
+                FormBody
+                    .Builder()
+                    .add(input.first, input.second)
+                    .build()
 
             bypassRobotVerification(client.newCall(POST(formUrl, headers, formBody)).execute().asJsoup())
         } ?: document
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return checkVerification(response.asJsoup())
+    override fun chapterListParse(response: Response): List<SChapter> =
+        checkVerification(response.asJsoup())
             .select(chapterListSelector())
             .map(::chapterFromElement)
-    }
 
     override fun pageListParse(document: Document): List<Page> {
         val doc = checkVerification(document)
 
-        val scriptContent = doc.selectFirst("script:containsData(ts_reader.run)")?.data()
-            ?: return super.pageListParse(doc)
+        val scriptContent =
+            doc.selectFirst("script:containsData(ts_reader.run)")?.data()
+                ?: return super.pageListParse(doc)
 
         return try {
             parseReaderScript(scriptContent)
@@ -75,9 +79,7 @@ class NoxScans : MangaThemesia(
         }
     }
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        return super.mangaDetailsParse(checkVerification(document))
-    }
+    override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(checkVerification(document))
 
     private fun parseReaderScript(scriptContent: String): List<Page> {
         val jsonStr = scriptContent.substringAfter("ts_reader.run(").substringBefore(");")
@@ -108,14 +110,15 @@ class NoxScans : MangaThemesia(
         }
 
     private fun isValidServerObject(obj: JSONObject): Boolean =
-        obj.length() == 2 && obj.keys().asSequence().any { key ->
-            try {
-                val arrayValue = obj.getJSONArray(key)
-                arrayValue.length() > 0 && isImageUrl(arrayValue.getString(0))
-            } catch (e: Exception) {
-                false
+        obj.length() == 2 &&
+            obj.keys().asSequence().any { key ->
+                try {
+                    val arrayValue = obj.getJSONArray(key)
+                    arrayValue.length() > 0 && isImageUrl(arrayValue.getString(0))
+                } catch (e: Exception) {
+                    false
+                }
             }
-        }
 
     private fun findImageArrayKey(server: JSONObject): String? =
         server.keys().asSequence().find { key ->
@@ -127,7 +130,8 @@ class NoxScans : MangaThemesia(
             }
         }
 
-    private fun isImageUrl(url: String): Boolean = IMAGE_EXTENSIONS.any { ext ->
-        url.lowercase().endsWith(ext) && url.contains("/wp-content/uploads/")
-    }
+    private fun isImageUrl(url: String): Boolean =
+        IMAGE_EXTENSIONS.any { ext ->
+            url.lowercase().endsWith(ext) && url.contains("/wp-content/uploads/")
+        }
 }

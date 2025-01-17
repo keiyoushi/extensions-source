@@ -5,14 +5,14 @@ import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class VCPVMPFactory : SourceFactory {
-    override fun createSources(): List<Source> = listOf(
-        VCP(),
-        VMP(),
-    )
+    override fun createSources(): List<Source> =
+        listOf(
+            VCP(),
+            VMP(),
+        )
 }
 
 class VCP : VerComics("VCP", "https://vercomicsporno.com", "es") {
-
     override val urlSuffix = "comics-porno"
     override val genreSuffix = "etiquetas"
     override var genres =
@@ -42,7 +42,6 @@ class VCP : VerComics("VCP", "https://vercomicsporno.com", "es") {
 }
 
 class VMP : VerComics("VMP", "https://vermangasporno.com", "es") {
-
     override val urlSuffix = "xxx"
     override val genreSuffix = "tag"
 

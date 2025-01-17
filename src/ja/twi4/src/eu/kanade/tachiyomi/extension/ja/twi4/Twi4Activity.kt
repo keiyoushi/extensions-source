@@ -11,11 +11,12 @@ class Twi4Activity : Activity() {
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 2) {
             val slug = pathSegments[2]
-            val mainIntent = Intent().apply {
-                action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Twi4.SEARCH_PREFIX_SLUG}$slug")
-                putExtra("filter", packageName)
-            }
+            val mainIntent =
+                Intent().apply {
+                    action = "eu.kanade.tachiyomi.SEARCH"
+                    putExtra("query", "${Twi4.SEARCH_PREFIX_SLUG}$slug")
+                    putExtra("filter", packageName)
+                }
 
             startActivity(mainIntent)
         }

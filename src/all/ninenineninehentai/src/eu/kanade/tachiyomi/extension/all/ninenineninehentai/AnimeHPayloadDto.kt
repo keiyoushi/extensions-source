@@ -36,4 +36,6 @@ data class SearchPayload(
 )
 
 @Serializable
-data class IdVariables(val id: String)
+data class IdVariables(
+    val id: String,
+)

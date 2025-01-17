@@ -15,7 +15,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class KillSixBillionDemons : HttpSource() {
-
     override val name = "KillSixBillionDemons"
 
     override val baseUrl = "https://killsixbilliondemons.com"
@@ -41,21 +40,15 @@ class KillSixBillionDemons : HttpSource() {
             "\nQ: Can I buy this book in a more traditional format?\n" +
             "You absolutely can. You can get your hands on a print copy of the first and second books from Image comics in your local comics shop or anywhere else you can get comics. It looks fantastic in print and if you don’t like reading stuff online I highly recommend it."
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET(baseUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     // list of books
-    override fun popularMangaParse(response: Response): MangasPage {
-        return generateKSBDMangasPage()
-    }
+    override fun popularMangaParse(response: Response): MangasPage = generateKSBDMangasPage()
 
     /**
      * @return the MangasPage containing the different books of Kill Six Billion Demons as manga
      */
-    private fun generateKSBDMangasPage(): MangasPage {
-        return MangasPage(fetchBooksAsMangas(), false)
-    }
+    private fun generateKSBDMangasPage(): MangasPage = MangasPage(fetchBooksAsMangas(), false)
 
     /**
      * This fetches the different books of Kill Six Billion Demons as different manga.
@@ -117,20 +110,18 @@ class KillSixBillionDemons : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return Observable.just(fetchBooksAsMangas().find { manga.title == it.title })
-    }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        Observable.just(fetchBooksAsMangas().find { manga.title == it.title })
 
     override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return Observable.just(
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        Observable.just(
             fetchChapterListTR(
                 baseUrl + manga.url + pagesOrder,
                 mutableListOf(),
             ).reversed(),
         )
-    }
 
     /**
      * Though this is recursive this will be optimized by the compiler into a for loop equivalent
@@ -148,21 +139,23 @@ class KillSixBillionDemons : HttpSource() {
     ): MutableList<SChapter> {
         val numberOfPreviousChapters = foundChapters.size
         val currentPage = client.newCall(GET(currentUrl, headers)).execute().asJsoup()
-        val chaptersOnCurrentPage = currentPage.select(".post-content")
-            .mapIndexed { index, chapterElement ->
-                val chapterTitle: String = chapterElement.select(".post-title a").text()
-                val chapterUrl: String =
-                    chapterElement.select(".comic-thumbnail-in-archive a").attr("href")
-                val imageUrl =
-                    chapterElement.select(".comic-thumbnail-in-archive a img").attr("src")
+        val chaptersOnCurrentPage =
+            currentPage
+                .select(".post-content")
+                .mapIndexed { index, chapterElement ->
+                    val chapterTitle: String = chapterElement.select(".post-title a").text()
+                    val chapterUrl: String =
+                        chapterElement.select(".comic-thumbnail-in-archive a").attr("href")
+                    val imageUrl =
+                        chapterElement.select(".comic-thumbnail-in-archive a img").attr("src")
 
-                SChapter.create().apply {
-                    setUrlWithoutDomain(chapterUrl)
-                    name = chapterTitle
-                    chapter_number = numberOfPreviousChapters + index + 1f
-                    date_upload = extractDateFromImageUrl(imageUrl)
+                    SChapter.create().apply {
+                        setUrlWithoutDomain(chapterUrl)
+                        name = chapterTitle
+                        chapter_number = numberOfPreviousChapters + index + 1f
+                        date_upload = extractDateFromImageUrl(imageUrl)
+                    }
                 }
-            }
 
         foundChapters.addAll(chaptersOnCurrentPage)
 
@@ -194,11 +187,13 @@ class KillSixBillionDemons : HttpSource() {
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val chapterDoc = client.newCall(GET(baseUrl + chapter.url, headers)).execute().asJsoup()
-        val pages = chapterDoc.select("#comic img")
-            .mapIndexed { index, imageElement ->
-                val imageUrl = imageElement.attr("src")
-                Page(index + 1, "", imageUrl)
-            }
+        val pages =
+            chapterDoc
+                .select("#comic img")
+                .mapIndexed { index, imageElement ->
+                    val imageUrl = imageElement.attr("src")
+                    Page(index + 1, "", imageUrl)
+                }
 
         return Observable.just(pages)
     }
@@ -215,6 +210,9 @@ class KillSixBillionDemons : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request = throw UnsupportedOperationException()
 }

@@ -36,8 +36,8 @@ import java.util.TimeZone
 class Akuma(
     override val lang: String,
     private val akumaLang: String,
-) : ConfigurableSource, ParsedHttpSource() {
-
+) : ParsedHttpSource(),
+    ConfigurableSource {
     override val name = "Akuma"
 
     override val baseUrl = "https://akuma.moe"
@@ -50,31 +50,39 @@ class Akuma(
 
     private val ddosGuardIntercept = DDosGuardInterceptor(network.client)
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(ddosGuardIntercept)
-        .addInterceptor(::tokenInterceptor)
-        .rateLimit(2)
-        .build()
+    private val dateFormat =
+        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+    override val client: OkHttpClient =
+        network.client
+            .newBuilder()
+            .addInterceptor(ddosGuardIntercept)
+            .addInterceptor(::tokenInterceptor)
+            .rateLimit(2)
+            .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .add("Referer", "$baseUrl/")
 
     private fun tokenInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
         if (request.method == "POST" && request.header("X-CSRF-TOKEN") == null) {
-            val modifiedRequest = request.newBuilder()
-                .addHeader("X-Requested-With", "XMLHttpRequest")
+            val modifiedRequest =
+                request
+                    .newBuilder()
+                    .addHeader("X-Requested-With", "XMLHttpRequest")
 
             val token = getToken()
-            val response = chain.proceed(
-                modifiedRequest
-                    .addHeader("X-CSRF-TOKEN", token)
-                    .build(),
-            )
+            val response =
+                chain.proceed(
+                    modifiedRequest
+                        .addHeader("X-CSRF-TOKEN", token)
+                        .build(),
+                )
 
             if (!response.isSuccessful && response.code == 419) {
                 response.close()
@@ -99,8 +107,10 @@ class Akuma(
             val response = client.newCall(request).execute()
 
             val document = response.asJsoup()
-            val token = document.select("head meta[name*=csrf-token]")
-                .attr("content")
+            val token =
+                document
+                    .select("head meta[name*=csrf-token]")
+                    .attr("content")
 
             if (token.isEmpty()) {
                 throw IOException("Unable to find CSRF token")
@@ -119,20 +129,24 @@ class Akuma(
     private val displayFullTitle: Boolean get() = preferences.getBoolean(PREF_TITLE, false)
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_TITLE
-            title = "Display manga title as full title"
-            setDefaultValue(false)
-        }.also(screen::addPreference)
+        SwitchPreferenceCompat(screen.context)
+            .apply {
+                key = PREF_TITLE
+                title = "Display manga title as full title"
+                setDefaultValue(false)
+            }.also(screen::addPreference)
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val payload = FormBody.Builder()
-            .add("view", "3")
-            .build()
+        val payload =
+            FormBody
+                .Builder()
+                .add("view", "3")
+                .build()
 
         val url = baseUrl.toHttpUrlOrNull()!!.newBuilder()
 
@@ -150,6 +164,7 @@ class Akuma(
     }
 
     override fun popularMangaSelector() = ".post-loop li"
+
     override fun popularMangaNextPageSelector() = ".page-item a[rel*=next]"
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -157,11 +172,14 @@ class Akuma(
 
         if (document.text().contains("Max keywords of 3 exceeded.")) {
             throw Exception("Login required for more than 3 filters")
-        } else if (document.text().contains("Max keywords of 8 exceeded.")) throw Exception("Only max of 8 filters are allowed")
-
-        val mangas = document.select(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
+        } else if (document.text().contains("Max keywords of 8 exceeded.")) {
+            throw Exception("Only max of 8 filters are allowed")
         }
+
+        val mangas =
+            document.select(popularMangaSelector()).map { element ->
+                popularMangaFromElement(element)
+            }
 
         val nextUrl = document.select(popularMangaNextPageSelector()).first()?.attr("href")
 
@@ -170,22 +188,22 @@ class Akuma(
         return MangasPage(mangas, !nextHash.isNullOrEmpty())
     }
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
+    override fun popularMangaFromElement(element: Element): SManga =
+        SManga.create().apply {
             setUrlWithoutDomain(element.select("a").attr("href"))
-            title = element.select(".overlay-title").text().replace("\"", "").let {
-                if (displayFullTitle) it.trim() else it.shortenTitle()
-            }
+            title =
+                element.select(".overlay-title").text().replace("\"", "").let {
+                    if (displayFullTitle) it.trim() else it.shortenTitle()
+                }
             thumbnail_url = element.select("img").attr("abs:src")
         }
-    }
 
     override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
-    ): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID)) {
+    ): Observable<MangasPage> =
+        if (query.startsWith(PREFIX_ID)) {
             val url = "/g/${query.substringAfter(PREFIX_ID)}"
             val manga = SManga.create().apply { this.url = url }
             fetchMangaDetails(manga).map {
@@ -194,9 +212,12 @@ class Akuma(
         } else {
             super.fetchSearchManga(page, query, filters)
         }
-    }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val request = popularMangaRequest(page)
 
         val finalQuery: MutableList<String> = mutableListOf(query)
@@ -230,64 +251,76 @@ class Akuma(
             }
         }
 
-        val url = request.url.newBuilder()
-            .setQueryParameter("q", finalQuery.joinToString(" "))
-            .build()
+        val url =
+            request.url
+                .newBuilder()
+                .setQueryParameter("q", finalQuery.joinToString(" "))
+                .build()
 
-        return request.newBuilder()
+        return request
+            .newBuilder()
             .url(url)
             .build()
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
+
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
+
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
-    override fun mangaDetailsParse(document: Document) = with(document) {
-        SManga.create().apply {
-            title = select(".entry-title").text().replace("\"", "").let {
-                if (displayFullTitle) it.trim() else it.shortenTitle()
+    override fun mangaDetailsParse(document: Document) =
+        with(document) {
+            SManga.create().apply {
+                title =
+                    select(".entry-title").text().replace("\"", "").let {
+                        if (displayFullTitle) it.trim() else it.shortenTitle()
+                    }
+                thumbnail_url = select(".img-thumbnail").attr("abs:src")
+
+                author = select(".group~.value").eachText().joinToString()
+                artist = select(".artist~.value").eachText().joinToString()
+
+                val characters = select(".character~.value").eachText()
+                val parodies = select(".parody~.value").eachText()
+                val males =
+                    select(".male~.value")
+                        .map { "${it.text()} ♂" }
+                val females =
+                    select(".female~.value")
+                        .map { "${it.text()} ♀" }
+                val others =
+                    select(".other~.value")
+                        .map { "${it.text()} ◊" }
+                // show all in tags for quickly searching
+
+                genre = (males + females + others).joinToString()
+                description =
+                    buildString {
+                        append(
+                            "Full English and Japanese title: \n",
+                            select(".entry-title").text(),
+                            "\n",
+                            select(".entry-title+span").text(),
+                            "\n\n",
+                        )
+
+                        // translated should show up in the description
+                        append("Language: ", select(".language~.value").eachText().joinToString(), "\n")
+                        append("Pages: ", select(".pages .value").text(), "\n")
+                        append("Upload Date: ", select(".date .value>time").text().replace(" ", ", ") + " UTC", "\n")
+                        append("Categories: ", selectFirst(".info-list .value")?.text() ?: "Unknown", "\n\n")
+
+                        // show followings for easy to reference
+                        parodies.takeIf { it.isNotEmpty() }?.let { append("Parodies: ", parodies.joinToString(), "\n") }
+                        characters.takeIf { it.isNotEmpty() }?.let { append("Characters: ", characters.joinToString(), "\n") }
+                    }
+                update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+                status = SManga.UNKNOWN
             }
-            thumbnail_url = select(".img-thumbnail").attr("abs:src")
-
-            author = select(".group~.value").eachText().joinToString()
-            artist = select(".artist~.value").eachText().joinToString()
-
-            val characters = select(".character~.value").eachText()
-            val parodies = select(".parody~.value").eachText()
-            val males = select(".male~.value")
-                .map { "${it.text()} ♂" }
-            val females = select(".female~.value")
-                .map { "${it.text()} ♀" }
-            val others = select(".other~.value")
-                .map { "${it.text()} ◊" }
-            // show all in tags for quickly searching
-
-            genre = (males + females + others).joinToString()
-            description = buildString {
-                append(
-                    "Full English and Japanese title: \n",
-                    select(".entry-title").text(),
-                    "\n",
-                    select(".entry-title+span").text(),
-                    "\n\n",
-                )
-
-                // translated should show up in the description
-                append("Language: ", select(".language~.value").eachText().joinToString(), "\n")
-                append("Pages: ", select(".pages .value").text(), "\n")
-                append("Upload Date: ", select(".date .value>time").text().replace(" ", ", ") + " UTC", "\n")
-                append("Categories: ", selectFirst(".info-list .value")?.text() ?: "Unknown", "\n\n")
-
-                // show followings for easy to reference
-                parodies.takeIf { it.isNotEmpty() }?.let { append("Parodies: ", parodies.joinToString(), "\n") }
-                characters.takeIf { it.isNotEmpty() }?.let { append("Characters: ", characters.joinToString(), "\n") }
-            }
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-            status = SManga.UNKNOWN
         }
-    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -296,18 +329,23 @@ class Akuma(
             SChapter.create().apply {
                 setUrlWithoutDomain("${response.request.url}/1")
                 name = "Chapter"
-                date_upload = try {
-                    dateFormat.parse(document.select(".date .value>time").text())!!.time
-                } catch (_: ParseException) {
-                    0L
-                }
+                date_upload =
+                    try {
+                        dateFormat.parse(document.select(".date .value>time").text())!!.time
+                    } catch (_: ParseException) {
+                        0L
+                    }
             },
         )
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val totalPages = document.select(".nav-select option").last()
-            ?.attr("value")?.toIntOrNull() ?: return emptyList()
+        val totalPages =
+            document
+                .select(".nav-select option")
+                .last()
+                ?.attr("value")
+                ?.toIntOrNull() ?: return emptyList()
 
         val url = document.location().substringBeforeLast("/")
 
@@ -322,9 +360,7 @@ class Akuma(
         return pageList
     }
 
-    override fun imageUrlParse(document: Document): String {
-        return document.select(".entry-content img").attr("abs:src")
-    }
+    override fun imageUrlParse(document: Document): String = document.select(".entry-content img").attr("abs:src")
 
     override fun getFilterList(): FilterList = getFilters()
 
@@ -334,9 +370,14 @@ class Akuma(
     }
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+
     override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+
     override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+
     override fun chapterListSelector() = throw UnsupportedOperationException()
 }

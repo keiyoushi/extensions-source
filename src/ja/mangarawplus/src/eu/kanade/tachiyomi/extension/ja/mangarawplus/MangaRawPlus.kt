@@ -8,36 +8,33 @@ import okhttp3.Request
 import org.jsoup.nodes.Element
 
 class MangaRawPlus : Madara("MANGARAW+", "https://mangarawx.net", "ja") {
-
     override val mangaSubString = "threads"
 
     override fun popularMangaSelector() = searchMangaSelector()
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/?s&post_type=wp-manga&m_orderby=views", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/?s&post_type=wp-manga&m_orderby=views", headers)
 
     override fun latestUpdatesSelector() = searchMangaSelector()
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/?s&post_type=wp-manga&m_orderby=latest", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?s&post_type=wp-manga&m_orderby=latest", headers)
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return super.popularMangaFromElement(element).apply {
+    override fun popularMangaFromElement(element: Element): SManga =
+        super.popularMangaFromElement(element).apply {
             thumbnail_url = thumbnail_url?.replaceFirst("-193x278", "")
         }
-    }
 
-    override fun imageFromElement(element: Element): String? {
-        return when {
+    override fun imageFromElement(element: Element): String? =
+        when {
             element.hasAttr("data-src-img") -> element.absUrl("data-src-img")
             else -> super.imageFromElement(element)
         }
-    }
 
     override fun imageRequest(page: Page): Request {
-        val imgHeaders = headersBuilder().apply {
-            removeAll("Referer")
-        }.build()
+        val imgHeaders =
+            headersBuilder()
+                .apply {
+                    removeAll("Referer")
+                }.build()
         return GET(page.imageUrl!!, imgHeaders)
     }
 

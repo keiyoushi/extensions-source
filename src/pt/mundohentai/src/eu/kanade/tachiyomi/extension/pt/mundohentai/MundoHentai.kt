@@ -20,7 +20,6 @@ import org.jsoup.nodes.Element
 import java.util.concurrent.TimeUnit
 
 class MundoHentai : ParsedHttpSource() {
-
     override val name = "Mundo Hentai"
 
     override val baseUrl = "https://mundohentaioficial.com"
@@ -32,12 +31,16 @@ class MundoHentai : ParsedHttpSource() {
     // They changed their website theme and URLs.
     override val versionId: Int = 2
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
-        .build()
+    override val client: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .rateLimit(1, 2, TimeUnit.SECONDS)
+            .build()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder =
+        Headers
+            .Builder()
+            .add("Referer", baseUrl)
 
     private fun genericMangaFromElement(element: Element): SManga =
         SManga.create().apply {
@@ -48,9 +51,10 @@ class MundoHentai : ParsedHttpSource() {
 
     // The source does not have a popular list page, so we use the Doujin list instead.
     override fun popularMangaRequest(page: Int): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", if (page == 1) baseUrl else "$baseUrl/category/doujinshi/page/${page - 1}")
-            .build()
+        val newHeaders =
+            headersBuilder()
+                .set("Referer", if (page == 1) baseUrl else "$baseUrl/category/doujinshi/page/${page - 1}")
+                .build()
 
         val pageStr = if (page != 1) "page/$page" else ""
         return GET("$baseUrl/category/doujinshi/$pageStr", newHeaders)
@@ -62,11 +66,18 @@ class MundoHentai : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector() = "ul.paginacao li.next"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isNotEmpty()) {
-            val url = baseUrl.toHttpUrl().newBuilder()
-                .addQueryParameter("s", query)
-                .toString()
+            val url =
+                baseUrl
+                    .toHttpUrl()
+                    .newBuilder()
+                    .addQueryParameter("s", query)
+                    .toString()
 
             return GET(url, headers)
         }
@@ -78,9 +89,10 @@ class MundoHentai : ParsedHttpSource() {
             return popularMangaRequest(page)
         }
 
-        val newHeaders = headersBuilder()
-            .set("Referer", if (page == 1) "$baseUrl/tags" else "$baseUrl/tag/$tagSlug/page/${page - 1}")
-            .build()
+        val newHeaders =
+            headersBuilder()
+                .set("Referer", if (page == 1) "$baseUrl/tags" else "$baseUrl/tag/$tagSlug/page/${page - 1}")
+                .build()
 
         val pageStr = if (page != 1) "page/$page" else ""
         return GET("$baseUrl/tag/$tagSlug/$pageStr", newHeaders)
@@ -114,88 +126,100 @@ class MundoHentai : ParsedHttpSource() {
             return multipleChapters.map(::chapterFromElement).reversed()
         }
 
-        val singleChapter = SChapter.create().apply {
-            name = "Capítulo"
-            chapter_number = 1f
-            setUrlWithoutDomain(document.location())
-        }
+        val singleChapter =
+            SChapter.create().apply {
+                name = "Capítulo"
+                chapter_number = 1f
+                setUrlWithoutDomain(document.location())
+            }
 
         return listOf(singleChapter)
     }
 
     override fun chapterListSelector(): String = "div.listaImagens div.galeriaTab"
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val chapterId = element.attr("data-id")
-        val title = element.selectFirst("div.galeriaTabTitulo")?.text()
+    override fun chapterFromElement(element: Element): SChapter =
+        SChapter.create().apply {
+            val chapterId = element.attr("data-id")
+            val title = element.selectFirst("div.galeriaTabTitulo")?.text()
 
-        name = "Capítulo $chapterId" + (if (!title.isNullOrEmpty()) " - $title" else "")
-        chapter_number = chapterId.toFloatOrNull() ?: -1f
-        setUrlWithoutDomain("${element.ownerDocument()!!.location()}#$chapterId")
-    }
+            name = "Capítulo $chapterId" + (if (!title.isNullOrEmpty()) " - $title" else "")
+            chapter_number = chapterId.toFloatOrNull() ?: -1f
+            setUrlWithoutDomain("${element.ownerDocument()!!.location()}#$chapterId")
+        }
 
     override fun pageListParse(document: Document): List<Page> {
         val chapterId = document.location().substringAfterLast("#", "")
-        val gallerySelector = when {
-            chapterId.isNotEmpty() -> "div.listaImagens #galeria-$chapterId img"
-            else -> "div.listaImagens ul.post-fotos img"
-        }
+        val gallerySelector =
+            when {
+                chapterId.isNotEmpty() -> "div.listaImagens #galeria-$chapterId img"
+                else -> "div.listaImagens ul.post-fotos img"
+            }
 
-        return document.select(gallerySelector)
+        return document
+            .select(gallerySelector)
             .mapIndexed { i, el -> Page(i, document.location(), el.attr("src")) }
     }
 
     override fun imageUrlParse(document: Document) = ""
 
     override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", page.url)
-            .build()
+        val newHeaders =
+            headersBuilder()
+                .set("Referer", page.url)
+                .build()
 
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("Os filtros são ignorados na busca!"),
-        TagFilter(getTags()),
-    )
+    override fun getFilterList(): FilterList =
+        FilterList(
+            Filter.Header("Os filtros são ignorados na busca!"),
+            TagFilter(getTags()),
+        )
 
-    data class Tag(val name: String, val slug: String) {
+    data class Tag(
+        val name: String,
+        val slug: String,
+    ) {
         override fun toString(): String = name
     }
 
-    private class TagFilter(tags: Array<Tag>) : Filter.Select<Tag>("Tag", tags)
+    private class TagFilter(
+        tags: Array<Tag>,
+    ) : Filter.Select<Tag>("Tag", tags)
 
-    private fun getTags(): Array<Tag> = arrayOf(
-        Tag("-- Selecione --", ""),
-        Tag("Ahegao", "ahegao"),
-        Tag("Anal", "anal"),
-        Tag("Biquíni", "biquini"),
-        Tag("Chubby", "chubby"),
-        Tag("Colegial", "colegial"),
-        Tag("Creampie", "creampie"),
-        Tag("Dark Skin", "dark-skin"),
-        Tag("Dupla Penetração", "dupla-penetracao"),
-        Tag("Espanhola", "espanhola"),
-        Tag("Exibicionismo", "exibicionismo"),
-        Tag("Footjob", "footjob"),
-        Tag("Furry", "furry"),
-        Tag("Futanari", "futanari"),
-        Tag("Grupal", "grupal"),
-        Tag("Incesto", "incesto"),
-        Tag("Lingerie", "lingerie"),
-        Tag("MILF", "milf"),
-        Tag("Maiô", "maio"),
-        Tag("Masturbação", "masturbacao"),
-        Tag("Netorare", "netorare"),
-        Tag("Oral", "oral"),
-        Tag("Peitinhos", "peitinhos"),
-        Tag("Preservativo", "preservativo"),
-        Tag("Professora", "professora"),
-        Tag("Sex Toys", "sex-toys"),
-        Tag("Tentáculos", "tentaculos"),
-        Tag("Yaoi", "yaoi"),
-    )
+    private fun getTags(): Array<Tag> =
+        arrayOf(
+            Tag("-- Selecione --", ""),
+            Tag("Ahegao", "ahegao"),
+            Tag("Anal", "anal"),
+            Tag("Biquíni", "biquini"),
+            Tag("Chubby", "chubby"),
+            Tag("Colegial", "colegial"),
+            Tag("Creampie", "creampie"),
+            Tag("Dark Skin", "dark-skin"),
+            Tag("Dupla Penetração", "dupla-penetracao"),
+            Tag("Espanhola", "espanhola"),
+            Tag("Exibicionismo", "exibicionismo"),
+            Tag("Footjob", "footjob"),
+            Tag("Furry", "furry"),
+            Tag("Futanari", "futanari"),
+            Tag("Grupal", "grupal"),
+            Tag("Incesto", "incesto"),
+            Tag("Lingerie", "lingerie"),
+            Tag("MILF", "milf"),
+            Tag("Maiô", "maio"),
+            Tag("Masturbação", "masturbacao"),
+            Tag("Netorare", "netorare"),
+            Tag("Oral", "oral"),
+            Tag("Peitinhos", "peitinhos"),
+            Tag("Preservativo", "preservativo"),
+            Tag("Professora", "professora"),
+            Tag("Sex Toys", "sex-toys"),
+            Tag("Tentáculos", "tentaculos"),
+            Tag("Yaoi", "yaoi"),
+        )
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 

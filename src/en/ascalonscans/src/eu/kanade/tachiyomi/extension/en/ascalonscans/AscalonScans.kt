@@ -12,10 +12,12 @@ import java.io.IOException
 import java.security.MessageDigest
 
 class AscalonScans : MangaThemesia("AscalonScans", "https://ascalonscans.com", "en") {
-    override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
-        .addInterceptor(::jsChallengeInterceptor)
-        .build()
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            .addInterceptor(::jsChallengeInterceptor)
+            .build()
 
     private fun jsChallengeInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -37,19 +39,23 @@ class AscalonScans : MangaThemesia("AscalonScans", "https://ascalonscans.com", "
         return chain.proceed(request)
     }
 
-    private tailrec fun fetchToken(chain: Interceptor.Chain, attempt: Int = 0): String {
+    private tailrec fun fetchToken(
+        chain: Interceptor.Chain,
+        attempt: Int = 0,
+    ): String {
         if (attempt > 5) throw IOException("Failed to fetch challenge token!")
         val request = GET("$baseUrl/hcdn-cgi/jschallenge", headers)
         val res = chain.proceed(request).body.string()
 
-        return res.substringAfter("cjs = '").substringBefore("'")
+        return res
+            .substringAfter("cjs = '")
+            .substringBefore("'")
             .takeUnless { it == "nil" } ?: fetchToken(chain, attempt + 1)
     }
 
-    private fun String.sha256(): String {
-        return MessageDigest
+    private fun String.sha256(): String =
+        MessageDigest
             .getInstance("SHA-256")
             .digest(toByteArray())
             .fold("", { str, it -> str + "%02x".format(it) })
-    }
 }

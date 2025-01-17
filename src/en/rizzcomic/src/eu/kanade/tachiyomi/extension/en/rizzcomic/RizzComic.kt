@@ -21,29 +21,35 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RizzComic : MangaThemesiaAlt(
-    "Rizz Comic",
-    "https://rizzfables.com",
-    "en",
-    mangaUrlDirectory = "/series",
-    dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
-) {
-
-    override val client = super.client.newBuilder()
-        .rateLimit(1, 3)
-        .addInterceptor { chain ->
-            val request = chain.request()
-            val isApiRequest = request.header("X-API-Request") != null
-            val headers = request.headers.newBuilder().apply {
-                if (!isApiRequest) removeAll("X-Requested-With")
-                removeAll("X-API-Request")
+class RizzComic :
+    MangaThemesiaAlt(
+        "Rizz Comic",
+        "https://rizzfables.com",
+        "en",
+        mangaUrlDirectory = "/series",
+        dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(1, 3)
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val isApiRequest = request.header("X-API-Request") != null
+                val headers =
+                    request.headers
+                        .newBuilder()
+                        .apply {
+                            if (!isApiRequest) removeAll("X-Requested-With")
+                            removeAll("X-API-Request")
+                        }.build()
+                chain.proceed(request.newBuilder().headers(headers).build())
             }.build()
-            chain.proceed(request.newBuilder().headers(headers).build())
-        }
-        .build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("X-Requested-With", randomString((1..20).random())) // For WebView
+    override fun headersBuilder() =
+        super
+            .headersBuilder()
+            .set("X-Requested-With", randomString((1..20).random())) // For WebView
 
     private val apiHeaders by lazy {
         headersBuilder()
@@ -63,38 +69,48 @@ class RizzComic : MangaThemesiaAlt(
     override val listSelector = "div.bsx a"
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.POPULAR)
+
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", SortFilter.LATEST)
+
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         if (query.isNotEmpty()) {
-            val form = FormBody.Builder()
-                .add("search_value", query.trim())
-                .build()
+            val form =
+                FormBody
+                    .Builder()
+                    .add("search_value", query.trim())
+                    .build()
 
             return POST("$baseUrl/Index/live_search", apiHeaders, form)
         }
 
-        val form = FormBody.Builder().apply {
-            filters.filterIsInstance<FormBodyFilter>().forEach {
-                it.addFormParameter(this)
-            }
-        }.build()
+        val form =
+            FormBody
+                .Builder()
+                .apply {
+                    filters.filterIsInstance<FormBodyFilter>().forEach {
+                        it.addFormParameter(this)
+                    }
+                }.build()
 
         return POST("$baseUrl/Index/filter_series", apiHeaders, form)
     }
 
-    override fun getFilterList(): FilterList {
-        return FilterList(
+    override fun getFilterList(): FilterList =
+        FilterList(
             Filter.Header("Filters don't work with text search"),
             SortFilter(),
             StatusFilter(),
             TypeFilter(),
             GenreFilter(),
         )
-    }
 
     @Serializable
     class Comic(
@@ -108,10 +124,13 @@ class RizzComic : MangaThemesiaAlt(
         val serialization: String? = null,
         @SerialName("genre_id") val genres: String? = null,
     ) {
-        val slug get() = title.trim().lowercase()
-            .replace(slugRegex, "-")
-            .replace("-s-", "s-")
-            .replace("-ll-", "ll-")
+        val slug get() =
+            title
+                .trim()
+                .lowercase()
+                .replace(slugRegex, "-")
+                .replace("-s-", "s-")
+                .replace("-ll-", "ll-")
 
         val genreIds get() = genres?.split(",")?.map(String::trim)
 
@@ -123,53 +142,56 @@ class RizzComic : MangaThemesiaAlt(
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<List<Comic>>()
 
-        val entries = result.map { comic ->
-            SManga.create().apply {
-                url = "$mangaUrlDirectory/${comic.slug}/"
-                title = comic.title
-                description = comic.synopsis
-                author = listOfNotNull(comic.author, comic.serialization).joinToString()
-                artist = comic.artist
-                status = comic.status.parseStatus()
-                thumbnail_url = comic.cover?.let { "$baseUrl/assets/images/$it" }
-                genre = buildList {
-                    add(comic.type?.capitalize())
-                    comic.genreIds?.onEach { gId ->
-                        add(genres.firstOrNull { it.second == gId }?.first)
-                    }
-                }.filterNotNull().joinToString()
-                initialized = true
+        val entries =
+            result.map { comic ->
+                SManga.create().apply {
+                    url = "$mangaUrlDirectory/${comic.slug}/"
+                    title = comic.title
+                    description = comic.synopsis
+                    author = listOfNotNull(comic.author, comic.serialization).joinToString()
+                    artist = comic.artist
+                    status = comic.status.parseStatus()
+                    thumbnail_url = comic.cover?.let { "$baseUrl/assets/images/$it" }
+                    genre =
+                        buildList {
+                            add(comic.type?.capitalize())
+                            comic.genreIds?.onEach { gId ->
+                                add(genres.firstOrNull { it.second == gId }?.first)
+                            }
+                        }.filterNotNull().joinToString()
+                    initialized = true
+                }
             }
-        }
 
         return MangasPage(entries, false)
     }
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        client
+            .newCall(mangaDetailsRequest(manga))
             .asObservableSuccess()
             .map { mangaDetailsParse(it).apply { description = manga.description } }
-    }
 
     override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
-            .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
-            .set("Referer", "$baseUrl/")
-            .build()
+        val newHeaders =
+            headersBuilder()
+                .set("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*")
+                .set("Referer", "$baseUrl/")
+                .build()
 
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use { it.body.string() }.let(json::decodeFromString)
+    private inline fun <reified T> Response.parseAs(): T = use { it.body.string() }.let(json::decodeFromString)
 
-    private fun String.capitalize() = replaceFirstChar {
-        if (it.isLowerCase()) {
-            it.titlecase(Locale.ROOT)
-        } else {
-            it.toString()
+    private fun String.capitalize() =
+        replaceFirstChar {
+            if (it.isLowerCase()) {
+                it.titlecase(Locale.ROOT)
+            } else {
+                it.toString()
+            }
         }
-    }
 
     private fun randomString(length: Int): String {
         val charPool = ('a'..'z') + ('A'..'Z')

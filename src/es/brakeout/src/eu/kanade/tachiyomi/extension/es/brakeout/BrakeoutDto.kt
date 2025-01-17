@@ -21,9 +21,10 @@ class SeriesDto(
     private val slug: String,
     private val id: Int,
 ) {
-    fun toSManga() = SManga.create().apply {
-        thumbnail_url = thumbnail
-        title = name
-        url = "/ver/$id/$slug"
-    }
+    fun toSManga() =
+        SManga.create().apply {
+            thumbnail_url = thumbnail
+            title = name
+            url = "/ver/$id/$slug"
+        }
 }

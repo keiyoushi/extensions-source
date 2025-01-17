@@ -7,15 +7,18 @@ import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TerritorioLealtad : Madara(
-    "Territorio Lealtad",
-    "https://territorioleal.com",
-    "es",
-    SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
-) {
+class TerritorioLealtad :
+    Madara(
+        "Territorio Lealtad",
+        "https://territorioleal.com",
+        "es",
+        SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
+    ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            .build()
 }

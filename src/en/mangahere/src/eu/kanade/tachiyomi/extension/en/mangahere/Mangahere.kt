@@ -23,7 +23,6 @@ import java.util.Calendar
 import java.util.Locale
 
 class Mangahere : ParsedHttpSource() {
-
     override val id: Long = 2
 
     override val name = "Mangahere"
@@ -34,35 +33,38 @@ class Mangahere : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override fun headersBuilder(): Headers.Builder =
+        super
+            .headersBuilder()
+            .set("Referer", "$baseUrl/")
 
-    private val cookieInterceptor = CookieInterceptor(
-        baseUrl.substringAfter("://"),
-        listOf(
-            "isAdult" to "1",
-        ),
-    )
+    private val cookieInterceptor =
+        CookieInterceptor(
+            baseUrl.substringAfter("://"),
+            listOf(
+                "isAdult" to "1",
+            ),
+        )
 
-    private val notRateLimitClient: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addNetworkInterceptor(cookieInterceptor)
-        .build()
+    private val notRateLimitClient: OkHttpClient =
+        network.cloudflareClient
+            .newBuilder()
+            .addNetworkInterceptor(cookieInterceptor)
+            .build()
 
-    override val client: OkHttpClient = notRateLimitClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
-        .build()
+    override val client: OkHttpClient =
+        notRateLimitClient
+            .newBuilder()
+            .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
+            .build()
 
     override fun popularMangaSelector() = ".manga-list-1-list li"
 
     override fun latestUpdatesSelector() = ".manga-list-1-list li"
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/directory/$page.htm", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/directory/$page.htm", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/directory/$page.htm?latest", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/directory/$page.htm?latest", headers)
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -70,21 +72,26 @@ class Mangahere : ParsedHttpSource() {
         val titleElement = element.select("a").first()!!
         manga.title = titleElement.attr("title")
         manga.setUrlWithoutDomain(titleElement.attr("href"))
-        manga.thumbnail_url = element.select("img.manga-list-1-cover")
-            .first()?.attr("src")
+        manga.thumbnail_url =
+            element
+                .select("img.manga-list-1-cover")
+                .first()
+                ?.attr("src")
 
         return manga
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     override fun popularMangaNextPageSelector() = "div.pager-list-left a:last-child"
 
     override fun latestUpdatesNextPageSelector() = "div.pager-list-left a:last-child"
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val url = "$baseUrl/search".toHttpUrl().newBuilder()
 
         filters.forEach { filter ->
@@ -151,8 +158,11 @@ class Mangahere : ParsedHttpSource() {
         manga.author = document.select(".detail-info-right-say > a").first()?.text()
         manga.genre = document.select(".detail-info-right-tag-list > a").joinToString { it.text() }
         manga.description = document.select(".fullcontent").first()?.text()
-        manga.thumbnail_url = document.select("img.detail-info-cover-img").first()
-            ?.attr("src")
+        manga.thumbnail_url =
+            document
+                .select("img.detail-info-cover-img")
+                .first()
+                ?.attr("src")
 
         document.select("span.detail-info-right-title-tip").first()?.text()?.also { statusText ->
             when {
@@ -176,26 +186,34 @@ class Mangahere : ParsedHttpSource() {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.select("a").first()!!.attr("href"))
         chapter.name = element.select("a p.title3").first()!!.text()
-        chapter.date_upload = element.select("a p.title2").first()?.text()?.let { parseChapterDate(it) } ?: 0
+        chapter.date_upload = element
+            .select("a p.title2")
+            .first()
+            ?.text()
+            ?.let { parseChapterDate(it) } ?: 0
         return chapter
     }
 
-    private fun parseChapterDate(date: String): Long {
-        return if ("Today" in date || " ago" in date) {
-            Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
+    private fun parseChapterDate(date: String): Long =
+        if ("Today" in date || " ago" in date) {
+            Calendar
+                .getInstance()
+                .apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
         } else if ("Yesterday" in date) {
-            Calendar.getInstance().apply {
-                add(Calendar.DATE, -1)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
+            Calendar
+                .getInstance()
+                .apply {
+                    add(Calendar.DATE, -1)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
         } else {
             try {
                 SimpleDateFormat("MMM dd,yyyy", Locale.ENGLISH).parse(date)?.time ?: 0L
@@ -203,7 +221,6 @@ class Mangahere : ParsedHttpSource() {
                 0L
             }
         }
-    }
 
     override fun pageListParse(document: Document): List<Page> {
         val bar = document.select("script[src*=chapter_bar]")
@@ -214,13 +231,18 @@ class Mangahere : ParsedHttpSource() {
             the last two isn't 1 or doesn't have an Int at the end of the last imageUrl's filename, drop last Page
          */
         fun List<Page>.dropLastIfBroken(): List<Page> {
-            val list = this.takeLast(2).map { page ->
-                try {
-                    page.imageUrl!!.substringBeforeLast(".").substringAfterLast("/").takeLast(2).toInt()
-                } catch (_: NumberFormatException) {
-                    return this.dropLast(1)
+            val list =
+                this.takeLast(2).map { page ->
+                    try {
+                        page.imageUrl!!
+                            .substringBeforeLast(".")
+                            .substringAfterLast("/")
+                            .takeLast(2)
+                            .toInt()
+                    } catch (_: NumberFormatException) {
+                        return this.dropLast(1)
+                    }
                 }
-            }
             return when {
                 list[0] == 0 && 100 - list[1] == 1 -> this
                 list[1] - list[0] == 1 -> this
@@ -243,10 +265,12 @@ class Mangahere : ParsedHttpSource() {
             var secretKey = extractSecretKey(html, quickJs)
 
             val chapterIdStartLoc = html.indexOf("chapterid")
-            val chapterId = html.substring(
-                chapterIdStartLoc + 11,
-                html.indexOf(";", chapterIdStartLoc),
-            ).trim()
+            val chapterId =
+                html
+                    .substring(
+                        chapterIdStartLoc + 11,
+                        html.indexOf(";", chapterIdStartLoc),
+                    ).trim()
 
             val chapterPagesElement = document.select(".pager-list-left > span").first()!!
             val pagesLinksElements = chapterPagesElement.select("a")
@@ -260,16 +284,18 @@ class Mangahere : ParsedHttpSource() {
                 var responseText = ""
 
                 for (tr in 1..3) {
-                    val request = Request.Builder()
-                        .url(pageLink)
-                        .addHeader("Referer", link)
-                        .addHeader("Accept", "*/*")
-                        .addHeader("Accept-Language", "en-US,en;q=0.9")
-                        .addHeader("Connection", "keep-alive")
-                        .addHeader("Host", "www.mangahere.cc")
-                        .addHeader("User-Agent", System.getProperty("http.agent") ?: "")
-                        .addHeader("X-Requested-With", "XMLHttpRequest")
-                        .build()
+                    val request =
+                        Request
+                            .Builder()
+                            .url(pageLink)
+                            .addHeader("Referer", link)
+                            .addHeader("Accept", "*/*")
+                            .addHeader("Accept-Language", "en-US,en;q=0.9")
+                            .addHeader("Connection", "keep-alive")
+                            .addHeader("Host", "www.mangahere.cc")
+                            .addHeader("User-Agent", System.getProperty("http.agent") ?: "")
+                            .addHeader("X-Requested-With", "XMLHttpRequest")
+                            .build()
 
                     val response = notRateLimitClient.newCall(request).execute()
                     responseText = response.body.string()
@@ -293,12 +319,14 @@ class Mangahere : ParsedHttpSource() {
 
                 Page(i - 1, "", "https:$baseLink$imageLink")
             }
-        }
-            .dropLastIfBroken()
+        }.dropLastIfBroken()
             .also { quickJs.close() }
     }
 
-    private fun extractSecretKey(html: String, quickJs: QuickJs): String {
+    private fun extractSecretKey(
+        html: String,
+        quickJs: QuickJs,
+    ): String {
         val secretKeyScriptLocation = html.indexOf("eval(function(p,a,c,k,e,d)")
         val secretKeyScriptEndLocation = html.indexOf("</script>", secretKeyScriptLocation)
         val secretKeyScript = html.substring(secretKeyScriptLocation, secretKeyScriptEndLocation).removePrefix("eval")
@@ -308,88 +336,119 @@ class Mangahere : ParsedHttpSource() {
         val secretKeyStartLoc = secretKeyDeobfuscatedScript.indexOf("'")
         val secretKeyEndLoc = secretKeyDeobfuscatedScript.indexOf(";")
 
-        val secretKeyResultScript = secretKeyDeobfuscatedScript.substring(
-            secretKeyStartLoc,
-            secretKeyEndLoc,
-        )
+        val secretKeyResultScript =
+            secretKeyDeobfuscatedScript.substring(
+                secretKeyStartLoc,
+                secretKeyEndLoc,
+            )
 
         return quickJs.evaluate(secretKeyResultScript).toString()
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
-    private class Genre(title: String, val id: Int) : Filter.TriState(title)
+    private class Genre(
+        title: String,
+        val id: Int,
+    ) : Filter.TriState(title)
 
-    private class TypeList(types: Array<String>) : Filter.Select<String>("Type", types, 1)
-    private class CompletionList(completions: Array<String>) : Filter.Select<String>("Completed series", completions, 0)
-    private class RatingList(ratings: Array<String>) : Filter.Select<String>("Minimum rating", ratings, 0)
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres)
+    private class TypeList(
+        types: Array<String>,
+    ) : Filter.Select<String>("Type", types, 1)
 
-    private class ArtistFilter(name: String) : Filter.Text(name)
-    private class AuthorFilter(name: String) : Filter.Text(name)
-    private class YearFilter(name: String) : Filter.Text(name)
+    private class CompletionList(
+        completions: Array<String>,
+    ) : Filter.Select<String>("Completed series", completions, 0)
 
-    override fun getFilterList() = FilterList(
-        TypeList(types.keys.toList().sorted().toTypedArray()),
-        ArtistFilter("Artist"),
-        AuthorFilter("Author"),
-        GenreList(genres()),
-        RatingList(ratings),
-        YearFilter("Year released"),
-        CompletionList(completions),
-    )
+    private class RatingList(
+        ratings: Array<String>,
+    ) : Filter.Select<String>("Minimum rating", ratings, 0)
 
-    private val types = hashMapOf(
-        "Japanese Manga" to 1,
-        "Korean Manhwa" to 2,
-        "Chinese Manhua" to 3,
-        "European Manga" to 4,
-        "American Manga" to 5,
-        "Hong Kong Manga" to 6,
-        "Other Manga" to 7,
-        "Any" to 0,
-    )
+    private class GenreList(
+        genres: List<Genre>,
+    ) : Filter.Group<Genre>("Genres", genres)
+
+    private class ArtistFilter(
+        name: String,
+    ) : Filter.Text(name)
+
+    private class AuthorFilter(
+        name: String,
+    ) : Filter.Text(name)
+
+    private class YearFilter(
+        name: String,
+    ) : Filter.Text(name)
+
+    override fun getFilterList() =
+        FilterList(
+            TypeList(
+                types.keys
+                    .toList()
+                    .sorted()
+                    .toTypedArray(),
+            ),
+            ArtistFilter("Artist"),
+            AuthorFilter("Author"),
+            GenreList(genres()),
+            RatingList(ratings),
+            YearFilter("Year released"),
+            CompletionList(completions),
+        )
+
+    private val types =
+        hashMapOf(
+            "Japanese Manga" to 1,
+            "Korean Manhwa" to 2,
+            "Chinese Manhua" to 3,
+            "European Manga" to 4,
+            "American Manga" to 5,
+            "Hong Kong Manga" to 6,
+            "Other Manga" to 7,
+            "Any" to 0,
+        )
 
     private val completions = arrayOf("Either", "No", "Yes")
     private val ratings = arrayOf("No Stars", "1 Star", "2 Stars", "3 Stars", "4 Stars", "5 Stars")
 
-    private fun genres() = arrayListOf(
-        Genre("Action", 1),
-        Genre("Adventure", 2),
-        Genre("Comedy", 3),
-        Genre("Fantasy", 4),
-        Genre("Historical", 5),
-        Genre("Horror", 6),
-        Genre("Martial Arts", 7),
-        Genre("Mystery", 8),
-        Genre("Romance", 9),
-        Genre("Shounen Ai", 10),
-        Genre("Supernatural", 11),
-        Genre("Drama", 12),
-        Genre("Shounen", 13),
-        Genre("School Life", 14),
-        Genre("Shoujo", 15),
-        Genre("Gender Bender", 16),
-        Genre("Josei", 17),
-        Genre("Psychological", 18),
-        Genre("Seinen", 19),
-        Genre("Slice of Life", 20),
-        Genre("Sci-fi", 21),
-        Genre("Ecchi", 22),
-        Genre("Harem", 23),
-        Genre("Shoujo Ai", 24),
-        Genre("Yuri", 25),
-        Genre("Mature", 26),
-        Genre("Tragedy", 27),
-        Genre("Yaoi", 28),
-        Genre("Doujinshi", 29),
-        Genre("Sports", 30),
-        Genre("Adult", 31),
-        Genre("One Shot", 32),
-        Genre("Smut", 33),
-        Genre("Mecha", 34),
-        Genre("Shotacon", 35),
-        Genre("Lolicon", 36),
-        Genre("Webtoons", 37),
-    )
+    private fun genres() =
+        arrayListOf(
+            Genre("Action", 1),
+            Genre("Adventure", 2),
+            Genre("Comedy", 3),
+            Genre("Fantasy", 4),
+            Genre("Historical", 5),
+            Genre("Horror", 6),
+            Genre("Martial Arts", 7),
+            Genre("Mystery", 8),
+            Genre("Romance", 9),
+            Genre("Shounen Ai", 10),
+            Genre("Supernatural", 11),
+            Genre("Drama", 12),
+            Genre("Shounen", 13),
+            Genre("School Life", 14),
+            Genre("Shoujo", 15),
+            Genre("Gender Bender", 16),
+            Genre("Josei", 17),
+            Genre("Psychological", 18),
+            Genre("Seinen", 19),
+            Genre("Slice of Life", 20),
+            Genre("Sci-fi", 21),
+            Genre("Ecchi", 22),
+            Genre("Harem", 23),
+            Genre("Shoujo Ai", 24),
+            Genre("Yuri", 25),
+            Genre("Mature", 26),
+            Genre("Tragedy", 27),
+            Genre("Yaoi", 28),
+            Genre("Doujinshi", 29),
+            Genre("Sports", 30),
+            Genre("Adult", 31),
+            Genre("One Shot", 32),
+            Genre("Smut", 33),
+            Genre("Mecha", 34),
+            Genre("Shotacon", 35),
+            Genre("Lolicon", 36),
+            Genre("Webtoons", 37),
+        )
 }

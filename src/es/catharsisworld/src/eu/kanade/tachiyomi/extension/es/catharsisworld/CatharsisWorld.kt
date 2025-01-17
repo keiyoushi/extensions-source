@@ -10,28 +10,43 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-class CatharsisWorld : MangaThemesia(
-    "Catharsis World",
-    "https://catharsisworld.com",
-    "es",
-) {
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .ignoreAllSSLErrors()
-        .build()
+class CatharsisWorld :
+    MangaThemesia(
+        "Catharsis World",
+        "https://catharsisworld.com",
+        "es",
+    ) {
+    override val client =
+        super.client
+            .newBuilder()
+            .rateLimit(3)
+            .ignoreAllSSLErrors()
+            .build()
 
     private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
-        val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
-        object : X509TrustManager {
-            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-            override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-            override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-        }
+        val naiveTrustManager =
+            @SuppressLint("CustomX509TrustManager")
+            object : X509TrustManager {
+                override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
 
-        val insecureSocketFactory = SSLContext.getInstance("TLSv1.2").apply {
-            val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
-            init(null, trustAllCerts, SecureRandom())
-        }.socketFactory
+                override fun checkClientTrusted(
+                    certs: Array<X509Certificate>,
+                    authType: String,
+                ) = Unit
+
+                override fun checkServerTrusted(
+                    certs: Array<X509Certificate>,
+                    authType: String,
+                ) = Unit
+            }
+
+        val insecureSocketFactory =
+            SSLContext
+                .getInstance("TLSv1.2")
+                .apply {
+                    val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
+                    init(null, trustAllCerts, SecureRandom())
+                }.socketFactory
 
         sslSocketFactory(insecureSocketFactory, naiveTrustManager)
         hostnameVerifier { _, _ -> true }

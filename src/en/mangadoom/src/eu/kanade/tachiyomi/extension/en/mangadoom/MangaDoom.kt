@@ -27,7 +27,6 @@ import java.nio.charset.Charset
 import java.util.Calendar
 
 class MangaDoom : HttpSource() {
-
     override val baseUrl = "https://www.mngdoom.com"
     override val lang = "en"
     override val name = "MangaDoom"
@@ -84,8 +83,10 @@ class MangaDoom : HttpSource() {
      * Checks on a page that has pagination (e.g. popular-manga and latest-chapters)
      * whether or not a next page exists.
      */
-    private fun paginationHasNext(document: Document) = !document
-        .select("ul.pagination > li:contains(»)").isEmpty()
+    private fun paginationHasNext(document: Document) =
+        !document
+            .select("ul.pagination > li:contains(»)")
+            .isEmpty()
 
     // individual manga
     override fun mangaDetailsParse(response: Response): SManga {
@@ -97,32 +98,49 @@ class MangaDoom : HttpSource() {
         return SManga.create().apply {
             this.url = response.request.url.toString()
 
-            this.title = innerContentElement
-                .select("h5.widget-heading:matchText").first()!!.text()
-            this.thumbnail_url = innerContentElement
-                .select("div.col-md-4 > img").first()?.attr("src")
+            this.title =
+                innerContentElement
+                    .select("h5.widget-heading:matchText")
+                    .first()!!
+                    .text()
+            this.thumbnail_url =
+                innerContentElement
+                    .select("div.col-md-4 > img")
+                    .first()
+                    ?.attr("src")
 
-            this.genre = dlElement.select("dt:contains(Categories:) ~ dd > a[title]")
-                .joinToString { e -> e.attr("title") }
+            this.genre =
+                dlElement
+                    .select("dt:contains(Categories:) ~ dd > a[title]")
+                    .joinToString { e -> e.attr("title") }
 
-            this.description = innerContentElement.select("div.note").first()?.let {
-                descriptionProcessor(it)
-            }
+            this.description =
+                innerContentElement.select("div.note").first()?.let {
+                    descriptionProcessor(it)
+                }
 
-            this.author = dlElement.selectFirst("dt:contains(Author:) ~ dd")
-                ?.text().takeIf { it != "-" }
-
-            this.artist = dlElement.selectFirst("dt:contains(Artist:) ~ dd")
-                ?.text().takeIf { it != "-" }
-
-            this.status = when (
-                dlElement.selectFirst("dt:contains(Status:) ~ dd")
+            this.author =
+                dlElement
+                    .selectFirst("dt:contains(Author:) ~ dd")
                     ?.text()
-            ) {
-                "Ongoing" -> SManga.ONGOING
-                "Completed" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+                    .takeIf { it != "-" }
+
+            this.artist =
+                dlElement
+                    .selectFirst("dt:contains(Artist:) ~ dd")
+                    ?.text()
+                    .takeIf { it != "-" }
+
+            this.status =
+                when (
+                    dlElement
+                        .selectFirst("dt:contains(Status:) ~ dd")
+                        ?.text()
+                ) {
+                    "Ongoing" -> SManga.ONGOING
+                    "Completed" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
         }
     }
 
@@ -186,7 +204,12 @@ class MangaDoom : HttpSource() {
             SChapter.create().apply {
                 this.name = it.select("span.val").first()!!.ownText()
                 this.url = it.select("a").first()!!.attr("href")
-                this.chapter_number = this.url.split("/").last().replace(Regex("[^0-9.]"), "").toFloat()
+                this.chapter_number =
+                    this.url
+                        .split("/")
+                        .last()
+                        .replace(Regex("[^0-9.]"), "")
+                        .toFloat()
 
                 val calculatedDate = parseDate(it.select("span.date").first()!!.ownText())
 
@@ -220,9 +243,10 @@ class MangaDoom : HttpSource() {
      * days, months, years ago. This leads to a lot of inaccuracy, but it's the best we have.
      */
     private fun parseDate(inputString: String): Long? {
-        val timeDifference = regexFirstNumberPattern.find(inputString)?.let {
-            it.value.toInt() * (-1)
-        }
+        val timeDifference =
+            regexFirstNumberPattern.find(inputString)?.let {
+                it.value.toInt() * (-1)
+            }
 
         val lastWord = regexLastWordPattern.find(inputString)?.value
 
@@ -272,9 +296,7 @@ class MangaDoom : HttpSource() {
 
     private val allPagesURLPart = "/all-pages"
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url + allPagesURLPart)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url + allPagesURLPart)
 
     private val imgSelector = "div.content-inner.inner-page > div > img.img-responsive"
 
@@ -283,16 +305,17 @@ class MangaDoom : HttpSource() {
 
         var pageIndex = 0
 
-        return document.select(imgSelector)
+        return document
+            .select(imgSelector)
             .map { Page(pageIndex++, it.attr("src"), it.attr("src")) }
     }
 
     override fun fetchImageUrl(page: Page) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response) =
-        throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     // search
+
     /**
      * The search functionality of the website is uses javascript to talk to an underlying API.
      * The here implemented search function skips the javascript and talks directly with the API.
@@ -303,21 +326,24 @@ class MangaDoom : HttpSource() {
      * The search API won't respond properly unless a certain header field is added to each request.
      * This function prepares the searchHeader by appending the header field to the default headers.
      */
-    private val searchHeaders: Headers = headers.newBuilder()
-        .set("X-Requested-With", "XMLHttpRequest")
-        .build()
+    private val searchHeaders: Headers =
+        headers
+            .newBuilder()
+            .set("X-Requested-With", "XMLHttpRequest")
+            .build()
 
     /**
      * All search payload parameters must be sent with each request. This ensures that even if
      * filters don't want to provide a payload parameter, no parameter will be missed.
      */
-    private val defaultSearchParameter = linkedMapOf(
-        Pair("type", "all"),
-        Pair("manga-name", ""),
-        Pair("author-name", ""),
-        Pair("artist-name", ""),
-        Pair("status", "both"),
-    )
+    private val defaultSearchParameter =
+        linkedMapOf(
+            Pair("type", "all"),
+            Pair("manga-name", ""),
+            Pair("author-name", ""),
+            Pair("artist-name", ""),
+            Pair("status", "both"),
+        )
 
     /**
      * Search requests are made with POST requests to the search API of the website.
@@ -326,7 +352,11 @@ class MangaDoom : HttpSource() {
      * GenreFilter form an exception, since they don't have default values, instead they are just
      * added if they exist, or ignored if they don't exist.
      */
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request {
         val currentSearchParameter = LinkedHashMap(defaultSearchParameter)
 
         var potentialGenreGroupFilter: GenreGroupFilterManager.GenreGroupFilter? = null
@@ -374,48 +404,55 @@ class MangaDoom : HttpSource() {
     // filters
     private val genreManager = GenreGroupFilterManager(client, baseUrl)
 
-    override fun getFilterList() = FilterList(
-        TypeFilter(),
-        AuthorTextFilter(),
-        ArtistTextFilter(),
-        StatusFilter(),
-        genreManager.getGenreGroupFilterOrPlaceholder(),
-    )
+    override fun getFilterList() =
+        FilterList(
+            TypeFilter(),
+            AuthorTextFilter(),
+            ArtistTextFilter(),
+            StatusFilter(),
+            genreManager.getGenreGroupFilterOrPlaceholder(),
+        )
 
-    private class TypeFilter : FormBodySelectFilter(
-        "Type",
-        "type",
-        arrayOf(
-            Pair("japanese", "Japanese Manga"),
-            Pair("korean", "Korean Manhwa"),
-            Pair("chinese", "Chinese Manhua"),
-            Pair("all", "All"),
-        ),
-        3,
-    )
+    private class TypeFilter :
+        FormBodySelectFilter(
+            "Type",
+            "type",
+            arrayOf(
+                Pair("japanese", "Japanese Manga"),
+                Pair("korean", "Korean Manhwa"),
+                Pair("chinese", "Chinese Manhua"),
+                Pair("all", "All"),
+            ),
+            3,
+        )
 
-    private class AuthorTextFilter : Filter.Text("Author"), FormBodyFilter {
+    private class AuthorTextFilter :
+        Filter.Text("Author"),
+        FormBodyFilter {
         override fun addToFormParameters(formParameters: MutableMap<String, String>) {
             formParameters["author-name"] = state
         }
     }
 
-    private class ArtistTextFilter : Filter.Text("Artist"), FormBodyFilter {
+    private class ArtistTextFilter :
+        Filter.Text("Artist"),
+        FormBodyFilter {
         override fun addToFormParameters(formParameters: MutableMap<String, String>) {
             formParameters["artist-name"] = state
         }
     }
 
-    private class StatusFilter : FormBodySelectFilter(
-        "Status",
-        "status",
-        arrayOf(
-            Pair("ongoing", "Ongoing"),
-            Pair("completed", "Completed"),
-            Pair("both", "Both"),
-        ),
-        2,
-    )
+    private class StatusFilter :
+        FormBodySelectFilter(
+            "Status",
+            "status",
+            arrayOf(
+                Pair("ongoing", "Ongoing"),
+                Pair("completed", "Completed"),
+                Pair("both", "Both"),
+            ),
+            2,
+        )
 
     /**
      * GenreFilter aren't hard coded into this extension, instead it relies on asynchronous-fetching
@@ -425,25 +462,29 @@ class MangaDoom : HttpSource() {
      * the filters are created, a substitute Filter object is returned and a new website request is
      * made.
      */
-    private class GenreGroupFilterManager(val client: OkHttpClient, val baseUrl: String) {
-
-        fun getGenreGroupFilterOrPlaceholder(): Filter<*> {
-            return when (val potentialGenreGroup = callForGenreGroup()) {
+    private class GenreGroupFilterManager(
+        val client: OkHttpClient,
+        val baseUrl: String,
+    ) {
+        fun getGenreGroupFilterOrPlaceholder(): Filter<*> =
+            when (val potentialGenreGroup = callForGenreGroup()) {
                 null -> GenreNotAvailable()
                 else -> potentialGenreGroup
             }
-        }
 
-        private class GenreNotAvailable :
-            Filter.Header("Reset for genre filter")
+        private class GenreNotAvailable : Filter.Header("Reset for genre filter")
 
-        private class GenreFilter(val payloadParam: String, displayName: String) :
-            Filter.CheckBox(displayName)
+        private class GenreFilter(
+            val payloadParam: String,
+            displayName: String,
+        ) : Filter.CheckBox(displayName)
 
-        class GenreGroupFilter(generatedGenreList: List<GenreFilter>) :
-            Filter.Group<GenreFilter>("Genres", generatedGenreList) {
+        class GenreGroupFilter(
+            generatedGenreList: List<GenreFilter>,
+        ) : Filter.Group<GenreFilter>("Genres", generatedGenreList) {
             fun addToRequestPayload(formBodyBuilder: FormBody.Builder) {
-                state.filter { it.state }
+                state
+                    .filter { it.state }
                     .forEach { formBodyBuilder.add("include[]", it.payloadParam) }
             }
         }
@@ -459,7 +500,7 @@ class MangaDoom : HttpSource() {
             (
                 compareTimestamp != null &&
                     (System.currentTimeMillis() - compareTimestamp < 15 * 60 * 1000)
-                )
+            )
 
         /**
          * Used to generate a GenreGroupFilter from cached Pair objects or (if the cached pairs are
@@ -473,9 +514,10 @@ class MangaDoom : HttpSource() {
                     },
                 )
 
-            val genreGroupFromVar = genreFiltersContent?.let { genreList ->
-                genreContentListToGenreGroup(genreList)
-            }
+            val genreGroupFromVar =
+                genreFiltersContent?.let { genreList ->
+                    genreContentListToGenreGroup(genreList)
+                }
 
             return if (genreGroupFromVar != null && contentUpToDate(genreFilterContentFrom)) {
                 genreGroupFromVar
@@ -504,33 +546,42 @@ class MangaDoom : HttpSource() {
                 }
             }
 
-            val genreResponse = client
-                .newCall(
-                    GET(
-                        url = baseUrl + advancedSearchPagePath,
-                        cache = CacheControl.FORCE_CACHE,
-                    ),
-                ).execute()
+            val genreResponse =
+                client
+                    .newCall(
+                        GET(
+                            url = baseUrl + advancedSearchPagePath,
+                            cache = CacheControl.FORCE_CACHE,
+                        ),
+                    ).execute()
 
             return if (genreResponse.code == 200 &&
                 contentUpToDate(genreResponse.receivedResponseAtMillis)
             ) {
                 responseToGenreFilterContentPair(genreResponse)
             } else {
-                client.newCall(
-                    GET(
-                        url = baseUrl + advancedSearchPagePath,
-                        cache = CacheControl.FORCE_NETWORK,
-                    ),
-                ).enqueue(
-                    object : Callback {
-                        override fun onFailure(call: Call, e: IOException) = e.printStackTrace()
-                        override fun onResponse(call: Call, response: Response) {
-                            genreFilterContentFrom = response.receivedResponseAtMillis
-                            genreFiltersContent = responseToGenreFilterContentPair(response)
-                        }
-                    },
-                )
+                client
+                    .newCall(
+                        GET(
+                            url = baseUrl + advancedSearchPagePath,
+                            cache = CacheControl.FORCE_NETWORK,
+                        ),
+                    ).enqueue(
+                        object : Callback {
+                            override fun onFailure(
+                                call: Call,
+                                e: IOException,
+                            ) = e.printStackTrace()
+
+                            override fun onResponse(
+                                call: Call,
+                                response: Response,
+                            ) {
+                                genreFilterContentFrom = response.receivedResponseAtMillis
+                                genreFiltersContent = responseToGenreFilterContentPair(response)
+                            }
+                        },
+                    )
                 null
             }
         }
@@ -544,8 +595,7 @@ class MangaDoom : HttpSource() {
         val payloadParam: String,
         val vals: Array<Pair<String, String>>,
         defaultValue: Int = 0,
-    ) :
-        Filter.Select<String>(
+    ) : Filter.Select<String>(
             displayName,
             vals.map { it.second }.toTypedArray(),
             defaultValue,
@@ -564,6 +614,7 @@ class MangaDoom : HttpSource() {
     }
 
     // common
+
     /**
      * The last step for parsing popular manga and search results (from jsoup element to [SManga]
      */
@@ -575,11 +626,16 @@ class MangaDoom : HttpSource() {
     /**
      * Used for latest, popular and search manga parsing to create [SManga] objects
      */
-    private fun mangaFromMangaTitleElement(mangaTitleElement: Element): SManga = SManga.create()
-        .apply {
-            this.title = mangaTitleElement.attr("title")
-            this.setUrlWithoutDomain(mangaTitleElement.attr("href"))
-            this.thumbnail_url = mangaTitleElement.select("img").first()!!
-                .attr("src")
-        }
+    private fun mangaFromMangaTitleElement(mangaTitleElement: Element): SManga =
+        SManga
+            .create()
+            .apply {
+                this.title = mangaTitleElement.attr("title")
+                this.setUrlWithoutDomain(mangaTitleElement.attr("href"))
+                this.thumbnail_url =
+                    mangaTitleElement
+                        .select("img")
+                        .first()!!
+                        .attr("src")
+            }
 }

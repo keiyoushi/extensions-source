@@ -12,38 +12,44 @@ import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 
 class Firescans : Madara("Firescans", "https://firescans.xyz", "en") {
-
     override val id: Long = 5761461704760730187
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(20, 5)
-        .build()
+    override val client: OkHttpClient =
+        super.client
+            .newBuilder()
+            .rateLimit(20, 5)
+            .build()
 
     override val useNewChapterEndpoint: Boolean = true
 
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
-        val chapterProtector = document.selectFirst(chapterProtectorSelector)
-            ?: return document.select(pageListParseSelector).mapIndexed { index, element ->
-                val imageUrl = element.selectFirst("img")?.let { imageFromElement(it) }
-                Page(index, document.location(), imageUrl)
+        val chapterProtector =
+            document.selectFirst(chapterProtectorSelector)
+                ?: return document.select(pageListParseSelector).mapIndexed { index, element ->
+                    val imageUrl = element.selectFirst("img")?.let { imageFromElement(it) }
+                    Page(index, document.location(), imageUrl)
+                }
+
+        val chapterProtectorHtml =
+            if (chapterProtector.attr("src").startsWith("data:text/javascript;base64,")) {
+                Base64.decode(chapterProtector.attr("src").substringAfter(","), Base64.DEFAULT).decodeToString()
+            } else {
+                chapterProtector.html()
             }
 
-        val chapterProtectorHtml = if (chapterProtector.attr("src").startsWith("data:text/javascript;base64,")) {
-            Base64.decode(chapterProtector.attr("src").substringAfter(","), Base64.DEFAULT).decodeToString()
-        } else {
-            chapterProtector.html()
-        }
-
-        val password = chapterProtectorHtml
-            .substringAfter("wpmangaprotectornonce='")
-            .substringBefore("';")
-        val chapterData = json.parseToJsonElement(
+        val password =
             chapterProtectorHtml
-                .substringAfter("chapter_data='")
+                .substringAfter("wpmangaprotectornonce='")
                 .substringBefore("';")
-                .replace("\\/", "/"),
-        ).jsonObject
+        val chapterData =
+            json
+                .parseToJsonElement(
+                    chapterProtectorHtml
+                        .substringAfter("chapter_data='")
+                        .substringBefore("';")
+                        .replace("\\/", "/"),
+                ).jsonObject
 
         val unsaltedCiphertext = Base64.decode(chapterData["ct"]!!.jsonPrimitive.content, Base64.DEFAULT)
         val salt = chapterData["s"]!!.jsonPrimitive.content.decodeHex()

@@ -2,12 +2,14 @@ package eu.kanade.tachiyomi.extension.en.retsu
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
-class Retsu : Madara(
-    "Retsu",
-    "https://retsu.org",
-    "en",
-) {
+class Retsu :
+    Madara(
+        "Retsu",
+        "https://retsu.org",
+        "en",
+    ) {
     override fun popularMangaSelector() = "div.manga__item"
+
     override val popularMangaUrlSelector = "h4 a"
 
     override val mangaDetailsSelectorTitle = "h1.post-title"
