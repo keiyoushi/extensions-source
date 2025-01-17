@@ -67,8 +67,7 @@ class Akaya : ParsedHttpSource() {
         query: String,
     ): Request {
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("_token", csrfToken)
                 .add("search", query)
                 .build()
@@ -80,8 +79,7 @@ class Akaya : ParsedHttpSource() {
             .build()
     }
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request =
@@ -207,8 +205,7 @@ class Akaya : ParsedHttpSource() {
                 }
         }
         thumbnail_url =
-            document
-                .selectFirst("meta[property=og:image]")!!
+            document.selectFirst("meta[property=og:image]")!!
                 .attr("content")
                 .replace("/chapters/", "/content/")
         description = document.selectFirst("section.main div.container div.sidebar > p")!!.text()

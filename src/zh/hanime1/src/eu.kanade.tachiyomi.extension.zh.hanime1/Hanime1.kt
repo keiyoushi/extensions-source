@@ -29,8 +29,7 @@ class Hanime1 : ParsedHttpSource() {
         val requestUrl = response.request.url.toString()
         val document = response.asJsoup()
         val chapterList =
-            document
-                .select("h3:containsOwn(相關集數列表) ~ div.comic-rows-videos-div")
+            document.select("h3:containsOwn(相關集數列表) ~ div.comic-rows-videos-div")
                 .map { element ->
                     SChapter.create().apply {
                         val comicUrl = element.select("a").attr("href")

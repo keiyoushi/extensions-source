@@ -50,8 +50,7 @@ class PixivComic : HttpSource() {
             .addNetworkInterceptor(::tagInterceptor)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("X-Requested-With", "pixivcomic")
 

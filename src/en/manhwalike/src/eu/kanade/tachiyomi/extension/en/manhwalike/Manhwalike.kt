@@ -37,8 +37,7 @@ class Manhwalike : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // popular

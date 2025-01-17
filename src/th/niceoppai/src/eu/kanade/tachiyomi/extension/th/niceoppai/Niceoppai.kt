@@ -270,8 +270,7 @@ class Niceoppai : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val listPage =
-            document
-                .select("ul.pgg li a")
+            document.select("ul.pgg li a")
                 .toList()
                 .filter { it.text() != "Next" && it.text() != "Last" }
                 .map { it.select("a").attr("href") }

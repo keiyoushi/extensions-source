@@ -157,8 +157,7 @@ class Nudemoon : ParsedHttpSource() {
         val manga = SManga.create()
         val infoElement = document.select("table.news_pic2").first()!!
         manga.title =
-            document
-                .select("h1")
+            document.select("h1")
                 .first()!!
                 .text()
                 .substringBefore(" / ")

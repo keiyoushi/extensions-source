@@ -73,8 +73,7 @@ class WeLoveMangaOne : FMReader("WeLoveMangaOne", "https://welovemanga.one", "ja
         val document = response.asJsoup()
 
         val chapterId =
-            document
-                .selectFirst("#chapter")
+            document.selectFirst("#chapter")
                 ?.`val`()
                 ?: throw Exception("Could not find chapter id")
 

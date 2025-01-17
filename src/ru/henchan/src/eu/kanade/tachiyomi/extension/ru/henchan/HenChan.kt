@@ -193,8 +193,7 @@ class HenChan :
             val chap = SChapter.create()
             chap.setUrlWithoutDomain(document.select("#left > div > a").attr("href"))
             chap.name =
-                document
-                    .select("#right > div:nth-child(4)")
+                document.select("#right > div:nth-child(4)")
                     .text()
                     .split(" похожий на ")[1]
                     .replace("\\\"", "\"")

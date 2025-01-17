@@ -33,8 +33,7 @@ class GaugauMonsterPlus : ParsedHttpSource() {
             .addInterceptor(SpeedBinbInterceptor(json))
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/list/works?page=$page", headers)

@@ -77,8 +77,7 @@ open class AnimeH(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
@@ -252,8 +251,7 @@ open class AnimeH(
                 .use { it.asJsoup() }
 
         val cdnHost =
-            document
-                .selectFirst("meta[property=og:image]")
+            document.selectFirst("meta[property=og:image]")
                 ?.attr("content")
                 ?.toHttpUrlOrNull()
                 ?.host

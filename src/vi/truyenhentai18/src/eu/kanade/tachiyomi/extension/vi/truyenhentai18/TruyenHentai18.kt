@@ -25,8 +25,7 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/truyen-de-xuat" + if (page > 1) "/page/$page" else "", headers)

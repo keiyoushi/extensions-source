@@ -32,8 +32,7 @@ abstract class WPComics(
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     open val intl =
@@ -213,8 +212,7 @@ abstract class WPComics(
 
     open val pageListSelector = "div.page-chapter > img, li.blocks-gallery-item img"
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(pageListSelector)
+    override fun pageListParse(document: Document): List<Page> = document.select(pageListSelector)
         .mapNotNull { img -> imageOrNull(img) }
         .distinct()
         .mapIndexed { i, image -> Page(i, "", image) }

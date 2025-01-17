@@ -31,8 +31,7 @@ class MangaStorm : ParsedHttpSource() {
                 filterInclude = listOf("chrome"),
             ).build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangas?page=$page", headers)
@@ -95,8 +94,7 @@ class MangaStorm : ParsedHttpSource() {
         name = element.text()
     }
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("div.text-center .img-fluid")
+    override fun pageListParse(document: Document): List<Page> = document.select("div.text-center .img-fluid")
         .mapIndexed { idx, img ->
             Page(idx, "", img.imgAttr())
         }

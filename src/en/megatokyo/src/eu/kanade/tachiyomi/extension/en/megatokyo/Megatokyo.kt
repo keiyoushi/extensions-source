@@ -62,8 +62,7 @@ class Megatokyo : ParsedHttpSource() {
         return chapter
     }
 
-    override fun pageListParse(document: Document) = document
-        .select("#strip img")
+    override fun pageListParse(document: Document) = document.select("#strip img")
         .mapIndexed { i, element ->
             Page(i, "", "https://megatokyo.com/" + element.attr("src"))
         }

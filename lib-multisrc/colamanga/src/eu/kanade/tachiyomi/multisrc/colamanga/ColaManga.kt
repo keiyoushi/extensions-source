@@ -61,8 +61,7 @@ abstract class ColaManga(
             ).addInterceptor(ColaMangaImageInterceptor())
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
 
@@ -168,8 +167,7 @@ abstract class ColaManga(
         author = document.selectFirst("span.fed-text-muted:contains($authorTitle) + a")?.text()
         genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a").joinToString { it.text() }
         description =
-            document
-                .selectFirst("ul.fed-part-rows li.fed-col-xs12.fed-show-md-block .fed-part-esan")
+            document.selectFirst("ul.fed-part-rows li.fed-col-xs12.fed-show-md-block .fed-part-esan")
                 ?.ownText()
         status =
             when (document.selectFirst("span.fed-text-muted:contains($statusTitle) + a")?.text()) {

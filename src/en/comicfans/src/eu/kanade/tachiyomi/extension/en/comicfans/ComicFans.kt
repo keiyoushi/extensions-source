@@ -40,8 +40,7 @@ class ComicFans : HttpSource() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private fun apiHeadersBuilder() = headersBuilder().apply {
@@ -91,19 +90,18 @@ class ComicFans : HttpSource() {
         val document = response.asJsoup()
 
         val mangaList =
-            document
-                .select(
-                    "div:has(>.block-title-bar > .title:contains(New Updates))" +
-                        "> .book-container > .book",
-                ).map { element ->
-                    SManga.create().apply {
-                        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-                        with(element.selectFirst(".book-name > a")!!) {
-                            title = text()
-                            setUrlWithoutDomain(attr("abs:href"))
-                        }
+            document.select(
+                "div:has(>.block-title-bar > .title:contains(New Updates))" +
+                    "> .book-container > .book",
+            ).map { element ->
+                SManga.create().apply {
+                    thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+                    with(element.selectFirst(".book-name > a")!!) {
+                        title = text()
+                        setUrlWithoutDomain(attr("abs:href"))
                     }
                 }
+            }
 
         return MangasPage(mangaList, false)
     }

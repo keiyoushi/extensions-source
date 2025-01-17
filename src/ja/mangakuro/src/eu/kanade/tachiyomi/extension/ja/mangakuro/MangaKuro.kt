@@ -72,8 +72,7 @@ class MangaKuro : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         author = document.selectFirst("div:has(.lnr-user) + .info_value")?.text()
         status =
-            document
-                .selectFirst("div:has(.lnr-leaf) + .info_value")
+            document.selectFirst("div:has(.lnr-leaf) + .info_value")
                 ?.text()
                 .orEmpty()
                 .let { parseStatus(it) }

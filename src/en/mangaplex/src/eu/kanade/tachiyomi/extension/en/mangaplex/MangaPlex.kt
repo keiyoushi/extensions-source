@@ -97,8 +97,7 @@ class MangaPlex : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         var document = response.asJsoup()
         val chapters =
-            document
-                .select(chapterListSelector())
+            document.select(chapterListSelector())
                 .map(::chapterFromElement)
                 .toMutableList()
         var nextPage = 2
@@ -107,8 +106,7 @@ class MangaPlex : ParsedHttpSource() {
             val currentPage = document.select("meta[property=\"og:url\"]").attr("content")
             document = client.newCall(chapterListRequest(currentPage, nextPage)).execute().asJsoup()
             chapters +=
-                document
-                    .select(chapterListSelector())
+                document.select(chapterListSelector())
                     .map(::chapterFromElement)
             nextPage++
         }
@@ -135,8 +133,7 @@ class MangaPlex : ParsedHttpSource() {
     }
 
     // pages
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("#the-post .entry-content > img")
+    override fun pageListParse(document: Document): List<Page> = document.select("#the-post .entry-content > img")
         .toList()
         .filter { it.attr("src").isNotEmpty() }
         .mapIndexed { i, el -> Page(i, "", el.attr("src")) }

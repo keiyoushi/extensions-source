@@ -51,8 +51,7 @@ class UniversoHentai :
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        return document
-            .select(chapterListSelector())
+        return document.select(chapterListSelector())
             .map { chapterFromElement(it) }
     }
 

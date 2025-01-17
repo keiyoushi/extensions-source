@@ -189,8 +189,7 @@ class Hentai2Read : ParsedHttpSource() {
                 .let { parseStatus(it) }
         manga.thumbnail_url = document.select("a#js-linkNext img").attr("src")
         manga.title =
-            document
-                .select("h3.block-title > a")
+            document.select("h3.block-title > a")
                 .first()!!
                 .ownText()
                 .trim()

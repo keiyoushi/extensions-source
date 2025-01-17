@@ -133,8 +133,7 @@ class Zaimanhua :
                 .digest(password.toByteArray(Charsets.UTF_8))
                 .joinToString("") { "%02x".format(it) }
         val formBody: RequestBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .addEncoded("username", username)
                 .addEncoded("passwd", passwordEncoded)
                 .build()

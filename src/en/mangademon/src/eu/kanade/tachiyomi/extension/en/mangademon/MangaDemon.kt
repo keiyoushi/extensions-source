@@ -34,8 +34,7 @@ class MangaDemon : ParsedHttpSource() {
             .rateLimit(1)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/advanced.php?list=$page&status=all&orderby=VIEWS%20DESC", headers)

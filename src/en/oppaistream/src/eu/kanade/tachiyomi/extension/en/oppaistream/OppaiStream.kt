@@ -32,8 +32,7 @@ class OppaiStream : ParsedHttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // popular

@@ -31,8 +31,7 @@ class Holonometria(
             .readTimeout(60, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/holonometria/$langPath", headers)
@@ -58,8 +57,7 @@ class Holonometria(
         val search = response.request.url.fragment!!
 
         val entries =
-            document
-                .select(searchMangaSelector())
+            document.select(searchMangaSelector())
                 .map(::searchMangaFromElement)
                 .filter { it.title.contains(search, true) }
 
@@ -109,14 +107,12 @@ class Holonometria(
                 .substringBefore("page/")
 
         val chapters =
-            document
-                .select(chapterListSelector())
+            document.select(chapterListSelector())
                 .map(::chapterFromElement)
                 .toMutableList()
 
         val lastPage =
-            document
-                .select(".pagenation-list a")
+            document.select(".pagenation-list a")
                 .last()
                 ?.text()
                 ?.toIntOrNull() ?: return chapters

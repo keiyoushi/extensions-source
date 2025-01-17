@@ -29,8 +29,7 @@ class Rawdevartart : HttpSource() {
 
     override val supportsLatest = true
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()

@@ -110,8 +110,7 @@ class MangaSwat :
                 .build()
 
         val formBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("action", "more_manga_home")
                 .add("paged", (page - 1).toString())
                 .build()

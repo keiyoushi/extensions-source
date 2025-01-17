@@ -104,25 +104,21 @@ open class MangaToon(
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         author =
-            document
-                .select("div.detail-author-name span")
+            document.select("div.detail-author-name span")
                 .text()
                 .substringAfter(": ")
         description =
-            document
-                .select("div.detail-description-short p")
+            document.select("div.detail-description-short p")
                 .joinToString("\n\n") { it.text() }
         genre =
-            document
-                .select("div.detail-tags-info span")
+            document.select("div.detail-tags-info span")
                 .text()
                 .split("/")
                 .map { it.replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() } }
                 .sorted()
                 .joinToString { it.trim() }
         status =
-            document
-                .select("div.detail-status")
+            document.select("div.detail-status")
                 .text()
                 .trim()
                 .toStatus()
@@ -172,8 +168,7 @@ open class MangaToon(
         setUrlWithoutDomain(element.attr("href"))
     }
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("div.pictures div img:first-child")
+    override fun pageListParse(document: Document): List<Page> = document.select("div.pictures div img:first-child")
         .mapIndexed { i, element -> Page(i, "", element.imgAttr()) }
         .takeIf { it.isNotEmpty() } ?: throw Exception(lockedError)
 

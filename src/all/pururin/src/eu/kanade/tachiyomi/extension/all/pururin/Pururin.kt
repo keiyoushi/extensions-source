@@ -102,8 +102,7 @@ abstract class Pururin(
         type: String,
     ): Pair<String, String>? {
         val requestBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("text", tag)
                 .build()
 
@@ -281,8 +280,7 @@ abstract class Pururin(
 
     // Pages
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(".gallery-preview a img")
+    override fun pageListParse(document: Document): List<Page> = document.select(".gallery-preview a img")
         .mapIndexed { i, img ->
             Page(i, "", (if (img.hasAttr("abs:src")) img.attr("abs:src") else img.attr("abs:data-src")).replace("t.", "."))
         }

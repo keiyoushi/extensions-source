@@ -98,8 +98,7 @@ class Kiutaku : ParsedHttpSource() {
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         title = document.selectFirst("div.article-header")?.text() ?: "Cosplay"
         genre =
-            document
-                .selectFirst("div.article-tags")
+            document.selectFirst("div.article-tags")
                 ?.select("a.tag > span")
                 ?.eachText()
                 ?.joinToString { it.trimStart('#') }

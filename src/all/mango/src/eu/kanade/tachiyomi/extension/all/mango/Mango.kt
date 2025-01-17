@@ -272,8 +272,7 @@ class Mango :
                 .add("ContentType", "application/x-www-form-urlencoded")
                 .build()
         val formBody: RequestBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .addEncoded("username", username)
                 .addEncoded("password", password)
                 .build()

@@ -59,8 +59,7 @@ abstract class MangaHub(
             .rateLimit(1)
             .build()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add(
             "Accept",
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
@@ -245,8 +244,7 @@ abstract class MangaHub(
         manga.genre = document.select(".row p a").joinToString { it.text() }
         manga.description = document.select(".tab-content p").first()?.text()
         manga.thumbnail_url =
-            document
-                .select("img.img-responsive")
+            document.select("img.img-responsive")
                 .first()
                 ?.attr("src")
 

@@ -87,8 +87,7 @@ class Randowiz : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val chapters =
-            document
-                .select(chapterListSelector())
+            document.select(chapterListSelector())
                 .map { chapterFromElement(it) }
                 .toMutableList()
         var next = document.selectFirst(".next")?.attr("href") ?: ""

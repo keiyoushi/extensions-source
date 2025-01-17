@@ -19,8 +19,7 @@ class MangaTilkisi :
 
     override fun pageListRequest(chapter: SChapter): Request {
         val payload =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("verified", "1")
                 .build()
         return POST(chapter.url, headers, payload)

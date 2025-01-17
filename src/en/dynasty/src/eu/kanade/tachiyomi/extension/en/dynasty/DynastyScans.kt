@@ -228,8 +228,7 @@ abstract class DynastyScans : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> = try {
         val imageUrl =
-            document
-                .select("script")
+            document.select("script")
                 .last()!!
                 .html()
                 .substringAfter("var pages = [")

@@ -272,16 +272,14 @@ open class Viz(
 
     override fun pageListParse(document: Document): List<Page> {
         val pageCount =
-            document
-                .select("script:containsData(var pages)")
+            document.select("script:containsData(var pages)")
                 .first()!!
                 .data()
                 .substringAfter("= ")
                 .substringBefore(";")
                 .toInt()
         val mangaId =
-            document
-                .location()
+            document.location()
                 .substringAfterLast("/")
                 .substringBefore("?")
 
@@ -332,8 +330,7 @@ open class Viz(
                 ?: client.newCall(loginCheckRequest).execute()
         val document = loginCheckResponse.asJsoup()
 
-        loggedIn = document
-            .select("div#o_account-links-content")
+        loggedIn = document.select("div#o_account-links-content")
             .firstOrNull()
             ?.attr("logged_in")
             ?.toBoolean() ?: false

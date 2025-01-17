@@ -30,8 +30,7 @@ abstract class Manga18(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/list-manga/$page?order_by=views", headers)
@@ -113,8 +112,7 @@ abstract class Manga18(
         if (getAvailableTags && tags.isEmpty() && getTagsAttempts < 3) {
             try {
                 tags =
-                    document
-                        .select(tagsSelector)
+                    document.select(tagsSelector)
                         .map {
                             Pair(
                                 it.text().trim(),
@@ -165,8 +163,7 @@ abstract class Manga18(
         title = document.select(titleSelector).text()
         description =
             buildString {
-                document
-                    .select(descriptionSelector)
+                document.select(descriptionSelector)
                     .eachText()
                     .onEach {
                         append(it.trim())

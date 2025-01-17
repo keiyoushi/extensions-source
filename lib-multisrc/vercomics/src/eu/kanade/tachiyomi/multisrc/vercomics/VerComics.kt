@@ -25,8 +25,7 @@ abstract class VerComics(
     protected open val genreSuffix = ""
     protected open val useSuffixOnSearch = true
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/$urlSuffix/page/$page", headers)
@@ -125,8 +124,7 @@ abstract class VerComics(
             "div.wp-content > figure img:not(noscript img)," +
             "div.wp-content > img, div.wp-content > p img"
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(pageListSelector)
+    override fun pageListParse(document: Document): List<Page> = document.select(pageListSelector)
         .mapIndexed { i, img -> Page(i, imageUrl = img.imgAttr()) }
 
     protected open var genres = arrayOf(Pair("Ver todos", ""))

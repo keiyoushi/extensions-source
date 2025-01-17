@@ -64,8 +64,7 @@ abstract class TerraScan(
             genresList = parseGenres(document)
         }
         val mangas =
-            document
-                .select(popularMangaSelector())
+            document.select(popularMangaSelector())
                 .map(::popularMangaFromElement)
 
         return MangasPage(mangas, document.selectFirst(popularMangaNextPageSelector()) != null)
@@ -171,8 +170,7 @@ abstract class TerraScan(
             thumbnail_url = selectFirst(mangaDetailsThumbnailSelector)?.absUrl("href")
             description = selectFirst(mangaDetailsDescriptionSelector)?.text()
             genre =
-                document
-                    .select(mangaDetailsGenreSelector)
+                document.select(mangaDetailsGenreSelector)
                     .joinToString { it.ownText() }
         }
         setUrlWithoutDomain(document.location())
@@ -255,8 +253,7 @@ abstract class TerraScan(
 
     open val genreFilterSelector: String = "form div > div:has(input) div"
 
-    private fun parseGenres(document: Document): List<Genre> = document
-        .select(genreFilterSelector)
+    private fun parseGenres(document: Document): List<Genre> = document.select(genreFilterSelector)
         .map { element ->
             val input = element.selectFirst("input")!!
             Genre(

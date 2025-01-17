@@ -67,8 +67,7 @@ class GourmetScans :
 
     override fun parseGenres(document: Document): List<Genre> {
         genresList =
-            document
-                .select("div.row.genres ul li a")
+            document.select("div.row.genres ul li a")
                 .orEmpty()
                 .map { li ->
                     Pair(

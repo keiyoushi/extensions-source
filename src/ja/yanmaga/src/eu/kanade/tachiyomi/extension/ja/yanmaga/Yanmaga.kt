@@ -38,8 +38,7 @@ abstract class Yanmaga(
             .addInterceptor(SpeedBinbInterceptor(json))
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun searchMangaRequest(
@@ -82,24 +81,20 @@ abstract class Yanmaga(
         val document = response.asJsoup()
 
         if (document.selectFirst(".js-episode") == null) {
-            return document
-                .select(chapterListSelector())
+            return document.select(chapterListSelector())
                 .map { chapterFromElement(it) }
                 .filter { it.url.isNotEmpty() }
         }
 
         val chapterUrl = response.request.url.toString()
         val firstChapterList =
-            document
-                .select("ul.mod-episode-list:first-of-type > li.mod-episode-item")
+            document.select("ul.mod-episode-list:first-of-type > li.mod-episode-item")
                 .map { chapterFromElement(it) }
         val lastChapterList =
-            document
-                .select("ul.mod-episode-list:last-of-type > li.mod-episode-item")
+            document.select("ul.mod-episode-list:last-of-type > li.mod-episode-item")
                 .map { chapterFromElement(it) }
         val totalChapterCount =
-            document
-                .selectFirst("#contents")
+            document.selectFirst("#contents")
                 ?.attr("data-count")
                 ?.toInt()
                 ?: return firstChapterList + lastChapterList
@@ -109,8 +104,7 @@ abstract class Yanmaga(
         val chapterOffset = chapterMoreButton.attr("data-offset").toInt()
         val chapterAjaxUrl = chapterMoreButton.attr("abs:data-path").toHttpUrl()
         val chaptersPerPage =
-            document
-                .selectFirst("script:containsData(gon.episode_more)")
+            document.selectFirst("script:containsData(gon.episode_more)")
                 ?.data()
                 ?.substringAfter("gon.episode_more=")
                 ?.substringBefore(";")

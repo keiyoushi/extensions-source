@@ -75,8 +75,7 @@ class HentaiVN :
             .build()
     }
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // latestUpdates
@@ -207,8 +206,7 @@ class HentaiVN :
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        if (document
-                .select("p")
+        if (document.select("p")
                 .toString()
                 .contains("Bạn chỉ có thể sử dụng chức năng này khi đã đăng ký thành viên")
         ) {

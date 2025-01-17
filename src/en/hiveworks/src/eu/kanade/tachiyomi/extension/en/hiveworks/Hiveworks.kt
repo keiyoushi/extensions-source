@@ -56,8 +56,7 @@ class Hiveworks : ParsedHttpSource() {
         val document = response.asJsoup()
 
         val mangas =
-            document
-                .select(popularMangaSelector())
+            document.select(popularMangaSelector())
                 .filterNot {
                     val url = it.select("a.comiclink").first()!!.attr("abs:href")
                     url.contains("sparklermonthly.com") || url.contains("explosm.net") // Filter Unsupported Comics
@@ -210,8 +209,7 @@ class Hiveworks : ParsedHttpSource() {
         url: String,
     ): SManga {
         val document = response.asJsoup()
-        return document
-            .select(popularMangaSelector())
+        return document.select(popularMangaSelector())
             .firstOrNull { url == it.select("a.comiclink").first()!!.attr("abs:href") }
             ?.let { mangaFromElement(it) } ?: SManga.create()
     }
@@ -254,8 +252,7 @@ class Hiveworks : ParsedHttpSource() {
         }
         val document = response.asJsoup()
         val baseUrl =
-            document
-                .select("div script")
+            document.select("div script")
                 .html()
                 .substringAfter("href='")
                 .substringBefore("'")

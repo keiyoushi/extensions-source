@@ -32,8 +32,7 @@ class TMOManga : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/recomendados?page=$page", headers)
@@ -57,8 +56,7 @@ class TMOManga : ParsedHttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas =
-            document
-                .selectFirst(latestUpdatesWrapperSelector())!!
+            document.selectFirst(latestUpdatesWrapperSelector())!!
                 .select(latestUpdatesSelector())
                 .map { latestUpdatesFromElement(it) }
 

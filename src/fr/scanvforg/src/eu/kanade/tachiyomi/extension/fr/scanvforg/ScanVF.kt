@@ -38,8 +38,7 @@ class ScanVF : ParsedHttpSource() {
         SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
     }
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga?q=p&page=$page", headers)

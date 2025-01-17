@@ -122,12 +122,10 @@ abstract class Etoshore(
         description = document.selectFirst(".excerpt p")?.text()
         document.selectFirst(".details-right-con img")?.let { thumbnail_url = imageFromElement(it) }
         genre =
-            document
-                .select("div.meta-item span.meta-title:contains(Genres) + span a")
+            document.select("div.meta-item span.meta-title:contains(Genres) + span a")
                 .joinToString { it.text() }
         author =
-            document
-                .selectFirst("div.meta-item span.meta-title:contains(Author) + span a")
+            document.selectFirst("div.meta-item span.meta-title:contains(Author) + span a")
                 ?.text()
         document.selectFirst(".status")?.text()?.let {
             status = it.toMangaStatus()

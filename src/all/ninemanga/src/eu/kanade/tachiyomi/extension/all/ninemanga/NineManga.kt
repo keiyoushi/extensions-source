@@ -143,8 +143,7 @@ open class NineManga(
         }
     }
 
-    override fun imageUrlParse(document: Document) = document
-        .select("div.pic_box img.manga_pic")
+    override fun imageUrlParse(document: Document) = document.select("div.pic_box img.manga_pic")
         .first()!!
         .attr("src")
         .orEmpty()

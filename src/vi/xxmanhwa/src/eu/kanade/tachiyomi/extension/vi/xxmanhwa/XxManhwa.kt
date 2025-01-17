@@ -40,8 +40,7 @@ class XxManhwa :
 
     override val supportsLatest = false
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
@@ -113,8 +112,7 @@ class XxManhwa :
                 .associate { it.termId to it.name }
                 .toMap()
         genre =
-            document
-                .selectFirst("div.each-to-taxonomy")
+            document.selectFirst("div.each-to-taxonomy")
                 ?.attr("data-id")
                 ?.split(",")
                 ?.joinToString { genreMap[it] ?: "Unknown" }
@@ -150,8 +148,7 @@ class XxManhwa :
 
         val html = document.html()
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .apply {
                     val mangaId =
                         response.request.url.pathSegments

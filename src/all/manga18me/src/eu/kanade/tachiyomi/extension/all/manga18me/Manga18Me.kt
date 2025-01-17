@@ -150,8 +150,7 @@ open class Manga18Me(
         title = document.select("div.post-title.wleft > h1").text()
         description =
             buildString {
-                document
-                    .select("div.ss-manga > p")
+                document.select("div.ss-manga > p")
                     .eachText()
                     .onEach {
                         append(it.trim())

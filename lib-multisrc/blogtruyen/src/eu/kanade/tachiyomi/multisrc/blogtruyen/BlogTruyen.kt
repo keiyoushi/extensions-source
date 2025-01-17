@@ -38,8 +38,7 @@ abstract class BlogTruyen(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
@@ -325,8 +324,7 @@ abstract class BlogTruyen(
         }
 
         // Some chapters use js script to render images
-        document
-            .select("#content > script:containsData(listImageCaption)")
+        document.select("#content > script:containsData(listImageCaption)")
             .lastOrNull()
             ?.let { script ->
                 val imagesStr =
@@ -386,8 +384,7 @@ abstract class BlogTruyen(
         genres: List<Genre>,
     ) : Filter.Group<Genre>("Thể loại", genres)
 
-    private fun getMangaTitle(document: Document) = document
-        .selectFirst(".entry-title a")!!
+    private fun getMangaTitle(document: Document) = document.selectFirst(".entry-title a")!!
         .attr("title")
         .removePrefix("truyện tranh ")
 
@@ -408,8 +405,7 @@ abstract class BlogTruyen(
             POST(
                 "$baseUrl/Chapter/UpdateView",
                 headers,
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add("mangaId", mangaId)
                     .add("chapterId", chapterId)
                     .build(),

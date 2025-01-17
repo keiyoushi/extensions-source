@@ -86,8 +86,7 @@ class UngTyComics :
         return this
     }
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/truyen-hot?page=$page", headers)
@@ -170,8 +169,7 @@ class UngTyComics :
         var page = 2
 
         return buildList {
-            document
-                .select(chapterListSelector())
+            document.select(chapterListSelector())
                 .forEach { add(chapterFromElement(it)) }
 
             while (document.selectFirst(chapterNextPageSelector()) != null) {
@@ -182,8 +180,7 @@ class UngTyComics :
                         .build()
 
                 document = client.newCall(GET(url, headers)).execute().asJsoup()
-                document
-                    .select(chapterListSelector())
+                document.select(chapterListSelector())
                     .forEach { add(chapterFromElement(it)) }
                 page++
             }

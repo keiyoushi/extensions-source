@@ -201,8 +201,7 @@ class BoyLove :
                 val request = client.newCall(GET("$baseUrl/home/book/cate.html", headers))
                 val document = request.execute().asJsoup()
                 genres =
-                    document
-                        .select("ul[data-str=tag] > li[class] > a")
+                    document.select("ul[data-str=tag] > li[class] > a")
                         .map { it.ownText() }
                         .toTypedArray()
             } catch (e: Throwable) {

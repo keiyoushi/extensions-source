@@ -50,8 +50,7 @@ class SushiScan :
             ).rateLimit(2, 1, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .addCustomUA()
         .set("Referer", "$baseUrl$mangaUrlDirectory")
 

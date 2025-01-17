@@ -46,8 +46,7 @@ class AnimeXNovel :
             status = parseStatus(it.text())
         }
         genre =
-            document
-                .select("dl:has(dt:contains(Gênero)) dd a")
+            document.select("dl:has(dt:contains(Gênero)) dd a")
                 .joinToString { it.text() }
 
         setUrlWithoutDomain(document.location())

@@ -23,8 +23,7 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
     override val versionId: Int = 2
 
     private val cdnHeaders =
-        super
-            .headersBuilder()
+        super.headersBuilder()
             .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .build()
 
@@ -237,8 +236,7 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
         launchIO { countViews(document) }
 
         val pageBaseUrl =
-            document
-                .selectFirst("[id=single-chapter-js-extra]")
+            document.selectFirst("[id=single-chapter-js-extra]")
                 ?.data()
                 ?.let { chapterExtraDataRegex.find(it)?.groups }
                 ?.get(1)
@@ -246,8 +244,7 @@ class Hentairead : Madara("HentaiRead", "https://hentairead.com", "en", dateForm
                 ?.let { json.decodeFromString<ImageBaseUrlDto>(it).baseUrl }
 
         val pages =
-            document
-                .selectFirst("[id=single-chapter-js-before]")
+            document.selectFirst("[id=single-chapter-js-before]")
                 ?.data()
                 ?.let { pagesDataRegex.find(it)?.groups }
                 ?.get(1)

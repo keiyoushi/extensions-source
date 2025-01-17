@@ -44,8 +44,7 @@ class LikeManga : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(page, "", FilterList(SortFilter("top-manga")))
@@ -135,8 +134,7 @@ class LikeManga : ParsedHttpSource() {
     private var genresList: List<Pair<String, String>> = emptyList()
 
     private fun parseGenres(document: Document): List<Pair<String, String>> {
-        return document
-            .selectFirst("div.search_genres")
+        return document.selectFirst("div.search_genres")
             ?.select("div.form-check")
             .orEmpty()
             .mapNotNull {
@@ -209,8 +207,7 @@ class LikeManga : ParsedHttpSource() {
         genre = document.select(".list-info a[href*=/genres/]").joinToString { it.text() }
         status = document.selectFirst(".list-info .status p:nth-child(2)")?.text().parseStatus()
         author =
-            document
-                .selectFirst(".list-info .author p:nth-child(2)")
+            document.selectFirst(".list-info .author p:nth-child(2)")
                 ?.text()
                 ?.takeUnless { it.trim() == "Updating" }
     }
@@ -230,14 +227,12 @@ class LikeManga : ParsedHttpSource() {
         val document = response.use { it.asJsoup() }
 
         val chapters =
-            document
-                .select(chapterListSelector())
+            document.select(chapterListSelector())
                 .map(::chapterFromElement)
                 .toMutableList()
 
         val lastPage =
-            document
-                .select("div.chapters_pagination a:not(.next)")
+            document.select("div.chapters_pagination a:not(.next)")
                 .last()
                 ?.attr("onclick")
                 ?.run { chapterPageCountRegex.find(this)?.groupValues?.get(1) }
@@ -245,8 +240,7 @@ class LikeManga : ParsedHttpSource() {
                 ?: return chapters
 
         val id =
-            document
-                .select("#title-detail-manga")
+            document.select("#title-detail-manga")
                 .attr("data-manga")
                 .toIntOrNull() ?: return chapters
 
@@ -297,8 +291,7 @@ class LikeManga : ParsedHttpSource() {
         val htmlString = responseJson["list_chap"]!!.jsonPrimitive.content
         val document = Jsoup.parseBodyFragment(htmlString, response.request.url.toString())
 
-        return document
-            .select(chapterListSelector())
+        return document.select(chapterListSelector())
             .map(::chapterFromElement)
     }
 
@@ -328,8 +321,7 @@ class LikeManga : ParsedHttpSource() {
             }
         }
 
-        return document
-            .select("div.reading-detail.box_doc img:not(noscript img)")
+        return document.select("div.reading-detail.box_doc img:not(noscript img)")
             .mapIndexed { i, img -> Page(i, "", img.imgAttr()) }
     }
 

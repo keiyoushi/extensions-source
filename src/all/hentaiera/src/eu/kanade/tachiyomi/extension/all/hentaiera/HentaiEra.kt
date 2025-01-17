@@ -80,8 +80,7 @@ class HentaiEra(
 
     override fun Element.getCover() = selectFirst(".left_cover img")?.imgAttr()
 
-    override fun tagsParser(document: Document): List<Genre> = document
-        .select("h2.gallery_title a")
+    override fun tagsParser(document: Document): List<Genre> = document.select("h2.gallery_title a")
         .mapNotNull {
             Genre(
                 it.text(),

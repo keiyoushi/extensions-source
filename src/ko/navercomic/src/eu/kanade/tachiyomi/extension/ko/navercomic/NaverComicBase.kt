@@ -35,8 +35,7 @@ abstract class NaverComicBase(
     internal val json: Json by injectLazy()
 
     private val mobileHeaders =
-        super
-            .headersBuilder()
+        super.headersBuilder()
             .add("Referer", mobileUrl)
             .build()
 
@@ -152,14 +151,12 @@ abstract class NaverComicBase(
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
         try {
-            document
-                .select(".wt_viewer img")
+            document.select(".wt_viewer img")
                 .map {
                     it.attr("src")
                 }.ifEmpty {
                     // for mobile user agent
-                    document
-                        .select(".toon_view_lst img")
+                    document.select(".toon_view_lst img")
                         .map {
                             it.attr("data-src")
                         }

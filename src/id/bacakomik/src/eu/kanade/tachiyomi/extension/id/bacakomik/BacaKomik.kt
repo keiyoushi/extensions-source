@@ -222,8 +222,7 @@ class BacaKomik : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
         var i = 0
-        document
-            .select("div:has(>img[alt*=\"Chapter\"]) img")
+        document.select("div:has(>img[alt*=\"Chapter\"]) img")
             .filter { element ->
                 val parent = element.parent()
                 parent != null && parent.tagName() != "noscript"

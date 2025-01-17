@@ -78,8 +78,7 @@ class Hitomi(
 
     private fun imageType() = preferences.getString(PREF_IMAGETYPE, "webp")!!
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
         .set("origin", baseUrl)
 

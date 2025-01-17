@@ -32,8 +32,7 @@ class MangaBTT : ParsedHttpSource() {
             .build()
     }
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
@@ -130,8 +129,7 @@ class MangaBTT : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1.title-detail")!!.text()
         description =
-            document
-                .selectFirst(".detail-content p")
+            document.selectFirst(".detail-content p")
                 ?.text()
                 ?.substringAfter("comic site. The Summary is ")
 
@@ -171,8 +169,7 @@ class MangaBTT : ParsedHttpSource() {
                 }.build()
 
         val postBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("StoryID", manga.url.substringAfterLast("-"))
                 .build()
 
@@ -246,8 +243,7 @@ class MangaBTT : ParsedHttpSource() {
 
     // =============================== Pages ================================
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(".reading-detail > .page-chapter")
+    override fun pageListParse(document: Document): List<Page> = document.select(".reading-detail > .page-chapter")
         .map { page ->
             val img = page.selectFirst("img[data-index]")!!
             val index = img.attr("data-index").toInt()

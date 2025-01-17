@@ -171,8 +171,7 @@ class ReadMangas : HttpSource() {
             genre = document.select("div > label + div > div").joinToString { it.text() }
 
             description =
-                document
-                    .select("script")
+                document.select("script")
                     .map { it.data() }
                     .firstOrNull { MANGA_DETAILS_DESCRIPTION_REGEX.containsMatchIn(it) }
                     ?.let {

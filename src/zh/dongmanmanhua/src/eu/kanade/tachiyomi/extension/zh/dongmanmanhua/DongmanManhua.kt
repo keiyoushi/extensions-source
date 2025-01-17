@@ -16,8 +16,7 @@ import java.util.Locale
 
 class DongmanManhua :
     Webtoons("Dongman Manhua", "https://www.dongmanmanhua.cn", "zh", "", dateFormat = SimpleDateFormat("yyyy-M-d", Locale.ENGLISH)) {
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .removeAll("Referer")
         .add("Referer", baseUrl)
 
@@ -25,8 +24,7 @@ class DongmanManhua :
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/dailySchedule?sortOrder=UPDATE&webtoonCompleteType=ONGOING", headers)
 
-    override fun parseDetailsThumbnail(document: Document): String? = document
-        .select("div.detail_body")
+    override fun parseDetailsThumbnail(document: Document): String? = document.select("div.detail_body")
         .attr("style")
         .substringAfter("(")
         .substringBefore(")")

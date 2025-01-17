@@ -83,8 +83,7 @@ class MangaDoom : HttpSource() {
      * Checks on a page that has pagination (e.g. popular-manga and latest-chapters)
      * whether or not a next page exists.
      */
-    private fun paginationHasNext(document: Document) = !document
-        .select("ul.pagination > li:contains(»)")
+    private fun paginationHasNext(document: Document) = !document.select("ul.pagination > li:contains(»)")
         .isEmpty()
 
     // individual manga
@@ -304,8 +303,7 @@ class MangaDoom : HttpSource() {
 
         var pageIndex = 0
 
-        return document
-            .select(imgSelector)
+        return document.select(imgSelector)
             .map { Page(pageIndex++, it.attr("src"), it.attr("src")) }
     }
 

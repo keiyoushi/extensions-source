@@ -34,8 +34,7 @@ class HeavenManga : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/top?orderby=views&page=$page", headers)
@@ -56,8 +55,7 @@ class HeavenManga : ParsedHttpSource() {
         val document = response.asJsoup()
 
         val mangas =
-            document
-                .selectFirst(latestUpdatesWrapperSelector())!!
+            document.selectFirst(latestUpdatesWrapperSelector())!!
                 .select(latestUpdatesSelector())
                 .map { element ->
                     latestUpdatesFromElement(element)

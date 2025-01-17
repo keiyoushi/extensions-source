@@ -40,8 +40,7 @@ class MangaPlanet : ParsedHttpSource() {
             .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "mpaconf" to "18"))
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/browse/title?ttlpage=$page", headers)
@@ -110,8 +109,7 @@ class MangaPlanet : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga {
         val alternativeTitles =
-            document
-                .selectFirst("h3#manga_title + p")!!
+            document.selectFirst("h3#manga_title + p")!!
                 .textNodes()
                 .filterNot { it.text().isBlank() }
                 .joinToString { it.text() }
@@ -128,17 +126,14 @@ class MangaPlanet : ParsedHttpSource() {
                 }
             genre =
                 buildList {
-                    document
-                        .select("h3:has(.fa-layer-group) a")
+                    document.select("h3:has(.fa-layer-group) a")
                         .map { it.text() }
                         .let { addAll(it) }
-                    document
-                        .select(".fa-pepper-hot")
+                    document.select(".fa-pepper-hot")
                         .size
                         .takeIf { it > 0 }
                         ?.let { add("🌶️".repeat(it)) }
-                    document
-                        .select(".tags-btn button")
+                    document.select(".tags-btn button")
                         .map { it.text() }
                         .let { addAll(it) }
                     document.selectFirst("span:has(.fa-book-spells, .fa-book)")?.let { add(it.text()) }
@@ -177,8 +172,7 @@ class MangaPlanet : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        return document
-            .select(chapterListSelector())
+        return document.select(chapterListSelector())
             .filter { e ->
                 e.selectFirst("p")?.ownText()?.contains("Arrives on") != true
             }.map { chapterFromElement(it) }

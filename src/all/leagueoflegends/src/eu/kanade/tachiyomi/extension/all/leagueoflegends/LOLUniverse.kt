@@ -30,8 +30,7 @@ class LOLUniverse(
 
     private val pageCache = mutableMapOf<String, List<Page>>()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Origin", UNIVERSE_URL)
         .set("Referer", "$UNIVERSE_URL/")
 

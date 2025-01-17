@@ -38,8 +38,7 @@ class SunshineButterflyScans : HttpSource() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private fun apiHeadersBuilder() = headersBuilder().apply {

@@ -83,10 +83,9 @@ class PatchFriday : HttpSource() {
         val chapters = mutableListOf<SChapter>()
         var document = response.asJsoup()
         var page =
-            document
-                .select(
-                    "div > div:first-of-type > div:first-of-type > a",
-                ).attr("abs:href")
+            document.select(
+                "div > div:first-of-type > div:first-of-type > a",
+            ).attr("abs:href")
                 .replace(baseUrl, "")
                 .replace("/", "")
                 .trim()

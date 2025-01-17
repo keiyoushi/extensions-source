@@ -130,8 +130,7 @@ abstract class Zbulu(
         // Chapter list may be paginated, get recursively
         fun addChapters(document: Document) {
             document.select(chapterListSelector()).map { chapters.add(chapterFromElement(it)) }
-            document
-                .select("${latestUpdatesNextPageSelector()}:not([id])")
+            document.select("${latestUpdatesNextPageSelector()}:not([id])")
                 .firstOrNull()
                 ?.let { addChapters(client.newCall(GET(it.attr("abs:href").addTrailingSlash(), headers)).execute().asJsoup()) }
         }

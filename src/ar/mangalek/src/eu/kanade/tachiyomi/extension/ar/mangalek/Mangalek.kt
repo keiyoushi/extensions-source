@@ -100,8 +100,7 @@ class Mangalek :
     ): Request = POST(
         "$baseUrl/wp-admin/admin-ajax.php",
         headers,
-        FormBody
-            .Builder()
+        FormBody.Builder()
             .add("action", "wp-manga-search-manga")
             .add("title", query)
             .build(),

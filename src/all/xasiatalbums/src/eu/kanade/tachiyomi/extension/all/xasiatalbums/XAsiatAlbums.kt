@@ -26,8 +26,7 @@ class XAsiatAlbums : ParsedHttpSource() {
 
     private val mainUrl = "https://www.xasiat.com"
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // Latest

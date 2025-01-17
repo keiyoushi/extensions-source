@@ -112,8 +112,7 @@ class ComX : ParsedHttpSource() {
                 response
             }.build()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", baseUrl)
 
     // Popular
@@ -253,8 +252,7 @@ class ComX : ParsedHttpSource() {
                 ",",
             )}/g=${mutableGenre.joinToString(",")}/t=${mutableType.joinToString(",")}/adult=${mutableAge.joinToString(",")}/$pageParameter",
             body =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add("dlenewssortby", orderBy)
                     .add("dledirection", ascEnd)
                     .add("set_new_sort", "dle_sort_xfilter")
@@ -305,8 +303,7 @@ class ComX : ParsedHttpSource() {
                 else -> "☆☆☆☆☆"
             }
         val rawCategory =
-            document
-                .select(".speedbar a")
+            document.select(".speedbar a")
                 .last()!!
                 .text()
                 .trim()
@@ -375,8 +372,7 @@ class ComX : ParsedHttpSource() {
         val document = response.asJsoup()
 
         val dataStr =
-            document
-                .toString()
+            document.toString()
                 .substringAfter("window.__DATA__ = ")
                 .substringBefore("</script>")
                 .substringBeforeLast(";")
@@ -384,8 +380,7 @@ class ComX : ParsedHttpSource() {
         val data = json.decodeFromString<JsonObject>(dataStr)
         val chaptersList = data["chapters"]?.jsonArray
         val isEvent =
-            document
-                .select(".page__list li:contains(Тип выпуска)")
+            document.select(".page__list li:contains(Тип выпуска)")
                 .text()
                 .contains("!!! События в комиксах - ХРОНОЛОГИЯ !!!")
 

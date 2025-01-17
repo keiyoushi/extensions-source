@@ -31,8 +31,7 @@ abstract class ManhwaZ(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")
 
@@ -130,8 +129,7 @@ abstract class ManhwaZ(
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         val statusText =
-            document
-                .selectFirst("div.summary-heading:contains($mangaDetailsStatusHeading) + div.summary-content")
+            document.selectFirst("div.summary-heading:contains($mangaDetailsStatusHeading) + div.summary-content")
                 ?.text()
                 ?.lowercase()
                 ?: ""

@@ -38,8 +38,7 @@ abstract class DbMultiverse(
 
     override fun chapterListParse(response: Response): List<SChapter> = super.chapterListParse(response).reversed()
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("#balloonsimg")
+    override fun pageListParse(document: Document): List<Page> = document.select("#balloonsimg")
         .let { e ->
             listOf(
                 if (e.hasAttr("src")) {

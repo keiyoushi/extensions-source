@@ -50,8 +50,7 @@ class ReadAllComics : ParsedHttpSource() {
             )
 
         val newUrl =
-            document
-                .selectFirst(".description-archive > p > span > a")
+            document.selectFirst(".description-archive > p > span > a")
                 ?.attr("href")
                 ?.toHttpUrlOrNull()
                 ?: return response

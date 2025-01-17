@@ -97,8 +97,7 @@ class QuestionableContent :
 
     override fun pageListParse(document: Document): List<Page> {
         val pages =
-            document
-                .select("#strip")
+            document.select("#strip")
                 .mapIndexed {
                     i,
                     element,

@@ -25,8 +25,7 @@ class XCaliBRScans : MangaThemesia("xCaliBR Scans", "https://xcalibrscans.com", 
         val imgUrls = mutableListOf<String>()
 
         // Selects all direct descendant of "div#readerarea"
-        document
-            .select("div#readerarea > *")
+        document.select("div#readerarea > *")
             .forEach { element ->
                 when {
                     element.tagName() == "p" -> {

@@ -19,8 +19,7 @@ class EveriaClub : ParsedHttpSource() {
     override val name = "Everia.club"
     override val supportsLatest = true
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val Element.imgSrc: String

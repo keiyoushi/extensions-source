@@ -36,8 +36,7 @@ class HentaiManga :
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("action", "ajax_chap")
                 .add("post_id", mangaId)
                 .build()

@@ -89,8 +89,7 @@ class MangaDistrict :
         try {
             pageListDate
                 .parse(
-                    document
-                        .selectFirst("meta[property=og:updated_time]")!!
+                    document.selectFirst("meta[property=og:updated_time]")!!
                         .attr("content")
                         .substringBeforeLast("+"),
                 )!!

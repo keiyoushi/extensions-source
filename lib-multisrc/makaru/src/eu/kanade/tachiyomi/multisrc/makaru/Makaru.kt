@@ -35,8 +35,7 @@ abstract class Makaru(
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {

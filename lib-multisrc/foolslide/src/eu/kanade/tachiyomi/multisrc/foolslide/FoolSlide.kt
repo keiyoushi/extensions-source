@@ -115,8 +115,7 @@ abstract class FoolSlide(
         document: Document,
         urlSelector: String = chapterUrlSelector,
     ): String? = document.select("div.thumbnail img, table.thumb img").firstOrNull()?.attr("abs:src")
-        ?: document
-            .select(chapterListSelector())
+        ?: document.select(chapterListSelector())
             .last()!!
             .select(urlSelector)
             .attr("abs:href")
@@ -274,8 +273,7 @@ abstract class FoolSlide(
         return pages.mapIndexed { i, jsonEl ->
             // Create dummy element to resolve relative URL
             val absUrl =
-                document
-                    .createElement("a")
+                document.createElement("a")
                     .attr("href", jsonEl.jsonObject["url"]!!.jsonPrimitive.content)
                     .absUrl("href")
             Page(i, "", absUrl)

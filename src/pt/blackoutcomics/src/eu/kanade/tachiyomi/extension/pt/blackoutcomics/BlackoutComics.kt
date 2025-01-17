@@ -89,8 +89,7 @@ class BlackoutComics :
                 ?.attr("value") ?: ""
 
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("_token", csrf)
                 .add("email", credentials.first)
                 .add("password", credentials.second)
@@ -114,8 +113,7 @@ class BlackoutComics :
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
         .add("Accept-Language", "en-US,en;q=0.5")

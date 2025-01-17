@@ -89,8 +89,7 @@ open class Komga(
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
 
     override val client: OkHttpClient =

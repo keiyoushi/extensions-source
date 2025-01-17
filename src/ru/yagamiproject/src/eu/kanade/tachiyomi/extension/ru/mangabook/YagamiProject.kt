@@ -103,8 +103,7 @@ class YagamiProject : ParsedHttpSource() {
         val infoElement = document.select(".large.comic .info").first()!!
         val manga = SManga.create()
         val titlestr =
-            document
-                .select("title")
+            document.select("title")
                 .text()
                 .substringBefore(" :: Yagami")
                 .split(" :: ")

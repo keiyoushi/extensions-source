@@ -145,8 +145,7 @@ class MangaBook : ParsedHttpSource() {
         val infoElement = document.select("article.full .fmid").first()!!
         val manga = SManga.create()
         val titlestr =
-            document
-                .select(".fheader h1")
+            document.select(".fheader h1")
                 .text()
                 .split(" / ")
                 .sorted()

@@ -190,8 +190,7 @@ class Jinmantiantang :
         // it will definitely return a String type of 0, 1 or 2. This warning can be ignored
         status = selectDetailsStatusAndGenre(document, 1).trim().toInt()
         description =
-            document
-                .selectFirst("#intro-block .p-t-5.p-b-5")!!
+            document.selectFirst("#intro-block .p-t-5.p-b-5")!!
                 .text()
                 .substringAfter("敘述：")
                 .trim()

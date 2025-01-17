@@ -119,8 +119,7 @@ class ManhwaXXL : ParsedHttpSource() {
                 .let { json.parseToJsonElement(it).jsonObject }
 
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("action", "baka_ajax")
                 .add("type", "get_chapters_list")
                 .add("id", data.getContent("post_id"))

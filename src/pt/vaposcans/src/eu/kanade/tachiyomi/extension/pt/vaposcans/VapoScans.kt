@@ -46,8 +46,7 @@ class VapoScans : HttpSource() {
 
     private var popularMangaCache: List<SManga> = mutableListOf()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Origin", baseUrl)
         .set("Referer", "$baseUrl/")
 

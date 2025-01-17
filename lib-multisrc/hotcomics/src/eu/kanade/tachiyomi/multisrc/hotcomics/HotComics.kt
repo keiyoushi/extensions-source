@@ -32,8 +32,7 @@ abstract class HotComics(
                 CookieInterceptor(baseUrl.removePrefix("https://"), "hc_vfs" to "Y"),
             ).build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/en", headers)
@@ -93,8 +92,7 @@ abstract class HotComics(
         val document = response.asJsoup()
 
         val entries =
-            document
-                .select("li[itemtype*=ComicSeries]:not(.no-comic) > a")
+            document.select("li[itemtype*=ComicSeries]:not(.no-comic) > a")
                 .map { element ->
                     SManga.create().apply {
                         setUrlWithoutDomain(element.absUrl("href"))
@@ -131,15 +129,13 @@ abstract class HotComics(
         }
         description =
             buildString {
-                document
-                    .selectFirst("div.episode-contents header")
+                document.selectFirst("div.episode-contents header")
                     ?.text()
                     ?.let {
                         append(it)
                         append("\n\n")
                     }
-                document
-                    .selectFirst("div.title_content > h2:not(.episode-title)")
+                document.selectFirst("div.title_content > h2:not(.episode-title)")
                     ?.text()
                     ?.let { append(it) }
             }.trim()

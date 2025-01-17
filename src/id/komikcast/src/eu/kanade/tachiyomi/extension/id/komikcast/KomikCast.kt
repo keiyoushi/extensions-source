@@ -27,8 +27,7 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast.la", "id", "/da
             .rateLimit(3)
             .build()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add(
             "Accept",
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
@@ -173,8 +172,7 @@ class KomikCast : MangaThemesia("Komik Cast", "https://komikcast.la", "id", "/da
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("div#chapter_body .main-reading-area img.size-full")
+    override fun pageListParse(document: Document): List<Page> = document.select("div#chapter_body .main-reading-area img.size-full")
         .distinctBy { img -> img.imgAttr() }
         .mapIndexed { i, img -> Page(i, document.location(), img.imgAttr()) }
 

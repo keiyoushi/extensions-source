@@ -91,8 +91,7 @@ class OnePieceBerwarna : ParsedHttpSource() {
         val dataId = response.request.url.fragment!!
         val selector = chapterListSelector().format(dataId)
 
-        return document
-            .select(selector)
+        return document.select(selector)
             .map(::chapterFromElement)
             .reversed()
     }
@@ -102,8 +101,7 @@ class OnePieceBerwarna : ParsedHttpSource() {
         setUrlWithoutDomain(element.attr("href"))
     }
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(".entry-content img[data-src]:not(a img)")
+    override fun pageListParse(document: Document): List<Page> = document.select(".entry-content img[data-src]:not(a img)")
         .mapIndexed { index, img ->
             Page(index, "", img.attr("data-src"))
         }

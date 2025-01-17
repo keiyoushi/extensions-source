@@ -175,8 +175,7 @@ class Baimangu :
         val detailElements = document.select("dd.fed-deta-content ul.fed-part-rows")
         return SManga.create().apply {
             title =
-                document
-                    .select("h1.fed-part-eone")
+                document.select("h1.fed-part-eone")
                     .first()!!
                     .text()
                     .trim()

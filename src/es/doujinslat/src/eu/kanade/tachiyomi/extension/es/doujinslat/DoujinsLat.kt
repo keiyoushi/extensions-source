@@ -33,8 +33,7 @@ class DoujinsLat :
             buildString {
                 description.orEmpty()
                 if (isNotEmpty()) append("\n\n")
-                document
-                    .select(".tsinfo > .imptdt")
+                document.select(".tsinfo > .imptdt")
                     .map { Pair(it.ownText().removeSuffix(":"), it.selectFirst("> *")?.text()) }
                     .filterNot { it.second.isNullOrEmpty() }
                     .filterNot { excludeFields.contains(it.first) }

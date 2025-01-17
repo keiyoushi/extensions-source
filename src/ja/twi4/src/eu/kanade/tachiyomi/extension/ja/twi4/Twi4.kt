@@ -107,8 +107,7 @@ class Twi4 : HttpSource() {
             // Twi4 uses the exact same thumbnail at both the main page and manga details
             thumbnail_url =
                 getUrlDomain() +
-                document
-                    .select("#introduction > header > div > h2 > img")
+                document.select("#introduction > header > div > h2 > img")
                     .attr("src")
             description =
                 document.select("#introduction > div > div > p").text()

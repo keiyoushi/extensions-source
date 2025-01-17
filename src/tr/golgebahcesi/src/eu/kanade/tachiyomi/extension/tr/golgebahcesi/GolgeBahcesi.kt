@@ -21,8 +21,7 @@ class GolgeBahcesi :
 
     override fun pageListParse(document: Document): List<Page> {
         if (document.selectFirst("#readerarea form, #readerarea input[value=Doğrula]") != null) {
-            captchaUrl = document
-                .selectFirst("#readerarea form")
+            captchaUrl = document.selectFirst("#readerarea form")
                 ?.attr("abs:action")
                 ?: "$baseUrl/kontrol/"
             throw Exception("WebView'da captcha çözün.")

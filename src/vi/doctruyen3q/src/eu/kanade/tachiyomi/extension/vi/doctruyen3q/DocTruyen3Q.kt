@@ -32,8 +32,7 @@ class DocTruyen3Q :
             .rateLimit(3)
             .build()
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(".page-chapter a img, .page-chapter img")
+    override fun pageListParse(document: Document): List<Page> = document.select(".page-chapter a img, .page-chapter img")
         .mapIndexed { index, element ->
             val img = element.attr("abs:src").takeIf { it.isNotBlank() } ?: element.attr("abs:data-original")
             Page(index, imageUrl = img)

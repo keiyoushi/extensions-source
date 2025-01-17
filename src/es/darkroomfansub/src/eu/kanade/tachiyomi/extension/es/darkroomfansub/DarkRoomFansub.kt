@@ -98,9 +98,9 @@ class DarkRoomFansub :
         }
     }
 
-    private fun chapterListFromDocument(document: Document) = document
-        .select(".grid.gtc-f141a > div > a, .series-chapterlist .flexch-infoz a")
-        .map(::toSChapter)
+    private fun chapterListFromDocument(document: Document) =
+        document.select(".grid.gtc-f141a > div > a, .series-chapterlist .flexch-infoz a")
+            .map(::toSChapter)
 
     private fun getChapterListURL(url: String): String = fetchChapterList(url)
         .selectFirst("h1 + .tac a")!!

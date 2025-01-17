@@ -155,8 +155,7 @@ open class A3Manga(
 
     protected fun decodeImgList(document: Document): String {
         val htmlContentScript =
-            document
-                .selectFirst("script:containsData(htmlContent)")
+            document.selectFirst("script:containsData(htmlContent)")
                 ?.html()
                 ?.substringAfter("var htmlContent=\"")
                 ?.substringBefore("\";")

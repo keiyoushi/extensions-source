@@ -9,8 +9,7 @@ class SlimeRead :
         "https://slimeread.com",
         "pt-BR",
     ) {
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Origin", baseUrl)
 
     override val client =

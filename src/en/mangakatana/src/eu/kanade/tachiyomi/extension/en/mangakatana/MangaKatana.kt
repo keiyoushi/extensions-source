@@ -179,8 +179,7 @@ class MangaKatana :
         author = document.select(".author").eachText().joinToString()
         description = document.select(".summary > p").text() +
             (
-                document
-                    .select(".alt_name")
+                document.select(".alt_name")
                     .text()
                     .takeIf { it.isNotBlank() }
                     ?.let { "\n\nAlt name(s): $it" } ?: ""

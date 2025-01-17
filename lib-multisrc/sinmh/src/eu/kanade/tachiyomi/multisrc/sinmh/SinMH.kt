@@ -139,8 +139,7 @@ abstract class SinMH(
         val detailsList = document.selectFirst(Evaluator.Class("detail-list"))!!
         author = detailsList.select("strong:contains(作者) ~ *").text()
         description =
-            document
-                .selectFirst(Evaluator.Id("intro-all"))!!
+            document.selectFirst(Evaluator.Id("intro-all"))!!
                 .text()
                 .trim()
                 .removePrefix("漫画简介：")
@@ -220,8 +219,7 @@ abstract class SinMH(
             }
         if (list.isNotEmpty()) {
             val date =
-                document
-                    .selectFirst(dateSelector)!!
+                document.selectFirst(dateSelector)!!
                     .textNodes()
                     .last()
                     .text()

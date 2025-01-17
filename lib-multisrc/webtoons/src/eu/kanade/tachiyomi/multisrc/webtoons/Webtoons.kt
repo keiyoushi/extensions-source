@@ -100,13 +100,11 @@ open class Webtoons(
 
     override fun latestUpdatesSelector() = "div#dailyList > $day li > a"
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "https://www.webtoons.com/$langCode/")
 
     protected val mobileHeaders: Headers =
-        super
-            .headersBuilder()
+        super.headersBuilder()
             .add("Referer", "https://m.webtoons.com")
             .build()
 

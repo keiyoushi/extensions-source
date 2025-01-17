@@ -217,8 +217,7 @@ class UniComics : ParsedHttpSource() {
             if (infoElement.select("img").isNotEmpty()) {
                 infoElement.select("img").first()!!.attr("src")
             } else {
-                document
-                    .select(".left_comics img")
+                document.select(".left_comics img")
                     .first()!!
                     .attr("src")
                     .replace(".jpg", "_big.jpg")
@@ -237,8 +236,7 @@ class UniComics : ParsedHttpSource() {
         val document = client.newCall(GET(baseDefaultUrl + manga.url, headers)).execute().asJsoup()
         val pages = mutableListOf(1)
         val dataStrArray =
-            document
-                .toString()
+            document.toString()
                 .substringAfter("new Paginator(")
                 .substringBefore(");</script>")
                 .split(", ")
@@ -296,8 +294,7 @@ class UniComics : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val dataStrArray =
-            document
-                .toString()
+            document.toString()
                 .substringAfter("new Paginator(")
                 .substringBefore(");</script>")
                 .split(", ")

@@ -158,13 +158,11 @@ class HentaiHere : ParsedHttpSource() {
 
         title = document.select("h4 > a").first()!!.ownText()
         author =
-            document
-                .select("#info .text-info:contains(Artist:) ~ a")
+            document.select("#info .text-info:contains(Artist:) ~ a")
                 .joinToString { it.text() }
 
         description =
-            document
-                .select("#info > div:has(> .text-info:contains(Brief Summary:))")
+            document.select("#info > div:has(> .text-info:contains(Brief Summary:))")
                 .first()
                 ?.ownText()
         if (description == "Nothing yet!") {
@@ -175,8 +173,7 @@ class HentaiHere : ParsedHttpSource() {
         status =
             when (licensed) {
                 null ->
-                    document
-                        .select("#info .text-info:contains(Status:) ~ a")
+                    document.select("#info .text-info:contains(Status:) ~ a")
                         .first()
                         ?.text()
                         ?.toStatus()
@@ -184,8 +181,7 @@ class HentaiHere : ParsedHttpSource() {
                 else -> SManga.LICENSED
             }
         thumbnail_url =
-            document
-                .select("#cover img")
+            document.select("#cover img")
                 .first()!!
                 .attr("src")
     }

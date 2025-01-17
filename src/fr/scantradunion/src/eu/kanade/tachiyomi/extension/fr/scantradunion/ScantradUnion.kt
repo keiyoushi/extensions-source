@@ -83,8 +83,7 @@ class ScantradUnion : ParsedHttpSource() {
         manga.thumbnail_url = document.select(".projet-image img").attr("src")
         manga.description = document.select(".sContent").text()
         manga.author =
-            document
-                .select("div.project-details a[href*=auteur]")
+            document.select("div.project-details a[href*=auteur]")
                 .joinToString(", ") { teamElem -> teamElem.text() }
         // Cannot distinguish authors and artists because they are in the same section.
         manga.artist = manga.author
@@ -93,8 +92,7 @@ class ScantradUnion : ParsedHttpSource() {
         return manga
     }
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("#webtoon a img")
+    override fun pageListParse(document: Document): List<Page> = document.select("#webtoon a img")
         .map { imgElem: Element ->
             // In webtoon mode, images have an src attribute only.
             // In manga mode, images have a data-src attribute that contains the src

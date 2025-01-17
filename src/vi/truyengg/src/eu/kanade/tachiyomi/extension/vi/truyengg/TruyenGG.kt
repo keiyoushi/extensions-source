@@ -96,8 +96,7 @@ class TruyenGG :
             }
     }
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(".content_detail img")
+    override fun pageListParse(document: Document): List<Page> = document.select(".content_detail img")
         .mapIndexed { idx, it ->
             Page(idx, imageUrl = it.attr("abs:src"))
         }

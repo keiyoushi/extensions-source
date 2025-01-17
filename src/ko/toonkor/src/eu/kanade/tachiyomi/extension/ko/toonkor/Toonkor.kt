@@ -133,8 +133,7 @@ class Toonkor :
 
     override fun pageListParse(document: Document): List<Page> {
         val encoded =
-            document
-                .select("script:containsData(toon_img)")
+            document.select("script:containsData(toon_img)")
                 .firstOrNull()
                 ?.data()
                 ?.substringAfter("'")

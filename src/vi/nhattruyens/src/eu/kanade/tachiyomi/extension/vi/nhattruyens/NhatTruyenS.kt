@@ -26,8 +26,7 @@ class NhatTruyenS :
         val document = response.asJsoup()
 
         val mangas =
-            document
-                .select(searchMangaSelector())
+            document.select(searchMangaSelector())
                 .filter { element -> element.select("figure > div > a[rel='nofollow']").isNullOrEmpty() }
                 .map { element ->
                     searchMangaFromElement(element)

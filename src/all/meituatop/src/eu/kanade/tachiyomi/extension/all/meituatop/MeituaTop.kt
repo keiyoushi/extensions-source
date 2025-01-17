@@ -100,8 +100,7 @@ class MeituaTop : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val images =
-            document
-                .selectFirst(Evaluator.Class("ttnr"))!!
+            document.selectFirst(Evaluator.Class("ttnr"))!!
                 .select(Evaluator.Tag("img"))
                 .map { it.attr("src") }
                 .distinct()

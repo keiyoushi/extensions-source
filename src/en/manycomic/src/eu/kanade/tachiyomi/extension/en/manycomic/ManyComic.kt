@@ -18,8 +18,7 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("action", "ajax_chap")
                 .add("post_id", mangaId)
                 .build()
@@ -56,8 +55,7 @@ class ManyComic : Madara("ManyComic", "https://manycomic.com", "en") {
         return GET(url.build(), headers)
     }
 
-    override fun parseGenres(document: Document): List<Genre> = document
-        .selectFirst(".manga-genres-class-name div.genres")
+    override fun parseGenres(document: Document): List<Genre> = document.selectFirst(".manga-genres-class-name div.genres")
         ?.select("li>a")
         .orEmpty()
         .map { a ->

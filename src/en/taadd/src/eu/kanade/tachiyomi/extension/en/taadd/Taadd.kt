@@ -69,8 +69,7 @@ class Taadd : HttpSource() {
 
     private val json by injectLazy<Json>()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
 
     private val ajaxHeaders =
@@ -80,8 +79,7 @@ class Taadd : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request {
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("page", page.toString())
                 .build()
 
@@ -113,8 +111,7 @@ class Taadd : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("page", page.toString())
                 .build()
 
@@ -216,8 +213,7 @@ class Taadd : HttpSource() {
         val document = response.asJsoup()
 
         val mangaTitle =
-            document
-                .selectFirst("meta[property=og:title]")!!
+            document.selectFirst("meta[property=og:title]")!!
                 .attr("content")
                 .simplify()
 
@@ -300,8 +296,7 @@ class Taadd : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         var document = response.asJsoup()
         val serverUrl =
-            document
-                .selectFirst("section.section div.post-content-body > a")
+            document.selectFirst("section.section div.post-content-body > a")
                 ?.attr("href")
 
         if (serverUrl != null) {
@@ -313,8 +308,7 @@ class Taadd : HttpSource() {
         }
 
         val finalUrl =
-            document
-                .selectFirst("script:containsData(window.location.href)")
+            document.selectFirst("script:containsData(window.location.href)")
                 ?.data()
                 ?.substringAfter("\"")
                 ?.substringBefore("\"")

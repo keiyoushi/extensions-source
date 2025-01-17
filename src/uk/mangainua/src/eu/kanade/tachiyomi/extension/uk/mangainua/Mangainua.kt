@@ -34,8 +34,7 @@ class Mangainua : ParsedHttpSource() {
             .build()
     }
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
 
     // ============================== Popular ===============================
@@ -74,8 +73,7 @@ class Mangainua : ParsedHttpSource() {
         POST(
             "$baseUrl/index.php?do=search",
             body =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add("do", "search")
                     .add("subaction", "search")
                     .add("story", query)
@@ -110,8 +108,7 @@ class Mangainua : ParsedHttpSource() {
             buildList {
                 // genres
                 addAll(
-                    document
-                        .getInfoElement("Жанри:")
+                    document.getInfoElement("Жанри:")
                         ?.select("a")
                         ?.eachText()
                         .orEmpty(),
@@ -178,8 +175,7 @@ class Mangainua : ParsedHttpSource() {
         val userHashQuery = document.parseUserHashQuery(endpoint)
         val metaElement = document.selectFirst(Evaluator.Id("linkstocomics"))!!
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .addEncoded("action", "show")
                 .addEncoded("news_id", metaElement.attr("data-news_id"))
                 .addEncoded("news_category", metaElement.attr("data-news_category"))

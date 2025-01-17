@@ -136,8 +136,7 @@ class Happymh :
         filters: FilterList,
     ): Request {
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .addEncoded("searchkey", query)
                 .add("v", "v2.13")
                 .build()

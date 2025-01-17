@@ -156,18 +156,15 @@ class BentoManga :
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title =
-            document
-                .select("div.manga div.manga-infos div.component-manga-title div.component-manga-title_main h1 ")
+            document.select("div.manga div.manga-infos div.component-manga-title div.component-manga-title_main h1 ")
                 .text()
         artist = document.select("div.datas div.datas_more-artists div.datas_more-artists-people a").text()
         author = document.select("div.datas div.datas_more-authors div.datas_more-authors-peoples div a").text()
         description = document.select("div.datas div.datas_synopsis").text()
         genre =
-            document
-                .select("div.manga div.manga-infos div.component-manga-categories a")
+            document.select("div.manga div.manga-infos div.component-manga-categories a")
                 .joinToString(" , ") { it.text() }
-        status = document
-            .selectFirst("div.datas div.datas_more div.datas_more-status div.datas_more-status-data")
+        status = document.selectFirst("div.datas div.datas_more div.datas_more-status div.datas_more-status-data")
             ?.text()
             ?.let {
                 when {
@@ -247,8 +244,7 @@ class BentoManga :
         var nextPage = 1
         val pagemax =
             if (!document.select(".paginator button:contains(>>)").isNullOrEmpty()) {
-                document
-                    .selectFirst(".paginator button:contains(>>)")
+                document.selectFirst(".paginator button:contains(>>)")
                     ?.attr("data-limit")
                     ?.toInt()
                     ?.plus(1)

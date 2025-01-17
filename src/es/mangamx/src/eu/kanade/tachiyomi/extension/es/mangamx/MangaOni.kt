@@ -214,8 +214,7 @@ open class MangaOni :
 
     override fun pageListParse(document: Document): List<Page> {
         val encoded =
-            document
-                .select("script:containsData(unicap)")
+            document.select("script:containsData(unicap)")
                 .firstOrNull()
                 ?.data()
                 ?.substringAfter("'")

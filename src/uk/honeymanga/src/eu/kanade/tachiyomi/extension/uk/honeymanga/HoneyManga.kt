@@ -34,8 +34,7 @@ class HoneyManga : HttpSource() {
     override val lang = "uk"
     override val supportsLatest = true
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Origin", baseUrl)
         .add("Referer", baseUrl)
 

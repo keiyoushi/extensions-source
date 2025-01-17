@@ -34,8 +34,7 @@ abstract class FuzzyDoodle(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // Popular
@@ -51,8 +50,7 @@ abstract class FuzzyDoodle(
         launchIO { fetchFilters(document) }
 
         val entries =
-            document
-                .select(popularMangaSelector())
+            document.select(popularMangaSelector())
                 .map(::popularMangaFromElement)
         val hasNextPage = document.selectFirst(popularMangaNextPageSelector()) != null
 

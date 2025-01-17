@@ -35,8 +35,7 @@ class MangasIn :
             .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/lasted?p=$page", headers)

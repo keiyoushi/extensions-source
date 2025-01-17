@@ -44,8 +44,7 @@ class Rmanga :
 
     override val baseUrl = preferences.getString(DOMAIN_PREF, "https://rmanga.app")!!
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking/most-viewed/$page", headers)
@@ -86,8 +85,7 @@ class Rmanga :
         filters: FilterList,
     ): Request {
         val payload =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .apply {
                     add("manga-name", query.trim())
                     filters.forEach { filter ->

@@ -27,8 +27,7 @@ class Hachiraw : ParsedHttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val dateFormat by lazy {

@@ -486,8 +486,7 @@ abstract class GalleryAdults(
         return POST(
             url.build().toString(),
             xhrHeaders,
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("page", page.toString())
                 .build(),
         )
@@ -510,8 +509,7 @@ abstract class GalleryAdults(
         } else {
             val hasNextPage = document.select(searchMangaNextPageSelector()).isNotEmpty()
             val mangas =
-                document
-                    .select(searchMangaSelector())
+                document.select(searchMangaSelector())
                     .map {
                         SMangaDto(
                             title = it.mangaTitle()!!,
@@ -602,8 +600,7 @@ abstract class GalleryAdults(
             SChapter.create().apply {
                 name = "Chapter"
                 scanlator =
-                    document
-                        .selectFirst(mangaDetailInfoSelector)
+                    document.selectFirst(mangaDetailInfoSelector)
                         ?.getInfo("Groups")
                 date_upload = document.getTime()
                 setUrlWithoutDomain(response.request.url.encodedPath)
@@ -633,8 +630,7 @@ abstract class GalleryAdults(
         val token = document.select("[name=csrf-token]").attr("content")
         val serverNumber = document.serverNumber()
 
-        return FormBody
-            .Builder()
+        return FormBody.Builder()
             .add("u_id", document.inputIdValueOf(galleryIdSelector))
             .add("g_id", document.inputIdValueOf(loadIdSelector))
             .add("img_dir", document.inputIdValueOf(loadDirSelector))
@@ -744,8 +740,7 @@ abstract class GalleryAdults(
         val pageUrl = "$baseUrl/$pageUri/$galleryId"
 
         val pages =
-            document
-                .select("$thumbnailSelector a")
+            document.select("$thumbnailSelector a")
                 .map {
                     if (parsingImagePageByPage) {
                         it.absUrl("href")
@@ -857,8 +852,7 @@ abstract class GalleryAdults(
     /**
      * Parsing [document] to return a list of tags in <name, uri> pairs.
      */
-    protected open fun tagsParser(document: Document): List<Genre> = document
-        .select("a.tag_btn")
+    protected open fun tagsParser(document: Document): List<Genre> = document.select("a.tag_btn")
         .mapNotNull {
             Genre(
                 it.select(".list_tag, .tag_name").text(),

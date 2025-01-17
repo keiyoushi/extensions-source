@@ -232,8 +232,7 @@ abstract class GigaViewer(
 
     override fun pageListParse(document: Document): List<Page> {
         val episode =
-            document
-                .selectFirst("script#episode-json")!!
+            document.selectFirst("script#episode-json")!!
                 .attr("data-value")
                 .let {
                     try {

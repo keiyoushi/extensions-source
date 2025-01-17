@@ -212,8 +212,7 @@ class MangaBuff : ParsedHttpSource() {
 
         description =
             buildString {
-                document
-                    .selectFirst(".manga__description")
+                document.selectFirst(".manga__description")
                     ?.text()
                     ?.also { append(it) }
 
@@ -266,14 +265,12 @@ class MangaBuff : ParsedHttpSource() {
             }.takeIf { it.isNotEmpty() }?.joinToString()
 
         status =
-            document
-                .select(".manga__middle-links > a:last-child, .manga-mobile__info > a:last-child")
+            document.select(".manga__middle-links > a:last-child, .manga-mobile__info > a:last-child")
                 .text()
                 .parseStatus()
 
         thumbnail_url =
-            document
-                .selectFirst(".manga__img img, img.manga-mobile__image")
+            document.selectFirst(".manga__img img, img.manga-mobile__image")
                 ?.absUrl("src")
     }
 
@@ -304,8 +301,7 @@ class MangaBuff : ParsedHttpSource() {
                 ?: throw Exception("Не удалось найти ID манги")
 
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("manga_id", mangaId)
                 .build()
 

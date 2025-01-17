@@ -31,8 +31,7 @@ class AnimeSama : ParsedHttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")
 
     // Popular
@@ -65,8 +64,7 @@ class AnimeSama : ParsedHttpSource() {
     ): Request {
         val url = "$baseUrl/catalogue/searchbar.php"
         val formBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("query", query)
                 .build()
 
@@ -110,8 +108,7 @@ class AnimeSama : ParsedHttpSource() {
         val document = response.asJsoup()
 
         val chapterUrl =
-            document
-                .baseUri()
+            document.baseUri()
                 .toHttpUrl()
                 .newBuilder()
                 .query(null)

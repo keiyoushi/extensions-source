@@ -147,18 +147,15 @@ class RoliaScan : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1")!!.text()
         thumbnail_url =
-            document
-                .selectFirst("div.post-type-single-column img.wp-post-image")
+            document.selectFirst("div.post-type-single-column img.wp-post-image")
                 ?.absUrl("src")
         description =
-            document
-                .select("div.card-body:has(h5:contains(Synopsis)) p")
+            document.select("div.card-body:has(h5:contains(Synopsis)) p")
                 .filter { p -> p.text().isNotBlank() }
                 .joinToString("\n") { it.text() }
 
         genre =
-            document
-                .select("a[href*=genres]")
+            document.select("a[href*=genres]")
                 .joinToString { it.text() }
 
         document.selectFirst("tr:has(th:contains(Status)) > td")?.text()?.let {
@@ -185,8 +182,7 @@ class RoliaScan : ParsedHttpSource() {
                 .asJsoup()
 
         val postId =
-            document
-                .select("input[name=current_page_id]")
+            document.select("input[name=current_page_id]")
                 .attr("value")
 
         chapters += document.select(chapterListSelector()).map(::chapterFromElement)
@@ -195,8 +191,7 @@ class RoliaScan : ParsedHttpSource() {
 
         do {
             val formBuilder =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add("action", "load_more_chapters")
                     .add("post_id", postId)
                     .add("offset", offset.toString())

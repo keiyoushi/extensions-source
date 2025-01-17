@@ -80,8 +80,7 @@ class AsmHentai(
     ): FormBody {
         val token = document.select("[name=csrf-token]").attr("content")
 
-        return FormBody
-            .Builder()
+        return FormBody.Builder()
             .add("id", document.inputIdValueOf(loadIdSelector))
             .add("dir", document.inputIdValueOf(loadDirSelector))
             .add("visible_pages", loadedPages.toString())
@@ -92,8 +91,7 @@ class AsmHentai(
             }.build()
     }
 
-    override fun tagsParser(document: Document): List<Genre> = document
-        .select(".tags_page .tags a.tag")
+    override fun tagsParser(document: Document): List<Genre> = document.select(".tags_page .tags a.tag")
         .mapNotNull {
             Genre(
                 it.ownText(),

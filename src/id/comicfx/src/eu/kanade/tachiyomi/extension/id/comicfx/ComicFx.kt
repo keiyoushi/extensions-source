@@ -32,8 +32,7 @@ class ComicFx : ParsedHttpSource() {
     override val lang = "id"
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add(
             "User-Agent",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36",
@@ -150,8 +149,7 @@ class ComicFx : ParsedHttpSource() {
 
         // Add series type (manga/manhwa/manhua/other) to genre
         val genres = document.select(".genre-komik a").map { it.text() }.toMutableList()
-        document
-            .selectFirst(".infokomik .type")
+        document.selectFirst(".infokomik .type")
             ?.ownText()
             .takeIf { it.isNullOrBlank().not() }
             ?.let { genres.add(it) }

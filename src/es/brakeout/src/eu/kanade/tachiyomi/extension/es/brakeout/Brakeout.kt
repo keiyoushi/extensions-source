@@ -37,8 +37,7 @@ class Brakeout : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
 
     private val json: Json by injectLazy()

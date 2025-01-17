@@ -28,8 +28,7 @@ class TuMangasNet : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/biblioteca-manga?page=$page", headers)

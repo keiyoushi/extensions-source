@@ -227,8 +227,7 @@ class ZettaHQ : ParsedHttpSource() {
         genreList = parseGenres(document)
     }
 
-    private fun parseGenres(document: Document): List<Genre> = document
-        .select(".cat-item > label")
+    private fun parseGenres(document: Document): List<Genre> = document.select(".cat-item > label")
         .map { label ->
             Genre(
                 name = label.text(),

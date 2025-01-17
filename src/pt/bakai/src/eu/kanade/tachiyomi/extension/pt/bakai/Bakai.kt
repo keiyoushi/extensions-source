@@ -53,8 +53,7 @@ class Bakai : ParsedHttpSource() {
             ).build()
     }
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", baseUrl)
         .set("Cache-Control", "no-cache")
         .set("Sec-Fetch-Dest", "image")
@@ -170,8 +169,7 @@ class Bakai : ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("div.ipsGrid div.ipsType_center > img")
+    override fun pageListParse(document: Document): List<Page> = document.select("div.ipsGrid div.ipsType_center > img")
         .mapIndexed { index, item ->
             Page(index, "", item.imgAttr())
         }

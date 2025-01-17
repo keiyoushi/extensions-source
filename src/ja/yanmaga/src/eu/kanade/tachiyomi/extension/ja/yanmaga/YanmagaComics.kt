@@ -93,8 +93,7 @@ class YanmagaComics : Yanmaga("search-item-category--comics") {
             }
 
             val manga =
-                document
-                    .select(latestUpdatesSelector())
+                document.select(latestUpdatesSelector())
                     .map { latestUpdatesFromElement(it) }
             val hasNextPage = latestUpdatesCount > LATEST_UPDATES_PER_PAGE
 

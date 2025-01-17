@@ -29,8 +29,7 @@ class TempleScan : HttpSource() {
 
     override val versionId = 3
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
         .set("origin", baseUrl)
 
@@ -72,8 +71,7 @@ class TempleScan : HttpSource() {
     private fun parseSearchResponse(response: Response) {
         val document = response.asJsoup()
         val script =
-            document
-                .selectFirst("script:containsData(allComics)")!!
+            document.selectFirst("script:containsData(allComics)")!!
                 .data()
                 .unescape()
 

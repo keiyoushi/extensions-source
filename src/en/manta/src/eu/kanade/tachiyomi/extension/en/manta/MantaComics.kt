@@ -47,8 +47,7 @@ class MantaComics : HttpSource() {
 
     private val json by injectLazy<Json>()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Origin", baseUrl)
         .set("Authorization", "Bearer $token")
 

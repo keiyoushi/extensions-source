@@ -209,14 +209,12 @@ abstract class MyMangaCMS(
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         setUrlWithoutDomain(
-            document
-                .select(".series-name-group a")
+            document.select(".series-name-group a")
                 .first()!!
                 .attr("abs:href"),
         )
         title =
-            document
-                .select(".series-name")
+            document.select(".series-name")
                 .first()!!
                 .text()
                 .trim()
@@ -280,13 +278,11 @@ abstract class MyMangaCMS(
         }
 
         genre =
-            document
-                .select("a[href*=the-loai] span.badge")
+            document.select("a[href*=the-loai] span.badge")
                 .joinToString(", ") { it.text().trim() }
 
         thumbnail_url =
-            document
-                .select("div.content.img-in-ratio")
+            document.select("div.content.img-in-ratio")
                 .first()!!
                 .attr("style")
                 .let {
@@ -361,8 +357,7 @@ abstract class MyMangaCMS(
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$baseUrl${chapter.url}")
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("div#chapter-content img")
+    override fun pageListParse(document: Document): List<Page> = document.select("div#chapter-content img")
         .filterNot { it.attr("abs:data-src").isNullOrEmpty() }
         .mapIndexed { index, elem -> Page(index, "", elem.attr("abs:data-src")) }
 

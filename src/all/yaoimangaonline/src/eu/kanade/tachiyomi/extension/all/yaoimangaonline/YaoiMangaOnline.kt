@@ -73,8 +73,7 @@ class YaoiMangaOnline : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.select("h1.entry-title").text()
         thumbnail_url =
-            document
-                .selectFirst(".herald-post-thumbnail img")
+            document.selectFirst(".herald-post-thumbnail img")
                 ?.attr("src")
         description = document.select(".entry-content > p").text()
         genre = document.select(".meta-tags > a").joinToString { it.text() }

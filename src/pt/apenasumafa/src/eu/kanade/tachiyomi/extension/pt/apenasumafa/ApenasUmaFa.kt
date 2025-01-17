@@ -20,8 +20,7 @@ class ApenasUmaFa :
         val document = response.asJsoup()
         title = document.selectFirst("h1")!!.text()
         thumbnail_url =
-            document
-                .selectFirst("thum")
+            document.selectFirst("thum")
                 ?.attr("style")
                 ?.substringAfter("url(\"")
                 ?.substringBeforeLast("\"")

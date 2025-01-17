@@ -36,8 +36,7 @@ abstract class LectorMoe(
             .rateLimitHost(apiBaseUrl.toHttpUrl(), 3)
             .build()
 
-    final override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    final override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val apiHeaders: Headers =

@@ -20,8 +20,7 @@ class FreleinBooks : ParsedHttpSource() {
     override val name = "Frelein Books"
     override val supportsLatest = true
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val Element.imgSrc: String
@@ -107,8 +106,7 @@ class FreleinBooks : ParsedHttpSource() {
                 ".postTitle",
             ).text()} \n \nNote: If you encounters error when opening the magazine, please press the WebView button then leave a comment on our web so we can update it soon."
         manga.genre =
-            document
-                .select(".labelLink > a")
+            document.select(".labelLink > a")
                 .joinToString(", ") { it.text() }
         manga.status = SManga.COMPLETED
         return manga

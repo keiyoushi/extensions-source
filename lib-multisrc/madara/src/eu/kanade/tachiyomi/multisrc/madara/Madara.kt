@@ -44,8 +44,7 @@ abstract class Madara(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     protected val xhrHeaders by lazy {
@@ -150,8 +149,7 @@ abstract class Madara(
         val document = response.asJsoup()
 
         val entries =
-            document
-                .select(popularMangaSelector())
+            document.select(popularMangaSelector())
                 .map(::popularMangaFromElement)
         val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
 
@@ -223,8 +221,7 @@ abstract class Madara(
         popular: Boolean,
     ): Request {
         val formBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .apply {
                     add("action", "madara_load_more")
                     add("page", (page - 1).toString())
@@ -347,8 +344,7 @@ abstract class Madara(
         filters: FilterList,
     ): Request {
         val formBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .apply {
                     add("action", "madara_load_more")
                     add("page", (page - 1).toString())
@@ -648,8 +644,7 @@ abstract class Madara(
         val document = response.asJsoup()
 
         val entries =
-            document
-                .select(searchMangaSelector())
+            document.select(searchMangaSelector())
                 .map(::searchMangaFromElement)
         val hasNextPage = searchMangaNextPageSelector()?.let { document.selectFirst(it) } != null
 
@@ -922,8 +917,7 @@ abstract class Madara(
 
     protected open fun oldXhrChaptersRequest(mangaId: String): Request {
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("action", "manga_get_chapters")
                 .add("manga", mangaId)
                 .build()
@@ -1163,8 +1157,7 @@ abstract class Madara(
 
     protected open fun countViewsRequest(document: Document): Request? {
         val wpMangaData =
-            document
-                .selectFirst("script#wp-manga-js-extra")
+            document.selectFirst("script#wp-manga-js-extra")
                 ?.data() ?: return null
 
         val wpMangaInfo =
@@ -1176,8 +1169,7 @@ abstract class Madara(
 
         if (wpManga["enable_manga_view"]?.jsonPrimitive?.content == "1") {
             val formBuilder =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add("action", "manga_views")
                     .add("manga", wpManga["manga_id"]!!.jsonPrimitive.content)
 
@@ -1243,8 +1235,7 @@ abstract class Madara(
      *
      * @param document The search page document
      */
-    protected open fun parseGenres(document: Document): List<Genre> = document
-        .selectFirst("div.checkbox-group")
+    protected open fun parseGenres(document: Document): List<Genre> = document.selectFirst("div.checkbox-group")
         ?.select("div.checkbox")
         .orEmpty()
         .map { li ->

@@ -23,8 +23,7 @@ class FoamGirl : ParsedHttpSource() {
     override val name = "FoamGirl"
     override val supportsLatest = false
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // Popular
@@ -72,8 +71,7 @@ class FoamGirl : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val imageCount =
-            document
-                .select(".post_title_topimg")
+            document.select(".post_title_topimg")
                 .text()
                 .substringAfter("(")
                 .substringBefore("P")
@@ -111,15 +109,13 @@ class FoamGirl : ParsedHttpSource() {
 
     private fun getPageListByDocument(document: Document): List<Page> {
         val pages =
-            document
-                .select("#image_div img")
+            document.select("#image_div img")
                 .mapIndexed { index, element ->
                     Page(index, imageUrl = element.absUrl("src"))
                 }.toList()
 
         val nextPageUrl =
-            document
-                .selectFirst(".page-numbers[title=Next]")
+            document.selectFirst(".page-numbers[title=Next]")
                 ?.absUrl("href")
                 ?.takeIf { HAS_NEXT_PAGE_REGEX in it }
                 ?: return pages

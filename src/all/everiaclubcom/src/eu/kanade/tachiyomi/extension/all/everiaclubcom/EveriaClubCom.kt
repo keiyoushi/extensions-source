@@ -21,8 +21,7 @@ class EveriaClubCom : HttpSource() {
     override val name = "EveriaClub (unoriginal)"
     override val supportsLatest = true
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val Element.imgSrc: String?

@@ -286,8 +286,7 @@ open class BatoTo(
         val manga = SManga.create()
         manga.title = infoElement.select("h3").text().removeEntities()
         manga.thumbnail_url =
-            document
-                .select("div.attr-cover img")
+            document.select("div.attr-cover img")
                 .attr("abs:src")
         manga.url = infoElement.select("h3 a").attr("abs:href")
         return MangasPage(listOf(manga), false)
@@ -296,8 +295,7 @@ open class BatoTo(
     private fun queryParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas =
-            document
-                .select(latestUpdatesSelector())
+            document.select(latestUpdatesSelector())
                 .map { element -> latestUpdatesFromElement(element) }
         val nextPage = document.select(latestUpdatesNextPageSelector()).first() != null
         return MangasPage(mangas, nextPage)
@@ -306,8 +304,7 @@ open class BatoTo(
     private fun queryUtilsParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas =
-            document
-                .select("tbody > tr")
+            document.select("tbody > tr")
                 .map { element -> searchUtilsFromElement(element) }
         return MangasPage(mangas, false)
     }
@@ -318,8 +315,7 @@ open class BatoTo(
 
         val document = Jsoup.parse(html, response.request.url.toString())
         val mangas =
-            document
-                .select(".my-history-item")
+            document.select(".my-history-item")
                 .map { element -> searchHistoryFromElement(element) }
         return MangasPage(mangas, false)
     }
@@ -445,10 +441,9 @@ open class BatoTo(
         0L
     }
 
-    private fun checkChapterLists(document: Document): Boolean = document
-        .select(
-            ".episode-list > .alert-warning",
-        ).text()
+    private fun checkChapterLists(document: Document): Boolean = document.select(
+        ".episode-list > .alert-warning",
+    ).text()
         .contains("This comic has been marked as deleted and the chapter list is not available.")
 
     override fun chapterListRequest(manga: SManga): Request = if (getAltChapterListPref()) {
@@ -476,8 +471,7 @@ open class BatoTo(
             throw Exception("Deleted from site")
         }
 
-        return document
-            .select(chapterListSelector())
+        return document.select(chapterListSelector())
             .map(::chapterFromElement)
     }
 

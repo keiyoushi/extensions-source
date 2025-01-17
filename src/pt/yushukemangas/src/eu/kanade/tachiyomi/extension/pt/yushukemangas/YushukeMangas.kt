@@ -169,8 +169,7 @@ class YushukeMangas : ParsedHttpSource() {
 
     private fun SManga.fetchMangaId(): String {
         val document = client.newCall(mangaDetailsRequest(this)).execute().asJsoup()
-        return document
-            .select("script")
+        return document.select("script")
             .map(Element::data)
             .firstOrNull(MANGA_ID_REGEX::containsMatchIn)
             ?.let {

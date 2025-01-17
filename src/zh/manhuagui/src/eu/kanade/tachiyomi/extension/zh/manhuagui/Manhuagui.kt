@@ -308,8 +308,7 @@ class Manhuagui(
 
     override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", baseUrl)
         .set(
             "User-Agent",
@@ -426,14 +425,12 @@ class Manhuagui(
         manga.description = document.select("div#intro-all").text().trim()
         manga.thumbnail_url = document.select("p.hcover > img").attr("abs:src")
         manga.author =
-            document
-                .select("span:contains(漫画作者) > a , span:contains(漫畫作者) > a")
+            document.select("span:contains(漫画作者) > a , span:contains(漫畫作者) > a")
                 .text()
                 .trim()
                 .replace(" ", ", ")
         manga.genre =
-            document
-                .select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a")
+            document.select("span:contains(漫画剧情) > a , span:contains(漫畫劇情) > a")
                 .text()
                 .trim()
                 .replace(" ", ", ")

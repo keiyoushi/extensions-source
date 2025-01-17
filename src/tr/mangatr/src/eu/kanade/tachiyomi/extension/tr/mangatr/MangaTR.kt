@@ -16,8 +16,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Accept-Language", "en-US,en;q=0.5")
 
     override val client by lazy {
@@ -107,8 +106,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
                             isEmpty() -> response
                             else -> {
                                 val body =
-                                    FormBody
-                                        .Builder()
+                                    FormBody.Builder()
                                         .add("page", nextPage.toString())
                                         .build()
                                 nextPage++

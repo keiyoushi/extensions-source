@@ -31,8 +31,7 @@ abstract class GravureBlogger(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()

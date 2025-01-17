@@ -55,8 +55,7 @@ class Manhastro :
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .selectFirst("script:containsData(imageLinks)")
+    override fun pageListParse(document: Document): List<Page> = document.selectFirst("script:containsData(imageLinks)")
         ?.data()
         ?.let {
             imageLinksPattern

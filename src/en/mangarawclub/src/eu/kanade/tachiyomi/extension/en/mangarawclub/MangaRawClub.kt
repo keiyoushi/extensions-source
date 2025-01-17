@@ -133,8 +133,7 @@ class MangaRawClub : ParsedHttpSource() {
         document.selectFirst(".novel-header") ?: throw Exception("Page not found")
 
         author =
-            document
-                .selectFirst(".author a")
+            document.selectFirst(".author a")
                 ?.attr("title")
                 ?.trim()
                 ?.takeIf { it.lowercase() != "updating" }
@@ -144,10 +143,9 @@ class MangaRawClub : ParsedHttpSource() {
                 document.selectFirst(".description")?.ownText()?.substringAfter("Summary is")?.trim()?.let {
                     append(it)
                 }
-                document
-                    .selectFirst(
-                        ".alternative-title",
-                    )?.ownText()
+                document.selectFirst(
+                    ".alternative-title",
+                )?.ownText()
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() && it.lowercase() != "updating" }
                     ?.let {

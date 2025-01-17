@@ -52,8 +52,7 @@ class ZeurelScan : HttpSource() {
         val document = response.asJsoup()
         // The titles of all unique manga in the latest section
         val titles =
-            document
-                .select("div.capitoli_mini")
+            document.select("div.capitoli_mini")
                 .distinctBy {
                     it.selectFirst("div:not(:has(img))")!!.text()
                 }.map { it.selectFirst("div:not(:has(img))")!!.text() }

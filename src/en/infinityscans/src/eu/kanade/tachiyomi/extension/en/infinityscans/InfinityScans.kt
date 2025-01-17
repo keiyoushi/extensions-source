@@ -226,8 +226,7 @@ class InfinityScans : HttpSource() {
         val document = response.use { it.asJsoup() }
 
         val desc =
-            document
-                .select("div:has(>h4:contains(Summary)) p")
+            document.select("div:has(>h4:contains(Summary)) p")
                 .text()
                 .split("</br>")
                 .joinToString("\n", transform = String::trim)

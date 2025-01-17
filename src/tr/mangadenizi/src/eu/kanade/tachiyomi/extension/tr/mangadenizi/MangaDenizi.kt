@@ -55,8 +55,7 @@ class MangaDenizi : ParsedHttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas =
-            document
-                .select(latestUpdatesSelector())
+            document.select(latestUpdatesSelector())
                 .distinctBy { it.text().trim() }
                 .map { latestUpdatesFromElement(it) }
         val hasNextPage =

@@ -109,8 +109,7 @@ abstract class Gattsu(
             return emptyList()
         }
 
-        return document
-            .select(chapterListSelector())
+        return document.select(chapterListSelector())
             .map { chapterFromElement(it) }
     }
 
@@ -133,8 +132,7 @@ abstract class Gattsu(
     protected open fun pageListSelector(): String = "div.meio div.post-box ul.post-fotos li a > img, " +
         "div.meio div.post-box.listaImagens div.galeriaHtml img"
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(pageListSelector())
+    override fun pageListParse(document: Document): List<Page> = document.select(pageListSelector())
         .mapIndexed { i, el ->
             Page(i, document.location(), el.imgAttr().withoutSize())
         }

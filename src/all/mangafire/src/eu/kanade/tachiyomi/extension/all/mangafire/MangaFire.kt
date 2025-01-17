@@ -115,8 +115,7 @@ open class MangaFire(
                 }
             }
         thumbnail_url =
-            document
-                .selectFirst(".poster")!!
+            document.selectFirst(".poster")!!
                 .selectFirst("img")!!
                 .attr("src")
         status =

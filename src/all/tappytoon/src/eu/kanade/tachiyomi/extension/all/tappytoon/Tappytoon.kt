@@ -88,8 +88,7 @@ class Tappytoon(
 
     private var nextUrl: String? = null
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("User-Agent", System.getProperty("http.agent")!!)
         .set("Referer", "https://www.tappytoon.com/")
 

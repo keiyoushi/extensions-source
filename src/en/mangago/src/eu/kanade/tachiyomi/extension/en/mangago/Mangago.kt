@@ -82,8 +82,7 @@ class Mangago :
                     .build()
             }.build()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Cookie", cookiesHeader)
 
@@ -252,8 +251,7 @@ class Mangago :
         val imgsrcs = Base64.decode(imgsrcRaw, Base64.DEFAULT)
 
         val chapterJsUrl =
-            document
-                .getElementsByTag("script")
+            document.getElementsByTag("script")
                 .first {
                     it.attr("src").contains("chapter.js", ignoreCase = true)
                 }.attr("abs:src")
@@ -320,8 +318,7 @@ class Mangago :
                 ?: throw Exception("Could not extract imgsrcs")
         val imgsrcs = Base64.decode(imgsrcRaw, Base64.DEFAULT)
         val chapterJsUrl =
-            document
-                .getElementsByTag("script")
+            document.getElementsByTag("script")
                 .first {
                     it.attr("src").contains("chapter.js", ignoreCase = true)
                 }.attr("abs:src")
@@ -354,8 +351,7 @@ class Mangago :
         val cols = colsRegex.find(cachedDeofChapterJS!!)?.groupValues?.get(1) ?: ""
 
         val pageNumber =
-            document
-                .location()
+            document.location()
                 .removeSuffix("/")
                 .substringAfterLast("-")
                 .toInt()

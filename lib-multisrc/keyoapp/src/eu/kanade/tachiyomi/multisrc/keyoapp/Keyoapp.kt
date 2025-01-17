@@ -45,8 +45,7 @@ abstract class Keyoapp(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
@@ -141,8 +140,7 @@ abstract class Keyoapp(
         val genres = response.request.url.queryParameterValues("genre")
 
         val mangaList =
-            document
-                .select(searchMangaSelector())
+            document.select(searchMangaSelector())
                 .toTypedArray()
                 .filter { it.attr("title").contains(query, true) }
                 .filter { entry ->
@@ -216,8 +214,7 @@ abstract class Keyoapp(
      *
      * @param document The search page document
      */
-    protected open fun parseGenres(document: Document): List<Genre> = document
-        .select("#series_tags_page > button")
+    protected open fun parseGenres(document: Document): List<Genre> = document.select("#series_tags_page > button")
         .map { btn ->
             Genre(btn.text(), btn.attr("tag"))
         }
@@ -239,8 +236,7 @@ abstract class Keyoapp(
         artist = document.selectFirst(artistSelector)?.text()
         genre =
             buildList {
-                document
-                    .selectFirst(genreSelector)
+                document.selectFirst(genreSelector)
                     ?.text()
                     ?.replaceFirstChar {
                         if (it.isLowerCase()) {
@@ -287,8 +283,7 @@ abstract class Keyoapp(
 
     override fun pageListParse(document: Document): List<Page> {
         val cdnUrl = getCdnUrl(document)
-        document
-            .select("#pages > img")
+        document.select("#pages > img")
             .map { it.attr("uid") }
             .filter { it.isNotEmpty() }
             .also { cdnUrl ?: throw Exception(intl["chapter_page_url_not_found"]) }
@@ -298,8 +293,7 @@ abstract class Keyoapp(
             ?.also { return it }
 
         // Fallback, old method
-        return document
-            .select("#pages > img")
+        return document.select("#pages > img")
             .map { it.imgAttr() }
             .filter { it.contains(oldImgCdnRegex) }
             .mapIndexed { index, img ->
@@ -307,8 +301,7 @@ abstract class Keyoapp(
             }
     }
 
-    protected open fun getCdnUrl(document: Document): String? = document
-        .select("script")
+    protected open fun getCdnUrl(document: Document): String? = document.select("script")
         .firstOrNull { CDN_HOST_REGEX.containsMatchIn(it.html()) }
         ?.let {
             val cdnHost =

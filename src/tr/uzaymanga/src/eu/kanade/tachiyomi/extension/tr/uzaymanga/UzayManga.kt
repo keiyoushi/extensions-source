@@ -42,8 +42,7 @@ class UzayManga : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/search?page=$page&search=&order=4")
@@ -148,8 +147,7 @@ class UzayManga : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val script =
-            document
-                .select("script")
+            document.select("script")
                 .map { it.html() }
                 .firstOrNull { pageRegex.find(it) != null }
                 ?: return emptyList()

@@ -44,8 +44,7 @@ class Webcomics :
 
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
     override val client =
@@ -172,8 +171,7 @@ class Webcomics :
 
     override fun pageListParse(document: Document): List<Page> {
         val script =
-            document
-                .select("script")
+            document.select("script")
                 .firstOrNull { PAGE_REGEX.containsMatchIn(it.data()) }
                 ?: throw Exception("You may need to log in")
 

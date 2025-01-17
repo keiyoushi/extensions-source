@@ -105,8 +105,7 @@ class PlotTwistNoFansub :
         val url = "$baseUrl/wp-admin/admin-ajax.php"
 
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("action", "td_ajax_search")
                 .add("td_string", query)
                 .add("limit", MAX_MANGA_RESULTS.toString())
@@ -160,16 +159,14 @@ class PlotTwistNoFansub :
             listOfNotNull(
                 MANGAID1_REGEX.find(document.html())?.groupValues?.get(1),
                 document.selectFirst("link[rel=shortlink]")?.attr("href")?.substringAfterLast("="),
-                document
-                    .selectFirst("body")
+                document.selectFirst("body")
                     ?.classNames()
                     ?.filter { it.startsWith("postid-") }
                     ?.getOrNull(0)
                     ?.substringAfterLast("-"),
-                document
-                    .selectFirst(
-                        ".td-post-views span",
-                    )?.classNames()
+                document.selectFirst(
+                    ".td-post-views span",
+                )?.classNames()
                     ?.filter { it.startsWith("td-nr-views-") }
                     ?.getOrNull(0)
                     ?.substringAfterLast("-"),
@@ -190,8 +187,7 @@ class PlotTwistNoFansub :
 
         do {
             val body =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add("action", key)
                     .add("manga_id", mangaId)
                     .add("pageNumber", page.toString())
@@ -230,8 +226,7 @@ class PlotTwistNoFansub :
 
     override fun pageListParse(document: Document): List<Page> {
         val script =
-            document
-                .select("script")
+            document.select("script")
                 .map(Element::data)
                 .firstNotNullOf(CHAPTER_PAGES_REGEX::find)
         val result = json.decodeFromString<PagesPayloadDto>(script.groups["json"]!!.value)
@@ -264,8 +259,7 @@ class PlotTwistNoFansub :
         val customPriorityJunk = listOf("bootstrap", "pagi", "reader", "jquery")
         val customPriorityJunk2 = listOf("multilanguage-", "ad-", "td-", "bj-", "html-", "gd-")
 
-        document
-            .select("script[src*=\"wp-content/plugins/\"]")
+        document.select("script[src*=\"wp-content/plugins/\"]")
             .asSequence()
             .map { it.attr("src") }
             .sortedWith(

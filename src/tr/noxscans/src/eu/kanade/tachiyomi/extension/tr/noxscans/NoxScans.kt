@@ -51,8 +51,7 @@ class NoxScans :
                 }
 
             val formBody =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add(input.first, input.second)
                     .build()
 

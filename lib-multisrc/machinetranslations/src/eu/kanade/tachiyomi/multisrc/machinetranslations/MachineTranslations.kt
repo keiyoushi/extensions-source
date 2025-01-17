@@ -162,8 +162,7 @@ abstract class MachineTranslations(
 
     override fun pageListParse(document: Document): List<Page> {
         val pages =
-            document
-                .selectFirst("div#json-data")
+            document.selectFirst("div#json-data")
                 ?.ownText()
                 ?.parseAs<List<PageDto>>()
                 ?: throw Exception("Pages not found")

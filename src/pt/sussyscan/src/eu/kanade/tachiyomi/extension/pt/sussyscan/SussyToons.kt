@@ -116,8 +116,7 @@ class SussyToons :
         }
     }
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("scan-id", "1") // Required header for requests
 
     // ============================= Popular ==================================

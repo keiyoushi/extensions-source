@@ -58,8 +58,7 @@ class NovelleLeggere : ParsedHttpSource() {
         thumbnail_url = document.select("div.post-content img").first()!!.attr("abs:src")
         title = document.select("div.post-content h3").text().trim()
         description =
-            document
-                .select("div.post-content div:contains(Trama) div.su-spoiler-content")
+            document.select("div.post-content div:contains(Trama) div.su-spoiler-content")
                 .text()
                 .trim()
     }

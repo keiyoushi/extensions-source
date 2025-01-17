@@ -170,8 +170,7 @@ open class Comico(
     private fun search(
         query: String,
         page: Int,
-    ) = FormBody
-        .Builder()
+    ) = FormBody.Builder()
         .add("query", query)
         .add("pageNo", (page - 1).toString())
         .add("pageSize", "25")

@@ -57,8 +57,7 @@ class ManhwaHentai :
         launchIO { countViews(document) }
 
         val mangaId =
-            document
-                .selectFirst("a[data-action=bookmark]")
+            document.selectFirst("a[data-action=bookmark]")
                 ?.attr("data-post")
                 ?: throw Exception("Failed to find mangaId")
 
@@ -89,8 +88,7 @@ class ManhwaHentai :
         launchIO { countViews(document) }
 
         val pages =
-            document
-                .selectFirst("#chapter_preloaded_images")!!
+            document.selectFirst("#chapter_preloaded_images")!!
                 .data()
                 .substringAfter("chapter_preloaded_images=")
                 .removeSuffix(",]")

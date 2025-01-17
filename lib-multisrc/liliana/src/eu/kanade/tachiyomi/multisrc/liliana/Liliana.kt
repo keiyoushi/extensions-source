@@ -40,8 +40,7 @@ abstract class Liliana(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
@@ -81,8 +80,7 @@ abstract class Liliana(
     ): Request {
         if (query.isNotBlank() && usesPostSearch) {
             val formBody =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add("search", query)
                     .build()
 
@@ -338,8 +336,7 @@ abstract class Liliana(
             Page(i, document.location(), url)
         }
     } else {
-        document
-            .select("div.separator[data-index]")
+        document.select("div.separator[data-index]")
             .map { page ->
                 val index = page.attr("data-index").toInt()
                 val url = page.selectFirst("a")!!.attr("abs:href")

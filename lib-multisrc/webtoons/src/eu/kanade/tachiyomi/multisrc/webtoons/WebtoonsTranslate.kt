@@ -39,8 +39,7 @@ open class WebtoonsTranslate(
 
     private val pageSize = 24
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .removeAll("Referer")
         .add("Referer", mobileBaseUrl.toString())
 

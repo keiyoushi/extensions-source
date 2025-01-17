@@ -146,8 +146,7 @@ class DisasterScans : HttpSource() {
         val document = response.asJsoup()
 
         val chapterPages =
-            document
-                .select("#__NEXT_DATA__")
+            document.select("#__NEXT_DATA__")
                 .html()
                 .parseAs<NextData<ApiChapterPages>>()
                 .props.pageProps.chapter.pages
@@ -163,8 +162,7 @@ class DisasterScans : HttpSource() {
 
     private fun updatedCdnUrl(document: Document): String {
         val cdnUrlFromPage =
-            document
-                .selectFirst("main div.maxWidth img")
+            document.selectFirst("main div.maxWidth img")
                 ?.attr("src")
                 ?.substringBefore("?")
                 ?.let { "$it?fileId=" }

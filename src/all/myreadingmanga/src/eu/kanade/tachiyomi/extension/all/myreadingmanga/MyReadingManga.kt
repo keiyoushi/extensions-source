@@ -32,8 +32,7 @@ open class MyReadingManga(
     override val name = "MyReadingManga"
     final override val baseUrl = "https://myreadingmanga.info"
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("User-Agent", USER_AGENT)
         .add("X-Requested-With", randomString((1..20).random()))
 
@@ -133,8 +132,7 @@ open class MyReadingManga(
         val document = response.asJsoup()
         if (document.location().contains("page=1")) mangaParsedSoFar = 0
         val mangas =
-            document
-                .select(searchMangaSelector())
+            document.select(searchMangaSelector())
                 .map { searchMangaFromElement(it) }
                 .also { mangaParsedSoFar += it.count() }
         val totalResults =
@@ -212,16 +210,14 @@ open class MyReadingManga(
         val basicDescription = document.select("h1").text()
         // too troublesome to achieve 100% accuracy assigning scanlator group during chapterListParse
         val scanlatedBy =
-            document
-                .select(".entry-terms:has(a[href*=group])")
+            document.select(".entry-terms:has(a[href*=group])")
                 .firstOrNull()
                 ?.select("a[href*=group]")
                 ?.joinToString(prefix = "Scanlated by: ") { it.text() }
         val extendedDescription =
-            document
-                .select(
-                    ".entry-content p:not(p:containsOwn(|)):not(.chapter-class + p)",
-                ).joinToString("\n") { it.text() }
+            document.select(
+                ".entry-content p:not(p:containsOwn(|)):not(.chapter-class + p)",
+            ).joinToString("\n") { it.text() }
         description = listOfNotNull(basicDescription, scanlatedBy, extendedDescription).joinToString("\n").trim()
         status =
             when (document.select("a[href*=status]").first()?.text()) {
@@ -258,8 +254,7 @@ open class MyReadingManga(
         val date = parseDate(document.select(".entry-time").text())
         val mangaUrl = document.baseUri()
         val chfirstname =
-            document
-                .select(".chapter-class a[href*=$mangaUrl]")
+            document.select(".chapter-class a[href*=$mangaUrl]")
                 .first()
                 ?.text()
                 ?.ifEmpty { "Ch. 1" }
@@ -273,10 +268,9 @@ open class MyReadingManga(
                 if (!it.text().contains("Next »", true)) {
                     val pageNumber = it.text()
                     val chname =
-                        document
-                            .select(
-                                ".chapter-class a[href$=/$pageNumber/]",
-                            ).text()
+                        document.select(
+                            ".chapter-class a[href$=/$pageNumber/]",
+                        ).text()
                             .ifEmpty { "Ch. $pageNumber" }
                             ?.replaceFirstChar { it.titlecase() }
                             ?: "Ch. $pageNumber"

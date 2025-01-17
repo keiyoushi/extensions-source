@@ -143,13 +143,11 @@ class TeamX :
         genre = document.select("div.review-author-info a").joinToString { it.text() }
         thumbnail_url = document.select("div.text-right img").first()!!.absUrl("src")
         status =
-            document
-                .selectFirst(".full-list-info > small:first-child:contains(الحالة) + small")
+            document.selectFirst(".full-list-info > small:first-child:contains(الحالة) + small")
                 ?.text()
                 .toStatus()
         author =
-            document
-                .selectFirst(".full-list-info > small:first-child:contains(الرسام) + small")
+            document.selectFirst(".full-list-info > small:first-child:contains(الرسام) + small")
                 ?.text()
                 ?.takeIf { it != "غير معروف" }
     }

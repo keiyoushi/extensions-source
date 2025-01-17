@@ -19,8 +19,7 @@ object ManhwalikeHelper {
         .add("X-Requested-With", "XMLHttpRequest")
         .build()
 
-    inline fun <reified T : Any> T.toFormRequestBody(): RequestBody = FormBody
-        .Builder()
+    inline fun <reified T : Any> T.toFormRequestBody(): RequestBody = FormBody.Builder()
         .add("keyword", this.toString())
         .build()
 

@@ -36,8 +36,7 @@ class OhtaWebComic : ParsedHttpSource() {
             .addInterceptor(SpeedBinbInterceptor(json))
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private lateinit var directory: List<Element>
@@ -117,8 +116,7 @@ class OhtaWebComic : ParsedHttpSource() {
         val document = response.asJsoup()
 
         directory =
-            document
-                .select(searchMangaSelector())
+            document.select(searchMangaSelector())
                 .filter { it ->
                     it.selectFirst(".title")?.text()?.contains(query, true) == true
                 }
@@ -135,8 +133,7 @@ class OhtaWebComic : ParsedHttpSource() {
         title = document.selectFirst("[itemprop=name]")!!.text()
         author = document.selectFirst("[itemprop=author]")?.text()
         thumbnail_url =
-            document
-                .selectFirst(".contentHeader")
+            document.selectFirst(".contentHeader")
                 ?.attr("style")
                 ?.substringAfter("background-image:url(")
                 ?.substringBefore(");")
@@ -164,8 +161,7 @@ class OhtaWebComic : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val chapters =
-            document
-                .select(chapterListSelector())
+            document.select(chapterListSelector())
                 .sortedByDescending {
                     it.selectFirst("dt.number")!!.ownText().toInt()
                 }.map { chapterFromElement(it) }
@@ -174,8 +170,7 @@ class OhtaWebComic : ParsedHttpSource() {
             return chapters
         }
 
-        return document
-            .select(".headBtnList a[onclick*=openBook]")
+        return document.select(".headBtnList a[onclick*=openBook]")
             .map {
                 SChapter.create().apply {
                     url = "/contents/${it.getChapterId()}"
@@ -197,8 +192,7 @@ class OhtaWebComic : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val readerUrl =
-            document
-                .selectFirst("script:containsData(location.href)")!!
+            document.selectFirst("script:containsData(location.href)")!!
                 .data()
                 .substringAfter("location.href='")
                 .substringBefore("';")

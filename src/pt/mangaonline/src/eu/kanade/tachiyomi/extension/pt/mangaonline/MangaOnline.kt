@@ -192,8 +192,7 @@ class MangaOnline :
             val document = request.asJsoup()
 
             genresSet =
-                document
-                    .select(".wp-content a")
+                document.select(".wp-content a")
                     .map { element ->
                         val id =
                             element

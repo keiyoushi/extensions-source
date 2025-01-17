@@ -62,8 +62,7 @@ class MangaClub : ParsedHttpSource() {
         var url = baseUrl
         if (query.isNotEmpty()) {
             val formData =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add("do", "search")
                     .add("subaction", "search")
                     .add("search_start", "$page")
@@ -118,8 +117,7 @@ class MangaClub : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         thumbnail_url = document.select("div.image img").attr("abs:src")
         title =
-            document
-                .select("div.info strong")
+            document.select("div.info strong")
                 .text()
                 .replace("\\'", "'")
                 .substringBefore("/")
@@ -127,10 +125,9 @@ class MangaClub : ParsedHttpSource() {
         author = document.select("div.info a[href*=author]").joinToString(", ") { it.text().trim() }
         artist = author
         status =
-            if (document
-                    .select(
-                        "div.fullstory",
-                    ).text()
+            if (document.select(
+                    "div.fullstory",
+                ).text()
                     .contains("Данное произведение лицензировано на территории РФ. Главы удалены.")
             ) {
                 SManga.LICENSED

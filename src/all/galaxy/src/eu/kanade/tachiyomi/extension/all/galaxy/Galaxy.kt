@@ -33,8 +33,7 @@ abstract class Galaxy(
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = if (page == 1) {
@@ -47,22 +46,21 @@ abstract class Galaxy(
         val document = response.asJsoup()
 
         val entries =
-            document
-                .select(
-                    """div.tabs div[wire:snapshot*=App\\Models\\Serie], main div:has(h2:matches(Today\'s Hot|الرائج اليوم)) a[wire:snapshot*=App\\Models\\Serie]""",
-                ).map { element ->
-                    SManga.create().apply {
-                        setUrlWithoutDomain(
-                            if (element.tagName().equals("a")) {
-                                element.absUrl("href")
-                            } else {
-                                element.selectFirst("a")!!.absUrl("href")
-                            },
-                        )
-                        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-                        title = element.selectFirst("div.text-sm")!!.text()
-                    }
-                }.distinctBy { it.url }
+            document.select(
+                """div.tabs div[wire:snapshot*=App\\Models\\Serie], main div:has(h2:matches(Today\'s Hot|الرائج اليوم)) a[wire:snapshot*=App\\Models\\Serie]""",
+            ).map { element ->
+                SManga.create().apply {
+                    setUrlWithoutDomain(
+                        if (element.tagName().equals("a")) {
+                            element.absUrl("href")
+                        } else {
+                            element.selectFirst("a")!!.absUrl("href")
+                        },
+                    )
+                    thumbnail_url = element.selectFirst("img")?.absUrl("src")
+                    title = element.selectFirst("div.text-sm")!!.text()
+                }
+            }.distinctBy { it.url }
 
         return MangasPage(
             entries,
@@ -217,12 +215,10 @@ abstract class Galaxy(
                 }
             genre =
                 buildList {
-                    document
-                        .getQueryParam("type")
+                    document.getQueryParam("type")
                         ?.capitalize()
                         ?.let(::add)
-                    document
-                        .select("#full_model a[href*=search?genre]")
+                    document.select("#full_model a[href*=search?genre]")
                         .eachText()
                         .let(::addAll)
                 }.joinToString()
@@ -232,8 +228,7 @@ abstract class Galaxy(
                 buildString {
                     append(document.select("#full_model p").text().trim())
                     append("\n\nAlternative Names:\n")
-                    document
-                        .select("#full_model [wire:key^=n-]")
+                    document.select("#full_model [wire:key^=n-]")
                         .joinToString("\n") { "• ${it.text().trim().removeMdEscaped()}" }
                         .let(::append)
                 }.trim()

@@ -32,8 +32,7 @@ class Sadscans : ParsedHttpSource() {
             .addInterceptor(DataImageInterceptor())
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // popular

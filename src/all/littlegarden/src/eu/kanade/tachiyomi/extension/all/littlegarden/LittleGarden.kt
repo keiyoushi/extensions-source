@@ -75,8 +75,7 @@ class LittleGarden : ParsedHttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas =
-            document
-                .select(latestUpdatesSelector())
+            document.select(latestUpdatesSelector())
                 .map { element ->
                     latestUpdatesFromElement(element)
                 }.distinctBy { it.title }
@@ -222,8 +221,7 @@ class LittleGarden : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
         val chapNb =
-            document
-                .selectFirst("div.chapter-number")!!
+            document.selectFirst("div.chapter-number")!!
                 .text()
                 .trim()
                 .toInt()

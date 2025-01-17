@@ -136,13 +136,11 @@ class LadronCorps : HttpSource() {
         val document = response.asJsoup()
         title = document.selectFirst("h1")!!.text()
         description =
-            document
-                .select("div[data-hook='post-description'] p > span")
+            document.select("div[data-hook='post-description'] p > span")
                 .joinToString("\n".repeat(2)) { it.text() }
 
         genre =
-            document
-                .select("#post-footer li a")
+            document.select("#post-footer li a")
                 .joinToString { it.text() }
 
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE

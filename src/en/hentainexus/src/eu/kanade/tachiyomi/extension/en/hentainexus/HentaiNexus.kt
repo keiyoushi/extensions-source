@@ -38,8 +38,7 @@ class HentaiNexus : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 1)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()

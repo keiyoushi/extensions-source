@@ -27,8 +27,7 @@ class ManhwasNet : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 3, 1, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {

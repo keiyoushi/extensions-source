@@ -20,8 +20,7 @@ class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Onl
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         description = document.select("div.card-body > p").text()
         title =
-            document
-                .select("h2 > span")
+            document.select("h2 > span")
                 .text()
                 .substringAfter("Manga: ")
                 .trim()

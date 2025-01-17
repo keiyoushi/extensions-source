@@ -32,8 +32,7 @@ class TopTruyen :
             .rateLimit(3)
             .build()
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(".page-chapter img")
+    override fun pageListParse(document: Document): List<Page> = document.select(".page-chapter img")
         .mapNotNull(::imageOrNull)
         .distinct()
         .mapIndexed { i, image -> Page(i, imageUrl = image) }

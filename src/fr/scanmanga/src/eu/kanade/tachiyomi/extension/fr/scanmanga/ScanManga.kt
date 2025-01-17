@@ -49,8 +49,7 @@ class ScanManga : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")
 
     // Popular

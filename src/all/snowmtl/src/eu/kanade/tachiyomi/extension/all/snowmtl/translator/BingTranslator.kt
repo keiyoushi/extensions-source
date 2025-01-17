@@ -86,8 +86,7 @@ class BingTranslator(
                 .build()
 
         val payload =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("fromLang", from)
                 .add("to", to)
                 .add("text", text)
@@ -103,8 +102,7 @@ class BingTranslator(
         val document = client.newCall(GET(translatorUrl, headers)).execute().asJsoup()
 
         val scripts =
-            document
-                .select("script")
+            document.select("script")
                 .map(Element::data)
 
         val scriptOne: String =

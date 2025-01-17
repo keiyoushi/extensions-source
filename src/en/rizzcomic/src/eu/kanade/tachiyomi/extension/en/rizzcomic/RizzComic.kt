@@ -46,8 +46,7 @@ class RizzComic :
                 chain.proceed(request.newBuilder().headers(headers).build())
             }.build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("X-Requested-With", randomString((1..20).random())) // For WebView
 
     private val apiHeaders by lazy {
@@ -82,8 +81,7 @@ class RizzComic :
     ): Request {
         if (query.isNotEmpty()) {
             val form =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add("search_value", query.trim())
                     .build()
 
@@ -91,8 +89,7 @@ class RizzComic :
         }
 
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .apply {
                     filters.filterIsInstance<FormBodyFilter>().forEach {
                         it.addFormParameter(this)

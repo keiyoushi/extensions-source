@@ -170,8 +170,7 @@ class MangaSaki : ParsedHttpSource() {
     // pages
     override fun pageListParse(document: Document): List<Page> {
         val jsonString =
-            document
-                .select("script:containsData(showmanga)")
+            document.select("script:containsData(showmanga)")
                 .first()!!
                 .data()
                 .substringAfter("(Drupal.settings, ")

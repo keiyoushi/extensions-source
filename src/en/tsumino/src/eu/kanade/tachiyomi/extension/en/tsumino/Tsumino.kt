@@ -128,8 +128,7 @@ class Tsumino : HttpSource() {
                 }
             }
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("PageNumber", page.toString())
                 .add("Text", query)
                 .add("Sort", SortType.values()[f.filterIsInstance<SortFilter>().first().state].name)
@@ -220,8 +219,7 @@ class Tsumino : HttpSource() {
         val document = response.asJsoup()
         val pages = mutableListOf<Page>()
         val numPages =
-            document
-                .select("h1")
+            document.select("h1")
                 .text()
                 .split(" ")
                 .last()
@@ -229,8 +227,7 @@ class Tsumino : HttpSource() {
         if (numPages.isNotEmpty()) {
             for (i in 1 until numPages.toInt() + 1) {
                 val data =
-                    document
-                        .select("#image-container")
+                    document.select("#image-container")
                         .attr("data-cdn")
                         .replace("[PAGE]", i.toString())
                 pages.add(Page(i, "", data))

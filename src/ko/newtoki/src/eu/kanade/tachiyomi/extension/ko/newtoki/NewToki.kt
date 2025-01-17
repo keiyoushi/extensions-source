@@ -48,8 +48,7 @@ abstract class NewToki(
         .connectTimeout(10, TimeUnit.SECONDS) // fail fast
         .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaSelector() = "div#webtoon-list > ul > li"

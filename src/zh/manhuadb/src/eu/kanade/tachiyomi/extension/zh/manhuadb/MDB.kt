@@ -129,8 +129,7 @@ abstract class MDB(
 
     override fun pageListParse(document: Document): List<Page> {
         val imgData =
-            document
-                .selectFirst("body > script:containsData(img_data)")!!
+            document.selectFirst("body > script:containsData(img_data)")!!
                 .data()
                 .substringAfter("img_data = ")
                 .run {

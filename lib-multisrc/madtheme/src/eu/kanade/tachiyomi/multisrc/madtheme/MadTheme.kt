@@ -149,8 +149,7 @@ abstract class MadTheme(
         thumbnail_url = document.selectFirst("#cover img")!!.attr("abs:data-src")
 
         val altNames =
-            document
-                .selectFirst(".detail h2")
+            document.selectFirst(".detail h2")
                 ?.text()
                 ?.split(',', ';')
                 ?.mapNotNull { it.trim().takeIf { it != title } }

@@ -51,8 +51,7 @@ class ComicFuz : HttpSource() {
                 return@addNetworkInterceptor response
             }.build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("Origin", baseUrl)
 

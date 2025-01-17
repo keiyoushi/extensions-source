@@ -23,8 +23,7 @@ class RaindropFansub :
         val chapters = super.chapterListParse(response)
 
         val lastChapterUrl =
-            document
-                .selectFirst("a:has(.epcurlast)")
+            document.selectFirst("a:has(.epcurlast)")
                 ?.attr("href")
                 ?.let {
                     val dummyChapter = SChapter.create()

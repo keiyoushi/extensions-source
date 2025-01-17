@@ -101,8 +101,7 @@ open class Wolf(
             val displayName = document.select(".sub-tab > a").eachText()
             assert(displayName.size == 3)
             searchFilters =
-                document
-                    .select(".tab-day > a, .tab-genre1 > a, .tab-genre2 > a, .tab-alphabet > a")
+                document.select(".tab-day > a, .tab-genre1 > a, .tab-genre2 > a, .tab-alphabet > a")
                     .map {
                         val url = it.absUrl("href").toHttpUrl()
                         val type = url.queryParameter("type1")!!
@@ -181,8 +180,7 @@ open class Wolf(
         parseSearchFilters(document)
 
         browseCache =
-            document
-                .select(".webtoon-list > ul > li > a")
+            document.select(".webtoon-list > ul > li > a")
                 .map {
                     val id =
                         it
@@ -226,8 +224,7 @@ open class Wolf(
             .map { response ->
                 val document = Jsoup.parseBodyFragment(response.body.string(), searchUrl)
                 val entries =
-                    document
-                        .select("article.searchItem")
+                    document.select("article.searchItem")
                         .filter { el ->
                             el.selectFirst("a.searchLink")!!.attr("href").contains(entryPath)
                         }.map { el ->

@@ -70,8 +70,7 @@ class Supermega : ParsedHttpSource() {
         )
     }
 
-    override fun pageListParse(document: Document) = document
-        .select("img[border='4']")
+    override fun pageListParse(document: Document) = document.select("img[border='4']")
         .mapIndexed { i, element ->
             Page(i, "", element.attr("src"))
         }

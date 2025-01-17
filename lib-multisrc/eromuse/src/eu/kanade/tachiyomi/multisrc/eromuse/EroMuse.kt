@@ -127,8 +127,7 @@ open class EroMuse(
                 }
                 SEARCH_RESULTS_OR_BASE -> {
                     val searchMangas = mutableListOf<SManga>()
-                    document
-                        .select(albumSelector)
+                    document.select(albumSelector)
                         .map { element ->
                             val url = element.attr("abs:href")
                             val depth = url.removePrefix("$baseUrl/$topLevelPathSegment/").split("/").count()
@@ -315,8 +314,7 @@ open class EroMuse(
             chapters: ArrayDeque<SChapter>,
         ): List<SChapter> {
             // Linked chapters
-            document
-                .select(linkedChapterSelector)
+            document.select(linkedChapterSelector)
                 .mapNotNull {
                     chapters.addFirst(
                         SChapter.create().apply {
@@ -357,8 +355,7 @@ open class EroMuse(
             pages: ArrayList<Page> = ArrayList(),
         ): List<Page> {
             // Nested chapters aka folders
-            document
-                .select(linkedChapterSelector)
+            document.select(linkedChapterSelector)
                 .mapNotNull {
                     nestedChapterDocuments.add(
                         client.newCall(GET(it.attr("abs:href"), headers)).execute().asJsoup(),

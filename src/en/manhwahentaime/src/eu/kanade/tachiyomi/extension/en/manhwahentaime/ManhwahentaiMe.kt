@@ -27,15 +27,13 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
         val id = comicObj.filter { it.isDigit() }
         val name = comicObj.substringBefore(":").substringAfter("{").trim()
         val ajaxUrl =
-            document
-                .selectFirst("script:containsData(ajax)")!!
+            document.selectFirst("script:containsData(ajax)")!!
                 .data()
                 .substringAfter('"')
                 .substringBefore('"')
 
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add(name, id)
                 .add("action", "ajax_chap")
                 .build()
@@ -132,8 +130,7 @@ class ManhwahentaiMe : Madara("Manhwahentai.me", "https://manhwahentai.me", "en"
         }
     }
 
-    private fun parseGenresMe(document: Document): List<Pair<String, String>> = document
-        .selectFirst("div.genres")
+    private fun parseGenresMe(document: Document): List<Pair<String, String>> = document.selectFirst("div.genres")
         ?.select("a")
         .orEmpty()
         .map { a ->

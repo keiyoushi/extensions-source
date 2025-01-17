@@ -25,8 +25,7 @@ class VortexScans :
         val document = response.asJsoup()
 
         val images =
-            document
-                .selectFirst("script:containsData(images)")
+            document.selectFirst("script:containsData(images)")
                 ?.data()
                 ?.let { regexImages.find(it)!!.groupValues[1].trim(',') }
                 ?.let { json.decodeFromString<String>("\"$it\"") }

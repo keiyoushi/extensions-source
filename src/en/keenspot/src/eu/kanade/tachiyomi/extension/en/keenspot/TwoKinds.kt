@@ -93,8 +93,7 @@ class TwoKinds : HttpSource() {
         val document = response.asJsoup()
 
         val pages =
-            document
-                .select(".chapter-links")
+            document.select(".chapter-links")
                 .flatMap { season -> season.select("> a") }
                 .map { a ->
                     // /comic/1185halloween/ -> 1185halloween
@@ -140,8 +139,7 @@ class TwoKinds : HttpSource() {
             val document = client.newCall(chapterListRequest(SManga.create())).execute().asJsoup()
 
             val pages =
-                document
-                    .select(".chapter-links")
+                document.select(".chapter-links")
                     .flatMap { season -> season.select("> a") }
                     .map { a ->
                         // /comic/1185halloween/ -> 1185halloween

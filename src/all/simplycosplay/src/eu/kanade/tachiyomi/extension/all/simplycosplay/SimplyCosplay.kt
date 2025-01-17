@@ -50,8 +50,7 @@ class SimplyCosplay :
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
 
     private val json: Json by injectLazy()
@@ -109,8 +108,7 @@ class SimplyCosplay :
         val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
 
         val scriptUrl =
-            document
-                .selectFirst("script[src*=main]")
+            document.selectFirst("script[src*=main]")
                 ?.attr("abs:src")
                 ?: throw IOException(TOKEN_EXCEPTION)
 

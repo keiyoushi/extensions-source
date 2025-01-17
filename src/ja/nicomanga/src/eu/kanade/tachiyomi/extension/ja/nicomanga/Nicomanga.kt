@@ -19,8 +19,7 @@ class Nicomanga : FMReader("Nicomanga", "https://nicomanga.com", "ja") {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // =========================== Manga Details ============================

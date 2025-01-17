@@ -41,8 +41,7 @@ class TMOHentai :
             .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
             .build()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     private val preferences: SharedPreferences by lazy {
@@ -134,8 +133,7 @@ class TMOHentai :
             }
         } else {
             val pageList =
-                document
-                    .select("select#select-page")
+                document.select("select#select-page")
                     .first()!!
                     .select("option")
                     .map { it.attr("value").toInt() }

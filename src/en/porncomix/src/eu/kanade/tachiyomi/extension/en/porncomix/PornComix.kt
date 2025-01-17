@@ -26,8 +26,7 @@ class PornComix : Madara("PornComix", " https://porncomix.online", "en") {
         filters: FilterList,
     ): Request {
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .apply {
                     add("action", "wp-manga-search-manga")
                     add("title", query)

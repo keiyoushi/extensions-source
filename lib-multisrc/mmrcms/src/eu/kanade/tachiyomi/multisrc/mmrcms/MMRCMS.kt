@@ -67,8 +67,7 @@ abstract class MMRCMS
 
         override val client = network.cloudflareClient
 
-        override fun headersBuilder() = super
-            .headersBuilder()
+        override fun headersBuilder() = super.headersBuilder()
             .add("Referer", "$baseUrl/")
 
         protected val json: Json by injectLazy()
@@ -191,8 +190,7 @@ abstract class MMRCMS
                 val document = response.asJsoup()
                 val fragment = response.request.url.fragment!!
                 val body =
-                    FormBody
-                        .Builder()
+                    FormBody.Builder()
                         .apply {
                             val page = fragment.substringAfter("page=").substringBefore("&")
 
@@ -535,8 +533,7 @@ abstract class MMRCMS
                                         .last()
                             }
                         sortOptions =
-                            document
-                                .select("#sort-types label:has(input)")
+                            document.select("#sort-types label:has(input)")
                                 .map {
                                     it.ownText() to it.selectFirst("input")!!.id()
                                 }.toTypedArray()

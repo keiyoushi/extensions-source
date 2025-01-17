@@ -23,7 +23,6 @@ class HiveScans :
                 chain.proceed(request.newBuilder().headers(headers).build())
             }.build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Cache-Control", "max-age=0")
 }

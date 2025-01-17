@@ -46,8 +46,7 @@ class MangaScans : ParsedHttpSource() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
@@ -108,8 +107,7 @@ class MangaScans : ParsedHttpSource() {
         document.updateToken()
 
         val mangaList =
-            document
-                .select(popularMangaSelector())
+            document.select(popularMangaSelector())
                 .map(::popularMangaFromElement)
 
         return MangasPage(mangaList, false)
@@ -136,8 +134,7 @@ class MangaScans : ParsedHttpSource() {
         document.updateToken()
 
         val mangaList =
-            document
-                .select(latestUpdatesSelector())
+            document.select(latestUpdatesSelector())
                 .map(::latestUpdatesFromElement)
 
         val hasNextPage = document.selectFirst(latestUpdatesNextPageSelector()) != null
@@ -222,8 +219,7 @@ class MangaScans : ParsedHttpSource() {
         document.updateToken()
 
         val mangaName =
-            document
-                .selectFirst("script:containsData(mangaName)")
+            document.selectFirst("script:containsData(mangaName)")
                 ?.data()
                 ?.substringAfter("mangaName")
                 ?.substringAfter("'")
@@ -237,8 +233,7 @@ class MangaScans : ParsedHttpSource() {
                 }.build()
 
         val postBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .apply {
                     add(
                         "mangaIdx",
@@ -321,8 +316,7 @@ class MangaScans : ParsedHttpSource() {
                 }.build()
 
         val postBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .apply {
                     add("chapterIdx", chapterId)
                 }.build()

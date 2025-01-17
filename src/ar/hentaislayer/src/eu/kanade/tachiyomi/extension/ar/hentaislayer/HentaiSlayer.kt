@@ -20,8 +20,7 @@ class HentaiSlayer :
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Origin", baseUrl)
 
     private val preferences by lazy {

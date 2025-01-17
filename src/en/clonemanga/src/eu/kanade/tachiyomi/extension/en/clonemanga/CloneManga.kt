@@ -96,8 +96,7 @@ class CloneManga : ParsedHttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val imgAbsoluteUrl =
-            document
-                .getElementsByClass("subsectionContainer")[0]
+            document.getElementsByClass("subsectionContainer")[0]
                 .select("img")
                 .first()!!
                 .absUrl("src")

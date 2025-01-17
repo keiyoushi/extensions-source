@@ -31,8 +31,7 @@ class HentaiCosplay : HttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     private val dateCache = mutableMapOf<String, String>()
@@ -56,8 +55,7 @@ class HentaiCosplay : HttpSource() {
 
     private fun parseMobileListing(document: Document): MangasPage {
         val entries =
-            document
-                .select("#entry_list > li > a[href*=/image/]")
+            document.select("#entry_list > li > a[href*=/image/]")
                 .map { element ->
                     SManga.create().apply {
                         setUrlWithoutDomain(element.absUrl("href"))
@@ -80,8 +78,7 @@ class HentaiCosplay : HttpSource() {
 
     private fun parseDesktopListing(document: Document): MangasPage {
         val entries =
-            document
-                .select("div.image-list-item:has(a[href*=/image/])")
+            document.select("div.image-list-item:has(a[href*=/image/])")
                 .map { element ->
                     SManga.create().apply {
                         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
@@ -236,8 +233,7 @@ class HentaiCosplay : HttpSource() {
         val pageUrl = document.location().substringBeforeLast("/1/")
 
         val totalPages =
-            document
-                .selectFirst("#right_sidebar > h3, #title > h2")
+            document.selectFirst("#right_sidebar > h3, #title > h2")
                 ?.text()
                 ?.trim()
                 ?.run { pagesRegex.find(this)?.groupValues?.get(1) }
@@ -256,8 +252,7 @@ class HentaiCosplay : HttpSource() {
 
     override fun imageUrlParse(response: Response) = imageUrlParse(response.asJsoup())
 
-    private fun imageUrlParse(document: Document): String = document
-        .selectFirst("#display_image_detail img, #detail_list img")!!
+    private fun imageUrlParse(document: Document): String = document.selectFirst("#display_image_detail img, #detail_list img")!!
         .absUrl("src")
         .replace("http://", "https://")
         .replace(hdRegex, "/")

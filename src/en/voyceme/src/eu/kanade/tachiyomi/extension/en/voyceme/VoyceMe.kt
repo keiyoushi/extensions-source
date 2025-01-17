@@ -43,8 +43,7 @@ class VoyceMe : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept", ACCEPT_ALL)
         .add("Origin", baseUrl)
         .add("Referer", "$baseUrl/")

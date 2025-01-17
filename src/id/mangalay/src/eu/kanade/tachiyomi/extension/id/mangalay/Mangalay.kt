@@ -37,8 +37,7 @@ class Mangalay : ParsedHttpSource() {
         name = element.select("b").text()
     }
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(".separator img")
+    override fun pageListParse(document: Document): List<Page> = document.select(".separator img")
         .dropLast(1) // :last-child not working somehow
         .mapIndexed { index, element ->
             val url = element.attr("src")

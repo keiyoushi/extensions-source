@@ -53,8 +53,7 @@ abstract class LectorTmo(
 
     // Needed to ignore the referer header in WebView
     private val tmoHeaders =
-        super
-            .headersBuilder()
+        super.headersBuilder()
             .set("Referer", "$baseUrl/")
             .build()
 
@@ -381,8 +380,7 @@ abstract class LectorTmo(
 
         if (currentUrl != newUrl) {
             val redirectHeaders =
-                super
-                    .headersBuilder()
+                super.headersBuilder()
                     .set("Referer", doc.location())
                     .build()
             doc = client.newCall(GET(newUrl, redirectHeaders)).execute().asJsoup()
@@ -417,8 +415,7 @@ abstract class LectorTmo(
         val script5 = document.selectFirst("script:containsData(window.opener):containsData(location.replace)")
 
         val redirectHeaders =
-            super
-                .headersBuilder()
+            super.headersBuilder()
                 .set("Referer", document.location())
                 .build()
 
@@ -436,8 +433,7 @@ abstract class LectorTmo(
 
             if (params != null && action != null) {
                 val formBody =
-                    FormBody
-                        .Builder()
+                    FormBody.Builder()
                         .add("uniqid", params.groupValues[1])
                         .add("cascade", params.groupValues[2])
                         .build()

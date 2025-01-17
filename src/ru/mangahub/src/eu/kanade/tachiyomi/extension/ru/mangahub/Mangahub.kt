@@ -59,8 +59,7 @@ open class Mangahub : ParsedHttpSource() {
                 ?: return response
 
         val formBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .addEncoded(formElement.attr("name"), formElement.attr("value"))
                 .build()
 

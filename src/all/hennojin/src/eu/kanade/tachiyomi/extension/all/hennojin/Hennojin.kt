@@ -78,40 +78,35 @@ class Hennojin(
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         description =
-            document
-                .select(
-                    ".manga-subtitle + p + p",
-                ).joinToString("\n") {
-                    it
-                        .apply { select(Evaluator.Tag("br")).prepend("\\n") }
-                        .text()
-                        .replace("\\n", "\n")
-                        .replace("\n ", "\n")
-                }.trim()
+            document.select(
+                ".manga-subtitle + p + p",
+            ).joinToString("\n") {
+                it
+                    .apply { select(Evaluator.Tag("br")).prepend("\\n") }
+                    .text()
+                    .replace("\\n", "\n")
+                    .replace("\n ", "\n")
+            }.trim()
         genre =
-            document
-                .select(
-                    ".tags-list a[href*=/parody/]," +
-                        ".tags-list a[href*=/tags/]," +
-                        ".tags-list a[href*=/character/]",
-                ).joinToString { it.text() }
+            document.select(
+                ".tags-list a[href*=/parody/]," +
+                    ".tags-list a[href*=/tags/]," +
+                    ".tags-list a[href*=/character/]",
+            ).joinToString { it.text() }
         artist =
-            document
-                .selectFirst(
-                    ".tags-list a[href*=/artist/]",
-                )?.text()
-        author = document
-            .selectFirst(
-                ".tags-list a[href*=/group/]",
-            )?.text() ?: artist
+            document.selectFirst(
+                ".tags-list a[href*=/artist/]",
+            )?.text()
+        author = document.selectFirst(
+            ".tags-list a[href*=/group/]",
+        )?.text() ?: artist
         status = SManga.COMPLETED
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup(response.body.string())
         val date =
-            document
-                .selectFirst(".manga-thumbnail > img")
+            document.selectFirst(".manga-thumbnail > img")
                 ?.absUrl("src")
                 ?.let { url ->
                     Request
@@ -143,8 +138,7 @@ class Hennojin(
         }
     }
 
-    override fun pageListParse(document: Document) = document
-        .select(".slideshow-container > img")
+    override fun pageListParse(document: Document) = document.select(".slideshow-container > img")
         .mapIndexed { idx, img -> Page(idx, imageUrl = img.absUrl("src")) }
 
     private inline fun HttpUrl.request(block: HttpUrl.Builder.() -> HttpUrl.Builder) = GET(newBuilder().block().build(), headers)

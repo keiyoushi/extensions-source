@@ -80,8 +80,7 @@ class Japscan :
 
     private fun chapterListPref() = preferences.getString(SHOW_SPOILER_CHAPTERS, "hide")
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("referer", "$baseUrl/")
 
     // Popular
@@ -137,8 +136,7 @@ class Japscan :
             return GET(url, headers)
         } else {
             val formBody =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .add("search", query)
                     .build()
             val searchHeaders =
@@ -169,8 +167,7 @@ class Japscan :
         val baseUrlHost = baseUrl.toHttpUrl().host
         val document = response.asJsoup()
         val manga =
-            document
-                .select(searchMangaSelector())
+            document.select(searchMangaSelector())
                 .filter { it ->
                     // Filter out ads masquerading as search results
                     it

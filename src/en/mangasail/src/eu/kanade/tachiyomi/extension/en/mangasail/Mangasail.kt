@@ -164,8 +164,7 @@ class Mangasail : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val imgUrlArray =
-            document
-                .selectFirst("script:containsData(paths)")!!
+            document.selectFirst("script:containsData(paths)")!!
                 .data()
                 .substringAfter("paths\":")
                 .substringBefore(",\"count_p")

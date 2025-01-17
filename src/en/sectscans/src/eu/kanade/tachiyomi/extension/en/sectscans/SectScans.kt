@@ -30,16 +30,14 @@ class SectScans : Madara("SectScans", "https://sectscans.com", "en") {
 
     override fun mangaDetailsParse(document: Document): SManga {
         val postId =
-            document
-                .selectFirst("script:containsData(manga_id)")
+            document.selectFirst("script:containsData(manga_id)")
                 ?.data()
                 ?.substringAfter("manga_id\":\"")
                 ?.substringBefore("\"")
                 ?: return super.mangaDetailsParse(document)
 
         val formBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .apply {
                     add("action", "madara_hover_load_post")
                     add("postid", postId)

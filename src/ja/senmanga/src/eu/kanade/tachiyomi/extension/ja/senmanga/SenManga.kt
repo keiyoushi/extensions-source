@@ -159,8 +159,7 @@ class SenManga : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val pageCount =
-            document
-                .select("select.page-list option:last-of-type")
+            document.select("select.page-list option:last-of-type")
                 .first()!!
                 .attr("value")
                 .toInt()

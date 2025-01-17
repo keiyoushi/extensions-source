@@ -38,8 +38,7 @@ abstract class MangaBox(
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", baseUrl) // for covers
 
     open val popularUrlPath = "manga_list?type=topview&category=all&state=all&page="
@@ -156,8 +155,7 @@ abstract class MangaBox(
                 ?: infoElement.select("td:containsOwn(genres) + td a").joinToString { it.text() } // nelo
         } ?: checkForRedirectMessage(document)
         description =
-            document
-                .select(descriptionSelector)
+            document.select(descriptionSelector)
                 .firstOrNull()
                 ?.ownText()
                 ?.replace("""^$title summary:\s""".toRegex(), "")
@@ -197,8 +195,7 @@ abstract class MangaBox(
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        return document
-            .select(chapterListSelector())
+        return document.select(chapterListSelector())
             .map { chapterFromElement(it) }
             .also { if (it.isEmpty()) checkForRedirectMessage(document) }
     }
@@ -256,8 +253,7 @@ abstract class MangaBox(
 
     open val pageListSelector = "div#vungdoc img, div.container-chapter-reader img"
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(pageListSelector)
+    override fun pageListParse(document: Document): List<Page> = document.select(pageListSelector)
         // filter out bad elements for mangakakalots
         .filterNot { it.attr("src").endsWith("log") }
         .mapIndexed { i, element ->

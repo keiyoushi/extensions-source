@@ -72,8 +72,7 @@ class ElarcPage :
                 request.url.toString(),
             )
 
-        document
-            .selectFirst(".serieslist > ul > li a.series")
+        document.selectFirst(".serieslist > ul > li a.series")
             ?.let {
                 val mangaUrlDirectory =
                     it

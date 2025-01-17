@@ -57,8 +57,7 @@ open class Comikey(
             .rateLimit(3)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val dateFormat by lazy {
@@ -215,8 +214,7 @@ open class Comikey(
                 .apply {
                     val mangaId = response.request.url.pathSegments[2]
                     val gundamToken =
-                        document
-                            .selectFirst("script:containsData(GUNDAM.token)")
+                        document.selectFirst("script:containsData(GUNDAM.token)")
                             ?.data()
                             ?.substringAfter("= \"")
                             ?.substringBefore("\";")

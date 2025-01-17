@@ -37,8 +37,7 @@ class RawOtaku : MangaReader() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // ============================== Popular ===============================
@@ -208,8 +207,7 @@ class RawOtaku : MangaReader() {
     private fun parseChapterList(response: Response): List<SChapter> {
         val document = response.use { it.asJsoup() }
 
-        return document
-            .select(chapterListSelector())
+        return document.select(chapterListSelector())
             .map(::chapterFromElement)
     }
 
@@ -229,8 +227,7 @@ class RawOtaku : MangaReader() {
         val id = chapter.url.substringAfterLast("#")
 
         val ajaxHeaders =
-            super
-                .headersBuilder()
+            super.headersBuilder()
                 .apply {
                     add("Accept", "application/json, text/javascript, */*; q=0.01")
                     add("Referer", URLEncoder.encode(baseUrl + chapter.url.substringBeforeLast("#"), "utf-8"))

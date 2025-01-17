@@ -33,8 +33,7 @@ class DuaLeoTruyen : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/top-ngay.html?page=$page", headers)
@@ -95,8 +94,7 @@ class DuaLeoTruyen : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         val statusText =
-            document
-                .selectFirst(".info-item:has(.fa-rss)")
+            document.selectFirst(".info-item:has(.fa-rss)")
                 ?.text()
                 ?.removePrefix("Tình trang: ")
 
@@ -141,8 +139,7 @@ class DuaLeoTruyen : ParsedHttpSource() {
         val chapterId = document.selectFirst("input[name=chap]")!!.`val`()
         val comicsId = document.selectFirst("input[name=truyen]")!!.`val`()
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("action", "update_view_chap")
                 .add("truyen", comicsId)
                 .add("chap", chapterId)

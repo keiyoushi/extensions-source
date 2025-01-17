@@ -62,8 +62,7 @@ class Akuma(
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private fun tokenInterceptor(chain: Interceptor.Chain): Response {
@@ -107,8 +106,7 @@ class Akuma(
 
             val document = response.asJsoup()
             val token =
-                document
-                    .select("head meta[name*=csrf-token]")
+                document.select("head meta[name*=csrf-token]")
                     .attr("content")
 
             if (token.isEmpty()) {
@@ -142,8 +140,7 @@ class Akuma(
 
     override fun popularMangaRequest(page: Int): Request {
         val payload =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("view", "3")
                 .build()
 
@@ -337,8 +334,7 @@ class Akuma(
 
     override fun pageListParse(document: Document): List<Page> {
         val totalPages =
-            document
-                .select(".nav-select option")
+            document.select(".nav-select option")
                 .last()
                 ?.attr("value")
                 ?.toIntOrNull() ?: return emptyList()

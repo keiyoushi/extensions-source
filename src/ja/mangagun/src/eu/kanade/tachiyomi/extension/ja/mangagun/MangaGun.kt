@@ -76,8 +76,7 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
 
     private fun handleDdosProtect(document: Document): Document {
         val key =
-            document
-                .select("script:containsData(document.cookie)")
+            document.select("script:containsData(document.cookie)")
                 .first()
                 ?.html()
                 ?.substringAfter("escape('")
@@ -104,8 +103,7 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
 
     override fun pageListParse(document: Document): List<Page> {
         val ddosProtect =
-            document
-                .select("title")
+            document.select("title")
                 .first()
                 ?.text()
                 ?.contains("Manga Gun - DDoS protection") ?: false

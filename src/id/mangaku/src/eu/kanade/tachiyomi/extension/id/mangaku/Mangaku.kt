@@ -121,15 +121,13 @@ class Mangaku : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title =
-            document
-                .select("h1.titles a, h1.title")
+            document.select("h1.titles a, h1.title")
                 .text()
                 .replace("Bahasa Indonesia", "")
                 .trim()
 
         thumbnail_url =
-            document
-                .select("#sidebar-a a[imageanchor] > img, #abc a[imageanchor] > img")
+            document.select("#sidebar-a a[imageanchor] > img, #abc a[imageanchor] > img")
                 .attr("abs:src")
 
         genre = document.select(".inf:contains(Genre) p a, .inf:contains(Type) p").joinToString { it.text() }
@@ -164,8 +162,7 @@ class Mangaku : ParsedHttpSource() {
         val interfaceName = randomString()
 
         val decodeScriptOriginal =
-            document
-                .select("script:containsData(dtx = )")
+            document.select("script:containsData(dtx = )")
                 .joinToString("\n") { it.data() }
         val decodeScript =
             decodeScriptOriginal.replace(urlsnxRe) {
@@ -173,8 +170,7 @@ class Mangaku : ParsedHttpSource() {
             }
 
         val wpRoutineUrl =
-            document
-                .selectFirst("script[src*=wp-routine]")!!
+            document.selectFirst("script[src*=wp-routine]")!!
                 .attr("abs:src")
         val wpRoutineScript =
             client

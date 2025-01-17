@@ -28,8 +28,7 @@ class Vgperson : ParsedHttpSource() {
     private val userAgent =
         "Mozilla/5.0 (Android ${VERSION.RELEASE}; Mobile) Tachiyomi/${AppInfo.getVersionName()}"
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("User-Agent", userAgent)
         .add("Referer", baseUrl)
 
@@ -55,8 +54,7 @@ class Vgperson : ParsedHttpSource() {
                 else -> SManga.UNKNOWN
             }
         description =
-            document
-                .select(".content")
+            document.select(".content")
                 .first()!!
                 .childNodes()
                 .drop(5)

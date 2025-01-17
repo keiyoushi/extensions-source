@@ -37,8 +37,7 @@ open class TodayManga : ParsedHttpSource() {
             .rateLimit(2)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
@@ -125,12 +124,10 @@ open class TodayManga : ParsedHttpSource() {
         val document = response.asJsoup()
 
         val mangaList =
-            document
-                .select(searchMangaSelector())
+            document.select(searchMangaSelector())
                 .map(::searchMangaFromElement)
                 .ifEmpty {
-                    document
-                        .select(latestUpdatesSelector())
+                    document.select(latestUpdatesSelector())
                         .map(::latestUpdatesFromElement)
                 }
 
@@ -317,8 +314,7 @@ open class TodayManga : ParsedHttpSource() {
 
     // =============================== Pages ================================
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select(".chapter-content > img[data-index]")
+    override fun pageListParse(document: Document): List<Page> = document.select(".chapter-content > img[data-index]")
         .map { img ->
             val index = img.attr("data-index").toInt()
             val url = img.imgAttr()

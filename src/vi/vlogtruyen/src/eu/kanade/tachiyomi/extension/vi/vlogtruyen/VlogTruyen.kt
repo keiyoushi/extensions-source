@@ -58,8 +58,7 @@ class VlogTruyen :
             .rateLimit(1)
             .build()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("X-Requested-With", "XMLHttpRequest")
 
@@ -104,8 +103,7 @@ class VlogTruyen :
         val json = json.decodeFromString<ChapterDTO>(response.body.string().replace("\\n", ""))
         val document = Jsoup.parseBodyFragment(json.data.chaptersHtml, response.request.url.toString())
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
-        return document
-            .select("li, .ul-list-chaper-detail-commic li")
+        return document.select("li, .ul-list-chaper-detail-commic li")
             .filterNot {
                 if (hidePaidChapters) {
                     it

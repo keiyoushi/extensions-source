@@ -112,16 +112,16 @@ abstract class NoiseManga(
 
     override fun pageListRequest(chapter: SChapter): Request = GET(baseUrl + chapter.url, headers)
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("div.single-content div.single-entry-summary img.aligncenter")
-        .mapIndexed { i, element ->
-            val imgUrl =
-                element
-                    .attr("srcset")
-                    .substringAfterLast(", ")
-                    .substringBeforeLast(" ")
-            Page(i, "", imgUrl)
-        }
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("div.single-content div.single-entry-summary img.aligncenter")
+            .mapIndexed { i, element ->
+                val imgUrl =
+                    element
+                        .attr("srcset")
+                        .substringAfterLast(", ")
+                        .substringBeforeLast(" ")
+                Page(i, "", imgUrl)
+            }
 
     override fun imageUrlParse(document: Document) = ""
 

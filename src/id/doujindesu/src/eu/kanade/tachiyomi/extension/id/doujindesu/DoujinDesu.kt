@@ -484,8 +484,7 @@ class DoujinDesu :
         return chapter
     }
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("X-Requested-With", "XMLHttpRequest")
 
@@ -507,8 +506,7 @@ class DoujinDesu :
     override fun pageListParse(document: Document): List<Page> {
         val id = document.select("#reader").attr("data-id")
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("id", id)
                 .build()
         return client

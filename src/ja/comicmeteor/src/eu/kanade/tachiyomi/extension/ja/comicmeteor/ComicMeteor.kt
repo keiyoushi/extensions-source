@@ -44,8 +44,7 @@ class ComicMeteor : ParsedHttpSource() {
                 }
             }.build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = GET(
@@ -137,8 +136,7 @@ class ComicMeteor : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h2.h2ttl")!!.text()
         author =
-            document
-                .selectFirst(".work_author_intro_name")
+            document.selectFirst(".work_author_intro_name")
                 ?.text()
                 ?.substringAfter("著者 ：")
         description = document.selectFirst(".work_story_txt")?.text()

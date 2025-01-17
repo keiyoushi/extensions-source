@@ -106,8 +106,7 @@ class Manwa :
                 ).execute()
         val document = resp.asJsoup()
         val imgHost =
-            document
-                .selectFirst(".manga-list-2-cover-img")!!
+            document.selectFirst(".manga-list-2-cover-img")!!
                 .attr(":src")
                 .drop(1)
                 .substringBefore("'")

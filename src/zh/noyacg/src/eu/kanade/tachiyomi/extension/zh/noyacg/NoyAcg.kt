@@ -34,14 +34,12 @@ class NoyAcg :
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).imageCdn
     }
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .addEncoded("page", page.toString())
                 .addEncoded("type", "day")
                 .build()
@@ -59,8 +57,7 @@ class NoyAcg :
 
     override fun latestUpdatesRequest(page: Int): Request {
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .addEncoded("page", page.toString())
                 .build()
         return POST("$baseUrl/api/booklist_v2", headers, body)
@@ -77,8 +74,7 @@ class NoyAcg :
     ): Request {
         val filters = filters.ifEmpty { getFilterListInternal() }
         val builder =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .addEncoded("page", page.toString())
         return if (query.isNotBlank()) {
             builder.add("info", query)
@@ -106,8 +102,7 @@ class NoyAcg :
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .addEncoded("bid", manga.url)
                 .build()
         val request = POST("$baseUrl/api/getbookinfo", headers, body)

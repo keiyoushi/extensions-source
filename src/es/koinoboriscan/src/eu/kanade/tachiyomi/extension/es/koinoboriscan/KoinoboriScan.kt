@@ -48,8 +48,7 @@ class KoinoboriScan : HttpSource() {
             .rateLimit(2, 1)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/api/topSeries", headers)

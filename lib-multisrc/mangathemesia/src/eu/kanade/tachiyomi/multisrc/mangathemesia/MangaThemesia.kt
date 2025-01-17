@@ -45,8 +45,7 @@ abstract class MangaThemesia(
 
     override val client = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     protected val intl =
@@ -383,8 +382,7 @@ abstract class MangaThemesia(
         // So source which not provide chapter timestamp will have at least one
         if (chapters.isNotEmpty() && chapters.first().date_upload == 0L) {
             val date =
-                document
-                    .select(".listinfo time[itemprop=dateModified], .fmed:contains(update) time, span:contains(update) time")
+                document.select(".listinfo time[itemprop=dateModified], .fmed:contains(update) time, span:contains(update) time")
                     .attr("datetime")
             if (date.isNotEmpty()) chapters.first().date_upload = parseUpdatedOnDate(date)
         }
@@ -418,8 +416,7 @@ abstract class MangaThemesia(
 
         val chapterUrl = document.location()
         val htmlPages =
-            document
-                .select(pageSelector)
+            document.select(pageSelector)
                 .filterNot { it.imgAttr().isEmpty() }
                 .mapIndexed { i, img -> Page(i, chapterUrl, img.imgAttr()) }
 
@@ -468,8 +465,7 @@ abstract class MangaThemesia(
 
     protected open fun countViewsRequest(document: Document): Request? {
         val wpMangaData =
-            document
-                .select("script:containsData(dynamic_view_ajax)")
+            document.select("script:containsData(dynamic_view_ajax)")
                 .firstOrNull()
                 ?.data() ?: return null
 
@@ -479,8 +475,7 @@ abstract class MangaThemesia(
                 ?: return null
 
         val formBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("action", "dynamic_view_ajax")
                 .add("post_id", postId)
                 .build()

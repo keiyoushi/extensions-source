@@ -45,8 +45,7 @@ open class OtakuSanctuary(
     override fun popularMangaRequest(page: Int) = POST(
         "$baseUrl/Manga/Newest",
         headers,
-        FormBody
-            .Builder()
+        FormBody.Builder()
             .apply {
                 add("Lang", helper.otakusanLang())
                 add("Page", page.toString())
@@ -134,19 +133,16 @@ open class OtakuSanctuary(
 
         return SManga.create().apply {
             title =
-                document
-                    .select("h1.title.text-lg-left.text-overflow-2-line")
+                document.select("h1.title.text-lg-left.text-overflow-2-line")
                     .text()
                     .replaceFirstChar { it.titlecase() }
             author =
-                document
-                    .select("tr:contains(Tác Giả) a.capitalize")
+                document.select("tr:contains(Tác Giả) a.capitalize")
                     .first()!!
                     .text()
                     .replaceFirstChar { it.titlecase() }
             description =
-                document
-                    .select("div.summary p")
+                document.select("div.summary p")
                     .joinToString("\n") {
                         it.run {
                             select(Evaluator.Tag("br")).prepend("\\n")
@@ -157,8 +153,7 @@ open class OtakuSanctuary(
             thumbnail_url = document.select("div.container-3-4.background-contain img").attr("abs:src")
 
             val statusString =
-                document
-                    .select("tr:contains(Tình Trạng) td")
+                document.select("tr:contains(Tình Trạng) td")
                     .first()!!
                     .text()
                     .trim()

@@ -38,8 +38,7 @@ class HentaiZM :
 
         // A login is required in order to load thumbnails and pages.
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("log", "demo") // Default user/password, provided in
                 .add("pwd", "demo") // the source itself.
                 .add("redirect_to", "$baseUrl/wp-admin/")

@@ -36,8 +36,7 @@ class TenkaiScan : ParsedHttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 3)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ranking", headers)

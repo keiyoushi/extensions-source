@@ -367,8 +367,7 @@ class TaoSect : HttpSource() {
         chapterId: String? = null,
     ): Request {
         val formBodyBuilder =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("action", "update_views_v2")
                 .add("projeto", projectId)
 

@@ -284,8 +284,7 @@ open class NovelCool(
 
     private fun genresRequest(): Request = GET("$baseUrl/search/", headers)
 
-    private fun parseGenres(document: Document): List<Pair<String, String>> = document
-        .selectFirst(".category-list")
+    private fun parseGenres(document: Document): List<Pair<String, String>> = document.selectFirst(".category-list")
         ?.select(".category-id-item")
         .orEmpty()
         .map { div ->
@@ -302,8 +301,7 @@ open class NovelCool(
         author = document.selectFirst(".bookinfo-author > a")?.attr("title")
         thumbnail_url = document.selectFirst(".bookinfo-pic-img")?.attr("abs:src")
         status =
-            document
-                .select(".bookinfo-category-list a")
+            document.select(".bookinfo-category-list a")
                 .first()
                 ?.text()
                 .parseStatus()
@@ -368,8 +366,7 @@ open class NovelCool(
         }
     }
 
-    private fun singlePageParse(document: Document): List<Page> = document
-        .selectFirst(".mangaread-pagenav > .sl-page")
+    private fun singlePageParse(document: Document): List<Page> = document.selectFirst(".mangaread-pagenav > .sl-page")
         ?.select("option")
         ?.mapIndexed { idx, page ->
             Page(idx, page.attr("value"))
@@ -406,8 +403,7 @@ open class NovelCool(
 
         val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
         val jsRedirect =
-            document
-                .selectFirst("script:containsData(window.location.href)")
+            document.selectFirst("script:containsData(window.location.href)")
                 ?.html()
                 ?.substringAfter("\"")
                 ?.substringBefore("\"")

@@ -76,8 +76,7 @@ class TsuminoUtils {
         fun getCollection(
             document: Document,
             selector: String,
-        ): List<SChapter> = document
-            .select(selector)
+        ): List<SChapter> = document.select(selector)
             .map { element ->
                 SChapter.create().apply {
                     val chapterNum = element.select("span")[0].text()
@@ -107,8 +106,7 @@ class TsuminoUtils {
         }
 
         fun cfDecodeEmails(document: Document) {
-            document
-                .select(".__cf_email__")
+            document.select(".__cf_email__")
                 .map { it to cfDecodeEmail(it.attr("data-cfemail")) }
                 .forEach { (element, plaintext) -> element.text(plaintext) }
         }

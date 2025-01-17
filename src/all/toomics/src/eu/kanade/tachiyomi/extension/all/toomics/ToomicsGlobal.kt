@@ -95,8 +95,7 @@ abstract class ToomicsGlobal(
         filters: FilterList,
     ): Request {
         val formBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("toonData", query)
                 .build()
         return POST("$baseUrl/$siteLang/webtoon/ajax_search", headers, formBody)
@@ -180,8 +179,7 @@ abstract class ToomicsGlobal(
 
         val url = document.select("head meta[property='og:url']").attr("content")
 
-        return document
-            .select("div[id^=load_image_] img")
+        return document.select("div[id^=load_image_] img")
             .mapIndexed { i, el -> Page(i, url, el.attr("data-src")) }
     }
 

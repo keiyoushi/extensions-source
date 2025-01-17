@@ -33,8 +33,7 @@ class Mangahere : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     private val cookieInterceptor =
@@ -158,8 +157,7 @@ class Mangahere : ParsedHttpSource() {
         manga.genre = document.select(".detail-info-right-tag-list > a").joinToString { it.text() }
         manga.description = document.select(".fullcontent").first()?.text()
         manga.thumbnail_url =
-            document
-                .select("img.detail-info-cover-img")
+            document.select("img.detail-info-cover-img")
                 .first()
                 ?.attr("src")
 

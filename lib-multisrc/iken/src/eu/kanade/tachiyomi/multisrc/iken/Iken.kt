@@ -27,8 +27,7 @@ abstract class Iken(
 
     private val json by injectLazy<Json>()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     private var genres = emptyList<Pair<String, String>>()

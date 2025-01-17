@@ -175,8 +175,7 @@ class HentaiFox(
         return POST(
             url,
             setSidebarHeaders(csrfToken),
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("type", category)
                 .build(),
         )
@@ -188,8 +187,7 @@ class HentaiFox(
         ) {
             val document = response.asJsoup()
             val mangas =
-                document
-                    .select(sidebarMangaSelector())
+                document.select(sidebarMangaSelector())
                     .map {
                         SMangaDto(
                             title = it.sidebarMangaTitle()!!,

@@ -89,8 +89,7 @@ class CutieComics : ParsedHttpSource() {
     ): Request {
         require(query.isNotBlank() && query.length >= 4) { "Invalid search! It should have at least 4 non-blank characters." }
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("do", "search")
                 .add("subaction", "search")
                 .add("full_search", "0")

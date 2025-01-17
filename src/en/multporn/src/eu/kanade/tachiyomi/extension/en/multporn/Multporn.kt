@@ -109,8 +109,7 @@ class Multporn : ParsedHttpSource() {
     private fun textSearchFilterParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas =
-            document
-                .select("#content .col-1:contains(Views:),.col-2:contains(Views:)")
+            document.select("#content .col-1:contains(Views:),.col-2:contains(Views:)")
                 .map { popularMangaFromElement(it) }
 
         val hasNextPage =

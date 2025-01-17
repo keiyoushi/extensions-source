@@ -95,8 +95,7 @@ class BatCave : HttpSource() {
             GET(url, headers)
         } else {
             val form =
-                FormBody
-                    .Builder()
+                FormBody.Builder()
                     .apply {
                         add("dlenewssortby", sort.getSort())
                         add("dledirection", sort.getDirection())
@@ -198,8 +197,7 @@ class BatCave : HttpSource() {
                 }
             }
         val hasNextPage =
-            document
-                .selectFirst("div.pagination__pages")
+            document.selectFirst("div.pagination__pages")
                 ?.children()
                 ?.last()
                 ?.tagName() == "a"
@@ -227,8 +225,7 @@ class BatCave : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val data =
-            document
-                .selectFirst(".page__chapters-list script:containsData(__DATA__)")!!
+            document.selectFirst(".page__chapters-list script:containsData(__DATA__)")!!
                 .data()
                 .substringAfter("=")
                 .trim()
@@ -255,8 +252,7 @@ class BatCave : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val data =
-            document
-                .selectFirst("script:containsData(__DATA__)")!!
+            document.selectFirst("script:containsData(__DATA__)")!!
                 .data()
                 .substringAfter("=")
                 .trim()

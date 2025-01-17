@@ -36,8 +36,7 @@ class CatharsisFantasy :
 
     private fun fetchIframeDocumentPageList(document: Document): Document {
         val pagesUrl =
-            document
-                .selectFirst(iframeSelector)!!
+            document.selectFirst(iframeSelector)!!
                 .absUrl("src")
 
         return client

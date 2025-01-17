@@ -59,8 +59,7 @@ class ThePropertyOfHate : HttpSource() {
                 },
             )
 
-        document
-            .select("select > option:not(:first-child)")
+        document.select("select > option:not(:first-child)")
             .mapIndexed { num, opt ->
                 SChapter.create().apply {
                     setUrlWithoutDomain(opt.attr("value"))

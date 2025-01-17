@@ -23,8 +23,7 @@ class Beauty3600000 : ParsedHttpSource() {
     override val name = "3600000 Beauty"
     override val supportsLatest = false
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     // Latest

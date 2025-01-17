@@ -93,8 +93,7 @@ class Comicabc : ParsedHttpSource() {
         val document = response.asJsoup()
         val url = response.request.url.toString()
         val script =
-            document
-                .selectFirst("script:containsData(function request)")!!
+            document.selectFirst("script:containsData(function request)")!!
                 .data()
                 .replace("document.location", "\"$url\"")
                 .replace("\$(\"#comics-pics\").html(xx);", "")

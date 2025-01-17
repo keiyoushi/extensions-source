@@ -18,8 +18,7 @@ class Comicaso :
     ) {
     override fun pageListParse(document: Document): List<Page> {
         val script =
-            document
-                .select("script[src^=data:text/javascript;base64,]")
+            document.select("script[src^=data:text/javascript;base64,]")
                 .map {
                     Base64
                         .decode(

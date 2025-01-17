@@ -41,8 +41,7 @@ class LeerCapitulo : ParsedHttpSource() {
 
     private val notRateLimitClient = network.cloudflareClient
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
@@ -183,8 +182,7 @@ class LeerCapitulo : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val orderList =
-            document
-                .selectFirst("meta[property=ad:check]")
+            document.selectFirst("meta[property=ad:check]")
                 ?.attr("content")
                 ?.replace(ORDER_LIST_REGEX, "-")
                 ?.split("-")
@@ -194,8 +192,7 @@ class LeerCapitulo : ParsedHttpSource() {
         val arrayData = document.selectFirst("#array_data")!!.text()
 
         val scripts =
-            document
-                .select("head > script[src^=/assets/][src$=.js]")
+            document.select("head > script[src^=/assets/][src$=.js]")
                 .map { it.attr("abs:src") }
                 .reversed()
                 .toMutableList()

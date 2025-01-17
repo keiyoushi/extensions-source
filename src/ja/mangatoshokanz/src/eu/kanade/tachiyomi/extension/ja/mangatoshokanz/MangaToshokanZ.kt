@@ -31,8 +31,7 @@ class MangaToshokanZ : HttpSource() {
             .addNetworkInterceptor(::r18Interceptor)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         // author/illustrator name might just show blank if language not set to japan
         .add("cookie", "_LANG_=ja")
 
@@ -257,8 +256,7 @@ class MangaToshokanZ : HttpSource() {
         }
 
         // if it's multiple chapters
-        return document
-            .select(".itemList li")
+        return document.select(".itemList li")
             .reversed()
             .mapIndexed { i, li ->
                 SChapter.create().apply {
@@ -288,8 +286,7 @@ class MangaToshokanZ : HttpSource() {
                 .build()
 
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("__serial", serial)
                 .add("__ticket", ticket)
                 .add("pub", pem)

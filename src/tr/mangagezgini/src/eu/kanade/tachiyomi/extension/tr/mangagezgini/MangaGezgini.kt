@@ -28,8 +28,7 @@ class MangaGezgini :
 
     override fun pageListParse(document: Document): List<Page> {
         if (document.selectFirst(".reading-content form, .reading-content input[value=Doğrula]") != null) {
-            captchaUrl = document
-                .selectFirst(".reading-content form")
+            captchaUrl = document.selectFirst(".reading-content form")
                 ?.attr("abs:action")
                 ?: "$baseUrl/kontrol/"
             throw Exception("WebView'da captcha çözün.")

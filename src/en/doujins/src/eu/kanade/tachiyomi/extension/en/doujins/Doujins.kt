@@ -108,8 +108,7 @@ class Doujins : HttpSource() {
             artist = document.select(".gallery-artist a").joinToString { it.text() }
             author = artist
             genre =
-                document
-                    .select(".tag-area")
+                document.select(".tag-area")
                     .first()!!
                     .select("a")
                     .joinToString { it.text() }

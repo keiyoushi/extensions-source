@@ -153,8 +153,7 @@ class MundoHentai : ParsedHttpSource() {
                 else -> "div.listaImagens ul.post-fotos img"
             }
 
-        return document
-            .select(gallerySelector)
+        return document.select(gallerySelector)
             .mapIndexed { i, el -> Page(i, document.location(), el.attr("src")) }
     }
 

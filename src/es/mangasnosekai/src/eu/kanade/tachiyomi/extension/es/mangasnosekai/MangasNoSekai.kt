@@ -152,8 +152,7 @@ class MangasNoSekai :
         objects: List<Pair<String, String>>,
     ): Request {
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("mangaid", mangaId)
                 .add("page", page.toString())
 
@@ -200,12 +199,10 @@ class MangasNoSekai :
                 }.toList()
 
         val mangaId =
-            document
-                .selectFirst("script#wp-manga-js-extra")
+            document.selectFirst("script#wp-manga-js-extra")
                 ?.data()
                 ?.let { MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
-                ?: document
-                    .selectFirst("script#manga_disqus_embed-js-extra")
+                ?: document.selectFirst("script#manga_disqus_embed-js-extra")
                     ?.data()
                     ?.let { ALT_MANGA_ID_REGEX.find(it)?.groupValues?.get(1) }
                 ?: throw Exception("No se pudo obtener el id del manga")

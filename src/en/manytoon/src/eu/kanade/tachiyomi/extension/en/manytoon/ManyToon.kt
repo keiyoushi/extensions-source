@@ -19,8 +19,7 @@ class ManyToon : Madara("ManyToon", "https://manytoon.com", "en") {
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {
         val form =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("action", "ajax_chap")
                 .add("post_id", mangaId)
                 .build()
@@ -117,8 +116,7 @@ class ManyToon : Madara("ManyToon", "https://manytoon.com", "en") {
         }
     }
 
-    private fun parseGenresMe(document: Document): List<Pair<String, String>> = document
-        .selectFirst("div.genres")
+    private fun parseGenresMe(document: Document): List<Pair<String, String>> = document.selectFirst("div.genres")
         ?.select("a")
         .orEmpty()
         .map { a ->

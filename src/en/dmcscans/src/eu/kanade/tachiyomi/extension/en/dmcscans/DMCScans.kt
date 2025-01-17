@@ -77,8 +77,7 @@ class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en")
         val document = response.asJsoup()
 
         val imgData =
-            document
-                .selectFirst("script:containsData(imgTag)")
+            document.selectFirst("script:containsData(imgTag)")
                 ?.data()
                 ?.substringAfter("imgTag")
                 ?.substringAfter("`")

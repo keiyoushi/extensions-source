@@ -136,13 +136,11 @@ class LxHentai :
         title = document.select("div.mb-4 span").first()!!.text()
         author = document.selectFirst("div.grow div.mt-2 > span:contains(Tác giả:) + span a")?.text()
         genre =
-            document
-                .selectFirst("div.grow div.mt-2 > span:contains(Thể loại:) + span")!!
+            document.selectFirst("div.grow div.mt-2 > span:contains(Thể loại:) + span")!!
                 .select("a")
                 .joinToString { it.text().trim(',', ' ') }
         description =
-            document
-                .select("p:contains(Tóm tắt) ~ p")
+            document.select("p:contains(Tóm tắt) ~ p")
                 .joinToString("\n") {
                     it.run {
                         select(Evaluator.Tag("br")).prepend("\\n")
@@ -187,8 +185,7 @@ class LxHentai :
         }?.value?.toFloat() ?: -1f
     }
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .select("div.text-center div.lazy")
+    override fun pageListParse(document: Document): List<Page> = document.select("div.text-center div.lazy")
         .mapIndexed { idx, element -> Page(idx, "", element.attr("abs:data-src")) }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()

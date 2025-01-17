@@ -157,8 +157,7 @@ class BrasilHentai : ParsedHttpSource() {
         return FilterList(filters)
     }
 
-    private fun parseCategories(document: Document): Array<Pair<String, String>> = document
-        .select("#categories-2 li a")
+    private fun parseCategories(document: Document): Array<Pair<String, String>> = document.select("#categories-2 li a")
         .map { element ->
             val url = element.absUrl("href")
             val category = url.split("/").filter { it.isNotBlank() }.last()

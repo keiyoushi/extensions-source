@@ -43,8 +43,7 @@ class DynastyDoujins : DynastyScans() {
                 title = document.selectFirst("div#main > h2 > b")!!.text().substringAfter("Doujins › ")
                 description = document.select("div#main > div.description").text()
                 thumbnail_url =
-                    document
-                        .select("a.thumbnail img")
+                    document.select("a.thumbnail img")
                         .firstOrNull()
                         ?.attr("abs:src")
                         ?.replace("/thumb/", "/medium/")

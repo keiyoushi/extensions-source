@@ -45,8 +45,7 @@ class TruyenGiHot : ParsedHttpSource() {
             .rateLimit(1)
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     private val json: Json by injectLazy()
@@ -219,8 +218,7 @@ class TruyenGiHot : ParsedHttpSource() {
             }
 
         val formBody =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("token", token)
                 .add("chapter_id", chapterInfo["c_id"]!!)
                 .add("m_slug", chapterInfo["mangaSLUG"]!!)

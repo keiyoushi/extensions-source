@@ -36,8 +36,7 @@ class Mangahasu : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", baseUrl)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/most-popular.html?page=$page", headers)
@@ -174,8 +173,7 @@ class Mangahasu : ParsedHttpSource() {
         // Some images are place holders on new chapters.
 
         val pageList =
-            document
-                .select("div.img img")
+            document.select("div.img img")
                 .mapIndexed { _, el ->
                     val pageNumber = el.attr("class").substringAfter("page").toInt()
                     Page(pageNumber, "", el.attr("src"))
@@ -185,8 +183,7 @@ class Mangahasu : ParsedHttpSource() {
         // Decode temporary URLs and replace placeholder images.
 
         val lstDUrls =
-            document
-                .select("script:containsData(lstDUrls)")
+            document.select("script:containsData(lstDUrls)")
                 .html()
                 .substringAfter("lstDUrls")
                 .substringAfter("\"")

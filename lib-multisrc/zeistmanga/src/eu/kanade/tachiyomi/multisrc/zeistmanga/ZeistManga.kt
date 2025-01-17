@@ -31,8 +31,7 @@ abstract class ZeistManga(
 
     private val intl by lazy { ZeistMangaIntl(lang) }
 
-    override fun headersBuilder(): Headers.Builder = super
-        .headersBuilder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)

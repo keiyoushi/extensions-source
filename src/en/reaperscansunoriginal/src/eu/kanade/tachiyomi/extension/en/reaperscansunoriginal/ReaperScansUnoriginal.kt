@@ -155,8 +155,7 @@ class ReaperScansUnoriginal : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val chapterUrl = document.location()
-        return document
-            .select("div.image-skeleton img")
+        return document.select("div.image-skeleton img")
             .filterNot { it.attr("data-src").isEmpty() }
             .mapIndexed { i, img -> Page(i, chapterUrl, img.attr("data-src")) }
     }
@@ -175,8 +174,7 @@ class ReaperScansUnoriginal : ParsedHttpSource() {
 
     private var genres = emptyList<Pair<String, String>>()
 
-    private fun parseGenres(document: Document): List<Pair<String, String>> = document
-        .select("li:has(input[name=\"genre[]\"])")
+    private fun parseGenres(document: Document): List<Pair<String, String>> = document.select("li:has(input[name=\"genre[]\"])")
         .map {
             Pair(it.selectFirst("label")!!.text(), it.selectFirst("input")!!.attr("value"))
         }

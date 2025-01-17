@@ -49,8 +49,7 @@ class IsekaiScanTop :
 
     override fun pageListParse(document: Document): List<Page> {
         val stringArray =
-            document
-                .select("p#arraydata")
+            document.select("p#arraydata")
                 .text()
                 .split(",")
                 .toTypedArray()

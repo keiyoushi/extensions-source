@@ -72,8 +72,7 @@ class Izneo(
 
     private var seriesCount = 0
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Cookie", "lang=$lang;")
         .set("Referer", baseUrl)
 

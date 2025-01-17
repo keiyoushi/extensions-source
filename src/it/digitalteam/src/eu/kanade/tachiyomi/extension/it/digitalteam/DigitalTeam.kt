@@ -120,8 +120,7 @@ class DigitalTeam : ParsedHttpSource() {
         val infoChSub = script_content.substringAfter("chs='").substringBefore("'")
 
         val formBodyBuilder =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("info[manga]", infoManga)
                 .add("info[chapter]", infoChapter)
                 .add("info[ch_sub]", infoChSub)
@@ -152,8 +151,7 @@ class DigitalTeam : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val scriptContent =
-            document
-                .body()
+            document.body()
                 .toString()
                 .substringAfter("current_page=")
                 .substringBefore(";")

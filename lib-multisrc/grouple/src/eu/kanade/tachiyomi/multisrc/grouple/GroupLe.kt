@@ -199,18 +199,15 @@ abstract class GroupLe(
             }
         manga.description =
             "$ratingStar $ratingValue[ⓘ$ratingValueOver] (голосов: $ratingVotes)\n$altName" +
-            document
-                .select(
-                    "div#tab-description  .manga-description",
-                ).text()
+            document.select(
+                "div#tab-description  .manga-description",
+            ).text()
         manga.status =
             when {
                 (
-                    document
-                        .html()
+                    document.html()
                         .contains("Запрещена публикация произведения по копирайту") ||
-                        document
-                            .html()
+                        document.html()
                             .contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!")
                 ) &&
                     document.select("div.chapters").isEmpty() -> SManga.LICENSED

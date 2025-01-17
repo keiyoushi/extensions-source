@@ -146,8 +146,7 @@ class Roumanwu :
 
     override fun pageListParse(document: Document): List<Page> {
         val images =
-            document
-                .selectFirst("script:containsData(imageUrl)")
+            document.selectFirst("script:containsData(imageUrl)")
                 ?.data()
                 ?.let { content ->
                     imageUrlRegex

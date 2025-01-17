@@ -83,8 +83,7 @@ class HattoriManga : HttpSource() {
         query: String,
     ): Request {
         val body =
-            FormBody
-                .Builder()
+            FormBody.Builder()
                 .add("_token", csrfToken)
                 .add("query", query)
                 .build()
@@ -145,8 +144,7 @@ class HattoriManga : HttpSource() {
             author = document.selectFirst(".anime-details-widget li:has(span:contains(Yazar))")?.ownText()
             artist = document.selectFirst(".anime-details-widget li:has(span:contains(Çizer))")?.ownText()
             genre =
-                document
-                    .selectFirst(".anime-details-widget li:has(span:contains(Etiketler))")
+                document.selectFirst(".anime-details-widget li:has(span:contains(Etiketler))")
                     ?.ownText()
                     ?.split(",")
                     ?.map { it.trim() }
@@ -186,8 +184,7 @@ class HattoriManga : HttpSource() {
         }
 
         val mangas =
-            document
-                .select(".product-card.grow-box")
+            document.select(".product-card.grow-box")
                 .map(::mangaFromElement)
 
         return MangasPage(
@@ -289,8 +286,7 @@ class HattoriManga : HttpSource() {
         setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups["url"]!!.value)
     }
 
-    private fun parseGenres(document: Document): List<Genre> = document
-        .select(".tags-blog a")
+    private fun parseGenres(document: Document): List<Genre> = document.select(".tags-blog a")
         .map { element -> Genre(element.text()) }
 
     private inline fun <reified T> Response.parseAs(): T = json.decodeFromString(body.string())

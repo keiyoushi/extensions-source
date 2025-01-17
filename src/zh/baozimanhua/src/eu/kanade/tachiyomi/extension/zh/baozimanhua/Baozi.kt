@@ -67,8 +67,7 @@ class Baozi :
             .addNetworkInterceptor(RedirectDomainInterceptor(domain))
             .build()
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "https://$domain/")
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
@@ -160,8 +159,7 @@ class Baozi :
                 pathToUrl[path] = imageUrl
             }
             val url =
-                document
-                    .selectFirst(Evaluator.Id("next-chapter"))
+                document.selectFirst(Evaluator.Id("next-chapter"))
                     ?.takeIf {
                         val text = it.text()
                         text == "下一页" || text == "下一頁"

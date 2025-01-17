@@ -32,10 +32,9 @@ class TaurusFansub :
         manga.author = document.select("div.site-content div.summary_content div.tags-content").text()
 
         val stado =
-            document
-                .select(
-                    "div.site-content div.summary_content div.manga-title div.post-content_item div.summary-content",
-                ).first()
+            document.select(
+                "div.site-content div.summary_content div.manga-title div.post-content_item div.summary-content",
+            ).first()
                 ?.text()
         manga.status =
             when (stado) {

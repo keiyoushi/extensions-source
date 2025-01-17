@@ -102,8 +102,7 @@ class AsuraScans :
         return chain.proceed(request)
     }
 
-    override fun headersBuilder() = super
-        .headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request =
@@ -258,12 +257,10 @@ class AsuraScans :
         artist = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Artist)) > h3:eq(1)")?.ownText()
         genre =
             buildList {
-                document
-                    .selectFirst("div.flex:has(h3:eq(0):containsOwn(type)) > h3:eq(1)")
+                document.selectFirst("div.flex:has(h3:eq(0):containsOwn(type)) > h3:eq(1)")
                     ?.ownText()
                     ?.let(::add)
-                document
-                    .select("div[class^=space] > div.flex > button.text-white")
+                document.select("div[class^=space] > div.flex > button.text-white")
                     .forEach { add(it.ownText()) }
             }.joinToString()
         status = parseStatus(document.selectFirst("div.flex:has(h3:eq(0):containsOwn(Status)) > h3:eq(1)")?.ownText())
@@ -323,8 +320,7 @@ class AsuraScans :
 
     override fun pageListParse(document: Document): List<Page> {
         val scriptData =
-            document
-                .select("script:containsData(self.__next_f.push)")
+            document.select("script:containsData(self.__next_f.push)")
                 .joinToString("") { it.data().substringAfter("\"").substringBeforeLast("\"") }
         val pagesData = PAGES_REGEX.find(scriptData)?.groupValues?.get(1) ?: throw Exception("Failed to find chapter pages")
         val pageList = json.decodeFromString<List<PageDto>>(pagesData.unescape()).sortedBy { it.order }

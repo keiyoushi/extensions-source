@@ -126,8 +126,7 @@ class MuitoHentai : ParsedHttpSource() {
         return GET(baseUrl + chapter.url, newHeader)
     }
 
-    override fun pageListParse(document: Document): List<Page> = document
-        .selectFirst("script:containsData(numeroImgAtual)")
+    override fun pageListParse(document: Document): List<Page> = document.selectFirst("script:containsData(numeroImgAtual)")
         ?.data()
         ?.substringAfter("var arr = ")
         ?.substringBefore(";")
