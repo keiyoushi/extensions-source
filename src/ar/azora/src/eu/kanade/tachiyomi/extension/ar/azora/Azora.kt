@@ -8,6 +8,7 @@ class Azora : Madara("Azora", "https://azoramoon.com", "ar") {
     override val mangaSubString = "series"
     override val useNewChapterEndpoint = false
     override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium-block)" // Filter fake chapters
+    override val mangaDetailsSelectorDescription = ".manga-summary"
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
 
