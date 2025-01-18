@@ -19,4 +19,6 @@ class NocturneSummer : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
+
+    override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Estado) > div.summary-content"
 }
