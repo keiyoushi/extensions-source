@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -79,6 +80,7 @@ class MyHentaiComics : ParsedHttpSource() {
             author = tags?.selectFirst("div:containsOwn(Artists) a")?.text()
             genre = tags?.select("div:containsOwn(Categories) a")?.joinToString { it.text() }
             status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
