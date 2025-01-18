@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
-            android:name="eu.kanade.tachiyomi.multisrc.etoshore.EtoshoreUrlActivity"
+            android:name=".pt.crystalcomics.CrystalComicsUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -13,9 +13,9 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="${SOURCEHOST}"
+                    android:host="crystalcomics.com"
                     android:pathPattern="/.*/..*"
-                    android:scheme="${SOURCESCHEME}" />
+                    android:scheme="https" />
             </intent-filter>
         </activity>
     </application>

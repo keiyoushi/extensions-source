@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.etoshore
+package eu.kanade.tachiyomi.extension.pt.crystalcomics
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class EtoshoreUrlActivity : Activity() {
+class CrystalComicsUrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
@@ -18,7 +18,7 @@ class EtoshoreUrlActivity : Activity() {
             val item = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Etoshore.PREFIX_SEARCH}$item")
+                putExtra("query", "${CrystalComics.PREFIX_SEARCH}$item")
                 putExtra("filter", packageName)
             }
 
