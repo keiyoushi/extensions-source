@@ -1,7 +1,0 @@
-ext {
-    extName = 'Vapo Scans'
-    extClass = '.VapoScans'
-    extVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
