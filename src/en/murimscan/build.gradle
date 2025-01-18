@@ -3,7 +3,7 @@ ext {
     extClass = '.MurimScan'
     themePkg = 'madara'
     baseUrl = 'https://murimscan.run'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
