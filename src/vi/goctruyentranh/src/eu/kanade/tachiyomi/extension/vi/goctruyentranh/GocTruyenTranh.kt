@@ -83,10 +83,12 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
     override fun chapterListSelector(): String = "section ul li a"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        name = element.select(".items-center:contains(Chapter)").text()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            date_upload = parseDate(element.select(".text-center").text())
+        element.selectFirst("a").let {
+            setUrlWithoutDomain(it!!.absUrl("href"))
+            name = it.select(".items-center:contains(Chapter)").text()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                date_upload = parseDate(it.select(".text-center").text())
+            }
         }
     }
 
