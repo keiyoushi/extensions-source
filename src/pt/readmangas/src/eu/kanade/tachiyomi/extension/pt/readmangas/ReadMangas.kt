@@ -42,7 +42,7 @@ class ReadMangas() : HttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .readTimeout(2, TimeUnit.MINUTES)
-        .rateLimit(2)
+        .rateLimit(1, 2)
         .build()
 
     override val versionId = 2
