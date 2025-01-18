@@ -114,8 +114,8 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
 
     private fun parseStatus(status: String?) = when {
         status == null -> SManga.UNKNOWN
-        status.contains("Đang tiến hành") -> SManga.ONGOING
-        status.contains("Hoàn thành") -> SManga.COMPLETED
+        status.contains("Đang tiến hành", ignoreCase = true) -> SManga.ONGOING
+        status.contains("Hoàn thành", ignoreCase = true) -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
 
