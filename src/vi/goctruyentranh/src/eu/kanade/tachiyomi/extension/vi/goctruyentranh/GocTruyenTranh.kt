@@ -2,7 +2,9 @@ package eu.kanade.tachiyomi.extension.vi.goctruyentranh
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.os.Build
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -26,6 +28,10 @@ import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
 
@@ -41,6 +47,8 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
 
     private val searchUrl by lazy { "${getPrefBaseUrl()}/baseapi/comics/filterComic" }
 
+    private val dateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.US)
+
     private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -50,13 +58,13 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(
-        "$baseUrl/danh-sach/truyen-moi-cap-nhat?page=$page",
-    )
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/danh-sach/truyen-moi-cap-nhat?page=$page", headers)
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a.line-clamp-2")!!.absUrl("href"))
-        title = element.select("a.line-clamp-2").text()
+        element.selectFirst("a.line-clamp-2").let {
+            setUrlWithoutDomain(it!!.absUrl("href"))
+            title = it.text()
+        }
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
@@ -68,7 +76,7 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaNextPageSelector(): String = latestUpdatesNextPageSelector()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/danh-sach/truyen-hot?page=$page")
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/danh-sach/truyen-hot?page=$page", headers)
 
     override fun popularMangaSelector(): String = latestUpdatesSelector()
 
@@ -76,30 +84,43 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        name = element.select(".items-center").text()
+        name = element.select(".items-center:contains(Chapter)").text()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            date_upload = parseDate(element.select(".text-center").text())
+        }
     }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun parseDate(date: String): Long = runCatching {
+        val formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss")
+        val currentDateTime = ZonedDateTime.now()
+        when (date.replace(Regex("[0-9]"), "").trim()) {
+            "phút trước" -> dateFormat.parse(currentDateTime.format(formatter))?.time
+            "giờ trước" -> dateFormat.parse(currentDateTime.format(formatter))?.time
+            else -> dateFormat.parse(currentDateTime.minusDays(date.replace(Regex("[^0-9]"), "").toLong()).format(formatter))?.time
+        }
+    }.getOrNull() ?: 0L
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.select("h1").text()
         genre = document.select("span:contains(Thể loại:) ~ a").joinToString { it.text().trim(',', ' ') }
-        description = document.select("div.mt-2").text()
+        description = document.selectFirst("div.mt-3")?.text()
         thumbnail_url = document.selectFirst("section.gird > aside:first-child > img")?.absUrl("src")
         status = parseStatus(document.selectFirst("span:contains(Trạng thái:) + b")?.text())
-        author = document.selectFirst("span:contains(Tác giả:) + b")?.text()
+        author = document.select("span:contains(Tác giả:) + b").joinToString { it.text() }
     }
 
     private fun parseStatus(status: String?) = when {
         status == null -> SManga.UNKNOWN
         status.contains("Đang tiến hành") -> SManga.ONGOING
-        status.contains("Đã hoàn thành") -> SManga.COMPLETED
-        status.contains("Tạm ngưng") -> SManga.ON_HIATUS
+        status.contains("Hoàn thành") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
 
     override fun pageListParse(document: Document): List<Page> = document.select("img.lozad").mapIndexed { i, e ->
-        Page(i, imageUrl = e.attr("data-src"))
+        Page(i, imageUrl = e.absUrl("data-src"))
     }
 
     override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
@@ -148,15 +169,15 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val data = json.decodeFromString<SearchDTO>(response.body.string())
-        val manga = data.comics.data.map {
+        val json = json.decodeFromString<SearchDTO>(response.body.string())
+        val manga = json.comics.data.map {
             SManga.create().apply {
                 title = it.name
                 thumbnail_url = it.thumbnail
                 setUrlWithoutDomain("$baseUrl/" + it.slug)
             }
         }
-        val hasNextPage = data.comics.current_page != data.comics.last_page
+        val hasNextPage = json.comics.current_page != json.comics.last_page
         return MangasPage(manga, hasNextPage)
     }
 
@@ -319,6 +340,7 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+
     companion object {
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."

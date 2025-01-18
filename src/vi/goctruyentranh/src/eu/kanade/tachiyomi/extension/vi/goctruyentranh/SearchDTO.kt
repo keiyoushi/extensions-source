@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.vi.goctruyentranh
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SearchDTO(
+class SearchDTO(
     val comics: Comics,
 )
 
