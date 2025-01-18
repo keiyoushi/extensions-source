@@ -29,6 +29,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -95,21 +96,22 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
     @RequiresApi(Build.VERSION_CODES.O)
     private fun parseDate(date: String): Long = runCatching {
         val formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss")
-        val currentDateTime = ZonedDateTime.now()
+        val currentDateTime = ZonedDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")) // GMT+7
         when (date.replace(Regex("[0-9]"), "").trim()) {
             "phút trước" -> dateFormat.parse(currentDateTime.format(formatter))?.time
             "giờ trước" -> dateFormat.parse(currentDateTime.format(formatter))?.time
-            else -> dateFormat.parse(currentDateTime.minusDays(date.replace(Regex("[^0-9]"), "").toLong()).format(formatter))?.time
+            "ngày trước" -> dateFormat.parse(currentDateTime.minusDays(date.replace(Regex("[^0-9]"), "").toLong()).format(formatter))?.time
+            else -> null
         }
     }.getOrNull() ?: 0L
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select("h1").text()
+        title = document.selectFirst("section aside:first-child h1")!!.text()
         genre = document.select("span:contains(Thể loại:) ~ a").joinToString { it.text().trim(',', ' ') }
         description = document.selectFirst("div.mt-3")?.text()
-        thumbnail_url = document.selectFirst("section.gird > aside:first-child > img")?.absUrl("src")
+        thumbnail_url = document.selectFirst("section aside:first-child img")?.absUrl("src")
         status = parseStatus(document.selectFirst("span:contains(Trạng thái:) + b")?.text())
         author = document.select("span:contains(Tác giả:) + b").joinToString { it.text() }
     }
