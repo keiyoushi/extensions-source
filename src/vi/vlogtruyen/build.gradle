@@ -1,6 +1,6 @@
 ext {
     extName = 'ThichDoc'
-    extClass = '.ThichDoc'
+    extClass = '.VlogTruyen'
     extVersionCode = 5
     isNsfw = true
 }
