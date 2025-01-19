@@ -8,5 +8,5 @@ class RimuScans : MangaThemesia(
     "Rimu Scans",
     "https://rimuscans.fr",
     "fr",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.FRENCH)
+    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.FRENCH),
 )

@@ -8,5 +8,5 @@ class MangasScans : MangaThemesia(
     "Mangas Scans",
     "https://mangas-scans.com",
     "fr",
-    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.FRENCH)
+    dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.FRENCH),
 )
