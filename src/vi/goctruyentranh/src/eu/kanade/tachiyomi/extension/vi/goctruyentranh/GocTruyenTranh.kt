@@ -2,9 +2,7 @@ package eu.kanade.tachiyomi.extension.vi.goctruyentranh
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.os.Build
 import android.widget.Toast
-import androidx.annotation.RequiresApi
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -29,9 +27,7 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
+import java.util.Calendar
 import java.util.Locale
 
 class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
@@ -87,21 +83,18 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
         element.selectFirst("a").let {
             setUrlWithoutDomain(it!!.absUrl("href"))
             name = it.select(".items-center:contains(Chapter)").text()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                date_upload = parseDate(it.select(".text-center").text())
-            }
+            date_upload = parseDate(it.select(".text-center").text())
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     private fun parseDate(date: String): Long = runCatching {
-        val formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss")
-        val currentDateTime = ZonedDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")) // GMT+7
+        val calendar = Calendar.getInstance()
+        val number = date.replace(Regex("[^0-9]"), "").trim().toInt()
         when (date.replace(Regex("[0-9]"), "").trim()) {
-            "phút trước" -> dateFormat.parse(currentDateTime.format(formatter))?.time
-            "giờ trước" -> dateFormat.parse(currentDateTime.format(formatter))?.time
-            "ngày trước" -> dateFormat.parse(currentDateTime.minusDays(date.replace(Regex("[^0-9]"), "").toLong()).format(formatter))?.time
-            else -> null
+            "phút trước" -> calendar.apply { add(Calendar.MINUTE, -number) }.timeInMillis
+            "giờ trước" -> calendar.apply { add(Calendar.HOUR, -number) }.timeInMillis
+            "ngày trước" -> calendar.apply { add(Calendar.DAY_OF_YEAR, -number) }.timeInMillis
+            else -> dateFormat.parse(date)?.time
         }
     }.getOrNull() ?: 0L
 
