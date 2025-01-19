@@ -33,7 +33,7 @@ class Zenko : HttpSource() {
         .build()
 
     override fun getMangaUrl(manga: SManga): String {
-        return "${baseUrl}/${manga.url}"
+        return "$baseUrl/${manga.url}"
     }
 
     // ============================== Popular ===============================
