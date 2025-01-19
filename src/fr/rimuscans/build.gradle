@@ -3,7 +3,7 @@ ext {
     extClass = '.RimuScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://rimuscans.fr'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
