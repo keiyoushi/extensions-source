@@ -33,7 +33,11 @@ class Zenko : HttpSource() {
         .build()
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/${manga.url}"
+        return "$baseUrl${manga.url}"
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        return "$baseUrl${chapter.url}"
     }
 
     // ============================== Popular ===============================
@@ -71,7 +75,7 @@ class Zenko : HttpSource() {
 
     // =========================== Manga Details ============================
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast('/')
+        val mangaId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
         val url = "$API_URL/titles/$mangaId"
         return GET(url, headers)
     }
@@ -89,7 +93,7 @@ class Zenko : HttpSource() {
 
     // ============================== Chapters ==============================
     override fun chapterListRequest(manga: SManga): Request {
-        val mangaId = manga.url.substringAfterLast('/')
+        val mangaId = "$baseUrl${manga.url}".toHttpUrl().pathSegments.last()
         val url = "$API_URL/titles/$mangaId/chapters"
         return GET(url, headers)
     }
@@ -111,7 +115,7 @@ class Zenko : HttpSource() {
 
     // =============================== Pages ================================
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfterLast('/')
+        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last()
         val url = "$API_URL/chapters/$chapterId"
         return GET(url, headers)
     }
