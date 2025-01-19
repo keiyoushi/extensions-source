@@ -54,7 +54,7 @@ class Zenko : HttpSource() {
             val offset = offsetCounter(page)
             val url = "$API_URL/titles".toHttpUrl().newBuilder()
                 .addQueryParameter("limit", "15")
-                .addQueryParameter("offset", "$offset")
+                .addQueryParameter("offset", offset.toString())
                 .addQueryParameter("name", query)
                 .build()
             return GET(url, headers)
@@ -74,10 +74,9 @@ class Zenko : HttpSource() {
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val mangaDto = response.parseAs<MangaDetailsResponse>()
+        setUrlWithoutDomain("/titles/${mangaDto.id}")
         title = mangaDto.engName ?: mangaDto.name
-        thumbnail_url =
-            "$IMAGE_STORAGE_URL/${mangaDto.coverImg}?optimizer=image&width=560&quality=70&height=auto"
-        url = "/titles/${mangaDto.id}"
+        thumbnail_url = buildImageUrl(mangaDto.coverImg)
         description = "${mangaDto.name}\n${mangaDto.description}"
         genre = mangaDto.genres!!.joinToString { it.name }
         author = mangaDto.author!!.username
@@ -98,7 +97,7 @@ class Zenko : HttpSource() {
             if (id > 0) id else item.id.toDouble()
         }.map { chapterResponseItem ->
             SChapter.create().apply {
-                url = "/titles/${chapterResponseItem.titleId}/${chapterResponseItem.id}"
+                setUrlWithoutDomain("/titles/${chapterResponseItem.titleId}/${chapterResponseItem.id}")
                 name = StringProcessor.format(chapterResponseItem.name)
                 date_upload = chapterResponseItem.createdAt!!.secToMs()
                 scanlator = chapterResponseItem.publisher!!.name
@@ -128,13 +127,7 @@ class Zenko : HttpSource() {
         return makeMangasPage(zenkoMangaListResponse.data, zenkoMangaListResponse.meta.hasNextPage)
     }
 
-    private fun offsetCounter(page: Int): Int {
-        return if (page == 1) {
-            0 // for page 1 offset must be 0
-        } else {
-            (page - 1) * 15 // calculate offset for other pages
-        }
-    }
+    private fun offsetCounter(page: Int) = (page - 1) * 15
 
     private fun makeZenkoMangaRequest(offset: Int, sortBy: String): Request {
         val url = "$API_URL/titles".toHttpUrl().newBuilder()
@@ -157,18 +150,18 @@ class Zenko : HttpSource() {
     }
 
     private fun makeSManga(mangaDto: MangaDetailsResponse) = SManga.create().apply {
+        setUrlWithoutDomain("/titles/${mangaDto.id}")
         title = mangaDto.engName ?: mangaDto.name
-        thumbnail_url =
-            "$IMAGE_STORAGE_URL/${mangaDto.coverImg}?optimizer=image&width=560&quality=70&height=auto"
-        url = "/titles/${mangaDto.id}"
+        thumbnail_url = buildImageUrl(mangaDto.coverImg)
         status = mangaDto.status.toStatus()
     }
 
     private fun String.toStatus(): Int {
-        return when (this) {
-            "ONGOING" -> SManga.ONGOING
-            "FINISHED" -> SManga.COMPLETED
-            "PAUSED" -> SManga.ON_HIATUS
+        val status = this.lowercase()
+        return when (status) {
+            "ongoing" -> SManga.ONGOING
+            "finished" -> SManga.COMPLETED
+            "paused" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
     }
@@ -178,6 +171,16 @@ class Zenko : HttpSource() {
             runCatching { this * 1000 }
                 .getOrNull() ?: 0L
             )
+    }
+
+    private fun buildImageUrl(imageId: String): String {
+        val url = "$IMAGE_STORAGE_URL/$imageId".toHttpUrl().newBuilder()
+            .addQueryParameter("optimizer", "image")
+            .addQueryParameter("width", "560")
+            .addQueryParameter("quality", "70")
+            .addQueryParameter("height", "auto")
+            .build()
+        return url.toString()
     }
 
     private inline fun <reified T> Response.parseAs(): T = use {
