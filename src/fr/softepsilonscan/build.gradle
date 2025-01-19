@@ -3,7 +3,7 @@ ext {
     extClass = '.SoftEpsilonScan'
     themePkg = 'madara'
     baseUrl = 'https://epsilonsoft.to'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
