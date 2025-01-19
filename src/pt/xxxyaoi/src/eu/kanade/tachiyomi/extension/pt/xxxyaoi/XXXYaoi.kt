@@ -21,4 +21,8 @@ class XXXYaoi : Madara(
     override val useNewChapterEndpoint = true
 
     override val mangaSubString = "bl"
+
+    override val mangaDetailsSelectorAuthor = mangaDetailsSelectorArtist
+
+    override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) > div.summary-content"
 }
