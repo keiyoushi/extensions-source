@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.fr.yaoiscan
+package eu.kanade.tachiyomi.extension.fr.yaoiscan.eu.kanade.tachiyomi.extension.fr.yaoiscan
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
