@@ -140,7 +140,7 @@ class Zenko : HttpSource() {
     private fun makeZenkoMangaRequest(offset: Int, sortBy: String): Request {
         val url = "$API_URL/titles".toHttpUrl().newBuilder()
             .addQueryParameter("limit", "15")
-            .addQueryParameter("offset", "$offset")
+            .addQueryParameter("offset", offset.toString())
             .addQueryParameter("sortBy", sortBy)
             .addQueryParameter("order", "DESC")
             .build()
