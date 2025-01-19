@@ -32,6 +32,10 @@ class Zenko : HttpSource() {
         .rateLimitHost(API_URL.toHttpUrl(), 10)
         .build()
 
+    override fun getMangaUrl(manga: SManga): String {
+        return "${baseUrl}/${manga.url}"
+    }
+
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request {
         val offset = offsetCounter(page)
