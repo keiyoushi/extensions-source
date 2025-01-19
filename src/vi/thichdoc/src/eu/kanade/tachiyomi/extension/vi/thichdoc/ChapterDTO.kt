@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.vi.vlogtruyen
+package eu.kanade.tachiyomi.extension.vi.thichdoc
 
 import kotlinx.serialization.Serializable
 

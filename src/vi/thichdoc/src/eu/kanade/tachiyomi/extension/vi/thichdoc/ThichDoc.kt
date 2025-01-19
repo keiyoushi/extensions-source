@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.vi.vlogtruyen
+package eu.kanade.tachiyomi.extension.vi.thichdoc
 
 import android.app.Application
 import android.content.SharedPreferences
@@ -33,11 +33,11 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
+class ThichDoc : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    override val name = "VlogTruyen"
+    override val name = "ThichDoc"
 
     override val supportsLatest = true
 
