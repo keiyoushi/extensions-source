@@ -53,8 +53,20 @@ object StringProcessor {
         val partNumber = part.toIntOrNull() ?: 0
         val chapterNumber = chapter.toDoubleOrNull() ?: 0
 
+        val formattedChapter = if (chapter.contains('.')) {
+            chapter.split('.').joinToString(".") { part ->
+                if (part == chapter.split('.').first() && part.length == 1) {
+                    part.padStart(2, '0')
+                } else {
+                    part
+                }
+            }
+        } else {
+            if (chapter.length == 1) chapter.padStart(2, '0') else chapter
+        }
+
         val idString = if (partNumber > 0) {
-            "$partNumber${ if (chapter.length == 1) chapter.padStart(2, '0') else chapter}"
+            "$partNumber$formattedChapter"
         } else {
             "$chapterNumber"
         }
