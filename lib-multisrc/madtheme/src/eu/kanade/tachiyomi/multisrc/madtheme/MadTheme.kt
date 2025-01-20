@@ -11,10 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -177,19 +174,33 @@ abstract class MadTheme(
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        if (response.code in 200..299) {
+        if (response.request.url.fragment == "idFound") {
             return super.chapterListParse(response)
         }
 
-        // Try to show message/error from site
-        response.body.let { body ->
-            json.decodeFromString<JsonObject>(body.string())["message"]
-                ?.jsonPrimitive
-                ?.content
-                ?.let { throw Exception(it) }
+        val script = response.asJsoup().selectFirst("script:containsData(bookId)")
+            ?: throw Exception("Cannot find script")
+        val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
+        val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
+
+        // Find by bookId, if no result then try with slug
+        var chapterRequest =
+            client.newCall(GET("$baseUrl/api/manga/$bookId/chapters?source=detail", headers))
+                .execute()
+
+        if (chapterRequest.code !in 200..299) {
+            chapterRequest =
+                client.newCall(GET("$baseUrl/api/manga/$bookSlug/chapters?source=detail", headers))
+                    .execute()
         }
 
-        throw Exception("HTTP error ${response.code}")
+        return chapterRequest.asJsoup().select("#chapter-list > li").map {
+            SChapter.create().apply {
+                url = it.selectFirst("a")!!.absUrl("href").removePrefix(baseUrl)
+                name = it.selectFirst(".chapter-title")!!.text()
+                date_upload = parseChapterDate(it.selectFirst(".chapter-update")?.text())
+            }
+        }
     }
 
     override fun chapterListRequest(manga: SManga): Request =
@@ -197,10 +208,11 @@ abstract class MadTheme(
             val url = "$baseUrl/service/backend/chaplist/".toHttpUrl().newBuilder()
                 .addQueryParameter("manga_id", mangaId)
                 .addQueryParameter("manga_name", manga.title)
+                .fragment("idFound")
                 .build()
 
             GET(url, headers)
-        } ?: GET("$baseUrl/api/manga${manga.url}/chapters?source=detail", headers)
+        } ?: GET("$baseUrl${manga.url}", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (genresList == null) {
