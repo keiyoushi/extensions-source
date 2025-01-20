@@ -25,7 +25,7 @@ class Zenko : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", "$baseUrl/")
+        .add("Origin", "$baseUrl")
         .add("Referer", "$baseUrl/")
 
     override val client = network.cloudflareClient.newBuilder()
@@ -175,10 +175,7 @@ class Zenko : HttpSource() {
     }
 
     private fun Long.secToMs(): Long {
-        return (
-            runCatching { this * 1000 }
-                .getOrNull() ?: 0L
-            )
+        return this * 1000
     }
 
     private fun buildImageUrl(imageId: String): String {
