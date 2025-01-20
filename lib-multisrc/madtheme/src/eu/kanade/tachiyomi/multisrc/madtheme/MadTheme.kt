@@ -1,8 +1,13 @@
 package eu.kanade.tachiyomi.multisrc.madtheme
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -22,6 +27,8 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -34,7 +41,7 @@ abstract class MadTheme(
     override val baseUrl: String,
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH),
-) : ParsedHttpSource() {
+) : ConfigurableSource, ParsedHttpSource() {
 
     override val supportsLatest = true
 
@@ -183,16 +190,18 @@ abstract class MadTheme(
         val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
         val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
 
-        // Find by bookId, if no result then try with slug
-        var chapterRequest =
-            client.newCall(GET("$baseUrl/api/manga/$bookId/chapters?source=detail", headers))
-                .execute()
+        val chapterUrl = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("api")
+            addPathSegment("manga")
+            when (getPrefChapterFetch()) {
+                CHAPTER_FETCH_BY_SLUG -> { addPathSegment(bookSlug) }
+                CHAPTER_FETCH_BY_ID -> { addPathSegment(bookId) }
+            }
+            addPathSegment("chapters")
+            addQueryParameter("source", "detail")
+        }.build()
 
-        if (chapterRequest.code !in 200..299) {
-            chapterRequest =
-                client.newCall(GET("$baseUrl/api/manga/$bookSlug/chapters?source=detail", headers))
-                    .execute()
-        }
+        val chapterRequest = client.newCall(GET(chapterUrl, headers)).execute()
 
         return chapterRequest.asJsoup().select("#chapter-list > li").map {
             SChapter.create().apply {
@@ -358,6 +367,30 @@ abstract class MadTheme(
         }
     }
 
+    // Preferences
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val chapterPref = ListPreference(screen.context).apply {
+            key = CHAPTER_FETCH_PREFERENCES
+            title = "Chapters fetch preference"
+            entries = arrayOf(
+                "By Slug",
+                "By Id",
+            )
+            entryValues = arrayOf(CHAPTER_FETCH_BY_SLUG, CHAPTER_FETCH_BY_ID)
+            summary =
+                "Some pages has an updated chapter api depends on how you fetch it, you will need to look which one is better."
+            setDefaultValue(CHAPTER_FETCH_BY_SLUG)
+        }
+        screen.addPreference(chapterPref)
+    }
+
+    private fun getPrefChapterFetch(): String =
+        preferences.getString(CHAPTER_FETCH_PREFERENCES, null)!!
+
     // Filters
     override fun getFilterList() = FilterList(
         // TODO: Filters for sites that support it:
@@ -415,5 +448,8 @@ abstract class MadTheme(
         private val MANGA_ID_REGEX = """/manga/(\d+)-""".toRegex()
         private val CHAPTER_ID_REGEX = """chapterId\s*=\s*(\d+)""".toRegex()
         private val NUMBER_REGEX = """\d+""".toRegex()
+        private const val CHAPTER_FETCH_PREFERENCES = "CHAPTER_PREFERENCES"
+        private const val CHAPTER_FETCH_BY_SLUG = "SLUG"
+        private const val CHAPTER_FETCH_BY_ID = "ID"
     }
 }
