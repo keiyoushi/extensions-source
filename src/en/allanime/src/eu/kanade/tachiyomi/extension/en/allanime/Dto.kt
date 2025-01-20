@@ -53,7 +53,7 @@ class SearchManga(
 ) {
     fun toSManga() = SManga.create().apply {
         title = englishName ?: name
-        url = "/manga/$id"
+        url = "/manga/$id/${name.titleToSlug()}"
         thumbnail_url = thumbnail?.parseThumbnailUrl()
     }
 }
@@ -79,7 +79,7 @@ class Manga(
 ) {
     fun toSManga() = SManga.create().apply {
         title = englishName ?: name
-        url = "/manga/$id"
+        url = "/manga/$id/${name.titleToSlug()}"
         thumbnail_url = thumbnail?.parseThumbnailUrl()
         description = this@Manga.description?.parseDescription()
         if (!altNames.isNullOrEmpty()) {

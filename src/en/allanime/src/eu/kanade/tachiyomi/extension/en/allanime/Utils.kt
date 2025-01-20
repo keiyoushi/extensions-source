@@ -39,6 +39,10 @@ fun String?.parseStatus(): Int {
     }
 }
 
+fun String.titleToSlug() = this.trim()
+    .lowercase(Locale.US)
+    .replace(titleSpecialCharactersRegex, "-")
+
 fun String.parseDescription(): String {
     return Jsoup.parse(
         this.replace("<br>", "br2n"),

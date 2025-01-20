@@ -206,7 +206,7 @@ class AllManga : ConfigurableSource, HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.split("/")
         val mangaId = chapterUrl[2]
-        val chapterNo = chapterUrl[3].split("-")[1]
+        val chapterNo = chapterUrl[4].split("-")[1]
 
         val payload = GraphQL(
             PageListVariables(
