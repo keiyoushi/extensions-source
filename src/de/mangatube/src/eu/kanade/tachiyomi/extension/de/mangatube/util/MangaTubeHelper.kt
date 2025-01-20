@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.de.mangatube.util
 
 import eu.kanade.tachiyomi.source.model.SManga
-import okhttp3.Response
 
 class MangaTubeHelper {
 
@@ -17,18 +16,5 @@ class MangaTubeHelper {
             }
         }
 
-        fun checkResponse(response: Response): String {
-            val body = response.body.string()
-
-            if (response.code != 200) {
-                throw Exception("Unexpected network issue")
-            }
-
-            if (body.startsWith("<!DOCTYPE html>")) {
-                throw Exception("IP isn't verified. Open webview!")
-            }
-
-            return body
-        }
     }
 }

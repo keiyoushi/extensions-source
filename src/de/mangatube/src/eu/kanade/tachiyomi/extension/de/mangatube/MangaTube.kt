@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.extension.de.mangatube.dio.wrapper.MangasWrapper
 import eu.kanade.tachiyomi.extension.de.mangatube.util.BaseResponse
 import eu.kanade.tachiyomi.extension.de.mangatube.util.Genre
 import eu.kanade.tachiyomi.extension.de.mangatube.util.MangaTubeHelper
+import eu.kanade.tachiyomi.extension.de.mangatube.util.ResponseInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -22,7 +23,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class MangaTube : HttpSource() {
@@ -51,6 +51,7 @@ class MangaTube : HttpSource() {
         .connectTimeout(1, TimeUnit.MINUTES)
         .readTimeout(1, TimeUnit.MINUTES)
         .writeTimeout(1, TimeUnit.MINUTES)
+        .addInterceptor(ResponseInterceptor())
         .build()
 
     override fun imageUrlParse(response: Response): String = ""
@@ -73,13 +74,9 @@ class MangaTube : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val body = MangaTubeHelper.checkResponse(response)
+        val body = response.body.string()
 
         val res: BaseResponse<List<Manga>> = json.decodeFromString(body)
-
-        if (!res.success) {
-            throw Exception("Something went wrong!")
-        }
 
         val mangaList = res.data.map { manga ->
             mangas[manga.title] = manga
@@ -101,14 +98,9 @@ class MangaTube : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val body = MangaTubeHelper.checkResponse(response)
+        val body = response.body.string()
 
         val res: BaseResponse<MangasWrapper> = json.decodeFromString(body)
-
-        if (!res.success) {
-            throw Exception("Something went wrong!")
-        }
-
 
         val mangaList = res.data.manga.map { manga ->
             mangas[manga.title] = manga
@@ -132,14 +124,9 @@ class MangaTube : HttpSource() {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val body = MangaTubeHelper.checkResponse(response)
+        val body = response.body.string()
 
         val res: BaseResponse<MangasWrapper> = json.decodeFromString(body)
-
-        if (!res.success) {
-            throw Exception("Something went wrong!")
-        }
-
 
         val mangaList = res.data.manga.map { manga ->
             mangas[manga.title] = manga
@@ -164,13 +151,9 @@ class MangaTube : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val body = MangaTubeHelper.checkResponse(response)
+        val body = response.body.string()
 
         val res: BaseResponse<MangaWrapper> = json.decodeFromString(body)
-
-        if (!res.success) {
-            throw Exception("Something went wrong!")
-        }
 
         val manga: Manga = res.data.manga
 
@@ -196,13 +179,9 @@ class MangaTube : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val body = MangaTubeHelper.checkResponse(response)
+        val body = response.body.string()
 
         val res: BaseResponse<ChaptersWrapper> = json.decodeFromString(body)
-
-        if (!res.success) {
-            throw Exception("Something went wrong!")
-        }
 
         val chapterList = res.data.chapters.map { chapter ->
             SChapter.create().apply {
@@ -228,13 +207,9 @@ class MangaTube : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val body = MangaTubeHelper.checkResponse(response)
+        val body = response.body.string()
 
         val res: BaseResponse<ChapterWrapper> = json.decodeFromString(body)
-
-        if (!res.success) {
-            throw Exception("Something went wrong!")
-        }
 
         val mangaList = res.data.chapter.pages.map { page ->
             Page(page.index, page.url, page.altSource)
