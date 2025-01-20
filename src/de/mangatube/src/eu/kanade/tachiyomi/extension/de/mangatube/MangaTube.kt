@@ -22,6 +22,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class MangaTube : HttpSource() {
@@ -33,6 +34,9 @@ class MangaTube : HttpSource() {
     override val lang = "de"
 
     override val supportsLatest = true
+
+    @SuppressLint("SimpleDateFormat")
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
     private val mangas: LinkedHashMap<String, Manga> = LinkedHashMap()
 
@@ -73,7 +77,7 @@ class MangaTube : HttpSource() {
 
         val res: BaseResponse<List<Manga>> = json.decodeFromString(body)
 
-        if(!res.success){
+        if (!res.success) {
             throw Exception("Something went wrong!")
         }
 
@@ -101,7 +105,7 @@ class MangaTube : HttpSource() {
 
         val res: BaseResponse<MangasWrapper> = json.decodeFromString(body)
 
-        if(!res.success){
+        if (!res.success) {
             throw Exception("Something went wrong!")
         }
 
@@ -132,7 +136,7 @@ class MangaTube : HttpSource() {
 
         val res: BaseResponse<MangasWrapper> = json.decodeFromString(body)
 
-        if(!res.success){
+        if (!res.success) {
             throw Exception("Something went wrong!")
         }
 
@@ -164,7 +168,7 @@ class MangaTube : HttpSource() {
 
         val res: BaseResponse<MangaWrapper> = json.decodeFromString(body)
 
-        if(!res.success){
+        if (!res.success) {
             throw Exception("Something went wrong!")
         }
 
@@ -191,13 +195,12 @@ class MangaTube : HttpSource() {
         return GET(url)
     }
 
-    @SuppressLint("SimpleDateFormat")
     override fun chapterListParse(response: Response): List<SChapter> {
         val body = MangaTubeHelper.checkResponse(response)
 
         val res: BaseResponse<ChaptersWrapper> = json.decodeFromString(body)
 
-        if(!res.success){
+        if (!res.success) {
             throw Exception("Something went wrong!")
         }
 
@@ -205,8 +208,7 @@ class MangaTube : HttpSource() {
             SChapter.create().apply {
                 url = "$baseUrl${chapter.readerURL}"
                 name = chapter.name.ifBlank { "Chapter ${chapter.number}" }
-                date_upload =
-                    SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(chapter.publishedAt)!!.time
+                date_upload = dateFormat.parse(chapter.publishedAt)!!.time
                 chapter_number = chapter.number.toFloat()
                 scanlator = chapter.volume.toString()
             }
@@ -230,7 +232,7 @@ class MangaTube : HttpSource() {
 
         val res: BaseResponse<ChapterWrapper> = json.decodeFromString(body)
 
-        if(!res.success){
+        if (!res.success) {
             throw Exception("Something went wrong!")
         }
 
