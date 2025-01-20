@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.de.mangatube
 
 import Manga
 import android.annotation.SuppressLint
-import android.util.Log
 import eu.kanade.tachiyomi.extension.de.mangatube.dio.wrapper.ChapterWrapper
 import eu.kanade.tachiyomi.extension.de.mangatube.dio.wrapper.ChaptersWrapper
 import eu.kanade.tachiyomi.extension.de.mangatube.dio.wrapper.MangaWrapper
@@ -66,9 +65,6 @@ class MangaTube : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/api/manga/search?page=$page&query=$query"
 
-        Log.d("MangaTube", "Search for: $query")
-        Log.d("MangaTube", "Url -> $url")
-
         return GET(url)
     }
 
@@ -96,9 +92,6 @@ class MangaTube : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/api/home/top-manga"
-
-        Log.d("MangaTube", "Request popular mangas")
-        Log.d("MangaTube", "Url -> $url")
 
         return GET(url)
     }
@@ -130,9 +123,6 @@ class MangaTube : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/api/home/new-manga"
-
-        Log.d("MangaTube", "Request new mangas")
-        Log.d("MangaTube", "Url -> $url")
 
         return GET(url)
     }
@@ -166,9 +156,6 @@ class MangaTube : HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = "$baseUrl/api/manga/${mangas[manga.title]!!.id}"
 
-        Log.d("MangaTube", "Request manga details for: ${manga.title}")
-        Log.d("MangaTube", "Url -> $url")
-
         return GET(url)
     }
 
@@ -200,9 +187,6 @@ class MangaTube : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = "$baseUrl/api/manga/${mangas[manga.title]!!.slug}/chapters"
-
-        Log.d("MangaTube", "Request chapters for manga: ${manga.title}")
-        Log.d("MangaTube", "Url -> $url")
 
         return GET(url)
     }
