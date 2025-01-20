@@ -72,9 +72,8 @@ class MangaHosted(private val langOption: LanguageOption) : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val maxResult = 20
-        val url = "$apiUrl/${langOption.infix}/QuickSearch/".toHttpUrl().newBuilder()
+        val url = "$apiUrl/${langOption.infix}/SeachPage/$maxResult/${page - 1}".toHttpUrl().newBuilder()
             .addPathSegment(query)
-            .addPathSegment("$maxResult")
             .build()
         return GET(url, headers)
     }
