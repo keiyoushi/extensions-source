@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.ru.desu
 import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -40,17 +41,18 @@ class Desu : ConfigurableSource, HttpSource() {
 
     override val id: Long = 6684416167758830305
 
-    override val baseUrl = "https://desu.win"
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
+    override val baseUrl: String = domain
 
     override val lang = "ru"
 
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("User-Agent", "Tachiyomi")
@@ -349,6 +351,7 @@ class Desu : ConfigurableSource, HttpSource() {
     )
 
     private var isEng: String? = preferences.getString(LANGUAGE_PREF, "eng")
+
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         val titleLanguagePref = ListPreference(screen.context).apply {
             key = LANGUAGE_PREF
@@ -363,7 +366,20 @@ class Desu : ConfigurableSource, HttpSource() {
                 true
             }
         }
+        val domainDesuPref = EditTextPreference(screen.context).apply {
+            key = DOMAIN_TITLE
+            this.title = DOMAIN_TITLE
+            summary = domain
+            this.setDefaultValue(DOMAIN_DEFAULT)
+            dialogTitle = DOMAIN_TITLE
+            setOnPreferenceChangeListener { _, _ ->
+                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
         screen.addPreference(titleLanguagePref)
+        screen.addPreference(domainDesuPref)
     }
     companion object {
         const val PREFIX_SLUG_SEARCH = "slug:"
@@ -371,5 +387,8 @@ class Desu : ConfigurableSource, HttpSource() {
         private const val LANGUAGE_PREF = "DesuTitleLanguage"
 
         private const val API_URL = "/manga/api"
+
+        private const val DOMAIN_TITLE = "Домен"
+        private const val DOMAIN_DEFAULT = "https://desu.store"
     }
 }
