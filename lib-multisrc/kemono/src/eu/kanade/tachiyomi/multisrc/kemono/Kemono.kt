@@ -132,7 +132,7 @@ open class Kemono(
 
                 includeType && !excludeType && isFavourited &&
                     regularSearch
-            }.also { mangasCache = mangas }
+            }.also { mangasCache = it }
         }
 
         val sorted = when (sort.first) {
