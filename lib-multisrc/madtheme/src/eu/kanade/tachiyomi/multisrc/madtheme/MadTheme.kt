@@ -1,13 +1,8 @@
 package eu.kanade.tachiyomi.multisrc.madtheme
 
-import android.app.Application
-import android.content.SharedPreferences
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -18,6 +13,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -27,8 +23,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -41,7 +35,7 @@ abstract class MadTheme(
     override val baseUrl: String,
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH),
-) : ConfigurableSource, ParsedHttpSource() {
+) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
@@ -190,26 +184,34 @@ abstract class MadTheme(
         val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
         val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
 
-        val chapterUrl = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("api")
-            addPathSegment("manga")
-            when (getPrefChapterFetch()) {
-                CHAPTER_FETCH_BY_SLUG -> { addPathSegment(bookSlug) }
-                CHAPTER_FETCH_BY_ID -> { addPathSegment(bookId) }
-            }
-            addPathSegment("chapters")
-            addQueryParameter("source", "detail")
-        }.build()
+        // At this moment we ca not decide which endpoint has the chapters, so we call both.
+        val idRequest = client.newCall(GET(buildChapterUrl(bookId), headers)).execute()
+        val slugRequest = client.newCall(GET(buildChapterUrl(bookSlug), headers)).execute()
 
-        val chapterRequest = client.newCall(GET(chapterUrl, headers)).execute()
+        var chapters = idRequest.asJsoup().select(chapterListSelector())
+        val slugDocument = slugRequest.asJsoup().select(chapterListSelector())
 
-        return chapterRequest.asJsoup().select("#chapter-list > li").map {
+        if (chapters.size < slugDocument.size) {
+            chapters = slugDocument
+        }
+
+        return chapters.map {
             SChapter.create().apply {
                 url = it.selectFirst("a")!!.absUrl("href").removePrefix(baseUrl)
                 name = it.selectFirst(".chapter-title")!!.text()
                 date_upload = parseChapterDate(it.selectFirst(".chapter-update")?.text())
             }
         }
+    }
+
+    private fun buildChapterUrl(fetchByParam: String): HttpUrl {
+        return baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("api")
+            addPathSegment("manga")
+            addPathSegment(fetchByParam)
+            addPathSegment("chapters")
+            addQueryParameter("source", "detail")
+        }.build()
     }
 
     override fun chapterListRequest(manga: SManga): Request =
@@ -366,30 +368,6 @@ abstract class MadTheme(
             }
         }
     }
-
-    // Preferences
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val chapterPref = ListPreference(screen.context).apply {
-            key = CHAPTER_FETCH_PREFERENCES
-            title = "Chapters fetch preference"
-            entries = arrayOf(
-                "By Slug",
-                "By Id",
-            )
-            entryValues = arrayOf(CHAPTER_FETCH_BY_SLUG, CHAPTER_FETCH_BY_ID)
-            summary =
-                "Some pages has an updated chapter api depends on how you fetch it, you will need to look which one is better."
-            setDefaultValue(CHAPTER_FETCH_BY_SLUG)
-        }
-        screen.addPreference(chapterPref)
-    }
-
-    private fun getPrefChapterFetch(): String =
-        preferences.getString(CHAPTER_FETCH_PREFERENCES, null)!!
 
     // Filters
     override fun getFilterList() = FilterList(
