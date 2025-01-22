@@ -426,8 +426,5 @@ abstract class MadTheme(
         private val MANGA_ID_REGEX = """/manga/(\d+)-""".toRegex()
         private val CHAPTER_ID_REGEX = """chapterId\s*=\s*(\d+)""".toRegex()
         private val NUMBER_REGEX = """\d+""".toRegex()
-        private const val CHAPTER_FETCH_PREFERENCES = "CHAPTER_PREFERENCES"
-        private const val CHAPTER_FETCH_BY_SLUG = "SLUG"
-        private const val CHAPTER_FETCH_BY_ID = "ID"
     }
 }
