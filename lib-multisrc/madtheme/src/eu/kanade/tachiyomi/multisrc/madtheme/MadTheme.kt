@@ -184,18 +184,19 @@ abstract class MadTheme(
         val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
         val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
 
-        // At this moment we ca not decide which endpoint has the chapters, so we call both.
+        // At this moment we can not decide which endpoint has the chapters, so we call both.
         val idRequest = client.newCall(GET(buildChapterUrl(bookId), headers)).execute()
         val slugRequest = client.newCall(GET(buildChapterUrl(bookSlug), headers)).execute()
 
-        var chapters = idRequest.asJsoup().select(chapterListSelector())
+        // By default the id request will be the final, due to some extension don't even has slug fetch.
+        var finalDocument = idRequest.asJsoup().select(chapterListSelector())
         val slugDocument = slugRequest.asJsoup().select(chapterListSelector())
 
-        if (chapters.size < slugDocument.size) {
-            chapters = slugDocument
+        if (finalDocument.size < slugDocument.size) {
+            finalDocument = slugDocument
         }
 
-        return chapters.map {
+        return finalDocument.map {
             SChapter.create().apply {
                 url = it.selectFirst("a")!!.absUrl("href").removePrefix(baseUrl)
                 name = it.selectFirst(".chapter-title")!!.text()
