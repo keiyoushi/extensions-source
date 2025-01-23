@@ -20,6 +20,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONObject
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
@@ -153,13 +154,16 @@ class ReadMangas() : HttpSource() {
         val document = response.asJsoup()
         return SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
+
             thumbnail_url = document.selectFirst("img.w-full")?.absUrl("src")
+
             genre = document.select("div > label + div > div").joinToString { it.text() }
 
             description = document.select("script").map { it.data() }
-                .firstOrNull { MANGA_DETAILS_DESCRIPTION_REGEX.containsMatchIn(it) }
+                .firstOrNull { it.contains("description", ignoreCase = true) }
                 ?.let {
-                    MANGA_DETAILS_DESCRIPTION_REGEX.find(it)?.groups?.get("description")?.value
+                    val jsonObject = JSONObject(it)
+                    jsonObject.optString("description", "")
                 }
 
             document.selectFirst("div.flex > div.inline-flex.items-center:last-child")?.text()?.let {
@@ -290,7 +294,6 @@ class ReadMangas() : HttpSource() {
 
     @SuppressLint("SimpleDateFormat")
     companion object {
-        val MANGA_DETAILS_DESCRIPTION_REGEX = """description":(?<description>"[^"]+)""".toRegex()
         val IMAGE_URL_REGEX = """url\\":\\"(?<imageUrl>[^(\\")]+)""".toRegex()
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
