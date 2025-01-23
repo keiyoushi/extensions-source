@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -183,24 +184,35 @@ abstract class MadTheme(
         val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
         val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
 
-        // Find by bookId, if no result then try with slug
-        var chapterRequest =
-            client.newCall(GET("$baseUrl/api/manga/$bookId/chapters?source=detail", headers))
-                .execute()
+        // At this moment we can not decide which endpoint has the chapters, so we call both.
+        val idRequest = client.newCall(GET(buildChapterUrl(bookId), headers)).execute()
+        val slugRequest = client.newCall(GET(buildChapterUrl(bookSlug), headers)).execute()
 
-        if (chapterRequest.code !in 200..299) {
-            chapterRequest =
-                client.newCall(GET("$baseUrl/api/manga/$bookSlug/chapters?source=detail", headers))
-                    .execute()
+        // By default the id request will be the final, due to some extension don't even has slug fetch.
+        var finalDocument = idRequest.asJsoup().select(chapterListSelector())
+        val slugDocument = slugRequest.asJsoup().select(chapterListSelector())
+
+        if (finalDocument.size < slugDocument.size) {
+            finalDocument = slugDocument
         }
 
-        return chapterRequest.asJsoup().select("#chapter-list > li").map {
+        return finalDocument.map {
             SChapter.create().apply {
                 url = it.selectFirst("a")!!.absUrl("href").removePrefix(baseUrl)
                 name = it.selectFirst(".chapter-title")!!.text()
                 date_upload = parseChapterDate(it.selectFirst(".chapter-update")?.text())
             }
         }
+    }
+
+    private fun buildChapterUrl(fetchByParam: String): HttpUrl {
+        return baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("api")
+            addPathSegment("manga")
+            addPathSegment(fetchByParam)
+            addPathSegment("chapters")
+            addQueryParameter("source", "detail")
+        }.build()
     }
 
     override fun chapterListRequest(manga: SManga): Request =
