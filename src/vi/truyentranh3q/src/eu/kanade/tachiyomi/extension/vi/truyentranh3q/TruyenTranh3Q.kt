@@ -82,39 +82,38 @@ class TruyenTranh3Q : ParsedHttpSource() {
     private val queryParam = "keyword"
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
 
-        // always add the page parameter
-        url.addQueryParameter("page", page.toString())
-
+        // always add search query if present
         if (query.isNotBlank()) {
             url.addQueryParameter(queryParam, query)
-        } else {
-            // apply filters
-            filters.forEach { filter ->
-                when (filter) {
-                    is SortFilter -> url.addQueryParameter("sort", filter.state.toString())
-                    is StatusFilter -> url.addQueryParameter("status", filter.state.toString())
-                    is CountryFilter -> url.addQueryParameter("country", filter.countryValues[filter.state])
-                    is MinChapterFilter -> url.addQueryParameter("minChap", filter.chapterValues[filter.state].toString())
-                    is GenreFilter -> {
-                        val includeGenres = mutableListOf<String>()
-                        val excludeGenres = mutableListOf<String>()
-                        filter.state.forEach { genre ->
-                            when (genre.state) {
-                                Filter.TriState.STATE_INCLUDE -> includeGenres.add(genre.id.toString())
-                                Filter.TriState.STATE_EXCLUDE -> excludeGenres.add(genre.id.toString())
-                                else -> {} // do nothing for STATE_IGNORE
-                            }
-                        }
-                        if (includeGenres.isNotEmpty()) {
-                            url.addQueryParameter("categories", includeGenres.joinToString(","))
-                        }
-                        if (excludeGenres.isNotEmpty()) {
-                            url.addQueryParameter("nocategories", excludeGenres.joinToString(","))
+        }
+
+        // process filters regardless of search query
+        filters.forEach { filter ->
+            when (filter) {
+                is SortFilter -> url.addQueryParameter("sort", filter.state.toString())
+                is StatusFilter -> url.addQueryParameter("status", filter.state.toString())
+                is CountryFilter -> url.addQueryParameter("country", filter.countryValues[filter.state])
+                is MinChapterFilter -> url.addQueryParameter("minChap", filter.chapterValues[filter.state].toString())
+                is GenreFilter -> {
+                    val includeGenres = mutableListOf<String>()
+                    val excludeGenres = mutableListOf<String>()
+                    filter.state.forEach { genre ->
+                        when (genre.state) {
+                            Filter.TriState.STATE_INCLUDE -> includeGenres.add(genre.id.toString())
+                            Filter.TriState.STATE_EXCLUDE -> excludeGenres.add(genre.id.toString())
+                            else -> {} // do nothing for STATE_IGNORE
                         }
                     }
-                    else -> {} // do nothing for unhandled filters
+                    if (includeGenres.isNotEmpty()) {
+                        url.addQueryParameter("categories", includeGenres.joinToString(","))
+                    }
+                    if (excludeGenres.isNotEmpty()) {
+                        url.addQueryParameter("nocategories", excludeGenres.joinToString(","))
+                    }
                 }
+                else -> {} // do nothing for unhandled filters
             }
         }
 
