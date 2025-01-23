@@ -156,16 +156,16 @@ class DeviantArt : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val firstImageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
-        val buttonsElement = document.selectFirst("[draggable=false]")
-        return if (buttonsElement == null) {
+        val buttonsParent = document.selectFirst("[draggable=false]")
+        return if (buttonsParent == null) {
             listOf(Page(0, imageUrl = firstImageUrl))
         } else {
-            val pageList = buttonsElement.children().mapIndexed { i, button ->
-                // Remove everything past "/v1" to get original instead of thumbnail
-                val imageUrl = button.selectFirst("img")?.absUrl("src")?.substringBefore("/v1")
+            val pageList = buttonsParent.children().mapIndexed { i, button ->
+                // Remove everything past "/v1/" to get original instead of thumbnail
+                val imageUrl = button.selectFirst("img")?.absUrl("src")?.substringBefore("/v1/")
                 Page(i, imageUrl = imageUrl)
             }
-            // Need token to access first image, token for original is included in firstImageUrl
+            // First image needs token to get original, which is included in firstImageUrl
             pageList[0].imageUrl = firstImageUrl
             pageList
         }
