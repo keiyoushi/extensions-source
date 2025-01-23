@@ -54,21 +54,14 @@ class TruyenTranh3Q : ParsedHttpSource() {
                 setUrlWithoutDomain(it.attr("abs:href"))
             }
             val relativeImageUrl = element.selectFirst(".book_avatar a img")?.attr("src")
-            thumbnail_url = if (relativeImageUrl != null) {
-                if (relativeImageUrl.startsWith("/_next/image?")) {
-                    // if it is next.js image, extract the original url
-                    val params = Uri.parse(relativeImageUrl).getQueryParameter("url")
-                    if (params != null) {
-                        URLDecoder.decode(params, "UTF-8")
-                    } else {
-                        null
+            thumbnail_url = relativeImageUrl?.let {
+                if (it.startsWith("/_next/image?")) {
+                    Uri.parse(it).getQueryParameter("url")?.let { encodedUrl ->
+                        URLDecoder.decode(encodedUrl, "UTF-8")
                     }
                 } else {
-                    // if it's not just use it as is
-                    relativeImageUrl
+                    it
                 }
-            } else {
-                null
             }
         }
     }
