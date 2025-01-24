@@ -1,7 +1,13 @@
 package eu.kanade.tachiyomi.extension.ru.nudemoon
 
+import android.app.Application
+import android.content.SharedPreferences
 import android.webkit.CookieManager
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,21 +20,27 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
-class Nudemoon : ParsedHttpSource() {
+class Nudemoon : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Nude-Moon"
-
-    override val baseUrl = "https://a.nude-moon.fun"
 
     override val lang = "ru"
 
     override val supportsLatest = true
+
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
+    private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
+    override val baseUrl: String = domain
 
     private val dateParseRu = SimpleDateFormat("d MMMM yyyy", Locale("ru"))
     private val dateParseSlash = SimpleDateFormat("d/MM/yyyy", Locale("ru"))
@@ -336,4 +348,23 @@ class Nudemoon : ParsedHttpSource() {
         Genre("titsfuck"),
         Genre("x-ray"),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = DOMAIN_TITLE
+            this.title = DOMAIN_TITLE
+            summary = domain
+            this.setDefaultValue(DOMAIN_DEFAULT)
+            dialogTitle = DOMAIN_TITLE
+            setOnPreferenceChangeListener { _, _ ->
+                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+    companion object {
+        private const val DOMAIN_TITLE = "Домен"
+        private const val DOMAIN_DEFAULT = "https://nude-moon.org"
+    }
 }
