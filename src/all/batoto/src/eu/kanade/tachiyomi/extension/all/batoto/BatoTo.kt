@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.cryptoaes.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
@@ -1004,7 +1005,6 @@ open class BatoTo(
         private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private val MIRROR_PREF_ENTRIES = arrayOf(
-            "zbato.org",
             "batocomic.com",
             "batocomic.net",
             "batocomic.org",
@@ -1016,23 +1016,25 @@ open class BatoTo(
             "readtoto.com",
             "readtoto.net",
             "readtoto.org",
-            "dto.to",
-            "fto.to",
-            "jto.to",
-            "hto.to",
-            "mto.to",
-            "wto.to",
             "xbato.com",
             "xbato.net",
             "xbato.org",
             "zbato.com",
             "zbato.net",
+            "zbato.org",
+            "dto.to",
+            "fto.to",
+            "hto.to",
+            "jto.to",
+            "mto.to",
+            "wto.to",
         )
         private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
-        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
+        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[BuildConfig.VERSION_NAME.hashCode() % MIRROR_PREF_ENTRIES.size]
 
         private val DEPRECATED_MIRRORS = listOf(
             "https://bato.to",
+            "https://batocc.com", // parked
             "https://mangatoto.com",
             "https://mangatoto.net",
             "https://mangatoto.org",
