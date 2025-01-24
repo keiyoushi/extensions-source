@@ -101,11 +101,25 @@ open class BatoTo(
             if (current.isNotEmpty()) {
                 return current
             }
-            field = getMirrorPref()!!
+            field = getMirrorPref()
             return field
         }
 
-    private fun getMirrorPref(): String? = preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
+    private fun getMirrorPref(): String {
+        return preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
+            ?.takeUnless { it == MIRROR_PREF_DEFAULT_VALUE }
+            ?: let {
+                val seed = runCatching {
+                    val pm = Injekt.get<Application>().packageManager
+                    pm.getPackageInfo(BuildConfig.APPLICATION_ID, 0).lastUpdateTime
+                }.getOrElse {
+                    BuildConfig.VERSION_NAME.hashCode().toLong()
+                }
+
+                MIRROR_PREF_ENTRY_VALUES[1 + (seed % (MIRROR_PREF_ENTRIES.size - 1)).toInt()]
+            }
+    }
+
     private fun getAltChapterListPref(): Boolean = preferences.getBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
     private fun isRemoveTitleVersion(): Boolean {
         return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
@@ -1005,6 +1019,7 @@ open class BatoTo(
         private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private val MIRROR_PREF_ENTRIES = arrayOf(
+            "Auto",
             "batocomic.com",
             "batocomic.net",
             "batocomic.org",
@@ -1030,7 +1045,7 @@ open class BatoTo(
             "wto.to",
         )
         private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
-        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[BuildConfig.VERSION_NAME.hashCode() % MIRROR_PREF_ENTRIES.size]
+        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 
         private val DEPRECATED_MIRRORS = listOf(
             "https://bato.to",
