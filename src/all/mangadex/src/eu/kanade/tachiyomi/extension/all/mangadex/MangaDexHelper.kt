@@ -365,9 +365,12 @@ class MangaDexHelper(lang: String) {
 
         val genreList = MDConstants.tagGroupsOrder.flatMap { genresMap[it].orEmpty() } + nonGenres
 
-        var desc = (attr.description[lang] ?: attr.description["en"])
+        // Build description
+        val desc = mutableListOf<String>()
+
+        (attr.description[lang] ?: attr.description["en"])
             ?.removeEntitiesAndMarkdown()
-            .orEmpty()
+            ?.let { desc.add(it) }
 
         if (altTitlesInDesc) {
             val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
@@ -379,12 +382,21 @@ class MangaDexHelper(lang: String) {
             if (altTitles.isNotEmpty()) {
                 val altTitlesDesc = altTitles
                     .joinToString("\n", "${intl["alternative_titles"]}\n") { "• $it" }
-                desc += (if (desc.isBlank()) "" else "\n\n") + altTitlesDesc.removeEntities()
+                desc.add(altTitlesDesc.removeEntities())
             }
         }
 
+        val finalChapter = mutableListOf<String>()
+        attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Volume $it") }
+        attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Chapter $it") }
+
+        if (finalChapter.isNotEmpty()) {
+            val finalChapterDesc = finalChapter.joinToString(prefix = "${intl["final_chapter"]}\n")
+            desc.add(finalChapterDesc.removeEntities())
+        }
+
         return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
-            description = desc
+            description = desc.joinToString("\n\n")
             author = authors.joinToString()
             artist = artists.joinToString()
             status = getPublicationStatus(attr, chapters)
