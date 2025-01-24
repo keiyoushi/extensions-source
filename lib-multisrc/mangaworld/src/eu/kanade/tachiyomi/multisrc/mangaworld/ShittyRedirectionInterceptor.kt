@@ -13,10 +13,14 @@ class ShittyRedirectionInterceptor(private val client: OkHttpClient) : Intercept
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        // ignore non-protected requests by checking for any of the x-* headers
-        if (response.headers["x-frame-options"] != null) return response
+        // ignore non-protected requests by checking for any header that doesn't show up when redirecting
+        if (response.headers["vary"] != null) return response
+
         return try {
-            chain.proceed(loadCookies(request, response))
+            val results = """document\.cookie="(MWCookie[^"]+)""".toRegex().find(response.body.string())
+                ?: return response
+            val (cookieString) = results.destructured
+            chain.proceed(loadCookie(request, cookieString))
         } catch (e: Throwable) {
             // Because OkHttp's enqueue only handles IOExceptions, wrap the exception so that
             // we don't crash the entire app
@@ -25,15 +29,12 @@ class ShittyRedirectionInterceptor(private val client: OkHttpClient) : Intercept
         }
     }
 
-    private fun loadCookies(request: Request, response: Response): Request {
-        val (cookieString) = """document\.cookie="([^"]+)""".toRegex().find(response.body.string())!!.destructured
+    private fun loadCookie(request: Request, cookieString: String): Request {
         val cookie = Cookie.parse(request.url, cookieString)!!
-
         client.cookieJar.saveFromResponse(request.url, listOf(cookie))
         val headers = request.headers.newBuilder()
             .add("Cookie", cookie.toString())
             .build()
-
         return GET(request.url.toString(), headers)
     }
 }
