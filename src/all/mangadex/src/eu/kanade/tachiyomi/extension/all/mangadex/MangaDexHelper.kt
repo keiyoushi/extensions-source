@@ -324,6 +324,7 @@ class MangaDexHelper(lang: String) {
         coverSuffix: String?,
         altTitlesInDesc: Boolean,
         preferExtensionLangTitle: Boolean,
+        finalChapterInDesc: Boolean,
     ): SManga {
         val attr = mangaDataDto.attributes!!
 
@@ -386,13 +387,16 @@ class MangaDexHelper(lang: String) {
             }
         }
 
-        val finalChapter = mutableListOf<String>()
-        attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Volume $it") }
-        attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Chapter $it") }
+        if (finalChapterInDesc) {
+            val finalChapter = mutableListOf<String>()
+            attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Vol.$it") }
+            attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Ch.$it") }
 
-        if (finalChapter.isNotEmpty()) {
-            val finalChapterDesc = finalChapter.joinToString(prefix = "${intl["final_chapter"]}\n")
-            desc.add(finalChapterDesc.removeEntities())
+            if (finalChapter.isNotEmpty()) {
+                val finalChapterDesc = finalChapter
+                    .joinToString(" ", "${intl["final_chapter"]}\n")
+                desc.add(finalChapterDesc.removeEntities())
+            }
         }
 
         return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
