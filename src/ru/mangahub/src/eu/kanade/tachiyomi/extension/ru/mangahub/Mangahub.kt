@@ -103,7 +103,7 @@ open class Mangahub : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/manga".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/search/title".toHttpUrl().newBuilder().apply {
             addQueryParameter("query", query)
             if (page > 1) addQueryParameter("page", page.toString())
         }
