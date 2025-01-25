@@ -4,6 +4,6 @@ import eu.kanade.tachiyomi.multisrc.lectormoe.LectorMoe
 
 class SenshiManga : LectorMoe(
     "Senshi Manga",
-    "https://visorsenshi.com",
+    "https://senshimanga.capibaratraductor.com",
     "es",
 )
