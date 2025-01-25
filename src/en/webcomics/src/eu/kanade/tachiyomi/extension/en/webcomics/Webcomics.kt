@@ -164,7 +164,7 @@ class Webcomics : ParsedHttpSource(), ConfigurableSource {
             ?: throw Exception("You may need to log in")
 
         return PAGE_REGEX.findAll(script.data()).mapIndexed { index, match ->
-            Page(index, imageUrl = match.groups["img"]!!.value.unicode())
+            Page(index, imageUrl = match.groups[1]!!.value.unicode())
         }.toList()
     }
 
@@ -227,7 +227,7 @@ class Webcomics : ParsedHttpSource(), ConfigurableSource {
     }
 
     companion object {
-        val PAGE_REGEX = """src:(\s+)?"(?<img>[^"]+)""".toRegex()
+        val PAGE_REGEX = """src:(\s+)?"([^"]+)""".toRegex()
         val WHITE_SPACE_REGEX = """[\s]+""".toRegex()
         val PUNCTUATION_REGEX = "[\\p{Punct}]".toRegex()
         val UNICODE_REGEX = "\\\\u([0-9A-Fa-f]{4})|\\\\U([0-9A-Fa-f]{8})".toRegex()
