@@ -270,7 +270,7 @@ open class NHentai(
         return data.images.pages.mapIndexed { i, image ->
             Page(
                 i,
-                imageUrl = "${baseUrl.replace("https://", "https://i$mediaServer.")}/galleries/${data.media_id}/${i + 1}" +
+                imageUrl = "${baseUrl.replace("https://", "https://t$mediaServer.")}/galleries/${data.media_id}/${i + 1}" +
                     when (image.t) {
                         "w" -> ".webp"
                         "p" -> ".png"
