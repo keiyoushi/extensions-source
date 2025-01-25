@@ -316,7 +316,7 @@ class TsukiMangas : HttpSource() {
         }
     }
 
-    private val apiHeadersRegex = Regex("""headers\.common(?:\.(?<key>[0-9A-Za-z_]+)|\[['"](?<key2>[0-9A-Za-z-_]+)['"]])\s*=\s*['"](?<value>[a-zA-Z0-9_ :;.,\\/?!(){}\[\]@<>=\-+*#$&`|~^%]+)['"]""")
+    private val apiHeadersRegex = Regex("""headers\.common(?:\.([0-9A-Za-z_]+)|\[['"]([0-9A-Za-z-_]+)['"]])\s*=\s*['"]([a-zA-Z0-9_ :;.,\\/?!(){}\[\]@<>=\-+*#$&`|~^%]+)['"]""")
 
     private val apiHeaders by lazy {
         val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
@@ -325,7 +325,7 @@ class TsukiMangas : HttpSource() {
         val matches = apiHeadersRegex.findAll(script)
 
         matches.associate {
-            (it.groups["key"] ?: it.groups["key2"]!!).value to it.groups["value"]!!.value
+            (it.groups[1] ?: it.groups[2]!!).value to it.groups[3]!!.value
         }
     }
 
