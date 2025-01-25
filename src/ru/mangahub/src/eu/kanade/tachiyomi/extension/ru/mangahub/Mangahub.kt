@@ -83,16 +83,16 @@ open class Mangahub : ParsedHttpSource() {
         return GET("$baseUrl/explore/sort-is-update$pageStr", headers)
     }
 
-    override fun popularMangaSelector() = "div.comic-grid-col-xl"
+    override fun popularMangaSelector() = "div.item-grid"
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.thumbnail_url = element.select("div.fast-view-layer-scale").attr("data-background-image")
-        manga.title = element.select("a.fw-medium").text()
-        manga.setUrlWithoutDomain(element.select("a.fw-medium").attr("href"))
-        return manga
+        return SManga.create().apply {
+            thumbnail_url = element.selectFirst("img.item-grid-image")!!.attr("src")
+            title = element.selectFirst("a.fw-medium")!!.text()
+            setUrlWithoutDomain(element.selectFirst("a.fw-medium")!!.attr("href"))
+        }
     }
 
     override fun latestUpdatesFromElement(element: Element): SManga =
@@ -122,13 +122,20 @@ open class Mangahub : ParsedHttpSource() {
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
-        manga.author = document.select(".attr-name:contains(Автор) + .attr-value").text() // TODO: Add "Сценарист" and "Художник"
-        manga.genre = document.select(".tags a").joinToString { it.text() }
-        manga.description = document.select("div.markdown-style").text()
-        manga.status = parseStatus(document.select("div.detail-attr:contains(перевод):eq(0)").toString())
-        manga.thumbnail_url = document.select("img.cover-detail").attr("src")
-        return manga
+        return SManga.create().apply {
+            val authorElement = document.selectFirst(".attr-name:contains(Автор) + .attr-value a")
+            if (authorElement != null) {
+                author = authorElement.text()
+            } else {
+                author = document.selectFirst(".attr-name:contains(Сценарист) + .attr-value a")?.text()
+                artist = document.selectFirst(".attr-name:contains(Художник) + .attr-value a")?.text()
+            }
+            artist = document.selectFirst(".attr-name:contains(Художник) + .attr-value a")!!.text()
+            genre = document.select(".tags a").joinToString { it.text() }
+            description = document.select("div.markdown-style").text()
+            status = parseStatus(document.select("div.detail-attr:contains(перевод):eq(0)").toString())
+            thumbnail_url = document.select("img.cover-detail").attr("src")
+        }
     }
 
     private fun parseStatus(elements: String): Int = when {
