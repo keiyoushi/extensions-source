@@ -130,17 +130,22 @@ open class Mangahub : ParsedHttpSource() {
                 author = document.selectFirst(".attr-name:contains(Сценарист) + .attr-value a")?.text()
                 artist = document.selectFirst(".attr-name:contains(Художник) + .attr-value a")?.text()
             }
-            artist = document.selectFirst(".attr-name:contains(Художник) + .attr-value a")!!.text()
             genre = document.select(".tags a").joinToString { it.text() }
-            description = document.select("div.markdown-style").text()
-            status = parseStatus(document.select("div.detail-attr:contains(перевод):eq(0)").toString())
-            thumbnail_url = document.select("img.cover-detail").attr("src")
+            description = document.selectFirst(".markdown-style.text-expandable-content")?.text()
+            val statusElement = document.selectFirst(".attr-name:contains(Томов) + .attr-value")?.text()
+            status = when {
+                statusElement?.contains("продолжается") == true -> SManga.ONGOING
+                statusElement?.contains("приостановлен") == true -> SManga.ON_HIATUS
+                statusElement?.contains("завершен") == true || statusElement?.contains("выпуск прекращён") == true ->
+                    if (document.selectFirst(".attr-name:contains(Перевод) + .attr-value")?.text()?.contains("Завершен") == true) {
+                        SManga.COMPLETED
+                    } else {
+                        SManga.PUBLISHING_FINISHED
+                    }
+                else -> SManga.UNKNOWN
+            }
+            thumbnail_url = document.selectFirst("img.cover-detail")!!.attr("src")
         }
-    }
-
-    private fun parseStatus(elements: String): Int = when {
-        elements.contains("Переведена") or elements.contains("Выпуск завершен") -> SManga.COMPLETED
-        else -> SManga.ONGOING
     }
 
     override fun chapterListSelector() = "div.py-2.px-3"
