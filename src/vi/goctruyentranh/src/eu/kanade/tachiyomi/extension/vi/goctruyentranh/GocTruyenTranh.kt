@@ -216,7 +216,7 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
         Country("Khác", "other"),
     )
     private fun getSortByList() = arrayOf(
-        SortBy("Không",""),
+        SortBy("Không", ""),
         SortBy("Mới nhất", "latest"),
         SortBy("Cũ nhất", "oldest"),
         SortBy("Đánh giá", "rating"),
