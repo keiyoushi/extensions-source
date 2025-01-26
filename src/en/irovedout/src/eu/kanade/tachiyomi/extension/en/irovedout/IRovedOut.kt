@@ -30,7 +30,7 @@ class IRovedOut : HttpSource() {
         It updates in chunks anywhere between 3 and 30 pages long at least once a month.
     """.trimIndent()
     private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
-    private val titleRegex = Regex("Book (\\d+): (?.+)")
+    private val titleRegex = Regex("Book (\\d+): (.+)")
 
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
