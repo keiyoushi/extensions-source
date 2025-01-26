@@ -34,7 +34,7 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder().addInterceptor(ScrambledImageInterceptor).build()
 
-    private val imageUrlRegex = """\\"imageUrl\\":\\"(?<imageUrl>[^\\]+)""".toRegex()
+    private val imageUrlRegex = """\\"imageUrl\\":\\"([^\\]+)""".toRegex()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
     override fun popularMangaNextPageSelector(): String? = null
@@ -110,7 +110,7 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
         val images = document.selectFirst("script:containsData(imageUrl)")?.data()
             ?.let { content ->
                 imageUrlRegex
-                    .findAll(content).map { it.groups["imageUrl"]?.value }
+                    .findAll(content).map { it.groups[1]?.value }
                     .toList()
             } ?: return emptyList()
 

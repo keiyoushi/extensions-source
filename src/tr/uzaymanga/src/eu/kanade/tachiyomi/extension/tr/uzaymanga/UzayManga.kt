@@ -138,7 +138,7 @@ class UzayManga : ParsedHttpSource() {
             ?: return emptyList()
 
         return pageRegex.findAll(script).mapIndexed { index, result ->
-            val url = result.groups.get("path")!!.value
+            val url = result.groups.get(1)!!.value
             Page(index, document.location(), "$CDN_URL/upload/series/$url")
         }.toList()
     }
@@ -158,7 +158,7 @@ class UzayManga : ParsedHttpSource() {
         const val CDN_URL = "https://cdn1.uzaymanga.com"
         const val URL_SEARCH_PREFIX = "slug:"
         val dateFormat = SimpleDateFormat("MMM d ,yyyy", Locale("tr"))
-        val pageRegex = """\\"path\\":\\"(?<path>[^"]+)\\""".trimIndent().toRegex()
+        val pageRegex = """\\"path\\":\\"([^"]+)\\""".trimIndent().toRegex()
     }
 }
 

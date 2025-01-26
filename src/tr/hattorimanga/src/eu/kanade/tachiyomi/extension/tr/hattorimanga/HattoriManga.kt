@@ -254,7 +254,7 @@ class HattoriManga : HttpSource() {
         thumbnail_url = element.selectFirst(".img-con")?.absUrl("data-setbg")
         genre = element.select(".product-card-con ul li").joinToString { it.text() }
         val script = element.attr("onclick")
-        setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups["url"]!!.value)
+        setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups[1]!!.value)
     }
 
     private fun parseGenres(document: Document): List<Genre> {
@@ -279,7 +279,7 @@ class HattoriManga : HttpSource() {
 
     companion object {
         const val SEARCH_PREFIX = "slug:"
-        val REGEX_MANGA_URL = """='(?<url>[^']+)""".toRegex()
+        val REGEX_MANGA_URL = """='([^']+)""".toRegex()
         val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.US)
     }
 }

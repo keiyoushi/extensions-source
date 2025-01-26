@@ -214,7 +214,7 @@ class Taiyo : ParsedHttpSource() {
                     .build()
 
                 val chapters = client.newCall(GET(pageUrl, headers)).execute().let {
-                    CHAPTER_REGEX.find(it.body.string())?.groups?.get("chapters")?.value
+                    CHAPTER_REGEX.find(it.body.string())?.groups?.get(1)?.value
                 }
 
                 val parsed = json.decodeFromString<ChapterListDto>(chapters!!)
@@ -320,7 +320,7 @@ class Taiyo : ParsedHttpSource() {
         val script = getScriptContainingToken(scripts)
             ?: throw Exception("Não foi possivel localizar o token")
 
-        return TOKEN_REGEX.find(script)?.groups?.get("token")?.value
+        return TOKEN_REGEX.find(script)?.groups?.get(1)?.value
             ?: throw Exception("Não foi possivel extrair o token")
     }
 
@@ -339,8 +339,8 @@ class Taiyo : ParsedHttpSource() {
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-        val CHAPTER_REGEX = """(?<chapters>\{"chapters".+"totalPages":\d+\})""".toRegex()
-        val TOKEN_REGEX = """NEXT_PUBLIC_MEILISEARCH_PUBLIC_KEY:(\s+)?"(?<token>[^"]+)""".toRegex()
+        val CHAPTER_REGEX = """(\{"chapters".+"totalPages":\d+\})""".toRegex()
+        val TOKEN_REGEX = """NEXT_PUBLIC_MEILISEARCH_PUBLIC_KEY:(\s+)?"([^"]+)""".toRegex()
         const val BEARER_TOKEN_PREF = "TAIYO_BEARER_TOKEN"
 
         private const val IMG_CDN = "https://cdn.taiyo.moe/medias"

@@ -290,7 +290,7 @@ abstract class Keyoapp(
             .firstOrNull { CDN_HOST_REGEX.containsMatchIn(it.html()) }
             ?.let {
                 val cdnHost = CDN_HOST_REGEX.find(it.html())
-                    ?.groups?.get("host")?.value
+                    ?.groups?.get(1)?.value
                     ?.replace(CDN_CLEAN_REGEX, "")
                 "https://$cdnHost/uploads"
             }
@@ -314,7 +314,7 @@ abstract class Keyoapp(
 
     protected open fun Element.getImageUrl(selector: String): String? {
         return this.selectFirst(selector)?.let { element ->
-            IMG_REGEX.find(element.attr("style"))?.groups?.get("url")?.value
+            IMG_REGEX.find(element.attr("style"))?.groups?.get(1)?.value
                 ?.toHttpUrlOrNull()?.let {
                     it.newBuilder()
                         .setQueryParameter("w", "480") // Keyoapp returns the dynamic size of the thumbnail to any size
@@ -376,8 +376,8 @@ abstract class Keyoapp(
     companion object {
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
-        val CDN_HOST_REGEX = """realUrl\s*=\s*`[^`]+//(?<host>[^/]+)""".toRegex()
+        val CDN_HOST_REGEX = """realUrl\s*=\s*`[^`]+//([^/]+)""".toRegex()
         val CDN_CLEAN_REGEX = """\$\{[^}]*\}""".toRegex()
-        val IMG_REGEX = """url\(['"]?(?<url>[^(['"\)])]+)""".toRegex()
+        val IMG_REGEX = """url\(['"]?([^(['"\)])]+)""".toRegex()
     }
 }

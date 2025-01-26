@@ -170,7 +170,7 @@ class Hachi : HttpSource() {
 
     // Details
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = patternMangaUrl.find(manga.url)?.groups?.get("slug")?.value
+        val slug = patternMangaUrl.find(manga.url)?.groups?.get(1)?.value
             ?: throw Exception("Failed to find manga from URL")
 
         val url = "$baseUrl/_next/data/$buildId/article/$slug.json".toHttpUrl().newBuilder()
@@ -226,8 +226,8 @@ class Hachi : HttpSource() {
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
         val matchGroups = patternMangaUrl.find(chapter.url)!!.groups
-        val slug = matchGroups["slug"]!!.value
-        val number = matchGroups["number"]!!.value
+        val slug = matchGroups[1]!!.value
+        val number = matchGroups[2]!!.value
 
         val url = "$baseUrl/_next/data/$buildId/article/$slug/chapter/$number.json".toHttpUrl()
             .newBuilder()
@@ -289,7 +289,7 @@ class Hachi : HttpSource() {
             }
 
         private val patternMangaUrl =
-            """/article/(?<slug>[^/]+)(?:/chapter/(?<number>[^/?&#]+))?""".toRegex()
+            """/article/([^/]+)(?:/chapter/([^/?&#]+))?""".toRegex()
         const val SEARCH_PREFIX = "slug:"
     }
 }
