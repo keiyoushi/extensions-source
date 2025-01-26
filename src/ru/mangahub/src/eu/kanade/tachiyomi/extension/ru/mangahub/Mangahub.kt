@@ -89,9 +89,9 @@ open class Mangahub : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            thumbnail_url = element.selectFirst("img.item-grid-image")!!.attr("src")
+            thumbnail_url = element.selectFirst("img.item-grid-image")?.absUrl("src")
             title = element.selectFirst("a.fw-medium")!!.text()
-            setUrlWithoutDomain(element.selectFirst("a.fw-medium")!!.attr("href"))
+            setUrlWithoutDomain(element.selectFirst("a.fw-medium")!!.absUrl("href"))
         }
     }
 
@@ -144,7 +144,7 @@ open class Mangahub : ParsedHttpSource() {
                     }
                 else -> SManga.UNKNOWN
             }
-            thumbnail_url = document.selectFirst("img.cover-detail")!!.attr("src")
+            thumbnail_url = document.selectFirst("img.cover-detail")?.absUrl("src")
         }
     }
 
@@ -157,7 +157,7 @@ open class Mangahub : ParsedHttpSource() {
         chapter.date_upload = element.select("div.text-muted").text().let {
             SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(it)?.time ?: 0L
         }
-        chapter.setUrlWithoutDomain(urlElement.attr("href"))
+        chapter.setUrlWithoutDomain(urlElement.absUrl("href"))
         return chapter
     }
 
