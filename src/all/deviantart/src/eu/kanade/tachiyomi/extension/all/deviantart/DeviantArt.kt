@@ -123,15 +123,14 @@ class DeviantArt : HttpSource() {
             nextUrl = newDocument.selectFirst("[rel=next]")?.absUrl("href")
         }
 
-        return indexChapterList(chapterList.toList())
+        return chapterList.toList().also(::indexChapterList)
     }
 
     private fun parseToChapterList(document: Document): List<SChapter> {
         val items = document.select("item")
         return items.map {
-            val chapter = SChapter.create()
-            chapter.setUrlWithoutDomain(it.selectFirst("link")!!.text())
-            chapter.apply {
+            SChapter.create().apply {
+                setUrlWithoutDomain(it.selectFirst("link")!!.text())
                 name = it.selectFirst("title")!!.text()
                 date_upload = parseDate(it.selectFirst("pubDate")?.text())
                 scanlator = it.selectFirst("media|credit")?.text()
@@ -139,24 +138,34 @@ class DeviantArt : HttpSource() {
         }
     }
 
-    private fun indexChapterList(chapterList: List<SChapter>): List<SChapter> {
+    private fun indexChapterList(chapterList: List<SChapter>) {
         // DeviantArt allows users to arrange galleries arbitrarily so we will
         // primitively index the list by checking the first and last dates
-        return if (chapterList.first().date_upload > chapterList.last().date_upload) {
-            chapterList.mapIndexed { i, chapter ->
-                chapter.apply { chapter_number = chapterList.size - i.toFloat() }
+        if (chapterList.first().date_upload > chapterList.last().date_upload) {
+            chapterList.forEachIndexed { i, chapter ->
+                chapter.chapter_number = chapterList.size - i.toFloat()
             }
         } else {
-            chapterList.mapIndexed { i, chapter ->
-                chapter.apply { chapter_number = i.toFloat() + 1 }
+            chapterList.forEachIndexed { i, chapter ->
+                chapter.chapter_number = i.toFloat() + 1
             }
         }
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
-        return listOf(Page(0, imageUrl = imageUrl))
+        val firstImageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
+        val buttons = document.selectFirst("[draggable=false]")?.children()
+        return buttons?.mapIndexed { i, button ->
+            // Remove everything past "/v1/" to get original instead of thumbnail
+            val imageUrl = button.selectFirst("img")?.absUrl("src")?.substringBefore("/v1/")
+            Page(i, imageUrl = imageUrl)
+        }?.also {
+            // First image needs token to get original, which is included in firstImageUrl
+            it[0].imageUrl = firstImageUrl
+        }
+            // If there are no buttons then chapter only has one page
+            ?: listOf(Page(0, imageUrl = firstImageUrl))
     }
 
     override fun imageUrlParse(response: Response): String {
