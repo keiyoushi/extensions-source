@@ -29,9 +29,9 @@ abstract class MangaWorld(
 
     override val supportsLatest = true
 
-    // ShittyRedirectionInterceptor extracts MWCookie from the page's JS code, applies it and then redirects to the page
+    // CookieRedirectInterceptor extracts MWCookie from the page's JS code, applies it and then redirects to the page
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor(ShittyRedirectionInterceptor(network.cloudflareClient))
+        .addInterceptor(CookieRedirectInterceptor(network.cloudflareClient))
         .build()
 
     companion object {
