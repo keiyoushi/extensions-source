@@ -30,7 +30,7 @@ class IRovedOut : HttpSource() {
         It updates in chunks anywhere between 3 and 30 pages long at least once a month.
     """.trimIndent()
     private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
-    private val titleRegex = Regex("Book (?<bookNumber>\\d+): (?<chapterTitle>.+)")
+    private val titleRegex = Regex("Book (\\d+): (?.+)")
 
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
@@ -79,8 +79,8 @@ class IRovedOut : HttpSource() {
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val match = titleRegex.matchEntire(chapter.name) ?: return Observable.just(listOf())
-        val bookNumber = match.groups["bookNumber"]!!.value.toInt()
-        val title = match.groups["chapterTitle"]!!.value
+        val bookNumber = match.groups[1]!!.value.toInt()
+        val title = match.groups[2]!!.value
         val bookPage = client.newCall(GET(archiveUrl + if (bookNumber != 1) "-book-$bookNumber" else "", headers)).execute().asJsoup()
         val chapterWrap = bookPage.select(".comic-archive-chapter-wrap").find { it.selectFirst(".comic-archive-chapter")!!.text() == title }
         val pageUrls = chapterWrap?.select(".comic-archive-list-wrap .comic-archive-title > a")?.map { it.attr("href") } ?: return Observable.just(listOf())

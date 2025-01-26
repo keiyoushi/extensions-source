@@ -24,7 +24,7 @@ class FRScan : Madara("FR-Scan", "https://fr-scan.com", "fr", dateFormat = Simpl
         val chapterPreloaded = document.selectFirst("#chapter_preloaded_images")
             ?: return super.pageListParse(document)
 
-        val content = CHAPTER_PAGES_REGEX.find(chapterPreloaded.data())?.groups?.get("pages")!!.value
+        val content = CHAPTER_PAGES_REGEX.find(chapterPreloaded.data())?.groups?.get(1)!!.value
         val pages = json.decodeFromString<List<String>>(content)
 
         return pages.mapIndexed { index, imageUrl ->
@@ -33,6 +33,6 @@ class FRScan : Madara("FR-Scan", "https://fr-scan.com", "fr", dateFormat = Simpl
     }
 
     companion object {
-        val CHAPTER_PAGES_REGEX = """=\s+(?<pages>\[.+\])""".toRegex()
+        val CHAPTER_PAGES_REGEX = """=\s+(\[.+\])""".toRegex()
     }
 }

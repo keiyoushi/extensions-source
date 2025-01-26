@@ -253,7 +253,7 @@ class ReadMangas() : HttpSource() {
         val document = response.asJsoup()
         val scripts = document.select("script").joinToString("\n") { it.data() }
         val pages = IMAGE_URL_REGEX.findAll(scripts).mapIndexed { index, match ->
-            Page(index, imageUrl = match.groups["imageUrl"]!!.value)
+            Page(index, imageUrl = match.groups[1]!!.value)
         }.toList()
 
         return pages
@@ -294,7 +294,7 @@ class ReadMangas() : HttpSource() {
 
     @SuppressLint("SimpleDateFormat")
     companion object {
-        val IMAGE_URL_REGEX = """url\\":\\"(?<imageUrl>[^(\\")]+)""".toRegex()
+        val IMAGE_URL_REGEX = """url\\":\\"([^(\\")]+)""".toRegex()
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
 
