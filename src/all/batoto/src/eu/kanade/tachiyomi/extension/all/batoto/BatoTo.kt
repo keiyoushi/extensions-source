@@ -346,9 +346,9 @@ open class BatoTo(
                 append("\n\n${it.text()}")
             }
             infoElement.selectFirst("h5:containsOwn(Extra Info:) + div")?.also {
-                append("\n\nExtra Info:\n${it.text()}")
+                append("\n\nExtra Info:\n${it.wholeText()}")
             }
-            document.selectFirst("div.pb-2.alias-set.line-b-f")?.also {
+            document.selectFirst("div.pb-2.alias-set.line-b-f")?.takeIf { it.hasText() }?.also {
                 append("\n\nAlternative Titles:\n")
                 append(it.text().split('/').joinToString("\n") { "• ${it.trim()}" })
             }
@@ -369,16 +369,19 @@ open class BatoTo(
         manga.thumbnail_url = document.select("div.attr-cover img").attr("abs:src")
         return manga
     }
-    private fun parseStatus(workStatus: String?, uploadStatus: String?) = when {
-        workStatus == null -> SManga.UNKNOWN
-        workStatus.contains("Ongoing") -> SManga.ONGOING
-        workStatus.contains("Cancelled") -> SManga.CANCELLED
-        workStatus.contains("Hiatus") -> SManga.ON_HIATUS
-        workStatus.contains("Completed") -> when {
-            uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
-            else -> SManga.COMPLETED
+    private fun parseStatus(workStatus: String?, uploadStatus: String?): Int {
+        val status = workStatus ?: uploadStatus
+        return when {
+            status == null -> SManga.UNKNOWN
+            status.contains("Ongoing") -> SManga.ONGOING
+            status.contains("Cancelled") -> SManga.CANCELLED
+            status.contains("Hiatus") -> SManga.ON_HIATUS
+            status.contains("Completed") -> when {
+                uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
+                else -> SManga.COMPLETED
+            }
+            else -> SManga.UNKNOWN
         }
-        else -> SManga.UNKNOWN
     }
 
     private fun altChapterParse(response: Response): List<SChapter> {
