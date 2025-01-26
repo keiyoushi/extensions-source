@@ -105,7 +105,7 @@ class HeanCmsChapterDto(
     @SerialName("chapter_name") private val name: String,
     @SerialName("chapter_title") private val title: String? = null,
     @SerialName("chapter_slug") private val slug: String,
-    @SerialName("created_at") private val createdAt: String,
+    @SerialName("created_at") private val createdAt: String? = null,
     val price: Int? = null,
 ) {
     fun toSChapter(
