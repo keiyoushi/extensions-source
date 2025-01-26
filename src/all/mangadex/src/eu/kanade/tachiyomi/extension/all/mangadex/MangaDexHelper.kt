@@ -324,6 +324,7 @@ class MangaDexHelper(lang: String) {
         coverSuffix: String?,
         altTitlesInDesc: Boolean,
         preferExtensionLangTitle: Boolean,
+        finalChapterInDesc: Boolean,
     ): SManga {
         val attr = mangaDataDto.attributes!!
 
@@ -365,9 +366,12 @@ class MangaDexHelper(lang: String) {
 
         val genreList = MDConstants.tagGroupsOrder.flatMap { genresMap[it].orEmpty() } + nonGenres
 
-        var desc = (attr.description[lang] ?: attr.description["en"])
+        // Build description
+        val desc = mutableListOf<String>()
+
+        (attr.description[lang] ?: attr.description["en"])
             ?.removeEntitiesAndMarkdown()
-            .orEmpty()
+            ?.let { desc.add(it) }
 
         if (altTitlesInDesc) {
             val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
@@ -379,12 +383,24 @@ class MangaDexHelper(lang: String) {
             if (altTitles.isNotEmpty()) {
                 val altTitlesDesc = altTitles
                     .joinToString("\n", "${intl["alternative_titles"]}\n") { "• $it" }
-                desc += (if (desc.isBlank()) "" else "\n\n") + altTitlesDesc.removeEntities()
+                desc.add(altTitlesDesc.removeEntities())
+            }
+        }
+
+        if (finalChapterInDesc) {
+            val finalChapter = mutableListOf<String>()
+            attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Vol.$it") }
+            attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Ch.$it") }
+
+            if (finalChapter.isNotEmpty()) {
+                val finalChapterDesc = finalChapter
+                    .joinToString(" ", "${intl["final_chapter"]}\n")
+                desc.add(finalChapterDesc.removeEntities())
             }
         }
 
         return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
-            description = desc
+            description = desc.joinToString("\n\n")
             author = authors.joinToString()
             artist = artists.joinToString()
             status = getPublicationStatus(attr, chapters)
