@@ -29,18 +29,24 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
+import org.jsoup.select.Evaluator
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.net.URLDecoder
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+import kotlin.math.ceil
 
 class YuriNeko : HttpSource(), ConfigurableSource {
 
     override val name = "YuriNeko"
 
-    private val defaultDomain = "yurineko.click"
+    private val defaultDomain = "yurineko.site"
 
     override val baseUrl by lazy { "https://${getPrefDomain()}" }
 
@@ -49,6 +55,12 @@ class YuriNeko : HttpSource(), ConfigurableSource {
     override val supportsLatest = false
 
     private val apiUrl by lazy { "https://api.${getPrefDomain()}" }
+
+    private val storageUrl by lazy { "https://storage.${getPrefDomain()}" }
+
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    }
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
@@ -98,7 +110,15 @@ class YuriNeko : HttpSource(), ConfigurableSource {
     override fun popularMangaParse(response: Response): MangasPage {
         val mangaListDto = response.parseAs<MangaListDto>()
         val currentPage = response.request.url.queryParameter("page")!!.toFloat()
-        return mangaListDto.toMangasPage(currentPage)
+        val hasNextPage = currentPage + 1f <= ceil(mangaListDto.resultCount.toFloat() / 20f)
+        val manga = mangaListDto.result.map {
+            SManga.create().apply {
+                title = it.originalName
+                thumbnail_url = "$storageUrl/${it.thumbnail}"
+                setUrlWithoutDomain("/manga/${it.id}")
+            }
+        }
+        return MangasPage(manga, hasNextPage)
     }
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
@@ -187,21 +207,64 @@ class YuriNeko : HttpSource(), ConfigurableSource {
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}")
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<MangaDto>().toSManga()
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val manga = response.parseAs<MangaDto>()
+        url = "/manga/${manga.id}"
+        title = manga.originalName
+        author = manga.author.joinToString(", ") { author -> author.name.toString() }
+        val descElem = Jsoup.parseBodyFragment(manga.description)
+        description = if (descElem.select("p").any()) {
+            Jsoup.parse(manga.description).select("p").joinToString("\n") {
+                it.run {
+                    select(Evaluator.Tag("br")).prepend("\\n")
+                    this.text().replace("\\n", "\n").replace("\n ", "\n")
+                }
+            }.trim()
+        } else {
+            manga.description
+        }
+        if (manga.otherName.isNotEmpty()) {
+            description = "Tên khác: ${manga.otherName}\n\n" + description
+        }
+        genre = manga.tag.joinToString(", ") { tag -> tag.name }
+        status = when (manga.status) {
+            1 -> SManga.UNKNOWN // "Chưa ra mắt" -> Not released
+            2 -> SManga.COMPLETED
+            3 -> SManga.UNKNOWN // "Sắp ra mắt" -> Upcoming
+            4 -> SManga.ONGOING
+            5 -> SManga.CANCELLED // "Ngừng dịch" -> source not translating it anymomre
+            6 -> SManga.ON_HIATUS
+            7 -> SManga.CANCELLED // "Ngừng xuất bản" -> No more publications
+            else -> SManga.UNKNOWN
+        }
+        thumbnail_url = "$storageUrl/" + manga.thumbnail
+        initialized = true
+    }
 
     override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl${manga.url}")
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaDto = response.parseAs<MangaDto>()
-        val scanlator = mangaDto.team.joinToString(", ") { it.name }
-        return mangaDto.chapters?.map { it.toSChapter(scanlator) } ?: emptyList()
+        val manga = response.parseAs<MangaDto>()
+        val chapter = manga.chapters.map {
+            SChapter.create().apply {
+                setUrlWithoutDomain("/read/${it.mangaID}/${it.id}")
+                name = it.name
+                if (!it.date.isNullOrEmpty()) {
+                    date_upload = runCatching {
+                        dateFormat.parse(it.date)?.time
+                    }.getOrNull() ?: 0L
+                }
+                scanlator = manga.team.joinToString(", ") { it.name.toString() }
+            }
+        }
+        return chapter
     }
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl${chapter.url}")
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.parseAs<ReadResponseDto>().toPageList()
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<ReadResponseDto>().url.mapIndexed { i, url ->
+        Page(i, imageUrl = storageUrl + url)
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 

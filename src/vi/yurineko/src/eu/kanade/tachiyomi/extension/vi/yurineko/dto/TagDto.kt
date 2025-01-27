@@ -3,9 +3,16 @@ package eu.kanade.tachiyomi.extension.vi.yurineko.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class TagDto(
-    val id: Int,
+class TagDto(
     val name: String,
-    val url: String,
-    val origin: String? = null,
+)
+
+@Serializable
+class Author(
+    val name: String?,
+)
+
+@Serializable
+class Team(
+    val name: String?,
 )
