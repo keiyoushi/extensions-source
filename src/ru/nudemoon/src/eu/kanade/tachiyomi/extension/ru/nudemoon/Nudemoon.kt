@@ -39,8 +39,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
-    private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
-    override val baseUrl: String = domain
+    override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val dateParseRu = SimpleDateFormat("d MMMM yyyy", Locale("ru"))
     private val dateParseSlash = SimpleDateFormat("d/MM/yyyy", Locale("ru"))
@@ -351,19 +350,34 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
-            key = DOMAIN_TITLE
-            this.title = DOMAIN_TITLE
-            summary = domain
-            this.setDefaultValue(DOMAIN_DEFAULT)
+            key = DOMAIN_PREF
+            title = DOMAIN_TITLE
+            setDefaultValue(DOMAIN_DEFAULT)
             dialogTitle = DOMAIN_TITLE
+            dialogMessage = "Default URL:\n\t$DOMAIN_DEFAULT"
             setOnPreferenceChangeListener { _, _ ->
-                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
-                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
                 true
             }
         }.let(screen::addPreference)
     }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
+
+    init {
+        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { defaultBaseUrl ->
+            if (defaultBaseUrl != DOMAIN_DEFAULT) {
+                preferences.edit()
+                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .apply()
+            }
+        }
+    }
+
     companion object {
+        private const val DOMAIN_PREF = "Домен"
+        private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
         private const val DOMAIN_TITLE = "Домен"
         private const val DOMAIN_DEFAULT = "https://nude-moon.org"
     }
