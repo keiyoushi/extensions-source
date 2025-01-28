@@ -283,7 +283,7 @@ abstract class ColaManga(
         val readJs = Deobfuscator.deobfuscateScript(obfuscatedReadJs)
             ?: throw Exception(intl.couldNotDeobufscateScript)
 
-        keyMappingRegex.findAll(readJs).associate { it.groups[1]!!.value to it.groups[2]!!.value }
+        keyMappingRegex.findAll(readJs).associate { it.groups[2]!!.value to it.groups[3]!!.value }
     }
 
     private fun randomString() = buildString(15) {
