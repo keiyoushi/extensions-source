@@ -195,8 +195,8 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         val artistInTitlePref = ListPreference(screen.context).apply {
             key = ArtistInTitle.PREF_KEY
             title = "Artist name in manga title"
-            entries = ArtistInTitle.textsArray()
-            entryValues = ArtistInTitle.namesArray()
+            entries = ArtistInTitle.values().map { it.text }.toTypedArray()
+            entryValues = ArtistInTitle.values().map { it.name }.toTypedArray()
             summary = "%s"
             setDefaultValue(ArtistInTitle.defaultValue.name)
         }
@@ -212,8 +212,6 @@ class DeviantArt : HttpSource(), ConfigurableSource {
 
         companion object {
             const val PREF_KEY = "artistInTitlePref"
-            fun namesArray() = values().map { it.name }.toTypedArray()
-            fun textsArray() = values().map { it.text }.toTypedArray()
             val defaultValue = ONLY_ALL
         }
     }
