@@ -3,7 +3,7 @@ ext {
     extClass = '.CoffeeManga'
     themePkg = 'madara'
     baseUrl = 'https://coffeemanga.io'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
