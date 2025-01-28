@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.truyentranh3q
 
 import android.net.ParseException
-import android.net.Uri
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
@@ -16,11 +15,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.net.URLDecoder
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -53,16 +52,13 @@ class TruyenTranh3Q : ParsedHttpSource() {
                 title = it.text()
                 setUrlWithoutDomain(it.attr("abs:href"))
             }
-            val relativeImageUrl = element.selectFirst(".book_avatar a img")?.attr("src")
-            thumbnail_url = relativeImageUrl?.let {
-                if (it.startsWith("/_next/image?")) {
-                    Uri.parse(it).getQueryParameter("url")?.let { encodedUrl ->
-                        URLDecoder.decode(encodedUrl, "UTF-8")
-                    }
-                } else {
-                    it
+            thumbnail_url = element.selectFirst(".book_avatar a img")
+                ?.absUrl("src")
+                ?.let { url ->
+                    url.toHttpUrlOrNull()
+                        ?.queryParameter("url")
+                        ?: url
                 }
-            }
         }
     }
 
