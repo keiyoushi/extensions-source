@@ -6,6 +6,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 class CookieRedirectInterceptor(private val client: OkHttpClient) : Interceptor {
     private val cookieRegex = Regex("""document\.cookie="(MWCookie[^"]+)""")
@@ -13,11 +14,12 @@ class CookieRedirectInterceptor(private val client: OkHttpClient) : Interceptor 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        // ignore non-protected requests by checking for any header that doesn't show up when redirecting
-        if (response.headers["vary"] != null) return response
+        // ignore requests with no possible JS challenge
+        if (response.body.contentType()?.type != "text/html") return response
 
-        val results = cookieRegex.find(response.body.string())
-            ?: return response
+        val content = response.body.string()
+        val results = cookieRegex.find(content)
+            ?: return response.newBuilder().body(content.toResponseBody(response.body.contentType())).build()
         val (cookieString) = results.destructured
         return chain.proceed(loadCookie(request, cookieString))
     }
