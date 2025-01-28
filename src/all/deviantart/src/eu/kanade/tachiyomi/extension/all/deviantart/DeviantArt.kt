@@ -92,8 +92,8 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         // If manga is sub-gallery then use sub-gallery name, else use gallery name
         val galleryName = gallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
             ?: gallery?.selectFirst("[aria-haspopup=listbox] > div")!!.ownText()
-        val artistInTitle = preferences.artistInTitle == ArtistInTitle.ON.name ||
-            preferences.artistInTitle == ArtistInTitle.ONLY_ALL.name && galleryName == "All"
+        val artistInTitle = preferences.artistInTitle == ArtistInTitle.ALWAYS.name ||
+            preferences.artistInTitle == ArtistInTitle.ONLY_ALL_GALLERIES.name && galleryName == "All"
 
         return SManga.create().apply {
             setUrlWithoutDomain(response.request.url.toString())
@@ -170,17 +170,17 @@ class DeviantArt : HttpSource(), ConfigurableSource {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val firstImageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
-        val buttons = document.selectFirst("[draggable=false]")?.children()
-        return buttons?.mapIndexed { i, button ->
-            // Remove everything past "/v1/" to get original instead of thumbnail
-            val imageUrl = button.selectFirst("img")?.absUrl("src")?.substringBefore("/v1/")
-            Page(i, imageUrl = imageUrl)
-        }?.also {
-            // First image needs token to get original, which is included in firstImageUrl
-            it[0].imageUrl = firstImageUrl
+        return when (val buttons = document.selectFirst("[draggable=false]")?.children()) {
+            null -> listOf(Page(0, imageUrl = firstImageUrl))
+            else -> buttons.mapIndexed { i, button ->
+                // Remove everything past "/v1/" to get original instead of thumbnail
+                val imageUrl = button.selectFirst("img")?.absUrl("src")?.substringBefore("/v1/")
+                Page(i, imageUrl = imageUrl)
+            }.also {
+                // First image needs token to get original, which is included in firstImageUrl
+                it[0].imageUrl = firstImageUrl
+            }
         }
-            // If there are no buttons then chapter only has one page
-            ?: listOf(Page(0, imageUrl = firstImageUrl))
     }
 
     override fun imageUrlParse(response: Response): String {
@@ -197,7 +197,10 @@ class DeviantArt : HttpSource(), ConfigurableSource {
             title = "Artist name in manga title"
             entries = ArtistInTitle.values().map { it.text }.toTypedArray()
             entryValues = ArtistInTitle.values().map { it.name }.toTypedArray()
-            summary = "%s"
+            summary = "Current: %s\n\n" +
+                "Changing this preference will not automatically apply to manga in Library " +
+                "and History, so refresh all DeviantArt manga and/or clear database in Settings " +
+                "> Advanced after doing so."
             setDefaultValue(ArtistInTitle.defaultValue.name)
         }
 
@@ -205,14 +208,14 @@ class DeviantArt : HttpSource(), ConfigurableSource {
     }
 
     private enum class ArtistInTitle(val text: String) {
-        OFF("Off"),
-        ON("On"),
-        ONLY_ALL("Only in \"All\" galleries"),
+        NEVER("Never"),
+        ALWAYS("Always"),
+        ONLY_ALL_GALLERIES("Only in \"All\" galleries"),
         ;
 
         companion object {
             const val PREF_KEY = "artistInTitlePref"
-            val defaultValue = ONLY_ALL
+            val defaultValue = ONLY_ALL_GALLERIES
         }
     }
 
