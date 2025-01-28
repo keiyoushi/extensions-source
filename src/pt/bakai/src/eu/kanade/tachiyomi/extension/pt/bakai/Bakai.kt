@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.bakai
 
+import android.app.Application
+import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -15,11 +17,15 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class Bakai : ParsedHttpSource() {
@@ -35,10 +41,11 @@ class Bakai : ParsedHttpSource() {
     override val client by lazy {
         network.cloudflareClient.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
+            .addInterceptor(::resolvePathSegment)
             .cookieJar(
                 object : CookieJar {
                     private fun List<Cookie>.removeLimit() = filterNot {
-                        it.name.startsWith("ips4_") || it.path == "/search1"
+                        it.name.startsWith("ips4_") || it.path == searchPathSegment
                     }
 
                     private val cookieJar = network.client.cookieJar
@@ -53,6 +60,9 @@ class Bakai : ParsedHttpSource() {
             .build()
     }
 
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", baseUrl)
         .set("Cache-Control", "no-cache")
@@ -62,7 +72,11 @@ class Bakai : ParsedHttpSource() {
         .set("Sec-GPC", "1")
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/home/page/$page/")
+    private var popularPathSegment: String
+        get() = preferences.getString(POPULAR_SEGMENT_PREF, "home4")!!
+        set(value) = preferences.edit().putString(POPULAR_SEGMENT_PREF, value).apply()
+
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/$popularPathSegment/page/$page/")
 
     override fun popularMangaSelector() = "#elCmsPageWrap ul > li > article"
 
@@ -110,8 +124,12 @@ class Bakai : ParsedHttpSource() {
         return MangasPage(listOf(details), false)
     }
 
+    private var searchPathSegment: String
+        get() = preferences.getString(SEARCH_SEGMENT_PREF, "search4")!!
+        set(value) = preferences.edit().putString(SEARCH_SEGMENT_PREF, value).apply()
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/".toHttpUrl().newBuilder()
+        val url = "$baseUrl/$searchPathSegment/".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .addQueryParameter("type", "cms_records1")
             .addQueryParameter("page", page.toString())
@@ -189,7 +207,65 @@ class Bakai : ParsedHttpSource() {
         }
     }
 
+    // =============================== Interceptors =========================
+
+    private fun resolvePathSegment(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        if (response.isSuccessful || request.url.pathSegments.any { it.contains(popularPathSegment, searchPathSegment) }.not()) {
+            return response
+        }
+
+        response.close()
+
+        val pathSegment = findPathSegment(chain, request)
+
+        val url = request.url.newBuilder()
+            .setPathSegment(0, pathSegment)
+            .build()
+
+        val newRequest = request.newBuilder()
+            .url(url)
+            .build()
+
+        return chain.proceed(newRequest)
+    }
+
+    private fun findPathSegment(chain: Interceptor.Chain, request: Request): String {
+        return chain.proceed(GET(baseUrl, headers)).use {
+            val document = it.asJsoup()
+            val pathSegments = request.url.pathSegments
+            val absUrl = when {
+                pathSegments.contains(popularPathSegment) ->
+                    document.selectFirst(popularMangaNextPageSelector())?.absUrl("href")
+
+                pathSegments.contains(searchPathSegment) ->
+                    document.selectFirst("#elSearch form")?.absUrl("action")
+
+                else -> null
+            } ?: throw IOException("Não foi possivel encontrar URL")
+
+            val url = absUrl.toHttpUrl()
+
+            return@use url.pathSegments.firstOrNull()?.also { segment ->
+                when {
+                    pathSegments.contains(popularPathSegment) -> popularPathSegment = segment
+                    pathSegments.contains(searchPathSegment) -> searchPathSegment = segment
+                    else -> throw IOException("Não foi possivel resolver caminho")
+                }
+            }
+        } ?: throw IOException("Falha na resolução do caminho")
+    }
+
+    // =============================== Utililies ======================================
+
+    private fun String.contains(vararg values: String): Boolean {
+        return values.any { it.contains(this, ignoreCase = true) }
+    }
+
     companion object {
         const val PREFIX_SEARCH = "id:"
+        const val POPULAR_SEGMENT_PREF = "popularSegmentPref"
+        const val SEARCH_SEGMENT_PREF = "searchSegmentPref"
     }
 }
