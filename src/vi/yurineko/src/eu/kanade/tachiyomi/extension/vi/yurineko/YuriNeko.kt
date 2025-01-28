@@ -30,7 +30,6 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
-import org.jsoup.select.Evaluator
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -212,19 +211,12 @@ class YuriNeko : HttpSource(), ConfigurableSource {
         url = "/manga/${manga.id}"
         title = manga.originalName
         author = manga.author.joinToString(", ") { author -> author.name.toString() }
-        val descElem = Jsoup.parseBodyFragment(manga.description)
-        description = if (descElem.select("p").any()) {
-            Jsoup.parse(manga.description).select("p").joinToString("\n") {
-                it.run {
-                    select(Evaluator.Tag("br")).prepend("\\n")
-                    this.text().replace("\\n", "\n").replace("\n ", "\n")
-                }
-            }.trim()
+        val descElem = Jsoup.parseBodyFragment(manga.description).select("p")
+            .joinToString("\n") { it.wholeText() }.trim()
+        description = if (manga.otherName.isNotEmpty()) {
+            "Tên khác: ${manga.otherName}\n\n" + descElem
         } else {
-            manga.description
-        }
-        if (manga.otherName.isNotEmpty()) {
-            description = "Tên khác: ${manga.otherName}\n\n" + description
+            descElem
         }
         genre = manga.tag.joinToString(", ") { tag -> tag.name }
         status = when (manga.status) {
