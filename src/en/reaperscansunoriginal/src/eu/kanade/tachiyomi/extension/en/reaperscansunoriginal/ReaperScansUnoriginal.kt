@@ -102,7 +102,8 @@ class ReaperScansUnoriginal : ParsedHttpSource() {
         }
 
         val trimmedDate = date.split(" ")
-        if (trimmedDate.size != 3 && trimmedDate[2] != "ago") return 0L
+        // This means 1hr ago or 20hrs ago
+        if (trimmedDate.size < 3) return 0L
         val number = trimmedDate[0].toIntOrNull() ?: return 0L
         val unit = trimmedDate[1].removeSuffix("s") // Remove 's' suffix
         val now = Calendar.getInstance()
