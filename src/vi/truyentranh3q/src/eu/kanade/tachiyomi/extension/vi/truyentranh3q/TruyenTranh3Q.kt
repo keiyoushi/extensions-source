@@ -200,7 +200,7 @@ class TruyenTranh3Q : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select(pageListSelector).mapIndexed { idx, it ->
-            Page(idx, imageUrl = it.attr("data-src"))
+            Page(idx, imageUrl = it.absUrl("data-src"))
         }
     }
 
