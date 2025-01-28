@@ -1,7 +1,13 @@
 package eu.kanade.tachiyomi.extension.ru.nudemoon
 
+import android.app.Application
+import android.content.SharedPreferences
 import android.webkit.CookieManager
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,21 +20,26 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
-class Nudemoon : ParsedHttpSource() {
+class Nudemoon : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Nude-Moon"
-
-    override val baseUrl = "https://a.nude-moon.fun"
 
     override val lang = "ru"
 
     override val supportsLatest = true
+
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
+    override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val dateParseRu = SimpleDateFormat("d MMMM yyyy", Locale("ru"))
     private val dateParseSlash = SimpleDateFormat("d/MM/yyyy", Locale("ru"))
@@ -336,4 +347,38 @@ class Nudemoon : ParsedHttpSource() {
         Genre("titsfuck"),
         Genre("x-ray"),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = DOMAIN_PREF
+            title = DOMAIN_TITLE
+            setDefaultValue(DOMAIN_DEFAULT)
+            dialogTitle = DOMAIN_TITLE
+            dialogMessage = "Default URL:\n\t$DOMAIN_DEFAULT"
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
+
+    init {
+        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { defaultBaseUrl ->
+            if (defaultBaseUrl != DOMAIN_DEFAULT) {
+                preferences.edit()
+                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .apply()
+            }
+        }
+    }
+
+    companion object {
+        private const val DOMAIN_PREF = "Домен"
+        private const val DEFAULT_DOMAIN_PREF = "pref_default_domain"
+        private const val DOMAIN_TITLE = "Домен"
+        private const val DOMAIN_DEFAULT = "https://nude-moon.org"
+    }
 }
