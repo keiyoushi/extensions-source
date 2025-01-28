@@ -212,7 +212,7 @@ class Bakai : ParsedHttpSource() {
     private fun resolvePathSegment(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        if (response.isSuccessful) {
+        if (response.isSuccessful || request.url.pathSegments.any { it.contains(popularPathSegment, searchPathSegment) }.not()) {
             return response
         }
 
@@ -255,6 +255,12 @@ class Bakai : ParsedHttpSource() {
                 }
             }
         } ?: throw IOException("Falha na resolução do caminho")
+    }
+
+    // =============================== Utililies ======================================
+
+    private fun String.contains(vararg values: String): Boolean {
+        return values.any { it.contains(this, ignoreCase = true) }
     }
 
     companion object {
