@@ -17,7 +17,6 @@ class HentaiDex : MangaThemesia(
     "https://dexhentai.com",
     "en",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.US),
-    mangaUrlDirectory = "/title",
 ) {
     override fun chapterListParse(response: Response): List<SChapter> =
         super.chapterListParse(response).sortedByDescending { it.chapter_number }
@@ -32,6 +31,9 @@ class HentaiDex : MangaThemesia(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment(mangaUrlDirectory.substring(1))
+            .addPathSegment("")
+            .addQueryParameter("page", page.toString())
 
         // Can't use filter if is a global search
         if (query.isNotEmpty()) {
@@ -84,8 +86,6 @@ class HentaiDex : MangaThemesia(
                 }
             }
         }
-        url.addPathSegment(mangaUrlDirectory.substring(1))
-            .addQueryParameter("page", page.toString())
         return GET(url.build(), headers)
     }
 
