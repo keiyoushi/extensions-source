@@ -92,8 +92,8 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         // If manga is sub-gallery then use sub-gallery name, else use gallery name
         val galleryName = gallery?.selectFirst("._2vMZg + ._2vMZg")?.text()?.substringBeforeLast(" ")
             ?: gallery?.selectFirst("[aria-haspopup=listbox] > div")!!.ownText()
-        val artistInTitle = preferences.artistInTitle == ArtistInTitle.ON.name
-            || preferences.artistInTitle == ArtistInTitle.ONLY_ALL.name && galleryName == "All"
+        val artistInTitle = preferences.artistInTitle == ArtistInTitle.ON.name ||
+            preferences.artistInTitle == ArtistInTitle.ONLY_ALL.name && galleryName == "All"
 
         return SManga.create().apply {
             setUrlWithoutDomain(response.request.url.toString())
