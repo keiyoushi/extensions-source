@@ -10,7 +10,7 @@ class Manhuaga : Madara("Manhuaga", "https://manhua-ga.org", "en") {
             chain.proceed(originalRequest).let { response ->
                 if (response.code == 403) {
                     response.close()
-                    chain.proceed(originalRequest.newBuilder().removeHeader("Referer").addHeader("Referer", "https://manhua-ga.org").build())
+                    chain.proceed(originalRequest.newBuilder().removeHeader("Referer").addHeader("Referer", baseUrl).build())
                 } else {
                     response
                 }
