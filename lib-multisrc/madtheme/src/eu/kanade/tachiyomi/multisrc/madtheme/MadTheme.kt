@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -23,7 +22,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -52,8 +50,6 @@ abstract class MadTheme(
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", "$baseUrl/")
     }
-
-    private val json: Json by injectLazy()
 
     private var genreKey = "genre[]"
 
@@ -179,21 +175,30 @@ abstract class MadTheme(
             return super.chapterListParse(response)
         }
 
-        val script = response.asJsoup().selectFirst("script:containsData(bookId)")
+        val document = response.asJsoup()
+
+        // Need the total chapters to check against the request
+        val totalChapters = document.selectFirst(".title span:containsOwn(CHAPTERS \\()")?.text()
+            ?.substringAfter("(")
+            ?.substringBefore(")")
+            ?.toIntOrNull()
+
+        val script = document.selectFirst("script:containsData(bookId)")
             ?: throw Exception("Cannot find script")
         val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
         val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
 
-        // At this moment we can not decide which endpoint has the chapters, so we call both.
-        val idRequest = client.newCall(GET(buildChapterUrl(bookId), headers)).execute()
-        val slugRequest = client.newCall(GET(buildChapterUrl(bookSlug), headers)).execute()
+        // Use slug search by default
+        val slugRequest = chapterClient.newCall(GET(buildChapterUrl(bookSlug), headers)).execute()
+        if (!slugRequest.isSuccessful) {
+            throw Exception("HTTP error ${slugRequest.code}")
+        }
 
-        // By default the id request will be the final, due to some extension don't even has slug fetch.
-        var finalDocument = idRequest.asJsoup().select(chapterListSelector())
-        val slugDocument = slugRequest.asJsoup().select(chapterListSelector())
+        var finalDocument = slugRequest.asJsoup().select(chapterListSelector())
 
-        if (finalDocument.size < slugDocument.size) {
-            finalDocument = slugDocument
+        if (totalChapters != null && finalDocument.size < totalChapters) {
+            val idRequest = chapterClient.newCall(GET(buildChapterUrl(bookId), headers)).execute()
+            finalDocument = idRequest.asJsoup().select(chapterListSelector())
         }
 
         return finalDocument.map {
