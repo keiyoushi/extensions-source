@@ -191,7 +191,7 @@ class TruyenTranh3Q : ParsedHttpSource() {
                 name = it.text()
                 setUrlWithoutDomain(it.attr("abs:href"))
             }
-            date_upload = parseChapterDate(element.selectFirst(".time-chap")!!.text() ?: "")
+            date_upload = parseChapterDate(element.selectFirst(".time-chap")?.text() ?: "")
         }
     }
 
