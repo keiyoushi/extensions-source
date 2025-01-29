@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 class TaurusFansub : Madara(
     "Taurus Fansub",
-    "https://taurusmanga.com",
+    "https://lectortaurus.com",
     "es",
     dateFormat = SimpleDateFormat("dd/MM/yyy", Locale.ROOT),
 ) {
