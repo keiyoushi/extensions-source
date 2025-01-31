@@ -15,7 +15,7 @@ class CookieRedirectInterceptor(private val client: OkHttpClient) : Interceptor 
         val request = chain.request()
         val response = chain.proceed(request)
         // ignore requests with no possible JS challenge
-        if (response.body.contentType()?.type != "text/html") return response
+        if (response.body.contentType()?.type?.contains("text/html") != true) return response
 
         val content = response.body.string()
         val results = cookieRegex.find(content)
