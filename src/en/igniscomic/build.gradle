@@ -2,7 +2,7 @@ ext {
     extName = 'Ignis Comic'
     extClass = '.IgnisComic'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://igniscomic.com'
+    baseUrl = 'https://manhuaga.com'
     overrideVersionCode = 1
 }
 
