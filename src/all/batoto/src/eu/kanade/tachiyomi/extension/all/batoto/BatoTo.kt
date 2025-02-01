@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.cryptoaes.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
@@ -100,11 +101,25 @@ open class BatoTo(
             if (current.isNotEmpty()) {
                 return current
             }
-            field = getMirrorPref()!!
+            field = getMirrorPref()
             return field
         }
 
-    private fun getMirrorPref(): String? = preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
+    private fun getMirrorPref(): String {
+        return preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
+            ?.takeUnless { it == MIRROR_PREF_DEFAULT_VALUE }
+            ?: let {
+                val seed = runCatching {
+                    val pm = Injekt.get<Application>().packageManager
+                    pm.getPackageInfo(BuildConfig.APPLICATION_ID, 0).lastUpdateTime
+                }.getOrElse {
+                    BuildConfig.VERSION_NAME.hashCode().toLong()
+                }
+
+                MIRROR_PREF_ENTRY_VALUES[1 + (seed % (MIRROR_PREF_ENTRIES.size - 1)).toInt()]
+            }
+    }
+
     private fun getAltChapterListPref(): Boolean = preferences.getBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
     private fun isRemoveTitleVersion(): Boolean {
         return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
@@ -327,6 +342,12 @@ open class BatoTo(
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (manga.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = manga.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             return GET(manga.url, headers)
         }
         return super.mangaDetailsRequest(manga)
@@ -414,6 +435,12 @@ open class BatoTo(
 
             GET("$baseUrl/rss/series/$id.xml", headers)
         } else if (manga.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = manga.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             GET(manga.url, headers)
         } else {
             super.chapterListRequest(manga)
@@ -510,6 +537,12 @@ open class BatoTo(
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (chapter.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = chapter.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             return GET(chapter.url, headers)
         }
         return super.pageListRequest(chapter)
@@ -1004,7 +1037,7 @@ open class BatoTo(
         private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private val MIRROR_PREF_ENTRIES = arrayOf(
-            "zbato.org",
+            "Auto",
             "batocomic.com",
             "batocomic.net",
             "batocomic.org",
@@ -1016,23 +1049,25 @@ open class BatoTo(
             "readtoto.com",
             "readtoto.net",
             "readtoto.org",
-            "dto.to",
-            "fto.to",
-            "jto.to",
-            "hto.to",
-            "mto.to",
-            "wto.to",
             "xbato.com",
             "xbato.net",
             "xbato.org",
             "zbato.com",
             "zbato.net",
+            "zbato.org",
+            "dto.to",
+            "fto.to",
+            "hto.to",
+            "jto.to",
+            "mto.to",
+            "wto.to",
         )
         private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 
         private val DEPRECATED_MIRRORS = listOf(
             "https://bato.to",
+            "https://batocc.com", // parked
             "https://mangatoto.com",
             "https://mangatoto.net",
             "https://mangatoto.org",
