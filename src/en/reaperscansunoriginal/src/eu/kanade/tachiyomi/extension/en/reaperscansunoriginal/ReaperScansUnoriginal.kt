@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.reaperscansunoriginal
 
+import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
@@ -147,9 +148,17 @@ class ReaperScansUnoriginal : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val chapterUrl = document.location()
-        return document.select("div.image-skeleton img")
+        return document.select("div.protected-image-data")
             .filterNot { it.attr("data-src").isEmpty() }
-            .mapIndexed { i, img -> Page(i, chapterUrl, img.attr("data-src")) }
+            .mapIndexed { i, div ->
+                Page(
+                    i,
+                    chapterUrl,
+                    Base64.decode(div.attr("data-src"), Base64.DEFAULT)
+                        .toString(Charsets.UTF_8)
+                        .trim(),
+                )
+            }
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
