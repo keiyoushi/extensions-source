@@ -180,7 +180,7 @@ class YushukeMangas : ParsedHttpSource() {
     }
 
     private fun fetchChapterListPage(mangaId: String, page: Int): Response {
-        val url = "$baseUrl/ajax/load_more_chapters.php?order=DESC".toHttpUrl().newBuilder()
+        val url = "$baseUrl/ajax/carregar_capitulos.php?order=DESC".toHttpUrl().newBuilder()
             .addQueryParameter("manga_id", mangaId)
             .addQueryParameter("page", page.toString())
             .build()
