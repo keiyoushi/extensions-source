@@ -342,6 +342,12 @@ open class BatoTo(
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (manga.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = manga.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             return GET(manga.url, headers)
         }
         return super.mangaDetailsRequest(manga)
@@ -429,6 +435,12 @@ open class BatoTo(
 
             GET("$baseUrl/rss/series/$id.xml", headers)
         } else if (manga.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = manga.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             GET(manga.url, headers)
         } else {
             super.chapterListRequest(manga)
@@ -525,6 +537,12 @@ open class BatoTo(
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (chapter.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = chapter.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             return GET(chapter.url, headers)
         }
         return super.pageListRequest(chapter)
