@@ -578,11 +578,13 @@ abstract class Madara(
 
     override fun searchMangaSelector() = "div.c-tabs-item__content"
 
+    protected open val searchMangaUrlSelector = "div.post-title a"
+
     override fun searchMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
         with(element) {
-            selectFirst("div.post-title a")!!.let {
+            selectFirst(searchMangaUrlSelector)!!.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
                 manga.title = it.ownText()
             }
