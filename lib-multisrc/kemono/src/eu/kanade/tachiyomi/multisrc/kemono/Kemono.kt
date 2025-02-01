@@ -107,7 +107,7 @@ open class Kemono(
         }
 
         var mangas = mangasCache
-        if (page == 1) {
+        if (page == 1 || mangasCache.isEmpty()) {
             var favourites: List<KemonoFavouritesDto> = emptyList()
             if (fav != null) {
                 val favores = client.newCall(GET("$baseUrl/$apiPath/account/favorites", headers)).execute()
@@ -132,7 +132,7 @@ open class Kemono(
 
                 includeType && !excludeType && isFavourited &&
                     regularSearch
-            }.also { mangasCache = mangas }
+            }.also { mangasCache = it }
         }
 
         val sorted = when (sort.first) {

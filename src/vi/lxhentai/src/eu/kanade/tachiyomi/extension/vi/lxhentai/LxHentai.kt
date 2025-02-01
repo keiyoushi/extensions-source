@@ -137,7 +137,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
         }.trim()
 
         thumbnail_url = document.selectFirst(".cover")?.attr("style")?.let {
-            IMAGE_REGEX.find(it)?.groups?.get("img")?.value
+            IMAGE_REGEX.find(it)?.groups?.get(1)?.value
         }
 
         val statusString = document.select("div.grow div.mt-2:contains(Tình trạng) a").first()!!.text()
@@ -323,7 +323,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
         const val PREFIX_ID_SEARCH = "id:"
 
         val CHAPTER_NUMBER_REGEX = Regex("""[+\-]?([0-9]*[.])?[0-9]+""", RegexOption.IGNORE_CASE)
-        val IMAGE_REGEX = """url\('(?<img>[^']+)""".toRegex()
+        val IMAGE_REGEX = """url\('([^']+)""".toRegex()
 
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."

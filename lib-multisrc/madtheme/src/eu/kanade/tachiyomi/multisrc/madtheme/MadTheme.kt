@@ -11,8 +11,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -22,7 +22,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -51,8 +50,6 @@ abstract class MadTheme(
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", "$baseUrl/")
     }
-
-    private val json: Json by injectLazy()
 
     private var genreKey = "genre[]"
 
@@ -178,29 +175,49 @@ abstract class MadTheme(
             return super.chapterListParse(response)
         }
 
-        val script = response.asJsoup().selectFirst("script:containsData(bookId)")
+        val document = response.asJsoup()
+
+        // Need the total chapters to check against the request
+        val totalChapters = document.selectFirst(".title span:containsOwn(CHAPTERS \\()")?.text()
+            ?.substringAfter("(")
+            ?.substringBefore(")")
+            ?.toIntOrNull()
+
+        val script = document.selectFirst("script:containsData(bookId)")
             ?: throw Exception("Cannot find script")
         val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
         val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
 
-        // Find by bookId, if no result then try with slug
-        var chapterRequest =
-            client.newCall(GET("$baseUrl/api/manga/$bookId/chapters?source=detail", headers))
-                .execute()
-
-        if (chapterRequest.code !in 200..299) {
-            chapterRequest =
-                client.newCall(GET("$baseUrl/api/manga/$bookSlug/chapters?source=detail", headers))
-                    .execute()
+        // Use slug search by default
+        val slugRequest = chapterClient.newCall(GET(buildChapterUrl(bookSlug), headers)).execute()
+        if (!slugRequest.isSuccessful) {
+            throw Exception("HTTP error ${slugRequest.code}")
         }
 
-        return chapterRequest.asJsoup().select("#chapter-list > li").map {
+        var finalDocument = slugRequest.asJsoup().select(chapterListSelector())
+
+        if (totalChapters != null && finalDocument.size < totalChapters) {
+            val idRequest = chapterClient.newCall(GET(buildChapterUrl(bookId), headers)).execute()
+            finalDocument = idRequest.asJsoup().select(chapterListSelector())
+        }
+
+        return finalDocument.map {
             SChapter.create().apply {
                 url = it.selectFirst("a")!!.absUrl("href").removePrefix(baseUrl)
                 name = it.selectFirst(".chapter-title")!!.text()
                 date_upload = parseChapterDate(it.selectFirst(".chapter-update")?.text())
             }
         }
+    }
+
+    private fun buildChapterUrl(fetchByParam: String): HttpUrl {
+        return baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("api")
+            addPathSegment("manga")
+            addPathSegment(fetchByParam)
+            addPathSegment("chapters")
+            addQueryParameter("source", "detail")
+        }.build()
     }
 
     override fun chapterListRequest(manga: SManga): Request =

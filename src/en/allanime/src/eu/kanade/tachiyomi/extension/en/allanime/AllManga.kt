@@ -154,7 +154,8 @@ class AllManga : ConfigurableSource, HttpSource() {
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl${manga.url}"
+        val mangaId = manga.url.split("/")[2]
+        return "$baseUrl/manga/$mangaId"
     }
 
     /* Chapters */
@@ -199,7 +200,10 @@ class AllManga : ConfigurableSource, HttpSource() {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl${chapter.url}"
+        val chapterUrlParts = chapter.url.split("/")
+        val mangaId = chapterUrlParts[2]
+        val chapterSlug = chapterUrlParts[4]
+        return "$baseUrl/read/$mangaId/$chapterSlug"
     }
 
     /* Pages */

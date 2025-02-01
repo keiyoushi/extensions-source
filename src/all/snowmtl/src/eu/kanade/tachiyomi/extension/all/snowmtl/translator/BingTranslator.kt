@@ -97,9 +97,9 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
         val matchTwo = IG_PARAM_REGEX.find(scriptTwo)?.groups
 
         return TokenGroup(
-            token = matchOne?.get("token")?.value ?: "",
-            key = matchOne?.get("key")?.value ?: "",
-            ig = matchTwo?.get("ig")?.value ?: "",
+            token = matchOne?.get(2)?.value ?: "",
+            key = matchOne?.get(1)?.value ?: "",
+            ig = matchTwo?.get(1)?.value ?: "",
             iid = document.selectFirst("div[data-iid]:not([class])")?.attr("data-iid") ?: "",
         )
     }
@@ -109,8 +109,8 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
     }
 
     companion object {
-        val TOKENS_REGEX = """params_AbusePreventionHelper(\s+)?=(\s+)?[^\[]\[(?<key>\d+),"(?<token>[^"]+)""".toRegex()
-        val IG_PARAM_REGEX = """IG:"(?<ig>[^"]+)""".toRegex()
+        val TOKENS_REGEX = """params_AbusePreventionHelper(\s+)?=(\s+)?[^\[]\[(\d+),"([^"]+)""".toRegex()
+        val IG_PARAM_REGEX = """IG:"([^"]+)""".toRegex()
         const val MAX_CHARS_ALLOW = 1000
     }
 }

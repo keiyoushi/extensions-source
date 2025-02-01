@@ -267,7 +267,7 @@ abstract class SlimeReadTheme(
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-        val FUNCTION_REGEX = """(?<script>\[""\.concat\("[^,]+,"\."\)\.concat\((?<infix>[^,]+),":\d+"\)\])""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        val FUNCTION_REGEX = """(\[""\.concat\("[^,]+,"\."\)\.concat\(([^,]+),":\d+"\)\])""".toRegex(RegexOption.DOT_MATCHES_ALL)
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
     }
 }
