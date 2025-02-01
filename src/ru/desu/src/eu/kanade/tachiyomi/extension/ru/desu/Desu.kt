@@ -44,6 +44,17 @@ class Desu : ConfigurableSource, HttpSource() {
     private val preferences: SharedPreferences =
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
+    init {
+        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
+            if (prefDefaultDomain != DOMAIN_DEFAULT) {
+                preferences.edit()
+                    .putString(DOMAIN_TITLE, DOMAIN_DEFAULT)
+                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .apply()
+            }
+        }
+    }
+
     private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
     override val baseUrl: String = domain
 
@@ -367,9 +378,9 @@ class Desu : ConfigurableSource, HttpSource() {
         }
         val domainDesuPref = EditTextPreference(screen.context).apply {
             key = DOMAIN_TITLE
-            this.title = DOMAIN_TITLE
+            title = DOMAIN_TITLE
             summary = domain
-            this.setDefaultValue(DOMAIN_DEFAULT)
+            setDefaultValue(DOMAIN_DEFAULT)
             dialogTitle = DOMAIN_TITLE
             setOnPreferenceChangeListener { _, _ ->
                 val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
@@ -380,6 +391,7 @@ class Desu : ConfigurableSource, HttpSource() {
         screen.addPreference(titleLanguagePref)
         screen.addPreference(domainDesuPref)
     }
+
     companion object {
         const val PREFIX_SLUG_SEARCH = "slug:"
 
@@ -388,6 +400,7 @@ class Desu : ConfigurableSource, HttpSource() {
         private const val API_URL = "/manga/api"
 
         private const val DOMAIN_TITLE = "Домен"
+        private const val DEFAULT_DOMAIN_PREF = "default_domain"
         private const val DOMAIN_DEFAULT = "https://desu.store"
     }
 }
