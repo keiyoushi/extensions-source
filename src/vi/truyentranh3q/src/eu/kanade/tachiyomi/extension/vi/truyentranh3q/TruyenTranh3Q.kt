@@ -113,7 +113,7 @@ class TruyenTranh3Q : ParsedHttpSource() {
             }
         }
 
-        return GET(url.toString(), headers)
+        return GET(url.build(), headers)
     }
 
     // same as popularManga
