@@ -28,7 +28,11 @@ abstract class MangaWorld(
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
-    override val client: OkHttpClient = network.cloudflareClient
+
+    // CookieRedirectInterceptor extracts MWCookie from the page's JS code, applies it and then redirects to the page
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(CookieRedirectInterceptor(network.cloudflareClient))
+        .build()
 
     companion object {
         protected val CHAPTER_NUMBER_REGEX by lazy { Regex("""(?i)capitolo\s([0-9]+)""") }
