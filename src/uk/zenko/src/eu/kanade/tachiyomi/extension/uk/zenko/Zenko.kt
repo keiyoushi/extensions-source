@@ -123,7 +123,7 @@ class Zenko : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val data = response.parseAs<ChapterResponseItem>()
         return data.pages!!.map { page ->
-            Page(page.id, imageUrl = "$IMAGE_STORAGE_URL/${page.imgUrl}")
+            Page(page.id, imageUrl = "$IMAGE_STORAGE_URL/${page.content}")
         }
     }
 
