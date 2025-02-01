@@ -1,0 +1,10 @@
+ext {
+    extName = 'CatManhwas'
+    extClass = '.CatManhwas'
+    themePkg = 'madara'
+    baseUrl = 'https://catmanhwas.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
