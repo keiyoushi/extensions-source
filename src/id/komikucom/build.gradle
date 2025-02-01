@@ -2,8 +2,8 @@ ext {
     extName = 'Komiku.com'
     extClass = '.KomikuCom'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://komiku.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://komiku.one'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
