@@ -48,7 +48,7 @@ class ChapterResponseItem(
 @Serializable
 class Page(
     val id: Int,
-    val imgUrl: String,
+    val content: String,
 )
 
 @Serializable
