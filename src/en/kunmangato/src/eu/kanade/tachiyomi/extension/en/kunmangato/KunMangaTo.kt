@@ -50,8 +50,8 @@ class KunMangaTo : ParsedHttpSource() {
         val a = element.selectFirst("a.manga")!!
         return SManga.create().apply {
             title = a.text()
-            url = a.attr("href").removePrefix(baseUrl)
-            thumbnail_url = element.selectFirst("img")!!.attr("src")
+            setUrlWithoutDomain(a.absUrl("href"))
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
     }
 
@@ -97,9 +97,9 @@ class KunMangaTo : ParsedHttpSource() {
             author = document.selectFirst("p.mb-1:nth-child(1)")!!.text().drop(9)
             description = document.getElementById("manga-description")!!.text()
             genre =
-                document.select("a.manga-genre").joinToString(", ") { element -> element.text() }
+                document.select("a.manga-genre").joinToString { element -> element.text() }
             status =
-                if (document.select(".text-success").size > 0) SManga.COMPLETED else SManga.ONGOING
+                if (document.select("*:has(~ #manga-description) p span:contains(Status:) ~ span").size > 0) SManga.COMPLETED else SManga.ONGOING
             thumbnail_url = document.selectFirst("img.text-end")!!.attr("src")
         }
     }
@@ -107,7 +107,7 @@ class KunMangaTo : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val chaptersDocument =
-            Jsoup.parse("<div>" + document.selectFirst(chapterListSelector())!!.attr("value") + "</div>")
+            Jsoup.parseBodyFragment(document.selectFirst(chapterListSelector())!!.attr("value"))
         val chapterItems = chaptersDocument.select(".chapter-item")
         return chapterItems.map { element ->
             chapterFromElement(element)
@@ -118,9 +118,11 @@ class KunMangaTo : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-            url = element.getElementsByTag("a").first()!!.attr("href").removePrefix(baseUrl)
+            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
             name = element.getElementsByTag("h3").first()!!.text()
-            date_upload = element.selectFirst(".text-muted")!!.text().parseChapterDate()
+            element.selectFirst(".text-muted")?.also {
+                date_upload = it.text().parseChapterDate()
+            }
         }
     }
 
@@ -135,11 +137,9 @@ class KunMangaTo : ParsedHttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
+        val chapterIdx = response.request.url.toString().substringBefore(".html").substringAfterLast("-")
         val form = FormBody.Builder()
-            .add(
-                "chapterIdx",
-                response.request.url.toString().substringBefore(".html").substringAfterLast("-"),
-            )
+            .add("chapterIdx", chapterIdx)
             .build()
 
         val chaptersRequest = POST(
