@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.ru.acomics
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -50,22 +49,7 @@ class AComics : ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaNextPageSelector(): String? {
-        TODO("Not yet implemented")
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select(popularMangaSelector()).map { element ->
-            popularMangaFromElement(element)
-        }
-
-        return MangasPage(mangas, true)
-    }
-
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
-    override fun searchMangaParse(response: Response) = popularMangaParse(response)
+    override fun popularMangaNextPageSelector() = "a.infinite-scroll"
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request =
