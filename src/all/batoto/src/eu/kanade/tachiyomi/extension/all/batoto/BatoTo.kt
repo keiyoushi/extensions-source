@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.cryptoaes.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
@@ -100,11 +101,25 @@ open class BatoTo(
             if (current.isNotEmpty()) {
                 return current
             }
-            field = getMirrorPref()!!
+            field = getMirrorPref()
             return field
         }
 
-    private fun getMirrorPref(): String? = preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
+    private fun getMirrorPref(): String {
+        return preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
+            ?.takeUnless { it == MIRROR_PREF_DEFAULT_VALUE }
+            ?: let {
+                val seed = runCatching {
+                    val pm = Injekt.get<Application>().packageManager
+                    pm.getPackageInfo(BuildConfig.APPLICATION_ID, 0).lastUpdateTime
+                }.getOrElse {
+                    BuildConfig.VERSION_NAME.hashCode().toLong()
+                }
+
+                MIRROR_PREF_ENTRY_VALUES[1 + (seed % (MIRROR_PREF_ENTRIES.size - 1)).toInt()]
+            }
+    }
+
     private fun getAltChapterListPref(): Boolean = preferences.getBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
     private fun isRemoveTitleVersion(): Boolean {
         return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
@@ -327,6 +342,12 @@ open class BatoTo(
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (manga.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = manga.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             return GET(manga.url, headers)
         }
         return super.mangaDetailsRequest(manga)
@@ -335,14 +356,25 @@ open class BatoTo(
         Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|\\/Official|\\/ Official", RegexOption.IGNORE_CASE)
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("div#mainer div.container-fluid")
+        val infoElement = document.selectFirst("div#mainer div.container-fluid")!!
         val manga = SManga.create()
-        val workStatus = infoElement.select("div.attr-item:contains(original work) span").text()
-        val uploadStatus = infoElement.select("div.attr-item:contains(upload status) span").text()
+        val workStatus = infoElement.selectFirst("div.attr-item:contains(original work) span")?.text()
+        val uploadStatus = infoElement.selectFirst("div.attr-item:contains(upload status) span")?.text()
         val originalTitle = infoElement.select("h3").text().removeEntities()
-        val alternativeTitles = document.select("div.pb-2.alias-set.line-b-f").text()
-        val description = infoElement.select("div.limit-html").text() + "\n" +
-            infoElement.select(".episode-list > .alert-warning").text().trim()
+        val description = buildString {
+            append(infoElement.select("div.limit-html").text())
+            infoElement.selectFirst(".episode-list > .alert-warning")?.also {
+                append("\n\n${it.text()}")
+            }
+            infoElement.selectFirst("h5:containsOwn(Extra Info:) + div")?.also {
+                append("\n\nExtra Info:\n${it.wholeText()}")
+            }
+            document.selectFirst("div.pb-2.alias-set.line-b-f")?.takeIf { it.hasText() }?.also {
+                append("\n\nAlternative Titles:\n")
+                append(it.text().split('/').joinToString("\n") { "• ${it.trim()}" })
+            }
+        }.trim()
+
         val cleanedTitle = if (isRemoveTitleVersion()) {
             originalTitle.replace(titleRegex, "").trim()
         } else {
@@ -354,21 +386,23 @@ open class BatoTo(
         manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
         manga.status = parseStatus(workStatus, uploadStatus)
         manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
-        manga.description = description +
-            if (alternativeTitles.isNotBlank()) "\n\nAlternative Titles:\n$alternativeTitles" else ""
+        manga.description = description
         manga.thumbnail_url = document.select("div.attr-cover img").attr("abs:src")
         return manga
     }
-    private fun parseStatus(workStatus: String?, uploadStatus: String?) = when {
-        workStatus == null -> SManga.UNKNOWN
-        workStatus.contains("Ongoing") -> SManga.ONGOING
-        workStatus.contains("Cancelled") -> SManga.CANCELLED
-        workStatus.contains("Hiatus") -> SManga.ON_HIATUS
-        workStatus.contains("Completed") -> when {
-            uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
-            else -> SManga.COMPLETED
+    private fun parseStatus(workStatus: String?, uploadStatus: String?): Int {
+        val status = workStatus ?: uploadStatus
+        return when {
+            status == null -> SManga.UNKNOWN
+            status.contains("Ongoing") -> SManga.ONGOING
+            status.contains("Cancelled") -> SManga.CANCELLED
+            status.contains("Hiatus") -> SManga.ON_HIATUS
+            status.contains("Completed") -> when {
+                uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
+                else -> SManga.COMPLETED
+            }
+            else -> SManga.UNKNOWN
         }
-        else -> SManga.UNKNOWN
     }
 
     private fun altChapterParse(response: Response): List<SChapter> {
@@ -401,6 +435,12 @@ open class BatoTo(
 
             GET("$baseUrl/rss/series/$id.xml", headers)
         } else if (manga.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = manga.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             GET(manga.url, headers)
         } else {
             super.chapterListRequest(manga)
@@ -497,6 +537,12 @@ open class BatoTo(
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (chapter.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = chapter.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             return GET(chapter.url, headers)
         }
         return super.pageListRequest(chapter)
@@ -991,7 +1037,7 @@ open class BatoTo(
         private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private val MIRROR_PREF_ENTRIES = arrayOf(
-            "zbato.org",
+            "Auto",
             "batocomic.com",
             "batocomic.net",
             "batocomic.org",
@@ -1003,23 +1049,25 @@ open class BatoTo(
             "readtoto.com",
             "readtoto.net",
             "readtoto.org",
-            "dto.to",
-            "fto.to",
-            "jto.to",
-            "hto.to",
-            "mto.to",
-            "wto.to",
             "xbato.com",
             "xbato.net",
             "xbato.org",
             "zbato.com",
             "zbato.net",
+            "zbato.org",
+            "dto.to",
+            "fto.to",
+            "hto.to",
+            "jto.to",
+            "mto.to",
+            "wto.to",
         )
         private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 
         private val DEPRECATED_MIRRORS = listOf(
             "https://bato.to",
+            "https://batocc.com", // parked
             "https://mangatoto.com",
             "https://mangatoto.net",
             "https://mangatoto.org",

@@ -623,7 +623,7 @@ abstract class Madara(
         "Em Andamento", "En cours", "En Cours", "En cours de publication", "Ativo", "Lançando", "Đang Tiến Hành", "Devam Ediyor",
         "Devam ediyor", "In Corso", "In Arrivo", "مستمرة", "مستمر", "En Curso", "En curso", "Emision",
         "Curso", "En marcha", "Publicandose", "Publicándose", "En emision", "连载中", "Em Lançamento", "Devam Ediyo",
-        "Đang làm", "Em postagem", "Devam Eden", "Em progresso", "Em curso",
+        "Đang làm", "Em postagem", "Devam Eden", "Em progresso", "Em curso", "Atualizações Semanais",
     )
 
     protected val hiatusStatusList: Array<String> = arrayOf(
@@ -678,7 +678,7 @@ abstract class Madara(
                 manga.thumbnail_url = imageFromElement(it)
             }
             select(mangaDetailsSelectorStatus).last()?.let {
-                manga.status = with(it.text()) {
+                manga.status = with(it.text().filter { text -> text.isLetterOrDigit() }) {
                     when {
                         containsIn(completedStatusList) -> SManga.COMPLETED
                         containsIn(ongoingStatusList) -> SManga.ONGOING
@@ -742,7 +742,7 @@ abstract class Madara(
 
     // Manga Details Selector
     open val mangaDetailsSelectorTitle = "div.post-title h3, div.post-title h1, #manga-title > h1"
-    open val mangaDetailsSelectorAuthor = "div.author-content > a"
+    open val mangaDetailsSelectorAuthor = "div.author-content > a, div.manga-authors > a"
     open val mangaDetailsSelectorArtist = "div.artist-content > a"
     open val mangaDetailsSelectorStatus = "div.summary-content"
     open val mangaDetailsSelectorDescription = "div.description-summary div.summary__content, div.summary_content div.post-content_item > h5 + div, div.summary_content div.manga-excerpt"
@@ -918,6 +918,10 @@ abstract class Madara(
                 parseRelativeDate(date)
             }
             WordSet("hace").startsWith(date) -> {
+                parseRelativeDate(date)
+            }
+            // Handle "jour" with a number before it
+            date.contains(Regex("""\b\d+ jour""")) -> {
                 parseRelativeDate(date)
             }
             date.contains(Regex("""\d(st|nd|rd|th)""")) -> {
