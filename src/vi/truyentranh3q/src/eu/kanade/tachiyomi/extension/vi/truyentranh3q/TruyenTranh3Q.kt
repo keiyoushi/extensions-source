@@ -171,15 +171,13 @@ class TruyenTranh3Q : ParsedHttpSource() {
     }
 
     private fun parseChapterDate(dateString: String): Long {
-        return try {
-            // first try to parse as a relative date
-            parseRelativeDate(dateString)
-        } catch (e: ParseException) {
+        val relativeTime = parseRelativeDate(dateString)
+        return if (relativeTime != 0L) {
+            relativeTime
+        } else {
             try {
-                // if relative date parsing fails, try absolute date parsing
                 dateFormat.parse(dateString)?.time ?: 0L
             } catch (e: ParseException) {
-                // if both fail, return 0L
                 0L
             }
         }
