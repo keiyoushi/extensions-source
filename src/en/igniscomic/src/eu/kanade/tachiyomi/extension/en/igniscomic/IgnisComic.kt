@@ -4,6 +4,6 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
 class IgnisComic : MangaThemesia(
     "Ignis Comic",
-    "https://igniscomic.com",
+    "https://manhuaga.com",
     "en",
 )
