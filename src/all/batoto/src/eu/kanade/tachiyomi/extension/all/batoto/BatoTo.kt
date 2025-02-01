@@ -358,8 +358,8 @@ open class BatoTo(
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("div#mainer div.container-fluid")!!
         val manga = SManga.create()
-        val workStatus = infoElement.select("div.attr-item:contains(original work) span").text()
-        val uploadStatus = infoElement.select("div.attr-item:contains(upload status) span").text()
+        val workStatus = infoElement.selectFirst("div.attr-item:contains(original work) span")?.text()
+        val uploadStatus = infoElement.selectFirst("div.attr-item:contains(upload status) span")?.text()
         val originalTitle = infoElement.select("h3").text().removeEntities()
         val description = buildString {
             append(infoElement.select("div.limit-html").text())
@@ -373,7 +373,7 @@ open class BatoTo(
                 append("\n\nAlternative Titles:\n")
                 append(it.text().split('/').joinToString("\n") { "• ${it.trim()}" })
             }
-        }
+        }.trim()
 
         val cleanedTitle = if (isRemoveTitleVersion()) {
             originalTitle.replace(titleRegex, "").trim()
