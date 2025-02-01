@@ -2,6 +2,7 @@ plugins {
     id("com.android.library")
     kotlin("android")
     id("kotlinx-serialization")
+    id("keiyoushi.lint")
 }
 
 android {

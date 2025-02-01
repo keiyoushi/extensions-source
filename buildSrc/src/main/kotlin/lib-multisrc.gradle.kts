@@ -2,6 +2,7 @@ plugins {
     id("com.android.library")
     kotlin("android")
     id("kotlinx-serialization")
+    id("keiyoushi.lint")
 }
 
 android {
@@ -36,18 +37,6 @@ android {
 dependencies {
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
 }
-
-//tasks {
-//    preBuild {
-//        dependsOn(lintKotlin)
-//    }
-//
-//    if (System.getenv("CI") != "true") {
-//        lintKotlin {
-//            dependsOn(formatKotlin)
-//        }
-//    }
-//}
 
 tasks.register("printDependentExtensions") {
     doLast {

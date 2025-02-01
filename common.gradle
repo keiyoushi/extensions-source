@@ -1,6 +1,7 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
+apply plugin: 'keiyoushi.lint'
 
 assert !ext.has("pkgNameSuffix")
 assert !ext.has("libVersion")
@@ -106,8 +107,3 @@ dependencies {
     implementation(project(":core"))
     compileOnly(libs.bundles.common)
 }
-
-//preBuild.dependsOn(lintKotlin)
-//if (System.getenv("CI") != "true") {
-//    lintKotlin.dependsOn(formatKotlin)
-//}
