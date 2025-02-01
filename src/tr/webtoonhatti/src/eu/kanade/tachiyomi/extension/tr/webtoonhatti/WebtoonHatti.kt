@@ -6,11 +6,13 @@ import java.util.Locale
 
 class WebtoonHatti : Madara(
     "Webtoon Hatti",
-    "https://webtoonhatti.dev",
+    "https://webtoonhatti.me",
     "tr",
     dateFormat = SimpleDateFormat("dd MMMM", Locale("tr")),
 ) {
     override val useNewChapterEndpoint = false
+
+    override val mangaSubString = "webtoon"
 
     // Skip fake image
     // OK: <div class="page-break no-gaps">

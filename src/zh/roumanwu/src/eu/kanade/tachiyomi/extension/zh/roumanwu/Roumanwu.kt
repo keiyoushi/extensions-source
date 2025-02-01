@@ -32,9 +32,9 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
         max(MIRRORS.size - 1, preferences.getString(MIRROR_PREF, MIRROR_DEFAULT)!!.toInt()),
     ]
 
-    override val client = network.client.newBuilder().addInterceptor(ScrambledImageInterceptor).build()
+    override val client = network.cloudflareClient.newBuilder().addInterceptor(ScrambledImageInterceptor).build()
 
-    private val imageUrlRegex = """\\"imageUrl\\":\\"(?<imageUrl>[^\\]+)""".toRegex()
+    private val imageUrlRegex = """\\"imageUrl\\":\\"([^\\]+)""".toRegex()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
     override fun popularMangaNextPageSelector(): String? = null
@@ -110,7 +110,7 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
         val images = document.selectFirst("script:containsData(imageUrl)")?.data()
             ?.let { content ->
                 imageUrlRegex
-                    .findAll(content).map { it.groups["imageUrl"]?.value }
+                    .findAll(content).map { it.groups[1]?.value }
                     .toList()
             } ?: return emptyList()
 
@@ -168,7 +168,7 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
         private const val MIRROR_PREF_SUMMARY = "使用鏡像網址。重啟軟體生效。"
 
         // 地址: https://rou.pub/dizhi
-        private val MIRRORS get() = arrayOf("https://rouman5.com", "https://roum18.xyz")
+        private val MIRRORS get() = arrayOf("https://rouman5.com", "https://roum20.xyz")
         private val MIRRORS_DESC get() = arrayOf("主站", "鏡像")
         private const val MIRROR_DEFAULT = 1.toString() // use mirror
 

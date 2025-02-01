@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -205,16 +206,22 @@ abstract class Keyoapp(
     }
 
     // Details
+    protected open val descriptionSelector: String = "div:containsOwn(Synopsis) ~ div"
+    protected open val statusSelector: String = "div:has(span:containsOwn(Status)) ~ div"
+    protected open val authorSelector: String = "div:has(span:containsOwn(Author)) ~ div"
+    protected open val artistSelector: String = "div:has(span:containsOwn(Artist)) ~ div"
+    protected open val genreSelector: String = "div:has(span:containsOwn(Type)) ~ div"
+    protected open val dateSelector: String = ".text-xs"
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("div.grid > h1")!!.text()
         thumbnail_url = document.getImageUrl("div[class*=photoURL]")
-        description = document.selectFirst("div.grid > div.overflow-hidden > p")?.text()
-        status = document.selectFirst("div[alt=Status]").parseStatus()
-        author = document.selectFirst("div[alt=Author]")?.text()
-        artist = document.selectFirst("div[alt=Artist]")?.text()
+        description = document.selectFirst(descriptionSelector)?.text()
+        status = document.selectFirst(statusSelector).parseStatus()
+        author = document.selectFirst(authorSelector)?.text()
+        artist = document.selectFirst(artistSelector)?.text()
         genre = buildList {
-            document.selectFirst("div[alt='Series Type']")?.text()?.replaceFirstChar {
+            document.selectFirst(genreSelector)?.text()?.replaceFirstChar {
                 if (it.isLowerCase()) {
                     it.titlecase(
                         Locale.getDefault(),
@@ -227,7 +234,7 @@ abstract class Keyoapp(
         }.joinToString()
     }
 
-    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
+    protected fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
         "ongoing" -> SManga.ONGOING
         "dropped" -> SManga.CANCELLED
         "paused" -> SManga.ON_HIATUS
@@ -247,7 +254,7 @@ abstract class Keyoapp(
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a[href]")!!.attr("href"))
         name = element.selectFirst(".text-sm")!!.text()
-        element.selectFirst(".text-xs")?.run {
+        element.selectFirst(dateSelector)?.run {
             date_upload = text().trim().parseDate()
         }
         if (element.select("img[src*=Coin.svg]").isNotEmpty()) {
@@ -283,7 +290,7 @@ abstract class Keyoapp(
             .firstOrNull { CDN_HOST_REGEX.containsMatchIn(it.html()) }
             ?.let {
                 val cdnHost = CDN_HOST_REGEX.find(it.html())
-                    ?.groups?.get("host")?.value
+                    ?.groups?.get(1)?.value
                     ?.replace(CDN_CLEAN_REGEX, "")
                 "https://$cdnHost/uploads"
             }
@@ -307,7 +314,13 @@ abstract class Keyoapp(
 
     protected open fun Element.getImageUrl(selector: String): String? {
         return this.selectFirst(selector)?.let { element ->
-            IMG_REGEX.find(element.attr("style"))?.groups?.get("url")?.value
+            IMG_REGEX.find(element.attr("style"))?.groups?.get(1)?.value
+                ?.toHttpUrlOrNull()?.let {
+                    it.newBuilder()
+                        .setQueryParameter("w", "480") // Keyoapp returns the dynamic size of the thumbnail to any size
+                        .build()
+                        .toString()
+                }
         }
     }
 
@@ -325,8 +338,6 @@ abstract class Keyoapp(
 
     private fun String.parseRelativeDate(): Long {
         val now = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
@@ -365,8 +376,8 @@ abstract class Keyoapp(
     companion object {
         private const val SHOW_PAID_CHAPTERS_PREF = "pref_show_paid_chap"
         private const val SHOW_PAID_CHAPTERS_DEFAULT = false
-        val CDN_HOST_REGEX = """realUrl\s*=\s*`[^`]+//(?<host>[^/]+)""".toRegex()
+        val CDN_HOST_REGEX = """realUrl\s*=\s*`[^`]+//([^/]+)""".toRegex()
         val CDN_CLEAN_REGEX = """\$\{[^}]*\}""".toRegex()
-        val IMG_REGEX = """url\(['"]?(?<url>[^(['"\)])]+)""".toRegex()
+        val IMG_REGEX = """url\(['"]?([^(['"\)])]+)""".toRegex()
     }
 }

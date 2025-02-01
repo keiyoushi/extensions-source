@@ -35,6 +35,8 @@ class WeebCentral : ParsedHttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH)
 
+    private val excludedSearchCharacters = "[!#:()]".toRegex()
+
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request = searchMangaRequest(
@@ -64,11 +66,10 @@ class WeebCentral : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String = searchMangaNextPageSelector()
 
     // =============================== Search ===============================
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = filters.ifEmpty { getFilterList() }
         val url = "$baseUrl/search/data".toHttpUrl().newBuilder().apply {
-            addQueryParameter("text", query)
+            addQueryParameter("text", query.replace(excludedSearchCharacters, " ").trim())
             filterList.filterIsInstance<UriFilter>().forEach {
                 it.addToUri(this)
             }
@@ -99,18 +100,37 @@ class WeebCentral : ParsedHttpSource() {
     // =========================== Manga Details ============================
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val descBuilder = StringBuilder()
+
         with(document.select("section[x-data] > section")[0]) {
             thumbnail_url = selectFirst("img")!!.attr("abs:src")
             author = select("ul > li:has(strong:contains(Author)) > span > a").joinToString { it.text() }
-            genre = select("ul > li:has(strong:contains(Tag)) > span > a").joinToString { it.text() }
+            genre = select("ul > li:has(strong:contains(Tag),strong:contains(Type)) a").joinToString { it.text() }
             status = selectFirst("ul > li:has(strong:contains(Status)) > a").parseStatus()
+
+            if (selectFirst("ul > li > strong:contains(Official Translation) + a:contains(Yes)") != null) {
+                descBuilder.appendLine("Official Translation")
+                descBuilder.appendLine()
+            }
         }
 
         with(document.select("section[x-data] > section")[1]) {
             title = selectFirst("h1")!!.text()
-            description = selectFirst("li:has(strong:contains(Description)) > p")?.text()
-                ?.replace("NOTE: ", "\n\nNOTE: ")
+
+            val alternateTitles = select("li:has(strong:contains(Associated Name)) li")
+            if (alternateTitles.size > 0) {
+                descBuilder.appendLine("Associated Name(s):")
+                alternateTitles.forEach { descBuilder.appendLine(it.text()) }
+                descBuilder.appendLine()
+            }
+
+            descBuilder.append(
+                selectFirst("li:has(strong:contains(Description)) > p")?.text()
+                    ?.replace("NOTE: ", "\n\nNOTE: "),
+            )
         }
+
+        description = descBuilder.toString()
     }
 
     private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
@@ -132,7 +152,7 @@ class WeebCentral : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    override fun chapterListSelector() = "a[x-data]"
+    override fun chapterListSelector() = "div[x-data] > a"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         name = element.selectFirst("span.flex > span")!!.text()

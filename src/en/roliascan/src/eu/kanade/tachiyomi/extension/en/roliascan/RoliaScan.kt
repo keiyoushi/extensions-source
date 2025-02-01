@@ -282,7 +282,7 @@ class RoliaScan : ParsedHttpSource() {
     }
 
     private fun getOptionList(pattern: Regex, content: String, cssQuery: String = "option"): List<Option> {
-        val query = pattern.find(content)?.groups?.get("query")?.value ?: return emptyList()
+        val query = pattern.find(content)?.groups?.get(1)?.value ?: return emptyList()
         return content.getDocumentFragmentFilter(pattern)
             ?.select(cssQuery)
             ?.map { element ->
@@ -295,13 +295,13 @@ class RoliaScan : ParsedHttpSource() {
     }
 
     private fun String.getDocumentFragmentFilter(pattern: Regex): Document? {
-        return pattern.find(this)?.groups?.get("value")?.value?.let {
+        return pattern.find(this)?.groups?.get(2)?.value?.let {
             val fragment = json.decodeFromString<String>(it)
             Jsoup.parseBodyFragment(fragment)
         }
     }
 
-    private fun buildRegex(field: String) = """"(?<query>$field)":(?<value>"<[^,]+)""".toRegex()
+    private fun buildRegex(field: String) = """"($field)":("<[^,]+)""".toRegex()
 
     private data class Option(val name: String = "", val value: String = "", val query: String = "")
 

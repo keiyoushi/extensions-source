@@ -1,0 +1,9 @@
+ext {
+    extName = 'Aniglis Novels'
+    extClass = '.AniglisNovels'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://agsnovels.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

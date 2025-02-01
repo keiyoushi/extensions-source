@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.hitomi
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -29,6 +30,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.internal.http2.StreamResetException
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -42,6 +44,7 @@ import java.util.LinkedList
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalUnsignedTypes::class)
 class Hitomi(
@@ -61,8 +64,14 @@ class Hitomi(
 
     private val json: Json by injectLazy()
 
+    private val REGEX_IMAGE_URL = """https://.*?a\.$domain/(jxl|avif|webp)/\d+?/\d+/([0-9a-f]{64})\.\1""".toRegex()
+
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::Intercept)
+        .addInterceptor(::jxlContentTypeInterceptor)
+        .addInterceptor(::updateImageUrlInterceptor)
+        .apply {
+            interceptors().add(0, ::streamResetRetry)
+        }
         .build()
 
     private val preferences: SharedPreferences by lazy {
@@ -708,7 +717,7 @@ class Hitomi(
         return this.sliceArray(byteArray.indices).contentEquals(byteArray)
     }
 
-    private fun Intercept(chain: Interceptor.Chain): Response {
+    private fun jxlContentTypeInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
         if (response.headers["Content-Type"] != "application/octet-stream") {
             return response
@@ -726,6 +735,39 @@ class Hitomi(
             .body(body)
             .header("Content-Type", type)
             .build()
+    }
+
+    private fun streamResetRetry(chain: Interceptor.Chain): Response {
+        return try {
+            chain.proceed(chain.request())
+        } catch (e: StreamResetException) {
+            Log.e(name, "reset", e)
+            if (e.message.orEmpty().contains("INTERNAL_ERROR")) {
+                Thread.sleep(2.seconds.inWholeMilliseconds)
+                chain.proceed(chain.request())
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private fun updateImageUrlInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        val cleanUrl = request.url.run { "$scheme://$host$encodedPath" }
+        REGEX_IMAGE_URL.matchEntire(cleanUrl)?.let { match ->
+            val (ext, hash) = match.destructured
+
+            val commonId = runBlocking { commonImageId() }
+            val imageId = imageIdFromHash(hash)
+            val subDomain = 'a' + runBlocking { subdomainOffset(imageId) }
+
+            val newUrl = "https://${subDomain}a.$domain/$ext/$commonId$imageId/$hash.$ext"
+            val newRequest = request.newBuilder().url(newUrl).build()
+            return chain.proceed(newRequest)
+        }
+
+        return chain.proceed(request)
     }
 
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Snow Machine Translations'
+    extClass = '.SnowmtlFactory'
+    themePkg = 'machinetranslations'
+    baseUrl = 'https://snowmtl.ru'
+    overrideVersionCode = 7
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -22,7 +22,6 @@ import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.util.Calendar
 import java.util.Date
-import java.util.Locale
 
 class WebNovel : HttpSource() {
 
@@ -34,7 +33,7 @@ class WebNovel : HttpSource() {
 
     private val baseApiUrl = "$baseUrl$BASE_API_ENDPOINT"
 
-    private val baseCoverURl = baseUrl.replace("www", "img")
+    private val baseCoverURl = baseUrl.replace("www", "book-pic")
 
     private val baseCdnUrl = baseUrl.replace("www", "comic-image")
 
@@ -89,60 +88,22 @@ class WebNovel : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val browseResponseDto = if (response.request.url.toString().contains(QUERY_SEARCH_PATH)) {
-            response.parseAsForWebNovel<QuerySearchResponseDto>().browseResponse
+        return if (response.request.url.toString().contains(QUERY_SEARCH_PATH)) {
+            response.parseAsForWebNovel<QuerySearchResponse>().toMangasPage(::getCoverUrl)
         } else {
-            response.parseAsForWebNovel()
+            response.parseAsForWebNovel<FilterSearchResponse>().toMangasPage(::getCoverUrl)
         }
-
-        val manga = browseResponseDto.items.map {
-            SManga.create().apply {
-                title = it.name
-                url = it.id
-                thumbnail_url = getCoverUrl(it.id)
-            }
-        }
-
-        return MangasPage(manga, browseResponseDto.isLast == 0)
     }
 
     // Manga details
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/comic/${manga.getId}"
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response)
-            }
-    }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         return GET("$baseApiUrl/comic/getComicDetailPage?comicId=${manga.getId}", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val comic = response.parseAsForWebNovel<ComicDetailInfoResponseDto>().info
-        return SManga.create().apply {
-            title = comic.name
-            url = comic.id
-            thumbnail_url = getCoverUrl(comic.id)
-            author = comic.authorName
-            description = buildString {
-                append(comic.description)
-                if (comic.actionStatus == ComicDetailInfoDto.ONGOING && comic.updateCycle.isNotBlank()) {
-                    append("\n\nInformation:")
-                    append("\n• ${comic.updateCycle.replaceFirstChar { it.uppercase(Locale.ENGLISH) }}")
-                }
-            }
-            genre = comic.categoryName
-            status = when (comic.actionStatus) {
-                ComicDetailInfoDto.ONGOING -> SManga.ONGOING
-                ComicDetailInfoDto.COMPLETED -> SManga.COMPLETED
-                ComicDetailInfoDto.ON_HIATUS -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
-        }
+        return response.parseAsForWebNovel<ComicDetailInfoResponse>().toSManga(::getCoverUrl)
     }
 
     // chapters
@@ -151,9 +112,9 @@ class WebNovel : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapterList = response.parseAsForWebNovel<ComicChapterListDto>()
-        val comic = chapterList.comicInfo
-        val chapters = chapterList.comicChapters.reversed().asSequence()
+        val chapterList = response.parseAsForWebNovel<ComicChapterListResponse>()
+        val comic = chapterList.comic
+        val chapters = chapterList.chapters.reversed().asSequence()
 
         val accurateUpdateTimes = runCatching {
             client.newCall(GET("$WEBNOVEL_UPLOAD_TIME/${comic.id}.json"))
@@ -164,29 +125,18 @@ class WebNovel : HttpSource() {
 
         val updateTimes = chapters.map { accurateUpdateTimes[it.id] ?: it.publishTime.toDate() }
 
-        // You can pay to get some chapter earlier than others. This privilege is divided into some tiers
-        // We check if user's tier same or more than chapter's.
-        val filteredChapters = chapters.filter { it.userLevel >= it.chapterLevel }
+        val filteredChapters = chapters.filter { it.isVisible }
 
         // When new privileged chapter is released oldest privileged chapter becomes normal one (in most cases)
         // but since those normal chapter retain the original upload time we improvise. (This isn't optimal but meh)
         return filteredChapters.zip(updateTimes) { chapter, updateTime ->
-            val namePrefix = when {
-                chapter.isPremium && !chapter.isAccessibleByUser -> "\uD83D\uDD12 "
-                else -> ""
-            }
             SChapter.create().apply {
-                name = namePrefix + chapter.name
+                name = if (chapter.isLocked) "\uD83D\uDD12 ${chapter.name}" else chapter.name
                 url = "${comic.id}:${chapter.id}"
                 date_upload = updateTime
             }
         }.toList()
     }
-
-    private val ComicChapterDto.isPremium get() = isVip != 0 || price != 0
-
-    // This can mean the chapter is free or user has paid to unlock it (check with [isPremium] for this case)
-    private val ComicChapterDto.isAccessibleByUser get() = isAuth == 1
 
     private fun String.toDate(): Long {
         if (contains("now", ignoreCase = true)) return Date().time
@@ -224,7 +174,7 @@ class WebNovel : HttpSource() {
     }
 
     private fun pageListRequest(comicId: String, chapterId: String): Request {
-        // Given a high [width] parameter it gives the highest resolution image available
+        // Given a high [width] value WebNovel returns the highest resolution image publicly available
         return GET("$baseApiUrl/comic/getContent?comicId=$comicId&chapterId=$chapterId&width=9999")
     }
 
@@ -235,14 +185,13 @@ class WebNovel : HttpSource() {
 
     // LinkedHashMap with a capacity of 25. When exceeding the capacity the oldest entry is removed.
     private val chapterPageCache = object : LinkedHashMap<String, List<ChapterPage>>() {
-
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<ChapterPage>>?): Boolean {
             return size > 25
         }
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapterContent = response.parseAsForWebNovel<ChapterContentResponseDto>().chapterContent
+        val chapterContent = response.parseAsForWebNovel<ChapterContentResponse>().data
         return chapterContent.pages.map { ChapterPage(it.id, it.url) }
             .also { chapterPageCache[chapterContent.id.toString()] = it }
             .mapIndexed { i, chapterPage -> Page(i, imageUrl = chapterPage.url) }
@@ -271,8 +220,8 @@ class WebNovel : HttpSource() {
             return comicId to chapterId
         }
 
-    private fun getCoverUrl(comicId: String): String {
-        return "$baseCoverURl/bookcover/$comicId/0/600.jpg"
+    private fun getCoverUrl(comicId: String, coverUpdatedAt: Long): String {
+        return "$baseCoverURl/bookcover/$comicId?imageId=$coverUpdatedAt&imageMogr2/thumbnail/1024x"
     }
 
     private fun csrfTokenInterceptor(chain: Interceptor.Chain): Response {
@@ -333,9 +282,9 @@ class WebNovel : HttpSource() {
     }
 
     private inline fun <reified T> Response.parseAsForWebNovel(): T = use {
-        val parsed = parseAs<ResponseDto<T>>()
+        val parsed = parseAs<ResponseWrapper<T>>()
         if (parsed.code != 0) error("Error ${parsed.code}: ${parsed.msg}")
-        requireNotNull(parsed.data) { "Response data is null" }
+        requireNotNull(parsed.data) { "Received response data was null" }
     }
 
     private inline fun <reified T> List<*>.firstInstanceOrNull() = firstOrNull { it is T } as? T

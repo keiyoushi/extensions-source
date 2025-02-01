@@ -1,5 +1,13 @@
 package eu.kanade.tachiyomi.extension.en.holymanga
 
-import eu.kanade.tachiyomi.multisrc.zbulu.Zbulu
+import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 
-class HolyManga : Zbulu("HolyManga", "https://w33.holymanga.net", "en")
+class HolyManga : FMReader(
+    "HolyManga",
+    "https://w34.holymanga.net",
+    "en",
+) {
+    override val versionId = 2
+
+    override val chapterUrlSelector = ""
+}

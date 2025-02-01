@@ -1,0 +1,9 @@
+ext {
+    extName = 'Shindai Scan'
+    extClass = '.ShindaiScan'
+    themePkg = 'madara'
+    baseUrl = 'https://shindai.com.br'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

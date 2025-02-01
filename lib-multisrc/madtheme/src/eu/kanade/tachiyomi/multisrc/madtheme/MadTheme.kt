@@ -11,11 +11,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -25,7 +22,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -54,8 +50,6 @@ abstract class MadTheme(
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", "$baseUrl/")
     }
-
-    private val json: Json by injectLazy()
 
     private var genreKey = "genre[]"
 
@@ -177,19 +171,53 @@ abstract class MadTheme(
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        if (response.code in 200..299) {
+        if (response.request.url.fragment == "idFound") {
             return super.chapterListParse(response)
         }
 
-        // Try to show message/error from site
-        response.body.let { body ->
-            json.decodeFromString<JsonObject>(body.string())["message"]
-                ?.jsonPrimitive
-                ?.content
-                ?.let { throw Exception(it) }
+        val document = response.asJsoup()
+
+        // Need the total chapters to check against the request
+        val totalChapters = document.selectFirst(".title span:containsOwn(CHAPTERS \\()")?.text()
+            ?.substringAfter("(")
+            ?.substringBefore(")")
+            ?.toIntOrNull()
+
+        val script = document.selectFirst("script:containsData(bookId)")
+            ?: throw Exception("Cannot find script")
+        val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
+        val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
+
+        // Use slug search by default
+        val slugRequest = chapterClient.newCall(GET(buildChapterUrl(bookSlug), headers)).execute()
+        if (!slugRequest.isSuccessful) {
+            throw Exception("HTTP error ${slugRequest.code}")
         }
 
-        throw Exception("HTTP error ${response.code}")
+        var finalDocument = slugRequest.asJsoup().select(chapterListSelector())
+
+        if (totalChapters != null && finalDocument.size < totalChapters) {
+            val idRequest = chapterClient.newCall(GET(buildChapterUrl(bookId), headers)).execute()
+            finalDocument = idRequest.asJsoup().select(chapterListSelector())
+        }
+
+        return finalDocument.map {
+            SChapter.create().apply {
+                url = it.selectFirst("a")!!.absUrl("href").removePrefix(baseUrl)
+                name = it.selectFirst(".chapter-title")!!.text()
+                date_upload = parseChapterDate(it.selectFirst(".chapter-update")?.text())
+            }
+        }
+    }
+
+    private fun buildChapterUrl(fetchByParam: String): HttpUrl {
+        return baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("api")
+            addPathSegment("manga")
+            addPathSegment(fetchByParam)
+            addPathSegment("chapters")
+            addQueryParameter("source", "detail")
+        }.build()
     }
 
     override fun chapterListRequest(manga: SManga): Request =
@@ -197,10 +225,11 @@ abstract class MadTheme(
             val url = "$baseUrl/service/backend/chaplist/".toHttpUrl().newBuilder()
                 .addQueryParameter("manga_id", mangaId)
                 .addQueryParameter("manga_name", manga.title)
+                .fragment("idFound")
                 .build()
 
             GET(url, headers)
-        } ?: GET("$baseUrl/api/manga${manga.url}/chapters?source=detail", headers)
+        } ?: GET("$baseUrl${manga.url}", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (genresList == null) {

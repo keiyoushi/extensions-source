@@ -36,7 +36,7 @@ class FlameComics : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2, 7)
         .addInterceptor(::buildIdOutdatedInterceptor)
         .addInterceptor(::composedImageIntercept)
@@ -224,8 +224,10 @@ class FlameComics : HttpSource() {
                 chapter_number = chapter.chapter.toFloat()
                 date_upload = chapter.release_date * 1000
                 name = buildString {
-                    append("Chapter ${chapter.chapter.toString().removeSuffix(".0")} ")
-                    append(chapter.title ?: "")
+                    append("Chapter ${chapter.chapter.toString().removeSuffix(".0")}")
+                    if (!chapter.title.isNullOrBlank()) {
+                        append(" - ${chapter.title}")
+                    }
                 }
             }
         }

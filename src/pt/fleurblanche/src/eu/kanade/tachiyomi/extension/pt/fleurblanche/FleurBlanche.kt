@@ -22,6 +22,8 @@ class FleurBlanche : Madara(
 
     override val useNewChapterEndpoint = true
 
+    override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) > div.summary-content"
+
     private fun authWarningIntercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
 
