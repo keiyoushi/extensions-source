@@ -2,8 +2,8 @@ ext {
     extName = 'Visor Inari'
     extClass = '.VisorInari'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://inarimanga.visahelper.online'
-    overrideVersionCode = 16
+    baseUrl = 'https://worldinari.org'
+    overrideVersionCode = 17
     isNsfw = true
 }
 
