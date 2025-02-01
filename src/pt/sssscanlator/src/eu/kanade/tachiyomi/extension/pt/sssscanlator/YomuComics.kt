@@ -19,14 +19,17 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class SSSScanlator :
+class YomuComics :
     MangaThemesia(
-        "SSSScanlator",
-        "https://ssstoons.com",
+        "Yomu Comics",
+        "https://yomucomics.com",
         "pt-BR",
         dateFormat = SimpleDateFormat("MMMMM dd, yyyy", Locale("pt", "BR")),
     ),
     ConfigurableSource {
+
+    // SSSScanlator
+    override val id = 1497838059713668619
 
     private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
