@@ -2,8 +2,8 @@ ext {
     extName = 'Manhuaga'
     extClass = '.Manhuaga'
     themePkg = 'madara'
-    baseUrl = 'https://manhuaga.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://manhua-ga.org'
+    overrideVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"
