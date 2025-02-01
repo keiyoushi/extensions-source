@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class CeriseScan : PeachScan(
     "Cerise Scan",
-    "https://cerise.leitorweb.com",
+    "https://sctoon.net",
     "pt-BR",
 ) {
     override val versionId: Int = 2
