@@ -33,6 +33,8 @@ class MangaDto(
     val slug: String?,
     @SerialName("status")
     val status: MangaStatus,
+    @SerialName("scan_id")
+    val scanId: Int,
 ) {
     @Serializable
     class MangaStatus(
