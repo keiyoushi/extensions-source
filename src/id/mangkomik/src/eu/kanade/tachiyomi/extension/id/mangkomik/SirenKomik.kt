@@ -4,8 +4,11 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import kotlinx.serialization.json.decodeFromStream
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -27,9 +30,6 @@ class SirenKomik : MangaThemesia(
 
     override fun chapterListSelector() = ".list-chapter a"
 
-    // Overridden since MangeThemesia doesn't search for jsonData in script tags, because it finds the bait images with the default selector
-    override val pageSelector: String = ":not(*)"
-
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst(".nomer-chapter")!!.text()
         date_upload = element.selectFirst(".tgl-chapter")?.text().parseChapterDate()
@@ -37,19 +37,25 @@ class SirenKomik : MangaThemesia(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        // Get external JS for image urls
-        val scriptEl = document.selectFirst("script[data-minify]")
-        val scriptUrl = scriptEl?.attr("src")
-        if (scriptUrl.isNullOrEmpty()) {
-            return super.pageListParse(document)
+        val postId = document.select("script").map(Element::data)
+            .firstOrNull(postIdRegex::containsMatchIn)
+            ?.let { postIdRegex.find(it)?.groups?.get(1)?.value }
+            ?: throw IOException("Post ID not found")
+
+        val pageUrl = "$baseUrl/wp-json/extras/v1/get-img-json".toHttpUrl().newBuilder()
+            .addQueryParameter("post_id", postId)
+            .build()
+
+        val dto = client.newCall(GET(pageUrl, headers)).execute().use {
+            json.decodeFromStream<SirenKomikDto>(it.body.byteStream())
         }
 
-        val scriptResponse = client.newCall(
-            GET(scriptUrl, headers),
-        ).execute()
+        return dto.pages.mapIndexed { index, imageUrl ->
+            Page(index, document.location(), imageUrl)
+        }
+    }
 
-        // Inject external JS
-        scriptEl.text(scriptResponse.body.string())
-        return super.pageListParse(document)
+    companion object {
+        val postIdRegex = """postId.:(\d+)""".toRegex()
     }
 }
