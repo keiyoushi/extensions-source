@@ -249,9 +249,6 @@ abstract class MachineTranslations(
             entryValues = sizes
             summary = intl["font_size_summary"]
 
-            setDefaultValue(DEFAULT_FONT_SIZE)
-            setValueIndex(0)
-
             setOnPreferenceChangeListener { _, newValue ->
                 val selected = newValue as String
                 val index = this.findIndexOfValue(selected)
