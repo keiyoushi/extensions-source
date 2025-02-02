@@ -32,7 +32,9 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SussyToons : HttpSource(), ConfigurableSource {
+class SussyToons :
+    HttpSource(),
+    ConfigurableSource {
 
     override val name = "Sussy Toons"
 
@@ -102,9 +104,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     // ============================= Popular ==================================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/obras/top5", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/obras/top5", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
@@ -152,8 +152,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
         return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        response.parseAs<WrapperDto<MangaDto>>().results.toSManga()
+    override fun mangaDetailsParse(response: Response) = response.parseAs<WrapperDto<MangaDto>>().results.toSManga()
 
     private val SManga.id: String get() {
         val mangaUrl = apiUrl.toHttpUrl().newBuilder()
@@ -166,18 +165,16 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<WrapperDto<WrapperChapterDto>>().results.chapters.map {
-            SChapter.create().apply {
-                name = it.name
-                it.chapterNumber?.let {
-                    chapter_number = it
-                }
-                setUrlWithoutDomain("$baseUrl/capitulo/${it.id}")
-                date_upload = it.updateAt.toDate()
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<WrapperDto<WrapperChapterDto>>().results.chapters.map {
+        SChapter.create().apply {
+            name = it.name
+            it.chapterNumber?.let {
+                chapter_number = it
             }
-        }.sortedBy(SChapter::chapter_number).reversed()
-    }
+            setUrlWithoutDomain("$baseUrl/capitulo/${it.id}")
+            date_upload = it.updateAt.toDate()
+        }
+    }.sortedBy(SChapter::chapter_number).reversed()
 
     // ============================= Pages ====================================
 
@@ -208,30 +205,22 @@ class SussyToons : HttpSource(), ConfigurableSource {
             Page(index, imageUrl = imageUrl.toString())
         }
     }
-    private fun pageListParse(document: Document): List<Page> {
-        return document.select(pageUrlSelector).mapIndexed { index, element ->
-            Page(index, document.location(), element.absUrl("src"))
-        }
+    private fun pageListParse(document: Document): List<Page> = document.select(pageUrlSelector).mapIndexed { index, element ->
+        Page(index, document.location(), element.absUrl("src"))
     }
-    private fun extractScriptData(document: Document): String {
-        return document.select("script").map(Element::data)
-            .firstOrNull(pageRegex::containsMatchIn)
-            ?: throw Exception("Failed to load pages: Script data not found")
-    }
+    private fun extractScriptData(document: Document): String = document.select("script").map(Element::data)
+        .firstOrNull(pageRegex::containsMatchIn)
+        ?: throw Exception("Failed to load pages: Script data not found")
 
-    private fun extractJsonContent(scriptData: String): String {
-        return pageRegex.find(scriptData)
-            ?.groups?.get(1)?.value
-            ?.let { json.decodeFromString<String>("\"$it\"") }
-            ?: throw Exception("Failed to extract JSON from script")
-    }
+    private fun extractJsonContent(scriptData: String): String = pageRegex.find(scriptData)
+        ?.groups?.get(1)?.value
+        ?.let { json.decodeFromString<String>("\"$it\"") }
+        ?: throw Exception("Failed to extract JSON from script")
 
-    private fun parseJsonToChapterPageDto(jsonContent: String): ChapterPageDto {
-        return try {
-            jsonContent.parseAs<WrapperDto<ChapterPageDto>>().results
-        } catch (e: Exception) {
-            throw Exception("Failed to load pages: ${e.message}")
-        }
+    private fun parseJsonToChapterPageDto(jsonContent: String): ChapterPageDto = try {
+        jsonContent.parseAs<WrapperDto<ChapterPageDto>>().results
+    } catch (e: Exception) {
+        throw Exception("Failed to load pages: ${e.message}")
     }
 
     override fun imageUrlParse(response: Response): String = ""
@@ -345,12 +334,13 @@ class SussyToons : HttpSource(), ConfigurableSource {
         return json.decodeFromStream(body.byteStream())
     }
 
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
-    private fun String.toDate() =
-        try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0L }
+    private fun String.toDate() = try {
+        dateFormat.parse(this)!!.time
+    } catch (_: Exception) {
+        0L
+    }
 
     /**
      * Normalizes path segments:
