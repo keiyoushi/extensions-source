@@ -36,6 +36,7 @@ import kotlin.math.sqrt
 class ComposedImageInterceptor(
     baseUrl: String,
     val language: Language,
+    val fontSize: Int = 24,
 ) : Interceptor {
 
     private val json: Json by injectLazy()
@@ -104,7 +105,7 @@ class ComposedImageInterceptor(
     }
 
     private fun createTextPaint(font: Typeface?): TextPaint {
-        val defaultTextSize = 24.pt // arbitrary
+        val defaultTextSize = fontSize.pt
         return TextPaint().apply {
             color = Color.BLACK
             textSize = defaultTextSize

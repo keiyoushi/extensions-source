@@ -29,8 +29,9 @@ class Snowmtl(
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
+        .connectTimeout(1, TimeUnit.MINUTES)
         .readTimeout(2, TimeUnit.MINUTES)
         .addInterceptor(TranslationInterceptor(language, translator))
-        .addInterceptor(ComposedImageInterceptor(baseUrl, language))
+        .addInterceptor(ComposedImageInterceptor(baseUrl, language, fontSize))
         .build()
 }
