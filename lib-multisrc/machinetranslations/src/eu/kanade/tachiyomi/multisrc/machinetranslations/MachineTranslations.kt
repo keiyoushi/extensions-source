@@ -253,15 +253,16 @@ abstract class MachineTranslations(
                 val selected = newValue as String
                 val index = this.findIndexOfValue(selected)
                 val entry = entries[index] as String
-                preferences.edit()
-                    .putString(FONT_SIZE_PREF, selected)
-                    .commit().also {
-                        Toast.makeText(
-                            screen.context,
-                            intl["font_size_message"].format(entry),
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    }
+
+                fontSize = selected.toInt()
+
+                Toast.makeText(
+                    screen.context,
+                    intl["font_size_message"].format(entry),
+                    Toast.LENGTH_LONG,
+                ).show()
+
+                true
             }
         }.also(screen::addPreference)
     }
