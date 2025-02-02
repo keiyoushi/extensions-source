@@ -28,11 +28,12 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
     modules = set()
     libs = set()
     deleted = set()
+    core_files_changed = False
 
     for file in map(lambda x: Path(x).as_posix(), changed_files):
         if CORE_FILES_REGEX.search(file):
-            return get_all_modules()
-        if match := EXTENSION_REGEX.search(file):
+            core_files_changed = True
+        elif match := EXTENSION_REGEX.search(file):
             lang = match.group("lang")
             extension = match.group("extension")
             if Path("src", lang, extension).is_dir():
@@ -55,19 +56,25 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
         deleted.add(f"{lang}.{extension}")
         return True
 
-    if len(libs) != 0:
+    if len(libs) != 0 and not core_files_changed:
         modules.update([
             module for module in
             run_command("./gradlew -q " + " ".join(libs)).splitlines()
             if is_extension_module(module)
         ])
 
-    if os.getenv("IS_PR_CHECK") != "true":
+    if os.getenv("IS_PR_CHECK") != "true" and not core_files_changed:
         with Path(".github/always_build.json").open() as always_build_file:
             always_build = json.load(always_build_file)
         for extension in always_build:
             modules.add(":src:" + extension.replace(".", ":"))
             deleted.add(extension)
+
+    if core_files_changed:
+        (all_modules, all_deleted) = get_all_modules()
+
+        modules.update(all_modules)
+        deleted.update(all_deleted)
 
     return list(modules), list(deleted)
 
