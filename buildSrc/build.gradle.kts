@@ -12,5 +12,5 @@ dependencies {
     implementation(libs.gradle.agp)
     implementation(libs.gradle.kotlin)
     implementation(libs.gradle.serialization)
-    implementation(libs.spotless.gradle)
+    implementation(libs.gradle.kotlinter)
 }
