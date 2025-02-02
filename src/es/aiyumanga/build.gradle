@@ -1,9 +1,0 @@
-ext {
-    extName = 'AiYuManhua'
-    extClass = '.AiYuManhua'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://www.aiyumanhua.com'
-    overrideVersionCode = 28
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Weebs'
-    extClass = '.MangaWeebs'
-    themePkg = 'madara'
-    baseUrl = 'https://mangaweebs.in'
-    overrideVersionCode = 10
-}
-
-apply from: "$rootDir/common.gradle"

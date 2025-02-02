@@ -1,8 +1,0 @@
-ext {
-    extName = 'Manga Latino'
-    extClass = '.MangaLatino'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
