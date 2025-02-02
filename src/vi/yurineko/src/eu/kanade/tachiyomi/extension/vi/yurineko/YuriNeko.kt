@@ -36,9 +36,7 @@ import java.io.IOException
 import java.net.URLDecoder
 import java.util.concurrent.TimeUnit
 
-class YuriNeko :
-    HttpSource(),
-    ConfigurableSource {
+class YuriNeko : HttpSource(), ConfigurableSource {
 
     override val name = "YuriNeko"
 
@@ -109,20 +107,22 @@ class YuriNeko :
 
     override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = when {
-        query.startsWith(PREFIX_ID_SEARCH) -> {
-            val id = query.removePrefix(PREFIX_ID_SEARCH).trim()
-            if (id.toIntOrNull() == null) {
-                throw Exception("ID tìm kiếm không hợp lệ (phải là một số).")
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return when {
+            query.startsWith(PREFIX_ID_SEARCH) -> {
+                val id = query.removePrefix(PREFIX_ID_SEARCH).trim()
+                if (id.toIntOrNull() == null) {
+                    throw Exception("ID tìm kiếm không hợp lệ (phải là một số).")
+                }
+                fetchMangaDetails(
+                    SManga.create().apply {
+                        url = "/manga/$id"
+                    },
+                )
+                    .map { MangasPage(listOf(it), false) }
             }
-            fetchMangaDetails(
-                SManga.create().apply {
-                    url = "/manga/$id"
-                },
-            )
-                .map { MangasPage(listOf(it), false) }
+            else -> super.fetchSearchManga(page, query, filters)
         }
-        else -> super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -182,13 +182,15 @@ class YuriNeko :
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = client.newCall(GET("$apiUrl${manga.url}"))
-        .asObservableSuccess()
-        .map { mangaDetailsParse(it) }
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        client.newCall(GET("$apiUrl${manga.url}"))
+            .asObservableSuccess()
+            .map { mangaDetailsParse(it) }
 
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}")
 
-    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().toSManga(storageUrl)
+    override fun mangaDetailsParse(response: Response): SManga =
+        response.parseAs<MangaDto>().toSManga(storageUrl)
 
     override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl${manga.url}")
 
@@ -200,11 +202,13 @@ class YuriNeko :
 
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl${chapter.url}")
 
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<ReadResponseDto>().toPageList(storageUrl)
+    override fun pageListParse(response: Response): List<Page> =
+        response.parseAs<ReadResponseDto>().toPageList(storageUrl)
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
+        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
