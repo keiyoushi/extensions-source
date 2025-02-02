@@ -10,9 +10,10 @@ spotless {
         targetExclude("**/build/**/*.kt")
         ktlint()
             .editorConfigOverride(mapOf(
-                "ktlint_standard_class-signature" to "disabled",
                 "ktlint_standard_discouraged-comment-location" to "disabled",
-                "ktlint_standard_function-signature" to "disabled",
+                "ktlint_function_signature_body_expression_wrapping" to "default",
+                "ktlint_standard_no-empty-first-line-in-class-body" to "disable",
+                "ktlint_standard_chain-method-continuation" to "disable"
             ))
         trimTrailingWhitespace()
         endWithNewline()
