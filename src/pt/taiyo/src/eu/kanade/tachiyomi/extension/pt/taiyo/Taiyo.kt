@@ -32,8 +32,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okhttp3.internal.http.HTTP_FORBIDDEN
-import okhttp3.internal.http.HTTP_UNAUTHORIZED
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
@@ -41,6 +39,8 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.net.HttpURLConnection.HTTP_FORBIDDEN
+import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -85,15 +85,13 @@ class Taiyo : ParsedHttpSource() {
 
     // =============================== Search ===============================
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
-            val id = query.removePrefix(PREFIX_SEARCH)
-            client.newCall(GET("$baseUrl/media/$id"))
-                .asObservableSuccess()
-                .map(::searchMangaByIdParse)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> = if (query.startsWith(PREFIX_SEARCH)) { // URL intent handler
+        val id = query.removePrefix(PREFIX_SEARCH)
+        client.newCall(GET("$baseUrl/media/$id"))
+            .asObservableSuccess()
+            .map(::searchMangaByIdParse)
+    } else {
+        super.fetchSearchManga(page, query, filters)
     }
 
     private fun searchMangaByIdParse(response: Response): MangasPage {
@@ -146,17 +144,11 @@ class Taiyo : ParsedHttpSource() {
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
-    override fun searchMangaSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -235,13 +227,9 @@ class Taiyo : ParsedHttpSource() {
         return Observable.just(chapters.sortedByDescending { it.chapter_number })
     }
 
-    override fun chapterListSelector(): String {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterListSelector(): String = throw UnsupportedOperationException()
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
+    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
     // =============================== Pages ================================
     override fun pageListParse(document: Document): List<Page> {
@@ -256,9 +244,7 @@ class Taiyo : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException()
-    }
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // ============================= Utilities ==============================
     private fun Element.getImageUrl() = absUrl("srcset").substringBefore(" ")
@@ -267,23 +253,19 @@ class Taiyo : ParsedHttpSource() {
         json.decodeFromStream(it.body.byteStream())
     }
 
-    private fun String.toDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(this)?.time }
-            .getOrNull() ?: 0L
-    }
+    private fun String.toDate(): Long = runCatching { DATE_FORMATTER.parse(this)?.time }
+        .getOrNull() ?: 0L
 
     private inline fun <reified T> Document.parseJsonFromDocument(
         itemName: String = "media",
         crossinline transformer: String.() -> String,
-    ): T? {
-        return runCatching {
-            val script = selectFirst("script:containsData($itemName\\\\\":):containsData(\\\"6:\\[)")!!.data()
-            val obj = script.substringAfter(",{\\\"$itemName\\\":")
-                .run(transformer)
-                .replace("\\", "")
-            json.decodeFromString<T>(obj)
-        }.onFailure { it.printStackTrace() }.getOrNull()
-    }
+    ): T? = runCatching {
+        val script = selectFirst("script:containsData($itemName\\\\\":):containsData(\\\"6:\\[)")!!.data()
+        val obj = script.substringAfter(",{\\\"$itemName\\\":")
+            .run(transformer)
+            .replace("\\", "")
+        json.decodeFromString<T>(obj)
+    }.onFailure { it.printStackTrace() }.getOrNull()
 
     // ============================= Authorization ========================
 
@@ -304,12 +286,10 @@ class Taiyo : ParsedHttpSource() {
         return chain.proceed(req)
     }
 
-    private fun getToken(): String {
-        return fetchBearerToken().also {
-            preferences.edit()
-                .putString(BEARER_TOKEN_PREF, it)
-                .apply()
-        }
+    private fun getToken(): String = fetchBearerToken().also {
+        preferences.edit()
+            .putString(BEARER_TOKEN_PREF, it)
+            .apply()
     }
 
     private fun fetchBearerToken(): String {

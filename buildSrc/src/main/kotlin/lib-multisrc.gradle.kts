@@ -2,7 +2,7 @@ plugins {
     id("com.android.library")
     kotlin("android")
     id("kotlinx-serialization")
-    id("org.jmailen.kotlinter")
+    id("keiyoushi.lint")
 }
 
 android {
@@ -23,33 +23,19 @@ android {
         }
     }
 
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
     kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17.toString()
         freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
     }
 }
 
-kotlinter {
-    experimentalRules = true
-    disabledRules = arrayOf(
-        "experimental:argument-list-wrapping", // Doesn't play well with Android Studio
-        "experimental:comment-wrapping",
-    )
-}
-
 dependencies {
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
-}
-
-tasks {
-    preBuild {
-        dependsOn(lintKotlin)
-    }
-
-    if (System.getenv("CI") != "true") {
-        lintKotlin {
-            dependsOn(formatKotlin)
-        }
-    }
 }
 
 tasks.register("printDependentExtensions") {
