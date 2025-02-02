@@ -221,7 +221,8 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     private fun extractJsonContent(scriptData: String): String {
         return pageRegex.find(scriptData)
-            ?.groups?.get(1)?.value?.replace("\\", "")
+            ?.groups?.get(1)?.value
+            ?.let { json.decodeFromString<String>("\"$it\"") }
             ?: throw Exception("Failed to extract JSON from script")
     }
 
