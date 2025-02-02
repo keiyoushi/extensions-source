@@ -3,7 +3,7 @@ ext {
     extClass = '.Retsu'
     themePkg = 'madara'
     baseUrl = 'https://retsu.org'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

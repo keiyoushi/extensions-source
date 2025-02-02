@@ -17,4 +17,7 @@ class Retsu : Madara(
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = false
+
+    override fun searchMangaSelector() = ".manga__item"
+    override val searchMangaUrlSelector = ".post-title a"
 }
