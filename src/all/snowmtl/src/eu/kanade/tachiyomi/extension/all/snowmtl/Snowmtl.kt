@@ -28,7 +28,6 @@ class Snowmtl(
     private val translator: TranslatorEngine = BingTranslator(clientUtils, headers)
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
         .connectTimeout(1, TimeUnit.MINUTES)
         .readTimeout(2, TimeUnit.MINUTES)
         .addInterceptor(TranslationInterceptor(language, translator))
