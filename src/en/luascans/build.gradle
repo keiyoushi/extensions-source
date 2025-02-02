@@ -1,9 +1,9 @@
 ext {
     extName = 'Lua Scans'
     extClass = '.LuaScans'
-    themePkg = 'keyoapp'
+    themePkg = 'heancms'
     baseUrl = 'https://luacomic.org'
-    overrideVersionCode = 31
+    overrideVersionCode = 18
     isNsfw = false
 }
 

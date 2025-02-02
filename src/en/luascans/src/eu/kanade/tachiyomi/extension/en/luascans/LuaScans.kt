@@ -1,12 +1,14 @@
 package eu.kanade.tachiyomi.extension.en.luascans
 
-import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 
-class LuaScans : Keyoapp(
+class LuaScans : HeanCms(
     "Lua Scans",
     "https://luacomic.org",
     "en",
 ) {
-    // migrated from MangaThemesia to Keyoapp
-    override val versionId = 2
+    // Moved from Keyoapp to HeanCms
+    override val versionId = 3
+
+    override val useNewChapterEndpoint = true
 }
