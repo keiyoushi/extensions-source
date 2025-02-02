@@ -48,7 +48,7 @@ data class ReadResponseDto(
     val chapterInfo: ChapterDto,
     val url: List<String>,
 ) {
-    fun toPageList(): List<Page> = this@ReadResponseDto
+    fun toPageList(storageUrl: String): List<Page> = this@ReadResponseDto
         .url
-        .mapIndexed { index, url -> Page(index, imageUrl = "https://storage.yurineko.my" + url) }
+        .mapIndexed { index, url -> Page(index, imageUrl = storageUrl + url) }
 }

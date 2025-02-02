@@ -40,7 +40,7 @@ class YuriNeko : HttpSource(), ConfigurableSource {
 
     override val name = "YuriNeko"
 
-    private val defaultDomain = "yurineko.click"
+    private val defaultDomain = "yurineko.site"
 
     override val baseUrl by lazy { "https://${getPrefDomain()}" }
 
@@ -49,6 +49,8 @@ class YuriNeko : HttpSource(), ConfigurableSource {
     override val supportsLatest = false
 
     private val apiUrl by lazy { "https://api.${getPrefDomain()}" }
+
+    private val storageUrl by lazy { "https://storage.${getPrefDomain()}" }
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
@@ -98,7 +100,7 @@ class YuriNeko : HttpSource(), ConfigurableSource {
     override fun popularMangaParse(response: Response): MangasPage {
         val mangaListDto = response.parseAs<MangaListDto>()
         val currentPage = response.request.url.queryParameter("page")!!.toFloat()
-        return mangaListDto.toMangasPage(currentPage)
+        return mangaListDto.toMangasPage(currentPage, storageUrl)
     }
 
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
@@ -188,7 +190,7 @@ class YuriNeko : HttpSource(), ConfigurableSource {
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl${manga.url}")
 
     override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<MangaDto>().toSManga()
+        response.parseAs<MangaDto>().toSManga(storageUrl)
 
     override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl${manga.url}")
 
@@ -201,7 +203,7 @@ class YuriNeko : HttpSource(), ConfigurableSource {
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl${chapter.url}")
 
     override fun pageListParse(response: Response): List<Page> =
-        response.parseAs<ReadResponseDto>().toPageList()
+        response.parseAs<ReadResponseDto>().toPageList(storageUrl)
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
