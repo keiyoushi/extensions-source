@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.rizzcomic
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
+import android.util.Log
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -10,22 +10,26 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RizzComic : MangaThemesiaAlt(
+class RizzComic : MangaThemesia(
     "Rizz Comic",
-    "https://rizzfables.com",
+    "https://realmoasis.com",
     "en",
-    mangaUrlDirectory = "/series",
+    mangaUrlDirectory = "/comics",
     dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH),
 ) {
 
@@ -52,15 +56,16 @@ class RizzComic : MangaThemesiaAlt(
             .build()
     }
 
-    override val versionId = 2
+    override val versionId = 3
 
-    override val slugRegex = Regex("""^(r\d+-)""")
-
-    // don't allow disabling random part setting
-    override fun setupPreferenceScreen(screen: PreferenceScreen) = Unit
-
-    override val listUrl = mangaUrlDirectory
-    override val listSelector = "div.bsx a"
+    private val mangaPath by lazy {
+        client.newCall(GET(baseUrl, headers))
+            .execute().asJsoup()
+            .selectFirst(".listupd a")!!
+            .absUrl("href")
+            .toHttpUrl()
+            .pathSegments[0]
+    }
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.POPULAR)
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
@@ -98,6 +103,7 @@ class RizzComic : MangaThemesiaAlt(
 
     @Serializable
     class Comic(
+        val id: String,
         val title: String,
         @SerialName("image_url") val cover: String? = null,
         @SerialName("long_description") val synopsis: String? = null,
@@ -108,16 +114,7 @@ class RizzComic : MangaThemesiaAlt(
         val serialization: String? = null,
         @SerialName("genre_id") val genres: String? = null,
     ) {
-        val slug get() = title.trim().lowercase()
-            .replace(slugRegex, "-")
-            .replace("-s-", "s-")
-            .replace("-ll-", "ll-")
-
         val genreIds get() = genres?.split(",")?.map(String::trim)
-
-        companion object {
-            private val slugRegex = Regex("""[^a-z0-9]+""")
-        }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -125,7 +122,7 @@ class RizzComic : MangaThemesiaAlt(
 
         val entries = result.map { comic ->
             SManga.create().apply {
-                url = "$mangaUrlDirectory/${comic.slug}/"
+                url = comic.id
                 title = comic.title
                 description = comic.synopsis
                 author = listOfNotNull(comic.author, comic.serialization).joinToString()
@@ -145,10 +142,52 @@ class RizzComic : MangaThemesiaAlt(
         return MangasPage(entries, false)
     }
 
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment(mangaPath)
+            .addPathSegment(
+                UrlUtils.generateSeriesLink(manga.url.toInt()),
+            ).build()
+
+        Log.d("realm", url.toString())
+
+        return GET(url, headers)
+    }
+
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         return client.newCall(mangaDetailsRequest(manga))
             .asObservableSuccess()
             .map { mangaDetailsParse(it).apply { description = manga.description } }
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        return mangaDetailsRequest(manga)
+    }
+
+    override fun chapterFromElement(element: Element): SChapter {
+        return super.chapterFromElement(element).apply {
+            val chapUrl = element.select("a").attr("abs:href")
+
+            val (seriesId, chapterId) = UrlUtils.extractChapterIds(chapUrl)
+                ?: throw Exception("unable find chapter id from url")
+
+            url = "$seriesId/$chapterId"
+        }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val (seriesId, chapterId) = chapter.url.split("/").let {
+            it[0].toInt() to it[1].toInt()
+        }
+
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment(mangaPath)
+            .addPathSegment(UrlUtils.generateChapterLink(seriesId, chapterId))
+            .build()
+
+        Log.d("realm", url.toString())
+
+        return GET(url, headers)
     }
 
     override fun imageRequest(page: Page): Request {
