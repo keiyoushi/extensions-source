@@ -680,7 +680,7 @@ abstract class Madara(
                 manga.thumbnail_url = imageFromElement(it)
             }
             select(mangaDetailsSelectorStatus).last()?.let {
-                manga.status = with(it.text().filter { text -> text.isLetterOrDigit() }) {
+                manga.status = with(it.text().filter { ch -> ch.isLetterOrDigit() || ch.isWhitespace() }.trim()) {
                     when {
                         containsIn(completedStatusList) -> SManga.COMPLETED
                         containsIn(ongoingStatusList) -> SManga.ONGOING
