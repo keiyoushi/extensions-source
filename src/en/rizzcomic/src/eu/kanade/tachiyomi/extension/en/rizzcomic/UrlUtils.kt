@@ -16,7 +16,6 @@ object UrlUtils {
             append(seriesId.toString().padStart(5, '0'))
             append(randomString(12))
         }
-        // return "/$mangaDir/${getRandomString(4)}s${getRandomString(4)}${seriesId.toString().padStart(5, '0')}${getRandomString(12)}"
     }
 
     fun generateChapterLink(seriesId: Int, chapterId: Int): String {
@@ -29,7 +28,6 @@ object UrlUtils {
             append(chapterId.toString().padStart(6, '0'))
             append(randomString(4))
         }
-        // return "/$mangaDir/${getRandomString(4)}c${getRandomString(4)}${seriesId.toString().padStart(5, '0')}${getRandomString(4)}${chapterId.toString().padStart(6, '0')}${getRandomString(4)}"
     }
 
     fun extractSeriesId(url: String): Int? {
