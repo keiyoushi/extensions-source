@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.rizzcomic
 
-import android.util.Log
+import android.app.Application
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -22,11 +22,13 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RizzComic : MangaThemesia(
-    "Rizz Comic",
+class RealmOasis : MangaThemesia(
+    "Realm Oasis",
     "https://realmoasis.com",
     "en",
     mangaUrlDirectory = "/comics",
@@ -58,6 +60,9 @@ class RizzComic : MangaThemesia(
 
     override val versionId = 3
 
+    private val preferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+
     private val mangaPath by lazy {
         client.newCall(GET(baseUrl, headers))
             .execute().asJsoup()
@@ -65,6 +70,11 @@ class RizzComic : MangaThemesia(
             .absUrl("href")
             .toHttpUrl()
             .pathSegments[0]
+            .also {
+                preferences.edit()
+                    .putString("manga_path", it)
+                    .apply()
+            }
     }
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.POPULAR)
@@ -149,9 +159,19 @@ class RizzComic : MangaThemesia(
                 UrlUtils.generateSeriesLink(manga.url.toInt()),
             ).build()
 
-        Log.d("realm", url.toString())
-
         return GET(url, headers)
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        return buildString {
+            append(baseUrl)
+            append("/")
+            append(preferences.getString("manga_path", ""))
+            append("/")
+            append(
+                UrlUtils.generateSeriesLink(manga.url.toInt()),
+            )
+        }
     }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
@@ -182,12 +202,27 @@ class RizzComic : MangaThemesia(
 
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment(mangaPath)
-            .addPathSegment(UrlUtils.generateChapterLink(seriesId, chapterId))
-            .build()
-
-        Log.d("realm", url.toString())
+            .addPathSegment(
+                UrlUtils.generateChapterLink(seriesId, chapterId),
+            ).build()
 
         return GET(url, headers)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (seriesId, chapterId) = chapter.url.split("/").let {
+            it[0].toInt() to it[1].toInt()
+        }
+
+        return buildString {
+            append(baseUrl)
+            append("/")
+            append(preferences.getString("manga_path", ""))
+            append("/")
+            append(
+                UrlUtils.generateChapterLink(seriesId, chapterId),
+            )
+        }
     }
 
     override fun imageRequest(page: Page): Request {
