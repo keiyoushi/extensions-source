@@ -1,9 +1,0 @@
-ext {
-    extName = 'Kuma Scans (Kuma Translation)'
-    extClass = '.KumaScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://kumascans.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
