@@ -1,0 +1,9 @@
+ext {
+    extName = 'Comic Growl'
+    extClass = '.ComicGrowl'
+    themePkg = 'gigaviewer'
+    baseUrl = 'https://comic-growl.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
