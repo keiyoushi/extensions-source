@@ -1,8 +1,0 @@
-ext {
-    extName = 'Frelein Books'
-    extClass = '.FreleinBooks'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"
