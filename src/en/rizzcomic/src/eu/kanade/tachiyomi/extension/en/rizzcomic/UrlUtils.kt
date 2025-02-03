@@ -30,12 +30,12 @@ object UrlUtils {
         }
     }
 
-    //private val seriesRegex = """^[a-z0-9]{4}s[a-z0-9]{4}(\d{5})[a-z0-9]+$""".toRegex()
+    // private val seriesRegex = """^[a-z0-9]{4}s[a-z0-9]{4}(\d{5})[a-z0-9]+$""".toRegex()
     //
-    //fun extractSeriesId(url: String): Int? {
+    // fun extractSeriesId(url: String): Int? {
     //    val path = url.toHttpUrl().pathSegments.last()
     //    return seriesRegex.find(path)?.groupValues?.get(1)?.toIntOrNull()
-    //}
+    // }
 
     private val ChaptersRegex = """^[a-z0-9]{4}c[a-z0-9]{4}(\d{5})[a-z0-9]{4}(\d{6})[a-z0-9]+$""".toRegex()
 
