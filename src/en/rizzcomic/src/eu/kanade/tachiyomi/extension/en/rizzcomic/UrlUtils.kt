@@ -30,16 +30,18 @@ object UrlUtils {
         }
     }
 
-    fun extractSeriesId(url: String): Int? {
-        val regex = """^[a-z0-9]{4}s[a-z0-9]{4}(\d{5})[a-z0-9]+$""".toRegex()
-        val path = url.toHttpUrl().pathSegments.last()
-        return regex.find(path)?.groupValues?.get(1)?.toIntOrNull()
-    }
+    //private val seriesRegex = """^[a-z0-9]{4}s[a-z0-9]{4}(\d{5})[a-z0-9]+$""".toRegex()
+    //
+    //fun extractSeriesId(url: String): Int? {
+    //    val path = url.toHttpUrl().pathSegments.last()
+    //    return seriesRegex.find(path)?.groupValues?.get(1)?.toIntOrNull()
+    //}
+
+    private val ChaptersRegex = """^[a-z0-9]{4}c[a-z0-9]{4}(\d{5})[a-z0-9]{4}(\d{6})[a-z0-9]+$""".toRegex()
 
     fun extractChapterIds(url: String): Pair<Int, Int>? {
-        val regex = """^[a-z0-9]{4}c[a-z0-9]{4}(\d{5})[a-z0-9]{4}(\d{6})[a-z0-9]+$""".toRegex()
         val path = url.toHttpUrl().pathSegments.last()
-        return regex.find(path)?.let { matchResult ->
+        return ChaptersRegex.find(path)?.let { matchResult ->
             val seriesId = matchResult.groupValues[1].toIntOrNull()
             val chapterId = matchResult.groupValues[2].toIntOrNull()
             if (seriesId != null && chapterId != null) {
