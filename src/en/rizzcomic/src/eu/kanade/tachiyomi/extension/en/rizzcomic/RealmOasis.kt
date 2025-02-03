@@ -186,7 +186,7 @@ class RealmOasis : MangaThemesia(
 
     override fun chapterFromElement(element: Element): SChapter {
         return super.chapterFromElement(element).apply {
-            val chapUrl = element.select("a").attr("abs:href")
+            val chapUrl = element.selectFirst("a")!!.absUrl("href")
 
             val (seriesId, chapterId) = UrlUtils.extractChapterIds(chapUrl)
                 ?: throw Exception("unable find chapter id from url")
@@ -196,9 +196,7 @@ class RealmOasis : MangaThemesia(
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val (seriesId, chapterId) = chapter.url.split("/").let {
-            it[0].toInt() to it[1].toInt()
-        }
+        val (seriesId, chapterId) = chapter.url.split("/").take(2).map(String::toInt)
 
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment(mangaPath)
@@ -210,9 +208,7 @@ class RealmOasis : MangaThemesia(
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val (seriesId, chapterId) = chapter.url.split("/").let {
-            it[0].toInt() to it[1].toInt()
-        }
+        val (seriesId, chapterId) = chapter.url.split("/").take(2).map(String::toInt)
 
         return buildString {
             append(baseUrl)

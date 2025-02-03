@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.rizzcomic
 
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 object UrlUtils {
     private fun randomString(length: Int): String {
@@ -30,22 +30,24 @@ object UrlUtils {
         }
     }
 
-    // private val seriesRegex = """^[a-z0-9]{4}s[a-z0-9]{4}(\d{5})[a-z0-9]+$""".toRegex()
+    // private val seriesRegex = """^[a-z0-9]{4}s[a-z0-9]{4}([0-9]{5})[a-z0-9]+$""".toRegex()
     //
     // fun extractSeriesId(url: String): Int? {
-    //    val path = url.toHttpUrl().pathSegments.last()
+    //    val path = url.toHttpUrlOrNull()?.pathSegments?.lastOrNull()
+    //        ?: return null
     //    return seriesRegex.find(path)?.groupValues?.get(1)?.toIntOrNull()
     // }
 
-    private val ChaptersRegex = """^[a-z0-9]{4}c[a-z0-9]{4}(\d{5})[a-z0-9]{4}(\d{6})[a-z0-9]+$""".toRegex()
+    private val ChaptersRegex = """^[a-z0-9]{4}c[a-z0-9]{4}([0-9]{5})[a-z0-9]{4}([0-9]{6})[a-z0-9]+$""".toRegex()
 
     fun extractChapterIds(url: String): Pair<Int, Int>? {
-        val path = url.toHttpUrl().pathSegments.last()
+        val path = url.toHttpUrlOrNull()?.pathSegments?.lastOrNull()
+            ?: return null
         return ChaptersRegex.find(path)?.let { matchResult ->
             val seriesId = matchResult.groupValues[1].toIntOrNull()
             val chapterId = matchResult.groupValues[2].toIntOrNull()
             if (seriesId != null && chapterId != null) {
-                Pair(seriesId, chapterId)
+                seriesId to chapterId
             } else {
                 null
             }
