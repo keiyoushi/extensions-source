@@ -64,8 +64,11 @@ class Hitomi(
 
     private val json: Json by injectLazy()
 
+    private val REGEX_IMAGE_URL = """https://.*?a\.$domain/(jxl|avif|webp)/\d+?/\d+/([0-9a-f]{64})\.\1""".toRegex()
+
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::jxlContentTypeInterceptor)
+        .addInterceptor(::updateImageUrlInterceptor)
         .apply {
             interceptors().add(0, ::streamResetRetry)
         }
@@ -746,6 +749,25 @@ class Hitomi(
                 throw e
             }
         }
+    }
+
+    private fun updateImageUrlInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        val cleanUrl = request.url.run { "$scheme://$host$encodedPath" }
+        REGEX_IMAGE_URL.matchEntire(cleanUrl)?.let { match ->
+            val (ext, hash) = match.destructured
+
+            val commonId = runBlocking { commonImageId() }
+            val imageId = imageIdFromHash(hash)
+            val subDomain = 'a' + runBlocking { subdomainOffset(imageId) }
+
+            val newUrl = "https://${subDomain}a.$domain/$ext/$commonId$imageId/$hash.$ext"
+            val newRequest = request.newBuilder().url(newUrl).build()
+            return chain.proceed(newRequest)
+        }
+
+        return chain.proceed(request)
     }
 
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()

@@ -2,8 +2,8 @@ ext {
     extName = 'Ignis Comic'
     extClass = '.IgnisComic'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://igniscomic.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://manhuaga.com'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
