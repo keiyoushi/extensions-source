@@ -18,7 +18,7 @@ class ComicGrowl : GigaViewer(
 
     override val publisher = "BUSHIROAD WORKS"
 
-    override val chapterListMode = 2 // No paid chapters
+    override val chapterListMode = CHAPTER_LIST_LOCKED
 
     override val supportsLatest: Boolean = false
 
