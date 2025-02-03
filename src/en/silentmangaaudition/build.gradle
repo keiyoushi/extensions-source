@@ -1,7 +1,0 @@
-ext {
-    extName = 'Silent Manga Audition'
-    extClass = '.SilentMangaAudition'
-    extVersionCode = 5
-}
-
-apply from: "$rootDir/common.gradle"
