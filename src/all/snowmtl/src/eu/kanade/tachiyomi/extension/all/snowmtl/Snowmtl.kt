@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations
 import eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors.ComposedImageInterceptor
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -27,10 +28,12 @@ class Snowmtl(
 
     private val translator: TranslatorEngine = BingTranslator(clientUtils, headers)
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .readTimeout(2, TimeUnit.MINUTES)
-        .addInterceptor(TranslationInterceptor(language, translator))
-        .addInterceptor(ComposedImageInterceptor(baseUrl, language))
-        .build()
+    override val client: OkHttpClient by lazy {
+        network.cloudflareClient.newBuilder()
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(2, TimeUnit.MINUTES)
+            .addInterceptor(TranslationInterceptor(language, translator))
+            .addInterceptor(ComposedImageInterceptor(baseUrl, language, fontSize))
+            .build()
+    }
 }

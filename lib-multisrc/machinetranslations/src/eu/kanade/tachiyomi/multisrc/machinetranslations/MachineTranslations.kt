@@ -1,9 +1,16 @@
 package eu.kanade.tachiyomi.multisrc.machinetranslations
 
+import android.app.Application
+import android.content.SharedPreferences
 import android.os.Build
+import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors.ComposedImageInterceptor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,10 +22,13 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -29,7 +39,7 @@ abstract class MachineTranslations(
     override val name: String,
     override val baseUrl: String,
     val language: Language,
-) : ParsedHttpSource() {
+) : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
@@ -37,9 +47,26 @@ abstract class MachineTranslations(
 
     override val lang = language.lang
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(ComposedImageInterceptor(baseUrl, language))
-        .build()
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    protected var fontSize: Int
+        get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()
+        set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
+
+    private val intl = Intl(
+        language = language.lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "es", "fr", "id", "it", "pt-BR"),
+        classLoader = this::class.java.classLoader!!,
+    )
+
+    override val client: OkHttpClient by lazy {
+        network.cloudflareClient.newBuilder()
+            .addInterceptor(ComposedImageInterceptor(baseUrl, language, fontSize))
+            .build()
+    }
 
     // ============================== Popular ===============================
 
@@ -203,9 +230,49 @@ abstract class MachineTranslations(
         return FilterList(filters)
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        // Some libreoffice font sizes
+        val sizes = arrayOf(
+            "24", "26", "28",
+            "32", "36", "40",
+            "42", "44", "48",
+            "54", "60", "72",
+            "80", "88", "96",
+        )
+
+        ListPreference(screen.context).apply {
+            key = FONT_SIZE_PREF
+            title = intl["font_size_title"]
+            entries = sizes.map {
+                "${it}pt" + if (it == DEFAULT_FONT_SIZE) " - ${intl["default_font_size"]}" else ""
+            }.toTypedArray()
+            entryValues = sizes
+            summary = intl["font_size_summary"]
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val selected = newValue as String
+                val index = this.findIndexOfValue(selected)
+                val entry = entries[index] as String
+
+                fontSize = selected.toInt()
+
+                Toast.makeText(
+                    screen.context,
+                    intl["font_size_message"].format(entry),
+                    Toast.LENGTH_LONG,
+                ).show()
+
+                false
+            }
+        }.also(screen::addPreference)
+    }
+
     companion object {
         val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
         const val PREFIX_SEARCH = "id:"
+        const val FONT_SIZE_PREF = "fontSizePref"
+        const val DEFAULT_FONT_SIZE = "24"
+
         private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.US)
     }
 }
