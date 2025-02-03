@@ -380,6 +380,8 @@ class Manhuagui(
 
     private val packedContentRegex = Regex("""['"]([0-9A-Za-z+/=]+)['"]\[['"].*?['"]]\(['"].*?['"]\)""")
 
+    private val singleQuoteRegex = Regex("""\\'""")
+
     override fun pageListParse(document: Document): List<Page> {
         // R18 warning element (#erroraudit_show) is remove by web page javascript, so here the warning element
         // will always exist if this manga is R18 limited whether R18 verification cookies has been sent or not.
@@ -393,13 +395,13 @@ class Manhuagui(
             // Make the packed content normal again so :lib:unpacker can do its job
             it.replace(packedContentRegex) { match ->
                 val lzs = match.groupValues[1]
-                val decoded = LZString.decompressFromBase64(lzs).replace("'", "\\'")
-
+                val decoded = LZString.decompressFromBase64(lzs)
                 "'$decoded'.split('|')"
             }
         }
-        val imgDecode = Unpacker.unpack(imgCode)
-
+        // Convert single quote to dash before passing to unpack, since unpack will replace it
+        // with double quote, which may make json parse fail.
+        val imgDecode = Unpacker.unpack(singleQuoteRegex.replace(imgCode, "-"))
         val imgJsonStr = blockCcArgRegex.find(imgDecode)!!.groupValues[0]
         val imageJson: Comic = json.decodeFromString(imgJsonStr)
 
