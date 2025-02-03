@@ -262,7 +262,7 @@ abstract class MachineTranslations(
                     Toast.LENGTH_LONG,
                 ).show()
 
-                true
+                false
             }
         }.also(screen::addPreference)
     }
