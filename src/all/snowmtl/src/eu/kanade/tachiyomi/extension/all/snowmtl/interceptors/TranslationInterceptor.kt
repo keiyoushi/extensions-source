@@ -62,7 +62,20 @@ class TranslationInterceptor(
         tokens: List<String>,
         mapping: Map<String, Pair<String, AssociatedDialog>>,
     ) = tokens.mapNotNull { token ->
-        val list = token.decode().parseAs<List<String>>()
+        val list = try {
+            token.decode().parseAs<List<String>>()
+        } catch (_: Exception) {
+            // The translator may return an invalid JSON, but it keeps the pattern sent.
+            TRANSLATOR_EXTRACT_REGEX.findAll(token).map {
+                listOf(
+                    it.groups[1]?.value!!.encode(),
+                    it.groups[3]?.value!!.let { dialog ->
+                        dialog.takeIf { it.startsWith("\"") } ?: dialog.encode()
+                    },
+                )
+            }.toList().flatten()
+        }
+
         val key = list.first()
         val text = list.last()
 
@@ -102,7 +115,7 @@ class TranslationInterceptor(
     private fun String.encode() = "\"${this}\""
     private fun String.decode() = this.substringAfter("\"").substringBeforeLast("\"")
 
-    private val delimiter: String = "|"
+    private val delimiter: String = "¦"
 
     /**
      * Tokenizes a list of texts based on the translator's character capacity per request
@@ -136,6 +149,10 @@ class TranslationInterceptor(
 
     private inline fun <reified T> String.parseAs(): T {
         return json.decodeFromString(this)
+    }
+
+    companion object {
+        val TRANSLATOR_EXTRACT_REGEX = """"?(-?\d+)(\\?")?,((\\?")?([^(\])]+))""".toRegex()
     }
 }
 
