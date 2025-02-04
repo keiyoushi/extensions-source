@@ -1,10 +1,12 @@
 package eu.kanade.tachiyomi.extension.all.koharu
 
 import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -59,6 +61,8 @@ class Koharu(
 
     private fun remadd() = preferences.getBoolean(PREF_REM_ADD, false)
 
+    private fun crt() = preferences.getString(PREF_CRT, DEFAULT_CRT) ?: DEFAULT_CRT
+
     private fun getDomain(): String {
         try {
             val noRedirectClient = client.newBuilder().followRedirects(false).build()
@@ -80,12 +84,12 @@ class Koharu(
     }
 
     private fun getManga(book: Entry) = SManga.create().apply {
-        setUrlWithoutDomain("${book.id}/${book.public_key}")
+        setUrlWithoutDomain("${book.id}/${book.key}")
         title = if (remadd()) book.title.shortenTitle() else book.title
         thumbnail_url = book.thumbnail.path
     }
 
-    private fun getImagesByMangaEntry(entry: MangaEntry): Pair<ImagesInfo, String> {
+    private fun getImagesByMangaEntry(entry: MangaData, entryId: String, entryKey: String): Pair<ImagesInfo, String> {
         val data = entry.data
         fun getIPK(
             ori: DataKey?,
@@ -96,7 +100,7 @@ class Koharu(
         ): Pair<Int?, String?> {
             return Pair(
                 ori?.id ?: alt1?.id ?: alt2?.id ?: alt3?.id ?: alt4?.id,
-                ori?.public_key ?: alt1?.public_key ?: alt2?.public_key ?: alt3?.public_key ?: alt4?.public_key,
+                ori?.key ?: alt1?.key ?: alt2?.key ?: alt3?.key ?: alt4?.key,
             )
         }
         val (id, public_key) = when (quality()) {
@@ -119,7 +123,7 @@ class Koharu(
             else -> "0"
         }
 
-        val imagesResponse = client.newCall(GET("$apiBooksUrl/data/${entry.id}/${entry.public_key}/$id/$public_key?v=${entry.updated_at ?: entry.created_at}&w=$realQuality", lazyHeaders)).execute()
+        val imagesResponse = client.newCall(GET("$apiBooksUrl/data/$entryId/$entryKey/$id/$public_key/$realQuality?crt=${crt()}", lazyHeaders)).execute()
         val images = imagesResponse.parseAs<ImagesInfo>() to realQuality
         return images
     }
@@ -196,7 +200,7 @@ class Koharu(
         return MangasPage(
             listOf(
                 SManga.create().apply {
-                    setUrlWithoutDomain("${entry.id}/${entry.public_key}")
+                    setUrlWithoutDomain("${entry.id}/${entry.key}")
                     title = if (remadd()) entry.title.shortenTitle() else entry.title
                     thumbnail_url = entry.thumbnails.base + entry.thumbnails.main.path
                 },
@@ -278,6 +282,7 @@ class Koharu(
                 append("Posted: ", dateReformat.format(created_at), "\n")
             } catch (_: Exception) {}
 
+            /*
             val dataKey = when (quality()) {
                 "1600" -> data.`1600` ?: data.`1280` ?: data.`0`
                 "1280" -> data.`1280` ?: data.`1600` ?: data.`0`
@@ -286,6 +291,7 @@ class Koharu(
                 else -> data.`0`
             }
             append("Size: ", dataKey.readableSize(), "\n\n")
+             */
             append("Pages: ", thumbnails.entries.size, "\n\n")
         }
         status = SManga.COMPLETED
@@ -316,7 +322,7 @@ class Koharu(
         return listOf(
             SChapter.create().apply {
                 name = "Chapter"
-                url = "${manga.id}/${manga.public_key}"
+                url = "${manga.id}/${manga.key}"
                 date_upload = (manga.updated_at ?: manga.created_at)
             },
         )
@@ -327,12 +333,15 @@ class Koharu(
     // Page List
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$apiBooksUrl/detail/${chapter.url}", lazyHeaders)
+        return POST("$apiBooksUrl/detail/${chapter.url}?crt=${crt()}", lazyHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val mangaEntry = response.parseAs<MangaEntry>()
-        val imagesInfo = getImagesByMangaEntry(mangaEntry)
+        val mangaData = response.parseAs<MangaData>()
+        val url = response.request.url.toString()
+        val matches = Regex("""/detail/(\d+)/([a-z\d]+)""").find(url)
+        if (matches == null || matches.groupValues.size < 3) return emptyList()
+        val imagesInfo = getImagesByMangaEntry(mangaData, matches.groupValues[1], matches.groupValues[2])
 
         return imagesInfo.first.entries.mapIndexed { index, image ->
             Page(index, imageUrl = "${imagesInfo.first.base}/${image.path}?w=${imagesInfo.second}")
@@ -344,6 +353,14 @@ class Koharu(
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+
+    override fun relatedMangaListRequest(manga: SManga) =
+        POST("$apiBooksUrl/detail/${manga.url}?crt=${crt()}", lazyHeaders)
+
+    override fun relatedMangaListParse(response: Response): List<SManga> {
+        val data = response.parseAs<MangaData>()
+        return data.similar.map(::getManga)
+    }
 
     // Settings
 
@@ -364,6 +381,13 @@ class Koharu(
                 "Reload manga to apply changes to loaded manga."
             setDefaultValue(false)
         }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = PREF_CRT
+            title = "CRT value"
+            summary = preferences.getString(PREF_CRT, DEFAULT_CRT) ?: DEFAULT_CRT
+            setDefaultValue(DEFAULT_CRT)
+        }.also(screen::addPreference)
     }
 
     private inline fun <reified T> Response.parseAs(): T {
@@ -374,5 +398,7 @@ class Koharu(
         const val PREFIX_ID_KEY_SEARCH = "id:"
         private const val PREF_IMAGERES = "pref_image_quality"
         private const val PREF_REM_ADD = "pref_remove_additional"
+        private const val PREF_CRT = "pref_crt"
+        private const val DEFAULT_CRT = "75af94f0-03c0-4c80-83c6-5e7b28daf4a0"
     }
 }

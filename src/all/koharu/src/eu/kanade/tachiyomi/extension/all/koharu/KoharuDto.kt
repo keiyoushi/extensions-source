@@ -19,7 +19,7 @@ class Books(
 @Serializable
 class Entry(
     val id: Int,
-    val public_key: String,
+    val key: String,
     val title: String,
     val thumbnail: Thumbnail,
 )
@@ -28,12 +28,17 @@ class Entry(
 class MangaEntry(
     val id: Int,
     val title: String,
-    val public_key: String,
+    val key: String,
     val created_at: Long = 0L,
     val updated_at: Long?,
     val thumbnails: Thumbnails,
     val tags: List<Tag> = emptyList(),
+)
+
+@Serializable
+class MangaData(
     val data: Data,
+    val similar: List<Entry> = emptyList(),
 )
 
 @Serializable
@@ -61,7 +66,7 @@ class Data(
 class DataKey(
     val id: Int? = null,
     val size: Double = 0.0,
-    val public_key: String? = null,
+    val key: String? = null,
 ) {
     fun readableSize() = when {
         size >= 300 * 1000 * 1000 -> "${"%.2f".format(size / (1000.0 * 1000.0 * 1000.0))} GB"
