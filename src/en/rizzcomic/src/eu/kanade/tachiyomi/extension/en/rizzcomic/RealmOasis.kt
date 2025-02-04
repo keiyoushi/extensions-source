@@ -71,9 +71,7 @@ class RealmOasis : MangaThemesia(
             .toHttpUrl()
             .pathSegments[0]
             .also {
-                preferences.edit()
-                    .putString("manga_path", it)
-                    .apply()
+                mangaPathCache = it
             }
     }
 
@@ -166,7 +164,7 @@ class RealmOasis : MangaThemesia(
         return buildString {
             append(baseUrl)
             append("/")
-            append(preferences.getString("manga_path", ""))
+            append(mangaPathCache)
             append("/")
             append(
                 UrlUtils.generateSeriesLink(manga.url.toInt()),
@@ -213,7 +211,7 @@ class RealmOasis : MangaThemesia(
         return buildString {
             append(baseUrl)
             append("/")
-            append(preferences.getString("manga_path", ""))
+            append(mangaPathCache)
             append("/")
             append(
                 UrlUtils.generateChapterLink(seriesId, chapterId),
@@ -245,4 +243,19 @@ class RealmOasis : MangaThemesia(
         val charPool = ('a'..'z') + ('A'..'Z')
         return List(length) { charPool.random() }.joinToString("")
     }
+
+    private var mangaPathCache: String = ""
+        get() {
+            if (field.isBlank()) {
+                field = preferences.getString(mangaPathPrefCache, "comics")!!
+            }
+
+            return field
+        }
+        set(newVal) {
+            preferences.edit().putString(mangaPathPrefCache, newVal).apply()
+            field = newVal
+        }
 }
+
+private const val mangaPathPrefCache = "manga_path"
