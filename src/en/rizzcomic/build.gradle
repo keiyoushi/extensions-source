@@ -1,9 +1,9 @@
 ext {
-    extName = 'Rizz Comic'
-    extClass = '.RizzComic'
+    extName = 'Realm Oasis'
+    extClass = '.RealmOasis'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://rizzfables.com'
-    overrideVersionCode = 5
+    baseUrl = 'https://realmoasis.com'
+    overrideVersionCode = 6
 }
 
 apply from: "$rootDir/common.gradle"
