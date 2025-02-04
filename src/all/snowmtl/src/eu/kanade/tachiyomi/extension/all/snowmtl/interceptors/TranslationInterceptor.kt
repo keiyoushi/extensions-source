@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.all.snowmtl.interceptors
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import eu.kanade.tachiyomi.extension.all.snowmtl.LanguageSetting
 import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
-import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -15,7 +15,7 @@ import uy.kohesive.injekt.injectLazy
 
 @RequiresApi(Build.VERSION_CODES.O)
 class TranslationInterceptor(
-    private val source: Language,
+    var language: LanguageSetting,
     private val translator: TranslatorEngine,
 ) : Interceptor {
 
@@ -25,14 +25,19 @@ class TranslationInterceptor(
         val request = chain.request()
         val url = request.url.toString()
 
-        if (PAGE_REGEX.containsMatchIn(url).not() || source.target == source.origin) {
+        if (PAGE_REGEX.containsMatchIn(url).not() || language.target == language.origin) {
             return chain.proceed(request)
         }
 
         val dialogues = request.url.fragment?.parseAs<List<Dialog>>()
             ?: return chain.proceed(request)
 
-        val translated = translationOptimized(dialogues)
+        val translated = when {
+            language.disableTranslationOptimization -> dialogues.map {
+                it.replaceText(translator.translate(language.origin, language.target, it.text))
+            }
+            else -> translationOptimized(dialogues)
+        }
 
         val newRequest = request.newBuilder()
             .url("${url.substringBeforeLast("#")}#${json.encodeToString(translated)}")
@@ -52,7 +57,7 @@ class TranslationInterceptor(
         val mapping = buildMap(dialogues)
 
         val tokens = tokenizeAssociatedDialog(mapping).flatMap { token ->
-            translator.translate(source.origin, source.target, token).split(delimiter)
+            translator.translate(language.origin, language.target, token).split(delimiter)
         }
 
         return replaceDialoguesWithTranslations(tokens, mapping)
@@ -79,12 +84,14 @@ class TranslationInterceptor(
         val key = list.first()
         val text = list.last()
 
-        mapping[key]?.second?.dialog?.copy(
-            textByLanguage = mapOf(
-                "text" to text,
-            ),
-        )
+        mapping[key]?.second?.dialog?.replaceText(text)
     }
+
+    private fun Dialog.replaceText(value: String) = this.copy(
+        textByLanguage = mutableMapOf(
+            "text" to value,
+        ),
+    )
 
     /**
      * Tokenizes the associated dialogues.

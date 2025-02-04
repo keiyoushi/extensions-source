@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors.ComposedImageInterceptor
 import eu.kanade.tachiyomi.network.GET
@@ -22,6 +23,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -33,12 +35,13 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 @RequiresApi(Build.VERSION_CODES.O)
 abstract class MachineTranslations(
     override val name: String,
     override val baseUrl: String,
-    val language: Language,
+    private val language: Language,
 ) : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
@@ -47,13 +50,17 @@ abstract class MachineTranslations(
 
     override val lang = language.lang
 
-    private val preferences: SharedPreferences by lazy {
+    protected val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
     protected var fontSize: Int
         get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()
         set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
+
+    protected var disableSourceSettings: Boolean
+        get() = preferences.getBoolean(DISABLE_SOURCE_SETTINGS_PREF, language.disableSourceSettings)
+        set(value) = preferences.edit().putBoolean(DISABLE_SOURCE_SETTINGS_PREF, value).apply()
 
     private val intl = Intl(
         language = language.lang,
@@ -62,10 +69,20 @@ abstract class MachineTranslations(
         classLoader = this::class.java.classLoader!!,
     )
 
-    override val client: OkHttpClient by lazy {
-        network.cloudflareClient.newBuilder()
-            .addInterceptor(ComposedImageInterceptor(baseUrl, language, fontSize))
-            .build()
+    private val settings get() = language.apply {
+        fontSize = this@MachineTranslations.fontSize
+    }
+
+    open val useDefaultComposedImageInterceptor: Boolean = true
+
+    override val client: OkHttpClient get() = network.cloudflareClient.newBuilder()
+        .connectTimeout(1, TimeUnit.MINUTES)
+        .readTimeout(2, TimeUnit.MINUTES)
+        .addInterceptorIf(useDefaultComposedImageInterceptor, ComposedImageInterceptor(baseUrl, settings))
+        .build()
+
+    private fun OkHttpClient.Builder.addInterceptorIf(condition: Boolean, interceptor: Interceptor): OkHttpClient.Builder {
+        return this.takeIf { condition.not() } ?: this.addInterceptor(interceptor)
     }
 
     // ============================== Popular ===============================
@@ -262,16 +279,30 @@ abstract class MachineTranslations(
                     Toast.LENGTH_LONG,
                 ).show()
 
-                false
+                true // It's necessary to update the user interface
             }
         }.also(screen::addPreference)
+
+        if (language.disableSourceSettings.not()) {
+            SwitchPreferenceCompat(screen.context).apply {
+                key = DISABLE_SOURCE_SETTINGS_PREF
+                title = "⚠ ${intl["disable_website_setting_title"]}"
+                summary = intl["disable_website_setting_summary"]
+                setDefaultValue(false)
+                setOnPreferenceChangeListener { _, newValue ->
+                    disableSourceSettings = newValue as Boolean
+                    true
+                }
+            }.also(screen::addPreference)
+        }
     }
 
     companion object {
         val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
         const val PREFIX_SEARCH = "id:"
-        const val FONT_SIZE_PREF = "fontSizePref"
-        const val DEFAULT_FONT_SIZE = "24"
+        private const val FONT_SIZE_PREF = "fontSizePref"
+        private const val DISABLE_SOURCE_SETTINGS_PREF = "disableSourceSettingsPref"
+        private const val DEFAULT_FONT_SIZE = "24"
 
         private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.US)
     }
