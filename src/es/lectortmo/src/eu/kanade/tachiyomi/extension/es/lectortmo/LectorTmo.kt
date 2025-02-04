@@ -9,7 +9,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -56,19 +55,6 @@ abstract class LectorTmo(
         .set("Referer", "$baseUrl/")
         .build()
 
-    protected open val imageCDNUrls = arrayOf(
-        "https://img1.japanreader.com",
-        "https://japanreader.com",
-        "https://imgtmo.com",
-    )
-
-    private fun OkHttpClient.Builder.rateLimitImageCDNs(hosts: Array<String>, permits: Int, period: Long): OkHttpClient.Builder {
-        hosts.forEach { host ->
-            rateLimitHost(host.toHttpUrl(), permits, period)
-        }
-        return this
-    }
-
     private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
         val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
         object : X509TrustManager {
@@ -77,7 +63,7 @@ abstract class LectorTmo(
             override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
         }
 
-        val insecureSocketFactory = SSLContext.getInstance("TLSv1.2").apply {
+        val insecureSocketFactory = SSLContext.getInstance("SSL").apply {
             val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
             init(null, trustAllCerts, SecureRandom())
         }.socketFactory
@@ -87,28 +73,17 @@ abstract class LectorTmo(
         return this
     }
 
-    private val ignoreSslClient: OkHttpClient by lazy {
+    override val client: OkHttpClient by lazy {
         rateLimitClient.newBuilder()
             .ignoreAllSSLErrors()
-            .followRedirects(false)
-            .rateLimit(
-                preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
-                60,
-            )
             .build()
     }
 
     private var lastCFDomain: String = ""
-    override val client: OkHttpClient by lazy {
+
+    // Used on all request except on image requests
+    private val safeClient: OkHttpClient by lazy {
         rateLimitClient.newBuilder()
-            .addInterceptor { chain ->
-                val request = chain.request()
-                val url = request.url
-                if (url.fragment == "imagereq") {
-                    return@addInterceptor ignoreSslClient.newCall(request).execute()
-                }
-                chain.proceed(request)
-            }
             .addInterceptor { chain ->
                 if (!getSaveLastCFUrlPref()) return@addInterceptor chain.proceed(chain.request())
                 val request = chain.request()
@@ -123,16 +98,19 @@ abstract class LectorTmo(
                 preferences.getString(WEB_RATELIMIT_PREF, WEB_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
                 60,
             )
-            .rateLimitImageCDNs(
-                imageCDNUrls,
-                preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)!!.toInt(),
-                60,
-            )
             .build()
     }
 
     // Marks erotic content as false and excludes: Ecchi(6), GirlsLove(17), BoysLove(18), Harem(19), Trap(94) genders
     private fun getSFWUrlPart(): String = if (getSFWModePref()) "&exclude_genders%5B%5D=6&exclude_genders%5B%5D=17&exclude_genders%5B%5D=18&exclude_genders%5B%5D=19&exclude_genders%5B%5D=94&erotic=false" else ""
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return safeClient.newCall(popularMangaRequest(page))
+            .asObservableSuccess()
+            .map { response ->
+                popularMangaParse(response)
+            }
+    }
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/library?order_item=likes_count&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", tmoHeaders)
 
@@ -148,6 +126,14 @@ abstract class LectorTmo(
         }
     }
 
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        return safeClient.newCall(latestUpdatesRequest(page))
+            .asObservableSuccess()
+            .map { response ->
+                latestUpdatesParse(response)
+            }
+    }
+
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/library?order_item=creation&order_dir=desc&filter_by=title${getSFWUrlPart()}&_pg=1&page=$page", tmoHeaders)
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
@@ -160,7 +146,7 @@ abstract class LectorTmo(
         return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val realQuery = query.removePrefix(PREFIX_SLUG_SEARCH)
 
-            client.newCall(searchMangaBySlugRequest(realQuery))
+            safeClient.newCall(searchMangaBySlugRequest(realQuery))
                 .asObservableSuccess()
                 .map { response ->
                     val details = mangaDetailsParse(response)
@@ -168,7 +154,7 @@ abstract class LectorTmo(
                     MangasPage(listOf(details), false)
                 }
         } else {
-            client.newCall(searchMangaRequest(page, query, filters))
+            safeClient.newCall(searchMangaRequest(page, query, filters))
                 .asObservableSuccess()
                 .map { response ->
                     searchMangaParse(response)
@@ -241,6 +227,14 @@ abstract class LectorTmo(
         return super.getMangaUrl(manga)
     }
 
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+        return safeClient.newCall(mangaDetailsRequest(manga))
+            .asObservableSuccess()
+            .map { response ->
+                mangaDetailsParse(response).apply { initialized = true }
+            }
+    }
+
     override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url, tmoHeaders)
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -268,6 +262,14 @@ abstract class LectorTmo(
     override fun getChapterUrl(chapter: SChapter): String {
         if (lastCFDomain.isNotEmpty()) return lastCFDomain.also { lastCFDomain = "" }
         return super.getChapterUrl(chapter)
+    }
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return safeClient.newCall(chapterListRequest(manga))
+            .asObservableSuccess()
+            .map { response ->
+                chapterListParse(response)
+            }
     }
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
@@ -314,6 +316,14 @@ abstract class LectorTmo(
     protected open fun parseChapterDate(date: String): Long {
         return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             .parse(date)?.time ?: 0
+    }
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        return safeClient.newCall(pageListRequest(chapter))
+            .asObservableSuccess()
+            .map { response ->
+                pageListParse(response)
+            }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -440,7 +450,7 @@ abstract class LectorTmo(
     }
 
     override fun imageRequest(page: Page) = GET(
-        url = page.imageUrl!! + "#imagereq",
+        url = page.imageUrl!!,
         headers = headers.newBuilder()
             .set("Referer", page.url.substringBefore("news/"))
             .build(),
@@ -585,7 +595,6 @@ abstract class LectorTmo(
             setDefaultValue(SCANLATOR_PREF_DEFAULT_VALUE)
         }
 
-        // Rate limit
         val apiRateLimitPreference = ListPreference(screen.context).apply {
             key = WEB_RATELIMIT_PREF
             title = WEB_RATELIMIT_PREF_TITLE
@@ -593,15 +602,6 @@ abstract class LectorTmo(
             entries = ENTRIES_ARRAY
             entryValues = ENTRIES_ARRAY
             setDefaultValue(WEB_RATELIMIT_PREF_DEFAULT_VALUE)
-        }
-
-        val imgCDNRateLimitPreference = ListPreference(screen.context).apply {
-            key = IMAGE_CDN_RATELIMIT_PREF
-            title = IMAGE_CDN_RATELIMIT_PREF_TITLE
-            summary = IMAGE_CDN_RATELIMIT_PREF_SUMMARY
-            entries = ENTRIES_ARRAY
-            entryValues = ENTRIES_ARRAY
-            setDefaultValue(IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE)
         }
 
         val saveLastCFUrlPreference = CheckBoxPreference(screen.context).apply {
@@ -614,7 +614,6 @@ abstract class LectorTmo(
         screen.addPreference(sfwModePref)
         screen.addPreference(scanlatorPref)
         screen.addPreference(apiRateLimitPreference)
-        screen.addPreference(imgCDNRateLimitPreference)
         screen.addPreference(saveLastCFUrlPreference)
     }
 
@@ -637,11 +636,6 @@ abstract class LectorTmo(
         private const val WEB_RATELIMIT_PREF_TITLE = "Ratelimit por minuto para el sitio web"
         private const val WEB_RATELIMIT_PREF_SUMMARY = "Este valor afecta la cantidad de solicitudes de red a la URL de TMO. Reducir este valor puede disminuir la posibilidad de obtener un error HTTP 429, pero la velocidad de descarga será más lenta. Se requiere reiniciar la app. \nValor actual: %s"
         private const val WEB_RATELIMIT_PREF_DEFAULT_VALUE = "8"
-
-        private const val IMAGE_CDN_RATELIMIT_PREF = "imgCDNRatelimitPreference"
-        private const val IMAGE_CDN_RATELIMIT_PREF_TITLE = "Ratelimit por minuto para descarga de imágenes"
-        private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY = "Este valor afecta la cantidad de solicitudes de red para descargar imágenes. Reducir este valor puede disminuir errores al cargar imagenes, pero la velocidad de descarga será más lenta. Se requiere reiniciar la app. \nValor actual: %s"
-        private const val IMAGE_CDN_RATELIMIT_PREF_DEFAULT_VALUE = "50"
 
         private const val SAVE_LAST_CF_URL_PREF = "saveLastCFUrlPreference"
         private const val SAVE_LAST_CF_URL_PREF_TITLE = "Guardar la última URL con error de Cloudflare"
