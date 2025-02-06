@@ -1,7 +1,7 @@
 ext {
-    extName = 'TuMangaOnline / LectorManga'
-    extClass = '.LectorTmoFactory'
-    extVersionCode = 4
+    extName = 'TuMangaOnline'
+    extClass = '.LectorTmo'
+    extVersionCode = 6
     isNsfw = true
 }
 
