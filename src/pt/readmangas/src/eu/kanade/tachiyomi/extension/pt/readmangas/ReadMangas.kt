@@ -23,6 +23,7 @@ import okhttp3.Response
 import org.json.JSONObject
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -203,8 +204,10 @@ class ReadMangas() : HttpSource() {
             .addQueryParameter("input", input.toString())
             .build()
 
+        val encodedUrl = URLEncoder.encode(manga.url.substringBeforeLast("#"), "UTF-8")
+
         val apiHeaders = headers.newBuilder()
-            .set("Referer", "$baseUrl${manga.url.substringBeforeLast("#")}")
+            .set("Referer", "$baseUrl$encodedUrl")
             .set("Content-Type", "application/json")
             .set("Cache-Control", "no-cache")
             .build()
