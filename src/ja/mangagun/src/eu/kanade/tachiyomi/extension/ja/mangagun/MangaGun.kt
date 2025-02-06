@@ -11,6 +11,7 @@ import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
@@ -30,6 +31,20 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
     override fun popularMangaRequest(page: Int): Request = mangaRequest("views", page)
 
     override fun latestUpdatesRequest(page: Int): Request = mangaRequest("last_update", page)
+
+    override fun getImgAttr(element: Element?): String? {
+        return when {
+            element == null -> null
+            element.hasAttr("data-original") -> element.attr("abs:data-original")
+            element.hasAttr("data-src") -> element.attr("abs:data-src")
+            element.hasAttr("data-bg") -> element.attr("abs:data-bg")
+            element.hasAttr("data-srcset") -> element.attr("abs:data-srcset")
+            element.hasAttr("style") -> element.attr("style").substringAfter("('")
+                .substringBefore("')")
+
+            else -> element.attr("abs:src")
+        }
+    }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val slug = manga.url.substringAfter("manga-").substringBefore(".html")
@@ -115,7 +130,7 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
             }
             .select(".lazyload")
             .mapIndexed { i, e ->
-                Page(i, "", e.attr("abs:data-src"))
+                Page(i, "", e.attr("abs:data-srcset"))
             }
     }
 }
