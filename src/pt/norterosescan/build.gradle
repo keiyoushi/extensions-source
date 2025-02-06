@@ -2,8 +2,8 @@ ext {
     extName = 'Norte Rose Scan'
     extClass = '.NorteRoseScan'
     themePkg = 'madara'
-    baseUrl = 'https://norterose.com.br'
-    overrideVersionCode = 0
+    baseUrl = 'https://norterose.xyz'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
