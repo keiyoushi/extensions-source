@@ -10,7 +10,6 @@ import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations
 import eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors.ComposedImageInterceptor
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -45,10 +44,10 @@ class Snowmtl(
 
     override val useDefaultComposedImageInterceptor = false
 
-    override val client: OkHttpClient get() = super.client.newBuilder()
+    override fun clientBuilder() = super.clientBuilder()
+        .rateLimit(3)
         .addInterceptor(translatorInterceptor.apply { language = this@Snowmtl.settings })
         .addInterceptor(composeInterceptor.apply { language = this@Snowmtl.settings })
-        .build()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         super.setupPreferenceScreen(screen)
@@ -67,7 +66,7 @@ class Snowmtl(
                     append("Pages will load more slowly.")
                 }
                 setDefaultValue(false)
-                setOnPreferenceChangeListener { _, newValue ->
+                setOnPreferenceChange { _, newValue ->
                     disableTranslationOptimization = newValue as Boolean
                     true
                 }

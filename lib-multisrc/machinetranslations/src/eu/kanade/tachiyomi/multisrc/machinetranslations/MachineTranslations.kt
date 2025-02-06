@@ -6,6 +6,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.preference.ListPreference
+import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.i18n.Intl
@@ -54,6 +55,19 @@ abstract class MachineTranslations(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
+    /**
+     * A flag that tracks whether the settings have been changed. It is used to indicate if
+     * any configuration change has occurred. Once the value is accessed, it resets to `false`.
+     * This is useful for tracking whether a preference has been modified, and ensures that
+     * the change status is cleared after it has been accessed, to prevent multiple triggers.
+     */
+    private var isSettingsChanged: Boolean = false
+        get() {
+            val current = field
+            field = false
+            return current
+        }
+
     protected var fontSize: Int
         get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()
         set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
@@ -75,11 +89,24 @@ abstract class MachineTranslations(
 
     open val useDefaultComposedImageInterceptor: Boolean = true
 
-    override val client: OkHttpClient get() = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient get() = clientInstance!!
+
+    /**
+     * This ensures that the `OkHttpClient` instance is only created when required, and it is rebuilt
+     * when there are configuration changes to ensure that the client uses the most up-to-date settings.
+     */
+    private var clientInstance: OkHttpClient? = null
+        get() {
+            if (field == null || isSettingsChanged) {
+                field = clientBuilder().build()
+            }
+            return field
+        }
+
+    protected open fun clientBuilder() = network.cloudflareClient.newBuilder()
         .connectTimeout(1, TimeUnit.MINUTES)
         .readTimeout(2, TimeUnit.MINUTES)
         .addInterceptorIf(useDefaultComposedImageInterceptor, ComposedImageInterceptor(baseUrl, settings))
-        .build()
 
     private fun OkHttpClient.Builder.addInterceptorIf(condition: Boolean, interceptor: Interceptor): OkHttpClient.Builder {
         return this.takeIf { condition.not() } ?: this.addInterceptor(interceptor)
@@ -266,7 +293,7 @@ abstract class MachineTranslations(
             entryValues = sizes
             summary = intl["font_size_summary"]
 
-            setOnPreferenceChangeListener { _, newValue ->
+            setOnPreferenceChange { _, newValue ->
                 val selected = newValue as String
                 val index = this.findIndexOfValue(selected)
                 val entry = entries[index] as String
@@ -289,11 +316,24 @@ abstract class MachineTranslations(
                 title = "⚠ ${intl["disable_website_setting_title"]}"
                 summary = intl["disable_website_setting_summary"]
                 setDefaultValue(false)
-                setOnPreferenceChangeListener { _, newValue ->
+                setOnPreferenceChange { _, newValue ->
                     disableSourceSettings = newValue as Boolean
                     true
                 }
             }.also(screen::addPreference)
+        }
+    }
+
+    /**
+     * Sets an `OnPreferenceChangeListener` for the preference, and before triggering the original listener,
+     * marks that the configuration has changed by setting `isSettingsChanged` to `true`.
+     * This behavior is useful for applying runtime configurations in the HTTP client,
+     * ensuring that the preference change is registered before invoking the original listener.
+     */
+    protected fun Preference.setOnPreferenceChange(onPreferenceChangeListener: Preference.OnPreferenceChangeListener) {
+        setOnPreferenceChangeListener { preference, newValue ->
+            isSettingsChanged = true
+            onPreferenceChangeListener.onPreferenceChange(preference, newValue)
         }
     }
 
