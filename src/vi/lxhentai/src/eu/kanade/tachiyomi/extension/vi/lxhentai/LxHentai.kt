@@ -19,7 +19,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.select.Evaluator
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -30,7 +29,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "LXHentai"
 
-    private val defaultBaseUrl = "https://lxmanga.info"
+    private val defaultBaseUrl = "https://lxmanga.cloud"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -129,13 +128,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
         genre = document.selectFirst("div.grow div.mt-2 > span:contains(Thể loại:) + span")!!
             .select("a")
             .joinToString { it.text().trim(',', ' ') }
-        description = document.select("p:contains(Tóm tắt) ~ p").joinToString("\n") {
-            it.run {
-                select(Evaluator.Tag("br")).prepend("\\n")
-                this.text().replace("\\n", "\n").replace("\n ", "\n")
-            }
-        }.trim()
-
+        description = document.select("p:contains(Tóm tắt) ~ p").joinToString("\n") { it.wholeText() }.trim()
         thumbnail_url = document.selectFirst(".cover")?.attr("style")?.let {
             IMAGE_REGEX.find(it)?.groups?.get(1)?.value
         }

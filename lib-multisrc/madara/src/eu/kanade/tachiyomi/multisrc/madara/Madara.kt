@@ -578,11 +578,13 @@ abstract class Madara(
 
     override fun searchMangaSelector() = "div.c-tabs-item__content"
 
+    protected open val searchMangaUrlSelector = "div.post-title a"
+
     override fun searchMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
         with(element) {
-            selectFirst("div.post-title a")!!.let {
+            selectFirst(searchMangaUrlSelector)!!.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
                 manga.title = it.ownText()
             }
@@ -678,7 +680,7 @@ abstract class Madara(
                 manga.thumbnail_url = imageFromElement(it)
             }
             select(mangaDetailsSelectorStatus).last()?.let {
-                manga.status = with(it.text().filter { text -> text.isLetterOrDigit() }) {
+                manga.status = with(it.text().filter { ch -> ch.isLetterOrDigit() || ch.isWhitespace() }.trim()) {
                     when {
                         containsIn(completedStatusList) -> SManga.COMPLETED
                         containsIn(ongoingStatusList) -> SManga.ONGOING
@@ -776,7 +778,7 @@ abstract class Madara(
     /**
      *  Get the best image quality available from srcset
      */
-    private fun String.getSrcSetImage(): String? {
+    protected fun String.getSrcSetImage(): String? {
         return this.split(" ")
             .filter(URL_REGEX::matches)
             .maxOfOrNull(String::toString)

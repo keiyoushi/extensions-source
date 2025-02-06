@@ -97,8 +97,8 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
         val matchTwo = IG_PARAM_REGEX.find(scriptTwo)?.groups
 
         return TokenGroup(
-            token = matchOne?.get(2)?.value ?: "",
-            key = matchOne?.get(1)?.value ?: "",
+            token = matchOne?.get(4)?.value ?: "",
+            key = matchOne?.get(3)?.value ?: "",
             ig = matchTwo?.get(1)?.value ?: "",
             iid = document.selectFirst("div[data-iid]:not([class])")?.attr("data-iid") ?: "",
         )

@@ -143,10 +143,10 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
                             .map { it.id }
                             .forEach { addQueryParameter("status", it) }
                     is ChapterCountList ->
-                        filter.state
-                            .filter { it.state }
-                            .map { it.id }
-                            .forEach { addQueryParameter("minChap", it) }
+                        {
+                            val chapterCount = getChapterCountList()[filter.state]
+                            addQueryParameter("minChap", chapterCount.id)
+                        }
                     is SortByList ->
                         {
                             val sort = getSortByList()[filter.state]
@@ -185,8 +185,12 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
     private class StatusList(status: List<Status>) : Filter.Group<Status>("Trạng Thái", status)
     private class Status(name: String, val id: String) : Filter.CheckBox(name)
 
-    private class ChapterCountList(chapter: List<ChapterCount>) : Filter.Group<ChapterCount>("Độ dài", chapter)
-    private class ChapterCount(name: String, val id: String) : Filter.CheckBox(name)
+    private class ChapterCountList(chapter: Array<ChapterCount>) : Filter.Select<ChapterCount>("Độ dài", chapter)
+    private class ChapterCount(name: String, val id: String) : Filter.CheckBox(name) {
+        override fun toString(): String {
+            return name
+        }
+    }
 
     private class SortByList(sort: Array<SortBy>) : Filter.Select<SortBy>("Sắp xếp", sort)
     private class SortBy(name: String, val id: String) : Filter.CheckBox(name) {
@@ -212,6 +216,7 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
         Country("Khác", "other"),
     )
     private fun getSortByList() = arrayOf(
+        SortBy("Không", ""),
         SortBy("Mới nhất", "latest"),
         SortBy("Cũ nhất", "oldest"),
         SortBy("Đánh giá", "rating"),
@@ -219,7 +224,8 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
         SortBy("Mới cập nhật", "recently_updated"),
         SortBy("Xem nhiều nhất", "mostView"),
     )
-    private fun getChapterCountList() = listOf(
+    private fun getChapterCountList() = arrayOf(
+        ChapterCount("Không", ""),
         ChapterCount(">= 1 chapters", "1"),
         ChapterCount(">= 3 chapters", "3"),
         ChapterCount(">= 5 chapters", "5"),

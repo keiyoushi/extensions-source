@@ -130,16 +130,28 @@ class Manhuagui(
 
             // Example: https://www.manhuagui.com/list/japan_maoxian_qingnian_2020_b/update_p1.html
             //                                        /$params                      /$sortOrder $page
-            var url = "$baseUrl/list"
-            if (params != "") {
-                url += "/$params"
-            }
-            url += if (sortOrder == "") {
-                "/index_p$page.html"
-            } else {
-                "/${sortOrder}_p$page.html"
+            val url: String = when {
+                sortOrder == "" -> "$baseUrl/list${params.toPathOrEmpty()}/index_p$page.html"
+                sortOrder.startsWith(RANK_PREFIX) -> {
+                    "$baseUrl/rank${params.toPathOrEmpty()}".let {
+                        if (it.endsWith("rank")) {
+                            "$it/${sortOrder.removePrefix(RANK_PREFIX).toPathOrEmpty("",".html")}"
+                        } else {
+                            "$it${sortOrder.removePrefix(RANK_PREFIX).toPathOrEmpty("_")}.html"
+                        }
+                    }
+                }
+                else -> "$baseUrl/list${params.toPathOrEmpty()}/${sortOrder}_p$page.html"
             }
             return GET(url, headers)
+        }
+    }
+
+    private fun String.toPathOrEmpty(prefix: String = "/", suffix: String = ""): String {
+        return if (isEmpty()) {
+            this
+        } else {
+            "$prefix$this$suffix"
         }
     }
 
@@ -221,23 +233,38 @@ class Manhuagui(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        if (response.request.url.encodedPath.startsWith("/s/")) {
-            // Normal search
-            val mangas = document.select(searchMangaSelector()).map { element ->
-                searchMangaFromElement(element)
-            }
-            val hasNextPage = searchMangaNextPageSelector().let { selector ->
-                document.select(selector).first()
-            } != null
+        return when {
+            response.request.url.encodedPath.startsWith("/s/") -> {
+                // Normal search
+                val mangas = document.select(searchMangaSelector()).map { element ->
+                    searchMangaFromElement(element)
+                }
+                val hasNextPage = searchMangaNextPageSelector().let { selector ->
+                    document.select(selector).first()
+                } != null
 
-            return MangasPage(mangas, hasNextPage)
-        } else {
-            // Filters search
-            val mangas = document.select(popularMangaSelector()).map { element ->
-                popularMangaFromElement(element)
+                MangasPage(mangas, hasNextPage)
             }
-            val hasNextPage = document.select(popularMangaNextPageSelector()).first() != null
-            return MangasPage(mangas, hasNextPage)
+            response.request.url.encodedPath.startsWith("/rank/") -> {
+                MangasPage(
+                    document.select("td.rank-title").map {
+                        SManga.create().apply {
+                            url = it.select("a").attr("href")
+                            title = it.select("a").text()
+                            // The ranking page does not include images.
+                        }
+                    },
+                    false,
+                )
+            }
+            else -> {
+                // Filters search
+                val mangas = document.select(popularMangaSelector()).map { element ->
+                    popularMangaFromElement(element)
+                }
+                val hasNextPage = document.select(popularMangaNextPageSelector()).first() != null
+                MangasPage(mangas, hasNextPage)
+            }
         }
     }
 
@@ -380,6 +407,8 @@ class Manhuagui(
 
     private val packedContentRegex = Regex("""['"]([0-9A-Za-z+/=]+)['"]\[['"].*?['"]]\(['"].*?['"]\)""")
 
+    private val singleQuoteRegex = Regex("""\\'""")
+
     override fun pageListParse(document: Document): List<Page> {
         // R18 warning element (#erroraudit_show) is remove by web page javascript, so here the warning element
         // will always exist if this manga is R18 limited whether R18 verification cookies has been sent or not.
@@ -393,13 +422,13 @@ class Manhuagui(
             // Make the packed content normal again so :lib:unpacker can do its job
             it.replace(packedContentRegex) { match ->
                 val lzs = match.groupValues[1]
-                val decoded = LZString.decompressFromBase64(lzs).replace("'", "\\'")
-
+                val decoded = LZString.decompressFromBase64(lzs)
                 "'$decoded'.split('|')"
             }
         }
-        val imgDecode = Unpacker.unpack(imgCode)
-
+        // Convert single quote to dash before passing to unpack, since unpack will replace it
+        // with double quote, which may make json parse fail.
+        val imgDecode = Unpacker.unpack(singleQuoteRegex.replace(imgCode, "-"))
         val imgJsonStr = blockCcArgRegex.find(imgDecode)!!.groupValues[0]
         val imageJson: Comic = json.decodeFromString(imgJsonStr)
 
@@ -535,6 +564,10 @@ class Manhuagui(
             Pair("最新发布", ""), // Publish date
             Pair("最新更新", "update"),
             Pair("评分最高", "rate"),
+            Pair("日排行", RANK_PREFIX),
+            Pair("周排行", "${RANK_PREFIX}week"),
+            Pair("月排行", "${RANK_PREFIX}month"),
+            Pair("总排行", "${RANK_PREFIX}total"),
         ),
     )
 
@@ -612,6 +645,11 @@ class Manhuagui(
         "按年份",
         arrayOf(
             Pair("全部", ""),
+            Pair("2025年", "2025"),
+            Pair("2024年", "2024"),
+            Pair("2023年", "2023"),
+            Pair("2022年", "2022"),
+            Pair("2021年", "2021"),
             Pair("2020年", "2020"),
             Pair("2019年", "2019"),
             Pair("2018年", "2018"),
@@ -695,6 +733,8 @@ class Manhuagui(
         private const val IMAGE_CDN_RATELIMIT_PREF_TITLE = "图片CDN每秒连接数限制" // "Ratelimit permits per second for image CDN"
         private const val IMAGE_CDN_RATELIMIT_PREF_SUMMARY = "此值影响加载图片时发起连接请求的数量。调低此值可能减小IP被屏蔽的几率，但加载速度也会变慢。需要重启软件以生效。\n当前值：%s" // "This value affects network request amount for loading image. Lower this value may reduce the chance to get IP Ban, but loading speed will be slower too. Tachiyomi restart required."
         private const val IMAGE_CDN_RATELIMIT_DEFAULT_VALUE = "4"
+
+        private const val RANK_PREFIX = "rank_"
 
         private val ENTRIES_ARRAY = (1..10).map { i -> i.toString() }.toTypedArray()
         const val PREFIX_ID_SEARCH = "id:"

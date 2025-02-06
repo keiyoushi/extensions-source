@@ -156,7 +156,7 @@ class MangaDexHelper(lang: String) {
      */
     private fun String.removeEntitiesAndMarkdown(): String {
         return removeEntities()
-            .substringBefore("---")
+            .substringBefore("\n---")
             .replace(markdownLinksRegex, "$1")
             .replace(markdownItalicBoldRegex, "$1")
             .replace(markdownItalicRegex, "$1")

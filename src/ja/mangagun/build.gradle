@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaGun'
     themePkg = 'fmreader'
     baseUrl = 'https://mangagun.net'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

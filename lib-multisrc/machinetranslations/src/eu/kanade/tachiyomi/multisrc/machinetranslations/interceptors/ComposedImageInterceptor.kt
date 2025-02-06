@@ -26,7 +26,6 @@ import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.io.IOException
 import java.io.InputStream
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -36,6 +35,7 @@ import kotlin.math.sqrt
 class ComposedImageInterceptor(
     baseUrl: String,
     val language: Language,
+    val fontSize: Int = 24,
 ) : Interceptor {
 
     private val json: Json by injectLazy()
@@ -55,7 +55,7 @@ class ComposedImageInterceptor(
         }
 
         val dialogues = request.url.fragment?.parseAs<List<Dialog>>()
-            ?: throw IOException("Dialogues not found")
+            ?: emptyList()
 
         val imageRequest = request.newBuilder()
             .url(url)
@@ -104,7 +104,7 @@ class ComposedImageInterceptor(
     }
 
     private fun createTextPaint(font: Typeface?): TextPaint {
-        val defaultTextSize = 24.pt // arbitrary
+        val defaultTextSize = fontSize.pt
         return TextPaint().apply {
             color = Color.BLACK
             textSize = defaultTextSize
