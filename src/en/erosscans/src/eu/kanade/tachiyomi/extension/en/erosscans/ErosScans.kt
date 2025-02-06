@@ -8,7 +8,7 @@ import okhttp3.Response
 
 class ErosScans : MangaThemesia(
     "Eros Scans",
-    "https://eros-toons.xyz",
+    "https://sobicscans.xyz",
     "en",
 ) {
     override val client = super.client.newBuilder()

@@ -34,7 +34,7 @@ class ManhuaRock : ParsedHttpSource() {
 
     override val lang = "vi"
 
-    override val baseUrl = "https://manhuarockz.com"
+    override val baseUrl = "https://manhuarock1.com"
 
     override val supportsLatest = true
 
@@ -150,7 +150,7 @@ class ManhuaRock : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.attr("abs:data-src"))
+            Page(i, imageUrl = it.attr("abs:src"))
         }
     }
 
