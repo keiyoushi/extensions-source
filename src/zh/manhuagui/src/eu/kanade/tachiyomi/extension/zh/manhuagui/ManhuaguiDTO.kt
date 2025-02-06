@@ -3,7 +3,13 @@ package eu.kanade.tachiyomi.extension.zh.manhuagui
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Comic(
+class Sl(
+    val e: Int? = 0,
+    val m: String? = "",
+)
+
+@Serializable
+class Comic(
     val bid: Int? = 0,
     val block_cc: String? = "",
     val bname: String? = "",
