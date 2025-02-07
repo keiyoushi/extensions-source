@@ -7,6 +7,4 @@ class KaiScans : MangaThemesia("Kai Scans", "https://kaiscans.org", "en") {
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
-
-    override val id = 4825368993215448425
 }
