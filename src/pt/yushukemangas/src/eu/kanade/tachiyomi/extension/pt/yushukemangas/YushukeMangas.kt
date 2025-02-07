@@ -163,7 +163,14 @@ class YushukeMangas : ParsedHttpSource() {
     override fun chapterListSelector() = "a.chapter-item"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        name = element.selectFirst(".chapter-number")!!.text()
+        val capituloTexto = element.select(".capitulo-numero")
+            .textNodes()
+            .joinToString(" ") { it.text().trim() }
+            .split(" ")
+            .take(2)
+            .joinToString(" ")
+
+        name = capituloTexto
         setUrlWithoutDomain(element.absUrl("href"))
     }
 
@@ -180,7 +187,7 @@ class YushukeMangas : ParsedHttpSource() {
     }
 
     private fun fetchChapterListPage(mangaId: String, page: Int): Response {
-        val url = "$baseUrl/ajax/carregar_capitulos.php?order=DESC".toHttpUrl().newBuilder()
+        val url = "$baseUrl/ajax/lzmvke.php?order=DESC".toHttpUrl().newBuilder()
             .addQueryParameter("manga_id", mangaId)
             .addQueryParameter("page", page.toString())
             .build()
@@ -193,9 +200,12 @@ class YushukeMangas : ParsedHttpSource() {
     // ============================== Pages ===============================
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(".manga-container .manga-image").mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl.absUrl("src"))
-        }
+        return document.select("div.select-nav + * picture")
+            .mapIndexedNotNull { index, pictureElement ->
+                val imgElement = pictureElement.selectFirst("img")
+                val imageUrl = imgElement?.attr("src")?.takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
+                Page(index, imageUrl = "$baseUrl$imageUrl")
+            }
     }
 
     override fun imageUrlParse(document: Document) = ""
