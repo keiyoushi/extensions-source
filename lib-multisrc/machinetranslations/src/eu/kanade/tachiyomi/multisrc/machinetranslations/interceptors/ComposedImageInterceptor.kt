@@ -34,8 +34,7 @@ import kotlin.math.sqrt
 @RequiresApi(Build.VERSION_CODES.O)
 class ComposedImageInterceptor(
     baseUrl: String,
-    val language: Language,
-    val fontSize: Int = 24,
+    var language: Language,
 ) : Interceptor {
 
     private val json: Json by injectLazy()
@@ -63,7 +62,9 @@ class ComposedImageInterceptor(
 
         // Load the fonts before opening the connection to load the image,
         // so there aren't two open connections inside the interceptor.
-        loadAllFont(chain)
+        if (language.disableSourceSettings.not()) {
+            loadAllFont(chain)
+        }
 
         val response = chain.proceed(imageRequest)
 
@@ -104,7 +105,7 @@ class ComposedImageInterceptor(
     }
 
     private fun createTextPaint(font: Typeface?): TextPaint {
-        val defaultTextSize = fontSize.pt
+        val defaultTextSize = language.fontSize.pt
         return TextPaint().apply {
             color = Color.BLACK
             textSize = defaultTextSize
@@ -116,6 +117,10 @@ class ComposedImageInterceptor(
     }
 
     private fun selectFontFamily(type: String): Typeface? {
+        if (language.disableSourceSettings) {
+            return null
+        }
+
         if (type in fontFamily) {
             return fontFamily[type]?.second
         }
@@ -218,7 +223,7 @@ class ComposedImageInterceptor(
         }
 
         // Use source setup
-        if (dialog.isNewApi) {
+        if (dialog.isNewApi && language.disableSourceSettings.not()) {
             textPaint.color = dialog.foregroundColor
             textPaint.bgColor = dialog.backgroundColor
             textPaint.style = if (dialog.isBold) Paint.Style.FILL_AND_STROKE else Paint.Style.FILL
