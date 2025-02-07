@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.novelfull
 
+import android.app.Application
+import android.content.SharedPreferences
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -17,19 +19,24 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 abstract class NovelFullGlobal(
     override val lang: String,
     val supportsSearch: Boolean = true,
 ) : ParsedHttpSource() {
 
-    override val baseUrl = "https://allwebnovel.com" // https://mangafre.com
+    override val baseUrl = "https://mangafre.com" // https://allwebnovel.com
 
     override val name = "NovelFull"
 
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder().build()
+
+    private val preferences: SharedPreferences =
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
 
     // ============================== Popular ===============================
 
@@ -44,8 +51,8 @@ abstract class NovelFullGlobal(
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             title = element.select(Evaluator.Tag("a")).attr("alt")
-            thumbnail_url = element.selectFirst(Evaluator.Tag("img"))!!.imgAttr()
-            setUrlWithoutDomain(element.select(Evaluator.Tag("a")).attr("href"))
+            element.selectFirst(Evaluator.Tag("img"))?.also { thumbnail_url = it.imgAttr() }
+            setUrlWithoutDomain(element.selectFirst(Evaluator.Tag("a"))!!.absUrl("href"))
         }
     }
 
@@ -53,10 +60,18 @@ abstract class NovelFullGlobal(
         return ".pagination > .next"
     }
 
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        if (page == 1) {
+            val url = "$baseUrl/comic/index.html?language=$lang"
+            fetchGenres(client, url, headers, preferences)
+        }
+        return super.fetchPopularManga(page)
+    }
+
     // =============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/comic/bookclass.html?type=last_release&page_num=$page&language=$lang")
+        return GET("$baseUrl/comic/bookclass.html?type=last_release&page_num=$page&language=$lang", headers)
     }
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
@@ -69,18 +84,19 @@ abstract class NovelFullGlobal(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            return GET("$baseUrl/comic/search.html?keyword=$query&page_num=$page")
+            return GET("$baseUrl/comic/search.html?keyword=$query&page_num=$page", headers)
         }
         filters.forEach { filter ->
             when (filter) {
                 is GenreFilter -> {
                     val filterId = filter.selected
-                    return GET("$baseUrl/comic/bookclass.html?type=category_novel&id=$filterId&page_num=$page&language=$lang")
+                    Log.i("NovelFullGlobal_Genre", "Filtering by genre: $filterId")
+                    return GET("$baseUrl/comic/bookclass.html?type=category_novel&id=$filterId&page_num=$page&language=$lang", headers)
                 }
                 else -> { }
             }
         }
-        TODO("Need to implement empty search somewhere")
+        return GET("$baseUrl/comic/search.html?keyword=", headers)
     }
 
     override fun searchMangaSelector(): String = popularMangaSelector()
@@ -105,7 +121,7 @@ abstract class NovelFullGlobal(
     override fun getFilterList() = FilterList(
         Note,
         Filter.Separator(),
-        GenreFilter(getGenreFilter(lang), 0),
+        getGenreFilterOrTip(preferences),
     )
 
     // =========================== Manga Details ============================
@@ -116,8 +132,9 @@ abstract class NovelFullGlobal(
             description = document.selectFirst(".desc-text")!!.text()
                 .replace("\\n", "\n")
             thumbnail_url = document.selectFirst(".books > .book > img")!!.imgAttr()
-            document.selectFirst(Evaluator.Class("info"))!!.children().forEach {
-                when (it.children().first()!!.text()) {
+            document.selectFirst(Evaluator.Class("info"))?.children()?.forEach {
+                when (it.children().first()?.text()) {
+                    // No need to translate these strings.
                     "Author:" -> it.parseAuthorsTo(this)
                     "Genre:" -> it.parseGenresTo(this)
                     "Status:" -> it.parseStatusTo(this)
@@ -127,24 +144,22 @@ abstract class NovelFullGlobal(
     }
 
     private fun Element.parseAuthorsTo(manga: SManga) {
-        val authors = this.select("a").map { it.text() }
-        manga.author = authors.joinToString(", ")
+        manga.author = this.select("a").joinToString { it.text() }
     }
 
     private fun Element.parseGenresTo(manga: SManga) {
-        val genres = this.select("a").map { it.text() }
-        manga.genre = genres.joinToString(", ")
+        manga.genre = this.select("a").joinToString { it.text() }
     }
 
     private fun Element.parseStatusTo(manga: SManga) {
-        this.selectFirst("h3:last-child").let {
-            it!!
-            when {
-                it.text().contains("ongoing", ignoreCase = true) -> manga.status = SManga.ONGOING
-                it.text().contains("completed", ignoreCase = true) -> manga.status = SManga.COMPLETED
+        this.selectFirst("h3:last-child").let { element ->
+            manga.status = when (element?.text()?.lowercase()) {
+                // No need to translate these strings.
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
                 else -> {
-                    Log.e("MangafreGlobal", "Unknown status: ${it.text()}")
-                    manga.status = SManga.UNKNOWN
+                    Log.e("NovelFullGlobal", "Unknown status: ${element?.text()}")
+                    SManga.UNKNOWN
                 }
             }
         }
@@ -209,7 +224,7 @@ abstract class NovelFullGlobal(
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
             name = element.attr("title").trim()
-            setUrlWithoutDomain(element.attr("href"))
+            setUrlWithoutDomain(element.absUrl("href"))
         }
     }
 
