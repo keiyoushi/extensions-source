@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.novelfull
 
 import android.content.SharedPreferences
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
