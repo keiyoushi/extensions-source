@@ -3,7 +3,7 @@ ext {
     extClass = '.AnimatedGlitchedComics'
     themePkg = 'keyoapp'
     baseUrl = 'https://agrcomics.com'
-    overrideVersionCode = 22
+    overrideVersionCode = 23
 }
 
 apply from: "$rootDir/common.gradle"
