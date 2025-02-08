@@ -32,7 +32,7 @@ class GoogleTranslator(private val client: OkHttpClient, private val headers: He
 
     override fun translate(from: String, to: String, text: String): String {
         val request = translateRequest(text, from, to)
-        return try { executeRequest(request) } catch (_: Exception) { text }
+        return try { fetchTranslatedText(request) } catch (_: Exception) { text }
     }
 
     private fun translateRequest(text: String, from: String, to: String): Request {
@@ -64,7 +64,7 @@ class GoogleTranslator(private val client: OkHttpClient, private val headers: He
             }
     }
 
-    private fun executeRequest(request: Request): String {
+    private fun fetchTranslatedText(request: Request): String {
         val response = client.newCall(request).execute()
 
         if (response.isSuccessful.not()) {

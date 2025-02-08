@@ -34,20 +34,20 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
         if (tokens.isNotValid() && refreshTokens().not()) {
             return text
         }
-
+        val request = translatorRequest(from, to, text)
         repeat(attempts) {
             try {
-                val dto = client
-                    .newCall(translatorRequest(from, to, text))
-                    .execute()
-                    .parseAs<List<TranslateDto>>()
-
-                return dto.firstOrNull()?.text ?: text
+                return fetchTranslatedText(request)
             } catch (e: Exception) {
                 refreshTokens()
             }
         }
         return text
+    }
+
+    private fun fetchTranslatedText(request: Request): String {
+        return client.newCall(request).execute().parseAs<List<TranslateDto>>()
+            .firstOrNull()!!.text
     }
 
     private fun refreshTokens(): Boolean {
