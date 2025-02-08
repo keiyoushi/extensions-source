@@ -158,6 +158,13 @@ class WeebCentral : ParsedHttpSource() {
         name = element.selectFirst("span.flex > span")!!.text()
         setUrlWithoutDomain(element.attr("abs:href"))
         element.selectFirst("time[datetime]")?.also {
+            if (element.select("span[style*=stroke:#d8b4fe]").isNotEmpty()) {
+                scanlator = "Official"
+            } else {
+                scanlator = "unknown"
+            }
+
+
             date_upload = it.attr("datetime").parseDate()
         }
     }
