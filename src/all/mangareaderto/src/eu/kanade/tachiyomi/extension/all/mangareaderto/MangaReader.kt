@@ -25,7 +25,8 @@ class MangaReader(
     "MangaReader",
     "https://mangareader.to",
     language.code,
-), ConfigurableSource {
+),
+    ConfigurableSource {
 
     override val client = super.client.newBuilder()
         .addInterceptor(ImageInterceptor)
