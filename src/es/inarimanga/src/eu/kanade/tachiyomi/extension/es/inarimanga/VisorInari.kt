@@ -42,7 +42,8 @@ class VisorInari : Madara(
     }
 
     override val mangaDetailsSelectorTitle = "div.wp-manga div.grid > h1"
-    override val mangaDetailsSelectorStatus = "div.wp-manga div[alt=type] > span"
+    override val mangaDetailsSelectorStatus = "div.wp-manga div[alt=type]:eq(0) > span"
+    override val mangaDetailsSelectorGenre = "div.wp-manga div[alt=type]:gt(0) > span"
     override val mangaDetailsSelectorDescription = "div.wp-manga div#expand_content"
 
     override fun chapterListSelector() = "ul#list-chapters > li"
