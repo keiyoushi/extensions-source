@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.snowmtl.translator.google
 
 import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
+import eu.kanade.tachiyomi.network.GET
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -28,15 +29,12 @@ class GoogleTranslator(private val client: OkHttpClient, private val headers: He
     override val capacity: Int = 5000
 
     override fun translate(from: String, to: String, text: String): String {
-        val url = clientUrlBuilder(text, from, to)
-        val headers = headersBuilder()
-
-        val request = Request.Builder()
-            .url(url.build())
-            .headers(headers.build())
-            .build()
-
+        val request = translateRequest(text, from, to)
         return try { executeRequest(request, text, from, to).text } catch (_: Exception) { text }
+    }
+
+    private fun translateRequest(text: String, from: String, to: String): Request {
+        return GET(clientUrlBuilder(text, from, to).build(), headersBuilder().build())
     }
 
     private fun headersBuilder(): Headers.Builder = headers.newBuilder()
