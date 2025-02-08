@@ -43,7 +43,7 @@ class CatharsisWorld : Madara(
     override val mangaDetailsSelectorGenre = "div.wp-manga div[alt=type]:gt(0) > span"
     override val mangaDetailsSelectorDescription = "div.wp-manga div#expand_content"
 
-    override fun chapterListSelector() = "ul#list-chapters > li"
+    override fun chapterListSelector() = "ul#list-chapters li > a"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst("div.grid > span")!!.text()
