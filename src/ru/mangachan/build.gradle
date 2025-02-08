@@ -2,8 +2,8 @@ ext {
     extName = 'MangaChan'
     extClass = '.MangaChan'
     themePkg = 'multichan'
-    baseUrl = 'https://manga-chan.me'
-    overrideVersionCode = 14
+    baseUrl = 'https://im.manga-chan.me'
+    overrideVersionCode = 15
 }
 
 apply from: "$rootDir/common.gradle"

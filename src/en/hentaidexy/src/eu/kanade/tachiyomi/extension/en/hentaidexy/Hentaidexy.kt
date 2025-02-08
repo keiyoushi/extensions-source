@@ -24,9 +24,7 @@ class Hentaidexy : HttpSource() {
 
     override val name = "Hentaidexy"
 
-    override val baseUrl = "https://hentaidexy.net"
-
-    private val apiUrl = "https://backend.hentaidexy.net"
+    override val baseUrl = "https://dexyscan.com"
 
     override val lang = "en"
 
@@ -37,7 +35,7 @@ class Hentaidexy : HttpSource() {
     private val json: Json by injectLazy()
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimitHost(apiUrl.toHttpUrl(), 1)
+        .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .build()
 
     override fun headersBuilder() = Headers.Builder().apply {
@@ -46,7 +44,12 @@ class Hentaidexy : HttpSource() {
 
     // popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/api/v1/mangas?page=$page&limit=100&sort=-views", headers)
+        val url = "$baseUrl/api/mangas".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", "24")
+            .addQueryParameter("sort", "-views")
+            .build()
+        return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -63,7 +66,12 @@ class Hentaidexy : HttpSource() {
 
     // latest
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/api/v1/mangas?page=$page&limit=100&sort=-updatedAt", headers)
+        val url = "$baseUrl/api/mangas".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("limit", "100")
+            .addQueryParameter("sort", "-updatedAt")
+            .build()
+        return GET(url, headers)
     }
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
@@ -81,14 +89,19 @@ class Hentaidexy : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$apiUrl/api/v1/mangas?page=$page&altTitles=$query&sort=createdAt", headers)
+        val url = "$baseUrl/api/mangas".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("altTitles", query)
+            .addQueryParameter("sort", "createdAt")
+            .build()
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
     // manga details
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiUrl/api/v1/mangas/${manga.url}", headers)
+        return GET("$baseUrl/api/mangas/${manga.url}", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -108,7 +121,12 @@ class Hentaidexy : HttpSource() {
     }
 
     private fun paginatedChapterListRequest(mangaID: String, page: Int): Request {
-        return GET("$apiUrl/api/v1/mangas/$mangaID/chapters?sort=-serialNumber&limit=100&page=$page", headers)
+        val url = "$baseUrl/api/mangas/$mangaID/chapters".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "-serialNumber")
+            .addQueryParameter("limit", "100")
+            .addQueryParameter("page", page.toString())
+            .build()
+        return GET(url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -145,8 +163,8 @@ class Hentaidexy : HttpSource() {
 
     // page list
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfterLast('/')
-        return GET("$apiUrl/api/v1/chapters/$chapterId", headers)
+        val chapterId = "$baseUrl${chapter.url}".toHttpUrl().pathSegments.last()
+        return GET("$baseUrl/api/chapters/$chapterId", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
