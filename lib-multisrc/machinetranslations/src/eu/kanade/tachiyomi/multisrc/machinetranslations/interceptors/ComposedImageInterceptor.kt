@@ -246,6 +246,7 @@ class ComposedImageInterceptor(
             setIncludePad(false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
+                setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL)
             }
         }.build()
     }
