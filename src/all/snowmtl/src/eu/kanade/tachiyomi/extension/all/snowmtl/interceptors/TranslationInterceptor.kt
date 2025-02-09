@@ -6,9 +6,9 @@ import eu.kanade.tachiyomi.extension.all.snowmtl.LanguageSetting
 import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -25,8 +25,6 @@ class TranslationInterceptor(
 
     private val json: Json by injectLazy()
 
-    private val scope = CoroutineScope(Dispatchers.IO)
-
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url = request.url.toString()
@@ -38,15 +36,15 @@ class TranslationInterceptor(
         val dialogues = request.url.fragment?.parseAs<List<Dialog>>()
             ?: return chain.proceed(request)
 
-        val executions = dialogues.map { dialog ->
-            scope.async {
-                dialog.replaceText(
-                    translator.translate(language.origin, language.target, dialog.text),
-                )
-            }
+        val translated = runBlocking(Dispatchers.IO) {
+            dialogues.map { dialog ->
+                async {
+                    dialog.replaceText(
+                        translator.translate(language.origin, language.target, dialog.text),
+                    )
+                }
+            }.awaitAll()
         }
-
-        val translated = runBlocking { executions.map { it.await() } }
 
         val newRequest = request.newBuilder()
             .url("${url.substringBeforeLast("#")}#${json.encodeToString(translated)}")

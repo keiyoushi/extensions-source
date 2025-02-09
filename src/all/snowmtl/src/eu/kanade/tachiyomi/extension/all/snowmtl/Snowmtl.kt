@@ -25,15 +25,18 @@ class Snowmtl(
 ) {
     override val lang = language.lang
 
-    private val translators = mapOf(
-        "Bing" to ::BingTranslator,
-        "Google" to ::GoogleTranslator,
+    private val translators = arrayOf(
+        "Bing",
+        "Google",
     )
 
     private val settings: LanguageSetting get() = language.copy(
         fontSize = this@Snowmtl.fontSize,
         disableSourceSettings = this@Snowmtl.disableSourceSettings,
     )
+
+    private val provider: String get() =
+        preferences.getString(TRANSLATOR_PROVIDER_PREF, translators.first())!!
 
     private val clientUtils = network.cloudflareClient.newBuilder()
         .rateLimit(3, 2, TimeUnit.SECONDS)
@@ -42,8 +45,10 @@ class Snowmtl(
     override val useDefaultComposedImageInterceptor = false
 
     override fun clientBuilder(): OkHttpClient.Builder {
-        val provider = preferences.getString(TRANSLATOR_PROVIDER_PREF, translators.keys.first())
-        val translator: TranslatorEngine = translators[provider]!!.invoke(clientUtils, headers)
+        val translator: TranslatorEngine = when (provider) {
+            "Google" -> GoogleTranslator(clientUtils, headers)
+            else -> BingTranslator(clientUtils, headers)
+        }
 
         return super.clientBuilder()
             .rateLimit(3)
@@ -61,14 +66,14 @@ class Snowmtl(
         ListPreference(screen.context).apply {
             key = TRANSLATOR_PROVIDER_PREF
             title = "Translator"
-            entries = translators.keys.toTypedArray()
-            entryValues = translators.keys.toTypedArray()
+            entries = translators
+            entryValues = translators
             summary = buildString {
                 appendLine("Engine used to translate dialog boxes")
                 append("\t* %s")
             }
 
-            setDefaultValue(translators.keys.first())
+            setDefaultValue(translators.first())
 
             setOnPreferenceChange { _, newValue ->
                 val selected = newValue as String
