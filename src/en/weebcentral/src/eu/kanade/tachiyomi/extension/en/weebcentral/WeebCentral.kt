@@ -160,6 +160,13 @@ class WeebCentral : ParsedHttpSource() {
         element.selectFirst("time[datetime]")?.also {
             date_upload = it.attr("datetime").parseDate()
         }
+        element.selectFirst("svg")?.attr("stroke")?.also { stroke ->
+            scanlator = when (stroke) {
+                "#d8b4fe" -> "Official"
+                "#4C4D54" -> "Unofficial"
+                else -> null
+            }
+        }
     }
 
     private fun String.parseDate(): Long {
