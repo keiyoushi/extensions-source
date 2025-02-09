@@ -66,9 +66,9 @@ class MangaReader(
         val request = chapterListRequest(path.removeSuffix(VOLUME_URL_SUFFIX), type)
         val response = client.newCall(request).execute()
 
-        return Observable.fromCallable {
+        return Observable.just(
             chapterListParse(response, isVolume)
-        }
+        )
     }
 
     private fun chapterListRequest(mangaUrl: String, type: String): Request {

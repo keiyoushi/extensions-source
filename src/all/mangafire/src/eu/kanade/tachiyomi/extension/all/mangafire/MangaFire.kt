@@ -48,7 +48,7 @@ class MangaFire(
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
     }
 
-    override val client = super.client.newBuilder().addInterceptor(ImageInterceptor).build()
+    override val client = network.cloudflareClient.newBuilder().addInterceptor(ImageInterceptor).build()
 
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl/filter?sort=most_viewed&language[]=$langCode&page=$page", headers)
