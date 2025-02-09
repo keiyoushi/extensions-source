@@ -2,8 +2,8 @@ ext {
     extName = 'Cypher Scans'
     extClass = '.CypherScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://cypherscans.xyz'
-    overrideVersionCode = 0
+    baseUrl = 'https://cypheroscans.xyz'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
