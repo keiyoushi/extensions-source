@@ -1,9 +1,9 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl.translator
+package eu.kanade.tachiyomi.extension.all.snowmtl.translator.bing
 
+import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.FormBody
@@ -15,7 +15,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class BingTranslator(private val client: OkHttpClient, private val headers: Headers) : TranslatorEngine {
+class BingTranslator(private val client: OkHttpClient, private val headers: Headers) :
+    TranslatorEngine {
 
     private val baseUrl = "https://www.bing.com"
 
@@ -25,7 +26,7 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
 
     private var tokens: TokenGroup = TokenGroup()
 
-    override val capacity: Int = MAX_CHARS_ALLOW
+    override val capacity: Int = 1000
 
     private val attempts = 3
 
@@ -33,20 +34,20 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
         if (tokens.isNotValid() && refreshTokens().not()) {
             return text
         }
-
+        val request = translatorRequest(from, to, text)
         repeat(attempts) {
             try {
-                val dto = client
-                    .newCall(translatorRequest(from, to, text))
-                    .execute()
-                    .parseAs<List<TranslateDto>>()
-
-                return dto.firstOrNull()?.text ?: text
+                return fetchTranslatedText(request)
             } catch (e: Exception) {
                 refreshTokens()
             }
         }
         return text
+    }
+
+    private fun fetchTranslatedText(request: Request): String {
+        return client.newCall(request).execute().parseAs<List<TranslateDto>>()
+            .firstOrNull()!!.text
     }
 
     private fun refreshTokens(): Boolean {
@@ -111,29 +112,5 @@ class BingTranslator(private val client: OkHttpClient, private val headers: Head
     companion object {
         val TOKENS_REGEX = """params_AbusePreventionHelper(\s+)?=(\s+)?[^\[]\[(\d+),"([^"]+)""".toRegex()
         val IG_PARAM_REGEX = """IG:"([^"]+)""".toRegex()
-        const val MAX_CHARS_ALLOW = 1000
     }
 }
-
-private class TokenGroup(
-    val token: String = "",
-    val key: String = "",
-    val iid: String = "",
-    val ig: String = "",
-) {
-    fun isNotValid() = listOf(token, key, iid, ig).any(String::isBlank)
-
-    fun isValid() = isNotValid().not()
-}
-
-@Serializable
-private class TranslateDto(
-    val translations: List<TextTranslated>,
-) {
-    val text = translations.firstOrNull()?.text ?: ""
-}
-
-@Serializable
-private class TextTranslated(
-    val text: String,
-)
