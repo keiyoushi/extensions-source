@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.yushukemangas
 
+import android.net.Uri
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -15,6 +16,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -22,6 +24,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.net.URLEncoder
 
 class YushukeMangas : ParsedHttpSource() {
 
@@ -32,6 +35,8 @@ class YushukeMangas : ParsedHttpSource() {
     override val lang = "pt-BR"
 
     override val supportsLatest = true
+
+    private var nextHash: String? = null
 
     override val versionId = 2
 
@@ -57,18 +62,47 @@ class YushukeMangas : ParsedHttpSource() {
 
     // ============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/obras", headers)
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .build()
+        return GET(url, headers)
+    }
 
-    override fun latestUpdatesSelector() = ".obras-grid .manga-card a"
+    override fun latestUpdatesSelector() = ".manga-list .manga-card"
 
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    override fun latestUpdatesNextPageSelector() = "a.page-link:contains(>)"
 
-    override fun latestUpdatesNextPageSelector() = null
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        val url = element.selectFirst("a.manga-cover")!!.absUrl("href")
+        val uri = Uri.parse(url)
+        val pathSegments = uri.pathSegments
+        val lastSegment = URLEncoder.encode(pathSegments.last(), "UTF-8")
+        val encodedUrl = uri.buildUpon()
+            .path(pathSegments.dropLast(1).joinToString("/") + "/$lastSegment")
+            .toString()
+
+        title = element.selectFirst("a.manga-title")!!.text()
+        thumbnail_url = element.selectFirst("a.manga-cover img")?.absUrl("data-src")
+        setUrlWithoutDomain(encodedUrl)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select(latestUpdatesSelector()).map { element ->
+            latestUpdatesFromElement(element)
+        }
+        val nextUrl = document.selectFirst(latestUpdatesNextPageSelector())?.attr("href")
+        val baseNextUrl = baseUrl + nextUrl
+        nextHash = baseNextUrl?.toHttpUrlOrNull()?.queryParameter("pagina")
+
+        return MangasPage(mangas, !nextHash.isNullOrEmpty())
+    }
 
     // ============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlFilterBuilder = filters.fold("$baseUrl/obras".toHttpUrl().newBuilder()) { urlBuilder, filter ->
+        val urlFilterBuilder = filters.fold(baseUrl.toHttpUrl().newBuilder()) { urlBuilder, filter ->
             when (filter) {
                 is RadioFilter -> {
                     val selected = filter.selected()
