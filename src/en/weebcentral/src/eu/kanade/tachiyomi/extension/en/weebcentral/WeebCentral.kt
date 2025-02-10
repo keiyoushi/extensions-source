@@ -121,9 +121,7 @@ class WeebCentral : ParsedHttpSource() {
             if (relatedSeries.size > 0) {
                 descBuilder.append("\n\nRelated Series(s):")
                 relatedSeries.forEach { series ->
-                    val name = series.selectFirst("a")?.text()
-                    val relation = series.selectFirst("span")?.text()
-                    descBuilder.append("\n").append("• $name $relation")
+                    descBuilder.append("\n").append("• ${series.text()")
                 }
             }
 
