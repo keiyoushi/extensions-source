@@ -27,8 +27,6 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
-import kotlin.math.pow
-import kotlin.math.sqrt
 
 // The Interceptor joins the dialogues and pages of the manga.
 @RequiresApi(Build.VERSION_CODES.O)
@@ -81,7 +79,7 @@ class ComposedImageInterceptor(
             val textPaint = createTextPaint(selectFontFamily(dialog.type))
             val dialogBox = createDialogBox(dialog, textPaint, bitmap)
             val y = getYAxis(textPaint, dialog, dialogBox)
-            canvas.draw(dialogBox, dialog, dialog.x1, y)
+            canvas.draw(textPaint, dialogBox, dialog, dialog.x1, y)
         }
 
         val output = ByteArrayOutputStream()
@@ -222,18 +220,9 @@ class ComposedImageInterceptor(
             dialogBox = createBoxLayout(dialog, textPaint)
         }
 
-        // Use source setup
-        if (dialog.isNewApi && language.disableSourceSettings.not()) {
-            textPaint.color = dialog.foregroundColor
-            textPaint.bgColor = dialog.backgroundColor
-            textPaint.style = if (dialog.isBold) Paint.Style.FILL_AND_STROKE else Paint.Style.FILL
-        }
-
-        /**
-         * Forces font color correction if the background color of the dialog box and the font color are too similar.
-         * It's a source configuration problem.
-         */
-        textPaint.adjustTextColor(dialog, bitmap)
+        textPaint.color = Color.BLACK
+        textPaint.bgColor = Color.WHITE
+        textPaint.strokeWidth = 2F
 
         return dialogBox
     }
@@ -246,58 +235,44 @@ class ComposedImageInterceptor(
             setIncludePad(false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
+                setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL)
             }
         }.build()
-    }
-
-    // Invert color in black dialog box.
-    private fun TextPaint.adjustTextColor(dialog: Dialog, bitmap: Bitmap) {
-        val pixelColor = bitmap.getPixel(dialog.centerX.toInt(), dialog.centerY.toInt())
-        val inverseColor = (Color.WHITE - pixelColor) or Color.BLACK
-
-        val minDistance = 80f // arbitrary
-        if (colorDistance(pixelColor, dialog.foregroundColor) > minDistance) {
-            return
-        }
-        color = inverseColor
     }
 
     private inline fun <reified T> String.parseAs(): T {
         return json.decodeFromString(this)
     }
 
-    private fun Canvas.draw(layout: StaticLayout, dialog: Dialog, x: Float, y: Float) {
+    private fun Canvas.draw(textPaint: TextPaint, layout: StaticLayout, dialog: Dialog, x: Float, y: Float) {
         save()
         translate(x, y)
         rotate(dialog.angle)
-        layout.draw(this)
+        drawTextOutline(textPaint, layout)
+        drawText(textPaint, layout)
         restore()
+    }
+
+    private fun Canvas.drawText(textPaint: TextPaint, layout: StaticLayout) {
+        textPaint.style = Paint.Style.FILL
+        layout.draw(this)
+    }
+
+    private fun Canvas.drawTextOutline(textPaint: TextPaint, layout: StaticLayout) {
+        val foregroundColor = textPaint.color
+        val style = textPaint.style
+
+        textPaint.color = textPaint.bgColor
+        textPaint.style = Paint.Style.FILL_AND_STROKE
+
+        layout.draw(this)
+
+        textPaint.color = foregroundColor
+        textPaint.style = style
     }
 
     // https://pixelsconverter.com/pt-to-px
     private val Int.pt: Float get() = this / SCALED_DENSITY
-
-    // ============================= Utils ======================================
-
-    /**
-     * Calculates the Euclidean distance between two colors in RGB space.
-     *
-     * This function takes two integer values representing hexadecimal colors,
-     * converts them to their RGB components, and calculates the Euclidean distance
-     * between the two colors. The distance provides a measure of how similar or
-     * different the two colors are.
-     *
-     */
-    private fun colorDistance(colorA: Int, colorB: Int): Double {
-        val a = Color.valueOf(colorA)
-        val b = Color.valueOf(colorB)
-
-        return sqrt(
-            (b.red() - a.red()).toDouble().pow(2) +
-                (b.green() - a.green()).toDouble().pow(2) +
-                (b.blue() - a.blue()).toDouble().pow(2),
-        )
-    }
 
     companion object {
         // w3: Absolute Lengths [...](https://www.w3.org/TR/css3-values/#absolute-lengths)
