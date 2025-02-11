@@ -3,7 +3,7 @@ ext {
     extClass = '.RealmOasis'
     themePkg = 'mangathemesia'
     baseUrl = 'https://realmoasis.com'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
 }
 
 apply from: "$rootDir/common.gradle"

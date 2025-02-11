@@ -1,3 +1,7 @@
+## 1.4.7
+
+- Reworked the lib-multisrc theme
+
 ## 1.3.4
 
 - Refactor and make multisrc
