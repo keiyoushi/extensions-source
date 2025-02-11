@@ -1,12 +1,18 @@
 package eu.kanade.tachiyomi.extension.all.mangafire
 
-import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
+import android.app.Application
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -19,29 +25,40 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
+import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class MangaFire(
+class MangaFire(
     override val lang: String,
     private val langCode: String = lang,
-) : MangaReader() {
+) : ConfigurableSource, HttpSource() {
     override val name = "MangaFire"
 
     override val baseUrl = "https://mangafire.to"
 
+    override val supportsLatest = true
+
     private val json: Json by injectLazy()
 
-    override val client = super.client.newBuilder()
-        .addInterceptor(ImageInterceptor)
-        .build()
+    private val preferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
+    }
+
+    override val client = network.cloudflareClient.newBuilder().addInterceptor(ImageInterceptor).build()
+
+    override fun popularMangaRequest(page: Int) =
+        GET("$baseUrl/filter?sort=most_viewed&language[]=$langCode&page=$page", headers)
+
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int) =
         GET("$baseUrl/filter?sort=recently_updated&language[]=$langCode&page=$page", headers)
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/filter?sort=most_viewed&language[]=$langCode&page=$page", headers)
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
@@ -63,9 +80,11 @@ open class MangaFire(
                                 }
                             }
                         }
+
                         is Select -> {
                             addQueryParameter(filter.param, filter.selection)
                         }
+
                         is GenresFilter -> {
                             filter.state.forEach {
                                 if (it.state != 0) {
@@ -76,6 +95,7 @@ open class MangaFire(
                                 addQueryParameter("genre_mode", "and")
                             }
                         }
+
                         else -> {}
                     }
                 }
@@ -84,22 +104,49 @@ open class MangaFire(
         return GET(urlBuilder.build(), headers)
     }
 
-    override fun searchMangaNextPageSelector() = ".page-item.active + .page-item .page-link"
+    private fun searchMangaNextPageSelector() = ".page-item.active + .page-item .page-link"
 
-    override fun searchMangaSelector() = ".original.card-lg .unit .inner"
+    private fun searchMangaSelector() = ".original.card-lg .unit .inner"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            element.selectFirst(".info > a")!!.let {
-                setUrlWithoutDomain(it.attr("href"))
-                title = it.ownText()
-            }
-            element.selectFirst(Evaluator.Tag("img"))!!.let {
-                thumbnail_url = it.attr("src")
+    private fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".info > a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.ownText()
+        }
+        element.selectFirst(Evaluator.Tag("img"))!!.let {
+            thumbnail_url = it.attr("src")
+        }
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        var entries = document.select(searchMangaSelector()).map(::searchMangaFromElement)
+        if (preferences.getBoolean(SHOW_VOLUME_PREF, false)) {
+            entries = entries.flatMapTo(ArrayList(entries.size * 2)) { manga ->
+                val volume = SManga.create().apply {
+                    url = manga.url + VOLUME_URL_SUFFIX
+                    title = VOLUME_TITLE_PREFIX + manga.title
+                    thumbnail_url = manga.thumbnail_url
+                }
+                listOf(manga, volume)
             }
         }
+        val hasNextPage = document.selectFirst(searchMangaNextPageSelector()) != null
+        return MangasPage(entries, hasNextPage)
+    }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.removeSuffix(VOLUME_URL_SUFFIX)
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        val manga = mangaDetailsParse(document)
+        if (response.request.url.fragment == VOLUME_URL_FRAGMENT) {
+            manga.title = VOLUME_TITLE_PREFIX + manga.title
+        }
+        return manga
+    }
+
+    private fun mangaDetailsParse(document: Document) = SManga.create().apply {
         val root = document.selectFirst(".info")!!
         val mangaTitle = root.child(1).ownText()
         title = mangaTitle
@@ -110,8 +157,7 @@ open class MangaFire(
                 else -> "$description\n\nAlternative Title: $altTitle"
             }
         }
-        thumbnail_url = document.selectFirst(".poster")!!
-            .selectFirst("img")!!.attr("src")
+        thumbnail_url = document.selectFirst(".poster")!!.selectFirst("img")!!.attr("src")
         status = when (root.child(0).ownText()) {
             "Completed" -> SManga.COMPLETED
             "Releasing" -> SManga.ONGOING
@@ -127,15 +173,48 @@ open class MangaFire(
         }
     }
 
-    override val chapterType get() = "chapter"
-    override val volumeType get() = "volume"
+    private val chapterType get() = "chapter"
+    private val volumeType get() = "volume"
 
-    override fun chapterListRequest(mangaUrl: String, type: String): Request {
+    override fun chapterListParse(response: Response): List<SChapter> {
+        throw UnsupportedOperationException()
+    }
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        Observable.fromCallable {
+            val path = manga.url
+            val isVolume = path.endsWith(VOLUME_URL_SUFFIX)
+            val type = if (isVolume) volumeType else chapterType
+            val request = chapterListRequest(path.removeSuffix(VOLUME_URL_SUFFIX), type)
+            val response = client.newCall(request).execute()
+
+            val abbrPrefix = if (isVolume) "Vol" else "Chap"
+            val fullPrefix = if (isVolume) "Volume" else "Chapter"
+            val linkSelector = Evaluator.Tag("a")
+            parseChapterElements(response, isVolume).map { element ->
+                SChapter.create().apply {
+                    val number = element.attr("data-number")
+                    chapter_number = number.toFloatOrNull() ?: -1f
+
+                    val link = element.selectFirst(linkSelector)!!
+                    name = run {
+                        val name = link.text()
+                        val prefix = "$abbrPrefix $number: "
+                        if (!name.startsWith(prefix)) return@run name
+                        val realName = name.removePrefix(prefix)
+                        if (realName.contains(number)) realName else "$fullPrefix $number: $realName"
+                    }
+                    setUrlWithoutDomain(link.attr("href") + '#' + type + '/' + element.attr("data-id"))
+                }
+            }.also { if (!isVolume && it.isNotEmpty()) updateChapterList(manga, it) }
+        }
+
+    private fun chapterListRequest(mangaUrl: String, type: String): Request {
         val id = mangaUrl.substringAfterLast('.')
         return GET("$baseUrl/ajax/manga/$id/$type/$langCode", headers)
     }
 
-    override fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> {
+    private fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> {
         val result = json.decodeFromString<ResponseDto<String>>(response.body.string()).result
         val document = Jsoup.parse(result)
         val selector = if (isVolume) "div.unit" else "ul li"
@@ -146,7 +225,8 @@ open class MangaFire(
             val type = if (isVolume) volumeType else chapterType
             val request = GET("$baseUrl/ajax/read/$mangaId/$type/$langCode", headers)
             val response = client.newCall(request).execute()
-            val res = json.decodeFromString<ResponseDto<ChapterIdsDto>>(response.body.string()).result.html
+            val res =
+                json.decodeFromString<ResponseDto<ChapterIdsDto>>(response.body.string()).result.html
             val chapterInfoDocument = Jsoup.parse(res)
             val chapters = chapterInfoDocument.select("ul li")
             for ((i, it) in elements.withIndex()) {
@@ -162,7 +242,7 @@ open class MangaFire(
         val title_format: String,
     )
 
-    override fun updateChapterList(manga: SManga, chapters: List<SChapter>) {
+    private fun updateChapterList(manga: SManga, chapters: List<SChapter>) {
         val request = chapterListRequest(manga.url, chapterType)
         val response = client.newCall(request).execute()
         val result = json.decodeFromString<ResponseDto<String>>(response.body.string()).result
@@ -187,6 +267,10 @@ open class MangaFire(
         }
     }
 
+    override fun imageUrlParse(response: Response): String {
+        throw UnsupportedOperationException()
+    }
+
     override fun pageListRequest(chapter: SChapter): Request {
         val typeAndId = chapter.url.substringAfterLast('#')
         return GET("$baseUrl/ajax/read/$typeAndId", headers)
@@ -206,10 +290,12 @@ open class MangaFire(
 
     @Serializable
     class PageListDto(private val images: List<List<JsonPrimitive>>) {
-        val pages get() = images.map {
-            Image(it[0].content, it[2].int)
-        }
+        val pages
+            get() = images.map {
+                Image(it[0].content, it[2].int)
+            }
     }
+
     class Image(val url: String, val offset: Int)
 
     @Serializable
@@ -218,15 +304,30 @@ open class MangaFire(
         val status: Int,
     )
 
-    override fun getFilterList() =
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Separator(),
-            TypeFilter(),
-            GenresFilter(),
-            StatusFilter(),
-            YearFilter(),
-            ChapterCountFilter(),
-            SortFilter(),
-        )
+    override fun getFilterList() = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        TypeFilter(),
+        GenresFilter(),
+        StatusFilter(),
+        YearFilter(),
+        ChapterCountFilter(),
+        SortFilter(),
+    )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_VOLUME_PREF
+            title = "Show volume entries in search result"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private const val SHOW_VOLUME_PREF = "show_volume"
+
+        private const val VOLUME_URL_FRAGMENT = "vol"
+        private const val VOLUME_URL_SUFFIX = "#$VOLUME_URL_FRAGMENT"
+        private const val VOLUME_TITLE_PREFIX = "[VOL] "
+    }
 }
