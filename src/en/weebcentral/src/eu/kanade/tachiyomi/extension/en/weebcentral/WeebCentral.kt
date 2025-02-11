@@ -165,6 +165,7 @@ class WeebCentral : ParsedHttpSource() {
         element.selectFirst("svg")?.attr("stroke")?.also { stroke ->
             scanlator = when (stroke) {
                 "#d8b4fe" -> "Official"
+                "#4C4D54" -> "Unknown"
                 else -> null
             }
         }
