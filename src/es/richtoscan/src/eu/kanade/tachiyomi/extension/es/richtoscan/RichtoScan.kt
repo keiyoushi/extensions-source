@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 
 class RichtoScan : Madara(
     "RichtoScan",
-    "https://richtoscan.com",
+    "https://r1.richtoon.top",
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.ROOT),
 ) {

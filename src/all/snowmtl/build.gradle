@@ -3,7 +3,7 @@ ext {
     extClass = '.SnowmtlFactory'
     themePkg = 'machinetranslations'
     baseUrl = 'https://snowmtl.ru'
-    overrideVersionCode = 7
+    overrideVersionCode = 9
     isNsfw = true
 }
 
