@@ -121,7 +121,7 @@ class WeebCentral : ParsedHttpSource() {
             if (relatedSeries.size > 0) {
                 descBuilder.append("\n\nRelated Series(s):")
                 relatedSeries.forEach { series ->
-                    descBuilder.append("\n").append("• ${series.text()")
+                    descBuilder.append("\n").append("• ${series.text()}")
                 }
             }
 
