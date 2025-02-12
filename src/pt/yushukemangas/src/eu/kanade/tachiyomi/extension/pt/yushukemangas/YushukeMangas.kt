@@ -50,7 +50,7 @@ class YushukeMangas : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
-    override fun popularMangaSelector() = "#semanal a.top-item"
+    override fun popularMangaSelector() = ".top10-section .top10-item a"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         title = element.selectFirst("h3")!!.text()
