@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangafire
 
-import android.util.Log
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 import java.util.Calendar
@@ -161,14 +160,11 @@ class YearFilter : UriMultiSelectFilter(
     }
 }
 
-class MinChapterFilter : Filter.Text("Minimum length"), UriFilter {
+class MinChapterFilter : Filter.Text("Minimum chapter length"), UriFilter {
     override fun addToUri(builder: HttpUrl.Builder) {
         if (state.isNotEmpty()) {
-            Log.i("SOMETHING-state", state)
-            Log.i("SOMETHING-value", state.toIntOrNull()?.takeIf { it > 0 }.toString())
-
             val value = state.toIntOrNull()?.takeIf { it > 0 }
-                ?: throw IllegalArgumentException("Minimum length must be a positive integer greater than 0")
+                ?: throw IllegalArgumentException("Minimum chapter length must be a positive integer greater than 0")
 
             builder.addQueryParameter("minchap", value.toString())
         }
