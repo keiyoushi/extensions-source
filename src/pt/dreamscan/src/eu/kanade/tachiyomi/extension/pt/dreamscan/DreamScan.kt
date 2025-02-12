@@ -6,7 +6,7 @@ import java.util.Locale
 
 class DreamScan : Madara(
     "Dream Scan",
-    "https://dreamscan.com.br",
+    "https://fairydream.com.br",
     "pt-BR",
     SimpleDateFormat("MMMM d, yyyy", Locale("pt", "BR")),
 ) {
