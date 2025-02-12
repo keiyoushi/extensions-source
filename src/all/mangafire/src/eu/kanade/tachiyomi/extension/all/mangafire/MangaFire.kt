@@ -121,7 +121,7 @@ class MangaFire(
             setUrlWithoutDomain(it.attr("href"))
             title = it.ownText()
         }
-        thumbnail_url = element.selectFirst("img")?.attr("src")
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
 
     // =============================== Filters ==============================
@@ -141,12 +141,11 @@ class MangaFire(
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.removeSuffix(VOLUME_URL_SUFFIX)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val manga = mangaDetailsParse(document)
-        if (response.request.url.fragment == VOLUME_URL_FRAGMENT) {
-            manga.title = VOLUME_TITLE_PREFIX + manga.title
+        return mangaDetailsParse(response.asJsoup()).apply {
+            if (response.request.url.fragment == VOLUME_URL_FRAGMENT) {
+                title = VOLUME_TITLE_PREFIX + title
+            }
         }
-        return manga
     }
 
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -164,10 +163,10 @@ class MangaFire(
                 }
             }.trim()
 
-            with(selectFirst(".meta")!!) {
-                author = selectFirst("span:contains(Author:) + span")?.text()
-                val type = selectFirst("span:contains(Type:) + span")?.text()
-                val genres = selectFirst("span:contains(Genres:) + span")?.text()
+            selectFirst(".meta")?.let {
+                author = it.selectFirst("span:contains(Author:) + span")?.text()
+                val type = it.selectFirst("span:contains(Type:) + span")?.text()
+                val genres = it.selectFirst("span:contains(Genres:) + span")?.text()
                 genre = listOfNotNull(type, genres).joinToString()
             }
         }
@@ -182,6 +181,10 @@ class MangaFire(
     }
 
     // ============================== Chapters ==============================
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        return baseUrl + chapter.url.substringBeforeLast("#")
+    }
 
     private fun getAjaxRequest(ajaxType: String, mangaId: String, chapterType: String): Request {
         return GET("$baseUrl/ajax/$ajaxType/$mangaId/$chapterType/$langCode", headers)
@@ -217,7 +220,7 @@ class MangaFire(
 
         val chapterList = ajaxMangaList.zip(ajaxReadList) { m, r ->
             val link = r.selectFirst("a")!!
-            if (!r.attr("href").substringAfterLast("/").contains(type)) {
+            if (!r.attr("abs:href").toHttpUrl().pathSegments.last().contains(type)) {
                 return Observable.just(emptyList())
             }
 
@@ -305,7 +308,7 @@ class MangaFire(
     }
 
     private fun String.toBodyFragment(): Document {
-        return Jsoup.parseBodyFragment(this)
+        return Jsoup.parseBodyFragment(this, baseUrl)
     }
 
     companion object {
