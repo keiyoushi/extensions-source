@@ -11,7 +11,7 @@ import okhttp3.Request
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class ReadManga : GroupLe("ReadManga", "https://1.readmanga.io", "ru") {
+class ReadManga : GroupLe("ReadManga", "https://zz.readmanga.io", "ru") {
 
     override val id: Long = 5
 

@@ -209,7 +209,9 @@ abstract class GroupLe(
     }
 
     protected open fun getChapterSearchParams(document: Document): String {
-        return "?mtr=true"
+        val scriptContent = document.selectFirst("script:containsData(user_hash)")?.data()
+        val userHash = scriptContent?.let { USER_HASH_REGEX.find(it)?.groupValues?.get(1) }
+        return userHash?.let { "?d=$it&mtr=true" } ?: "?mtr=true"
     }
 
     private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
@@ -436,5 +438,6 @@ abstract class GroupLe(
         private const val UAGENT_TITLE = "User-Agent(для некоторых стран)"
         private const val UAGENT_DEFAULT = "arora"
         const val PREFIX_SLUG_SEARCH = "slug:"
+        private val USER_HASH_REGEX = "user_hash.+'(.+)'".toRegex()
     }
 }
