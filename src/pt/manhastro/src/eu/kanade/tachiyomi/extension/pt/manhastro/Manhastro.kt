@@ -26,6 +26,9 @@ import javax.net.ssl.X509TrustManager
 
 class Manhastro : HttpSource() {
 
+    // Moved from Madara
+    override val versionId = 2
+
     override val name = "Manhastro"
 
     override val lang = "pt-BR"
