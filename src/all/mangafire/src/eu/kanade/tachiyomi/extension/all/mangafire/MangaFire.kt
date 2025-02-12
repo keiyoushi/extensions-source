@@ -121,7 +121,7 @@ class MangaFire(
             setUrlWithoutDomain(it.attr("href"))
             title = it.ownText()
         }
-        thumbnail_url = element.selectFirst("img")!!.attr("src")
+        thumbnail_url = element.selectFirst("img")?.attr("src")
     }
 
     // =============================== Filters ==============================
@@ -152,7 +152,7 @@ class MangaFire(
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
         with(document.selectFirst(".main-inner:not(.manga-bottom)")!!) {
             title = selectFirst("h1")!!.text()
-            thumbnail_url = selectFirst(".poster img")!!.attr("src")
+            thumbnail_url = selectFirst(".poster img")?.attr("src")
             status = selectFirst(".info > p").parseStatus()
             description = buildString {
                 document.selectFirst("#synopsis .modal-content")?.textNodes()?.let {
