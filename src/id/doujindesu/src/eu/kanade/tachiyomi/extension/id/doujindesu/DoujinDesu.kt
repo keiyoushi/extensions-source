@@ -136,7 +136,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Genre("Cunnilingus"),
         Genre("Dark Skin"),
         Genre("Daughter"),
-        Genre("Defloartion"),
+        Genre("Defloration"),
         Genre("Demon"),
         Genre("Demon Girl"),
         Genre("Dick Growth"),
