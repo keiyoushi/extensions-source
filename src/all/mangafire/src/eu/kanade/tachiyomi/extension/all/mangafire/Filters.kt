@@ -136,7 +136,9 @@ private val years: List<Entry>
         Entry("1940s"),
     )
 
-class ChapterCountFilter : Select("Chapter Count", "minchap", chapterCounts)
+class ChapterCountFilter : Filter.Text("Minimum Chapter Count", "") {
+    val param = "minchap"
+}
 
 private val chapterCounts
     get() = mapOf(

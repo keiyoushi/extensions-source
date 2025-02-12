@@ -85,6 +85,10 @@ class MangaFire(
                             addQueryParameter(filter.param, filter.selection)
                         }
 
+                        is ChapterCountFilter -> {
+                            addQueryParameter(filter.param, filter.state)
+                        }
+
                         is GenresFilter -> {
                             filter.state.forEach {
                                 if (it.state != 0) {
