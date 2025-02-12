@@ -66,7 +66,12 @@ class DragonTranslationNet :
     override fun getFilterList() = FilterList(emptyList())
 
     override fun mangaDetailsParse(document: Document): SManga {
+        val infoRow = document.selectFirst("div.section-main > div.row")
+
         return SManga.create().apply {
+            description = infoRow?.selectFirst("> :eq(1)")?.ownText()
+            status = infoRow?.selectFirst("p:contains(Status) > a").parseStatus()
+            genre = infoRow?.select("p:contains(Tag(s)) a")?.joinToString { it.text() }
         }
     }
 
@@ -89,5 +94,11 @@ class DragonTranslationNet :
                 element.attr("abs:src"),
             )
         }
+    }
+
+    protected fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
+        "publishing", "ongoing" -> SManga.ONGOING
+        "ended" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 }
