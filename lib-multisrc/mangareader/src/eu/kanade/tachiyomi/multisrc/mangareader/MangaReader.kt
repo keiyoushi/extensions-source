@@ -183,7 +183,7 @@ abstract class MangaReader(
     }
 
     private fun Element.parseStatus(manga: SManga): SManga {
-        manga.status = this.selectFirst(".name")?.ownText().getStatus()
+        manga.status = this.selectFirst(".name")?.text().getStatus()
         return manga
     }
 
@@ -270,6 +270,7 @@ abstract class MangaReader(
     open fun Element.imgAttr(): String = when {
         hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
         hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-url") -> attr("abs:data-url")
         else -> attr("abs:src")
     }
 
