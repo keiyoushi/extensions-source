@@ -324,6 +324,9 @@ abstract class GroupLe(
                 throw Exception("Не удалось загрузить главу. Url: ${response.request.url}")
             }
             else -> {
+                if (html.contains("hprocessed") || html.contains("purchase-form")) {
+                    throw Exception("Эта глава платная. Используйте сайт, чтобы купить и прочитать ее.")
+                }
                 throw Exception("Дизайн сайта обновлен, для дальнейшей работы необходимо обновление дополнения")
             }
         }
