@@ -34,7 +34,7 @@ class ElGoonishShive : ParsedHttpSource() {
                 "It is a comedy mixed with drama and is recommended for audiences thirteen and " +
                 "older."
 
-            thumbnail_url = "https://www.egscomics.com/images/logo.gif"
+            thumbnail_url = "https://static.tumblr.com/8cee5e83d26a8a96ad5e51b67f2e340e/j8ipbno/fXFoj0zh9/tumblr_static_1f2fhwjyya74gsgs888g8k880.png"
         }
 
         return Observable.just(MangasPage(arrayListOf(manga).reversed(), false))
