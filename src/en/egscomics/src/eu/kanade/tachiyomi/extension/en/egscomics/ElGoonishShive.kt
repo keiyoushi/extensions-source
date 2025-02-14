@@ -11,12 +11,16 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class ElGoonishShive : ParsedHttpSource() {
     override val name = "El Goonish Shive"
     override val baseUrl = "https://www.egscomics.com"
     override val lang = "en"
     override val supportsLatest = false
+
+    private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.ROOT)
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val manga = SManga.create().apply {
@@ -51,11 +55,10 @@ class ElGoonishShive : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-//            chapter_number = element.select("""a[name~=\d*]""").attr("name").toFloat()
             chapter_number = element.previousElementSiblings().size.toFloat()
             setUrlWithoutDomain("/" + element.attr("value"))
             name = element.text().split(" - ", limit = 2).last()
-//            date_upload = element.text().split(" - ", limit = 2).first()
+            date_upload = dateFormat.parse(element.text().split(" - ", limit = 2).first())?.time ?: 0L
         }
     }
 
