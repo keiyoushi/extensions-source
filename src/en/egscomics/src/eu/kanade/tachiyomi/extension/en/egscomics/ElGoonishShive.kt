@@ -20,7 +20,7 @@ class ElGoonishShive : ParsedHttpSource() {
     override val lang = "en"
     override val supportsLatest = false
 
-    private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.ROOT)
+    private val dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.US)
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val manga = SManga.create().apply {
