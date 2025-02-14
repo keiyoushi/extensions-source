@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.rizzcomic
+package eu.kanade.tachiyomi.extension.en.realmoasis
 
 import android.app.Application
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
@@ -54,7 +54,7 @@ class RealmOasis : MangaThemesia(
     private val apiHeaders by lazy {
         headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
-            .set("X-API-Request", "1")
+            .set("Referer", "https://realmoasis.com/comics")
             .build()
     }
 
@@ -87,7 +87,7 @@ class RealmOasis : MangaThemesia(
                 .add("search_value", query.trim())
                 .build()
 
-            return POST("$baseUrl/Index/live_search", apiHeaders, form)
+            return POST("$baseUrl/search", apiHeaders, form)
         }
 
         val form = FormBody.Builder().apply {
