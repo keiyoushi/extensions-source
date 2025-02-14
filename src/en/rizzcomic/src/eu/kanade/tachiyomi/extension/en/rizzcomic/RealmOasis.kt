@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.realmoasis
+package eu.kanade.tachiyomi.extension.en.rizzcomic
 
 import android.app.Application
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia

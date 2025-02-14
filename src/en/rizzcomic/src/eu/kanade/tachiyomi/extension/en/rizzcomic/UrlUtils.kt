@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.realmoasis
+package eu.kanade.tachiyomi.extension.en.rizzcomic
 
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
