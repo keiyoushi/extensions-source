@@ -54,6 +54,7 @@ class RealmOasis : MangaThemesia(
     private val apiHeaders by lazy {
         headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
+            .set("X-API-Request", "1")
             .set("Referer", "$baseUrl$mangaUrlDirectory")
             .build()
     }
