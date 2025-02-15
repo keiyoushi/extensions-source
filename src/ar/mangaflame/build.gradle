@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Flame'
-    extClass = '.MangaFlame'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://mangaflame.org'
-    overrideVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"
