@@ -1,9 +1,0 @@
-ext {
-    extName = 'Qinqin Manhua'
-    extClass = '.Qinqin'
-    themePkg = 'sinmh'
-    baseUrl = 'http://www.acgwd.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
