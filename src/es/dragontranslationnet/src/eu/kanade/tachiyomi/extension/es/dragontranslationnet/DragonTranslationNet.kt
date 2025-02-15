@@ -77,7 +77,7 @@ open class DragonTranslationNet : HttpSource() {
         return document.select("ul.list-group a").map {
             SChapter.create().apply {
                 name = it.selectFirst("li")!!.text()
-                setUrlWithoutDomain(it.attr("href"))
+                setUrlWithoutDomain(it.attr("abs:href"))
             }
         }
     }
