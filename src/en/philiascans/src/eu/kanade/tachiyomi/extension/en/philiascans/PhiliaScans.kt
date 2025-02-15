@@ -14,7 +14,6 @@ class PhiliaScans : Madara(
     SimpleDateFormat("dd/MMM", Locale.US),
 ) {
     override val versionId: Int = 1
-    
     override val useNewChapterEndpoint = true
 
     override fun popularMangaRequest(page: Int): Request {
