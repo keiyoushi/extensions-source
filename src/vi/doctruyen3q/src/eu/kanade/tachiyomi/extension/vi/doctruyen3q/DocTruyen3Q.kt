@@ -17,7 +17,7 @@ import java.util.TimeZone
 
 class DocTruyen3Q : WPComics(
     "DocTruyen3Q",
-    "https://doctruyen3qui.com",
+    "https://doctruyen3qui2.com",
     "vi",
     dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
