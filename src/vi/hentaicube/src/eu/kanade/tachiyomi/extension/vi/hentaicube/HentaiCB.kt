@@ -23,10 +23,10 @@ class HentaiCB : Madara("CBHentai", "https://hentaicube.xyz", "vi", SimpleDateFo
 
     override val altNameSelector = ".post-content_item:contains(Tên khác) .summary-content"
 
-    // Changed from 'read' to 'manga'
     @Suppress("OVERRIDE_DEPRECATION")
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
+            // Changed from 'read' to 'manga'
             val mangaUrl = "/manga/${query.substringAfter(URL_SEARCH_PREFIX)}/"
             return client.newCall(GET("$baseUrl$mangaUrl", headers))
                 .asObservableSuccess().map { response ->
