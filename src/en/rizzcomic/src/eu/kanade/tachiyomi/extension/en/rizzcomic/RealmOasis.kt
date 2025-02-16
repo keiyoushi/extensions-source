@@ -55,6 +55,7 @@ class RealmOasis : MangaThemesia(
         headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
             .set("X-API-Request", "1")
+            .set("Referer", "$baseUrl$mangaUrlDirectory")
             .build()
     }
 
@@ -87,7 +88,7 @@ class RealmOasis : MangaThemesia(
                 .add("search_value", query.trim())
                 .build()
 
-            return POST("$baseUrl/Index/live_search", apiHeaders, form)
+            return POST("$baseUrl/search", apiHeaders, form)
         }
 
         val form = FormBody.Builder().apply {
