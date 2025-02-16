@@ -47,7 +47,7 @@ class DisasterScans : ParsedHttpSource() {
 
     override fun searchMangaSelector(): String = ".grid a"
 
-    private fun mangaFromElement(element:Element):SManga=SManga.create().apply {
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.absUrl("href"))
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
@@ -64,7 +64,7 @@ class DisasterScans : ParsedHttpSource() {
         title = element.selectFirst("h1")?.text().toString()
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList, ): Observable<MangasPage> {
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         val response = client.newCall(searchMangaRequest(page, query, filters)).execute()
         val mangaList = response.asJsoup().select(searchMangaSelector())
             .map { searchMangaFromElement(it) }
