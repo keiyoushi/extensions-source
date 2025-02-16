@@ -82,7 +82,12 @@ abstract class Madara(
     /**
      * Automatically fetched genres from the source to be used in the filters.
      */
-    private var genresList: List<Genre> = emptyList()
+    protected open var genresList: List<Genre> = emptyList()
+
+    /**
+     * Whether genres have been fetched
+     */
+    private var genresFetched: Boolean = false
 
     /**
      * Inner variable to control how much tries the genres request was called.
@@ -1069,10 +1074,17 @@ abstract class Madara(
      * Fetch the genres from the source to be used in the filters.
      */
     protected fun fetchGenres() {
-        if (fetchGenres && fetchGenresAttempts < 3 && genresList.isEmpty()) {
+        if (fetchGenres && fetchGenresAttempts < 3 && !genresFetched) {
             try {
-                genresList = client.newCall(genresRequest()).execute()
+                client.newCall(genresRequest()).execute()
                     .use { parseGenres(it.asJsoup()) }
+                    .also {
+                        genresFetched = true
+                    }
+                    .takeIf { it.isNotEmpty() }
+                    ?.also {
+                        genresList = it
+                    }
             } catch (_: Exception) {
             } finally {
                 fetchGenresAttempts++
