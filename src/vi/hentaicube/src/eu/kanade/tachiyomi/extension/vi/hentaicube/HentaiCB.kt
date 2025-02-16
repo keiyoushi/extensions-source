@@ -41,10 +41,12 @@ class HentaiCB : Madara("CBHentai", "https://hentaicube.xyz", "vi", SimpleDateFo
         return super.fetchSearchManga(page, query, filters)
     }
 
+    private val oldMangaUrlRegex by lazy { Regex("""^$baseUrl/read/""") }
+
     // Change old entries from 'read' to 'manga'
     override fun getMangaUrl(manga: SManga): String {
         return super.getMangaUrl(manga)
-            .replace("""^$baseUrl/read/""".toRegex(), "$baseUrl/manga/")
+            .replace(oldMangaUrlRegex, "$baseUrl/manga/")
     }
 
     override fun pageListParse(document: Document): List<Page> {
