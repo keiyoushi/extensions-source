@@ -75,17 +75,22 @@ class DisasterScans : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         author = document.selectFirst("span:contains(Author) + span")?.text()
 
-        val titleElement = document.selectFirst("section h1")
-        titleElement?.text()?.let { title = it }
+        val infoBlock = document.selectFirst("section div div")
 
-        description = titleElement?.parent()?.parent()?.nextElementSibling()?.nextElementSibling()?.text()
-        val genres = titleElement?.parent()?.parent()?.nextElementSibling()?.select("span")
+        if (infoBlock != null) {
+            val infoBlockChildren = infoBlock.children()
 
-        status = when (genres?.removeAt(0)?.text()?.lowercase()) {
-            "ongoing" -> SManga.ONGOING
-            else -> SManga.UNKNOWN
+            infoBlockChildren[0].selectFirst("h1")?.text()?.let { title = it }
+            description = infoBlockChildren[2].text()
+
+            with(infoBlockChildren[1].select("span")) {
+                status = when (this.removeAt(0)?.text()?.lowercase()) {
+                    "ongoing" -> SManga.ONGOING
+                    else -> SManga.UNKNOWN
+                }
+                genre = this.joinToString(", ") { it.text() }
+            }
         }
-        genre = genres?.joinToString(", ") { it.text() }
     }
 
     @Serializable
@@ -93,21 +98,25 @@ class DisasterScans : ParsedHttpSource() {
     private val chapterDataRegex = Regex("""\\"chapters\\":(\[.*]),\\"param\\":\\"(\S+)\\"\}""")
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val found = chapterDataRegex.find(response.body.string())?.destructured
-        val chapterData = found?.component1()?.replace("\\", "") ?: return listOf()
-        val mangaID = found.component2()
+        val (chapterData, mangaId) = chapterDataRegex.find(response.body.string())
+            ?.destructured ?: return emptyList()
 
-        return json.decodeFromString<List<ChapterDTO>>(chapterData).map { chapter ->
+        return json.decodeFromString<List<ChapterDTO>>(chapterData.replace("\\", "")).map { chapter ->
             SChapter.create().apply {
                 name = "Chapter ${chapter.ChapterNumber} - ${chapter.ChapterName}"
                 setUrlWithoutDomain(
                     baseUrl.toHttpUrl().newBuilder().apply {
                         addPathSegment("comics")
-                        addPathSegment(mangaID)
+                        addPathSegment(mangaId)
                         addPathSegment("${chapter.chapterID}-chapter-${chapter.ChapterNumber}")
                     }.build().toString(),
                 )
-                date_upload = dateFormat.parse(chapter.chapterDate)?.time ?: 0
+
+                date_upload = try {
+                    dateFormat.parse(chapter.chapterDate)?.time ?: 0
+                } catch (_: Exception) {
+                    0
+                }
             }
         }
     }
