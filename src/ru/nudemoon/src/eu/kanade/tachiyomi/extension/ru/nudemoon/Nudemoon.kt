@@ -206,10 +206,13 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private fun chapterFromSinglePage(document: Document, url: HttpUrl): SChapter = SChapter.create().apply {
+    private fun chapterFromSinglePage(document: Document, responseUrl: HttpUrl): SChapter = SChapter.create().apply {
         val chapterName = document.select("table td.bg_style1 h1").text()
-        val chapterUrl = url.toString()
+        val chapterUrl = responseUrl.toString()
         setUrlWithoutDomain(chapterUrl)
+        if (url.contains(baseUrl)) {
+            url = url.replace(baseUrl, "")
+        }
         name = "$chapterName Сингл"
         scanlator = document.select("table.news_pic2 a[href*=perevod]").text()
         date_upload = document.select("table.news_pic2:has(a[href*=perevod]) span.small2:not(:contains(тыс))").first()!!.text().replace("Май", "Мая").let {
