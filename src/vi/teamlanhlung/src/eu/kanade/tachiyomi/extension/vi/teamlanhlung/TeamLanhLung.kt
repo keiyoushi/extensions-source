@@ -2,4 +2,4 @@ package eu.kanade.tachiyomi.extension.vi.teamlanhlung
 
 import eu.kanade.tachiyomi.multisrc.a3manga.A3Manga
 
-class TeamLanhLung : A3Manga("Team Lạnh Lùng", "https://teamlanhlung1.shop", "vi")
+class TeamLanhLung : A3Manga("Team Lạnh Lùng", "https://teamlanhlung2.shop", "vi")
