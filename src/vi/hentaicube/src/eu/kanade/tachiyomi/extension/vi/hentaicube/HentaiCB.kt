@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import rx.Observable
 import java.text.SimpleDateFormat
@@ -23,8 +24,22 @@ class HentaiCB : Madara("CBHentai", "https://hentaicube.xyz", "vi", SimpleDateFo
 
     override val altNameSelector = ".post-content_item:contains(Tên khác) .summary-content"
 
-    @Suppress("OVERRIDE_DEPRECATION")
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(URL_SEARCH_PREFIX)) {
+            val mangaUrl = baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("manga")
+                addPathSegment(query.substringAfter(URL_SEARCH_PREFIX))
+            }.build()
+            return client.newCall(GET(mangaUrl, headers))
+                .asObservableSuccess().map { response ->
+                    val manga = mangaDetailsParse(response).apply {
+                        setUrlWithoutDomain(mangaUrl.toString())
+                    }
+
+                    MangasPage(listOf(manga), false)
+                }
+        }
+
         // Special characters causing search to fail
         val queryFixed = query
             .replace("–", "-")
@@ -33,23 +48,10 @@ class HentaiCB : Madara("CBHentai", "https://hentaicube.xyz", "vi", SimpleDateFo
             .replace("”", "\"")
             .replace("…", "...")
 
-        if (queryFixed.startsWith(URL_SEARCH_PREFIX)) {
-            // Changed from 'read' to 'manga'
-            val mangaUrl = "/manga/${queryFixed.substringAfter(URL_SEARCH_PREFIX)}/"
-            return client.newCall(GET("$baseUrl$mangaUrl", headers))
-                .asObservableSuccess().map { response ->
-                    val manga = mangaDetailsParse(response).apply {
-                        url = mangaUrl
-                    }
-
-                    MangasPage(listOf(manga), false)
-                }
-        }
-
         return super.fetchSearchManga(page, queryFixed, filters)
     }
 
-    private val oldMangaUrlRegex by lazy { Regex("""^$baseUrl/read/""") }
+    private val oldMangaUrlRegex = Regex("""^$baseUrl/read/""")
 
     // Change old entries from 'read' to 'manga'
     override fun getMangaUrl(manga: SManga): String {
