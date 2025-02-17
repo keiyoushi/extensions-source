@@ -10,14 +10,14 @@ import uy.kohesive.injekt.api.get
  * Returns the [SharedPreferences] associated with current source id
  */
 inline fun HttpSource.getPreferences(
-    migration: (SharedPreferences) -> Unit = { },
+    migration: SharedPreferences.() -> Unit = { },
 ): SharedPreferences = getPreferences(id).also(migration)
 
 /**
  * Lazily returns the [SharedPreferences] associated with current source id
  */
 inline fun HttpSource.getPreferencesLazy(
-    crossinline migration: (SharedPreferences) -> Unit = { }
+    crossinline migration: SharedPreferences.() -> Unit = { }
 ) = lazy { getPreferences(migration) }
 
 /**
