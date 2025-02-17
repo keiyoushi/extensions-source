@@ -188,9 +188,9 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
                     setUrlWithoutDomain(chapterUrl)
                     name = "$chapterName Сингл"
                     scanlator = document.select("table.news_pic2 a[href*=perevod]").text()
-                    date_upload = document.select("table.news_pic2 span.small2:contains(/)").text().let {
+                    date_upload = document.select("table.news_pic2:has(a[href*=perevod]) span.small2:not(:contains(тыс))").first()!!.text().replace("Май", "Мая").let {
                         try {
-                            dateParseSlash.parse(it)?.time ?: 0L
+                            dateParseRu.parse(it)?.time ?: 0L
                         } catch (e: Exception) {
                             0
                         }
