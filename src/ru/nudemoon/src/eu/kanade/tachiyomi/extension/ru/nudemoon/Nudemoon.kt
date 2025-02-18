@@ -160,7 +160,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         val infoElement = document.selectFirst("table.news_pic2")
-        manga.title = document.selectFirst("h1")?.text()?.substringBefore(" / ")?.substringBefore(" №") ?: "No title"
+        manga.title = document.selectFirst("h1")!!.text().substringBefore(" / ").substringBefore(" №")
         manga.author = infoElement?.select("a[href*=mangaka]")?.text()
         manga.genre = infoElement?.select("div.tag-links a")?.joinToString { it.text() }
         manga.description = document.select(".description").text()
