@@ -34,7 +34,7 @@ class ManhuaRock : ParsedHttpSource() {
 
     override val lang = "vi"
 
-    override val baseUrl = "https://manhuarock1.com"
+    override val baseUrl = "https://manhuarock2.com"
 
     override val supportsLatest = true
 
