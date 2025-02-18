@@ -313,7 +313,7 @@ abstract class LibGroup(
     override fun chapterListParse(response: Response): List<SChapter> {
         val slugUrl = response.request.url.toString().substringAfter("manga/").substringBefore("/chapters")
         val chaptersData = response.parseAs<Data<List<Chapter>>>()
-            .also { if (it.data.isEmpty()) throw Exception("Нет глав") }
+            .also { if (it.data.isEmpty()) return emptyList() }
         val sortingList = preferences.getString(SORTING_PREF, "ms_mixing")
         val defaultBranchId = if (sortingList == "ms_mixing" && chaptersData.data.getBranchCount() > 1) {
             runCatching { getDefaultBranch(slugUrl.substringBefore("-")).first().id }.getOrNull()
