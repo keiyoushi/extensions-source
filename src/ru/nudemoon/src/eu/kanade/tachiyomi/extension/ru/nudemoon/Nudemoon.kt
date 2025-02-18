@@ -43,7 +43,6 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val dateParseRu = SimpleDateFormat("d MMMM yyyy", Locale("ru"))
-    private val dateParseSlash = SimpleDateFormat("d/MM/yyyy", Locale("ru"))
 
     private val cookieManager by lazy { CookieManager.getInstance() }
 
@@ -160,12 +159,12 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
-        val infoElement = document.select("table.news_pic2").first()!!
-        manga.title = document.select("h1").first()!!.text().substringBefore(" / ").substringBefore(" №")
-        manga.author = infoElement.select("a[href*=mangaka]").text()
-        manga.genre = infoElement.select("div.tag-links a").joinToString { it.text() }
+        val infoElement = document.selectFirst("table.news_pic2")
+        manga.title = document.selectFirst("h1")?.text()?.substringBefore(" / ")?.substringBefore(" №") ?: "No title"
+        manga.author = infoElement?.select("a[href*=mangaka]")?.text()
+        manga.genre = infoElement?.select("div.tag-links a")?.joinToString { it.text() }
         manga.description = document.select(".description").text()
-        manga.thumbnail_url = document.selectFirst("meta[property=og:image]")!!.attr("abs:content")
+        manga.thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("abs:content")
 
         return manga
     }
@@ -207,15 +206,15 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
     }
 
     private fun chapterFromSinglePage(document: Document, responseUrl: HttpUrl): SChapter = SChapter.create().apply {
-        val chapterName = document.select("table td.bg_style1 h1").text()
+        val chapterName = document.selectFirst("table td.bg_style1 h1")?.text()
         val chapterUrl = responseUrl.toString()
         setUrlWithoutDomain(chapterUrl)
         if (url.contains(baseUrl)) {
             url = url.replace(baseUrl, "")
         }
         name = "$chapterName Сингл"
-        scanlator = document.select("table.news_pic2 a[href*=perevod]").text()
-        date_upload = document.select("table.news_pic2:has(a[href*=perevod]) span.small2:not(:contains(тыс))").first()!!.text().replace("Май", "Мая").let {
+        scanlator = document.selectFirst("table.news_pic2 a[href*=perevod]")?.text()
+        date_upload = document.selectFirst("table.news_pic2:has(a[href*=perevod]) span.small2")?.text()?.replace("Май", "Мая").let {
             try {
                 dateParseRu.parse(it)?.time ?: 0L
             } catch (e: Exception) {
