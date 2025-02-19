@@ -204,7 +204,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
             // There are entries with more chapters but those never show up,
             // so we take the last one and loop it to get all hidden ones.
             // Example: 1 2 3 4 .. 7 8 9 Next
-            for (i in 2 .. lastChapterNumber.toInt()) {
+            for (i in 2..lastChapterNumber.toInt()) {
                 chapters.add(createChapter(i.toString(), document.baseUri(), date, "Ch. $i"))
             }
         }
