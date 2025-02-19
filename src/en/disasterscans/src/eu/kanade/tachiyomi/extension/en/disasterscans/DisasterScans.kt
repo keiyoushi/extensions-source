@@ -53,15 +53,15 @@ class DisasterScans : ParsedHttpSource() {
     }
 
     override fun popularMangaFromElement(element: Element): SManga = mangaFromElement(element).apply {
-        title = element.selectFirst("h5")?.text().toString()
+        title = element.selectFirst("h5")!!.text()
     }
 
     override fun latestUpdatesFromElement(element: Element): SManga = mangaFromElement(element).apply {
-        title = element.parent()?.selectFirst("div a")?.text().toString()
+        title = element.parent()?.selectFirst("div a")!!.text()
     }
 
     override fun searchMangaFromElement(element: Element): SManga = mangaFromElement(element).apply {
-        title = element.selectFirst("h1")?.text().toString()
+        title = element.selectFirst("h1")!!.text()
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -73,22 +73,18 @@ class DisasterScans : ParsedHttpSource() {
     }
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        author = document.selectFirst("span:contains(Author) + span")?.text()
+        author = document.selectFirst("span:contains(Author) + span")!!.text()
 
-        val infoBlock = document.selectFirst("section div div")
+        document.selectFirst("section div div")?.children()?.also { infoRows ->
+            infoRows[0].selectFirst("h1")?.text()?.let { title = it }
+            description = infoRows[2].text()
 
-        if (infoBlock != null) {
-            val infoBlockChildren = infoBlock.children()
-
-            infoBlockChildren[0].selectFirst("h1")?.text()?.let { title = it }
-            description = infoBlockChildren[2].text()
-
-            with(infoBlockChildren[1].select("span")) {
+            with(infoRows[1].select("span")) {
                 status = when (this.removeAt(0)?.text()?.lowercase()) {
                     "ongoing" -> SManga.ONGOING
                     else -> SManga.UNKNOWN
                 }
-                genre = this.joinToString(", ") { it.text() }
+                genre = this.joinToString { text() }
             }
         }
     }
@@ -98,10 +94,17 @@ class DisasterScans : ParsedHttpSource() {
     private val chapterDataRegex = Regex("""\\"chapters\\":(\[.*]),\\"param\\":\\"(\S+)\\"\}""")
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val (chapterData, mangaId) = chapterDataRegex.find(response.body.string())
-            ?.destructured ?: return emptyList()
+        var mangaId = ""
+        val chapters = chapterDataRegex.find(response.body.string())
+            ?.destructured
+            ?.let {
+                mangaId = it.component2()
+                it.component1().replace("\\", "")
+            }
+            ?.let { json.decodeFromString<List<ChapterDTO>>(it) }
+            ?: throw Exception("Cant parse chapter list")
 
-        return json.decodeFromString<List<ChapterDTO>>(chapterData.replace("\\", "")).map { chapter ->
+        return chapters.map { chapter ->
             SChapter.create().apply {
                 name = "Chapter ${chapter.ChapterNumber} - ${chapter.ChapterName}"
                 setUrlWithoutDomain(
