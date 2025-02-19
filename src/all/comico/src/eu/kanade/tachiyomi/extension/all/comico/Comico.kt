@@ -24,6 +24,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
+import java.lang.Exception
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -159,7 +160,7 @@ open class Comico(
         if (!chapter.name.endsWith(LOCK)) {
             super.fetchPageList(chapter)
         } else {
-            throw Error("You are not authorized to view this!")
+            throw Exception("You are not authorized to view this!")
         }
 
     private fun search(query: String, page: Int) =
@@ -176,7 +177,7 @@ open class Comico(
     private val Response.data: JsonElement?
         get() = json.parseToJsonElement(body.string()).jsonObject.also {
             val code = it["result"]["code"].jsonPrimitive.int
-            if (code != 200) throw Error(status(code))
+            if (code != 200) throw Exception(status(code))
         }["data"]
 
     private operator fun JsonElement?.get(key: String) =

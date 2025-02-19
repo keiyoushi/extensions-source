@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -36,7 +36,7 @@ class RealmOasis : MangaThemesia(
 ) {
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 3)
+        .rateLimit(1, 3)
         .addInterceptor { chain ->
             val request = chain.request()
             val isApiRequest = request.header("X-API-Request") != null
@@ -55,6 +55,7 @@ class RealmOasis : MangaThemesia(
         headersBuilder()
             .set("X-Requested-With", "XMLHttpRequest")
             .set("X-API-Request", "1")
+            .set("Referer", "$baseUrl$mangaUrlDirectory")
             .build()
     }
 
@@ -87,7 +88,7 @@ class RealmOasis : MangaThemesia(
                 .add("search_value", query.trim())
                 .build()
 
-            return POST("$baseUrl/Index/live_search", apiHeaders, form)
+            return POST("$baseUrl/search", apiHeaders, form)
         }
 
         val form = FormBody.Builder().apply {
@@ -136,7 +137,7 @@ class RealmOasis : MangaThemesia(
                 author = listOfNotNull(comic.author, comic.serialization).joinToString()
                 artist = comic.artist
                 status = comic.status.parseStatus()
-                thumbnail_url = comic.cover?.let { "https://x.0ms.dev/q70/$baseUrl/assets/images/$it" }
+                thumbnail_url = comic.cover?.let { "$baseUrl/assets/images/$it" }
                 genre = buildList {
                     add(comic.type?.capitalize())
                     comic.genreIds?.onEach { gId ->
@@ -225,7 +226,7 @@ class RealmOasis : MangaThemesia(
             .set("Referer", "$baseUrl/")
             .build()
 
-        return GET("https://x.0ms.dev/q70/" + page.imageUrl!!, newHeaders)
+        return GET(page.imageUrl!!, newHeaders)
     }
 
     private inline fun <reified T> Response.parseAs(): T =
