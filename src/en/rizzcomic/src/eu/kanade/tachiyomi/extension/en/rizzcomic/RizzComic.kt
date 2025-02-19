@@ -52,7 +52,7 @@ class RizzComic : MangaThemesiaAlt(
             .build()
     }
 
-    override val versionId = 2
+    override val versionId = 4
 
     override val slugRegex = Regex("""^(r\d+-)""")
 
