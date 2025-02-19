@@ -57,10 +57,10 @@ class TypeFilter : SelectFilter("Type", type) {
 
 private val type = listOf(
     Pair("All", "all"),
-    Pair("Manga", "manga"),
-    Pair("Manhwa", "manhwa"),
-    Pair("Manhua", "manhua"),
-    Pair("Comic", "comic"),
+    Pair("Manga", "Manga"),
+    Pair("Manhwa", "Manhwa"),
+    Pair("Manhua", "Manhua"),
+    Pair("Comic", "Comic"),
 )
 
 class CheckBoxFilter(
