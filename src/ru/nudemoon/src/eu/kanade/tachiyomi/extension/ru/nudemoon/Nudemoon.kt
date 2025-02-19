@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.HttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -136,8 +135,8 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
-        manga.thumbnail_url = element.select("a img").attr("abs:src")
-        element.select("a:has(h2)").let {
+        manga.thumbnail_url = element.selectFirst("a img")?.attr("abs:src")
+        element.selectFirst("a:has(h2)")!!.let {
             manga.title = it.text().substringBefore(" / ").substringBefore(" №")
             manga.setUrlWithoutDomain(it.attr("href"))
         }
@@ -161,9 +160,9 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         val manga = SManga.create()
         val infoElement = document.selectFirst("table.news_pic2")
         manga.title = document.selectFirst("h1")!!.text().substringBefore(" / ").substringBefore(" №")
-        manga.author = infoElement?.select("a[href*=mangaka]")?.text()
+        manga.author = infoElement?.selectFirst("a[href*=mangaka]")?.text()
         manga.genre = infoElement?.select("div.tag-links a")?.joinToString { it.text() }
-        manga.description = document.select(".description").text()
+        manga.description = document.selectFirst(".description")?.text()
         manga.thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("abs:content")
 
         return manga
@@ -181,7 +180,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         val allPageElement = document.select("td.button a:contains(Все главы)")
 
         if (allPageElement.isEmpty()) {
-            add(chapterFromSinglePage(document, response.request.url))
+            add(chapterFromSinglePage(document, response.request.url.toString()))
         } else {
             var pageListDocument: Document
             val pageListLink = allPageElement.attr("href")
@@ -195,7 +194,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
                 pageListDocument = this.asJsoup()
             }
             if (pageListDocument.select(chapterListSelector()).isEmpty()) {
-                add(chapterFromSinglePage(document, response.request.url))
+                add(chapterFromSinglePage(document, response.request.url.toString()))
             } else {
                 pageListDocument.select(chapterListSelector())
                     .forEach {
@@ -205,43 +204,43 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private fun chapterFromSinglePage(document: Document, responseUrl: HttpUrl): SChapter = SChapter.create().apply {
+    private fun chapterFromSinglePage(document: Document, responseUrl: String): SChapter = SChapter.create().apply {
         val chapterName = document.selectFirst("table td.bg_style1 h1")?.text()
-        val chapterUrl = responseUrl.toString()
-        setUrlWithoutDomain(chapterUrl)
+        name = "$chapterName Сингл"
+        setUrlWithoutDomain(responseUrl)
         if (url.contains(baseUrl)) {
             url = url.replace(baseUrl, "")
         }
-        name = "$chapterName Сингл"
         scanlator = document.selectFirst("table.news_pic2 a[href*=perevod]")?.text()
-        date_upload = document.selectFirst("table.news_pic2:has(a[href*=perevod]) span.small2")?.text()?.replace("Май", "Мая").let {
-            try {
-                dateParseRu.parse(it)?.time ?: 0L
-            } catch (e: Exception) {
-                0
-            }
-        }
+        date_upload = document.selectFirst("table.news_pic2:has(a[href*=perevod]) span.small2")?.text()?.let {
+            dateParseWithReplace(it)
+        } ?: 0L
         chapter_number = 0F
     }
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val nameAndUrl = element.select("tr[valign=top] a:has(h2)")
-        name = nameAndUrl.select("h2").text()
+        val nameAndUrl = element.selectFirst("tr[valign=top] a:has(h2)")
+        name = nameAndUrl!!.selectFirst("h2")!!.text()
         setUrlWithoutDomain(nameAndUrl.attr("abs:href"))
         if (url.contains(baseUrl)) {
             url = url.replace(baseUrl, "")
         }
-        val informBlock = element.select("tr[valign=top] td[align=left]")
-        scanlator = informBlock.select("a[href*=perevod]").text()
-        date_upload = informBlock.select("span.small2")
-            .text().replace("Май", "Мая").let { textDate ->
-                try {
-                    dateParseRu.parse(textDate)?.time ?: 0L
-                } catch (e: Exception) {
-                    0
-                }
-            }
+        val informBlock = element.selectFirst("tr[valign=top] td[align=left]")
+        scanlator = informBlock?.selectFirst("a[href*=perevod]")?.text()
+        date_upload = informBlock?.selectFirst("span.small2")?.text()?.let {
+            dateParseWithReplace(it)
+        } ?: 0L
         chapter_number = name.substringAfter("№").substringBefore(" ").toFloatOrNull() ?: -1f
+    }
+
+    private fun dateParseWithReplace(textDate: String): Long {
+        return textDate.replace("Май", "Мая").let {
+            try {
+                dateParseRu.parse(it)?.time ?: 0L
+            } catch (e: Exception) {
+                0L
+            }
+        }
     }
 
     override fun pageListParse(response: Response): List<Page> = mutableListOf<Page>().apply {
