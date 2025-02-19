@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.novelfull
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
@@ -41,7 +40,12 @@ abstract class NovelFullGlobal(
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/comic/bookclass.html?type=hot_novel&page_num=$page&language=$lang", headers)
+        val url = "$baseUrl/comic/bookclass.html".toHttpUrl().newBuilder().apply {
+            addQueryParameter("type", "hot_novel")
+            addQueryParameter("page_num", page.toString())
+            addQueryParameter("language", lang)
+        }.build()
+        return GET(url, headers)
     }
 
     override fun popularMangaSelector(): String {
@@ -71,7 +75,12 @@ abstract class NovelFullGlobal(
     // =============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/comic/bookclass.html?type=last_release&page_num=$page&language=$lang", headers)
+        val url = "$baseUrl/comic/bookclass.html".toHttpUrl().newBuilder().apply {
+            addQueryParameter("type", "last_release")
+            addQueryParameter("page_num", page.toString())
+            addQueryParameter("language", lang)
+        }.build()
+        return GET(url, headers)
     }
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
@@ -84,14 +93,23 @@ abstract class NovelFullGlobal(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            return GET("$baseUrl/comic/search.html?keyword=$query&page_num=$page", headers)
+            val url = "$baseUrl/comic/search.html".toHttpUrl().newBuilder().apply {
+                addQueryParameter("keyword", query)
+                addQueryParameter("page_num", page.toString())
+            }.build()
+            return GET(url, headers)
         }
         filters.forEach { filter ->
             when (filter) {
                 is GenreFilter -> {
                     val filterId = filter.selected
-                    Log.i("NovelFullGlobal_Genre", "Filtering by genre: $filterId")
-                    return GET("$baseUrl/comic/bookclass.html?type=category_novel&id=$filterId&page_num=$page&language=$lang", headers)
+                    val url = "$baseUrl/comic/bookclass.html".toHttpUrl().newBuilder().apply {
+                        addQueryParameter("type", "category_novel")
+                        addQueryParameter("id", filterId)
+                        addQueryParameter("page_num", page.toString())
+                        addQueryParameter("language", lang)
+                    }.build()
+                    return GET(url, headers)
                 }
                 else -> { }
             }
@@ -129,9 +147,9 @@ abstract class NovelFullGlobal(
     override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
             title = document.selectFirst("h3.title")!!.text()
-            description = document.selectFirst(".desc-text")!!.text()
-                .replace("\\n", "\n")
-            thumbnail_url = document.selectFirst(".books > .book > img")!!.imgAttr()
+            description = document.selectFirst(".desc-text")?.text()
+                ?.replace("\\n", "\n")
+            thumbnail_url = document.selectFirst(".books > .book > img")?.imgAttr()
             document.selectFirst(Evaluator.Class("info"))?.children()?.forEach {
                 when (it.children().first()?.text()) {
                     // No need to translate these strings.
@@ -158,7 +176,6 @@ abstract class NovelFullGlobal(
                 "ongoing" -> SManga.ONGOING
                 "completed" -> SManga.COMPLETED
                 else -> {
-                    Log.e("NovelFullGlobal", "Unknown status: ${element?.text()}")
                     SManga.UNKNOWN
                 }
             }
@@ -191,7 +208,10 @@ abstract class NovelFullGlobal(
 
                 // Determine the last page number from the pagination section.
                 val lastPageElement = firstDocument.selectFirst(".last a")
-                    ?.attr("href")
+                    ?.absUrl("href")
+                    ?.toHttpUrl()
+                    ?.pathSegments
+                    ?.lastOrNull()
 
                 val lastPageNumber = baseUrl.toHttpUrl().newBuilder().build()
                     .resolve(lastPageElement!!)
@@ -236,7 +256,7 @@ abstract class NovelFullGlobal(
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select(imageListSelector()).mapIndexed { i, element ->
-            Page(i, "", element.imgAttr())
+            Page(i, imageUrl = element.imgAttr())
         }
     }
 
