@@ -177,11 +177,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> = mutableListOf<SChapter>().apply {
         val document = response.asJsoup()
 
-        val allPageElement = document.select("td.button a:contains(Все главы)")
-
-        if (allPageElement.isEmpty()) {
-            add(chapterFromSinglePage(document, response.request.url.toString()))
-        } else {
+        document.selectFirst("td.button a:contains(Все главы)")?.let { allPageElement ->
             var pageListDocument: Document
             val pageListLink = allPageElement.attr("href")
             client.newCall(
@@ -201,6 +197,8 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
                         add(chapterFromElement(it))
                     }
             }
+        } ?: run {
+            add(chapterFromSinglePage(document, response.request.url.toString()))
         }
     }
 
