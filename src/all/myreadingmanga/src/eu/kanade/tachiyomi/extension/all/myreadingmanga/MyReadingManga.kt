@@ -121,6 +121,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     private fun getImage(element: Element): String? {
         val url = when {
             element.attr("data-src").contains(extensionRegex) -> element.attr("abs:data-src")
+            element.attr("data-cfsrc").contains(extensionRegex) -> element.attr("abs:data-cfsrc")
             element.attr("src").contains(extensionRegex) -> element.attr("abs:src")
             else -> element.attr("abs:data-lazy-src")
         }
@@ -184,7 +185,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
 
     // Start Chapter Get
-    override fun chapterListSelector() = ".entry-pagination a"
+    override fun chapterListSelector() = "a[class=page-numbers]"
 
     @SuppressLint("DefaultLocale")
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -198,14 +199,13 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         // create first chapter since its on main manga page
         chapters.add(createChapter("1", document.baseUri(), date, chfirstname))
         // see if there are multiple chapters or not
-        document.select(chapterListSelector()).let { it ->
-            it.forEach {
-                if (!it.text().contains("Next »", true)) {
-                    val pageNumber = it.text()
-                    val chname = document.select(".chapter-class a[href$=/$pageNumber/]").text().ifEmpty { "Ch. $pageNumber" }?.replaceFirstChar { it.titlecase() }
-                        ?: "Ch. $pageNumber"
-                    chapters.add(createChapter(it.text(), document.baseUri(), date, chname))
-                }
+        val lastChapterNumber = document.select(chapterListSelector()).last()?.text()
+        if (lastChapterNumber != null) {
+            // There are entries with more chapters but those never show up,
+            // so we take the last one and loop it to get all hidden ones.
+            // Example: 1 2 3 4 .. 7 8 9 Next
+            for (i in 2..lastChapterNumber.toInt()) {
+                chapters.add(createChapter(i.toString(), document.baseUri(), date, "Ch. $i"))
             }
         }
         chapters.reverse()
