@@ -329,7 +329,7 @@ abstract class LibGroup(
                         ?: chapter.branches.first().branchId
 
                     listOf(
-                        chapter.toSChapter(slugUrl, branch, isScanUser())
+                        chapter.toSChapter(slugUrl, branch, isScanUser()),
                     )
                 }
                 chapter.branchesCount > 1 && sortingList == "ms_combining" -> {
