@@ -125,7 +125,7 @@ class RizzComic : MangaThemesiaAlt(
 
         val entries = result.map { comic ->
             SManga.create().apply {
-                url = "$mangaUrlDirectory/${comic.slug}/"
+                url = "$mangaUrlDirectory/${comic.slug}/#${comic.id}"
                 title = comic.title
                 description = comic.synopsis
                 author = listOfNotNull(comic.author, comic.serialization).joinToString()
