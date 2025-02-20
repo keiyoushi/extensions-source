@@ -324,11 +324,12 @@ abstract class LibGroup(
         return chaptersData.data.flatMap { chapter ->
             when {
                 chapter.branchesCount > 1 && sortingList == "ms_mixing" -> {
+                    val branch = chapter.branches
+                        .firstOrNull { it.branchId == defaultBranchId }?.branchId
+                        ?: chapter.branches.first().branchId
+
                     listOf(
-                        chapter.branches
-                            .firstOrNull { it.branchId == defaultBranchId }
-                            ?.let { chapter.toSChapter(slugUrl, defaultBranchId, isScanUser()) }
-                            ?: chapter.toSChapter(slugUrl, chapter.branches.first().branchId, isScanUser()),
+                        chapter.toSChapter(slugUrl, branch, isScanUser())
                     )
                 }
                 chapter.branchesCount > 1 && sortingList == "ms_combining" -> {
