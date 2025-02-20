@@ -94,34 +94,27 @@ class DisasterScans : ParsedHttpSource() {
     private val chapterDataRegex = Regex("""\\"chapters\\":(\[.*]),\\"param\\":\\"(\S+)\\"\}""")
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        var mangaId = ""
-        val chapters = chapterDataRegex.find(response.body.string())
-            ?.destructured
-            ?.let {
-                mangaId = it.component2()
-                it.component1().replace("\\", "")
-            }
-            ?.let { json.decodeFromString<List<ChapterDTO>>(it) }
-            ?: throw Exception("Cant parse chapter list")
+        chapterDataRegex.find(response.body.string())?.destructured?.also { (chapterData, mangaId) ->
+            return json.decodeFromString<List<ChapterDTO>>(chapterData).map { chapter ->
+                SChapter.create().apply {
+                    name = "Chapter ${chapter.ChapterNumber} - ${chapter.ChapterName}"
+                    setUrlWithoutDomain(
+                        baseUrl.toHttpUrl().newBuilder().apply {
+                            addPathSegment("comics")
+                            addPathSegment(mangaId)
+                            addPathSegment("${chapter.chapterID}-chapter-${chapter.ChapterNumber}")
+                        }.build().toString(),
+                    )
 
-        return chapters.map { chapter ->
-            SChapter.create().apply {
-                name = "Chapter ${chapter.ChapterNumber} - ${chapter.ChapterName}"
-                setUrlWithoutDomain(
-                    baseUrl.toHttpUrl().newBuilder().apply {
-                        addPathSegment("comics")
-                        addPathSegment(mangaId)
-                        addPathSegment("${chapter.chapterID}-chapter-${chapter.ChapterNumber}")
-                    }.build().toString(),
-                )
-
-                date_upload = try {
-                    dateFormat.parse(chapter.chapterDate)?.time ?: 0
-                } catch (_: Exception) {
-                    0
+                    date_upload = try {
+                        dateFormat.parse(chapter.chapterDate)?.time ?: 0
+                    } catch (_: Exception) {
+                        0
+                    }
                 }
             }
         }
+        return listOf()
     }
 
     override fun pageListParse(document: Document): List<Page> =
