@@ -54,7 +54,7 @@ class CosplayTele : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = ".next.page-number"
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/page/$page/")
 
-    override fun latestUpdatesSelector() = "div.box"
+    override fun latestUpdatesSelector() = "main div.box"
 
     // Popular
     override fun popularMangaFromElement(element: Element): SManga {
