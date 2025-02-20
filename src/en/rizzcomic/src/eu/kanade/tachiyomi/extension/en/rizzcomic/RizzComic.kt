@@ -99,6 +99,7 @@ class RizzComic : MangaThemesiaAlt(
     @Serializable
     class Comic(
         val title: String,
+        val id: String,
         @SerialName("image_url") val cover: String? = null,
         @SerialName("long_description") val synopsis: String? = null,
         val status: String? = null,
