@@ -218,7 +218,7 @@ abstract class GroupLe(
         val document = response.asJsoup()
 
         if (document.select(".user-avatar").isEmpty() &&
-            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") }
+            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") || contains("RuMix") }
         ) {
             throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
         }
@@ -311,7 +311,7 @@ abstract class GroupLe(
         val html = document.html()
 
         if (document.select(".user-avatar").isEmpty() &&
-            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") }
+            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") || contains("RuMix") }
 
         ) {
             throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
