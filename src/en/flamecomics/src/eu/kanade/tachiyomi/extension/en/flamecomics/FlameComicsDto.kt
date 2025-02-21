@@ -74,7 +74,6 @@ class Series(
     val description: String,
     val cover: String,
     val type: String,
-    @Serializable(with = TagsListSerializer::class)
     val tags: List<String>?,
     val author: String?,
     val status: String,
@@ -106,15 +105,4 @@ class KeysToListSerializer : KSerializer<List<Page>> {
     }
 
     override fun serialize(encoder: Encoder, value: List<Page>) {}
-}
-
-class TagsListSerializer : KSerializer<List<String>> {
-    private val listSer = ListSerializer(String.serializer())
-    override val descriptor: SerialDescriptor = listSer.descriptor
-    override fun deserialize(decoder: Decoder): List<String> {
-        val jsonString = decoder.decodeString()
-        return Json.decodeFromString(jsonString)
-    }
-
-    override fun serialize(encoder: Encoder, value: List<String>) {}
 }
