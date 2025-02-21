@@ -84,10 +84,10 @@ class WeebCentral : ParsedHttpSource() {
     override fun searchMangaSelector(): String = "article:has(section)"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
-        with(element.selectFirst("div > a")!!) {
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        with(element.selectFirst("a")!!) {
             title = text()
-            setUrlWithoutDomain(attr("abs:href"))
+            setUrlWithoutDomain(absUrl("href"))
         }
     }
 
