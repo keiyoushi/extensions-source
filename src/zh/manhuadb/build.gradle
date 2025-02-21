@@ -1,7 +1,0 @@
-ext {
-    extName = 'ManhuaDB'
-    extClass = '.ManhuaDB'
-    extVersionCode = 7
-}
-
-apply from: "$rootDir/common.gradle"
