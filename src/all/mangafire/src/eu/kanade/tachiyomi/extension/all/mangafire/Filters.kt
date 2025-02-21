@@ -61,6 +61,7 @@ class TypeFilter : UriPartFilter(
     "Type",
     "type",
     arrayOf(
+        Pair("All", ""),
         Pair("Manga", "manga"),
         Pair("One-Shot", "one_shot"),
         Pair("Doujinshi", "doujinshi"),
