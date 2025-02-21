@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
@@ -44,14 +45,13 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
 
     override fun chapterListRequest(manga: SManga): Request = GET(
         "$apiUrl/chapters/".toHttpUrl().newBuilder().apply {
-            addPathSegment(manga.url.substringAfterLast("#"))
+            (baseUrl + manga.url).toHttpUrlOrNull()?.fragment?.let { addPathSegment(it) }
             addQueryParameter("page", "1")
             addQueryParameter("perPage", "1000")
-            fragment(manga.url.substringAfterLast("/").substringBefore("#"))
+            fragment((baseUrl + manga.url).toHttpUrlOrNull()?.pathSegments?.last())
             // not needed. just added to be authentic
             addQueryParameter("query", "")
             addQueryParameter("order", "desc")
-
         }.build(),
         headers,
     )
