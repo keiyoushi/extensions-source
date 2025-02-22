@@ -3,7 +3,7 @@ ext {
     extClass = '.HentaiEraFactory'
     themePkg = 'galleryadults'
     baseUrl = 'https://hentaiera.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 

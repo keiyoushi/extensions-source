@@ -3,7 +3,7 @@ ext {
     extClass = '.RuMIX'
     themePkg = 'grouple'
     baseUrl = 'https://rumix.me'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"
