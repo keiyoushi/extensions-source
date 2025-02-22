@@ -1,4 +1,10 @@
 package eu.kanade.tachiyomi.extension.es.lectortmo
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 
 import android.app.Activity
 import android.content.ActivityNotFoundException

@@ -1,4 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.rawotaku
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader.UriMultiSelectFilter
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader.UriPartFilter
