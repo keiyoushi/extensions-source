@@ -316,9 +316,7 @@ open class MangaOni : ConfigurableSource, ParsedHttpSource() {
         Pair("Isekai", "43"),
     )
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         val contentPref = androidx.preference.CheckBoxPreference(screen.context).apply {

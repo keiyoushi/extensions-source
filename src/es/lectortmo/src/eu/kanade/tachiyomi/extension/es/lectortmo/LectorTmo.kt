@@ -53,9 +53,7 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "es"
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val supportsLatest = true
 

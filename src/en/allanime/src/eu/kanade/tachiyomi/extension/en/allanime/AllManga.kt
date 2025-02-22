@@ -43,9 +43,7 @@ class AllManga : ConfigurableSource, HttpSource() {
 
     override val supportsLatest = true
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1)

@@ -1,4 +1,16 @@
 package eu.kanade.tachiyomi.multisrc.machinetranslations
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 
 class MachineTranslationsFactoryUtils
 

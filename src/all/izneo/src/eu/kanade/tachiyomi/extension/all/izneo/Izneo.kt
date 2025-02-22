@@ -49,9 +49,7 @@ class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
 
     private val json by lazy { Injekt.get<Json>() }
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
+    private val preferences by getPreferencesLazy()
 
     private inline val username: String
         get() = preferences.getString("username", "")!!

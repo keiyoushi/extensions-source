@@ -37,9 +37,7 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
 
     override val baseUrl = BASE_URL
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
+    private val preferences by getPreferencesLazy()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Single.create<MangasPage> {
         updateLangData(client, headers, preferences)

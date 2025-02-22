@@ -118,9 +118,7 @@ class Akuma(
         return storedToken!!
     }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val displayFullTitle: Boolean get() = preferences.getBoolean(PREF_TITLE, false)
 

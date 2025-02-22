@@ -17,9 +17,7 @@ import uy.kohesive.injekt.api.get
 
 class HentaiLib : LibGroup("HentaiLib", "https://hentailib.me", "ru") {
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
     override val baseUrl: String = domain

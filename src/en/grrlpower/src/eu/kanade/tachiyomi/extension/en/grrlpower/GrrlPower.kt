@@ -127,9 +127,7 @@ class GrrlPower(
 
     // Show Authors Notes Pref Copied from
     // ProjectRoot/multisrc/overrides/webtoons/webtoons/src/WebtoonsSrc.kt
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
     companion object {
         private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
     }

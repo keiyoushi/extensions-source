@@ -64,9 +64,7 @@ open class Wolf(
 
     private val json: Json by injectLazy()
 
-    private val preference: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preference: SharedPreferences by getPreferencesLazy()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         return fetchSearchManga(page, "", POPULAR)

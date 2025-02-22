@@ -68,9 +68,7 @@ open class NovelCool(
 
     private val json: Json by injectLazy()
 
-    private val preference by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preference by getPreferencesLazy()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         return when (preference.useAppApi) {

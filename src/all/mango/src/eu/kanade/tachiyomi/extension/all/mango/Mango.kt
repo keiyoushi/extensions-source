@@ -220,9 +220,7 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
         Headers.Builder()
             .add("User-Agent", "Tachiyomi Mango v${AppInfo.getVersionName()}")
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client: OkHttpClient =
         network.client.newBuilder()

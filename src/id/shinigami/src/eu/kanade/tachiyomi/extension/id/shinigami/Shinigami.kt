@@ -35,9 +35,7 @@ class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), Configur
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {

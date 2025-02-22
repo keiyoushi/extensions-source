@@ -38,9 +38,7 @@ class DeviantArt : HttpSource(), ConfigurableSource {
     override val lang = "all"
     override val supportsLatest = false
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0")

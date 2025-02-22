@@ -45,9 +45,7 @@ class MangaDistrict :
 
     override val mangaSubString = "read-scan"
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun popularMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
 

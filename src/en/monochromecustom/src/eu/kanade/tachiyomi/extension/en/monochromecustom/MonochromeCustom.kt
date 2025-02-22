@@ -24,9 +24,7 @@ class MonochromeCustom : ConfigurableSource,
         preferences.getString("apiUrl", DEMO_API_URL)!!
     }
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
+    private val preferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {

@@ -1,4 +1,16 @@
 package eu.kanade.tachiyomi.multisrc.kemono
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 
 import android.app.Application
 import androidx.preference.ListPreference

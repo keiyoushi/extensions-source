@@ -1,4 +1,16 @@
 package eu.kanade.tachiyomi.multisrc.bakkin
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 
 import android.app.Application
 import android.os.Build
@@ -33,9 +45,7 @@ abstract class BakkinReaderX(
         "Android ${Build.VERSION.RELEASE}; Mobile) " +
         "Tachiyomi/${AppInfo.getVersionName()}"
 
-    protected val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
+    protected val preferences by getPreferencesLazy()
 
     private val json by lazy { Injekt.get<Json>() }
 

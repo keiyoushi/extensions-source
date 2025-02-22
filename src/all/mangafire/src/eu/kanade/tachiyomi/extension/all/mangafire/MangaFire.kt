@@ -49,9 +49,7 @@ class MangaFire(
 
     private val json: Json by injectLazy()
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
+    private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder().addInterceptor(ImageInterceptor).build()
 

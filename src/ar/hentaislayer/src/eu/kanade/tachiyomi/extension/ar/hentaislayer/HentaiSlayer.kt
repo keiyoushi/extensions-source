@@ -26,9 +26,7 @@ class HentaiSlayer : FuzzyDoodle("هنتاي سلاير", "https://hentaislayer.
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", baseUrl)
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences by getPreferencesLazy()
 
     override fun latestPageRequest(page: Int) = GET("$baseUrl/latest-${getLatestTypes()}?page=$page", headers)
 

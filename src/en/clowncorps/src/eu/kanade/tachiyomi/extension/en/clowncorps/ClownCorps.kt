@@ -187,9 +187,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
         throw UnsupportedOperationException()
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun getShowAuthorsNotesPref() =
         preferences.getBoolean(SETTING_KEY_SHOW_AUTHORS_NOTES, false)

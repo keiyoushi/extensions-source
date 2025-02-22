@@ -55,9 +55,7 @@ abstract class Luscious(
     override val supportsLatest: Boolean = true
     override val name: String = "Luscious"
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val baseUrl: String = getMirrorPref()!!
 

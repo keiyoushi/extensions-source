@@ -48,9 +48,7 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH)
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun authenticate(request: Request): Request {
         val credential = Credentials.basic(preferences.getString("username", "")!!, preferences.getString("password", "")!!)

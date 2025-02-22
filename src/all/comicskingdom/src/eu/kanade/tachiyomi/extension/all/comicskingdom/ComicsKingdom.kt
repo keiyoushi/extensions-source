@@ -307,9 +307,7 @@ class ComicsKingdom(override val lang: String) : ConfigurableSource, HttpSource(
         screen.addPreference(compactpref)
     }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun shouldCompact() = preferences.getBoolean("compactPref", true)
 

@@ -42,9 +42,7 @@ class MangaKatana : ConfigurableSource, ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
     private val serverPreference = "SERVER_PREFERENCE"
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder().addNetworkInterceptor { chain ->

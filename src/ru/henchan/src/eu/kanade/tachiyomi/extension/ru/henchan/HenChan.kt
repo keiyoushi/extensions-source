@@ -38,9 +38,7 @@ class HenChan : MultiChan("HenChan", "https://xxxxx.hentaichan.live", "ru"), Con
 
     override val id = 5504588601186153612
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val domain = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
 

@@ -211,9 +211,7 @@ class ComicFury(
     private fun Boolean.toInt(): Int = if (this) { 0 } else { 1 }
 
     // START OF AUTHOR NOTES //
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
     companion object {
         private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
     }

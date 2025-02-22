@@ -35,9 +35,7 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
     override val name = "百漫谷"
 
     // Preference setting
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val baseUrl = preferences.getString(MAINSITE_URL_PREF, MAINSITE_URL_PREF_DEFAULT)!!
 

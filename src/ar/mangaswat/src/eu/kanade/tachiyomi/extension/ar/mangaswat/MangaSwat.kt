@@ -45,9 +45,7 @@ class MangaSwat :
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences by getPreferencesLazy()
 
     override val client = super.client.newBuilder()
         .addInterceptor(::tokenInterceptor)

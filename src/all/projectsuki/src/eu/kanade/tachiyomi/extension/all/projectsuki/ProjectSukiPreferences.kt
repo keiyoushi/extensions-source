@@ -28,7 +28,7 @@ private inline val INFO: Nothing get() = error("INFO")
  */
 class ProjectSukiPreferences(id: Long) {
 
-    internal val shared by lazy { Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000) }
+    internal val shared by getPreferencesLazy()
 
     abstract inner class PSPreference<Raw : Any, T : Any>(val preferenceIdentifier: String, val default: Raw) {
 

@@ -46,9 +46,7 @@ open class SimplyHentai(
 
     private val json: Json by injectLazy()
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
+    private val preferences by getPreferencesLazy()
 
     override fun popularMangaRequest(page: Int) =
         Uri.parse("$apiUrl/tag/$langName").buildUpon().run {

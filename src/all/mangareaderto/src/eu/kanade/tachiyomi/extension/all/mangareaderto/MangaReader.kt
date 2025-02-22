@@ -38,9 +38,7 @@ class MangaReader(
         .addInterceptor(ImageInterceptor)
         .build()
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     // =============================== Search ===============================
 

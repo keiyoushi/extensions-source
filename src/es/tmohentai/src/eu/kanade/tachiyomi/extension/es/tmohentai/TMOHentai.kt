@@ -47,9 +47,7 @@ class TMOHentai : ConfigurableSource, ParsedHttpSource() {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/section/all?view=list&page=$page&order=popularity&order-dir=desc&search[searchText]=&search[searchBy]=name&type=all", headers)
 

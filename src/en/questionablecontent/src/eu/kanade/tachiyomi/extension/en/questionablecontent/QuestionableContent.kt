@@ -58,9 +58,7 @@ class QuestionableContent : ParsedHttpSource(), ConfigurableSource {
 
     override fun fetchMangaDetails(manga: SManga) = fetchPopularManga(1).map { it.mangas.first() }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = super.chapterListParse(response).distinct()

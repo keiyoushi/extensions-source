@@ -162,9 +162,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
         }
     }
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
+    private val preferences by getPreferencesLazy()
 
     private val useTrad get() = preferences.getBoolean("ZH_HANT", false)
 

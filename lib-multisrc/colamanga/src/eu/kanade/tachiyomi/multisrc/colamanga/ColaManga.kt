@@ -1,4 +1,16 @@
 package eu.kanade.tachiyomi.multisrc.colamanga
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 
 import android.annotation.SuppressLint
 import android.app.Application
@@ -46,9 +58,7 @@ abstract class ColaManga(
 
     private val intl = ColaMangaIntl(lang)
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(

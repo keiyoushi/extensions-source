@@ -1,4 +1,16 @@
 package eu.kanade.tachiyomi.multisrc.hentaihand
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 
 import android.app.Application
 import android.content.SharedPreferences
@@ -318,9 +330,7 @@ abstract class HentaiHand(
 
     // Preferences
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addPreference(screen.editTextPreference(USERNAME_TITLE, USERNAME_DEFAULT, username))

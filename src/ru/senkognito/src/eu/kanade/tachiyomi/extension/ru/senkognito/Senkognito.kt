@@ -15,9 +15,7 @@ import uy.kohesive.injekt.api.get
 
 class Senkognito : Senkuro("Senkognito", "https://senkognito.com", "ru") {
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private var domain: String? = if (preferences.getBoolean(redirect_PREF, true)) "https://senkognito.com" else "https://senkuro.com"
     override val baseUrl: String = domain.toString()

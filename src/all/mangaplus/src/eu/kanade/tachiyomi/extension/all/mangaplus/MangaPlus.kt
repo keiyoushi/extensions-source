@@ -74,9 +74,7 @@ class MangaPlus(
         )
     }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     /**
      * Private cache to find the newest thumbnail URL in case the existing one

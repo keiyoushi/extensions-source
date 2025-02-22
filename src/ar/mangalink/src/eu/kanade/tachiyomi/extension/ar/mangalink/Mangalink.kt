@@ -30,9 +30,7 @@ class Mangalink :
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     companion object {
         private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"

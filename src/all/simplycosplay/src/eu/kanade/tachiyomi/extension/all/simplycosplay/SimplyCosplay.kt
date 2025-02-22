@@ -59,9 +59,7 @@ class SimplyCosplay : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    private val preference by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preference by getPreferencesLazy()
 
     private fun tokenIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()

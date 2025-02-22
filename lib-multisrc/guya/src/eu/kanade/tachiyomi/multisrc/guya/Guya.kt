@@ -1,4 +1,16 @@
 package eu.kanade.tachiyomi.multisrc.guya
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.firstInstanceOrNull
 
 import android.app.Application
 import android.content.SharedPreferences
@@ -48,9 +60,7 @@ abstract class Guya(
     private val scanlators: ScanlatorStore = ScanlatorStore()
 
     // Preferences configuration
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     // Request builder for the "browse" page of the manga
     override fun popularMangaRequest(page: Int): Request {

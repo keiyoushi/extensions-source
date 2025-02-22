@@ -38,9 +38,7 @@ open class WebtoonsSrc(
         .addInterceptor(TextInterceptor())
         .build()
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val authorsNotesPref = SwitchPreferenceCompat(screen.context).apply {

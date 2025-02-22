@@ -71,7 +71,5 @@ class Dilar :
 
     override val cdnUrl by lazy { baseUrl }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 }

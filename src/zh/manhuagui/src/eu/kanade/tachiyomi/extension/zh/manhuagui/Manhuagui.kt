@@ -55,9 +55,7 @@ class Manhuagui(
     override val lang: String = "zh",
 ) : ConfigurableSource, ParsedHttpSource() {
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val baseHost = if (preferences.getBoolean(USE_MIRROR_URL_PREF, false)) {
         "mhgui.com"

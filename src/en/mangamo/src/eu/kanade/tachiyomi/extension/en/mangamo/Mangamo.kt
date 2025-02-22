@@ -49,9 +49,7 @@ class Mangamo : ConfigurableSource, HttpSource() {
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val helper = MangamoHelper(headers)
 

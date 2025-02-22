@@ -61,9 +61,7 @@ class Koharu(
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
     private fun String.shortenTitle() = replace(shortenTitleRegex, "").trim()
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun quality() = preferences.getString(PREF_IMAGERES, "1280")!!
 

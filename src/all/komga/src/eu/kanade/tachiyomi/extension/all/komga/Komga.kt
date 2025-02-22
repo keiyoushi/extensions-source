@@ -55,9 +55,7 @@ import java.util.Locale
 
 open class Komga(private val suffix: String = "") : ConfigurableSource, UnmeteredSource, HttpSource() {
 
-    internal val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    internal val preferences: SharedPreferences by getPreferencesLazy()
 
     private val displayName by lazy { preferences.getString(PREF_DISPLAY_NAME, "")!! }
 

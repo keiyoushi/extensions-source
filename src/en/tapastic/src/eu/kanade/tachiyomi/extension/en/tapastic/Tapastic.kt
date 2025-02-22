@@ -105,9 +105,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
         .addInterceptor(TextInterceptor())
         .build()
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", "https://m.tapas.io")
