@@ -15,6 +15,7 @@ import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -47,6 +48,16 @@ class ManhwaFreakXyz : Madara(
         }
     }
 
+    override fun popularMangaParse(response: Response): MangasPage {
+        if (nonce.isBlank()) {
+            nonce = response.peekBody().let(::findNonceValue)
+        }
+        return super.popularMangaParse(response)
+    }
+
+    private fun Response.peekBody(): Document =
+        Jsoup.parseBodyFragment(peekBody(Long.MAX_VALUE).string())
+
     override fun popularMangaNextPageSelector() = ".navigation .page-item:last-child:not(.disabled)"
 
     // ===================== Latest ============================
@@ -65,6 +76,10 @@ class ManhwaFreakXyz : Madara(
     // ===================== Search ============================
 
     override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
+        if (nonce.isBlank()) {
+            nonce = findNonceValue()
+        }
+
         val form = FormBody.Builder()
             .add("action", "live_search")
             .add("search", query)
@@ -87,18 +102,10 @@ class ManhwaFreakXyz : Madara(
     }
 
     private var nonce: String = ""
-        get() {
-            if (field.isNotBlank()) {
-                return field
-            }
-            val document = client.newCall(popularMangaRequest(1)).execute().asJsoup()
-            return document.findNonceValue().also {
-                field = it
-            }
-        }
 
-    private fun Document.findNonceValue(): String {
-        return select("script")
+    private fun findNonceValue(document: Document? = null): String {
+        val dom = document ?: client.newCall(popularMangaRequest(1)).execute().asJsoup()
+        return dom.select("script")
             .map(Element::data)
             .firstOrNull { it.contains("'nonce','") }
             ?.substringAfter("'nonce','")
