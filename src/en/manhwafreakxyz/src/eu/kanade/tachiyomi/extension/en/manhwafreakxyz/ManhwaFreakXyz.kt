@@ -86,7 +86,6 @@ class ManhwaFreakXyz : Madara(
         return MangasPage(mangas, hasNextPage = false)
     }
 
-
     private var nonce: String = ""
         get() {
             if (field.isNotBlank()) {
