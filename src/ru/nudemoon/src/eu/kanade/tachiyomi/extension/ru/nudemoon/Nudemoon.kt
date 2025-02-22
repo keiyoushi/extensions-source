@@ -210,7 +210,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
             url = url.replace(baseUrl, "")
         }
         scanlator = document.selectFirst("table.news_pic2 a[href*=perevod]")?.text()
-        date_upload = document.selectFirst("table.news_pic2:has(a[href*=perevod]) span.small2")?.text()?.let {
+        date_upload = document.selectFirst("""table.news_pic2 span.small2:matches((0[1-9]|[12][0-9]|3[01])*(19|20)\d{2})""")?.text()?.let {
             dateParseWithReplace(it)
         } ?: 0L
         chapter_number = 0F
@@ -225,7 +225,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         }
         val informBlock = element.selectFirst("tr[valign=top] td[align=left]")
         scanlator = informBlock?.selectFirst("a[href*=perevod]")?.text()
-        date_upload = informBlock?.selectFirst("span.small2")?.text()?.let {
+        date_upload = informBlock?.selectFirst("""span.small2:matches((0[1-9]|[12][0-9]|3[01])*(19|20)\d{2})""")?.text()?.let {
             dateParseWithReplace(it)
         } ?: 0L
         chapter_number = name.substringAfter("№").substringBefore(" ").toFloatOrNull() ?: -1f
