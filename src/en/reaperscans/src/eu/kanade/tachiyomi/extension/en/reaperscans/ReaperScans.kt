@@ -45,10 +45,11 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
 
     override fun chapterListRequest(manga: SManga): Request = GET(
         "$apiUrl/chapters/".toHttpUrl().newBuilder().apply {
-            (baseUrl + manga.url).toHttpUrlOrNull()?.fragment?.let { addPathSegment(it) }
+            val mangaUrl = (baseUrl + manga.url).toHttpUrlOrNull()
+            mangaUrl?.fragment?.let { addPathSegment(it) }
             addQueryParameter("page", "1")
             addQueryParameter("perPage", "1000")
-            fragment((baseUrl + manga.url).toHttpUrlOrNull()?.pathSegments?.last())
+            fragment(mangaUrl?.pathSegments?.last())
             // not needed. just added to be authentic
             addQueryParameter("query", "")
             addQueryParameter("order", "desc")
