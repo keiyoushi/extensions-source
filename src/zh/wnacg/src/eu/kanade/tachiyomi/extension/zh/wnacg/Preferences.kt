@@ -49,7 +49,7 @@ val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.s
 fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 
 fun getSharedPreferences(id: Long): SharedPreferences {
-    val preferences: SharedPreferences = getPreferences()
+    val preferences: SharedPreferences = getPreferences(id)
     if (preferences.getString(DEFAULT_LIST_PREF, "")!! == DEFAULT_LIST) return preferences
     preferences.edit()
         .remove("overrideBaseUrl")

@@ -54,8 +54,7 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x000)
+    private val preferences: SharedPreferences = getPreferences()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(

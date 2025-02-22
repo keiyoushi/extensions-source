@@ -129,7 +129,7 @@ class TCBScans : ParsedHttpSource() {
 
     init {
         val context = Injekt.get<Application>()
-        val prefs = context.getSharedPreferences("source_$id", 0x0000)
+        val prefs = getPreferences()
 
         if (!prefs.getBoolean("legacy_updateTime_removed", false)) {
             try {

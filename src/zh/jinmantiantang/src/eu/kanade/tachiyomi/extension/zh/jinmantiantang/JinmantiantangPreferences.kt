@@ -106,7 +106,7 @@ private val SharedPreferences.mirrorIndex get() = getString(USE_MIRROR_URL_PREF,
 private val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.split(",")
 
 fun getSharedPreferences(id: Long): SharedPreferences {
-    val preferences: SharedPreferences = getPreferences()
+    val preferences: SharedPreferences = getPreferences(id)
     if (preferences.getString(DEFAULT_LIST_PREF, "")!! == DEFAULT_LIST) return preferences
     preferences.edit()
         .remove("overrideBaseUrl")
