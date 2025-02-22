@@ -30,9 +30,7 @@ class Zerobyw : ParsedHttpSource(), ConfigurableSource {
     override val name: String = "zero搬运网"
     override val lang: String = "zh"
     override val supportsLatest: Boolean get() = false
-    private val preferences: SharedPreferences =
-        getPreferences()
-            .clearOldBaseUrl()
+    private val preferences = getPreferences { clearOldBaseUrl() }
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(UpdateUrlInterceptor(preferences))

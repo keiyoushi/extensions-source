@@ -59,10 +59,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences by lazy {
-        getPreferences()
-            .sanitizeExistingUuidPrefs()
-    }
+    private val preferences by getPreferencesLazy { sanitizeExistingUuidPrefs() }
 
     private val helper = MangaDexHelper(lang)
 
@@ -891,9 +888,9 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
      * preferences. This method clear invalid UUIDs in case the user have updated from
      * a previous version with that behaviour.
      */
-    private fun SharedPreferences.sanitizeExistingUuidPrefs(): SharedPreferences {
+    private fun SharedPreferences.sanitizeExistingUuidPrefs() {
         if (getBoolean(MDConstants.getHasSanitizedUuidsPrefKey(dexLang), false)) {
-            return this
+            return
         }
 
         val blockedGroups = getString(MDConstants.getBlockedGroupsPrefKey(dexLang), "")!!
@@ -913,7 +910,5 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             .putString(MDConstants.getBlockedUploaderPrefKey(dexLang), blockedUploaders)
             .putBoolean(MDConstants.getHasSanitizedUuidsPrefKey(dexLang), true)
             .apply()
-
-        return this
     }
 }

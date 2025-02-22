@@ -69,10 +69,7 @@ abstract class LibGroup(
         encodeDefaults = true
     }
 
-    private val preferences: SharedPreferences by lazy {
-        getPreferences()
-            .migrateOldImageServer()
-    }
+    private val preferences by getPreferencesLazy { migrateOldImageServer() }
 
     override val supportsLatest = true
 
@@ -699,9 +696,9 @@ abstract class LibGroup(
     }
 
     // api changed id of servers, remap SERVER_PREF old("fourth") to new("secondary")
-    private fun SharedPreferences.migrateOldImageServer(): SharedPreferences {
-        if (getString(SERVER_PREF, "main") != "fourth") return this
+    private fun SharedPreferences.migrateOldImageServer() {
+        if (getString(SERVER_PREF, "main") != "fourth") return
+
         edit().putString(SERVER_PREF, "secondary").apply()
-        return this
     }
 }

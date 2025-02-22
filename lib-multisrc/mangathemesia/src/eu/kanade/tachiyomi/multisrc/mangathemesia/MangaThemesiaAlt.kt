@@ -46,14 +46,12 @@ abstract class MangaThemesiaAlt(
     protected open val listUrl = "$mangaUrlDirectory/list-mode/"
     protected open val listSelector = "div#content div.soralist ul li a.series"
 
-    protected val preferences: SharedPreferences by lazy {
-        getPreferences().also {
-            if (it.contains("__random_part_cache")) {
-                it.edit().remove("__random_part_cache").apply()
-            }
-            if (it.contains("titles_without_random_part")) {
-                it.edit().remove("titles_without_random_part").apply()
-            }
+    protected val preferences by getPreferencesLazy {
+        if (contains("__random_part_cache")) {
+            edit().remove("__random_part_cache").apply()
+        }
+        if (contains("titles_without_random_part")) {
+            edit().remove("titles_without_random_part").apply()
         }
     }
 

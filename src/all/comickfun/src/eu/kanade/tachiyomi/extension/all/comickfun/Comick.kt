@@ -71,10 +71,7 @@ abstract class Comick(
         )
     }
 
-    private val preferences by lazy {
-        getPreferences()
-            .newLineIgnoredGroups()
-    }
+    private val preferences by getPreferencesLazy { newLineIgnoredGroups() }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
@@ -513,8 +510,9 @@ abstract class Comick(
 
     override fun getFilterList() = getFilters()
 
-    private fun SharedPreferences.newLineIgnoredGroups(): SharedPreferences {
-        if (getBoolean(MIGRATED_IGNORED_GROUPS, false)) return this
+    private fun SharedPreferences.newLineIgnoredGroups() {
+        if (getBoolean(MIGRATED_IGNORED_GROUPS, false)) return
+
         val ignoredGroups = getString(IGNORED_GROUPS_PREF, "").orEmpty()
 
         edit()
@@ -528,8 +526,6 @@ abstract class Comick(
             )
             .putBoolean(MIGRATED_IGNORED_GROUPS, true)
             .apply()
-
-        return this
     }
 
     companion object {
