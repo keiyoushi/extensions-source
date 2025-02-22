@@ -40,7 +40,7 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
     private val urlSuffix: String
 
     init {
-        val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val preferences = getPreferences()
         val mirror = preferences.mirror
         _baseUrl = "https://" + mirror.domain
         urlSuffix = mirror.urlSuffix

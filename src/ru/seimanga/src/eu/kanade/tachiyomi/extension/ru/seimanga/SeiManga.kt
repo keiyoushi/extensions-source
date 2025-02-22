@@ -20,7 +20,7 @@ import uy.kohesive.injekt.api.get
 class SeiManga : GroupLe("SeiManga", "https://1.seimanga.me", "ru") {
 
     private val preferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

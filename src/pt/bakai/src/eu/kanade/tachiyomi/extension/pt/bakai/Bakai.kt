@@ -67,7 +67,7 @@ class Bakai : ParsedHttpSource() {
     }
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", baseUrl)

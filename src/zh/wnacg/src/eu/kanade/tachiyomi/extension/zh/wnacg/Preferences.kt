@@ -49,7 +49,7 @@ val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.s
 fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 
 fun getSharedPreferences(id: Long): SharedPreferences {
-    val preferences: SharedPreferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    val preferences: SharedPreferences = getPreferences()
     if (preferences.getString(DEFAULT_LIST_PREF, "")!! == DEFAULT_LIST) return preferences
     preferences.edit()
         .remove("overrideBaseUrl")

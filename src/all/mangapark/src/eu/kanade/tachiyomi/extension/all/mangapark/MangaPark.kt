@@ -54,7 +54,7 @@ class MangaPark(
     override val versionId = 2
 
     private val preference =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     private val domain =
         preference.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT) ?: MIRROR_PREF_DEFAULT

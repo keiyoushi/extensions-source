@@ -55,7 +55,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     private val json by injectLazy<Json>()
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     override val client: OkHttpClient = network.client.newBuilder()
         .rateLimit(5)

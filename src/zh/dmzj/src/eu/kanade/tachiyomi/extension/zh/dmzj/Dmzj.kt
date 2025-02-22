@@ -36,7 +36,7 @@ class Dmzj : ConfigurableSource, HttpSource() {
     override val baseUrl = "https://m.idmzj.com"
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ImageUrlInterceptor)

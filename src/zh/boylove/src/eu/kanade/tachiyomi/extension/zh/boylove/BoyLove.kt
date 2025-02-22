@@ -46,7 +46,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
 
     override val baseUrl by lazy {
         val preferences =
-            Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+            getPreferences()
 
         val mirrors = MIRRORS
         val index = preferences.getString(MIRROR_PREF, "0")!!.toInt().coerceIn(0, mirrors.size - 1)

@@ -20,7 +20,7 @@ import uy.kohesive.injekt.api.get
 class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
     override val id = 1809051393403180443
 
-    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

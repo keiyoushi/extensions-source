@@ -42,7 +42,7 @@ class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
 
     init {
         val mirrors = MIRRORS
-        val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val preferences = getPreferences()
         var mirrorIndex = preferences.getString(MIRROR_PREF, "-1")!!.toInt()
 
         if (mirrorIndex !in mirrors.indices) {

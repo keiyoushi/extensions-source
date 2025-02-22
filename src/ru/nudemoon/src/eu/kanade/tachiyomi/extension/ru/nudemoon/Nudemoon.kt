@@ -43,7 +43,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

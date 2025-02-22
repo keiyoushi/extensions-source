@@ -47,7 +47,7 @@ abstract class MangaThemesiaAlt(
     protected open val listSelector = "div#content div.soralist ul li a.series"
 
     protected val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).also {
+        getPreferences().also {
             if (it.contains("__random_part_cache")) {
                 it.edit().remove("__random_part_cache").apply()
             }

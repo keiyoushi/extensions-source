@@ -73,7 +73,7 @@ class BentoManga : ParsedHttpSource(), ConfigurableSource {
             set("Sec-Fetch-User", "?1")
         }
 
-        val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val preferences = getPreferences()
         val userAgent = preferences.getString(USER_AGENT_PREF, "")!!
         return if (userAgent.isNotBlank()) {
             builder.set("User-Agent", userAgent)

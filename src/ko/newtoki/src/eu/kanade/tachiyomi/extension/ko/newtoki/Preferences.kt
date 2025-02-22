@@ -93,4 +93,4 @@ private const val RATE_LIMIT_PERIOD_DEFAULT = 2.toString()
 private const val RATE_LIMIT_PERIOD_MAX = 9
 
 private fun getSharedPreferences(id: Long): SharedPreferences =
-    Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    getPreferences()

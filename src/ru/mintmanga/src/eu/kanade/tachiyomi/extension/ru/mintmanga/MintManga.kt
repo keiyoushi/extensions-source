@@ -22,7 +22,7 @@ class MintManga : GroupLe("MintManga", "https://2.mintmanga.one", "ru") {
     override val id: Long = 6
 
     private val preferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

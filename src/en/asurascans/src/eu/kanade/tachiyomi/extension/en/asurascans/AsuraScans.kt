@@ -51,7 +51,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     private val dateFormat = SimpleDateFormat("MMMM d yyyy", Locale.US)
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     init {
         // remove legacy preferences

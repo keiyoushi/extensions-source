@@ -62,7 +62,7 @@ class Taiyo : ParsedHttpSource() {
     override val supportsLatest = false
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     private var bearerToken: String = preferences.getString(BEARER_TOKEN_PREF, "").toString()
 

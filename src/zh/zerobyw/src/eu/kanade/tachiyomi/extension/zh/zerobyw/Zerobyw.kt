@@ -31,7 +31,7 @@ class Zerobyw : ParsedHttpSource(), ConfigurableSource {
     override val lang: String = "zh"
     override val supportsLatest: Boolean get() = false
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
             .clearOldBaseUrl()
 
     override val client = network.cloudflareClient.newBuilder()

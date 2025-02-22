@@ -29,7 +29,7 @@ class TheBlank :
     ),
     ConfigurableSource {
 
-    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences = getPreferences()
 
     override val client = super.client.newBuilder()
         .rateLimit(1)

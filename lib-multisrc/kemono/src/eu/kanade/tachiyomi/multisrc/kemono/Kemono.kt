@@ -54,7 +54,7 @@ open class Kemono(
     private val json: Json by injectLazy()
 
     private val preferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     private val apiPath = "api/v1"
 

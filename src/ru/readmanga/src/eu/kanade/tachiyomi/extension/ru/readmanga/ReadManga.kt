@@ -22,7 +22,7 @@ class ReadManga : GroupLe("ReadManga", "https://zz.readmanga.io", "ru") {
     override val id: Long = 5
 
     private val preferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

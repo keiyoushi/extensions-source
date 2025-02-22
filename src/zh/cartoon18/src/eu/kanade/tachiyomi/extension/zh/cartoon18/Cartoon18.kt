@@ -209,7 +209,7 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
 
     private val preferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
+        getPreferences()
 
     private val useTrad get() = preferences.getBoolean("ZH_HANT", false)
 

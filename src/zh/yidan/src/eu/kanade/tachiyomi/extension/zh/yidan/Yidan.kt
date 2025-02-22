@@ -38,7 +38,7 @@ class Yidan : HttpSource(), ConfigurableSource {
 
     init {
         val mirrors = MIRRORS
-        val index = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val index = getPreferences()
             .getString(MIRROR_PREF, "0")!!.toInt().coerceAtMost(mirrors.size - 1)
         baseUrl = "https://" + mirrors[index]
     }

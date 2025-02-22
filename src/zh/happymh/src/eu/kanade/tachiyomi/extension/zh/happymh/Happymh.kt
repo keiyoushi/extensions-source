@@ -51,7 +51,7 @@ class Happymh : HttpSource(), ConfigurableSource {
     private val json: Json by injectLazy()
     private val chapterUrlToCode = hashMapOf<String, String>()
 
-    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences = getPreferences()
 
     init {
         val oldUa = preferences.getString("userAgent", null)

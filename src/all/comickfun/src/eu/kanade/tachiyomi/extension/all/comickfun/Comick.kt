@@ -72,7 +72,7 @@ abstract class Comick(
     }
 
     private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
             .newLineIgnoredGroups()
     }
 

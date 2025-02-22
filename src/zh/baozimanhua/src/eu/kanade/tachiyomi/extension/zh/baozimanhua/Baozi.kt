@@ -41,7 +41,7 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
     override val name = "包子漫画"
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     private val domain: String = run {
         val mirrors = MIRRORS

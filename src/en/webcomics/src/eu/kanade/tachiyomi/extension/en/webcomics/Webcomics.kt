@@ -47,7 +47,7 @@ class Webcomics : ParsedHttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences = getPreferences()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")

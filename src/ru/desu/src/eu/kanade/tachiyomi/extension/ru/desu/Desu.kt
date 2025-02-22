@@ -48,7 +48,7 @@ class Desu : ConfigurableSource, HttpSource() {
     override val id: Long = 6684416167758830305
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     init {
         preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->

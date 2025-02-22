@@ -415,7 +415,7 @@ class YuriNeko : HttpSource(), ConfigurableSource {
         json.decodeFromString(body.string())
     }
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     init {
         preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->

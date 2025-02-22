@@ -75,7 +75,7 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
     override val supportsLatest: Boolean = true
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()

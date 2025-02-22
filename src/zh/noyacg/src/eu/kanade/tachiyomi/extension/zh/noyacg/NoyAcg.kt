@@ -35,7 +35,7 @@ class NoyAcg : HttpSource(), ConfigurableSource {
     override val baseUrl get() = "https://noy1.top"
 
     private val imageCdn by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).imageCdn
+        getPreferences().imageCdn
     }
 
     override fun headersBuilder() = super.headersBuilder()

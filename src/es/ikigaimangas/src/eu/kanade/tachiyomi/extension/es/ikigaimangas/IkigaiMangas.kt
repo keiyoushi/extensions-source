@@ -92,7 +92,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
     }
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     private val lazyHeaders by lazy {
         headersBuilder()

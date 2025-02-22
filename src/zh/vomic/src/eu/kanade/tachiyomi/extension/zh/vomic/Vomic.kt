@@ -47,7 +47,7 @@ class Vomic : HttpSource(), ConfigurableSource {
     private val apiUrl: String
 
     init {
-        val domain = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).getString(DOMAIN_PREF, DEFAULT_DOMAIN)!!
+        val domain = getPreferences().getString(DOMAIN_PREF, DEFAULT_DOMAIN)!!
         if (domain.startsWith("www.") || domain.startsWith("api.")) {
             val tld = domain.substring(4)
             baseUrl = "http://www.$tld"

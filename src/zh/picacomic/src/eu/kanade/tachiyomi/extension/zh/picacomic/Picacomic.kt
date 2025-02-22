@@ -48,7 +48,7 @@ class Picacomic : HttpSource(), ConfigurableSource {
     private val leeway: Long = 10
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     private val blocklist = preferences.getString("BLOCK_GENRES", "")!!
         .split(',').map { it.trim() }

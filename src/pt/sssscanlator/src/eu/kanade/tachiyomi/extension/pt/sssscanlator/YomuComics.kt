@@ -37,7 +37,7 @@ class YomuComics :
     // SSSScanlator
     override val id = 1497838059713668619
 
-    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences = getPreferences()
 
     override val client: OkHttpClient = super.client.newBuilder()
         .setRandomUserAgent(

@@ -42,7 +42,7 @@ class SushiScan :
     ),
     ConfigurableSource {
 
-    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences = getPreferences()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)

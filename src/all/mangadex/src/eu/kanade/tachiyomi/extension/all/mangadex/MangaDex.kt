@@ -60,7 +60,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
             .sanitizeExistingUuidPrefs()
     }
 

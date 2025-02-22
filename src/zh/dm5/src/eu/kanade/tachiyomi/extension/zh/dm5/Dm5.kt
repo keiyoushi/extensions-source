@@ -40,7 +40,7 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
         .build()
 
     private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        getPreferences()
 
     // Some mangas are blocked without this
     override fun headersBuilder() = super.headersBuilder().set("Accept-Language", "zh-TW")
