@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mystic Moon'
+    extClass = '.MysticMoon'
+    themePkg = 'madara'
+    baseUrl = 'https://mysticmagic.com.br'
+    overrideVersionCode = 1
+}
+
+apply from: "$rootDir/common.gradle"
+
