@@ -57,7 +57,7 @@ open class UriTriSelectFilter(
     }
 }
 
-class TypeFilter : UriPartFilter(
+class TypeFilter : UriMultiSelectFilter(
     "Type",
     "type",
     arrayOf(
