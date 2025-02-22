@@ -1,17 +1,4 @@
 package eu.kanade.tachiyomi.multisrc.colamanga
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Handler
@@ -31,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject

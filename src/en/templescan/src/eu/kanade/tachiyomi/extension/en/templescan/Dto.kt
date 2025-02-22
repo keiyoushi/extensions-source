@@ -1,12 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.templescan
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.ParseException

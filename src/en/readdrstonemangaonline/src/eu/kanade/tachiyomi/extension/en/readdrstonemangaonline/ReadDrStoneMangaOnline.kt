@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.en.readdrstonemangaonline
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadDrStoneMangaOnline : MangaCatalog("Read Dr. Stone Manga Online", "https://ww3.readdrstone.com", "en") {

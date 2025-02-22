@@ -1,17 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.peppercarrot
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToByteArray

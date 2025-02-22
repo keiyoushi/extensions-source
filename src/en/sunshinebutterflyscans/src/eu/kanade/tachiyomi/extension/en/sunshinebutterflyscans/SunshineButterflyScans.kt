@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.en.sunshinebutterflyscans
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import android.util.Base64
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.network.GET
@@ -17,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl

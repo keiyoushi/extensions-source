@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.ja.shonenjumpplus
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import okhttp3.OkHttpClient
 

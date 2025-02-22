@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.en.readattackontitanshingekinokyojinmanga
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 import eu.kanade.tachiyomi.source.model.SChapter
 import org.jsoup.nodes.Element

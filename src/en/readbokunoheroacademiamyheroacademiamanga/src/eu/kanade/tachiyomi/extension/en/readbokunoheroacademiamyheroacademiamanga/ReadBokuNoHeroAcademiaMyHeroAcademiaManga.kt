@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.en.readbokunoheroacademiamyheroacademiamanga
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadBokuNoHeroAcademiaMyHeroAcademiaManga : MangaCatalog("Read Boku no Hero Academia My Hero Academia Manga", "https://ww6.readmha.com", "en") {

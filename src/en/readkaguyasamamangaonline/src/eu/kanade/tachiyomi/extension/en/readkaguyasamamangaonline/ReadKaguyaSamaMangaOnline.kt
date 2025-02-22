@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.en.readkaguyasamamangaonline
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadKaguyaSamaMangaOnline : MangaCatalog("Read Kaguya-sama Manga Online", "https://ww1.readkaguyasama.com", "en") {

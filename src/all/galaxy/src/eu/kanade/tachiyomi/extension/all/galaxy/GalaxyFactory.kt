@@ -1,18 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.galaxy
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.SourceFactory
-import uy.kohesive.injekt.Injekt
+import keiyoushi.utils.getPreferencesLazy
 import uy.kohesive.injekt.api.get
 
 class GalaxyFactory : SourceFactory {

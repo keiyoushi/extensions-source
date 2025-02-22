@@ -1,10 +1,4 @@
 package eu.kanade.tachiyomi.extension.ko.blacktoon
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
 
 val platformsMap = mapOf(
     1 to "네이버",

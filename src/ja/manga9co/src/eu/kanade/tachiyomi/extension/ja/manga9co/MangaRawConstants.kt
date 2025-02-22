@@ -1,10 +1,4 @@
 package eu.kanade.tachiyomi.extension.ja.manga9co
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
 
 /**
  * https://syosetu.me/ is not added because of different HTML structure

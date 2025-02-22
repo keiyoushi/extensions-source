@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.en.hentai3zcc
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.multisrc.manga18.Manga18
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Element

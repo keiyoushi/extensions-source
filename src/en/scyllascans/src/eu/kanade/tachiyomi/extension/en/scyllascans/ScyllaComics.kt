@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.en.scyllascans
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.multisrc.fuzzydoodle.FuzzyDoodle
 
 class ScyllaComics : FuzzyDoodle("Scylla Comics", "https://scyllacomics.xyz", "en") {

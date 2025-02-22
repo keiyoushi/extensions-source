@@ -1,16 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.manhwahentai
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request

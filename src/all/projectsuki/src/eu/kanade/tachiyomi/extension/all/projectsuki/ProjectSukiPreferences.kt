@@ -1,19 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import uy.kohesive.injekt.Injekt
+import keiyoushi.utils.getPreferencesLazy
 import uy.kohesive.injekt.api.get
 import java.util.Locale
 

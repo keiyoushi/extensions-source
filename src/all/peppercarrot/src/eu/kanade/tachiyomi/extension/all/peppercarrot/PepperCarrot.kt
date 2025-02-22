@@ -1,12 +1,4 @@
 package eu.kanade.tachiyomi.extension.all.peppercarrot
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
-import android.app.Application
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -17,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.CacheControl
 import okhttp3.Request
 import okhttp3.Response
@@ -24,7 +18,6 @@ import org.jsoup.nodes.TextNode
 import org.jsoup.select.Evaluator
 import rx.Observable
 import rx.Single
-import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale

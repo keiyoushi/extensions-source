@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.vi.truyentranhdammy
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.DateFormatSymbols

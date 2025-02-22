@@ -1,20 +1,12 @@
 package eu.kanade.tachiyomi.extension.ru.usagi
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
-import android.app.Application
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.utils.getPreferences
 import okhttp3.Request
-import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 class Usagi : GroupLe("Usagi", "https://web.usagi.one/", "ru") {

@@ -1,12 +1,4 @@
 package eu.kanade.tachiyomi.extension.id.shinigami
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
-import android.app.Application
 import android.content.SharedPreferences
 import android.util.Base64
 import android.widget.Toast
@@ -18,11 +10,11 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), ConfigurableSource {

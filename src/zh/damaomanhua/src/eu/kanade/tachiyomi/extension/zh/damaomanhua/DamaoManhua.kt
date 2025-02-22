@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.zh.damaomanhua
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMS
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMSConfig
 import eu.kanade.tachiyomi.source.model.SChapter

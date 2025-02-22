@@ -1,19 +1,11 @@
 package eu.kanade.tachiyomi.extension.zh.wnacg
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
-import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.utils.getPreferences
 import okhttp3.Interceptor
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
 import kotlin.random.Random

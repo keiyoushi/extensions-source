@@ -1,17 +1,9 @@
 package eu.kanade.tachiyomi.extension.ru.yaoilib
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.libgroup.LibGroup
-import uy.kohesive.injekt.Injekt
+import keiyoushi.utils.getPreferencesLazy
 import uy.kohesive.injekt.api.get
 
 class YaoiLib : LibGroup("YaoiLib", "https://slashlib.me", "ru") {

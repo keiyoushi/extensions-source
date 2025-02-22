@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.es.akaya
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.source.model.Filter
 
 class Genre(name: String, val id: Int) : Filter.CheckBox(name)

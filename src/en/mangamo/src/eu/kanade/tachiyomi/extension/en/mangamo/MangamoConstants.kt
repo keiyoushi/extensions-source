@@ -1,10 +1,4 @@
 package eu.kanade.tachiyomi.extension.en.mangamo
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
 
 object MangamoConstants {
     const val USER_TOKEN_PREF = "userToken"

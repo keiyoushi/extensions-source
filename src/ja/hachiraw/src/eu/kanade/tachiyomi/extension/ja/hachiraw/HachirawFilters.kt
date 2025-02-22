@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.ja.hachiraw
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.source.model.Filter
 
 class SortFilter(state: Int = 2) : SelectFilter(

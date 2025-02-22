@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.all.snowmtl
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi

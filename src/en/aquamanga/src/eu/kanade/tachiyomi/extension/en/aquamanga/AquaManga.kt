@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.en.aquamanga
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import okhttp3.Headers

@@ -1,11 +1,4 @@
 package eu.kanade.tachiyomi.extension.ar.mangatales
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
 import eu.kanade.tachiyomi.multisrc.gmanga.Gmanga
 import eu.kanade.tachiyomi.multisrc.gmanga.TagFilterData
 import eu.kanade.tachiyomi.network.GET
@@ -14,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import okhttp3.Request
 import okhttp3.Response
 

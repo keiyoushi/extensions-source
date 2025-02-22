@@ -1,12 +1,4 @@
 package eu.kanade.tachiyomi.extension.ar.hentaislayer
-import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.getPreferences
-import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import keiyoushi.utils.firstInstance
-import keiyoushi.utils.firstInstanceOrNull
-
-import android.app.Application
 import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -14,7 +6,7 @@ import eu.kanade.tachiyomi.multisrc.fuzzydoodle.FuzzyDoodle
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import uy.kohesive.injekt.Injekt
+import keiyoushi.utils.getPreferencesLazy
 import uy.kohesive.injekt.api.get
 
 class HentaiSlayer : FuzzyDoodle("هنتاي سلاير", "https://hentaislayer.net", "ar"), ConfigurableSource {
