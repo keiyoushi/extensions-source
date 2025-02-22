@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.multisrc.heancms.SortProperty
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -40,6 +41,20 @@ class ReaperScans : HeanCms("Reaper Scans", "https://reaperscans.com", "en") {
 
         return GET(url.build(), headers)
     }
+
+    override fun chapterListRequest(manga: SManga): Request = GET(
+        "$apiUrl/chapters/".toHttpUrl().newBuilder().apply {
+            val mangaUrl = (baseUrl + manga.url).toHttpUrl()
+            addPathSegment(mangaUrl.fragment!!)
+            addQueryParameter("page", "1")
+            addQueryParameter("perPage", "1000")
+            fragment(mangaUrl.pathSegments.last())
+            // not needed. just added to be authentic
+            addQueryParameter("query", "")
+            addQueryParameter("order", "desc")
+        }.build(),
+        headers,
+    )
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ReaperPagePayloadDto>()
