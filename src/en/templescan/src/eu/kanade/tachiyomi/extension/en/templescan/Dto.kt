@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.templescan
 
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.ParseException

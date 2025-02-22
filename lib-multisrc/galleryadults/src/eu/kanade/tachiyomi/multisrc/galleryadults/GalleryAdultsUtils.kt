@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.galleryadults
 
-import keiyoushi.utils.tryParse
 import org.jsoup.nodes.Element
 import java.text.ParseException
 import java.text.SimpleDateFormat

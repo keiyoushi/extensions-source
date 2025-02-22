@@ -9,7 +9,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request

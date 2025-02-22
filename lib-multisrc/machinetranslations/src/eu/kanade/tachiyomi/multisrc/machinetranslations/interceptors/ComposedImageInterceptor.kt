@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
 import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
 import eu.kanade.tachiyomi.network.GET
-import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor

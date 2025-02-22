@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.extension.all.snowmtl.LanguageSetting
 import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
-import keiyoushi.utils.parseAs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll

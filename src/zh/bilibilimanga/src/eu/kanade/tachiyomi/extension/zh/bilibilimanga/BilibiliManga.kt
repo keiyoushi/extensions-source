@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.bilibilimanga
 
 import eu.kanade.tachiyomi.source.model.SChapter
-import keiyoushi.utils.parseAs
 import okhttp3.Headers
 import okhttp3.Response
 
