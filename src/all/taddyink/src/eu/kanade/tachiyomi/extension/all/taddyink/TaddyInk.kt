@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.taddyink
+
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET

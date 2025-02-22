@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.tcbscans
+
 import android.app.Application
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET

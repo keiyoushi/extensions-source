@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.raw18
+
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList

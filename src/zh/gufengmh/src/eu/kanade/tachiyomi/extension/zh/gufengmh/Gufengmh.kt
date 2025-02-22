@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.gufengmh
+
 import eu.kanade.tachiyomi.multisrc.sinmh.ProgressiveParser
 import eu.kanade.tachiyomi.multisrc.sinmh.SinMH
 import eu.kanade.tachiyomi.network.GET

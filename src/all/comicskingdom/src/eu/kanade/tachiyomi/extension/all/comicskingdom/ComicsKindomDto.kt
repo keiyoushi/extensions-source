@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comicskingdom
+
 import kotlinx.serialization.Serializable
 
 @Serializable

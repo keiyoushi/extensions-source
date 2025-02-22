@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.manhuatop
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale

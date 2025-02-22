@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentainexus
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost

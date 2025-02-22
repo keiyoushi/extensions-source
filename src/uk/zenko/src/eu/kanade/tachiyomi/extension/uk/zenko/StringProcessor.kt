@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.uk.zenko
+
 import android.util.Log
 
 object StringProcessor {

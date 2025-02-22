@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.arthurscan
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.MediaType.Companion.toMediaType

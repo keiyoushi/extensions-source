@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.manhwaraw
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class ManhwaRaw : Madara("ManhwaRaw", "https://manhwaraw.com", "ko") {

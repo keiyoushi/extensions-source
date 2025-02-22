@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.dmcscans
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.dmzj
+
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.decodeFromString

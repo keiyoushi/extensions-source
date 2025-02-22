@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.mangaship
+
 import eu.kanade.tachiyomi.lib.dataimage.DataImageInterceptor
 import eu.kanade.tachiyomi.lib.dataimage.dataImageAsUrl
 import eu.kanade.tachiyomi.network.GET

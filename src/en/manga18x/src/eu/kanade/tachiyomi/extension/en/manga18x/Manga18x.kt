@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.manga18x
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.util.concurrent.TimeUnit
 

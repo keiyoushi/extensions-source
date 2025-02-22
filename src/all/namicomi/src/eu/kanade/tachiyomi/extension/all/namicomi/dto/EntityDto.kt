@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.namicomi.dto
+
 import kotlinx.serialization.Serializable
 
 @Serializable

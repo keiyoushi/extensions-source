@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.senkuro
+
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

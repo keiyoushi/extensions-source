@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.beauty3600000
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList

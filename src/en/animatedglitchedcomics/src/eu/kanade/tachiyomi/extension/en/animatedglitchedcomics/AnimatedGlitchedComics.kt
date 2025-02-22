@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.animatedglitchedcomics
+
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
 class AnimatedGlitchedComics : Keyoapp(

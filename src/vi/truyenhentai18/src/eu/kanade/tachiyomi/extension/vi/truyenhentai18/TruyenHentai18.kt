@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.truyenhentai18
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage

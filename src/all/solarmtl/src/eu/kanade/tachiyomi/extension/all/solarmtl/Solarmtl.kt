@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.solarmtl
+
 import android.os.Build
 import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.multisrc.machinetranslations.Language

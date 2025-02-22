@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.mangahub
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList

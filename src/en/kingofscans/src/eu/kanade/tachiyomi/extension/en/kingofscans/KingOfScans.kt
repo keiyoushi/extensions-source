@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.kingofscans
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
 import org.jsoup.nodes.Document

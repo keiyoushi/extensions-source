@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentairead
+
 import kotlinx.serialization.Serializable
 
 @Serializable

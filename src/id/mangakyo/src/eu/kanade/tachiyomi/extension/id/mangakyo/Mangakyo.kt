@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.mangakyo
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient

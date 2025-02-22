@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.colamanga
+
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response

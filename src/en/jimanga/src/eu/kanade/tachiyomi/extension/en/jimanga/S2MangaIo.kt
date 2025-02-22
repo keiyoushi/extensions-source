@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.jimanga
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class S2MangaIo : Madara("S2Manga.io", "https://s2manga.io", "en") {

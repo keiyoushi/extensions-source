@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.taosect
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

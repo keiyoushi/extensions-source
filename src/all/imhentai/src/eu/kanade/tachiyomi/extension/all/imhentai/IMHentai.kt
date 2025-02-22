@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.imhentai
+
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.imgAttr
 import okhttp3.OkHttpClient

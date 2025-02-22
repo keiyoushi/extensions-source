@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.newtoki
+
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference

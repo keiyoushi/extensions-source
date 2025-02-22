@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.mangasnosekai
+
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET

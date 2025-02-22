@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.hattorimanga
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.math.min

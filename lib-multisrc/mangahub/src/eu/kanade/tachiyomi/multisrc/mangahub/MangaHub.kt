@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
+
 import eu.kanade.tachiyomi.lib.randomua.UserAgentType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET

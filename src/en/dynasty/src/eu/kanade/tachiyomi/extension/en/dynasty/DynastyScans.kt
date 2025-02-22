@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.dynasty
+
 import android.net.Uri
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess

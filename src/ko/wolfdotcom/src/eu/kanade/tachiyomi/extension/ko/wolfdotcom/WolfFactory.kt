@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.wolfdotcom
+
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.FilterList
 import org.jsoup.nodes.Document

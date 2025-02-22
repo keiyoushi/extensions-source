@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.otakusanctuary
+
 import eu.kanade.tachiyomi.multisrc.otakusanctuary.OtakuSanctuary
 import eu.kanade.tachiyomi.source.SourceFactory
 

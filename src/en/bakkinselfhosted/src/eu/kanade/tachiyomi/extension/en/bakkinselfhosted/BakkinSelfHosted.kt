@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.bakkinselfhosted
+
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.bakkin.BakkinReaderX

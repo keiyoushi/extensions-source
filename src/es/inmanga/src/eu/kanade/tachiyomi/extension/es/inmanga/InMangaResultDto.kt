@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.inmanga
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
+
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.ContentRatingDto
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.PublicationDemographicDto

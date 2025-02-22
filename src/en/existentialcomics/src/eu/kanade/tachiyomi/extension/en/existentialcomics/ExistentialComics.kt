@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.existentialcomics
+
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page

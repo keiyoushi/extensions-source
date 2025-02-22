@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.uk.zenko
+
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.ChapterResponseItem
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.MangaDetailsResponse
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.ZenkoMangaListResponse

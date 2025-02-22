@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.ehentai
+
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.net.Uri

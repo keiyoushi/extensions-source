@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.holonometria
+
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class HolonometriaFactory : SourceFactory {

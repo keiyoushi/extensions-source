@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.mangaesp
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import okhttp3.HttpUrl.Companion.toHttpUrl

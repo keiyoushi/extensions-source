@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.sixmh
+
 import android.app.Application
 import android.os.Build
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMS

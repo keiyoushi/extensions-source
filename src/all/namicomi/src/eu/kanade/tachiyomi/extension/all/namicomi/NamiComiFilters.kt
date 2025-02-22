@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.namicomi
+
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.ContentRatingDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.StatusDto
 import eu.kanade.tachiyomi.lib.i18n.Intl

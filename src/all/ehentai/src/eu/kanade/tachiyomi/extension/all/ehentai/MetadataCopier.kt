@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.ehentai
+
 import eu.kanade.tachiyomi.source.model.SManga
 import java.text.SimpleDateFormat
 import java.util.Date

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.hentaiorigines
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import okhttp3.Request

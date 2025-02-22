@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.mangatrnet
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class MangaTRNet : Madara(

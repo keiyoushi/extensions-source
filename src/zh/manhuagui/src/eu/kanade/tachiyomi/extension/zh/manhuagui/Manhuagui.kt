@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.manhuagui
+
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.lib.lzstring.LZString
 import eu.kanade.tachiyomi.lib.unpacker.Unpacker

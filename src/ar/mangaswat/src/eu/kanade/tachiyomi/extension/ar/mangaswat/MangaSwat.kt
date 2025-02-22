@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangaswat
+
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia

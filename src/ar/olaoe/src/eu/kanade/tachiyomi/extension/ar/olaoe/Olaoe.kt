@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.olaoe
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import okhttp3.Request

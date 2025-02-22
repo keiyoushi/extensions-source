@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangadex.dto
+
 import eu.kanade.tachiyomi.extension.all.mangadex.MDConstants
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangairo
+
 import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList

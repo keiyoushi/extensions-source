@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.hentaihand
+
 import android.content.SharedPreferences
 import android.text.InputType
 import android.widget.Toast

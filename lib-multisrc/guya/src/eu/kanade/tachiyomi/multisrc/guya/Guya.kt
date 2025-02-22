@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.guya
+
 import android.content.SharedPreferences
 import android.os.Build
 import androidx.preference.ListPreference

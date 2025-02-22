@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.ngamenkomik
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Status
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Type

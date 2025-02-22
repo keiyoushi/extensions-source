@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.izneo
+
 import kotlinx.serialization.Serializable
 
 @Serializable

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.mangabz
+
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

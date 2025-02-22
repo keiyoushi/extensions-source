@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comikey
+
 import android.annotation.SuppressLint
 import android.app.Application
 import android.graphics.Bitmap

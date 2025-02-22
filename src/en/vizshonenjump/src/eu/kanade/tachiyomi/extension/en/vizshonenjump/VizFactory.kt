@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.vizshonenjump
+
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class VizFactory : SourceFactory {

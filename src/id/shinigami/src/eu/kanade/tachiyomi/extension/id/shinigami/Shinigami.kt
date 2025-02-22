@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.shinigami
+
 import android.content.SharedPreferences
 import android.util.Base64
 import android.widget.Toast

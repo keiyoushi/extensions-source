@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.taiyo
+
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.AdditionalInfoDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.ChapterListDto

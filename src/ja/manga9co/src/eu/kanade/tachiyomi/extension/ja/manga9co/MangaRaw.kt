@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.manga9co
+
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangaraw.ImageListParser

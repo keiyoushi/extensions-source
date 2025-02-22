@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.manta
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 private val categories = arrayOf(

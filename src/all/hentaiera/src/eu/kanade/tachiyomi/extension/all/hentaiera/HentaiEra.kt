@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.hentaiera
+
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.multisrc.galleryadults.Genre
 import eu.kanade.tachiyomi.multisrc.galleryadults.SearchFlagFilter

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.mangatr
+
 import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
 import okhttp3.Cookie

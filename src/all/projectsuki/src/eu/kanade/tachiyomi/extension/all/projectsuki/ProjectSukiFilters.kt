@@ -1,6 +1,7 @@
 @file:Suppress("CanSealedSubClassBeObject")
 
 package eu.kanade.tachiyomi.extension.all.projectsuki
+
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 

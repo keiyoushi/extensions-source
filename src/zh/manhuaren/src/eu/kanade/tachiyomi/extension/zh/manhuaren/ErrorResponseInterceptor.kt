@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.manhuaren
+
 import android.content.SharedPreferences
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject

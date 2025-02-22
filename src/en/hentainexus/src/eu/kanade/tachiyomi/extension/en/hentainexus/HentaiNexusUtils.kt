@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentainexus
+
 import android.util.Base64
 import kotlin.experimental.xor
 

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.golgebahcesi
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga

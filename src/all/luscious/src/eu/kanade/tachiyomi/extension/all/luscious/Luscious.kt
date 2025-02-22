@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.luscious
+
 import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference

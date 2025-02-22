@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.foolslidecustomizable
+
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen

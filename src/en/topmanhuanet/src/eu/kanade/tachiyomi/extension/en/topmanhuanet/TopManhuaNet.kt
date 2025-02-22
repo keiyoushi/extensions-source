@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.topmanhuanet
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class TopManhuaNet : Madara(

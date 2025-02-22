@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comickfun
+
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
+
 import android.util.Log
 import eu.kanade.tachiyomi.extension.all.mangadex.dto.ImageReportDto
 import eu.kanade.tachiyomi.network.POST

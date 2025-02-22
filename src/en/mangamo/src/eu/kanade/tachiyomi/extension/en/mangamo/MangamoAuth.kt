@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangamo
+
 import eu.kanade.tachiyomi.extension.en.mangamo.MangamoHelper.Companion.parseJson
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.FirebaseAuthDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.FirebaseRegisterDto

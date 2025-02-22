@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.yokai
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistMangaDto
 import eu.kanade.tachiyomi.network.GET

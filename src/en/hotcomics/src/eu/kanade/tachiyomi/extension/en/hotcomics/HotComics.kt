@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hotcomics
+
 import eu.kanade.tachiyomi.multisrc.hotcomics.HotComics
 
 class HotComics : HotComics(

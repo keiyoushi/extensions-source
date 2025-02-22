@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readbokunoheroacademiamyheroacademiamanga
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadBokuNoHeroAcademiaMyHeroAcademiaManga : MangaCatalog("Read Boku no Hero Academia My Hero Academia Manga", "https://ww6.readmha.com", "en") {

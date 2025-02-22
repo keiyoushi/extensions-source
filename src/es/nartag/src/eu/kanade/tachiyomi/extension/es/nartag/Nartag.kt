@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.nartag
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import okhttp3.HttpUrl.Companion.toHttpUrl

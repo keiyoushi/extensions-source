@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
+
 import android.icu.text.BreakIterator
 import android.icu.text.Collator
 import android.icu.text.Normalizer2

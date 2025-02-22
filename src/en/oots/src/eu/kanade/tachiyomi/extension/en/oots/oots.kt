@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.oots
+
 import android.app.Application
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage

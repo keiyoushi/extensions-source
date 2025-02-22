@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.madokami
+
 import android.content.SharedPreferences
 import android.text.InputType
 import eu.kanade.tachiyomi.network.GET

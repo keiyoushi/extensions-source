@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangago
+
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory

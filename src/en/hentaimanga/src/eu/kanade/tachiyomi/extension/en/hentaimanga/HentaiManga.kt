@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentaimanga
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SManga

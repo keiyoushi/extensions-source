@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
+
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference

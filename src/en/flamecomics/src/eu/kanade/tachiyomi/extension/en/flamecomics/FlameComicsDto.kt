@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.flamecomics
+
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.casacomic
+
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
 class CasaComic : Keyoapp(

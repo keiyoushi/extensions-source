@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readhaikyuumangaonline
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadHaikyuuMangaOnline : MangaCatalog("Read Haikyuu!! Manga Online", "https://ww6.readhaikyuu.com", "en") {

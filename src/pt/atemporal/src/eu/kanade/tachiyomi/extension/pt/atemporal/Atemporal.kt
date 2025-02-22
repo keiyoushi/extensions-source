@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.atemporal
+
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import okhttp3.HttpUrl.Companion.toHttpUrl

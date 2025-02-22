@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.evilflowers
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class EvilFlowers : Madara(

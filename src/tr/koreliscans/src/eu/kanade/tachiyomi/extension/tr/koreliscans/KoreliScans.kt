@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.koreliscans
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.MangasPage
 import okhttp3.Response

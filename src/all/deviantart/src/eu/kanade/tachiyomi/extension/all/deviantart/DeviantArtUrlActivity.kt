@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.deviantart
+
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent

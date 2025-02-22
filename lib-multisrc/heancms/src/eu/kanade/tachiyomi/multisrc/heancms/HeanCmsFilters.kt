@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.heancms
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class Genre(title: String, val id: Int) : Filter.CheckBox(title)

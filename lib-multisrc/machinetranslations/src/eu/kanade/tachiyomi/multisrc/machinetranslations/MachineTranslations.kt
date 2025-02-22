@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.machinetranslations
+
 import android.content.SharedPreferences
 import android.os.Build
 import android.widget.Toast

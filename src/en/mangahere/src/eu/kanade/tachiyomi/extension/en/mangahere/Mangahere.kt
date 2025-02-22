@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangahere
+
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET

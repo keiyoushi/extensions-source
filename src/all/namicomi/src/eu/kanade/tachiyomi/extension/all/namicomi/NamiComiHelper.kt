@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.namicomi
+
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.AbstractTagDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.ChapterDataDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.ContentRatingDto

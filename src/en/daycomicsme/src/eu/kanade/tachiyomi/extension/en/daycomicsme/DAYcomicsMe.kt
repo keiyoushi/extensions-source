@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.daycomicsme
+
 import eu.kanade.tachiyomi.multisrc.hotcomics.HotComics
 
 class DAYcomicsMe : HotComics(

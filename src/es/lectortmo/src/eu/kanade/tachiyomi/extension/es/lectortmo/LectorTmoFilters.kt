@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.lectortmo
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class ContentType(name: String, val id: String) : Filter.TriState(name)

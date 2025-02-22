@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
+
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page

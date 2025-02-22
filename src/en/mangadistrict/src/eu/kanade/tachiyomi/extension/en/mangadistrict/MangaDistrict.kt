@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangadistrict
+
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import androidx.preference.ListPreference

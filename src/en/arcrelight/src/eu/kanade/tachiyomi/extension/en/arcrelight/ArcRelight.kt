@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.arcrelight
+
 import eu.kanade.tachiyomi.multisrc.mangadventure.MangAdventure
 
 /** Arc-Relight source. */

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.ehentai
+
 import kotlin.math.ln
 import kotlin.math.pow
 

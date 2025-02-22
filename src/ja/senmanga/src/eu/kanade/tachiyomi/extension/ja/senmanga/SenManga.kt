@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.senmanga
+
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter

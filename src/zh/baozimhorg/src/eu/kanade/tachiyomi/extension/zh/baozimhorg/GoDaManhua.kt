@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.baozimhorg
+
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.goda.GoDa

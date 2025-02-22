@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.blogtruyen
+
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.erofus
+
 import eu.kanade.tachiyomi.multisrc.eromuse.EroMuse
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList

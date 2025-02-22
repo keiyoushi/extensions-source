@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.zinmangacom
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class ZinMangaCom : Madara(

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.flamescansfr
+
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent

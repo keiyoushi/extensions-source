@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.ungtycomics
+
 import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.preference.ListPreference

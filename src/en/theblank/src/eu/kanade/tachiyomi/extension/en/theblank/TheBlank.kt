@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.theblank
+
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA

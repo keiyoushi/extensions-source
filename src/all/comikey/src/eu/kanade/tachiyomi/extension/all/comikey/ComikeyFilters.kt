@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comikey
+
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList

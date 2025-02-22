@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.baozimanhua
+
 import okhttp3.Interceptor
 import okhttp3.Response
 

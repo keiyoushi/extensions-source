@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.magerin
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 

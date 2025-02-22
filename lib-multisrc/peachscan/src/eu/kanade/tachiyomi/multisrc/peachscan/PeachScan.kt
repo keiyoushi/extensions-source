@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.peachscan
+
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.lib.zipinterceptor.ZipInterceptor
 import eu.kanade.tachiyomi.network.GET

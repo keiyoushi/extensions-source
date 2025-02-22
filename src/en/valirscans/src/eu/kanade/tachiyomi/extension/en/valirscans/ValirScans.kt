@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.valirscans
+
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
 class ValirScans : Keyoapp(

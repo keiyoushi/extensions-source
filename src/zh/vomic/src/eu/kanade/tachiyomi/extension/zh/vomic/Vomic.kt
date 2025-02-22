@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.vomic
+
 import android.util.Base64
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen

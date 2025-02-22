@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.peppercarrot
+
 import kotlinx.serialization.Serializable
 
 typealias LangsDto = Map<String, LangDto>

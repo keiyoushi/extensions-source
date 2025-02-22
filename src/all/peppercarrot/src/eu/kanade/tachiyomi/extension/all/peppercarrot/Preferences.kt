@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.peppercarrot
+
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64

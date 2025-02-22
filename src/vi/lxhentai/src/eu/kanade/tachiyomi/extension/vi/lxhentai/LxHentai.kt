@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.lxhentai
+
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen

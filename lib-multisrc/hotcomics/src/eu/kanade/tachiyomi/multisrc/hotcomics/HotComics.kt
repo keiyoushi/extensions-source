@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.hotcomics
+
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter

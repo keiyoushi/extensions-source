@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.rawdevartart
+
 import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.ChapterDetailsDto
 import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.MangaDetailsDto
 import eu.kanade.tachiyomi.extension.ja.rawdevartart.dto.PaginatedMangaList

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.uk.honeymanga
+
 import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.CompleteHoneyMangaDto
 import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaChapterPagesDto
 import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaChapterResponseDto

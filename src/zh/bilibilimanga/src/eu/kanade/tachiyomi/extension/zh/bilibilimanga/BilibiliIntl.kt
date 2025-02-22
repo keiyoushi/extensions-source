@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.bilibilimanga
+
 import java.text.DateFormatSymbols
 import java.text.NumberFormat
 import java.util.Locale

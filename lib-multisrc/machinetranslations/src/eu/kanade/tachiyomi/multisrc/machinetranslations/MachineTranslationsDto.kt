@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.machinetranslations
+
 import android.graphics.Color
 import android.os.Build
 import androidx.annotation.RequiresApi

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.fuzzydoodle
+
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await

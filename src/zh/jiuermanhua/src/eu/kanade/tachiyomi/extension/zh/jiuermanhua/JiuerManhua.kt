@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.jiuermanhua
+
 import eu.kanade.tachiyomi.multisrc.sinmh.SinMH
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
+
 import kotlinx.serialization.Serializable
 
 private fun buildQuery(queryAction: () -> String) = queryAction().replace("%", "$")

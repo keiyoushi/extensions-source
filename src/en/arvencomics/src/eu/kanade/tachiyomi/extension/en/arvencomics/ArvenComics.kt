@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.arvencomics
+
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
 class ArvenComics : Keyoapp(

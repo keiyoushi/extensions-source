@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.comicfuz
+
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response

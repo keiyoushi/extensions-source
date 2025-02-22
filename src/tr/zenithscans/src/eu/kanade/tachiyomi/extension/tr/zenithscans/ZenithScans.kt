@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.zenithscans
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
 import java.util.Locale

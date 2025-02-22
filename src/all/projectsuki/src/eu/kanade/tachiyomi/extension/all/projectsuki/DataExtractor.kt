@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
+
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull

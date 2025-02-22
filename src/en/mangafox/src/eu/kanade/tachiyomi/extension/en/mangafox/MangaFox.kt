@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangafox
+
 import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

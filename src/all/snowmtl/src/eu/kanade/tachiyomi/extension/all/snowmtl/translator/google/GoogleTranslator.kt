@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.snowmtl.translator.google
+
 import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
 import eu.kanade.tachiyomi.network.GET
 import kotlinx.serialization.json.Json

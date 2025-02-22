@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mangaraw
+
 import kotlin.math.pow
 
 class ImageListParser(

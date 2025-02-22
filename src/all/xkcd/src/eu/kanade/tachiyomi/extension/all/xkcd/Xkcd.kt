@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.xkcd
+
 import android.net.Uri.encode
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage

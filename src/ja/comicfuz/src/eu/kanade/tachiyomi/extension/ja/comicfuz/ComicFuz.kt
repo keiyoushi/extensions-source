@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.comicfuz
+
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage

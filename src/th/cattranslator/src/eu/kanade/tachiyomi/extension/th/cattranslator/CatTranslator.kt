@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.th.cattranslator
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Element

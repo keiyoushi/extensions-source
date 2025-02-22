@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.randomscan.dto
+
 import kotlinx.serialization.Serializable
 
 @Serializable

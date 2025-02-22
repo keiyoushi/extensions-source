@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.tsumino
+
 import eu.kanade.tachiyomi.extension.en.tsumino.TsuminoUtils.Companion.cfDecodeEmails
 import eu.kanade.tachiyomi.extension.en.tsumino.TsuminoUtils.Companion.getArtists
 import eu.kanade.tachiyomi.extension.en.tsumino.TsuminoUtils.Companion.getChapter

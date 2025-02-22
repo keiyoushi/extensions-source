@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readhunterxhuntermangaonline
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadHunterxHunterMangaOnline : MangaCatalog("Read Hunter x Hunter Manga Online", "https://ww2.readhxh.com", "en") {

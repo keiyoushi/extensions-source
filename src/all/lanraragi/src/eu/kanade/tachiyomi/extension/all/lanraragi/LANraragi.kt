@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.lanraragi
+
 import android.content.SharedPreferences
 import android.net.Uri
 import android.text.InputType

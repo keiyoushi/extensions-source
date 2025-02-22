@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.animexnovel
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistMangaDto
 import eu.kanade.tachiyomi.network.GET

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.tappytoon
+
 import kotlinx.serialization.Serializable
 
 interface Accessible {

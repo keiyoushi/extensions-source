@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.mangatilkisi
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.SChapter

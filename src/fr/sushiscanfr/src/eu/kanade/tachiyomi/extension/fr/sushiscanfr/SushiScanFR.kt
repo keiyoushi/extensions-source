@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.sushiscanfr
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document

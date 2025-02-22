@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.ler999
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.util.concurrent.TimeUnit

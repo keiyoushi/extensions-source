@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.simplyhentai
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class SortFilter(values: Array<String> = labels) : Filter.Select<String>("Sort by", values) {

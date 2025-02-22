@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.taddyink
+
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat

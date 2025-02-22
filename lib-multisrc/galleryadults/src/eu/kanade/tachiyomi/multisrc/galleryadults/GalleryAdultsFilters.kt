@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.galleryadults
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class Genre(name: String, val uri: String) : Filter.CheckBox(name)

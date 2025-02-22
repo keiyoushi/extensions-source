@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.luascans
+
 import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 
 class LuaScans : HeanCms(

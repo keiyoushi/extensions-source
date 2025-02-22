@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.warforrayuba
+
 import android.os.Build
 import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.extension.en.warforrayuba.dto.PageDto

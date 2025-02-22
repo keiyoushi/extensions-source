@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.xmanhwa
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class Xmanhwa : Madara(

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.vyvymanga
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page

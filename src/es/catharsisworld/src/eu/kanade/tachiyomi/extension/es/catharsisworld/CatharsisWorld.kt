@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.catharsisworld
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SChapter

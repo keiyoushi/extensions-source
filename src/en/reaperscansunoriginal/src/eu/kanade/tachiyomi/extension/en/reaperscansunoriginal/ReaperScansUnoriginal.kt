@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.reaperscansunoriginal
+
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

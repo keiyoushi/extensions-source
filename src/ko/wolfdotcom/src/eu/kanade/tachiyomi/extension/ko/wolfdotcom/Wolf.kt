@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.wolfdotcom
+
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.EditTextPreference

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.argosscan
+
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject

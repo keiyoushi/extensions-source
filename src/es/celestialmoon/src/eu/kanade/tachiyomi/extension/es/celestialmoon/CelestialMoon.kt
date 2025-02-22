@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.celestialmoon
+
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost

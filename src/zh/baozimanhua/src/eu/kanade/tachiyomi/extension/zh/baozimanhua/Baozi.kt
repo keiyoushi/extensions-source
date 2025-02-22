@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.baozimanhua
+
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen

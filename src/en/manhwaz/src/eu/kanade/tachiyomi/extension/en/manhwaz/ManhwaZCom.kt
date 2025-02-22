@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.manhwaz
+
 import eu.kanade.tachiyomi.multisrc.manhwaz.ManhwaZ
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient

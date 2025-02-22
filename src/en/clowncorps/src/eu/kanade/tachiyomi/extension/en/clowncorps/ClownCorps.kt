@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.clowncorps
+
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.MultiSelectListPreference

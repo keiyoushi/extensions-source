@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.lectortmo
+
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference

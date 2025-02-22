@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.mangaokutr
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor

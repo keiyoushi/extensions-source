@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangademon
+
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 

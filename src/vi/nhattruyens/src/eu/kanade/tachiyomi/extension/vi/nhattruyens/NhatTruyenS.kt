@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.nhattruyens
+
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga

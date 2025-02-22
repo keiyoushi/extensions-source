@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentaidexy
+
 import kotlinx.serialization.Serializable
 
 @Serializable

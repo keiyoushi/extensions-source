@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.komga
+
 import android.content.SharedPreferences
 import android.text.InputType
 import android.util.Log

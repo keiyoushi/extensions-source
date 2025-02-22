@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.manhwaweb
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class TypeFilter : UriPartFilter(

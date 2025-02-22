@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.mangaraworg
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess

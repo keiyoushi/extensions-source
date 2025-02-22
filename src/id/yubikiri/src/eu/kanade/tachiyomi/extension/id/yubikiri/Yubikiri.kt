@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.yubikiri
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.tmohentai
+
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess

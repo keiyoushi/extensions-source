@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readtokyoghoulretokyoghoulmangaonline
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadTokyoGhoulReTokyoGhoulMangaOnline : MangaCatalog("Read Tokyo Ghoul Re & Tokyo Ghoul Manga Online", "https://ww10.tokyoghoulre.com", "en") {

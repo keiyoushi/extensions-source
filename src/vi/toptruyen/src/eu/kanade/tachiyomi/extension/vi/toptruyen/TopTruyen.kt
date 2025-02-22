@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.toptruyen
+
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

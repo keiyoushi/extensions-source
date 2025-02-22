@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.batoto
+
 import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.CheckBoxPreference

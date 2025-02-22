@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.rawdevartart
+
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 

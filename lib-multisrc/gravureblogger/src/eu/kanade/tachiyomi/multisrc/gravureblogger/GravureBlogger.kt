@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.gravureblogger
+
 import android.os.Build
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter

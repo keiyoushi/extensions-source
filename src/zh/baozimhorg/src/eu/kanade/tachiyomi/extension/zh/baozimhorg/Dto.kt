@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.baozimhorg
+
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.Serializable

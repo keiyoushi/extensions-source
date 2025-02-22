@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.thunderscans
+
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper

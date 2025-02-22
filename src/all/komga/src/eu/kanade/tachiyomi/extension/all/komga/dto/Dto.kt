@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.komga.dto
+
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import org.apache.commons.text.StringSubstitutor

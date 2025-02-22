@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.freecomiconline
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class FreeComicOnline : Madara(

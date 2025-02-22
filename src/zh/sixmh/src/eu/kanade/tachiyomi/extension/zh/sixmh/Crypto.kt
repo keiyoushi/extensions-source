@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.sixmh
+
 import android.util.Base64
 import kotlin.experimental.xor
 

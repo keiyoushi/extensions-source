@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.gmanga
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

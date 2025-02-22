@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangareaderto
+
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader.UriFilter
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader.UriMultiSelectFilter
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader.UriPartFilter

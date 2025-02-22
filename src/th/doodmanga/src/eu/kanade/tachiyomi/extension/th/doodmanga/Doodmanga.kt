@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.th.doodmanga
+
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page

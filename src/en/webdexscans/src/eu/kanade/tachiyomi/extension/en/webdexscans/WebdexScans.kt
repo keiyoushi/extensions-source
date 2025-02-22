@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.webdexscans
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class WebdexScans : Madara("Webdex Scans", "https://webdexscans.com", "en") {

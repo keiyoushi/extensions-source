@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentairead
+
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET

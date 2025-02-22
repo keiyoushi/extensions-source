@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.simplyhentai
+
 import android.net.Uri
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen

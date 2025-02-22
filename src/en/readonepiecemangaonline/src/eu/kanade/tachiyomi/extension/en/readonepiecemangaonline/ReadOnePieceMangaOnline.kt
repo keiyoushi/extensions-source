@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readonepiecemangaonline
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadOnePieceMangaOnline : MangaCatalog("Read One Piece Manga Online", "https://ww8.readonepiece.com", "en") {

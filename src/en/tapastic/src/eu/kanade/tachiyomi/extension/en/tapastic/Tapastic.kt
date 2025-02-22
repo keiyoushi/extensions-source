@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.tapastic
+
 import android.content.SharedPreferences
 import android.webkit.CookieManager
 import androidx.preference.PreferenceScreen

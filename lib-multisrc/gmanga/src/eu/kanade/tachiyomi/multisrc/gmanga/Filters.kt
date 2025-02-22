@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.gmanga
+
 import eu.kanade.tachiyomi.source.model.Filter
 import java.text.ParseException
 import java.text.SimpleDateFormat

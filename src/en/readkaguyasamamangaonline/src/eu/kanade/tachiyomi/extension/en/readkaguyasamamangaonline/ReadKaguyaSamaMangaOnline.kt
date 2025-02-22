@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readkaguyasamamangaonline
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadKaguyaSamaMangaOnline : MangaCatalog("Read Kaguya-sama Manga Online", "https://ww1.readkaguyasama.com", "en") {

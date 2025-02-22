@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.zeroscans
+
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

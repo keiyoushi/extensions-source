@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.flamescansfr
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class SelectFilter(name: String, val field: String, values: Array<String>) :

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentai2read
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess

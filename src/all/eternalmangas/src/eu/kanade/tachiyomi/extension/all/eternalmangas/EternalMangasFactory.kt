@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.eternalmangas
+
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class EternalMangasFactory : SourceFactory {

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.blogtruyen
+
 import eu.kanade.tachiyomi.multisrc.blogtruyen.BlogTruyen
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 

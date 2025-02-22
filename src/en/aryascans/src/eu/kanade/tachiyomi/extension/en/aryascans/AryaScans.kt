@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.aryascans
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class AryaScans : Madara(

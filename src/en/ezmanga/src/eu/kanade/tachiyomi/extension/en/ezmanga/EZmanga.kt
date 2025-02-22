@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.ezmanga
+
 import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 
 class EZmanga : HeanCms(

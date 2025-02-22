@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.eggporncomics
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.Filter

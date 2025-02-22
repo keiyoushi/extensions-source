@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.makaru
+
 import org.jsoup.nodes.Element
 
 object MakaruUtils {

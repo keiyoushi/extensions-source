@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.navercomic
+
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SManga

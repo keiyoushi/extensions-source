@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.plumacomics
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import okhttp3.Response
 import java.text.SimpleDateFormat

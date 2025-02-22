@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.yurimoonsub
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import org.jsoup.nodes.Document

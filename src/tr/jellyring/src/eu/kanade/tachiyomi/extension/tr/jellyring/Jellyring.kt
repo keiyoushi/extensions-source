@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.jellyring
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat

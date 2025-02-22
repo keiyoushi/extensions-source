@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.webcomics
+
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_RANDOM_UA
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen

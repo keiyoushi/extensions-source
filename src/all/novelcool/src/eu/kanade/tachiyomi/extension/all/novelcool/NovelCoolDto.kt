@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.novelcool
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

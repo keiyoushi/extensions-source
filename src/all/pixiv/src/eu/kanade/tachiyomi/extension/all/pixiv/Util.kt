@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.pixiv
+
 import android.util.LruCache
 
 internal fun countUp(start: Int = 0) = sequence<Int> {

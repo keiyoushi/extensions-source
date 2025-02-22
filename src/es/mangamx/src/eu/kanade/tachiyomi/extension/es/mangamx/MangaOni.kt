@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.mangamx
+
 import android.content.SharedPreferences
 import android.net.Uri
 import android.util.Base64

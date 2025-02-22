@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.foolslide
+
 import androidx.preference.CheckBoxPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET

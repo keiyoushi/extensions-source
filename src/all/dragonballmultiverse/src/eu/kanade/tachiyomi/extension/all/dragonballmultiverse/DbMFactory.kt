@@ -1,6 +1,7 @@
 @file:Suppress("ClassName")
 
 package eu.kanade.tachiyomi.extension.all.dragonballmultiverse
+
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 

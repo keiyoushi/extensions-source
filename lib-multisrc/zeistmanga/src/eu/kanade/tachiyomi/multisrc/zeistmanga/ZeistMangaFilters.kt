@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.zeistmanga
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class Genre(title: String, val value: String) : Filter.CheckBox(title)

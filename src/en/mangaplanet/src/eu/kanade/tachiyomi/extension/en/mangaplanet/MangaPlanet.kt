@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangaplanet
+
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbInterceptor
 import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbReader

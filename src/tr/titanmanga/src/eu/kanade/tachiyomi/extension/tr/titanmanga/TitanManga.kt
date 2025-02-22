@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.titanmanga
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class TitanManga : Madara(

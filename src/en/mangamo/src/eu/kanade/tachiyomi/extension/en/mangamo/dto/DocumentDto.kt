@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangamo.dto
+
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable

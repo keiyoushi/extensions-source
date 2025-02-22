@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.navercomic
+
 import android.annotation.SuppressLint
 import android.net.Uri
 import eu.kanade.tachiyomi.network.GET

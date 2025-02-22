@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.infernalvoidscans
+
 import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.source.model.Page
 import kotlinx.serialization.Serializable

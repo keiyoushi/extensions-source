@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.gaugaumonsterplus
+
 import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbInterceptor
 import eu.kanade.tachiyomi.lib.speedbinb.SpeedBinbReader
 import eu.kanade.tachiyomi.network.GET

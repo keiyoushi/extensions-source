@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.shiyurasub
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga

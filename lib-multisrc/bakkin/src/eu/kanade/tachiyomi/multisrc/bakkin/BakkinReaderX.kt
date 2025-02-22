@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.bakkin
+
 import android.os.Build
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen

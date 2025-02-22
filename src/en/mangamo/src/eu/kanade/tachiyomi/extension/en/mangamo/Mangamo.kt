@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangamo
+
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.MultiSelectListPreference

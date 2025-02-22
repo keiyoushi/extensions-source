@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangapuma
+
 import eu.kanade.tachiyomi.multisrc.madtheme.MadTheme
 
 class MangaPuma :

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.tsumino
+
 import eu.kanade.tachiyomi.source.model.SChapter
 import okhttp3.Response
 import org.jsoup.nodes.Document

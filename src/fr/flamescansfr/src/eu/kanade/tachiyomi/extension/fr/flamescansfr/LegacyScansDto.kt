@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.flamescansfr
+
 import kotlinx.serialization.Serializable
 
 @Serializable

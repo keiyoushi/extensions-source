@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.fmreader
+
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter

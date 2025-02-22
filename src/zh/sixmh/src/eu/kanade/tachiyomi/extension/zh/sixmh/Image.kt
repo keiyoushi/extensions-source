@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.sixmh
+
 import kotlinx.serialization.Serializable
 
 @Serializable

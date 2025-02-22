@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
+
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import java.text.SimpleDateFormat
 import java.util.Locale

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.comx
+
 import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST

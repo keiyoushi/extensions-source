@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.ravensscans
+
 import eu.kanade.tachiyomi.multisrc.readerfront.ReaderFront
 import eu.kanade.tachiyomi.source.SourceFactory
 

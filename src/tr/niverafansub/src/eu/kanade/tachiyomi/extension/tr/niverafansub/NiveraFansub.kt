@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.niverafansub
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.Page
 import org.jsoup.nodes.Document

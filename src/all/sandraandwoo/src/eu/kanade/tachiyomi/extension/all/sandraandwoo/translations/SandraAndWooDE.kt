@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.sandraandwoo.translations
+
 import eu.kanade.tachiyomi.extension.all.sandraandwoo.SandraAndWoo
 import eu.kanade.tachiyomi.source.model.SManga
 

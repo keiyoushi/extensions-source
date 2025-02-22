@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.perfscan
+
 import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import okhttp3.HttpUrl.Companion.toHttpUrl

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.ninehentai
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

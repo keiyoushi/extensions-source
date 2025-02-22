@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.xkcd.translations
+
 import eu.kanade.tachiyomi.extension.all.xkcd.Xkcd
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangaailand
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 

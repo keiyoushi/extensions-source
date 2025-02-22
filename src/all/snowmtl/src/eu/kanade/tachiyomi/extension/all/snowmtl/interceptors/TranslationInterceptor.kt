@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.snowmtl.interceptors
+
 import android.os.Build
 import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.extension.all.snowmtl.LanguageSetting

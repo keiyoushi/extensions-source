@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.pixivcomic
+
 import android.annotation.SuppressLint
 import android.os.Build
 import okhttp3.Interceptor

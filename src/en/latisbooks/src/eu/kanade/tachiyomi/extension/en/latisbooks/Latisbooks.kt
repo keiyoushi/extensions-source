@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.latisbooks
+
 import android.net.Uri.encode
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess

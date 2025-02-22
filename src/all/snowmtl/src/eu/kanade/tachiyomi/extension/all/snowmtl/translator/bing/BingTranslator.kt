@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.snowmtl.translator.bing
+
 import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST

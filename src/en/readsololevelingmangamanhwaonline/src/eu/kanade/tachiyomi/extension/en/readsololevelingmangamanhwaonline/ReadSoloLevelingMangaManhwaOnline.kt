@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readsololevelingmangamanhwaonline
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadSoloLevelingMangaManhwaOnline : MangaCatalog("Read Solo Leveling Manga Manhwa Online", "https://readsololeveling.org", "en") {

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.zeroscans
+
 import eu.kanade.tachiyomi.source.model.SManga
 import java.util.Calendar
 import java.util.Locale

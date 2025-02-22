@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.senkuro
+
 import kotlinx.serialization.Serializable
 @Serializable
 data class PageWrapperDto<T>(

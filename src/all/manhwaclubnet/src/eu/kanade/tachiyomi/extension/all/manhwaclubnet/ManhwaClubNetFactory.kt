@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.manhwaclubnet
+
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class ManhwaClubNetFactory : SourceFactory {

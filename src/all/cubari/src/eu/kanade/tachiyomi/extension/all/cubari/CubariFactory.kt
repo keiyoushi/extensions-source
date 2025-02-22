@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.cubari
+
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.a3manga
+
 import kotlinx.serialization.Serializable
 
 @Serializable

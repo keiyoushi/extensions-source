@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.manhuaren
+
 import android.content.SharedPreferences
 import android.os.Build
 import android.text.format.DateFormat

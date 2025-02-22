@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.comicdays
+
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.OkHttpClient

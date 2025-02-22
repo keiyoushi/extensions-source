@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readthepromisedneverlandmangaonline
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadThePromisedNeverlandMangaOnline : MangaCatalog("Read The Promised Neverland Manga Online", "https://ww3.readneverland.com", "en") {

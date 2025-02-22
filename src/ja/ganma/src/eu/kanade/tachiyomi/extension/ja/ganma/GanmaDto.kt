@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.ganma
+
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga

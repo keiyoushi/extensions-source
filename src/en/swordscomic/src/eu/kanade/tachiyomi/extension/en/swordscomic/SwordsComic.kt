@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.swordscomic
+
 import android.net.Uri
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage

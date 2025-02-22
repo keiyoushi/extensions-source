@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.simplyhentai
+
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class SimplyHentaiFactory : SourceFactory {

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mccms
+
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.webtoons
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter.Header
 import eu.kanade.tachiyomi.source.model.Filter.Select

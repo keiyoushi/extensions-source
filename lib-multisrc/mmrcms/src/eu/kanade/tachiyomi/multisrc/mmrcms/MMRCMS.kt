@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mmrcms
+
 import android.annotation.SuppressLint
 import android.util.Log
 import eu.kanade.tachiyomi.lib.i18n.Intl

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.spyfakku
+
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 

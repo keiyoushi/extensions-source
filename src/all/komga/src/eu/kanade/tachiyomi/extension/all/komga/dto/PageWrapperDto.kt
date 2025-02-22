@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.komga.dto
+
 import kotlinx.serialization.Serializable
 
 @Serializable

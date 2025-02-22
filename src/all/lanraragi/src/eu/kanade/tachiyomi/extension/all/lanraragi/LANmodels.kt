@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.lanraragi
+
 import kotlinx.serialization.Serializable
 
 @Serializable

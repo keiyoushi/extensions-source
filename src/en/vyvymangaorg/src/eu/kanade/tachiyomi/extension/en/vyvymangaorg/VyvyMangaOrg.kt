@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.vyvymangaorg
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class VyvyMangaOrg : Madara(

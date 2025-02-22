@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.fuzzydoodle
+
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 

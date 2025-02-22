@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.manhuazonghe
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class ManhuaZonghe : Madara("Manhua Zonghe", "https://manhuazonghe.com", "en") {

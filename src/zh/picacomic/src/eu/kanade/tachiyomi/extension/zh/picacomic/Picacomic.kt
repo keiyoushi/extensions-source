@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.picacomic
+
 import android.content.SharedPreferences
 import android.util.Base64
 import androidx.preference.EditTextPreference

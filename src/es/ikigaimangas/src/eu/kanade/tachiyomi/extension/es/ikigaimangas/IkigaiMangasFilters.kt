@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.ikigaimangas
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class Genre(title: String, val id: Long) : Filter.CheckBox(title)

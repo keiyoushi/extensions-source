@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.newtoki
+
 import android.os.Build
 import android.os.LocaleList
 import java.util.Locale

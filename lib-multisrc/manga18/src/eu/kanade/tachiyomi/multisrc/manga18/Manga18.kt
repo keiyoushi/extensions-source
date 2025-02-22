@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.manga18
+
 import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET

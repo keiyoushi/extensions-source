@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.eternalmangas
+
 import eu.kanade.tachiyomi.multisrc.mangaesp.MangaEsp
 import eu.kanade.tachiyomi.multisrc.mangaesp.SeriesDto
 import eu.kanade.tachiyomi.network.POST

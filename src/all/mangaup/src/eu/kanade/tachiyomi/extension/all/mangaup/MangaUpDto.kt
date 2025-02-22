@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangaup
+
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName

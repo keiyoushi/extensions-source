@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangago
+
 import kotlin.IllegalArgumentException
 
 /*

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.vgperson
+
 import android.os.Build.VERSION
 import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.network.GET

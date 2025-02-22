@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.traduccionesmoonlight
+
 import eu.kanade.tachiyomi.multisrc.mangaesp.MangaEsp
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Page

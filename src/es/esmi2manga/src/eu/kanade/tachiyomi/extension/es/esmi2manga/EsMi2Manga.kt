@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.esmi2manga
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.text.SimpleDateFormat

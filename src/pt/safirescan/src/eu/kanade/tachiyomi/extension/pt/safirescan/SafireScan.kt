@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.safirescan
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SManga

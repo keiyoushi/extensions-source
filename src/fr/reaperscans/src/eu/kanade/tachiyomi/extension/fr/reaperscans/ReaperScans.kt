@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.reaperscans
+
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document

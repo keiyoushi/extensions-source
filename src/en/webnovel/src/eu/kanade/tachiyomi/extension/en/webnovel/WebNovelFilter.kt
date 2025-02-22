@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.webnovel
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 data class FilterOption(val displayName: String, val value: String)

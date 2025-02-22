@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangapark
+
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 

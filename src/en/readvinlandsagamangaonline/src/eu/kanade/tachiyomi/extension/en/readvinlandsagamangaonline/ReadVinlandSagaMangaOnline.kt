@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readvinlandsagamangaonline
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadVinlandSagaMangaOnline : MangaCatalog("Read Vinland Saga Manga Online", "https://ww1.readvinlandsaga.com", "en") {

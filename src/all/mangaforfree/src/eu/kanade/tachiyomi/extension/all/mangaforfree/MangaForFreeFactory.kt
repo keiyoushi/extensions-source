@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangaforfree
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.Source

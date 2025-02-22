@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.grabberzone
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SChapter
 import org.jsoup.nodes.Element

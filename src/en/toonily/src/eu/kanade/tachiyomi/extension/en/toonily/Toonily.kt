@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.toonily
+
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET

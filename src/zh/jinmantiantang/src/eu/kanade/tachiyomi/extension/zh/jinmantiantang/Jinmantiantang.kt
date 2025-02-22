@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
+
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangamo
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import okhttp3.Headers

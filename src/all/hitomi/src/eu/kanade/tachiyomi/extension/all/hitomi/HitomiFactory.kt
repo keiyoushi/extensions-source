@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.hitomi
+
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class HitomiFactory : SourceFactory {

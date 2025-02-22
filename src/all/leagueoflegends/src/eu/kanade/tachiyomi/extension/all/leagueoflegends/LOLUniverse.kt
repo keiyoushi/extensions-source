@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.leagueoflegends
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList

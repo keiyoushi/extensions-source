@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.izneo
+
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class IzneoFactory : SourceFactory {

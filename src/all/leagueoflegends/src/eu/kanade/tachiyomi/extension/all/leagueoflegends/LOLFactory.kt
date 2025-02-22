@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.leagueoflegends
+
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class LOLFactory : SourceFactory {

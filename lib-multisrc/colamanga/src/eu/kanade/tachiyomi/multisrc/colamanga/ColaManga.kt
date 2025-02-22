@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.colamanga
+
 import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Handler

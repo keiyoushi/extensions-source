@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.yurineko.dto
+
 import kotlinx.serialization.Serializable
 
 @Serializable

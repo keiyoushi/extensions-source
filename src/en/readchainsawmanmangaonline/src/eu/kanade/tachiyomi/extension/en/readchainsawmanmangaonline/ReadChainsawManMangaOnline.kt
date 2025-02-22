@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readchainsawmanmangaonline
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
 class ReadChainsawManMangaOnline : MangaCatalog("Read Chainsaw Man Manga Online", "https://ww4.readchainsawman.com", "en") {

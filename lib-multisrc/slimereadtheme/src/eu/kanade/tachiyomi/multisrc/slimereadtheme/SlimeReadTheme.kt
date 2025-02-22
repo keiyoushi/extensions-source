@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.slimereadtheme
+
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.pt.slimeread.dto.LatestResponseDto

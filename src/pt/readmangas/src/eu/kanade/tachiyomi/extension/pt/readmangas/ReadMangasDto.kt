@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.readmangas
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames

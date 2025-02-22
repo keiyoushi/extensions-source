@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.hattorimanga
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess

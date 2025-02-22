@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.yidan
+
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET

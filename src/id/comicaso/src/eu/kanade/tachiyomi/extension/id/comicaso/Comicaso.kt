@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.comicaso
+
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page

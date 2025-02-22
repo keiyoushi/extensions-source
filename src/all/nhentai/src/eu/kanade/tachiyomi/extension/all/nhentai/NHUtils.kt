@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.nhentai
+
 import org.jsoup.nodes.Element
 
 object NHUtils {

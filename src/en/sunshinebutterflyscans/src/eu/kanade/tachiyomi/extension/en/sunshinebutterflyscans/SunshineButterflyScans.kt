@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.sunshinebutterflyscans
+
 import android.util.Base64
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.network.GET

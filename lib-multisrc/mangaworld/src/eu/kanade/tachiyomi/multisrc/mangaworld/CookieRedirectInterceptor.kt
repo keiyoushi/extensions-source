@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mangaworld
+
 import eu.kanade.tachiyomi.network.GET
 import okhttp3.Cookie
 import okhttp3.Interceptor

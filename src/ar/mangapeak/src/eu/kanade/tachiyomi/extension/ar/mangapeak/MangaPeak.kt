@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangapeak
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class MangaPeak : Madara(

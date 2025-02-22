@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.aquamanga
+
 import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import okhttp3.Headers

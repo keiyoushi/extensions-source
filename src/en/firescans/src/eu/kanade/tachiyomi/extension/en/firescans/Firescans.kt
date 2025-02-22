@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.firescans
+
 import android.util.Base64
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.multisrc.madara.Madara

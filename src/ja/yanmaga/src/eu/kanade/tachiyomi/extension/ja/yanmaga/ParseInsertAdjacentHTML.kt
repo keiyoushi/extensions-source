@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.yanmaga
+
 import app.cash.quickjs.QuickJs
 
 private val INSERT_ADJACENT_HTML_REGEX = Regex(

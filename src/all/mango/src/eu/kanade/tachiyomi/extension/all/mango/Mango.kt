@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mango
+
 import android.content.SharedPreferences
 import android.text.InputType
 import android.widget.Toast

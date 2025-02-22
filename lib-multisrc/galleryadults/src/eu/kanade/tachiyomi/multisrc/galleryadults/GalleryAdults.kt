@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.galleryadults
+
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.PreferenceScreen

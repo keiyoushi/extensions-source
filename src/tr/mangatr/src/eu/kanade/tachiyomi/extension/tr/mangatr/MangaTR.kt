@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.mangatr
+
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST

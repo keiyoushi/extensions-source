@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.readonepunchmanmangaonlinetwo
+
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga

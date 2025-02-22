@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.gigaviewer
+
 import kotlinx.serialization.Serializable
 
 @Serializable

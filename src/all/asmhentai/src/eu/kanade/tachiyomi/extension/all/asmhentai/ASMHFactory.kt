@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.asmhentai
+
 import eu.kanade.tachiyomi.multisrc.galleryadults.GalleryAdults
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory

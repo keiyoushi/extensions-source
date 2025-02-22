@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangahen
+
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 

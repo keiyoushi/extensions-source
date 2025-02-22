@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
+
 import android.os.Build
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.all.projectsuki.activities.INTENT_BOOK_QUERY_PREFIX

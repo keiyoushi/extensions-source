@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.chochox
+
 import eu.kanade.tachiyomi.multisrc.vercomics.VerComics
 
 class Chochox : VerComics("ChoChoX", "https://chochox.com", "es") {

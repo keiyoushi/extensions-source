@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.hentaislayer
+
 import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen

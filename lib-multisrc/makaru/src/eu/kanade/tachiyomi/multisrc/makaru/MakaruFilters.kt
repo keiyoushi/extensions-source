@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.makaru
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class LabelFilter(name: String, labels: List<Label>) : Filter.Group<Label>(name, labels)

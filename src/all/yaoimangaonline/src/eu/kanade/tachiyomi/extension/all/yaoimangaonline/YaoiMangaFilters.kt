@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.yaoimangaonline
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class CategoryFilter(

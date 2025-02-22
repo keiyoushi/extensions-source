@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.mangasin
+
 import android.util.Base64
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator

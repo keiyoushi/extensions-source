@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.tumangasnet
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter

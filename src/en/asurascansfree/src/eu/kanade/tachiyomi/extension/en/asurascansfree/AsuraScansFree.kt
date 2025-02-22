@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.asurascansfree
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
 class AsuraScansFree : MangaThemesia(

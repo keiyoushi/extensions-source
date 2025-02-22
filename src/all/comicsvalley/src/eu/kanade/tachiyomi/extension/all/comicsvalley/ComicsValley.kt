@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comicsvalley
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class ComicsValley : Madara(

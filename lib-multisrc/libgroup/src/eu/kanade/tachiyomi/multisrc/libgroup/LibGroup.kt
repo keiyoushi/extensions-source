@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.libgroup
+
 import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences

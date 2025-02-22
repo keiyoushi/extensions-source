@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.cerberusseries
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
 class CerberusSeries : MangaThemesia(

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.mangaefendisi
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.SManga
 import java.text.SimpleDateFormat

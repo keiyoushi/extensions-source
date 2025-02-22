@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.tonizutoon
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import okhttp3.Interceptor
 import okhttp3.Response

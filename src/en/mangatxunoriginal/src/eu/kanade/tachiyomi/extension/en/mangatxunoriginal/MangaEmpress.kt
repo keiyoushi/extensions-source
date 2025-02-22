@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangatxunoriginal
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class MangaEmpress : Madara(

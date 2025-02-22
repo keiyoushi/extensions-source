@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.dmzj
+
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color

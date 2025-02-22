@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.makaru
+
 import android.annotation.SuppressLint
 import android.os.Build
 import eu.kanade.tachiyomi.multisrc.makaru.MakaruUtils.imgAttr

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comikey
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

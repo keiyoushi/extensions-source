@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comickfun
+
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.parser.Parser
 import java.text.SimpleDateFormat

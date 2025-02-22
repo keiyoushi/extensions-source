@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.argoscomics
+
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

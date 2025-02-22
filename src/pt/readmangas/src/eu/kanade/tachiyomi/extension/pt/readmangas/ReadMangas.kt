@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.readmangas
+
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST

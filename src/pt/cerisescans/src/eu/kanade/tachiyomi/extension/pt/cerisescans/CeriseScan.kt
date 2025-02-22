@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.cerisescans
+
 import eu.kanade.tachiyomi.multisrc.peachscan.PeachScan
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 

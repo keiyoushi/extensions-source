@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangatales
+
 import eu.kanade.tachiyomi.multisrc.gmanga.Gmanga
 import eu.kanade.tachiyomi.multisrc.gmanga.TagFilterData
 import eu.kanade.tachiyomi.network.GET

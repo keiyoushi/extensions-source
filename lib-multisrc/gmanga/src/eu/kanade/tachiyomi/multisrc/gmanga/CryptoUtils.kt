@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.gmanga
+
 import android.util.Base64
 import java.security.MessageDigest
 import javax.crypto.Cipher

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.inazumanga
+
 import eu.kanade.tachiyomi.multisrc.makaru.Makaru
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup

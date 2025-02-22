@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.manhwa18
+
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

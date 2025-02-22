@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.simplycosplay
+
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.Serializable

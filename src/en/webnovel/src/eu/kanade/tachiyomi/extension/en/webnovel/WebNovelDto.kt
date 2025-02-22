@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.webnovel
+
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName

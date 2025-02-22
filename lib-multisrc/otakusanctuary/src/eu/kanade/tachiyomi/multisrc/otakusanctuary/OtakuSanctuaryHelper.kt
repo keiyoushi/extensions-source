@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.otakusanctuary
+
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class OtakuSanctuaryHelper(private val lang: String) {

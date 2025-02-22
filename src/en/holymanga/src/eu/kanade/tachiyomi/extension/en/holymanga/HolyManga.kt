@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.holymanga
+
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 
 class HolyManga : FMReader(

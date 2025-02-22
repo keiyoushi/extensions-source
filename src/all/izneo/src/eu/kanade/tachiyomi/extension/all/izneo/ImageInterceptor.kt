@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.izneo
+
 import android.util.Base64
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType

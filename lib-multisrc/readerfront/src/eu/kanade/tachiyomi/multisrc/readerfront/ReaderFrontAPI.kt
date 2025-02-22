@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.readerfront
+
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import java.text.DecimalFormat

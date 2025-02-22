@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.henchan
+
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.widget.Toast

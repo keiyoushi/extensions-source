@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.miauscan
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.Filter

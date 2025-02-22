@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.snowmtl.translator.google
+
 import okhttp3.Response
 
 class GoogleTranslatorDto

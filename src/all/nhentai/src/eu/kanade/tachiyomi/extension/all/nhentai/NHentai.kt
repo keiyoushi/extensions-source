@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.nhentai
+
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen

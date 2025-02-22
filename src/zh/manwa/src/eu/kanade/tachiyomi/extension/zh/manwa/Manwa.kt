@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.manwa
+
 import android.content.SharedPreferences
 import android.net.Uri
 import androidx.preference.CheckBoxPreference

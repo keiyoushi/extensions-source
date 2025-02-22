@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.rocksmanga
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga

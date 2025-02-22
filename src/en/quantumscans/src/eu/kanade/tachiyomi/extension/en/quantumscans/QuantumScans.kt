@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.quantumscans
+
 import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.util.concurrent.TimeUnit

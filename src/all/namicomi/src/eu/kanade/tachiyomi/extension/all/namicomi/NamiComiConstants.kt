@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.namicomi
+
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import java.text.SimpleDateFormat
 import java.util.Locale

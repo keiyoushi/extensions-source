@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.desu
+
 import kotlinx.serialization.Serializable
 
 @Serializable

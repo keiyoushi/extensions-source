@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.machinetranslations
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class SelectionList(displayName: String, private val vals: List<Option>, state: Int = 0) :

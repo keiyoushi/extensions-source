@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.sectscans
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

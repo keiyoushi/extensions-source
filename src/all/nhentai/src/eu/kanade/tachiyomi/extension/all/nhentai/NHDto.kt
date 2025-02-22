@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.nhentai
+
 import kotlinx.serialization.Serializable
 
 @Serializable

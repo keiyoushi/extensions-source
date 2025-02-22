@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comico
+
 import android.webkit.CookieManager
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.network.GET

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.paritehaber
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class Paritehaber : Madara(

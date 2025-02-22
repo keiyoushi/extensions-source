@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangamo
+
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.DocumentDto
 import eu.kanade.tachiyomi.extension.en.mangamo.dto.DocumentDtoInternal

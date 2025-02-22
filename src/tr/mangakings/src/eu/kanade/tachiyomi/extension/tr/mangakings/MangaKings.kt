@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.mangakings
+
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SManga

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.damaomanhua
+
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMS
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMSConfig
 import eu.kanade.tachiyomi.source.model.SChapter

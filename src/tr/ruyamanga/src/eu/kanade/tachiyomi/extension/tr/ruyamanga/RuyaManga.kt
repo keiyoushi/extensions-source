@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.tr.ruyamanga
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.SimpleDateFormat
 import java.util.Locale

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mmrcms
+
 import kotlinx.serialization.Serializable
 
 @Serializable

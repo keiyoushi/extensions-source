@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangafire
+
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas

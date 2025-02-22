@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mangadventure
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 internal interface UriFilter {

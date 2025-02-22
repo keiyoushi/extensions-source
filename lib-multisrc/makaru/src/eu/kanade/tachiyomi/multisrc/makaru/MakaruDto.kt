@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.makaru
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

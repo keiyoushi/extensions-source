@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.snowmtl.translator.bing
+
 import kotlinx.serialization.Serializable
 
 class BingTranslatorDto

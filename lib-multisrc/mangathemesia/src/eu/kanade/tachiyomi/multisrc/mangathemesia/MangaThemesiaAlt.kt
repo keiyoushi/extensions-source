@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.mangathemesia
+
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat

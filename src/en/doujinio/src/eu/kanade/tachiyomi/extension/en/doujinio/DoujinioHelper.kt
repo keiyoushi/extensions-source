@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.doujinio
+
 import kotlinx.serialization.json.Json
 import uy.kohesive.injekt.injectLazy
 import java.text.ParseException

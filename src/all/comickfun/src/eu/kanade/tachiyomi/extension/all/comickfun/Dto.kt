@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comickfun
+
 import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.GROUP_TAGS_DEFAULT
 import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.INCLUDE_MU_TAGS_DEFAULT
 import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.SCORE_POSITION_DEFAULT

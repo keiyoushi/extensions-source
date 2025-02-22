@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.hniscantrad
+
 import eu.kanade.tachiyomi.multisrc.pizzareader.PizzaReader
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.json.Json

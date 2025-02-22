@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.randomscan
+
 import eu.kanade.tachiyomi.lib.zipinterceptor.ZipInterceptor
 import okhttp3.Request
 import okhttp3.Response

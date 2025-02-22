@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.sandraandwoo
+
 import eu.kanade.tachiyomi.extension.all.sandraandwoo.translations.SandraAndWooDE
 import eu.kanade.tachiyomi.extension.all.sandraandwoo.translations.SandraAndWooEN
 import eu.kanade.tachiyomi.source.SourceFactory

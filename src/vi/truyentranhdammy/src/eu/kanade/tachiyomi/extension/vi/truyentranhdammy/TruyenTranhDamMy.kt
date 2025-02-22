@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.truyentranhdammy
+
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import java.text.DateFormatSymbols

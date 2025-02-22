@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.uk.honeymanga.dtos
+
 import kotlinx.serialization.Serializable
 
 @Serializable

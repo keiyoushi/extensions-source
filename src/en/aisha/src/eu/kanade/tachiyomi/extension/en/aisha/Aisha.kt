@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.aisha
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage

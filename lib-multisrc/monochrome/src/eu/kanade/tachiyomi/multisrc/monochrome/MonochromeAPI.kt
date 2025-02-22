@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.monochrome
+
 import kotlinx.serialization.Serializable
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat

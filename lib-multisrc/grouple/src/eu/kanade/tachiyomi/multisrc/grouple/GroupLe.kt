@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.grouple
+
 import android.content.SharedPreferences
 import android.widget.Toast
 import eu.kanade.tachiyomi.network.GET

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.traducoesdolipe
+
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga

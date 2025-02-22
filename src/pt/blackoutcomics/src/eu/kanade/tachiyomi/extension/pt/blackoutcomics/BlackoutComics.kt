@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.blackoutcomics
+
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.zaimanhua
+
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga

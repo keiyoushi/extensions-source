@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.zinmanga
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class Zinmanga : Madara("Zinmanga", "https://mangazin.org", "en") {

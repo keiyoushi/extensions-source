@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.bilibilimanga
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

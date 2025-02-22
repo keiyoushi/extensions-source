@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.nudemoon
+
 import android.content.SharedPreferences
 import android.webkit.CookieManager
 import android.widget.Toast

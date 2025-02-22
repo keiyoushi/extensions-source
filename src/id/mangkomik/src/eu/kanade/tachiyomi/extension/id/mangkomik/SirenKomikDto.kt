@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.mangkomik
+
 import kotlinx.serialization.Serializable
 
 @Serializable

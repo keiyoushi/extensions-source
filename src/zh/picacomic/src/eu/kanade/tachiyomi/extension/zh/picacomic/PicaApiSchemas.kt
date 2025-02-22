@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.picacomic
+
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 

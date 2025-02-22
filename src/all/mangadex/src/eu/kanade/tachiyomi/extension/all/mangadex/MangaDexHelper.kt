@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
+
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log

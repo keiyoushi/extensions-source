@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.firstkissmanganet
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class FirstKissMangaNet : Madara(

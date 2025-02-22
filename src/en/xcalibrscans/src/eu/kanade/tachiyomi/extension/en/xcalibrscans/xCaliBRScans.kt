@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.xcalibrscans
+
 import android.util.Log
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

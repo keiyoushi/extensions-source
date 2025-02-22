@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.comicfuz
+
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 import java.util.Calendar

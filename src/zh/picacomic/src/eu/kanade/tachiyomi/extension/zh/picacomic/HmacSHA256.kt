@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.picacomic
+
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 

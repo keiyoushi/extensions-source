@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comico
+
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class ComicoFactory : SourceFactory {

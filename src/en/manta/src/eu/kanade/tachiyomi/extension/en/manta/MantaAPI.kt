@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.manta
+
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale

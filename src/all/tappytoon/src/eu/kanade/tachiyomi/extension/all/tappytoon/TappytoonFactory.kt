@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.tappytoon
+
 import eu.kanade.tachiyomi.source.SourceFactory
 
 class TappytoonFactory : SourceFactory {

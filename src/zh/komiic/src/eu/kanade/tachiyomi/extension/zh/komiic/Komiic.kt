@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.komiic
+
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.manhwaz
+
 import android.util.Log
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET

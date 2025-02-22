@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.doujinio
+
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga

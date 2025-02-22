@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.mangabuff
+
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 

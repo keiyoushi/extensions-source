@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.mangajikan
+
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMS
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMSConfig
 

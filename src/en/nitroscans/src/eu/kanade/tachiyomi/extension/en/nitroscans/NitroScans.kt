@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.nitroscans
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class NitroScans : Madara("Nitro Scans", "https://nitroscans.net", "en") {

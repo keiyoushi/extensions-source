@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.sapphirescan
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Page

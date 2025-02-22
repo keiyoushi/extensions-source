@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.scanvf
+
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga

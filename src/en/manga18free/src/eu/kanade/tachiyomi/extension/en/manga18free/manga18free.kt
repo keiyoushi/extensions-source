@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.manga18free
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class manga18free : Madara(

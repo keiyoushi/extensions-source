@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.madtheme
+
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.interceptor.rateLimit

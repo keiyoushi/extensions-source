@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangamo
+
 import kotlin.reflect.KProperty
 
 @Suppress("ClassName")

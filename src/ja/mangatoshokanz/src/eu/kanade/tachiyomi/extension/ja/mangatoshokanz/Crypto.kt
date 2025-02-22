@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.mangatoshokanz
+
 import android.util.Base64
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import kotlinx.serialization.SerialName

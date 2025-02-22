@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
+
 import android.content.SharedPreferences
 import android.os.Build
 import androidx.preference.EditTextPreference

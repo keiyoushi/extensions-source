@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.vcpvmp
+
 import eu.kanade.tachiyomi.multisrc.vercomics.VerComics
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.plottwistnofansub
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

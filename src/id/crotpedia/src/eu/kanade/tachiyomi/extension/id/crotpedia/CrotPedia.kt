@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.crotpedia
+
 import eu.kanade.tachiyomi.multisrc.zmanga.ZManga
 import java.text.SimpleDateFormat
 import java.util.Locale

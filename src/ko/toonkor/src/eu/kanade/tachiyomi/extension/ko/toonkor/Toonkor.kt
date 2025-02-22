@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.toonkor
+
 import android.content.SharedPreferences
 import android.util.Base64
 import eu.kanade.tachiyomi.AppInfo

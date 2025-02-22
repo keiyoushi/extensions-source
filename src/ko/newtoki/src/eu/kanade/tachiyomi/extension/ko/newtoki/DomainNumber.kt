@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.newtoki
+
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import okhttp3.Interceptor

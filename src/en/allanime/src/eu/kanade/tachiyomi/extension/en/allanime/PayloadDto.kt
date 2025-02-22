@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.allanime
+
 import kotlinx.serialization.Serializable
 
 @Serializable

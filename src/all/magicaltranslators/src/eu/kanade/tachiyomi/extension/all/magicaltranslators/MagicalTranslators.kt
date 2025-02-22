@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.magicaltranslators
+
 import eu.kanade.tachiyomi.multisrc.guya.Guya
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.MangasPage

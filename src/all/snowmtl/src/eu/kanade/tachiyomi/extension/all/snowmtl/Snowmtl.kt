@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.snowmtl
+
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi

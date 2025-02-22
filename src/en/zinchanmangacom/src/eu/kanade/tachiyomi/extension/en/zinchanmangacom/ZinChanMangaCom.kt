@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.zinchanmangacom
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document

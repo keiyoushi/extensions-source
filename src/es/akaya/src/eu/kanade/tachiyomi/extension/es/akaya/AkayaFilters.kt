@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.akaya
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class Genre(name: String, val id: Int) : Filter.CheckBox(name)

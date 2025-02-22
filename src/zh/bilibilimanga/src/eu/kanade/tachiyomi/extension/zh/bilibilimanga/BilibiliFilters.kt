@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.bilibilimanga
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 data class BilibiliTag(val name: String, val id: Int) {

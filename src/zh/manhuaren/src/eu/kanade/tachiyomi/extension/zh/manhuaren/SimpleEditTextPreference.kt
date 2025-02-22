@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.manhuaren
+
 import android.content.Context
 import androidx.preference.EditTextPreference
 

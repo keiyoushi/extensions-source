@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.catharsisfantasy
+
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET

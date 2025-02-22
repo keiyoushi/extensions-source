@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.manganow
+
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter

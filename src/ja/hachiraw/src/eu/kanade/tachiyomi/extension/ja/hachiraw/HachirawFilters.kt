@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.hachiraw
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class SortFilter(state: Int = 2) : SelectFilter(

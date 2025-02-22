@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.firstkissmanhua
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 

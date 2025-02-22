@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.twi4
+
 import android.app.Application
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess

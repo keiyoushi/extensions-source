@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.xkcd
+
 import eu.kanade.tachiyomi.extension.all.xkcd.translations.XkcdES
 import eu.kanade.tachiyomi.extension.all.xkcd.translations.XkcdFR
 import eu.kanade.tachiyomi.extension.all.xkcd.translations.XkcdRU

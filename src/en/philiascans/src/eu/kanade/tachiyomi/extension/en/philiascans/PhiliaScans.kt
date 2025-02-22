@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.philiascans
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import okhttp3.HttpUrl.Companion.toHttpUrl

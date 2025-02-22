@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.anisascans
+
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 

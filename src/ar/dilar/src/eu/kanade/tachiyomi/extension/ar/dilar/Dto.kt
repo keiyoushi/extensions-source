@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.dilar
+
 import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

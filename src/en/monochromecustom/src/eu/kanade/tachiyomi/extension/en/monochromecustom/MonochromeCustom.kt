@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.monochromecustom
+
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.monochrome.MonochromeCMS

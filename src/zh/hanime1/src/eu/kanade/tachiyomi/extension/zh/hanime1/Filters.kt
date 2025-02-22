@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.hanime1
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 abstract class SelectFilter(

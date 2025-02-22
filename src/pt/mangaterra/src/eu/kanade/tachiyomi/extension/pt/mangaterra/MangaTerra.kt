@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.mangaterra
+
 import eu.kanade.tachiyomi.multisrc.terrascan.TerraScan
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import java.util.concurrent.TimeUnit

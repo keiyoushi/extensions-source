@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranh
+
 import kotlinx.serialization.Serializable
 
 @Serializable

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.manganow
+
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader.UriMultiSelectFilter
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader.UriPartFilter
 import java.util.Calendar

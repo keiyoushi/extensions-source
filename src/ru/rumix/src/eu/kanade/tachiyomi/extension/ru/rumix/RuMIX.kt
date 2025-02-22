@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.ru.rumix
+
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.magusmanga
+
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import okhttp3.HttpUrl.Companion.toHttpUrl

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.peppercarrot
+
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource

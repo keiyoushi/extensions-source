@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.nettruyenx
+
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document

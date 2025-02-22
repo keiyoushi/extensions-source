@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.japanread
+
 import android.net.Uri
 import android.widget.Toast
 import androidx.preference.EditTextPreference

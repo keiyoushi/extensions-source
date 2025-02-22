@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.sussyscan
+
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.widget.Toast
