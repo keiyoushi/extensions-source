@@ -2,14 +2,11 @@ package eu.kanade.tachiyomi.extension.en.flamecomics
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.Json
 
 @Serializable
 class NewBuildID(
@@ -74,7 +71,6 @@ class Series(
     val description: String,
     val cover: String,
     val type: String,
-    @Serializable(with = TagsListSerializer::class)
     val tags: List<String>?,
     val author: String?,
     val status: String,
@@ -106,15 +102,4 @@ class KeysToListSerializer : KSerializer<List<Page>> {
     }
 
     override fun serialize(encoder: Encoder, value: List<Page>) {}
-}
-
-class TagsListSerializer : KSerializer<List<String>> {
-    private val listSer = ListSerializer(String.serializer())
-    override val descriptor: SerialDescriptor = listSer.descriptor
-    override fun deserialize(decoder: Decoder): List<String> {
-        val jsonString = decoder.decodeString()
-        return Json.decodeFromString(jsonString)
-    }
-
-    override fun serialize(encoder: Encoder, value: List<String>) {}
 }
