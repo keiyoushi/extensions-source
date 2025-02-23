@@ -71,16 +71,7 @@ class Manhastro : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<List<MangaDto>>()
-
-        val mangas = dto.map {
-            SManga.create().apply {
-                title = it.titulo
-                thumbnail_url = "https://" + it.imagem
-                setUrlWithoutDomain("/dados/${it.manga_id}")
-                description = it.descricao.trim()
-            }
-        }
-
+        val mangas = dto.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -92,16 +83,7 @@ class Manhastro : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<List<MangaDto>>()
-
-        val mangas = dto.map {
-            SManga.create().apply {
-                title = it.titulo
-                thumbnail_url = "https://" + it.imagem
-                setUrlWithoutDomain("/dados/${it.manga_id}")
-                description = it.descricao.trim()
-            }
-        }
-
+        val mangas = dto.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -118,15 +100,9 @@ class Manhastro : HttpSource() {
         val dto = response.parseAs<MangaResponseDto>()
         val query = response.request.url.queryParameter("titulo")?.lowercase() ?: ""
 
-        val mangas = dto.data.filter { it.titulo.lowercase().contains(query) }
-            .map {
-                SManga.create().apply {
-                    title = it.titulo
-                    thumbnail_url = "https://" + it.imagem
-                    setUrlWithoutDomain("/dados/${it.manga_id}")
-                    description = it.descricao.trim()
-                }
-            }
+        val mangas = dto.data
+            .filter { it.titulo.lowercase().contains(query) }
+            .map { it.toSManga() }
 
         return MangasPage(mangas, false)
     }
@@ -172,8 +148,6 @@ class Manhastro : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapterNumberRegex = """\d+(\.\d+)?""".toRegex()
-
         return response.parseAs<CapituloDto>().capitulos.map {
             SChapter.create().apply {
                 name = it.capitulo_nome
@@ -213,6 +187,16 @@ class Manhastro : HttpSource() {
 
     // ============================= Utilities ====================================
 
+    private fun MangaDto.toSManga(): SManga {
+        return SManga.create().apply {
+            title = this@toSManga.titulo
+            thumbnail_url = "https://${this@toSManga.imagem}"
+            setUrlWithoutDomain("/dados/${this@toSManga.manga_id}")
+            description = this@toSManga.descricao.trim()
+            initialized = true
+        }
+    }
+
     private inline fun <reified T> Response.parseAs(): T = use {
         return json.decodeFromStream(body.byteStream())
     }
@@ -223,5 +207,6 @@ class Manhastro : HttpSource() {
     companion object {
         @SuppressLint("SimpleDateFormat")
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
+        val chapterNumberRegex = """\d+(\.\d+)?""".toRegex()
     }
 }
