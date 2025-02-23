@@ -28,7 +28,7 @@ import java.util.Locale
 
 class DeviantArt : HttpSource(), ConfigurableSource {
     override val name = "DeviantArt"
-    override val baseUrl = "https://deviantart.com"
+    override val baseUrl = "https://www.deviantart.com"
     override val lang = "all"
     override val supportsLatest = false
 
