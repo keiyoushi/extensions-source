@@ -37,22 +37,26 @@ class Kanjiku(
 
     override fun latestUpdatesParse(response: Response): MangasPage = MangasPage(
         response.asJsoup().select(".manga_overview_box_headline a").run {
-                val latest = mutableListOf<SManga>()
-                forEach { element ->
-                    val mangaTitle = element.text()
-                    if (latest.find { manga -> manga.title == mangaTitle } == null)
-                        latest.add(SManga.create().apply {
-                                element.absUrl("href").toHttpUrl().also {
-                                    setUrlWithoutDomain(it.newBuilder().apply {
-                                            if (it.pathSegments.last() == "")
-                                                removePathSegment(it.pathSegments.lastIndex)
-                                        }.build().toString(),
-                                    )}
-                                title = mangaTitle
-                        })
-                }
-                latest
-            },
+            val latest = mutableListOf<SManga>()
+            forEach { element ->
+                val mangaTitle = element.text()
+                if (latest.find { manga -> manga.title == mangaTitle } == null)
+                    latest.add(
+                        SManga.create().apply {
+                            element.absUrl("href").toHttpUrl().also {
+                                setUrlWithoutDomain(
+                                    it.newBuilder().apply {
+                                        if (it.pathSegments.last() == "")
+                                            removePathSegment(it.pathSegments.lastIndex)
+                                    }.build().toString(),
+                                )
+                            }
+                            title = mangaTitle
+                        },
+                    )
+            }
+            latest
+        },
         false,
     )
 
@@ -105,9 +109,15 @@ class Kanjiku(
             Page(index, imageUrl = element.absUrl("src"))
         }
 
-    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        throw UnsupportedOperationException()
+
+    override fun searchMangaFromElement(element: Element): SManga =
+        throw UnsupportedOperationException()
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+        throw UnsupportedOperationException()
+
     override fun searchMangaSelector(): String = throw UnsupportedOperationException()
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
     override fun searchMangaNextPageSelector(): String? = null
