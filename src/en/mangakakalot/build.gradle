@@ -2,7 +2,7 @@ ext {
     extName = 'Mangakakalot'
     extClass = '.Mangakakalot'
     themePkg = 'mangabox'
-    baseUrl = 'https://mangakakalot.com'
+    baseUrl = 'https://www.mangakakalot.gg'
     overrideVersionCode = 4
 }
 
