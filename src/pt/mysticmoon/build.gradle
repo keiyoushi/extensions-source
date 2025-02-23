@@ -2,8 +2,8 @@ ext {
     extName = 'Mystic Moon'
     extClass = '.MysticMoon'
     themePkg = 'madara'
-    baseUrl = 'https://mysticmoon.lat'
-    overrideVersionCode = 0
+    baseUrl = 'https://mysticmagic.com.br'
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

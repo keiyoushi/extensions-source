@@ -6,7 +6,7 @@ import java.util.Locale
 
 class MysticMoon : Madara(
     "Mystic Moon",
-    "https://mysticmoon.lat",
+    "https://mysticmagic.com.br",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {

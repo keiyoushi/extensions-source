@@ -1,0 +1,9 @@
+ext {
+    extName = 'Flone Scans'
+    extClass = '.FloneScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://sweetmanhwa.online'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
