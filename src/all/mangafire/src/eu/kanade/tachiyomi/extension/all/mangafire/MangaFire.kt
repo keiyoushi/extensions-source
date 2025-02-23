@@ -5,7 +5,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -24,11 +23,11 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.select.Evaluator
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -50,72 +49,50 @@ class MangaFire(
 
     override val client = network.cloudflareClient.newBuilder().addInterceptor(ImageInterceptor).build()
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/filter?sort=most_viewed&language[]=$langCode&page=$page", headers)
+    // ============================== Popular ===============================
+
+    override fun popularMangaRequest(page: Int): Request {
+        return searchMangaRequest(
+            page,
+            "",
+            FilterList(SortFilter(defaultValue = "most_viewed")),
+        )
+    }
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/filter?sort=recently_updated&language[]=$langCode&page=$page", headers)
+    // =============================== Latest ===============================
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        return searchMangaRequest(
+            page,
+            "",
+            FilterList(SortFilter(defaultValue = "recently_updated")),
+        )
+    }
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
+    // =============================== Search ===============================
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
-        if (query.isNotBlank()) {
-            urlBuilder.addPathSegment("filter").apply {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("filter")
+
+            if (query.isNotBlank()) {
                 addQueryParameter("keyword", query)
-                addQueryParameter("page", page.toString())
             }
-        } else {
-            urlBuilder.addPathSegment("filter").apply {
-                addQueryParameter("language[]", langCode)
-                addQueryParameter("page", page.toString())
-                filters.ifEmpty(::getFilterList).forEach { filter ->
-                    when (filter) {
-                        is Group -> {
-                            filter.state.forEach {
-                                if (it.state) {
-                                    addQueryParameter(filter.param, it.id)
-                                }
-                            }
-                        }
 
-                        is Select -> {
-                            addQueryParameter(filter.param, filter.selection)
-                        }
-
-                        is GenresFilter -> {
-                            filter.state.forEach {
-                                if (it.state != 0) {
-                                    addQueryParameter(filter.param, it.selection)
-                                }
-                            }
-                            if (filter.combineMode) {
-                                addQueryParameter("genre_mode", "and")
-                            }
-                        }
-
-                        else -> {}
-                    }
-                }
+            val filterList = filters.ifEmpty { getFilterList() }
+            filterList.filterIsInstance<UriFilter>().forEach {
+                it.addToUri(this)
             }
-        }
-        return GET(urlBuilder.build(), headers)
-    }
 
-    private fun searchMangaNextPageSelector() = ".page-item.active + .page-item .page-link"
+            addQueryParameter("language[]", langCode)
+            addQueryParameter("page", page.toString())
+        }.build()
 
-    private fun searchMangaSelector() = ".original.card-lg .unit .inner"
-
-    private fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        element.selectFirst(".info > a")!!.let {
-            setUrlWithoutDomain(it.attr("href"))
-            title = it.ownText()
-        }
-        element.selectFirst(Evaluator.Tag("img"))!!.let {
-            thumbnail_url = it.attr("src")
-        }
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -135,141 +112,148 @@ class MangaFire(
         return MangasPage(entries, hasNextPage)
     }
 
+    private fun searchMangaNextPageSelector() = ".page-item.active + .page-item .page-link"
+
+    private fun searchMangaSelector() = ".original.card-lg .unit .inner"
+
+    private fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        element.selectFirst(".info > a")!!.let {
+            setUrlWithoutDomain(it.attr("href"))
+            title = it.ownText()
+        }
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+    }
+
+    // =============================== Filters ==============================
+
+    override fun getFilterList() = FilterList(
+        TypeFilter(),
+        GenreFilter(),
+        GenreModeFilter(),
+        StatusFilter(),
+        YearFilter(),
+        MinChapterFilter(),
+        SortFilter(),
+    )
+
+    // =========================== Manga Details ============================
+
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.removeSuffix(VOLUME_URL_SUFFIX)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val manga = mangaDetailsParse(document)
-        if (response.request.url.fragment == VOLUME_URL_FRAGMENT) {
-            manga.title = VOLUME_TITLE_PREFIX + manga.title
+        return mangaDetailsParse(response.asJsoup()).apply {
+            if (response.request.url.fragment == VOLUME_URL_FRAGMENT) {
+                title = VOLUME_TITLE_PREFIX + title
+            }
         }
-        return manga
     }
 
     private fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val root = document.selectFirst(".info")!!
-        val mangaTitle = root.child(1).ownText()
-        title = mangaTitle
-        description = document.run {
-            val description = selectFirst(Evaluator.Class("description"))!!.ownText()
-            when (val altTitle = root.child(2).ownText()) {
-                "", mangaTitle -> description
-                else -> "$description\n\nAlternative Title: $altTitle"
+        with(document.selectFirst(".main-inner:not(.manga-bottom)")!!) {
+            title = selectFirst("h1")!!.text()
+            thumbnail_url = selectFirst(".poster img")?.attr("src")
+            status = selectFirst(".info > p").parseStatus()
+            description = buildString {
+                document.selectFirst("#synopsis .modal-content")?.textNodes()?.let {
+                    append(it.joinToString("\n\n"))
+                }
+
+                selectFirst("h6")?.let {
+                    append("\n\nAlternative title: ${it.text()}")
+                }
+            }.trim()
+
+            selectFirst(".meta")?.let {
+                author = it.selectFirst("span:contains(Author:) + span")?.text()
+                val type = it.selectFirst("span:contains(Type:) + span")?.text()
+                val genres = it.selectFirst("span:contains(Genres:) + span")?.text()
+                genre = listOfNotNull(type, genres).joinToString()
             }
-        }
-        thumbnail_url = document.selectFirst(".poster")!!.selectFirst("img")!!.attr("src")
-        status = when (root.child(0).ownText()) {
-            "Completed" -> SManga.COMPLETED
-            "Releasing" -> SManga.ONGOING
-            "On_hiatus" -> SManga.ON_HIATUS
-            "Discontinued" -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
-        with(document.selectFirst(Evaluator.Class("meta"))!!) {
-            author = selectFirst("span:contains(Author:) + span")?.text()
-            val type = selectFirst("span:contains(Type:) + span")?.text()
-            val genres = selectFirst("span:contains(Genres:) + span")?.text()
-            genre = listOfNotNull(type, genres).joinToString()
         }
     }
 
-    private val chapterType get() = "chapter"
-    private val volumeType get() = "volume"
+    private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
+        "releasing" -> SManga.ONGOING
+        "completed" -> SManga.COMPLETED
+        "on_hiatus" -> SManga.ON_HIATUS
+        "discontinued" -> SManga.CANCELLED
+        else -> SManga.UNKNOWN
+    }
+
+    // ============================== Chapters ==============================
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        return baseUrl + chapter.url.substringBeforeLast("#")
+    }
+
+    private fun getAjaxRequest(ajaxType: String, mangaId: String, chapterType: String): Request {
+        return GET("$baseUrl/ajax/$ajaxType/$mangaId/$chapterType/$langCode", headers)
+    }
+
+    @Serializable
+    class AjaxReadDto(
+        val html: String,
+    )
 
     override fun chapterListParse(response: Response): List<SChapter> {
         throw UnsupportedOperationException()
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        Observable.fromCallable {
-            val path = manga.url
-            val isVolume = path.endsWith(VOLUME_URL_SUFFIX)
-            val type = if (isVolume) volumeType else chapterType
-            val request = chapterListRequest(path.removeSuffix(VOLUME_URL_SUFFIX), type)
-            val response = client.newCall(request).execute()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val path = manga.url
+        val mangaId = path.removeSuffix(VOLUME_URL_SUFFIX).substringAfterLast(".")
+        val isVolume = path.endsWith(VOLUME_URL_SUFFIX)
 
-            val abbrPrefix = if (isVolume) "Vol" else "Chap"
-            val fullPrefix = if (isVolume) "Volume" else "Chapter"
-            val linkSelector = Evaluator.Tag("a")
-            parseChapterElements(response, isVolume).map { element ->
-                SChapter.create().apply {
-                    val number = element.attr("data-number")
-                    chapter_number = number.toFloatOrNull() ?: -1f
+        val type = if (isVolume) "volume" else "chapter"
+        val abbrPrefix = if (isVolume) "Vol" else "Chap"
+        val fullPrefix = if (isVolume) "Volume" else "Chapter"
 
-                    val link = element.selectFirst(linkSelector)!!
-                    name = run {
-                        val name = link.text()
-                        val prefix = "$abbrPrefix $number: "
-                        if (!name.startsWith(prefix)) return@run name
-                        val realName = name.removePrefix(prefix)
-                        if (realName.contains(number)) realName else "$fullPrefix $number: $realName"
-                    }
-                    setUrlWithoutDomain(link.attr("href") + '#' + type + '/' + element.attr("data-id"))
+        val ajaxMangaList = client.newCall(getAjaxRequest("manga", mangaId, type))
+            .execute().parseAs<ResponseDto<String>>().result
+            .toBodyFragment()
+            .select(if (isVolume) ".vol-list > .item" else "li")
+
+        val ajaxReadList = client.newCall(getAjaxRequest("read", mangaId, type))
+            .execute().parseAs<ResponseDto<AjaxReadDto>>().result.html
+            .toBodyFragment()
+            .select("ul a")
+
+        val chapterList = ajaxMangaList.zip(ajaxReadList) { m, r ->
+            val link = r.selectFirst("a")!!
+            if (!r.attr("abs:href").toHttpUrl().pathSegments.last().contains(type)) {
+                return Observable.just(emptyList())
+            }
+
+            assert(m.attr("data-number") == r.attr("data-number")) {
+                "Chapter count doesn't match. Try updating again."
+            }
+
+            val number = m.attr("data-number")
+            val dateStr = m.select("span").getOrNull(1)?.text() ?: ""
+
+            SChapter.create().apply {
+                setUrlWithoutDomain("${link.attr("href")}#$type/${r.attr("data-id")}")
+                chapter_number = number.toFloatOrNull() ?: -1f
+                name = run {
+                    val name = link.text()
+                    val prefix = "$abbrPrefix $number: "
+                    if (!name.startsWith(prefix)) return@run name
+                    val realName = name.removePrefix(prefix)
+                    if (realName.contains(number)) realName else "$fullPrefix $number: $realName"
                 }
-            }.also { if (!isVolume && it.isNotEmpty()) updateChapterList(manga, it) }
-        }
 
-    private fun chapterListRequest(mangaUrl: String, type: String): Request {
-        val id = mangaUrl.substringAfterLast('.')
-        return GET("$baseUrl/ajax/manga/$id/$type/$langCode", headers)
-    }
-
-    private fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> {
-        val result = json.decodeFromString<ResponseDto<String>>(response.body.string()).result
-        val document = Jsoup.parse(result)
-        val selector = if (isVolume) "div.unit" else "ul li"
-        val elements = document.select(selector)
-        if (elements.size > 0) {
-            val linkToFirstChapter = elements[0].selectFirst(Evaluator.Tag("a"))!!.attr("href")
-            val mangaId = linkToFirstChapter.toString().substringAfter('.').substringBefore('/')
-            val type = if (isVolume) volumeType else chapterType
-            val request = GET("$baseUrl/ajax/read/$mangaId/$type/$langCode", headers)
-            val response = client.newCall(request).execute()
-            val res =
-                json.decodeFromString<ResponseDto<ChapterIdsDto>>(response.body.string()).result.html
-            val chapterInfoDocument = Jsoup.parse(res)
-            val chapters = chapterInfoDocument.select("ul li")
-            for ((i, it) in elements.withIndex()) {
-                it.attr("data-id", chapters[i].select("a").attr("data-id"))
+                date_upload = try {
+                    dateFormat.parse(dateStr)!!.time
+                } catch (_: ParseException) {
+                    0L
+                }
             }
         }
-        return elements.toList()
+
+        return Observable.just(chapterList)
     }
 
-    @Serializable
-    class ChapterIdsDto(
-        val html: String,
-        val title_format: String,
-    )
-
-    private fun updateChapterList(manga: SManga, chapters: List<SChapter>) {
-        val request = chapterListRequest(manga.url, chapterType)
-        val response = client.newCall(request).execute()
-        val result = json.decodeFromString<ResponseDto<String>>(response.body.string()).result
-        val document = Jsoup.parse(result)
-
-        val elements = document.selectFirst(".scroll-sm")!!.children()
-        val chapterCount = chapters.size
-        if (elements.size != chapterCount) throw Exception("Chapter count doesn't match. Try updating again.")
-        val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US)
-        for (i in 0 until chapterCount) {
-            val chapter = chapters[i]
-            val element = elements[i]
-            val number = element.attr("data-number").toFloatOrNull() ?: -1f
-            if (chapter.chapter_number != number) throw Exception("Chapter number doesn't match. Try updating again.")
-            chapter.name = element.select(Evaluator.Tag("span"))[0].ownText()
-            val date = element.select(Evaluator.Tag("span"))[1].ownText()
-            chapter.date_upload = try {
-                dateFormat.parse(date)!!.time
-            } catch (_: Throwable) {
-                0
-            }
-        }
-    }
-
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
+    // =============================== Pages ================================
 
     override fun pageListRequest(chapter: SChapter): Request {
         val typeAndId = chapter.url.substringAfterLast('#')
@@ -277,7 +261,7 @@ class MangaFire(
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val result = json.decodeFromString<ResponseDto<PageListDto>>(response.body.string()).result
+        val result = response.parseAs<ResponseDto<PageListDto>>().result
 
         return result.pages.mapIndexed { index, image ->
             val url = image.url
@@ -298,22 +282,11 @@ class MangaFire(
 
     class Image(val url: String, val offset: Int)
 
-    @Serializable
-    class ResponseDto<T>(
-        val result: T,
-        val status: Int,
-    )
+    override fun imageUrlParse(response: Response): String {
+        throw UnsupportedOperationException()
+    }
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        TypeFilter(),
-        GenresFilter(),
-        StatusFilter(),
-        YearFilter(),
-        ChapterCountFilter(),
-        SortFilter(),
-    )
+    // ============================ Preferences =============================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -323,7 +296,23 @@ class MangaFire(
         }.let(screen::addPreference)
     }
 
+    // ============================= Utilities ==============================
+
+    @Serializable
+    class ResponseDto<T>(
+        val result: T,
+    )
+
+    private inline fun <reified T> Response.parseAs(): T {
+        return json.decodeFromString(body.string())
+    }
+
+    private fun String.toBodyFragment(): Document {
+        return Jsoup.parseBodyFragment(this, baseUrl)
+    }
+
     companion object {
+        private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US)
         private const val SHOW_VOLUME_PREF = "show_volume"
 
         private const val VOLUME_URL_FRAGMENT = "vol"
