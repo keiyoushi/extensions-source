@@ -35,30 +35,20 @@ class Kanjiku(
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = MangasPage(
-        response.asJsoup().select(".manga_overview_box_headline a").run {
-            val latest = mutableListOf<SManga>()
-            forEach { element ->
-                val mangaTitle = element.text()
-                if (latest.find { manga -> manga.title == mangaTitle } == null)
-                    latest.add(
-                        SManga.create().apply {
-                            element.absUrl("href").toHttpUrl().also {
-                                setUrlWithoutDomain(
-                                    it.newBuilder().apply {
-                                        if (it.pathSegments.last() == "")
-                                            removePathSegment(it.pathSegments.lastIndex)
-                                    }.build().toString(),
-                                )
-                            }
-                            title = mangaTitle
-                        },
-                    )
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val mangas = response.asJsoup().select(".manga_overview_box_headline a").map { element ->
+            SManga.create().apply {
+                var url = element.absUrl("href").toHttpUrl()
+                if (url.pathSegments.last() == "") {
+                    // remove empty path segment
+                    url = url.newBuilder().removePathSegment(url.pathSegments.lastIndex).build()
+                }
+                setUrlWithoutDomain(url.toString())
+                title = element.text()
             }
-            latest
-        },
-        false,
-    )
+        }.distinctBy { it.url }
+        return MangasPage(mangas, false)
+    }
 
     override fun fetchSearchManga(
         page: Int,
