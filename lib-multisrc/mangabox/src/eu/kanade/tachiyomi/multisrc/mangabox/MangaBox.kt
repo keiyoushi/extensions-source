@@ -199,7 +199,7 @@ abstract class MangaBox(
 
     protected open val alternateChapterDateSelector = String()
 
-    private fun Element.selectDateFromElement(): Element {
+    protected fun Element.selectDateFromElement(): Element {
         val defaultChapterDateSelector = "span"
         return this.select(defaultChapterDateSelector).lastOrNull() ?: this.select(alternateChapterDateSelector).last()!!
     }

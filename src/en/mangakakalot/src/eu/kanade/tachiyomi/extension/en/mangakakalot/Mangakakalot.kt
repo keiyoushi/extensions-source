@@ -4,12 +4,17 @@ import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import org.jsoup.nodes.Element
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class Mangakakalot : MangaBox("Mangakakalot", "https://www.mangakakalot.gg", "en") {
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder().set("Referer", "https://www.mangakakalot.gg/") // for covers
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder().set("Referer", "$baseUrl/") // for covers
     override val popularUrlPath = "manga-list/hot-manga?page="
     override val latestUrlPath = "manga-list/latest-manga?page="
     override val simpleQueryPath = "search/story/"
@@ -17,10 +22,14 @@ class Mangakakalot : MangaBox("Mangakakalot", "https://www.mangakakalot.gg", "en
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank() && getAdvancedGenreFilters().isEmpty()) {
-            GET("$baseUrl/$simpleQueryPath${normalizeSearchQuery(query)}?page=$page", headers)
+            val url = "$baseUrl/$simpleQueryPath".toHttpUrl().newBuilder()
+                .addPathSegment(normalizeSearchQuery(query))
+                .addQueryParameter("page", page.toString())
+                .build()
+
+            return GET(url, headers)
         } else {
-            val url = baseUrl.toHttpUrl().newBuilder()
-            url.addPathSegment("genre")
+            val url = "$baseUrl/genre".toHttpUrl().newBuilder()
             url.addQueryParameter("page", page.toString())
             filters.forEach { filter ->
                 when (filter) {
@@ -35,16 +44,28 @@ class Mangakakalot : MangaBox("Mangakakalot", "https://www.mangakakalot.gg", "en
         }
     }
 
+    override fun chapterFromElement(element: Element): SChapter {
+        // parse on title attribute rather than the value
+        val dateUploadAttr: Long? = try {
+            SimpleDateFormat("MMM-dd-yyyy HH:mm", Locale.ENGLISH).parse(element.selectDateFromElement().attr("title"))?.time
+        } catch (e: ParseException) {
+            null
+        }
+
+        return super.chapterFromElement(element).apply {
+            date_upload = dateUploadAttr ?: date_upload
+        }
+    }
+
     override val descriptionSelector = "div#contentBox"
 
     override fun imageRequest(page: Page): Request {
         return if (page.url.contains(baseUrl)) {
             GET(page.imageUrl!!, headersBuilder().build())
-        } else { //Avoid 403 errors on non-migrated mangas
-            GET(page.imageUrl!!, headersBuilder().set("Referer", baseUrl).build())
+        } else { // Avoid 403 errors on non-migrated mangas
+            GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())
         }
     }
-
 
     override fun getGenreFilters(): Array<Pair<String?, String>> = arrayOf(
         Pair("all", "ALL"),
