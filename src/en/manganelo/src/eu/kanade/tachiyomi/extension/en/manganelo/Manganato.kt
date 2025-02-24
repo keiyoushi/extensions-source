@@ -65,7 +65,7 @@ class Manganato : MangaBox("Manganato", "https://www.natomanga.com", "en") {
         return if (page.url.contains(baseUrl)) {
             GET(page.imageUrl!!, headersBuilder().build())
         } else { // Avoid 403 errors on non-migrated mangas
-            GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())
+            super.imageRequest(page)
         }
     }
 
