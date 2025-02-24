@@ -14,6 +14,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Mangakakalot : MangaBox("Mangakakalot", "https://www.mangakakalot.gg", "en") {
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM-dd-yyyy HH:mm", Locale.ENGLISH)
+
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().set("Referer", "$baseUrl/") // for covers
     override val popularUrlPath = "manga-list/hot-manga?page="
     override val latestUrlPath = "manga-list/latest-manga?page="
@@ -47,7 +49,7 @@ class Mangakakalot : MangaBox("Mangakakalot", "https://www.mangakakalot.gg", "en
     override fun chapterFromElement(element: Element): SChapter {
         // parse on title attribute rather than the value
         val dateUploadAttr: Long? = try {
-            SimpleDateFormat("MMM-dd-yyyy HH:mm", Locale.ENGLISH).parse(element.selectDateFromElement().attr("title"))?.time
+            dateFormat.parse(element.selectDateFromElement().attr("title"))?.time
         } catch (e: ParseException) {
             null
         }

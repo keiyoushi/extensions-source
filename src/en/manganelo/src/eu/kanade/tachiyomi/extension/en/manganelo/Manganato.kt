@@ -16,6 +16,8 @@ import java.util.Locale
 class Manganato : MangaBox("Manganato", "https://www.natomanga.com", "en") {
     override val id: Long = 1024627298672457456
 
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM-dd-yyyy HH:mm", Locale.ENGLISH)
+
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().set("Referer", "$baseUrl/") // for covers
     override val popularUrlPath = "manga-list/hot-manga?page="
     override val latestUrlPath = "manga-list/latest-manga?page="
@@ -49,7 +51,7 @@ class Manganato : MangaBox("Manganato", "https://www.natomanga.com", "en") {
     override fun chapterFromElement(element: Element): SChapter {
         // parse on title attribute rather than the value
         val dateUploadAttr: Long? = try {
-            SimpleDateFormat("MMM-dd-yyyy HH:mm", Locale.ENGLISH).parse(element.selectDateFromElement().attr("title"))?.time
+            dateFormat.parse(element.selectDateFromElement().attr("title"))?.time
         } catch (e: ParseException) {
             null
         }
