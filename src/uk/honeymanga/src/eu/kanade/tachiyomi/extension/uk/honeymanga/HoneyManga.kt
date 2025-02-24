@@ -28,8 +28,8 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-
 class HoneyManga : HttpSource() {
+
     override val name = "HoneyManga"
     override val baseUrl = "https://honey-manga.com.ua"
     override val lang = "uk"
