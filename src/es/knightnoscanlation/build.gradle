@@ -3,7 +3,7 @@ ext {
     extClass = '.KnightNoScanlation'
     themePkg = 'madara'
     baseUrl = 'https://kns.cookni.net'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
     isNsfw = true
 }
 
