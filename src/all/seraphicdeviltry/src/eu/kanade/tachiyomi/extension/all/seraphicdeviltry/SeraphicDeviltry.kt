@@ -6,12 +6,12 @@ import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class SeraphicDeviltry(
+class SeraphicDeviltry(
     lang: String,
-    urlLang: String,
+    baseUrl: String,
 ) : Madara(
     "SeraphicDeviltry",
-    urlLang,
+    baseUrl,
     lang,
     dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale("US")),
 ) {
