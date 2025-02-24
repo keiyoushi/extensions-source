@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.uk.honeymanga
 
+import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.CompleteHoneyMangaDto
 import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaChapterPagesDto
 import eu.kanade.tachiyomi.extension.uk.honeymanga.dtos.HoneyMangaChapterResponseDto
@@ -28,8 +29,8 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class HoneyManga : HttpSource() {
 
+class HoneyManga : HttpSource() {
     override val name = "HoneyManga"
     override val baseUrl = "https://honey-manga.com.ua"
     override val lang = "uk"
@@ -106,7 +107,7 @@ class HoneyManga : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.asClass<HoneyMangaChapterResponseDto>()
-        return result.data.map {
+        return result.data.filter { !it.isMonetized }.map {
             val suffix = if (it.subChapterNum == 0) "" else ".${it.subChapterNum}"
             SChapter.create().apply {
                 url = "$baseUrl/read/${it.id}/${it.mangaId}"

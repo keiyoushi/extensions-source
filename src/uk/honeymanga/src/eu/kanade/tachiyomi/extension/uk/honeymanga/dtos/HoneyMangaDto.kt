@@ -46,4 +46,5 @@ data class HoneyMangaChapterDto(
     val subChapterNum: Int,
     val mangaId: String,
     val lastUpdated: String,
+    val isMonetized: Boolean,
 )
