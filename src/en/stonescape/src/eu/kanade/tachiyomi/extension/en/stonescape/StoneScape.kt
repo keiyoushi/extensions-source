@@ -15,6 +15,7 @@ class StoneScape : Madara(
     override val chapterUrlSelector = "li > a"
 
     override val mangaDetailsSelectorAuthor = ".post-content .manga-authors a"
+    override val mangaDetailsSelectorDescription = ".manga-about, ${super.mangaDetailsSelectorDescription}"
 
     override fun chapterListSelector() = "li.wp-manga-chapter:not(.premium-block)"
 }
