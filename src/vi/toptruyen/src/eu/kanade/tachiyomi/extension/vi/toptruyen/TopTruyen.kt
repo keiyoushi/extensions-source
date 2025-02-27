@@ -1,12 +1,17 @@
 package eu.kanade.tachiyomi.extension.vi.toptruyen
 
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -15,15 +20,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class TopTruyen : WPComics(
-    "Top Truyen",
-    "https://www.toptruyen369.net",
-    "vi",
-    dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-    },
-    gmtOffset = null,
-) {
+class TopTruyen :
+    WPComics(
+        "Top Truyen",
+        "https://www.toptruyentv.pro",
+        "vi",
+        dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+        },
+        gmtOffset = null,
+    ),
+    ConfigurableSource {
+
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
@@ -85,4 +93,47 @@ class TopTruyen : WPComics(
     }
 
     override val genresSelector = ".categories-detail ul.nav li:not(.active) a"
+
+    private val preferences: SharedPreferences = getPreferences()
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != super.baseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, super.baseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
+                    .apply()
+            }
+        }
+    }
+
+    override val baseUrl by lazy { getPrefBaseUrl() }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            setDefaultValue(super.baseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: ${super.baseUrl}"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+        screen.addPreference(baseUrlPref)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
+
+    companion object {
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
+        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_SUMMARY =
+            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
+    }
 }
