@@ -63,6 +63,7 @@ class SeriesChapterDto(
     private val title: String,
     private val number: Float,
     private val releasedAt: String,
+    val subscribersOnly: Boolean,
 ) {
     fun toSChapter(seriesSlug: String) = SChapter.create().apply {
         name = "Capítulo ${number.toString().removeSuffix(".0")} - $title"

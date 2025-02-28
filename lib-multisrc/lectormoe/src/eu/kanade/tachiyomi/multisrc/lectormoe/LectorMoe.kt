@@ -112,6 +112,7 @@ abstract class LectorMoe(
         val result = json.decodeFromString<Data<SeriesDto>>(response.body.string())
         val seriesSlug = result.data.slug
         return result.data.chapters
+            ?.filter { it.subscribersOnly.not() }
             ?.map { it.toSChapter(seriesSlug) }
             ?.filter { it.date_upload < System.currentTimeMillis() }
             ?: emptyList()
