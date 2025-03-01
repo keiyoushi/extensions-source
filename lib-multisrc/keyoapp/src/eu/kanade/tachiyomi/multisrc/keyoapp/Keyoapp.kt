@@ -191,7 +191,7 @@ abstract class Keyoapp(
         }
     }
 
-    private fun genresRequest(): Request = GET("$baseUrl/series/", headers)
+    protected open fun genresRequest(): Request = GET("$baseUrl/series/", headers)
 
     /**
      * Get the genres from the search page document.
