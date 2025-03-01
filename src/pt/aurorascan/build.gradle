@@ -4,6 +4,7 @@ ext {
     themePkg = 'peachscan'
     baseUrl = 'https://aurorascan.net'
     overrideVersionCode = 0
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

@@ -4,6 +4,7 @@ ext {
     themePkg = 'fansubscat'
     baseUrl = 'https://manga.fansubs.cat'
     overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

@@ -4,6 +4,7 @@ ext {
     themePkg = 'mccms'
     baseUrl = 'https://www.mangakoinu.com'
     overrideVersionCode = 0
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

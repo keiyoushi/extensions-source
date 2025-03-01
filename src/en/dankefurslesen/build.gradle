@@ -4,6 +4,7 @@ ext {
     themePkg = 'guya'
     baseUrl = 'https://danke.moe'
     overrideVersionCode = 0
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

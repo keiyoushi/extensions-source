@@ -4,6 +4,7 @@ ext {
     themePkg = 'keyoapp'
     baseUrl = 'https://reaper-scans.fr'
     overrideVersionCode = 4
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

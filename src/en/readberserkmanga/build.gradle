@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangacatalog'
     baseUrl = 'https://readberserk.com'
     overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

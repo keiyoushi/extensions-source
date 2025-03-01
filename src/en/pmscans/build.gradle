@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangathemesia'
     baseUrl = 'https://rackusreads.com'
     overrideVersionCode = 7
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

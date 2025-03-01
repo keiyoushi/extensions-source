@@ -4,6 +4,7 @@ ext {
     themePkg = 'heancms'
     baseUrl = 'https://ezmanga.org'
     overrideVersionCode = 21
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
