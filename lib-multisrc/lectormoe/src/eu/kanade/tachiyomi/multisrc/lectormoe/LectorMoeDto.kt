@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
 class Data<T>(val data: T)
@@ -53,18 +54,21 @@ class SeriesAuthorDto(
     val name: String,
 )
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
 
 @Serializable
 class SeriesChapterDto(
     private val title: String,
     private val number: Float,
-    private val createdAt: String,
+    private val releasedAt: String,
+    val subscribersOnly: Boolean,
 ) {
     fun toSChapter(seriesSlug: String) = SChapter.create().apply {
         name = "Capítulo ${number.toString().removeSuffix(".0")} - $title"
         date_upload = try {
-            dateFormat.parse(createdAt)?.time ?: 0L
+            dateFormat.parse(releasedAt)?.time ?: 0L
         } catch (_: ParseException) {
             0L
         }
