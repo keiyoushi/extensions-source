@@ -3,7 +3,7 @@ ext {
     extClass = '.LuaScans'
     themePkg = 'heancms'
     baseUrl = 'https://luacomic.org'
-    overrideVersionCode = 18
+    overrideVersionCode = 19
     isNsfw = false
 }
 
