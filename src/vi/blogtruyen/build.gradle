@@ -1,9 +1,0 @@
-ext {
-    extName = 'BlogTruyen'
-    extClass = '.BlogTruyenMoi'
-    themePkg = 'blogtruyen'
-    baseUrl = 'https://blogtruyenmoi.com'
-    overrideVersionCode = 17
-}
-
-apply from: "$rootDir/common.gradle"
