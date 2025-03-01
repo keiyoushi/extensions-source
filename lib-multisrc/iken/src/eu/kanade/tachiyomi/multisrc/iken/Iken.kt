@@ -9,8 +9,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -130,11 +135,20 @@ abstract class Iken(
             .map { it.toSChapter(data.post.slug) }
     }
 
+    private val regexImages = """\\"images\\":(\[.*?]).*?nextChapter""".toRegex()
+
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        return document.select("main section img").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.absUrl("src"))
+        val images = document.selectFirst("script:containsData(images)")
+            ?.data()
+            ?.let { regexImages.find(it)!!.groupValues[1].trim(',') }
+            ?.let { "\"$it\"".parseAs<String>() }
+            ?.let { jsonInstance.parseToJsonElement(it).jsonArray }
+            ?: throw Exception("Unable to parse images")
+
+        return images.mapIndexed { idx, img ->
+            Page(idx, imageUrl = img.jsonObject["url"]!!.jsonPrimitive.content)
         }
     }
 
