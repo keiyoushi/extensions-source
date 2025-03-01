@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.infernalvoidscans
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
-import kotlinx.serialization.json.Json
-import uy.kohesive.injekt.injectLazy
 
 class HiveScans : Iken(
     "Hive Scans",
