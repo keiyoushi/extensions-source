@@ -6,7 +6,6 @@ import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.libgroup.LibGroup
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.utils.getPreferencesLazy
-import uy.kohesive.injekt.api.get
 
 class HentaiLib : LibGroup("HentaiLib", "https://hentailib.me", "ru") {
 

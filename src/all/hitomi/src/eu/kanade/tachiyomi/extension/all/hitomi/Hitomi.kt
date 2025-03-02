@@ -32,7 +32,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.internal.http2.StreamResetException
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

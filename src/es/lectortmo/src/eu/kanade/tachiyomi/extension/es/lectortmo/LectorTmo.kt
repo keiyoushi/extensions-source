@@ -26,7 +26,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat

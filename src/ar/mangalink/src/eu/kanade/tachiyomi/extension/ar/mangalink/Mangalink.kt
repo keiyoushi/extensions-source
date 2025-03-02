@@ -6,7 +6,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferencesLazy
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 

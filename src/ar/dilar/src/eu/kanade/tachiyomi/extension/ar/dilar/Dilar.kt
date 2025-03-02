@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.api.get
 
 private const val MIRROR_PREF_KEY = "MIRROR"
 private const val MIRROR_PREF_TITLE = "Dilar : Mirror Urls"

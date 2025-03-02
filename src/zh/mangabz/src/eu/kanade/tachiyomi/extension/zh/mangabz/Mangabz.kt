@@ -23,7 +23,6 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import org.jsoup.select.Evaluator
 import rx.Observable
-import uy.kohesive.injekt.api.get
 
 class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
 

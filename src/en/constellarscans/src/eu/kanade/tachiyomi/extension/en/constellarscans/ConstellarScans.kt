@@ -20,7 +20,6 @@ import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.api.get
 
 class ConstellarScans :
     MangaThemesia(

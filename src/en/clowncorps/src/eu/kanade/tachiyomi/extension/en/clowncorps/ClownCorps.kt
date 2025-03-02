@@ -24,7 +24,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale

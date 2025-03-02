@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferences
 import okhttp3.Headers
 import okhttp3.OkHttpClient
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit

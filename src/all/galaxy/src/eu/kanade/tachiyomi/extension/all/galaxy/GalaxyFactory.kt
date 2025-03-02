@@ -6,7 +6,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.SourceFactory
 import keiyoushi.utils.getPreferencesLazy
-import uy.kohesive.injekt.api.get
 
 class GalaxyFactory : SourceFactory {
 

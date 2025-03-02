@@ -16,7 +16,6 @@ import keiyoushi.utils.getPreferences
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.api.get
 import kotlin.math.max
 
 class Roumanwu : ParsedHttpSource(), ConfigurableSource {

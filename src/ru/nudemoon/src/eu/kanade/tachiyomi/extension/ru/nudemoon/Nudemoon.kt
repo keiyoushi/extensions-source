@@ -20,7 +20,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale

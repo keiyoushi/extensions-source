@@ -22,7 +22,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 

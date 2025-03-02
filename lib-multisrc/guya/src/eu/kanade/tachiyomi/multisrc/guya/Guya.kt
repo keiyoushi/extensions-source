@@ -25,7 +25,6 @@ import org.jsoup.Jsoup
 import org.jsoup.select.Evaluator
 import rx.Observable
 import rx.schedulers.Schedulers
-import uy.kohesive.injekt.api.get
 
 abstract class Guya(
     override val name: String,

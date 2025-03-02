@@ -27,7 +27,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.net.URLEncoder

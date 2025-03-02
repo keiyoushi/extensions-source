@@ -6,7 +6,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferences
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 

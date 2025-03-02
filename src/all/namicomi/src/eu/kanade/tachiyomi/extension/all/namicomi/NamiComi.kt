@@ -31,7 +31,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.IOException
-import uy.kohesive.injekt.api.get
 
 abstract class NamiComi(final override val lang: String, private val extLang: String = lang) :
     ConfigurableSource, HttpSource() {

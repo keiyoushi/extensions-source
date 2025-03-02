@@ -5,7 +5,6 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.libgroup.LibGroup
 import keiyoushi.utils.getPreferencesLazy
-import uy.kohesive.injekt.api.get
 
 class YaoiLib : LibGroup("YaoiLib", "https://slashlib.me", "ru") {
 

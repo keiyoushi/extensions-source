@@ -5,7 +5,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.monochrome.MonochromeCMS
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferencesLazy
-import uy.kohesive.injekt.api.get
 
 class MonochromeCustom : ConfigurableSource,
     MonochromeCMS("Monochrome Custom", "", "en") {

@@ -34,7 +34,6 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 

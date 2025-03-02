@@ -21,7 +21,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date

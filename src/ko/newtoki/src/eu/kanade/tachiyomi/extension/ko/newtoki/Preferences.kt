@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import keiyoushi.utils.getPreferences
-import uy.kohesive.injekt.api.get
 
 const val MANATOKI_ID = 2526381983439079467L // "NewToki/ko/1"
 const val NEWTOKI_ID = 1977818283770282459L // "NewToki (Webtoon)/ko/1"

@@ -30,7 +30,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.asResponseBody
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"

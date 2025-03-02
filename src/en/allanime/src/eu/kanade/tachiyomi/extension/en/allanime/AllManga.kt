@@ -20,7 +20,6 @@ import kotlinx.serialization.json.float
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.api.get
 
 class AllManga : ConfigurableSource, HttpSource() {
 

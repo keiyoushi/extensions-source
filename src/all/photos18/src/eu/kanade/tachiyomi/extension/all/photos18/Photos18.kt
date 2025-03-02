@@ -21,7 +21,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.select.Evaluator
 import rx.Observable
-import uy.kohesive.injekt.api.get
 
 class Photos18 : HttpSource(), ConfigurableSource {
     override val name = "Photos18"

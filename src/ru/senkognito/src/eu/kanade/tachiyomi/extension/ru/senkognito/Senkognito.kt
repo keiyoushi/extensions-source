@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import eu.kanade.tachiyomi.multisrc.senkuro.Senkuro
 import keiyoushi.utils.getPreferencesLazy
-import uy.kohesive.injekt.api.get
 
 class Senkognito : Senkuro("Senkognito", "https://senkognito.com", "ru") {
 

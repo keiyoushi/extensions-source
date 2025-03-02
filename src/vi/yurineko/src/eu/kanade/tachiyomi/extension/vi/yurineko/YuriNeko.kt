@@ -30,7 +30,6 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.net.URLDecoder
 import java.util.concurrent.TimeUnit

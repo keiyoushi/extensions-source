@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.OkHttpClient
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 

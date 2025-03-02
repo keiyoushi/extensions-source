@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferencesLazy
-import uy.kohesive.injekt.api.get
 
 class HentaiSlayer : FuzzyDoodle("هنتاي سلاير", "https://hentaislayer.net", "ar"), ConfigurableSource {
 

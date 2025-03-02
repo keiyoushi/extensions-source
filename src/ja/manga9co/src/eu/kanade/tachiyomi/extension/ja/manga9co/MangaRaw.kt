@@ -13,7 +13,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
-import uy.kohesive.injekt.api.get
 import kotlin.random.Random
 
 class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {

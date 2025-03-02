@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.getPreferences
 import okhttp3.Interceptor
 import okhttp3.Response
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 import kotlin.random.Random
 

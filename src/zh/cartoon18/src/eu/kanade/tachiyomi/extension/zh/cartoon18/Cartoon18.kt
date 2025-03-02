@@ -20,7 +20,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.api.get
 import java.net.URLDecoder
 
 class Cartoon18 : HttpSource(), ConfigurableSource {

@@ -30,7 +30,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
 
 abstract class EHentai(

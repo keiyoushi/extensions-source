@@ -31,7 +31,6 @@ import okhttp3.Request
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.api.get
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.URLEncoder

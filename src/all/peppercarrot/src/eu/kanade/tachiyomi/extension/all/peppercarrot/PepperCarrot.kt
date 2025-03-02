@@ -19,7 +19,6 @@ import org.jsoup.nodes.TextNode
 import org.jsoup.select.Evaluator
 import rx.Observable
 import rx.Single
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit

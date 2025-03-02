@@ -32,7 +32,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
 import rx.schedulers.Schedulers
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat

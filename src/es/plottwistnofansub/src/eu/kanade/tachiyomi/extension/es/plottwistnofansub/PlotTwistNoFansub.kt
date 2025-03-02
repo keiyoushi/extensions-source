@@ -32,7 +32,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Entities
 import org.jsoup.select.Elements
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {

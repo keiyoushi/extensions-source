@@ -16,7 +16,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.api.get
 
 class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), ConfigurableSource {
     // moved from Reaper Scans (id) to Shinigami (id)

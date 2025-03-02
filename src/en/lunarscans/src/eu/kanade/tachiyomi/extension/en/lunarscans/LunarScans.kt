@@ -17,7 +17,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.Request
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.api.get
 
 class LunarScans :
     MangaThemesia(

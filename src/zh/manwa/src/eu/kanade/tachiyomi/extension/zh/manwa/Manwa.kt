@@ -31,7 +31,6 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec

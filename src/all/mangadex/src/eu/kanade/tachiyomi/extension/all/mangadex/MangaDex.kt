@@ -40,7 +40,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.api.get
 import java.util.Date
 
 abstract class MangaDex(final override val lang: String, private val dexLang: String = lang) :

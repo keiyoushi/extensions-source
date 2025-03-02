@@ -30,7 +30,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.utils.getPreferences
 import okhttp3.Request
-import uy.kohesive.injekt.api.get
 
 class ReadManga : GroupLe("ReadManga", "https://zz.readmanga.io", "ru") {
 
