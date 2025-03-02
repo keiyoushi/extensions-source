@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.clowncorps
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.MultiSelectListPreference
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -24,8 +24,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -181,9 +179,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
         throw UnsupportedOperationException()
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun getShowAuthorsNotesPref() =
         preferences.getBoolean(SETTING_KEY_SHOW_AUTHORS_NOTES, false)

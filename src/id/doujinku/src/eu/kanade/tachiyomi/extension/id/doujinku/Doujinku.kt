@@ -1,13 +1,11 @@
 package eu.kanade.tachiyomi.extension.id.doujinku
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import keiyoushi.utils.getPreferences
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -19,8 +17,7 @@ class Doujinku :
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("id")),
     ),
     ConfigurableSource {
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->

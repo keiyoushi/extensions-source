@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.mangabz
 
-import android.app.Application
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.lib.unpacker.SubstringExtractor
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.getPreferences
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -23,8 +23,6 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import org.jsoup.select.Evaluator
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
 
@@ -34,7 +32,7 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
     private val urlSuffix: String
 
     init {
-        val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val preferences = getPreferences()
         val mirror = preferences.mirror
         _baseUrl = "https://" + mirror.domain
         urlSuffix = mirror.urlSuffix

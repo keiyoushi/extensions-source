@@ -1,7 +1,7 @@
 ext {
     extName = 'Baozi Manhua'
     extClass = '.Baozi'
-    extVersionCode = 23
+    extVersionCode = 24
 }
 
 apply from: "$rootDir/common.gradle"

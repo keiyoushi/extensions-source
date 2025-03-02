@@ -1,14 +1,12 @@
 package eu.kanade.tachiyomi.extension.all.projectsuki
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import keiyoushi.utils.getPreferences
 import java.util.Locale
 
 /**
@@ -22,7 +20,7 @@ private inline val INFO: Nothing get() = error("INFO")
  */
 class ProjectSukiPreferences(id: Long) {
 
-    internal val shared by lazy { Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000) }
+    internal val shared by lazy { getPreferences(id) }
 
     abstract inner class PSPreference<Raw : Any, T : Any>(val preferenceIdentifier: String, val default: Raw) {
 

@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.danbooru
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 internal class FilterTags : Filter.Text("Tags")

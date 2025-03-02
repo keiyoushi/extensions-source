@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaRaw'
     themePkg = 'mangaraw'
     baseUrl = 'https://manga1001.in'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 

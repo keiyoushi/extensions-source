@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ko.wolfdotcom
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.EditTextPreference
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -27,8 +27,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.net.URLEncoder
@@ -58,9 +56,7 @@ open class Wolf(
 
     private val json: Json by injectLazy()
 
-    private val preference: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preference: SharedPreferences by getPreferencesLazy()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         return fetchSearchManga(page, "", POPULAR)

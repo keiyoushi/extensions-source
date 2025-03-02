@@ -3,7 +3,7 @@ ext {
     extClass = '.HentaiLib'
     themePkg = 'libgroup'
     baseUrl = 'https://hentailib.me'
-    overrideVersionCode = 19
+    overrideVersionCode = 20
     isNsfw = true
 }
 

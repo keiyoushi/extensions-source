@@ -1,13 +1,11 @@
 package eu.kanade.tachiyomi.extension.ar.mangalink
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import keiyoushi.utils.getPreferencesLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -24,9 +22,7 @@ class Mangalink :
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     companion object {
         private const val RESTART_TACHIYOMI = ".لتطبيق الإعدادات الجديدة Tachiyomi أعد تشغيل"
