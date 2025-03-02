@@ -146,8 +146,6 @@ abstract class Iken(
             .map { it.toSChapter(data.post.slug) }
     }
 
-    open val useNextJSImageParsing = false
-
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
@@ -155,16 +153,10 @@ abstract class Iken(
             throw Exception("Unlock chapter in webview")
         }
 
-        return if (useNextJSImageParsing) {
-            val data = document.getNextJson("images")
+        val data = document.getNextJson("images")
 
-            json.decodeFromString<List<PageParseDto>>(data).mapIndexed { idx, p ->
-                Page(idx, imageUrl = p.url)
-            }
-        } else {
-            document.select("main section img").mapIndexed { idx, img ->
-                Page(idx, imageUrl = img.absUrl("src"))
-            }
+        return json.decodeFromString<List<PageParseDto>>(data).mapIndexed { idx, p ->
+            Page(idx, imageUrl = p.url)
         }
     }
 

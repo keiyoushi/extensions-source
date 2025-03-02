@@ -36,8 +36,4 @@ class NyxScans : Iken(
         val postTitle: String,
         val featuredImage: String? = null,
     )
-
-    // =============================== Pages ================================
-
-    override val useNextJSImageParsing = true
 }

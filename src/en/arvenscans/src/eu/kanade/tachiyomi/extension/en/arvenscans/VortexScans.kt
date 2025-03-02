@@ -6,6 +6,4 @@ class VortexScans : Iken(
     "Vortex Scans",
     "en",
     "https://vortexscans.org",
-) {
-    override val useNextJSImageParsing = true
-}
+)

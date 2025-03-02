@@ -21,6 +21,4 @@ class HiveScans : Iken(
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Cache-Control", "max-age=0")
-
-    override val useNextJSImageParsing = true
 }
