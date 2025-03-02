@@ -37,7 +37,7 @@ class Mangamo : ConfigurableSource, HttpSource() {
 
     override val lang = "en"
 
-    override val baseUrl = "https://mangamo.com"
+    override val baseUrl = "https://www.mangamo.com"
 
     override val supportsLatest = true
 

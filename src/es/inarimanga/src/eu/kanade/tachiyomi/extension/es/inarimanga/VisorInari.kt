@@ -11,7 +11,7 @@ import java.util.Locale
 
 class VisorInari : Madara(
     "Visor Inari",
-    "https://vrinari.org",
+    "https://inarimanga.yevadu.com",
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {

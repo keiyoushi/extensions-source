@@ -6,4 +6,5 @@ class Taikutsu : LectorMoe(
     "Taikutsu",
     "https://taikutsutl.capibaratraductor.com",
     "es",
+    apiBaseUrl = "https://api.capibaratraductor.com",
 )

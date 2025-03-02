@@ -84,7 +84,7 @@ class DisasterScans : ParsedHttpSource() {
                     "ongoing" -> SManga.ONGOING
                     else -> SManga.UNKNOWN
                 }
-                genre = this.joinToString { text() }
+                genre = this.joinToString { it.text() }
             }
         }
     }
@@ -95,7 +95,7 @@ class DisasterScans : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         chapterDataRegex.find(response.body.string())?.destructured?.also { (chapterData, mangaId) ->
-            return json.decodeFromString<List<ChapterDTO>>(chapterData).map { chapter ->
+            return json.decodeFromString<List<ChapterDTO>>(chapterData.replace("\\", "")).map { chapter ->
                 SChapter.create().apply {
                     name = "Chapter ${chapter.ChapterNumber} - ${chapter.ChapterName}"
                     setUrlWithoutDomain(
