@@ -11,8 +11,7 @@ import okhttp3.Request
 
 class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
 
-    private val preferences =
-        getPreferences()
+    private val preferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

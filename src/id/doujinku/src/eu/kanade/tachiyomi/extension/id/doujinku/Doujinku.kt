@@ -17,8 +17,7 @@ class Doujinku :
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("id")),
     ),
     ConfigurableSource {
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->

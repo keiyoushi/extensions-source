@@ -18,8 +18,7 @@ class SayHentai :
     ConfigurableSource {
     override fun popularMangaSelector() = "#slide-top > .item:contains(a)"
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->

@@ -66,8 +66,7 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
 
     override val supportsLatest: Boolean = true
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()

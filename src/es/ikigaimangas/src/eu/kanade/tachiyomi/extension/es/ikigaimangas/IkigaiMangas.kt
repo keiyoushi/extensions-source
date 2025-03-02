@@ -83,8 +83,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             .build()
     }
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     private val lazyHeaders by lazy {
         headersBuilder()

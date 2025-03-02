@@ -13,8 +13,7 @@ class MintManga : GroupLe("MintManga", "https://2.mintmanga.one", "ru") {
 
     override val id: Long = 6
 
-    private val preferences =
-        getPreferences()
+    private val preferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

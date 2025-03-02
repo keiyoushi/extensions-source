@@ -22,8 +22,7 @@ class MangaCrab :
     ),
     ConfigurableSource {
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     override val client = super.client.newBuilder()
         .setRandomUserAgent(

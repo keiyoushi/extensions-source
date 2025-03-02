@@ -53,8 +53,7 @@ class Taiyo : ParsedHttpSource() {
     // The source doesn't show the title on the home page
     override val supportsLatest = false
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     private var bearerToken: String = preferences.getString(BEARER_TOKEN_PREF, "").toString()
 

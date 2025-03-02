@@ -20,9 +20,7 @@ private inline val INFO: Nothing get() = error("INFO")
  */
 class ProjectSukiPreferences(id: Long) {
 
-    internal val shared by lazy {
-        getPreferences(id)
-    }
+    internal val shared by lazy { getPreferences(id) }
 
     abstract inner class PSPreference<Raw : Any, T : Any>(val preferenceIdentifier: String, val default: Raw) {
 

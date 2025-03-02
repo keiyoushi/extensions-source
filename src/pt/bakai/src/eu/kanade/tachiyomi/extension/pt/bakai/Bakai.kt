@@ -58,8 +58,7 @@ class Bakai : ParsedHttpSource() {
             .build()
     }
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", baseUrl)

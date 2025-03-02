@@ -39,8 +39,7 @@ class Desu : ConfigurableSource, HttpSource() {
 
     override val id: Long = 6684416167758830305
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->

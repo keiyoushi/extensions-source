@@ -406,8 +406,7 @@ class YuriNeko : HttpSource(), ConfigurableSource {
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromString(body.string())
     }
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->

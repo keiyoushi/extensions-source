@@ -43,8 +43,7 @@ class MangaOnline : ParsedHttpSource(), ConfigurableSource {
 
     private var genresSet: Set<Genre> = emptySet()
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     override val client: OkHttpClient =
         network.cloudflareClient.newBuilder()

@@ -32,8 +32,7 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "包子漫画"
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     private val domain: String = run {
         val mirrors = MIRRORS

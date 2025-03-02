@@ -47,8 +47,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     private val isCi = System.getenv("CI") == "true"
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     private var apiUrl: String
         get() = preferences.getString(API_BASE_URL_PREF, defaultApiUrl)!!

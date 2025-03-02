@@ -22,8 +22,7 @@ class HentaiVNPlus :
 
     override val mangaSubString = "truyen-hentai"
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->

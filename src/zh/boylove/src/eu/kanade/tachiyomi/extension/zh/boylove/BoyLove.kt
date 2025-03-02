@@ -37,8 +37,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
     private val json: Json by injectLazy()
 
     override val baseUrl by lazy {
-        val preferences =
-            getPreferences()
+        val preferences = getPreferences()
 
         val mirrors = MIRRORS
         val index = preferences.getString(MIRROR_PREF, "0")!!.toInt().coerceIn(0, mirrors.size - 1)

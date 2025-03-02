@@ -27,8 +27,7 @@ class Dmzj : ConfigurableSource, HttpSource() {
     override val name = "动漫之家"
     override val baseUrl = "https://m.idmzj.com"
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ImageUrlInterceptor)

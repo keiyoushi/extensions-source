@@ -13,8 +13,7 @@ class SelfManga : GroupLe("SelfManga", "https://selfmanga.live", "ru") {
 
     override val id: Long = 5227602742162454547
 
-    private val preferences =
-        getPreferences()
+    private val preferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

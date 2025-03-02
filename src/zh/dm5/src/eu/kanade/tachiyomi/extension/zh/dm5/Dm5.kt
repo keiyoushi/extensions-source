@@ -31,8 +31,7 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
         .addInterceptor(CommentsInterceptor)
         .build()
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     // Some mangas are blocked without this
     override fun headersBuilder() = super.headersBuilder().set("Accept-Language", "zh-TW")

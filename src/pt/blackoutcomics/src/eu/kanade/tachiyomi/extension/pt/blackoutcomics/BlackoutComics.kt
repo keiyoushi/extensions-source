@@ -96,8 +96,7 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
         return chain.proceed(request)
     }
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     override fun headersBuilder() =
         super.headersBuilder()

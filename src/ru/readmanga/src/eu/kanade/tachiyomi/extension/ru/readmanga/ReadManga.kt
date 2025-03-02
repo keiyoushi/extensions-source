@@ -13,8 +13,7 @@ class ReadManga : GroupLe("ReadManga", "https://zz.readmanga.io", "ru") {
 
     override val id: Long = 5
 
-    private val preferences =
-        getPreferences()
+    private val preferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

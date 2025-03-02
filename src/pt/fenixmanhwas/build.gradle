@@ -3,7 +3,7 @@ ext {
     extClass = '.FenixManhwas'
     themePkg = 'madara'
     baseUrl = 'https://fenixscan.xyz'
-    overrideVersionCode = 3
+    overrideVersionCode = 2
 }
 
 apply from: "$rootDir/common.gradle"

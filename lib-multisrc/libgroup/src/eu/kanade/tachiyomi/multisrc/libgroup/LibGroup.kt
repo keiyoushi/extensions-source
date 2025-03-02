@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.libgroup
 
 import android.annotation.SuppressLint
 import android.app.Application
-import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -58,7 +57,11 @@ abstract class LibGroup(
         encodeDefaults = true
     }
 
-    private val preferences by getPreferencesLazy { migrateOldImageServer() }
+    private val preferences by getPreferencesLazy {
+        if (getString(SERVER_PREF, "main") == "fourth") {
+            edit().putString(SERVER_PREF, "secondary").apply()
+        }
+    }
 
     override val supportsLatest = true
 
@@ -682,12 +685,5 @@ abstract class LibGroup(
                 true
             }
         }
-    }
-
-    // api changed id of servers, remap SERVER_PREF old("fourth") to new("secondary")
-    private fun SharedPreferences.migrateOldImageServer() {
-        if (getString(SERVER_PREF, "main") != "fourth") return
-
-        edit().putString(SERVER_PREF, "secondary").apply()
     }
 }

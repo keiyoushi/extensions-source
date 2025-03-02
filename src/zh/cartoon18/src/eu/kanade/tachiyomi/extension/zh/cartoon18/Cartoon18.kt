@@ -200,8 +200,7 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
 
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
 
-    private val preferences =
-        getPreferences()
+    private val preferences = getPreferences()
 
     private val useTrad get() = preferences.getBoolean("ZH_HANT", false)
 

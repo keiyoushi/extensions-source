@@ -39,8 +39,7 @@ class Picacomic : HttpSource(), ConfigurableSource {
     override val baseUrl = "https://picaapi.picacomic.com"
     private val leeway: Long = 10
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     private val blocklist = preferences.getString("BLOCK_GENRES", "")!!
         .split(',').map { it.trim() }

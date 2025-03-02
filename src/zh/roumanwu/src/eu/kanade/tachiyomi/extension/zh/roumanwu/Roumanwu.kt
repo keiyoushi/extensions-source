@@ -23,8 +23,7 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     override val baseUrl = MIRRORS[
         max(MIRRORS.size - 1, preferences.getString(MIRROR_PREF, MIRROR_DEFAULT)!!.toInt()),

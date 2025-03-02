@@ -11,8 +11,7 @@ import okhttp3.Request
 
 class Usagi : GroupLe("Usagi", "https://web.usagi.one/", "ru") {
 
-    private val preferences =
-        getPreferences()
+    private val preferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

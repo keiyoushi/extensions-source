@@ -309,8 +309,7 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
         Genre("Magic", "70"),
     )
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->

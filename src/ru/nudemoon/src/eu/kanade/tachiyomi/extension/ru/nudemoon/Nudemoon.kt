@@ -34,8 +34,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

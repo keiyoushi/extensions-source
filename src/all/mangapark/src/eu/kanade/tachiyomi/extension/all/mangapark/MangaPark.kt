@@ -45,8 +45,7 @@ class MangaPark(
 
     override val versionId = 2
 
-    private val preference =
-        getPreferences()
+    private val preference = getPreferences()
 
     private val domain =
         preference.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT) ?: MIRROR_PREF_DEFAULT

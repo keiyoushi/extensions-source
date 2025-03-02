@@ -22,8 +22,7 @@ class Hiperdex :
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
 
-    private val preferences =
-        getPreferences()
+    private val preferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

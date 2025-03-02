@@ -39,8 +39,7 @@ open class Kemono(
 
     private val json: Json by injectLazy()
 
-    private val preferences =
-        getPreferences()
+    private val preferences = getPreferences()
 
     private val apiPath = "api/v1"
 

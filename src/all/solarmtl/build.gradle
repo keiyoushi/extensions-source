@@ -3,7 +3,7 @@ ext {
     extClass = '.SolarmtlFactory'
     themePkg = 'machinetranslations'
     baseUrl = 'https://solarmtl.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = true
 }
 
