@@ -192,8 +192,8 @@ abstract class Iken(
             ?.data()
             ?: throw Exception("Unable to retrieve NEXT data")
 
-        val popularIndex = data.indexOf(key)
-        val start = data.indexOf('[', popularIndex)
+        val keyIndex = data.indexOf(key)
+        val start = data.indexOf('[', keyIndex)
 
         var depth = 1
         var i = start + 1
