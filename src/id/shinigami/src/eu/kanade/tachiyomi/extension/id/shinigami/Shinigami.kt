@@ -2,73 +2,54 @@ package eu.kanade.tachiyomi.extension.id.shinigami
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.util.Base64
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
-import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
-import kotlinx.serialization.Serializable
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.serialization.decodeFromString
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
+import kotlinx.serialization.json.Json
+import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
+import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), ConfigurableSource {
+class Shinigami : ConfigurableSource, HttpSource() {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
+    override val name = "Shinigami"
+
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override val mangaSubString = "semua-series"
+    private var defaultBaseUrl = "https://app.shinigami.asia"
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    private val apiUrl = "https://api.shngm.io"
+
+    private val cdnUrl = "https://storage.shngm.id"
+
+    override val lang = "id"
+
+    override val supportsLatest = true
+
+    private val json: Json by injectLazy()
+
+    private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
 
     private val preferences: SharedPreferences by lazy {
         Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            this.setDefaultValue(super.baseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: ${super.baseUrl}"
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }
-        screen.addPreference(baseUrlPref)
-    }
-
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != super.baseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, super.baseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    override fun headersBuilder() = super.headersBuilder().apply {
-        add("Sec-Fetch-Dest", "document")
-        add("Sec-Fetch-Mode", "navigate")
-        add("Sec-Fetch-Site", "same-origin")
-        add("Upgrade-Insecure-Requests", "1")
-        add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
     }
 
     override val client = network.cloudflareClient.newBuilder()
@@ -83,70 +64,206 @@ class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), Configur
         .rateLimit(3)
         .build()
 
-    // Tags are useless as they are just SEO keywords.
-    override val mangaDetailsSelectorTag = ""
-
-    override val chapterUrlSelector = "div.chapter-link:not([style~=display:\\snone]) a"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val urlElement = element.selectFirst(chapterUrlSelector)!!
-
-        name = urlElement.selectFirst("p.chapter-manhwa-title")?.text()
-            ?: urlElement.ownText()
-        date_upload = urlElement.selectFirst("span.chapter-release-date > i")?.text()
-            .let { parseChapterDate(it) }
-
-        val fixedUrl = urlElement.attr("abs:href")
-
-        setUrlWithoutDomain(fixedUrl)
-    }
-
-    // Page list
-    @Serializable
-    data class CDT(val ct: String, val s: String)
-
-    override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script:containsData(chapter_data)")?.data()
-            ?: throw Exception("chapter_data script not found")
-
-        val deobfuscated = Deobfuscator.deobfuscateScript(script)
-            ?: throw Exception("Unable to deobfuscate chapter_data script")
-
-        val keyMatch = KEY_REGEX.find(deobfuscated)?.groupValues
-            ?: throw Exception("Unable to find key")
-
-        val chapterData = json.decodeFromString<CDT>(
-            CHAPTER_DATA_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception("Unable to get chapter data"),
-        )
-        val postId = POST_ID_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception("Unable to get post_id")
-        val otherId = OTHER_ID_REGEX.findAll(script).firstOrNull { it.groupValues[1] != "post" }?.groupValues?.get(2) ?: throw Exception("Unable to get other id")
-        val key = otherId + keyMatch[1] + postId + keyMatch[2] + postId
-        val salt = chapterData.s.decodeHex()
-
-        val unsaltedCiphertext = Base64.decode(chapterData.ct, Base64.DEFAULT)
-        val ciphertext = salted + salt + unsaltedCiphertext
-
-        val decrypted = CryptoAES.decrypt(Base64.encodeToString(ciphertext, Base64.DEFAULT), key)
-        val data = json.decodeFromString<List<String>>(decrypted)
-        return data.mapIndexed { idx, it ->
-            Page(idx, document.location(), it)
-        }
-    }
+    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
 
     private fun randomString(length: Int): String {
         val charPool = ('a'..'z') + ('A'..'Z')
         return List(length) { charPool.random() }.joinToString("")
     }
 
+    private fun apiHeadersBuilder(): Headers.Builder = headersBuilder()
+        .add("Accept", "application/json")
+        .add("DNT", "1")
+        .add("Origin", baseUrl)
+        .add("Sec-GPC", "1")
+
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$apiUrl/$API_BASE_PATH/manga/list".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("page_size", "30")
+            .addQueryParameter("sort", "popularity")
+            .toString()
+
+        return GET(url, apiHeaders)
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val rootObject = response.parseAs<ShinigamiBrowseDto>()
+        val projectList = rootObject.data.map(::popularMangaFromObject)
+
+        val hasNextPage = rootObject.meta.page < rootObject.meta.totalPage
+
+        return MangasPage(projectList, hasNextPage)
+    }
+
+    private fun popularMangaFromObject(obj: ShinigamiBrowseDataDto): SManga = SManga.create().apply {
+        title = obj.title.toString()
+        thumbnail_url = obj.thumbnail
+        url = "$apiUrl/$API_BASE_PATH/manga/detail/" + obj.mangaId
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$apiUrl/$API_BASE_PATH/manga/list".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("page_size", "30")
+            .addQueryParameter("sort", "latest")
+            .toString()
+
+        return GET(url, apiHeaders)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$apiUrl/$API_BASE_PATH/manga/list".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("page_size", "30")
+
+        if (query.isNotEmpty()) {
+            url.addQueryParameter("q", query)
+        }
+
+        // TODO: search by tag/genre/status/etc
+
+        return GET(url.toString(), apiHeaders)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun getMangaUrl(manga: SManga): String {
+        return "$baseUrl/series/" + manga.url.substringAfter("manga/detail/")
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return GET(manga.url, apiHeaders)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val mangaDetailsResponse = response.parseAs<ShinigamiMangaDetailDto>()
+        val mangaDetails = mangaDetailsResponse.data
+
+        return SManga.create().apply {
+            author = mangaDetails.taxonomy["Author"]?.joinToString(", ") { it.name }.orEmpty()
+            artist = mangaDetails.taxonomy["Artist"]?.joinToString(", ") { it.name }.orEmpty()
+            status = mangaDetails.status.toStatus()
+            description = mangaDetails.description
+
+            val genres = mangaDetails.taxonomy["Genre"]?.joinToString(", ") { it.name }.orEmpty()
+            val type = mangaDetails.taxonomy["Format"]?.joinToString(", ") { it.name }.orEmpty()
+            genre = listOf(genres, type).filter { it.isNotBlank() }.joinToString(", ")
+        }
+    }
+
+    private fun Int.toStatus(): Int {
+        return when (this) {
+            1 -> SManga.ONGOING
+            2 -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        return GET(
+            "$apiUrl/$API_BASE_PATH/chapter/" + manga.url.substringAfter("manga/detail/") +
+                "/list?page_size=3000",
+            apiHeaders,
+        )
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val result = response.parseAs<ShinigamiChapterListDto>()
+
+        return result.chapterList.map(::chapterFromObject)
+    }
+
+    private fun chapterFromObject(obj: ShinigamiChapterListDataDto): SChapter = SChapter.create().apply {
+        date_upload = obj.date.toDate() ?: 0
+        name = "Chapter ${obj.name} ${obj.title}"
+        url = "$apiUrl/$API_BASE_PATH/chapter/detail/" + obj.chapterId
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        return GET(chapter.url, apiHeaders)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val result = response.parseAs<ShinigamiPageListDto>()
+
+        return result.pageList.chapterPage.pages.mapIndexed { index, imageName ->
+            Page(index = index, imageUrl = "$cdnUrl${result.pageList.chapterPage.path}$imageName")
+        }
+    }
+
+    override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
+
+    override fun imageUrlParse(response: Response): String = ""
+
+    override fun imageRequest(page: Page): Request {
+        val newHeaders = headersBuilder()
+            .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+            .add("DNT", "1")
+            .add("referer", baseUrl)
+            .add("sec-fetch-dest", "empty")
+            .add("Sec-GPC", "1")
+            .build()
+
+        return GET(page.imageUrl!!, newHeaders)
+    }
+
+    private inline fun <reified T> Response.parseAs(): T = use {
+        json.decodeFromString(it.body.string())
+    }
+
+    private fun String.toDate(): Long {
+        return runCatching { DATE_FORMATTER_V2.parse(this)?.time }.getOrNull()
+            ?: runCatching { DATE_FORMATTER.parse(this)?.time }.getOrNull()
+            ?: 0
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            this.setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $defaultBaseUrl"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
+        screen.addPreference(baseUrlPref)
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
     companion object {
-        private val KEY_REGEX by lazy { Regex("""_id\s+\+\s+'(.*?)'\s+\+\s+post_id\s+\+\s+'(.*?)'\s+\+\s+post_id""") }
-        private val CHAPTER_DATA_REGEX by lazy { Regex("""var chapter_data\s*=\s*'(.*?)'""") }
-        private val POST_ID_REGEX by lazy { Regex("""var post_id\s*=\s*'(.*?)'""") }
-        private val OTHER_ID_REGEX by lazy { Regex("""var (\w+)_id\s*=\s*'(.*?)'""") }
-        private const val RESTART_APP = "Untuk menerapkan perubahan, restart aplikasi."
+        private val DATE_FORMATTER by lazy {
+            SimpleDateFormat("MMMM dd, yyyy", Locale.ENGLISH)
+        }
+        private val DATE_FORMATTER_V2 by lazy {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
+        }
+
+        private const val API_BASE_PATH = "v1"
+        private const val RESTART_APP = "Restart aplikasi untuk menerapkan perubahan."
         private const val BASE_URL_PREF_TITLE = "Ubah Domain"
         private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY = "Untuk penggunaan sementara. Memperbarui aplikasi akan menghapus pengaturan"
+        private const val BASE_URL_PREF_SUMMARY = "Untuk penggunaan sementara. Memperbarui ekstensi akan menghapus pengaturan. \n\n❗ Restart aplikasi untuk menerapkan perubahan. ❗"
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
     }
 }
