@@ -136,6 +136,11 @@ class Shinigami : ConfigurableSource, HttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
+        // Migration from old web urls to the new api based
+        if (manga.url.startsWith("/series/")) {
+            throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
+        }
+
         return GET(manga.url, apiHeaders)
     }
 
@@ -184,6 +189,11 @@ class Shinigami : ConfigurableSource, HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
+        // Migration from old web urls to the new api based
+        if (chapter.url.startsWith("/series/")) {
+            throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
+        }
+
         return GET(chapter.url, apiHeaders)
     }
 
