@@ -226,8 +226,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
     }
 
     private fun String.toDate(): Long {
-        return runCatching { DATE_FORMATTER_V2.parse(this)?.time }.getOrNull()
-            ?: runCatching { DATE_FORMATTER.parse(this)?.time }.getOrNull()
+        return runCatching { DATE_FORMATTER.parse(this)?.time }.getOrNull()
             ?: 0
     }
 
@@ -264,9 +263,6 @@ class Shinigami : ConfigurableSource, HttpSource() {
 
     companion object {
         private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("MMMM dd, yyyy", Locale.ENGLISH)
-        }
-        private val DATE_FORMATTER_V2 by lazy {
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
         }
 
