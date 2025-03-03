@@ -213,7 +213,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
         val newHeaders = headersBuilder()
             .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .add("DNT", "1")
-            .add("referer", baseUrl)
+            .add("referer", "$baseUrl/")
             .add("sec-fetch-dest", "empty")
             .add("Sec-GPC", "1")
             .build()
@@ -248,7 +248,8 @@ class Shinigami : ConfigurableSource, HttpSource() {
         screen.addPreference(baseUrlPref)
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+    private fun getPrefBaseUrl(): String =
+        preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!.trimEnd('/')
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
