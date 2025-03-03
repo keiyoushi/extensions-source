@@ -12,6 +12,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import java.net.URLDecoder
 
 class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
 
@@ -34,8 +35,7 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("search")
+        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             if (query.isNotBlank()) {
                 addQueryParameter("title", query)
             }
@@ -68,17 +68,22 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
     override val statusSelector = "[alt=Status]"
     override val genreSelector = "[alt=Type]"
 
+    override fun chapterListSelector(): String {
+        if (!preferences.showPaidChapters) {
+            return "#chapters > a:not(:has(.text-sm span:matches(Upcoming))):not(:has(img[src*=star-circle]))"
+        }
+        return "#chapters > a:not(:has(.text-sm span:matches(Upcoming)))"
+    }
+
     override fun pageListParse(document: Document): List<Page> {
         val (pages, baseLink) = document.selectFirst("[x-data]")!!.attr("x-data")
             .replace(spaces, "")
             .let {
                 val pages = pagesRegex.find(it)!!.groupValues[1]
-                    .replace("&quot;", "\"")
+                    .let { encoded -> URLDecoder.decode(encoded, "UTF-8") }
                     .parseAs<List<Path>>()
 
-                val baseLink = linkRegex.find(
-                    it.replace("\"", "'"),
-                )!!.groupValues[1]
+                val baseLink = linkRegex.find(it)!!.groupValues[2]
 
                 pages to baseLink
             }
@@ -91,7 +96,7 @@ class ArtLapsa : Keyoapp("Art Lapsa", "https://artlapsa.com", "en") {
 
 private val spaces = Regex("\\s")
 private val pagesRegex = Regex("pages:(\\[[^]]+])")
-private val linkRegex = Regex("baseLink:'([^']+)'")
+private val linkRegex = """baseLink:(["'])(.+?)\1""".toRegex()
 
 @Serializable
 class Path(
