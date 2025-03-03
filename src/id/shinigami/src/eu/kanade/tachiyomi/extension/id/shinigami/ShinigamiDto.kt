@@ -50,7 +50,7 @@ data class ShinigamiChapterListDto(
 data class ShinigamiChapterListDataDto(
     @SerialName("release_date") val date: String = "",
     @SerialName("chapter_title") val title: String = "",
-    @SerialName("chapter_number") val name: Int = 0,
+    @SerialName("chapter_number") val name: Double = 0.0,
     @SerialName("chapter_id") val chapterId: String = "",
 )
 
