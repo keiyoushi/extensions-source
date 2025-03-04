@@ -4,8 +4,8 @@ import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import okhttp3.Response
 
 class NyxScans : Iken(
@@ -18,7 +18,7 @@ class NyxScans : Iken(
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.asJsoup().getNextJson("popularPosts")
 
-        val entries = json.decodeFromString<List<PopularParseDto>>(data).map { entry ->
+        val entries = data.parseAs<List<PopularParseDto>>().map { entry ->
             SManga.create().apply {
                 title = entry.postTitle
                 thumbnail_url = entry.featuredImage

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.iken
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -14,17 +13,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 
 abstract class Iken(
     override val name: String,
@@ -36,11 +32,7 @@ abstract class Iken(
 
     override val client = network.cloudflareClient
 
-    protected val json by injectLazy<Json>()
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -153,9 +145,7 @@ abstract class Iken(
             throw Exception("Unlock chapter in webview")
         }
 
-        val data = document.getNextJson("images")
-
-        return json.decodeFromString<List<PageParseDto>>(data).mapIndexed { idx, p ->
+        return document.getNextJson("images").parseAs<List<PageParseDto>>().mapIndexed { idx, p ->
             Page(idx, imageUrl = p.url)
         }
     }
@@ -176,9 +166,6 @@ abstract class Iken(
     override fun imageUrlParse(response: Response) =
         throw UnsupportedOperationException()
 
-    private inline fun <reified T> Response.parseAs(): T =
-        json.decodeFromString(body.string())
-
     protected fun Document.getNextJson(key: String): String {
         val data = selectFirst("script:containsData($key)")
             ?.data()
@@ -198,7 +185,7 @@ abstract class Iken(
             i++
         }
 
-        return json.decodeFromString<String>("\"${data.substring(start, i)}\"")
+        return "\"${data.substring(start, i)}\"".parseAs<String>()
     }
 }
 
