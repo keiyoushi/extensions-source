@@ -37,7 +37,7 @@ class TopTruyen :
         .build()
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(".page-chapter img")
+        return document.select(".page-chapter[id] img")
             .mapNotNull(::imageOrNull)
             .distinct()
             .mapIndexed { i, image -> Page(i, imageUrl = image) }
