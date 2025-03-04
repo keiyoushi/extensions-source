@@ -43,7 +43,6 @@ class TaxonomyItemDto(
 @Serializable
 class ShinigamiChapterListDto(
     @SerialName("data") val chapterList: List<ShinigamiChapterListDataDto>,
-    val meta: MetaDto,
 )
 
 @Serializable
