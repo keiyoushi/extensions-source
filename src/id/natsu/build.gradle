@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangathemesia'
     baseUrl = 'https://natsu.id'
     overrideVersionCode = 0
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

@@ -4,6 +4,7 @@ ext {
     themePkg = 'pizzareader'
     baseUrl = 'https://hni-scantrad.net'
     overrideVersionCode = 5
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

@@ -4,6 +4,7 @@ ext {
     themePkg = 'guya'
     baseUrl = 'https://guya.cubari.moe'
     overrideVersionCode = 18
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

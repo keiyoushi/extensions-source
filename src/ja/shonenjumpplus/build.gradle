@@ -4,6 +4,7 @@ ext {
     themePkg = 'gigaviewer'
     baseUrl = 'https://shonenjumpplus.com'
     overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

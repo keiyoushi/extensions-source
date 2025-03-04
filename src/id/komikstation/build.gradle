@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangathemesia'
     baseUrl = 'https://komikstation.co'
     overrideVersionCode = 4
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

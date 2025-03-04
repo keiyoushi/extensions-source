@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangathemesia'
     baseUrl = 'https://tsundoku.com.br'
     overrideVersionCode = 9
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

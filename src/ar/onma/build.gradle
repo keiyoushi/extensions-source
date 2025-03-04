@@ -4,6 +4,7 @@ ext {
     themePkg = 'mmrcms'
     baseUrl = 'https://onma.me'
     overrideVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangathemesia'
     baseUrl = 'https://diskusscan.online'
     overrideVersionCode = 13
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
