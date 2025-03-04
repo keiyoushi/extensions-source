@@ -3,7 +3,7 @@ ext {
     extClass = '.PhiliaScans'
     themePkg = 'madara'
     baseUrl = "https://philiascans.org"
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
