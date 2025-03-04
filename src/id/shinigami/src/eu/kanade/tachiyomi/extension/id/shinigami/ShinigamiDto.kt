@@ -4,31 +4,31 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ShinigamiBrowseDto(
+class ShinigamiBrowseDto(
     val data: List<ShinigamiBrowseDataDto>,
     val meta: MetaDto,
 )
 
 @Serializable
-data class ShinigamiBrowseDataDto(
+class ShinigamiBrowseDataDto(
     @SerialName("cover_image_url") val thumbnail: String? = "",
     @SerialName("manga_id") val mangaId: String? = "",
     val title: String? = "",
 )
 
 @Serializable
-data class MetaDto(
+class MetaDto(
     val page: Int,
     @SerialName("total_page") val totalPage: Int,
 )
 
 @Serializable
-data class ShinigamiMangaDetailDto(
+class ShinigamiMangaDetailDto(
     val data: ShinigamiMangaDetailDataDto,
 )
 
 @Serializable
-data class ShinigamiMangaDetailDataDto(
+class ShinigamiMangaDetailDataDto(
     val description: String = "",
 //    @SerialName("alternative_title") val alternativeTitle: String = "",
     val status: Int = 0,
@@ -36,18 +36,18 @@ data class ShinigamiMangaDetailDataDto(
 )
 
 @Serializable
-data class TaxonomyItemDto(
+class TaxonomyItemDto(
     val name: String,
 )
 
 @Serializable
-data class ShinigamiChapterListDto(
+class ShinigamiChapterListDto(
     @SerialName("data") val chapterList: List<ShinigamiChapterListDataDto>,
     val meta: MetaDto,
 )
 
 @Serializable
-data class ShinigamiChapterListDataDto(
+class ShinigamiChapterListDataDto(
     @SerialName("release_date") val date: String = "",
     @SerialName("chapter_title") val title: String = "",
     @SerialName("chapter_number") val name: Double = 0.0,
@@ -55,17 +55,17 @@ data class ShinigamiChapterListDataDto(
 )
 
 @Serializable
-data class ShinigamiPageListDto(
+class ShinigamiPageListDto(
     @SerialName("data") val pageList: ShinigamiPagesDataDto,
 )
 
 @Serializable
-data class ShinigamiPagesDataDto(
+class ShinigamiPagesDataDto(
     @SerialName("chapter") val chapterPage: ShinigamiPagesData2Dto,
 )
 
 @Serializable
-data class ShinigamiPagesData2Dto(
+class ShinigamiPagesData2Dto(
     val path: String,
     @SerialName("data") val pages: List<String> = emptyList(),
 )

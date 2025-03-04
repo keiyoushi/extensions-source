@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.shinigami
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
@@ -13,16 +12,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -43,8 +39,6 @@ class Shinigami : ConfigurableSource, HttpSource() {
     override val lang = "id"
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
 
@@ -98,7 +92,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
     private fun popularMangaFromObject(obj: ShinigamiBrowseDataDto): SManga = SManga.create().apply {
         title = obj.title.toString()
         thumbnail_url = obj.thumbnail
-        url = "$apiUrl/$API_BASE_PATH/manga/detail/" + obj.mangaId
+        url = obj.mangaId.toString()
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -130,7 +124,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/series/" + manga.url.substringAfter("manga/detail/")
+        return "$baseUrl/series/" + manga.url
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -139,7 +133,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
 
-        return GET(manga.url, apiHeaders)
+        return GET("$apiUrl/$API_BASE_PATH/manga/detail/" + manga.url, apiHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -167,11 +161,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        return GET(
-            "$apiUrl/$API_BASE_PATH/chapter/" + manga.url.substringAfter("manga/detail/") +
-                "/list?page_size=3000",
-            apiHeaders,
-        )
+        return GET("$apiUrl/$API_BASE_PATH/chapter/${manga.url}/list?page_size=3000", apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -183,7 +173,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
     private fun chapterFromObject(obj: ShinigamiChapterListDataDto): SChapter = SChapter.create().apply {
         date_upload = obj.date.toDate()
         name = "Chapter ${obj.name.toString().replace(".0","")} ${obj.title}"
-        url = "$apiUrl/$API_BASE_PATH/chapter/detail/" + obj.chapterId
+        url = obj.chapterId
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -192,7 +182,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
 
-        return GET(chapter.url, apiHeaders)
+        return GET("$apiUrl/$API_BASE_PATH/chapter/detail/" + chapter.url, apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -202,8 +192,6 @@ class Shinigami : ConfigurableSource, HttpSource() {
             Page(index = index, imageUrl = "$cdnUrl${result.pageList.chapterPage.path}$imageName")
         }
     }
-
-    override fun fetchImageUrl(page: Page): Observable<String> = Observable.just(page.imageUrl!!)
 
     override fun imageUrlParse(response: Response): String = ""
 
@@ -219,13 +207,8 @@ class Shinigami : ConfigurableSource, HttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(it.body.string())
-    }
-
     private fun String.toDate(): Long {
-        return runCatching { DATE_FORMATTER.parse(this)?.time }.getOrNull()
-            ?: 0
+        return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH).tryParse(this)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -260,10 +243,6 @@ class Shinigami : ConfigurableSource, HttpSource() {
     }
 
     companion object {
-        private val DATE_FORMATTER by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
-        }
-
         private const val API_BASE_PATH = "v1"
         private const val RESTART_APP = "Restart aplikasi untuk menerapkan perubahan."
         private const val BASE_URL_PREF_TITLE = "Ubah Domain"
