@@ -43,7 +43,7 @@ jobs:
 
       - name: Get last successful CI commit
         id: last_successful_ci_commit
-        uses: nrwl/nx-set-shas@e2e6dc8bce4b0387a05eb687735c39c41580b792 # v4.1.2
+        uses: nrwl/nx-set-shas@2fa6769581e1ccf9ca8ce27e305d21b195bdaa7f # v4.2.1
       
       - id: generate-matrices
         name: Create output matrices
@@ -102,7 +102,7 @@ jobs:
     runs-on: 'ubuntu-24.04'
     steps:
       - name: Download APK artifacts
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
           path: ~/apk-artifacts
 
