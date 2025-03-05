@@ -146,9 +146,9 @@ class Shinigami : ConfigurableSource, HttpSource() {
             status = mangaDetails.status.toStatus()
             description = mangaDetails.description
 
-            val genres = mangaDetails.taxonomy["Genre"]?.joinToString(", ") { it.name }.orEmpty()
-            val type = mangaDetails.taxonomy["Format"]?.joinToString(", ") { it.name }.orEmpty()
-            genre = listOf(genres, type).filter { it.isNotBlank() }.joinToString(", ")
+            val genres = mangaDetails.taxonomy["Genre"]?.joinToString { it.name }.orEmpty()
+            val type = mangaDetails.taxonomy["Format"]?.joinToString { it.name }.orEmpty()
+            genre = listOf(genres, type).filter { it.isNotBlank() }.joinToString()
         }
     }
 
