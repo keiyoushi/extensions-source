@@ -171,7 +171,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
     }
 
     private fun chapterFromObject(obj: ShinigamiChapterListDataDto): SChapter = SChapter.create().apply {
-        date_upload = obj.date.toDate()
+        date_upload = dateFormat.tryParse(obj.date)
         name = "Chapter ${obj.name.toString().replace(".0","")} ${obj.title}"
         url = obj.chapterId
     }
@@ -207,10 +207,6 @@ class Shinigami : ConfigurableSource, HttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private fun String.toDate(): Long {
-        return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH).tryParse(this)
-    }
-
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
@@ -244,6 +240,8 @@ class Shinigami : ConfigurableSource, HttpSource() {
 
     companion object {
         private const val API_BASE_PATH = "v1"
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
+
         private const val RESTART_APP = "Restart aplikasi untuk menerapkan perubahan."
         private const val BASE_URL_PREF_TITLE = "Ubah Domain"
         private const val BASE_URL_PREF = "overrideBaseUrl"
