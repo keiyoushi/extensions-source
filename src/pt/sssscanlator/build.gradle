@@ -3,7 +3,7 @@ ext {
     extClass = '.YomuComics'
     themePkg = 'mangathemesia'
     baseUrl = 'https://yomucomics.com'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
 }
 
 apply from: "$rootDir/common.gradle"

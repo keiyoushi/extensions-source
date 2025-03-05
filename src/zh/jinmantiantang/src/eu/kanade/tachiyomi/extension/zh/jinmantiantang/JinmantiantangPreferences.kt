@@ -1,15 +1,13 @@
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
-import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.utils.getPreferences
 import okhttp3.Interceptor
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 
 internal fun getPreferenceList(context: Context, preferences: SharedPreferences, isUrlUpdated: Boolean) = arrayOf(
@@ -100,7 +98,7 @@ private val SharedPreferences.mirrorIndex get() = getString(USE_MIRROR_URL_PREF,
 private val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.split(",")
 
 fun getSharedPreferences(id: Long): SharedPreferences {
-    val preferences: SharedPreferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    val preferences: SharedPreferences = getPreferences(id)
     if (preferences.getString(DEFAULT_LIST_PREF, "")!! == DEFAULT_LIST) return preferences
     preferences.edit()
         .remove("overrideBaseUrl")

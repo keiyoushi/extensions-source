@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
-import android.app.Application
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
@@ -11,10 +10,9 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.utils.getPreferences
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -31,7 +29,7 @@ class YomuComics :
     // SSSScanlator
     override val id = 1497838059713668619
 
-    private val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences = getPreferences()
 
     override val client: OkHttpClient = super.client.newBuilder()
         .setRandomUserAgent(

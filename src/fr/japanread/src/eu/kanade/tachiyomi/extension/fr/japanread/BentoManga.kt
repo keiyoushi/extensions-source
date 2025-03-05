@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.japanread
 
-import android.app.Application
 import android.net.Uri
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -27,8 +27,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -67,7 +65,7 @@ class BentoManga : ParsedHttpSource(), ConfigurableSource {
             set("Sec-Fetch-User", "?1")
         }
 
-        val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val preferences = getPreferences()
         val userAgent = preferences.getString(USER_AGENT_PREF, "")!!
         return if (userAgent.isNotBlank()) {
             builder.set("User-Agent", userAgent)

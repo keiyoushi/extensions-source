@@ -3,7 +3,7 @@ ext {
     extClass = '.Shinigami'
     themePkg = 'madara'
     baseUrl = 'https://shinigami09.com'
-    overrideVersionCode = 30
+    overrideVersionCode = 31
     isNsfw = false
 }
 

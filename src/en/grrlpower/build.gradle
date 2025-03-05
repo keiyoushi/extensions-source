@@ -1,7 +1,7 @@
 ext {
     extName = 'Grrl Power Comic'
     extClass = '.GrrlPower'
-    extVersionCode = 2
+    extVersionCode = 3
 }
 
 apply from: "$rootDir/common.gradle"

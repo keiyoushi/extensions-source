@@ -1,14 +1,12 @@
 package eu.kanade.tachiyomi.extension.zh.wnacg
 
-import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
+import keiyoushi.utils.getPreferences
 import okhttp3.Interceptor
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 import kotlin.random.Random
 
@@ -43,7 +41,7 @@ val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.s
 fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 
 fun getSharedPreferences(id: Long): SharedPreferences {
-    val preferences: SharedPreferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    val preferences: SharedPreferences = getPreferences(id)
     if (preferences.getString(DEFAULT_LIST_PREF, "")!! == DEFAULT_LIST) return preferences
     preferences.edit()
         .remove("overrideBaseUrl")

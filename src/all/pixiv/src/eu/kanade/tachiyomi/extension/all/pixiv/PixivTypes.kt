@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.pixiv
+
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 

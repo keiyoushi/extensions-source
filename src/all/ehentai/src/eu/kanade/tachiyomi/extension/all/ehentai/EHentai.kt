@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.ehentai
 
 import android.annotation.SuppressLint
-import android.app.Application
 import android.content.SharedPreferences
 import android.net.Uri
 import android.webkit.CookieManager
@@ -23,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.CacheControl
 import okhttp3.CookieJar
 import okhttp3.Headers
@@ -30,8 +30,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
 
 abstract class EHentai(
@@ -41,9 +39,7 @@ abstract class EHentai(
 
     override val name = "E-Hentai"
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
     private val memberId: String by lazy { getMemberIdPref() }
