@@ -59,9 +59,9 @@ class Shinigami : ConfigurableSource, HttpSource() {
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
 
-    private fun randomString(length: Int): String {
+    private fun randomString(length: Int) = buildString {
         val charPool = ('a'..'z') + ('A'..'Z')
-        return List(length) { charPool.random() }.joinToString("")
+        repeat(length) { append(charPool.random()) }
     }
 
     private fun apiHeadersBuilder(): Headers.Builder = headersBuilder()
@@ -90,9 +90,9 @@ class Shinigami : ConfigurableSource, HttpSource() {
     }
 
     private fun popularMangaFromObject(obj: ShinigamiBrowseDataDto): SManga = SManga.create().apply {
-        title = obj.title.toString()
+        title = obj.title!!
         thumbnail_url = obj.thumbnail
-        url = obj.mangaId.toString()
+        url = obj.mangaId!!
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -141,7 +141,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
         val mangaDetails = mangaDetailsResponse.data
 
         return SManga.create().apply {
-            author = mangaDetails.taxonomy["Author"]?.joinToString(", ") { it.name }.orEmpty()
+            author = mangaDetails.taxonomy["Author"]?.joinToString { it.name }.orEmpty()
             artist = mangaDetails.taxonomy["Artist"]?.joinToString(", ") { it.name }.orEmpty()
             status = mangaDetails.status.toStatus()
             description = mangaDetails.description
