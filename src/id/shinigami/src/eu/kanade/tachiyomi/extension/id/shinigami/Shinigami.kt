@@ -75,7 +75,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", "30")
             .addQueryParameter("sort", "popularity")
-            .toString()
+            .build()
 
         return GET(url, apiHeaders)
     }
@@ -100,7 +100,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", "30")
             .addQueryParameter("sort", "latest")
-            .toString()
+            .build()
 
         return GET(url, apiHeaders)
     }
@@ -124,7 +124,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/series/" + manga.url
+        return "$baseUrl/series/${manga.url}"
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -133,7 +133,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
 
-        return GET("$apiUrl/$API_BASE_PATH/manga/detail/" + manga.url, apiHeaders)
+        return GET("$apiUrl/$API_BASE_PATH/manga/detail/${manga.url}", apiHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -182,7 +182,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
 
-        return GET("$apiUrl/$API_BASE_PATH/chapter/detail/" + chapter.url, apiHeaders)
+        return GET("$apiUrl/$API_BASE_PATH/chapter/detail/${chapter.url}", apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
