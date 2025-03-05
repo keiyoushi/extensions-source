@@ -14,6 +14,7 @@ class Onemanhua : ColaManga("COLAMANGA", "https://www.colamanga.com", "zh") {
     override val genreTitle = "类别"
     override val statusOngoing = "连载中"
     override val statusCompleted = "已完结"
+    override val lastUpdated = "更新"
 
     override fun getFilterList(): FilterList {
         val filters = buildList {
