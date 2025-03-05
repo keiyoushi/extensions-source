@@ -9,25 +9,27 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.ParseException
+import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import java.util.regex.Pattern
 
 // Based off of Mangakakalot 1.2.8
 abstract class MangaBox(
     override val name: String,
     override val baseUrl: String,
     override val lang: String,
-    private val dateformat: SimpleDateFormat = SimpleDateFormat("MMM-dd-yy", Locale.ENGLISH),
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM-dd-yyyy HH:mm", Locale.ENGLISH),
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
@@ -35,16 +37,71 @@ abstract class MangaBox(
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .addInterceptor(::useDifferentCdnInterceptor)
         .build()
 
+    private val cdnSet = HashSet<String>() // Stores all unique CDNs that the extension can use to retrieve chapter images
+
+    private fun useDifferentCdnInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val originalResponse = chain.proceed(request)
+        val requestTag = request.tag(FallbackTag::class.java)
+
+        // Check if the request has already been processed by this interceptor or is allowed to use one
+        if (requestTag == null || requestTag.isProcessed() || originalResponse.isSuccessful) {
+            return originalResponse
+        }
+
+        // Close the original response if it's not successful
+        originalResponse.close()
+
+        // Create a copy of the CDN set and remove the used CDN to exclude it in the loop
+        val localCdnSet = HashSet(cdnSet)
+        val usedCdn = "${request.url.scheme}://${request.url.host}${if (request.url.port != 80 && request.url.port != 443) ":${request.url.port}" else ""}"
+        localCdnSet.remove(usedCdn)
+
+        for (cdnUrl in localCdnSet) {
+            var tryResponse: Response? = null
+
+            try {
+                val newUrl = cdnUrl.toHttpUrl().newBuilder()
+                    .encodedPath(request.url.encodedPath)
+                    .fragment(request.url.fragment)
+                    .build()
+
+                // Create a new request with the updated URL and mark it as processed
+                val newRequest = request.newBuilder()
+                    .url(newUrl)
+                    .tag(FallbackTag::class.java, FallbackTag(true)) // CDNs usually have sensitive headers so setting flags via headers is not feasible
+                    .build()
+
+                // Proceed with the new request
+                tryResponse = chain.proceed(newRequest)
+
+                // Check if the response is successful
+                if (tryResponse.isSuccessful) {
+                    return tryResponse
+                }
+
+                tryResponse.close()
+            } catch (e: SocketTimeoutException) {
+                tryResponse?.close()
+                continue
+            }
+        }
+
+        // If all CDNs fail, return the original response
+        return originalResponse
+    }
+
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", baseUrl) // for covers
+        .add("Referer", "$baseUrl/")
 
-    open val popularUrlPath = "manga_list?type=topview&category=all&state=all&page="
+    open val popularUrlPath = "manga-list/hot-manga?page="
 
-    open val latestUrlPath = "manga_list?type=latest&category=all&state=all&page="
+    open val latestUrlPath = "manga-list/latest-manga?page="
 
-    open val simpleQueryPath = "search/"
+    open val simpleQueryPath = "search/story/"
 
     override fun popularMangaSelector() = "div.truyen-list > div.list-truyen-item-wrap"
 
@@ -58,7 +115,7 @@ abstract class MangaBox(
         return GET("$baseUrl/$latestUrlPath$page", headers)
     }
 
-    protected fun mangaFromElement(element: Element, urlSelector: String = "h3 a"): SManga {
+    private fun mangaFromElement(element: Element, urlSelector: String = "h3 a"): SManga {
         return SManga.create().apply {
             element.select(urlSelector).first()!!.let {
                 url = it.attr("abs:href").substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
@@ -77,47 +134,30 @@ abstract class MangaBox(
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return if (query.isNotBlank() && getAdvancedGenreFilters().isEmpty()) {
-            GET("$baseUrl/$simpleQueryPath${normalizeSearchQuery(query)}?page=$page", headers)
+        return if (query.isNotBlank()) {
+            val url = "$baseUrl/$simpleQueryPath".toHttpUrl().newBuilder()
+                .addPathSegment(normalizeSearchQuery(query))
+                .addQueryParameter("page", page.toString())
+                .build()
+
+            return GET(url, headers)
         } else {
-            val url = baseUrl.toHttpUrl().newBuilder()
-            if (getAdvancedGenreFilters().isNotEmpty()) {
-                url.addPathSegment("advanced_search")
-                url.addQueryParameter("page", page.toString())
-                url.addQueryParameter("keyw", normalizeSearchQuery(query))
-                var genreInclude = ""
-                var genreExclude = ""
-                filters.forEach { filter ->
-                    when (filter) {
-                        is KeywordFilter -> filter.toUriPart()?.let { url.addQueryParameter("keyt", it) }
-                        is SortFilter -> url.addQueryParameter("orby", filter.toUriPart())
-                        is StatusFilter -> url.addQueryParameter("sts", filter.toUriPart())
-                        is AdvGenreFilter -> {
-                            filter.state.forEach { if (it.isIncluded()) genreInclude += "_${it.id}" }
-                            filter.state.forEach { if (it.isExcluded()) genreExclude += "_${it.id}" }
-                        }
-                        else -> {}
-                    }
-                }
-                url.addQueryParameter("g_i", genreInclude)
-                url.addQueryParameter("g_e", genreExclude)
-            } else {
-                url.addPathSegment("manga_list")
-                url.addQueryParameter("page", page.toString())
-                filters.forEach { filter ->
-                    when (filter) {
-                        is SortFilter -> url.addQueryParameter("type", filter.toUriPart())
-                        is StatusFilter -> url.addQueryParameter("state", filter.toUriPart())
-                        is GenreFilter -> url.addQueryParameter("category", filter.toUriPart())
-                        else -> {}
-                    }
+            val url = "$baseUrl/genre".toHttpUrl().newBuilder()
+            url.addQueryParameter("page", page.toString())
+            filters.forEach { filter ->
+                when (filter) {
+                    is SortFilter -> url.addQueryParameter("type", filter.toUriPart())
+                    is StatusFilter -> url.addQueryParameter("state", filter.toUriPart())
+                    is GenreFilter -> url.addPathSegment(filter.toUriPart()!!)
+                    else -> {}
                 }
             }
+
             GET(url.build(), headers)
         }
     }
 
-    override fun searchMangaSelector() = ".panel_story_list .story_item"
+    override fun searchMangaSelector() = ".panel_story_list .story_item, div.list-truyen-item-wrap"
 
     override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
@@ -127,7 +167,7 @@ abstract class MangaBox(
 
     open val thumbnailSelector = "div.manga-info-pic img, span.info-image img"
 
-    open val descriptionSelector = "div#noidungm, div#panel-story-info-description"
+    open val descriptionSelector = "div#noidungm, div#panel-story-info-description, div#contentBox"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (manga.url.startsWith("http")) {
@@ -199,7 +239,7 @@ abstract class MangaBox(
 
     protected open val alternateChapterDateSelector = String()
 
-    protected fun Element.selectDateFromElement(): Element {
+    private fun Element.selectDateFromElement(): Element {
         val defaultChapterDateSelector = "span"
         return this.select(defaultChapterDateSelector).lastOrNull() ?: this.select(alternateChapterDateSelector).last()!!
     }
@@ -212,31 +252,7 @@ abstract class MangaBox(
                 scanlator =
                     it.attr("abs:href").toHttpUrl().host // show where chapters are actually from
             }
-            date_upload = parseChapterDate(element.selectDateFromElement().text(), scanlator!!) ?: 0
-        }
-    }
-
-    private fun parseChapterDate(date: String, host: String): Long? {
-        return if ("ago" in date) {
-            val value = date.split(' ')[0].toIntOrNull()
-            val cal = Calendar.getInstance()
-            when {
-                value != null && "min" in date -> cal.apply { add(Calendar.MINUTE, -value) }
-                value != null && "hour" in date -> cal.apply { add(Calendar.HOUR_OF_DAY, -value) }
-                value != null && "day" in date -> cal.apply { add(Calendar.DATE, -value) }
-                else -> null
-            }?.timeInMillis
-        } else {
-            try {
-                if (host.contains("manganato", ignoreCase = true)) {
-                    // Nelo's date format
-                    SimpleDateFormat("MMM dd,yy", Locale.ENGLISH).parse(date)
-                } else {
-                    dateformat.parse(date)
-                }
-            } catch (e: ParseException) {
-                null
-            }?.time
+            date_upload = dateFormat.tryParse(element.selectDateFromElement().attr("title"))
         }
     }
 
@@ -247,26 +263,50 @@ abstract class MangaBox(
         return super.pageListRequest(chapter)
     }
 
-    open val pageListSelector = "div#vungdoc img, div.container-chapter-reader img"
+    private fun extractArray(scriptContent: String, arrayName: String): List<String> {
+        val pattern = Pattern.compile("$arrayName\\s*=\\s*\\[([^\\]]+)\\]")
+        val matcher = pattern.matcher(scriptContent)
+        val arrayValues = mutableListOf<String>()
+
+        if (matcher.find()) {
+            val arrayContent = matcher.group(1)
+            val values = arrayContent.split(",")
+            for (value in values) {
+                arrayValues.add(
+                    value.trim()
+                        .removeSurrounding("\"")
+                        .replace("\\/", "/")
+                        .removeSuffix("/"),
+                )
+            }
+        }
+
+        return arrayValues
+    }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(pageListSelector)
-            // filter out bad elements for mangakakalots
-            .filterNot { it.attr("src").endsWith("log") }
-            .mapIndexed { i, element ->
-                val url = element.attr("abs:src").let { src ->
-                    if (src.startsWith("https://convert_image_digi.mgicdn.com")) {
-                        "https://images.weserv.nl/?url=" + src.substringAfter("//")
-                    } else {
-                        src
-                    }
-                }
-                Page(i, document.location(), url)
+        val element = document.select("head > script").lastOrNull()
+            ?: return emptyList()
+        val cdns = extractArray(element.html(), "cdns") + extractArray(element.html(), "backupImage")
+        val chapterImages = extractArray(element.html(), "chapterImages")
+
+        // Add all parsed cdns to set
+        cdnSet.addAll(cdns)
+
+        return chapterImages.mapIndexed { i, imagePath ->
+            val parsedUrl = cdns[0].toHttpUrl().run {
+                newBuilder()
+                    .encodedPath("/$imagePath".replace("//", "/")) // replace ensures that there's at least one trailing slash prefix
+                    .build()
+                    .toString()
             }
+
+            Page(i, document.location(), parsedUrl)
+        }
     }
 
     override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, headersBuilder().set("Referer", page.url).build())
+        return GET(page.imageUrl!!, headers).newBuilder().tag(FallbackTag::class.java, FallbackTag(false)).build()
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
@@ -288,40 +328,17 @@ abstract class MangaBox(
         return str
     }
 
-    override fun getFilterList() = if (getAdvancedGenreFilters().isNotEmpty()) {
-        FilterList(
-            KeywordFilter(getKeywordFilters()),
-            SortFilter(getSortFilters()),
-            StatusFilter(getStatusFilters()),
-            AdvGenreFilter(getAdvancedGenreFilters()),
-        )
-    } else {
-        FilterList(
-            Filter.Header("NOTE: Ignored if using text search!"),
-            Filter.Separator(),
-            SortFilter(getSortFilters()),
-            StatusFilter(getStatusFilters()),
-            GenreFilter(getGenreFilters()),
-        )
-    }
-
-    // Technically, only Sort, Status, and Genre need to be non-private for Mangakakalot and Manganato, but I'll include Keyword to make it uniform.
-    protected class KeywordFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Keyword search ", vals)
-    protected class SortFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Order by", vals)
-    protected class StatusFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Status", vals)
-    protected class GenreFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Category", vals)
-
-    // For advanced search, specifically tri-state genres
-    private class AdvGenreFilter(vals: List<AdvGenre>) : Filter.Group<AdvGenre>("Category", vals)
-    class AdvGenre(val id: String?, name: String) : Filter.TriState(name)
-
-    // keyt query parameter
-    private fun getKeywordFilters(): Array<Pair<String?, String>> = arrayOf(
-        Pair(null, "Everything"),
-        Pair("title", "Title"),
-        Pair("alternative", "Alt title"),
-        Pair("author", "Author"),
+    override fun getFilterList() = FilterList(
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        SortFilter(getSortFilters()),
+        StatusFilter(getStatusFilters()),
+        GenreFilter(getGenreFilters()),
     )
+
+    private class SortFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Order by", vals)
+    private class StatusFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Status", vals)
+    private class GenreFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Category", vals)
 
     private fun getSortFilters(): Array<Pair<String?, String>> = arrayOf(
         Pair("latest", "Latest"),
@@ -338,50 +355,47 @@ abstract class MangaBox(
 
     open fun getGenreFilters(): Array<Pair<String?, String>> = arrayOf(
         Pair("all", "ALL"),
-        Pair("2", "Action"),
-        Pair("3", "Adult"),
-        Pair("4", "Adventure"),
-        Pair("6", "Comedy"),
-        Pair("7", "Cooking"),
-        Pair("9", "Doujinshi"),
-        Pair("10", "Drama"),
-        Pair("11", "Ecchi"),
-        Pair("12", "Fantasy"),
-        Pair("13", "Gender bender"),
-        Pair("14", "Harem"),
-        Pair("15", "Historical"),
-        Pair("16", "Horror"),
-        Pair("45", "Isekai"),
-        Pair("17", "Josei"),
-        Pair("44", "Manhua"),
-        Pair("43", "Manhwa"),
-        Pair("19", "Martial arts"),
-        Pair("20", "Mature"),
-        Pair("21", "Mecha"),
-        Pair("22", "Medical"),
-        Pair("24", "Mystery"),
-        Pair("25", "One shot"),
-        Pair("26", "Psychological"),
-        Pair("27", "Romance"),
-        Pair("28", "School life"),
-        Pair("29", "Sci fi"),
-        Pair("30", "Seinen"),
-        Pair("31", "Shoujo"),
-        Pair("32", "Shoujo ai"),
-        Pair("33", "Shounen"),
-        Pair("34", "Shounen ai"),
-        Pair("35", "Slice of life"),
-        Pair("36", "Smut"),
-        Pair("37", "Sports"),
-        Pair("38", "Supernatural"),
-        Pair("39", "Tragedy"),
-        Pair("40", "Webtoons"),
-        Pair("41", "Yaoi"),
-        Pair("42", "Yuri"),
+        Pair("action", "Action"),
+        Pair("adult", "Adult"),
+        Pair("adventure", "Adventure"),
+        Pair("comedy", "Comedy"),
+        Pair("cooking", "Cooking"),
+        Pair("doujinshi", "Doujinshi"),
+        Pair("drama", "Drama"),
+        Pair("ecchi", "Ecchi"),
+        Pair("fantasy", "Fantasy"),
+        Pair("gender-bender", "Gender bender"),
+        Pair("harem", "Harem"),
+        Pair("historical", "Historical"),
+        Pair("horror", "Horror"),
+        Pair("isekai", "Isekai"),
+        Pair("josei", "Josei"),
+        Pair("manhua", "Manhua"),
+        Pair("manhwa", "Manhwa"),
+        Pair("martial-arts", "Martial arts"),
+        Pair("mature", "Mature"),
+        Pair("mecha", "Mecha"),
+        Pair("medical", "Medical"),
+        Pair("mystery", "Mystery"),
+        Pair("one-shot", "One shot"),
+        Pair("psychological", "Psychological"),
+        Pair("romance", "Romance"),
+        Pair("school-life", "School life"),
+        Pair("sci-fi", "Sci fi"),
+        Pair("seinen", "Seinen"),
+        Pair("shoujo", "Shoujo"),
+        Pair("shoujo-ai", "Shoujo ai"),
+        Pair("shounen", "Shounen"),
+        Pair("shounen-ai", "Shounen ai"),
+        Pair("slice-of-life", "Slice of life"),
+        Pair("smut", "Smut"),
+        Pair("sports", "Sports"),
+        Pair("supernatural", "Supernatural"),
+        Pair("tragedy", "Tragedy"),
+        Pair("webtoons", "Webtoons"),
+        Pair("yaoi", "Yaoi"),
+        Pair("yuri", "Yuri"),
     )
-
-    // To be overridden if using tri-state genres
-    protected open fun getAdvancedGenreFilters(): List<AdvGenre> = emptyList()
 
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String?, String>>) :
         Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
