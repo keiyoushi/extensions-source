@@ -142,7 +142,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
 
         return SManga.create().apply {
             author = mangaDetails.taxonomy["Author"]?.joinToString { it.name }.orEmpty()
-            artist = mangaDetails.taxonomy["Artist"]?.joinToString(", ") { it.name }.orEmpty()
+            artist = mangaDetails.taxonomy["Artist"]?.joinToString { it.name }.orEmpty()
             status = mangaDetails.status.toStatus()
             description = mangaDetails.description
 
