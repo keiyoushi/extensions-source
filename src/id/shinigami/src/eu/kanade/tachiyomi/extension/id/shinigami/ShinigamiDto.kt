@@ -30,7 +30,6 @@ class ShinigamiMangaDetailDto(
 @Serializable
 class ShinigamiMangaDetailDataDto(
     val description: String = "",
-//    @SerialName("alternative_title") val alternativeTitle: String = "",
     val status: Int = 0,
     val taxonomy: Map<String, List<TaxonomyItemDto>> = emptyMap(),
 )
