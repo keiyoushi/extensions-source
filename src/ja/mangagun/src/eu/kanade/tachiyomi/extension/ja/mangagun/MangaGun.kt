@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.mangagun
 
+import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -116,21 +117,10 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
             handleDdosProtect(document)
         } else {
             document
-        }.select("script:containsData(load_image)")
-            .html()
-            .substringAfter("(")
-            .substringBefore(",")
-            .let { cid ->
-                client.newCall(
-                    GET(
-                        "$baseUrl/app/manga/controllers/cont.Showimage.php?cid=$cid",
-                        headers,
-                    ),
-                ).execute().asJsoup()
-            }
-            .select(".lazyload")
-            .mapIndexed { i, e ->
-                Page(i, "", e.attr("abs:data-srcset"))
+        }.select(".chapter-content img.chapter-img")
+            .eachAttr("data-img")
+            .mapIndexed { index, img ->
+                Page(index, "", Base64.decode(img, Base64.DEFAULT).decodeToString())
             }
     }
 }
