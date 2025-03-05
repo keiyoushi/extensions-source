@@ -31,6 +31,7 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -150,6 +151,8 @@ abstract class ColaManga(
     protected abstract val genreTitle: String
     protected abstract val statusOngoing: String
     protected abstract val statusCompleted: String
+    protected abstract val lastUpdated: String
+    var lastUpdatedDate: Long = 0
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.fed-part-eone")!!.text()
@@ -164,6 +167,8 @@ abstract class ColaManga(
             statusCompleted -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
+        val formatter: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd")
+        lastUpdatedDate = formatter.parse(document.selectFirst("span.fed-text-muted:contains($lastUpdated) + a")?.text()).getTime()
     }
 
     override fun chapterListSelector(): String = "div:not(.fed-hidden) > div.all_data_list > ul.fed-part-rows a"
@@ -171,6 +176,7 @@ abstract class ColaManga(
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         name = element.attr("title")
+        date_upload = lastUpdatedDate
     }
 
     @SuppressLint("SetJavaScriptEnabled")
