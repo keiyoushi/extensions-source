@@ -82,6 +82,7 @@ class Onemanhua : ColaManga("COLAMANGA", "https://www.colamanga.com", "zh") {
             Pair("霸总", "10127"),
             Pair("大女主", "10706"),
             Pair("生活", "10142"),
+            Pair("少年热血", "12163"),
         ),
     )
     private class CharFilter : UriPartFilter(
