@@ -84,7 +84,7 @@ class Koharu(
     }
 
     private fun getManga(book: Entry) = SManga.create().apply {
-        setUrlWithoutDomain("${book.id}/${book.public_key}")
+        setUrlWithoutDomain("${book.id}/${book.key}")
         title = if (remadd()) book.title.shortenTitle() else book.title
         thumbnail_url = book.thumbnail.path
     }
@@ -123,7 +123,7 @@ class Koharu(
             else -> "0"
         }
 
-        val imagesResponse = client.newCall(GET("$apiBooksUrl/data/${entry.id}/${entry.public_key}/$id/$public_key?v=${entry.updated_at ?: entry.created_at}&w=$realQuality", lazyHeaders)).execute()
+        val imagesResponse = client.newCall(GET("$apiBooksUrl/data/${entry.id}/${entry.key}/$id/$public_key?v=${entry.updated_at ?: entry.created_at}&w=$realQuality", lazyHeaders)).execute()
         val images = imagesResponse.parseAs<ImagesInfo>() to realQuality
         return images
     }
@@ -200,7 +200,7 @@ class Koharu(
         return MangasPage(
             listOf(
                 SManga.create().apply {
-                    setUrlWithoutDomain("${entry.id}/${entry.public_key}")
+                    setUrlWithoutDomain("${entry.id}/${entry.key}")
                     title = if (remadd()) entry.title.shortenTitle() else entry.title
                     thumbnail_url = entry.thumbnails.base + entry.thumbnails.main.path
                 },
@@ -320,7 +320,7 @@ class Koharu(
         return listOf(
             SChapter.create().apply {
                 name = "Chapter"
-                url = "${manga.id}/${manga.public_key}"
+                url = "${manga.id}/${manga.key}"
                 date_upload = (manga.updated_at ?: manga.created_at)
             },
         )

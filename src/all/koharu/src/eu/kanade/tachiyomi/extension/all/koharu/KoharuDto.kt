@@ -19,7 +19,7 @@ class Books(
 @Serializable
 class Entry(
     val id: Int,
-    val public_key: String,
+    val key: String,
     val title: String,
     val thumbnail: Thumbnail,
 )
@@ -28,7 +28,7 @@ class Entry(
 class MangaEntry(
     val id: Int,
     val title: String,
-    val public_key: String,
+    val key: String,
     val created_at: Long = 0L,
     val updated_at: Long?,
     val thumbnails: Thumbnails,
