@@ -118,7 +118,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
 
         // TODO: search by tag/genre/status/etc
 
-        return GET(url.toString(), apiHeaders)
+        return GET(url.build(), apiHeaders)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
