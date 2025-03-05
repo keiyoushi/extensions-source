@@ -71,7 +71,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
         .add("Sec-GPC", "1")
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/$API_BASE_PATH/manga/list".toHttpUrl().newBuilder()
+        val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", "30")
             .addQueryParameter("sort", "popularity")
@@ -96,7 +96,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/$API_BASE_PATH/manga/list".toHttpUrl().newBuilder()
+        val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", "30")
             .addQueryParameter("sort", "latest")
@@ -108,7 +108,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/$API_BASE_PATH/manga/list".toHttpUrl().newBuilder()
+        val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("page_size", "30")
 
@@ -133,7 +133,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
 
-        return GET("$apiUrl/$API_BASE_PATH/manga/detail/${manga.url}", apiHeaders)
+        return GET("$apiUrl/v1/manga/detail/${manga.url}", apiHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -161,7 +161,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        return GET("$apiUrl/$API_BASE_PATH/chapter/${manga.url}/list?page_size=3000", apiHeaders)
+        return GET("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -182,7 +182,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
             throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
         }
 
-        return GET("$apiUrl/$API_BASE_PATH/chapter/detail/${chapter.url}", apiHeaders)
+        return GET("$apiUrl/v1/chapter/detail/${chapter.url}", apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -239,7 +239,6 @@ class Shinigami : ConfigurableSource, HttpSource() {
     }
 
     companion object {
-        private const val API_BASE_PATH = "v1"
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
 
         private const val RESTART_APP = "Restart aplikasi untuk menerapkan perubahan."
