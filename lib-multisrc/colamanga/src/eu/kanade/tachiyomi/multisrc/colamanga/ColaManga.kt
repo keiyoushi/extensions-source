@@ -19,12 +19,14 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -152,7 +154,7 @@ abstract class ColaManga(
     protected abstract val statusOngoing: String
     protected abstract val statusCompleted: String
     protected abstract val lastUpdated: String
-    var lastUpdatedDate: Long = 0
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd")
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.fed-part-eone")!!.text()
@@ -167,16 +169,20 @@ abstract class ColaManga(
             statusCompleted -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        val formatter: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd")
-        lastUpdatedDate = formatter.parse(document.selectFirst("span.fed-text-muted:contains($lastUpdated) + a")?.text()).getTime()
     }
 
-    override fun chapterListSelector(): String = "div:not(.fed-hidden) > div.all_data_list > ul.fed-part-rows a"
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("div:not(.fed-hidden) > div.all_data_list > ul.fed-part-rows a").map{ chapterFromElement(it) }.apply {
+            this[0].date_upload = dateFormat.parse(document.selectFirst("span.fed-text-muted:contains($lastUpdated) + a")?.text()).getTime()
+        }
+    }
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         name = element.attr("title")
-        date_upload = lastUpdatedDate
     }
 
     @SuppressLint("SetJavaScriptEnabled")
