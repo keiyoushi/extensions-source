@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.mangabox
 
 class MangaBoxLinkedCdnSet : LinkedHashSet<String>() {
-    fun moveItemToFirstThenSave(item: String) {
+    fun moveItemToFirst(item: String) {
         if (this.contains(item) && this.first() != item) {
             // Remove the item from the current set
             this.remove(item)

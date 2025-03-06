@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.multisrc.mangabox
 
 import android.annotation.SuppressLint
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -31,7 +36,7 @@ abstract class MangaBox(
     override val baseUrl: String,
     override val lang: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM-dd-yyyy HH:mm", Locale.ENGLISH),
-) : ParsedHttpSource() {
+) : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
@@ -41,7 +46,10 @@ abstract class MangaBox(
         .addInterceptor(::useAltCdnInterceptor)
         .build()
 
+    private val preferences: SharedPreferences = getPreferences()
+
     private val cdnSet = MangaBoxLinkedCdnSet() // Stores all unique CDNs that the extension can use to retrieve chapter images
+
     private class MangaBoxFallBackTag() // Custom empty class tag to use as an identifier that the specific request is fallback-able
 
     private fun HttpUrl.getBaseUrl(): String =
@@ -58,17 +66,17 @@ abstract class MangaBox(
         val originalResponse: Response? = try {
             chain.proceed(request)
         } catch (e: IOException) {
-            if (requestTag == null) {
+            if (preferences.shouldUseFallbackCdn() && requestTag == null) {
                 throw e
             } else {
                 null
             }
         }
 
-        if (requestTag == null || originalResponse?.isSuccessful == true) {
+        if (!preferences.shouldUseFallbackCdn() || requestTag == null || originalResponse?.isSuccessful == true) {
             requestTag?.let {
                 // Move working cdn to first so it gets priority during iteration
-                cdnSet.moveItemToFirstThenSave(request.url.getBaseUrl())
+                cdnSet.moveItemToFirst(request.url.getBaseUrl())
             }
 
             return originalResponse!!
@@ -98,7 +106,7 @@ abstract class MangaBox(
                 if (tryResponse.isSuccessful) {
                     // Move working cdn to first so it gets priority during iteration
                     if (requestTag != null) {
-                        cdnSet.moveItemToFirstThenSave(newRequest.url.getBaseUrl())
+                        cdnSet.moveItemToFirst(newRequest.url.getBaseUrl())
                     }
 
                     return tryResponse
@@ -422,5 +430,20 @@ abstract class MangaBox(
     open class UriPartFilter(displayName: String, private val vals: Array<Pair<String?, String>>) :
         Filter.Select<String>(displayName, vals.map { it.second }.toTypedArray()) {
         fun toUriPart() = vals[state].first
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_USE_CDN_FALLBACK
+            title = "Allow CDN Fallback"
+            summary = "Allow to redirect to the next available/retrieved CDN that the extension uses if the main CDN fails"
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+    }
+
+    private fun SharedPreferences.shouldUseFallbackCdn(): Boolean = getBoolean(PREF_USE_CDN_FALLBACK, true)
+
+    companion object {
+        private const val PREF_USE_CDN_FALLBACK = "pref_use_cdn_fallback"
     }
 }
