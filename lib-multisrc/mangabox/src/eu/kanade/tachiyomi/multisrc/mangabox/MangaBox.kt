@@ -11,14 +11,15 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okio.IOException
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -37,30 +38,46 @@ abstract class MangaBox(
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
-        .addInterceptor(::useDifferentCdnInterceptor)
+        .addInterceptor(::useAltCdnInterceptor)
         .build()
 
-    private val cdnSet = HashSet<String>() // Stores all unique CDNs that the extension can use to retrieve chapter images
+    private val cdnSet = MangaBoxLinkedCdnSet() // Stores all unique CDNs that the extension can use to retrieve chapter images
+    private class MangaBoxFallBackTag() // Custom empty class tag to use as an identifier that the specific request is fallback-able
 
-    private fun useDifferentCdnInterceptor(chain: Interceptor.Chain): Response {
+    private fun HttpUrl.getBaseUrl(): String =
+        "${this.scheme}://${this.host}${
+        when (this.port) {
+            80, 443 -> ""
+            else -> ":${this.port}"
+        }
+        }"
+
+    private fun useAltCdnInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val originalResponse = chain.proceed(request)
-        val requestTag = request.tag(FallbackTag::class.java)
+        val requestTag = request.tag(MangaBoxFallBackTag::class.java)
+        val originalResponse: Response? = try {
+            chain.proceed(request)
+        } catch (e: IOException) {
+            if (requestTag == null) {
+                throw e
+            } else {
+                null
+            }
+        }
 
-        // Check if the request has already been processed by this interceptor or is allowed to use one
-        if (requestTag == null || requestTag.isProcessed() || originalResponse.isSuccessful) {
+        if (originalResponse?.isSuccessful == true) {
+            requestTag?.let {
+                // Move working cdn to first so it gets priority during iteration
+                cdnSet.moveItemToFirstThenSave(request.url.getBaseUrl())
+            }
+
             return originalResponse
         }
 
         // Close the original response if it's not successful
-        originalResponse.close()
+        originalResponse?.close()
 
-        // Create a copy of the CDN set and remove the used CDN to exclude it in the loop
-        val localCdnSet = HashSet(cdnSet)
-        val usedCdn = "${request.url.scheme}://${request.url.host}${if (request.url.port != 80 && request.url.port != 443) ":${request.url.port}" else ""}"
-        localCdnSet.remove(usedCdn)
-
-        for (cdnUrl in localCdnSet) {
+        for (cdnUrl in cdnSet) {
             var tryResponse: Response? = null
 
             try {
@@ -69,10 +86,9 @@ abstract class MangaBox(
                     .fragment(request.url.fragment)
                     .build()
 
-                // Create a new request with the updated URL and mark it as processed
+                // Create a new request with the updated URL
                 val newRequest = request.newBuilder()
                     .url(newUrl)
-                    .tag(FallbackTag::class.java, FallbackTag(true)) // CDNs usually have sensitive headers so setting flags via headers is not feasible
                     .build()
 
                 // Proceed with the new request
@@ -80,18 +96,22 @@ abstract class MangaBox(
 
                 // Check if the response is successful
                 if (tryResponse.isSuccessful) {
+                    // Move working cdn to first so it gets priority during iteration
+                    if (requestTag != null) {
+                        cdnSet.moveItemToFirstThenSave(newRequest.url.getBaseUrl())
+                    }
+
                     return tryResponse
                 }
 
                 tryResponse.close()
-            } catch (e: SocketTimeoutException) {
+            } catch (_: IOException) {
                 tryResponse?.close()
-                continue
             }
         }
 
         // If all CDNs fail, return the original response
-        return originalResponse
+        return originalResponse ?: throw IOException("All CDN attempts failed.")
     }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -264,20 +284,22 @@ abstract class MangaBox(
     }
 
     private fun extractArray(scriptContent: String, arrayName: String): List<String> {
-        val pattern = Pattern.compile("$arrayName\\s*=\\s*\\[([^\\]]+)\\]")
+        val pattern = Pattern.compile("$arrayName\\s*=\\s*\\[([^]]+)]")
         val matcher = pattern.matcher(scriptContent)
         val arrayValues = mutableListOf<String>()
 
         if (matcher.find()) {
             val arrayContent = matcher.group(1)
-            val values = arrayContent.split(",")
-            for (value in values) {
-                arrayValues.add(
-                    value.trim()
-                        .removeSurrounding("\"")
-                        .replace("\\/", "/")
-                        .removeSuffix("/"),
-                )
+            val values = arrayContent?.split(",")
+            if (values != null) {
+                for (value in values) {
+                    arrayValues.add(
+                        value.trim()
+                            .removeSurrounding("\"")
+                            .replace("\\/", "/")
+                            .removeSuffix("/"),
+                    )
+                }
             }
         }
 
@@ -306,7 +328,7 @@ abstract class MangaBox(
     }
 
     override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, headers).newBuilder().tag(FallbackTag::class.java, FallbackTag(false)).build()
+        return GET(page.imageUrl!!, headers).newBuilder().tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag()).build()
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
