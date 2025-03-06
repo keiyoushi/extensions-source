@@ -65,13 +65,13 @@ abstract class MangaBox(
             }
         }
 
-        if (originalResponse?.isSuccessful == true) {
+        if (requestTag == null || originalResponse?.isSuccessful == true) {
             requestTag?.let {
                 // Move working cdn to first so it gets priority during iteration
                 cdnSet.moveItemToFirstThenSave(request.url.getBaseUrl())
             }
 
-            return originalResponse
+            return originalResponse!!
         }
 
         // Close the original response if it's not successful
