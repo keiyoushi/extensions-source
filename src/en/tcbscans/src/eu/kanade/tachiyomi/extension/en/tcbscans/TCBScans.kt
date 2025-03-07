@@ -14,6 +14,7 @@ import okhttp3.Response
 import okio.IOException
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
@@ -62,17 +63,19 @@ class TCBScans : ParsedHttpSource() {
     override fun latestUpdatesSelector() = throw UnsupportedOperationException()
     override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/projects#$query", headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val query = response.request.url.fragment!!
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        val response = client.newCall(GET("$baseUrl/projects", headers)).execute()
         val mangas = popularMangaParse(response).mangas.filter {
             it.title.contains(query, true)
         }
-        return MangasPage(mangas, false)
+        return Observable.just(MangasPage(mangas, false))
     }
 
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
