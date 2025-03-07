@@ -6,7 +6,6 @@ import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import keiyoushi.utils.getPreferences
 import java.util.Locale
 
 /**
@@ -18,9 +17,7 @@ private inline val INFO: Nothing get() = error("INFO")
 /**
  * @author Federico d'Alonzo &lt;me@npgx.dev&gt;
  */
-class ProjectSukiPreferences(id: Long) {
-
-    internal val shared by lazy { getPreferences(id) }
+class ProjectSukiPreferences(internal val shared: SharedPreferences) {
 
     abstract inner class PSPreference<Raw : Any, T : Any>(val preferenceIdentifier: String, val default: Raw) {
 

@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
-import keiyoushi.utils.getPreferences
 import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
@@ -97,15 +96,14 @@ private const val URL_LIST_PREF = "baseUrlList"
 private val SharedPreferences.mirrorIndex get() = getString(USE_MIRROR_URL_PREF, "0")!!.toInt()
 private val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.split(",")
 
-fun getSharedPreferences(id: Long): SharedPreferences {
-    val preferences: SharedPreferences = getPreferences(id)
-    if (preferences.getString(DEFAULT_LIST_PREF, "")!! == DEFAULT_LIST) return preferences
-    preferences.edit()
-        .remove("overrideBaseUrl")
-        .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
-        .setUrlList(DEFAULT_LIST, preferences.mirrorIndex)
-        .apply()
-    return preferences
+fun SharedPreferences.preferenceMigration() {
+    if (getString(DEFAULT_LIST_PREF, "")!! != DEFAULT_LIST) {
+        edit()
+            .remove("overrideBaseUrl")
+            .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
+            .setUrlList(DEFAULT_LIST, mirrorIndex)
+            .apply()
+    }
 }
 
 fun SharedPreferences.Editor.setUrlList(urlList: String, oldIndex: Int): SharedPreferences.Editor {
