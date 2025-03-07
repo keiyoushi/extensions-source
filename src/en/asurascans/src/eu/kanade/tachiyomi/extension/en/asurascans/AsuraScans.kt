@@ -42,8 +42,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     private val dateFormat = SimpleDateFormat("MMMM d yyyy", Locale.US)
 
-    private val preferences: SharedPreferences =
-        getPreferences()
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         // remove legacy preferences

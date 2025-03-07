@@ -26,9 +26,7 @@ class NoyAcg : HttpSource(), ConfigurableSource {
     override val supportsLatest get() = true
     override val baseUrl get() = "https://noy1.top"
 
-    private val imageCdn by lazy {
-        getPreferences().imageCdn
-    }
+    private val imageCdn by lazy { getPreferences().imageCdn }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
