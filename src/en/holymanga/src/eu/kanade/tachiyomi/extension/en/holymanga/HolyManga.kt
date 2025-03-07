@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.holymanga
 
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
+import eu.kanade.tachiyomi.source.model.SChapter
+import org.jsoup.nodes.Element
 
 class HolyManga : FMReader(
     "HolyManga",
@@ -11,7 +13,7 @@ class HolyManga : FMReader(
 
     override val chapterUrlSelector = ""
 
-    override fun chapterFromElement(element: Element, mangaTitle: String = ""): SChapter {
+    override fun chapterFromElement(element: Element, mangaTitle: String): SChapter {
         return SChapter.create().apply {
             if (chapterUrlSelector != "") {
                 element.select(chapterUrlSelector).first()!!.let {
@@ -24,7 +26,7 @@ class HolyManga : FMReader(
                     name = element.attr(chapterNameAttrSelector).substringAfter("$mangaTitle ")
                 }
             }
-            date_upload = element.select(chapterTimeSelector).let { if (it.hasText()) parseAbsoluteDate (it.text()) else 0 }
+            date_upload = element.select(chapterTimeSelector).let { if (it.hasText()) parseAbsoluteDate(it.text()) else 0 }
         }
     }
 }
