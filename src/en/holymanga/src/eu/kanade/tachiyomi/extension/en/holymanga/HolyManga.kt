@@ -7,7 +7,7 @@ class HolyManga : FMReader(
     "https://w34.holymanga.net",
     "en",
 ) {
-    override val versionId = 2
+    override val versionId = 3
 
     override val chapterUrlSelector = ""
 
