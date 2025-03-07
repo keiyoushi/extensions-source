@@ -71,7 +71,7 @@ class TCBScans : ParsedHttpSource() {
         query: String,
         filters: FilterList,
     ): Observable<MangasPage> {
-        val response = client.newCall(GET("$baseUrl/projects", headers)).execute()
+        val response = client.newCall(popularMangaRequest(page)).execute()
         val mangas = popularMangaParse(response).mangas.filter {
             it.title.contains(query, true)
         }
