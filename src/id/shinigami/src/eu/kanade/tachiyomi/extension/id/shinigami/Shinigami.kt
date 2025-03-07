@@ -56,7 +56,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
         .rateLimit(3)
         .build()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
 
     private fun randomString(length: Int) = buildString {
