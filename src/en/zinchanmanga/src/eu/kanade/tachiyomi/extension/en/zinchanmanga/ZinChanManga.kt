@@ -6,7 +6,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class ZinChanManga : Madara("ZinChanManga", "https://zinchangmanga.net", "en") {
-    override val versionId = 3
+    override val versionId = 2
     override val useNewChapterEndpoint = true
 
     override fun popularMangaFromElement(element: Element): SManga {
