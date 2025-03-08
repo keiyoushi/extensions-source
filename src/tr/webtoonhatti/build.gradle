@@ -4,6 +4,7 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://webtoonhatti.me'
     overrideVersionCode = 6
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

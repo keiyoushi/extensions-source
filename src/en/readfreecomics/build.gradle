@@ -4,6 +4,7 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://readfreecomics.com'
     overrideVersionCode = 0
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
