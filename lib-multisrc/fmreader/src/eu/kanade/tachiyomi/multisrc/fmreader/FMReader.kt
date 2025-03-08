@@ -251,7 +251,7 @@ abstract class FMReader(
                 if (dateElement.hasText()) {
                     parseRelativeDate(dateElement.text()).takeIf { it != 0L } ?: parseAbsoluteDate(dateElement.text())
                 } else {
-                    0
+                    0L
                 }
             }
         }
