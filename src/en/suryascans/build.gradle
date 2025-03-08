@@ -4,6 +4,7 @@ ext {
     themePkg = 'keyoapp'
     baseUrl = 'https://genzupdates.com'
     overrideVersionCode = 30
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

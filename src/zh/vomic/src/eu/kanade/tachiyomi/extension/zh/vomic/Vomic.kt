@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.vomic
 
-import android.app.Application
 import android.util.Base64
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -12,14 +11,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
@@ -41,7 +39,7 @@ class Vomic : HttpSource(), ConfigurableSource {
     private val apiUrl: String
 
     init {
-        val domain = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).getString(DOMAIN_PREF, DEFAULT_DOMAIN)!!
+        val domain = getPreferences().getString(DOMAIN_PREF, DEFAULT_DOMAIN)!!
         if (domain.startsWith("www.") || domain.startsWith("api.")) {
             val tld = domain.substring(4)
             baseUrl = "http://www.$tld"
