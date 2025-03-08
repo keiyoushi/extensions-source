@@ -17,8 +17,8 @@ class HolyManga : FMReader(
     override val chapterUrlSelector = ""
 
     override fun chapterFromElement(element: Element, mangaTitle: String): SChapter {
-        return super.chapterFromElement(element).apply {
-            date_upload = element.select(chapterTimeSelector).let { if (it.hasText()) parseAbsoluteDate(it.text()) else 0 }
+        return super.chapterFromElement(element, mangaTitle).apply {
+            date_upload = element.select(chapterTimeSelector).text().let { parseAbsoluteDate(it) }
         }
     }
 }
