@@ -4,6 +4,7 @@ ext {
     themePkg = 'liliana'
     baseUrl = 'https://mangakoma01.com'
     overrideVersionCode = 1
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

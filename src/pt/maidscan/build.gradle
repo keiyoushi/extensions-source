@@ -4,6 +4,7 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://empreguetes.site'
     overrideVersionCode = 2
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

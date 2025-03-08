@@ -4,6 +4,7 @@ ext {
     themePkg = 'comicgamma'
     baseUrl = 'https://webcomicgamma.takeshobo.co.jp'
     overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

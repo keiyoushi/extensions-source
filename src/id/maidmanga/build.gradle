@@ -4,6 +4,7 @@ ext {
     themePkg = 'zmanga'
     baseUrl = 'https://www.maid.my.id'
     overrideVersionCode = 10
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

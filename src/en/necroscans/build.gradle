@@ -4,6 +4,7 @@ ext {
     themePkg = 'keyoapp'
     baseUrl = 'https://necroscans.com'
     overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangathemesia'
     baseUrl = 'https://sushiscan.net'
     overrideVersionCode = 13
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

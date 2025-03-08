@@ -4,6 +4,7 @@ ext {
     themePkg = 'monochrome'
     baseUrl = 'https://manga.d34d.one'
     overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

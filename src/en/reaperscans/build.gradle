@@ -4,6 +4,7 @@ ext {
     themePkg = 'heancms'
     baseUrl = 'https://reaperscans.com'
     overrideVersionCode = 29
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

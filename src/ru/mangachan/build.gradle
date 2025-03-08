@@ -4,6 +4,7 @@ ext {
     themePkg = 'multichan'
     baseUrl = 'https://im.manga-chan.me'
     overrideVersionCode = 15
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

@@ -4,6 +4,7 @@ ext {
     themePkg = 'mccms'
     baseUrl = 'https://www.mangajikan.com'
     overrideVersionCode = 1
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

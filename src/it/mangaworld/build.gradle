@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangaworld'
     baseUrl = 'https://www.mangaworld.ac'
     overrideVersionCode = 6
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

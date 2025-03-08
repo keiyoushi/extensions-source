@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangacatalog'
     baseUrl = 'https://ww3.read7deadlysins.com'
     overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

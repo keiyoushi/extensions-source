@@ -4,6 +4,7 @@ ext {
     themePkg = 'libgroup'
     baseUrl = 'https://mangalib.me'
     overrideVersionCode = 75
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

@@ -4,6 +4,7 @@ ext {
     themePkg = 'wpcomics'
     baseUrl = 'https://www.nhattruyenss.net'
     overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
