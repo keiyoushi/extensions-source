@@ -97,16 +97,21 @@ class Chapter(
     private val createdAt: String,
     private val chapterStatus: String,
     private val isAccessible: Boolean,
+    private val isLocked: Boolean? = false,
+    private val isTimeLocked: Boolean? = false,
     private val mangaPost: ChapterPostDetails,
 ) {
     fun isPublic() = chapterStatus == "PUBLIC"
 
     fun isAccessible() = isAccessible
 
+    fun isLocked() = (isLocked == true) || (isTimeLocked == true)
+
     fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
+        val prefix = if (isLocked()) "🔒 " else ""
         val seriesSlug = mangaSlug ?: mangaPost.slug
         url = "/series/$seriesSlug/$slug#$id"
-        name = "Chapter $number"
+        name = "${prefix}Chapter $number"
         scanlator = createdBy.name
         date_upload = try {
             dateFormat.parse(createdAt)!!.time
