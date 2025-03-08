@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.libgroup
 
 import android.annotation.SuppressLint
 import android.app.Application
-import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -24,6 +23,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -57,9 +57,10 @@ abstract class LibGroup(
         encodeDefaults = true
     }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-            .migrateOldImageServer()
+    private val preferences by getPreferencesLazy {
+        if (getString(SERVER_PREF, "main") == "fourth") {
+            edit().putString(SERVER_PREF, "secondary").apply()
+        }
     }
 
     override val supportsLatest = true
@@ -684,12 +685,5 @@ abstract class LibGroup(
                 true
             }
         }
-    }
-
-    // api changed id of servers, remap SERVER_PREF old("fourth") to new("secondary")
-    private fun SharedPreferences.migrateOldImageServer(): SharedPreferences {
-        if (getString(SERVER_PREF, "main") != "fourth") return this
-        edit().putString(SERVER_PREF, "secondary").apply()
-        return this
     }
 }

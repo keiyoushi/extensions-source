@@ -3,7 +3,7 @@ ext {
     extClass = '.WebtoonsFactory'
     themePkg = 'webtoons'
     baseUrl = 'https://www.webtoons.com'
-    overrideVersionCode = 39
+    overrideVersionCode = 40
 }
 
 apply from: "$rootDir/common.gradle"
