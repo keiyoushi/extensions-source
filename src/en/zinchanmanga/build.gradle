@@ -2,8 +2,8 @@ ext {
     extName = 'ZinChanManga'
     extClass = '.ZinChanManga'
     themePkg = 'madara'
-    baseUrl = 'https://zinchanmanga.net'
-    overrideVersionCode = 2
+    baseUrl = 'https://zinchangmanga.net'
+    overrideVersionCode = 3
     isNsfw = true
 }
 
