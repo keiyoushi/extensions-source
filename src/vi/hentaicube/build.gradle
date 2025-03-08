@@ -2,8 +2,8 @@ ext {
     extName = 'CBHentai'
     extClass = '.HentaiCB'
     themePkg = 'madara'
-    baseUrl = 'https://hentaicb.love'
-    overrideVersionCode = 13
+    baseUrl = 'https://hentaicb.lat'
+    overrideVersionCode = 14
     isNsfw = true
 }
 
