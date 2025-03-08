@@ -27,9 +27,9 @@ import java.util.Locale
 
 class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
-    override val name = "LXHentai"
+    override val name = "LXManga"
 
-    private val defaultBaseUrl = "https://lxmanga.cloud"
+    private val defaultBaseUrl = "https://lxmanga.art"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
