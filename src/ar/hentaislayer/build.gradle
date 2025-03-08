@@ -2,7 +2,7 @@ ext {
     extName = 'Hentai Slayer'
     extClass = '.HentaiSlayer'
     themePkg = 'fuzzydoodle'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 

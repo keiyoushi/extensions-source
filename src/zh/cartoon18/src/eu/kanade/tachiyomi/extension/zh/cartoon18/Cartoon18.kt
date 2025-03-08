@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.cartoon18
 
-import android.app.Application
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,8 +20,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.net.URLDecoder
 
 class Cartoon18 : HttpSource(), ConfigurableSource {
@@ -202,8 +200,7 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
 
     private fun launchIO(block: () -> Unit) = scope.launch { block() }
 
-    private val preferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
+    private val preferences = getPreferences()
 
     private val useTrad get() = preferences.getBoolean("ZH_HANT", false)
 

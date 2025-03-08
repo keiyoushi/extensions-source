@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.galleryadults
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.PreferenceScreen
@@ -18,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,8 +36,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 
@@ -56,9 +54,7 @@ abstract class GalleryAdults(
         .build()
 
     /* Preferences */
-    protected val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    protected val preferences: SharedPreferences by getPreferencesLazy()
 
     protected open val useShortTitlePreference = true
 

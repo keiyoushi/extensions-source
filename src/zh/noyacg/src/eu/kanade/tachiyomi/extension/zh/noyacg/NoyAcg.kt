@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.noyacg
 
-import android.app.Application
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -12,14 +11,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 class NoyAcg : HttpSource(), ConfigurableSource {
@@ -28,9 +26,7 @@ class NoyAcg : HttpSource(), ConfigurableSource {
     override val supportsLatest get() = true
     override val baseUrl get() = "https://noy1.top"
 
-    private val imageCdn by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000).imageCdn
-    }
+    private val imageCdn by lazy { getPreferences().imageCdn }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

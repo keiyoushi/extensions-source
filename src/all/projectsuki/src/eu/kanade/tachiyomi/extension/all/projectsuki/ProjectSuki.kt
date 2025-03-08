@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -188,7 +189,7 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
     override val id: Long = 8965918600406781666L
 
     /** Handles extension preferences found in Extensions &gt; Project Suki &gt; Gear icon */
-    private val preferences = ProjectSukiPreferences(id)
+    private val preferences = ProjectSukiPreferences(getPreferences())
 
     /** See [Kotlinx-Serialization](https://github.com/Kotlin/kotlinx.serialization). */
     private val json: Json = Json {

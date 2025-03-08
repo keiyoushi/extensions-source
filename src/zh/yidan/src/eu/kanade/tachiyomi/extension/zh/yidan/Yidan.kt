@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.yidan
 
-import android.app.Application
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Headers
@@ -19,8 +19,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 class Yidan : HttpSource(), ConfigurableSource {
@@ -32,7 +30,7 @@ class Yidan : HttpSource(), ConfigurableSource {
 
     init {
         val mirrors = MIRRORS
-        val index = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val index = getPreferences()
             .getString(MIRROR_PREF, "0")!!.toInt().coerceAtMost(mirrors.size - 1)
         baseUrl = "https://" + mirrors[index]
     }

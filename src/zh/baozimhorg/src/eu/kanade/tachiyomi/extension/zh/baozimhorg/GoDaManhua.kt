@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.baozimhorg
 
-import android.app.Application
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.goda.GoDa
@@ -8,6 +7,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
@@ -28,7 +28,7 @@ class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
         if (System.getenv("CI") == "true") {
             baseUrl = mirrors.joinToString("#, ") { "https://$it" }
         } else {
-            val mirrorIndex = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+            val mirrorIndex = getPreferences()
                 .getString(MIRROR_PREF, "0")!!.toInt().coerceAtMost(mirrors.size - 1)
             baseUrl = "https://" + mirrors[mirrorIndex]
         }

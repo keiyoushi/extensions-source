@@ -3,7 +3,7 @@ ext {
     extClass = '.ConstellarScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://constellarcomic.com'
-    overrideVersionCode = 16
+    overrideVersionCode = 17
     isNsfw = true
 }
 

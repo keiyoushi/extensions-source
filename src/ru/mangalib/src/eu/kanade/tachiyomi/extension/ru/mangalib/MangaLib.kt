@@ -1,18 +1,14 @@
 package eu.kanade.tachiyomi.extension.ru.mangalib
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.libgroup.LibGroup
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import keiyoushi.utils.getPreferencesLazy
 
 class MangaLib : LibGroup("MangaLib", "https://mangalib.me", "ru") {
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private var domain: String = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
     override val baseUrl: String = domain

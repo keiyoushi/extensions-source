@@ -1,7 +1,7 @@
 ext {
     extName = 'NewToki / ManaToki'
     extClass = '.TokiFactory'
-    extVersionCode = 32
+    extVersionCode = 33
     isNsfw = true
 }
 
