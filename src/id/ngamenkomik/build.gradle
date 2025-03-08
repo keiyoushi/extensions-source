@@ -4,6 +4,7 @@ ext {
     themePkg = 'zeistmanga'
     baseUrl = 'https://ngamenkomik05.blogspot.com'
     overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
