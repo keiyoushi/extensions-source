@@ -2,8 +2,8 @@ ext {
     extName = 'Taurus Fansub'
     extClass = '.TaurusFansub'
     themePkg = 'madara'
-    baseUrl = 'https://lectortaurus.com'
-    overrideVersionCode = 3
+    baseUrl = 'https://lectortaurus.yopres.com'
+    overrideVersionCode = 4
     isNsfw = false
 }
 
