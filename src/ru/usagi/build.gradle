@@ -3,7 +3,7 @@ ext {
     extClass = '.Usagi'
     themePkg = 'grouple'
     baseUrl = 'https://web.usagi.one'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

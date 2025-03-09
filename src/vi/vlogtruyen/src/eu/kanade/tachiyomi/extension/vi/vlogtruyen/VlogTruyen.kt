@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.vlogtruyen
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -27,8 +27,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -37,13 +35,13 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    override val name = "ThichDoc"
+    override val name = "VlogTruyen"
 
     override val supportsLatest = true
 
     override val id: Long = 6425642624422299254
 
-    private val defaultBaseUrl = "https://thichdoc1.com"
+    private val defaultBaseUrl = "https://vlogtruyen45.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -171,8 +169,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(document: Document): String = ""
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->

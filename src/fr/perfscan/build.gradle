@@ -4,6 +4,7 @@ ext {
     themePkg = 'heancms'
     baseUrl = 'https://perf-scan.fr'
     overrideVersionCode = 0
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

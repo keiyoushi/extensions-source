@@ -4,6 +4,7 @@ ext {
     themePkg = 'mccms'
     baseUrl = 'https://www.liumanhua.com'
     overrideVersionCode = 5
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
