@@ -44,7 +44,7 @@ class ElderManga : ParsedHttpSource() {
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/search?page=$page&search=&order=4")
+        GET("$baseUrl/search?page=$page&search=&order=4", headers)
 
     override fun popularMangaNextPageSelector() =
         "section[aria-label='navigation'] li:has(a[class~='!text-gray-800']) + li > a:not([href~='#'])"
