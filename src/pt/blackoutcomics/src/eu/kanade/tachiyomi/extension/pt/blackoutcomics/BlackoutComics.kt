@@ -32,7 +32,7 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Blackout Comics"
 
-    override val baseUrl = "https://blackoutcomics.com"
+    override val baseUrl = "https://toptoon.com.co"
 
     override val lang = "pt-BR"
 

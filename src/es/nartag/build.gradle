@@ -2,8 +2,8 @@ ext {
     extName = 'Traducciones Amistosas'
     extClass = '.Nartag'
     themePkg = 'madara'
-    baseUrl = 'https://traduccionesamistosas.eyudud.net'
-    overrideVersionCode = 1
+    baseUrl = 'https://traduccionesamistosas.cookni.net'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
