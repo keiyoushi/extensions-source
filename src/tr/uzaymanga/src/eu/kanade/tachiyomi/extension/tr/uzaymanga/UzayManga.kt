@@ -58,15 +58,82 @@ class UzayManga : ParsedHttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/search?page=$page&search=&order=3")
+        GET(baseUrl)
 
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesNextPageSelector() = null
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Not used")
 
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element) =
+        throw UnsupportedOperationException("Not used")
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        return client.newCall(latestUpdatesRequest(page))
+            .asObservableSuccess()
+            .map { response ->
+                latestUpdatesParse(response)
+            }
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        // Ana sayfadaki grid içinde bulunan manga kartlarını seçiyoruz
+        val elements =
+            document.select("div.grid.grid-cols-1.lg\\:grid-cols-2.xl\\:grid-cols-3 > div")
+
+        val mangas = mutableListOf<SManga>()
+
+        for (i in 0 until elements.size) {
+            try {
+                val element = elements[i]
+
+                // Manga başlığı
+                val titleElement = element.select("h2")
+                if (titleElement.isEmpty()) continue
+                val title = titleElement[0].text()
+
+                // Manga URL'si
+                val linkElements = element.select("a")
+                if (linkElements.isEmpty()) continue
+                val mangaUrl = linkElements[0].attr("href")
+                if (!mangaUrl.contains("/manga/")) continue
+
+                // Manga kapak resmi
+                val imgElements = element.select("div.card-image img")
+                val thumbnail = if (imgElements.isNotEmpty()) imgElements[0].attr("src") else ""
+
+                // En son bölüm bilgisi
+                val chapterElements = element.select("div.flex.pt-0.flex-col.gap-2\\.5 > a")
+                val hasNewChapter = chapterElements.isNotEmpty()
+
+                if (hasNewChapter) {
+                    val manga = SManga.create().apply {
+                        this.title = title
+                        setUrlWithoutDomain(mangaUrl)
+                        thumbnail_url = when {
+                            thumbnail.startsWith("https://") || thumbnail.startsWith("http://") -> thumbnail
+                            thumbnail.startsWith("//") -> "https:$thumbnail"
+                            thumbnail.isEmpty() -> null
+                            thumbnail.startsWith("/") -> baseUrl + thumbnail
+                            else -> "https://cdn1.uzaymanga.com/$thumbnail"
+                        }
+                    }
+                    mangas.add(manga)
+                }
+            } catch (e: Exception) {
+                // Hata durumunda pas geç
+            }
+        }
+
+        return MangasPage(mangas, false)
+    }
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
             val url = "$baseUrl/manga/${query.substringAfter(URL_SEARCH_PREFIX)}"
             return client.newCall(GET(url, headers)).asObservableSuccess().map { response ->
@@ -149,7 +216,11 @@ class UzayManga : ParsedHttpSource() {
         document.selectFirst("div.grid h2 + p") != null
 
     private fun String.toDate(): Long =
-        try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0L }
+        try {
+            dateFormat.parse(this)!!.time
+        } catch (_: Exception) {
+            0L
+        }
 
     private fun String.contains(vararg fragment: String): Boolean =
         fragment.any { trim().contains(it, ignoreCase = true) }
