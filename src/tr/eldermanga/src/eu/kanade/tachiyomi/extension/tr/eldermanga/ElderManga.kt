@@ -58,7 +58,7 @@ class ElderManga : ParsedHttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int) =
-        GET(baseUrl)
+        GET(baseUrl, headers)
 
     override fun latestUpdatesNextPageSelector() = null
 
