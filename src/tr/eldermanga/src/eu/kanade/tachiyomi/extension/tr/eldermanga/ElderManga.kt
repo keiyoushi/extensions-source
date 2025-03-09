@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.tr.uzaymanga
+package eu.kanade.tachiyomi.extension.tr.eldermanga
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -23,16 +23,16 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class UzayManga : ParsedHttpSource() {
-    override val name = "Uzay Manga"
+class ElderManga : ParsedHttpSource() {
+    override val name = "Elder Manga"
 
-    override val baseUrl = "https://uzaymanga.com"
+    override val baseUrl = "https://eldermanga.com"
 
     override val lang = "tr"
 
     override val supportsLatest = true
 
-    override val versionId = 2
+    override val versionId = 1
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
@@ -44,7 +44,7 @@ class UzayManga : ParsedHttpSource() {
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/search?page=$page&search=&order=4")
+        GET("$baseUrl/search?page=$page&search=&order=4", headers)
 
     override fun popularMangaNextPageSelector() =
         "section[aria-label='navigation'] li:has(a[class~='!text-gray-800']) + li > a:not([href~='#'])"
@@ -58,7 +58,7 @@ class UzayManga : ParsedHttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int) =
-        GET(baseUrl)
+        GET(baseUrl, headers)
 
     override fun latestUpdatesNextPageSelector() = null
 
@@ -116,7 +116,7 @@ class UzayManga : ParsedHttpSource() {
                             thumbnail.startsWith("//") -> "https:$thumbnail"
                             thumbnail.isEmpty() -> null
                             thumbnail.startsWith("/") -> baseUrl + thumbnail
-                            else -> "https://cdn1.uzaymanga.com/$thumbnail"
+                            else -> "https://cdn1.eldermanga.com/$thumbnail"
                         }
                     }
                     mangas.add(manga)
@@ -205,7 +205,7 @@ class UzayManga : ParsedHttpSource() {
             ?: return emptyList()
 
         return pageRegex.findAll(script).mapIndexed { index, result ->
-            val url = result.groups.get(1)!!.value
+            val url = result.groupValues[1]
             Page(index, document.location(), "$CDN_URL/upload/series/$url")
         }.toList()
     }
@@ -226,7 +226,7 @@ class UzayManga : ParsedHttpSource() {
         fragment.any { trim().contains(it, ignoreCase = true) }
 
     companion object {
-        const val CDN_URL = "https://cdn1.uzaymanga.com"
+        const val CDN_URL = "https://cdn1.eldermanga.com"
         const val URL_SEARCH_PREFIX = "slug:"
         val dateFormat = SimpleDateFormat("MMM d ,yyyy", Locale("tr"))
         val pageRegex = """\\"path\\":\\"([^"]+)\\""".trimIndent().toRegex()
