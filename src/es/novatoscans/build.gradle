@@ -1,0 +1,10 @@
+ext {
+    extName = 'Novato Scans'
+    extClass = '.NovatoScans'
+    themePkg = 'zeistmanga'
+    baseUrl = 'https://www.novatoscans.top'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

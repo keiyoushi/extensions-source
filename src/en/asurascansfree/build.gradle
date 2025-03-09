@@ -1,0 +1,10 @@
+ext {
+    extName = 'Asura Scans Free (unoriginal)'
+    extClass = '.AsuraScansFree'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://asurascansfree.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

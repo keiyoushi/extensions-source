@@ -4,6 +4,7 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://ragnarokscanlation.org'
     overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

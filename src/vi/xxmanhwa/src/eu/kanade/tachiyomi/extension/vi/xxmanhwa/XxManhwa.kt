@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.vi.xxmanhwa
 
-import android.app.Application
+import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -12,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
@@ -20,8 +22,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import kotlin.random.Random
 
@@ -31,7 +31,9 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    override val baseUrl = "https://s1.xxmanhwa1.top"
+    private val defaultBaseUrl = "https://google.xxmanhwa2.top"
+
+    override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val supportsLatest = false
 
@@ -40,9 +42,7 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences by getPreferencesLazy()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/tat-ca-cac-truyen?page_num=$page", headers)
 
@@ -187,6 +187,17 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = KEY_HIDE_PAID_CHAPTERS
@@ -194,9 +205,25 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
             summary = "Ẩn các chương truyện cần nạp VIP để đọc.\n$baseUrl/thong-tin-cap-bac-tai-khoan"
             setDefaultValue(false)
         }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $defaultBaseUrl"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
     }
 
     private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
 
     companion object {
         private const val KEY_HIDE_PAID_CHAPTERS = "hidePaidChapters"
@@ -204,5 +231,11 @@ class XxManhwa : ParsedHttpSource(), ConfigurableSource {
         // The website generates this by creating a canvas, doing some funny things to it, and then
         // gets the SHA256 of the canvas' data URI. Pretty much a static string until the site updates.
         private const val WP_NONCE = "e732af2390628a21d8b7500e621b1493c28d9330b415e88f27b8b4e2f9a440a3"
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
+        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_SUMMARY =
+            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
     }
 }

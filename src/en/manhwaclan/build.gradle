@@ -3,7 +3,8 @@ ext {
     extClass = '.ManhwaClan'
     themePkg = 'madara'
     baseUrl = 'https://manhwaclan.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

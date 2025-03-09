@@ -1,14 +1,12 @@
 package eu.kanade.tachiyomi.extension.es.noblessetranslations
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import keiyoushi.utils.getPreferences
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -21,8 +19,7 @@ class NoblesseTranslations :
     ),
     ConfigurableSource {
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

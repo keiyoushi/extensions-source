@@ -1,7 +1,7 @@
 ext {
     extName = 'Galaxy'
     extClass = '.GalaxyFactory'
-    extVersionCode = 4
+    extVersionCode = 5
     isNsfw = false
 }
 

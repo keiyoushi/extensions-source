@@ -3,7 +3,7 @@ ext {
     extClass = '.HentaiTeca'
     themePkg = 'madara'
     baseUrl = 'https://hentaiteca.net'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 

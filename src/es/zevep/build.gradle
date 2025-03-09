@@ -1,0 +1,10 @@
+ext {
+    extName = 'Zevep'
+    extClass = '.Zevep'
+    themePkg = 'madara'
+    baseUrl = 'https://zevep.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

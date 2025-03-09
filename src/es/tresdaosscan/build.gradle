@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangathemesia'
     baseUrl = 'https://tresdaos.com'
     overrideVersionCode = 8
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

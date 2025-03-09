@@ -3,7 +3,7 @@ ext {
     extClass = '.AlgodaoDoce'
     themePkg = 'madara'
     baseUrl = 'https://xn--algododoce-j5a.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 

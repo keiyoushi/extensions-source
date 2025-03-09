@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Tx.gg (unoriginal)'
-    extClass = '.MangaTxGg'
-    themePkg = 'madara'
-    baseUrl = 'https://mangatx.gg'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

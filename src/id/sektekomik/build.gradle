@@ -4,6 +4,7 @@ ext {
     themePkg = 'colorlibanime'
     baseUrl = 'https://sektekomik.xyz'
     overrideVersionCode = 26
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

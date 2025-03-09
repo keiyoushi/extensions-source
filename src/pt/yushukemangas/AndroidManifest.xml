@@ -13,8 +13,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="yushukemangas.com"
-                    android:pathPattern="/manga"
+                    android:host="new.yushukemangas.com"
+                    android:pathPattern="/manga/..*"
                     android:scheme="https" />
             </intent-filter>
         </activity>

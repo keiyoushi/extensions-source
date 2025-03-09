@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.shinigami
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.util.Base64
 import android.widget.Toast
@@ -12,14 +11,13 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
-class Shinigami : Madara("Shinigami", "https://shinigami07.com", "id"), ConfigurableSource {
+class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), ConfigurableSource {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
@@ -29,9 +27,7 @@ class Shinigami : Madara("Shinigami", "https://shinigami07.com", "id"), Configur
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
