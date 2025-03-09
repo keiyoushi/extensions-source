@@ -19,6 +19,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import java.nio.charset.Charset
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -246,7 +247,13 @@ abstract class FMReader(
                     name = element.attr(chapterNameAttrSelector).substringAfter("$mangaTitle ")
                 }
             }
-            date_upload = element.select(chapterTimeSelector).let { if (it.hasText()) parseRelativeDate(it.text()) else 0 }
+            date_upload = element.select(chapterTimeSelector).let { dateElement ->
+                if (dateElement.hasText()) {
+                    parseRelativeDate(dateElement.text()).takeIf { it != 0L } ?: parseAbsoluteDate(dateElement.text())
+                } else {
+                    0L
+                }
+            }
         }
     }
 
@@ -257,55 +264,63 @@ abstract class FMReader(
     open val dateWordIndex = 1
 
     open fun parseRelativeDate(date: String): Long {
-        val value = date.split(' ')[dateValueIndex].toInt()
-        val dateWord = date.split(' ')[dateWordIndex].let {
-            if (it.contains("(")) {
-                it.substringBefore("(")
-            } else {
-                it.substringBefore("s")
+        try {
+            val value = date.split(' ')[dateValueIndex].toInt()
+            val dateWord = date.split(' ')[dateWordIndex].let {
+                if (it.contains("(")) {
+                    it.substringBefore("(")
+                } else {
+                    it.substringBefore("s")
+                }
             }
-        }
 
-        // languages: en, vi, es, tr
-        return when (dateWord) {
-            "min", "minute", "phút", "minuto", "dakika" -> Calendar.getInstance().apply {
-                add(Calendar.MINUTE, -value)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            "hour", "giờ", "hora", "saat" -> Calendar.getInstance().apply {
-                add(Calendar.HOUR_OF_DAY, -value)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            "day", "ngày", "día", "gün" -> Calendar.getInstance().apply {
-                add(Calendar.DATE, -value)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            "week", "tuần", "semana", "hafta" -> Calendar.getInstance().apply {
-                add(Calendar.DATE, -value * 7)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            "month", "tháng", "mes", "ay" -> Calendar.getInstance().apply {
-                add(Calendar.MONTH, -value)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            "year", "năm", "año", "yıl" -> Calendar.getInstance().apply {
-                add(Calendar.YEAR, -value)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            else -> {
-                return 0
+            // languages: en, vi, es, tr
+            return when (dateWord) {
+                "min", "minute", "phút", "minuto", "dakika" -> Calendar.getInstance().apply {
+                    add(Calendar.MINUTE, -value)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                "hour", "giờ", "hora", "saat" -> Calendar.getInstance().apply {
+                    add(Calendar.HOUR_OF_DAY, -value)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                "day", "ngày", "día", "gün" -> Calendar.getInstance().apply {
+                    add(Calendar.DATE, -value)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                "week", "tuần", "semana", "hafta" -> Calendar.getInstance().apply {
+                    add(Calendar.DATE, -value * 7)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                "month", "tháng", "mes", "ay" -> Calendar.getInstance().apply {
+                    add(Calendar.MONTH, -value)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                "year", "năm", "año", "yıl" -> Calendar.getInstance().apply {
+                    add(Calendar.YEAR, -value)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                else -> {
+                    return 0L
+                }
             }
+        } catch (_: Exception) {
+            return 0L
         }
     }
+
     open fun parseAbsoluteDate(dateStr: String): Long {
-        return runCatching { dateFormat.parse(dateStr)?.time }
-            .getOrNull() ?: 0L
+        return try {
+            dateFormat.parse(dateStr)?.time ?: 0L
+        } catch (_: ParseException) {
+            0L
+        }
     }
 
     open val pageListImageSelector = "img.chapter-img"

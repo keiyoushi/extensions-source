@@ -4,6 +4,7 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://raijinscan.fr'
     overrideVersionCode = 4
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

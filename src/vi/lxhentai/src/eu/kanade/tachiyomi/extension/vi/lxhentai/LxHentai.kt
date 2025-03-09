@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.lxhentai
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferences
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -20,16 +20,16 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
-    override val name = "LXHentai"
+    override val name = "LXManga"
 
-    private val defaultBaseUrl = "https://lxmanga.cloud"
+    override val id = 6495630445796108150
+
+    private val defaultBaseUrl = "https://lxmanga.art"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -279,8 +279,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
         Genre("LXHENTAI", 66),
     )
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
