@@ -4,40 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonNames
 import java.util.Calendar
-
-@Serializable
-class PageDto<T>(
-    @SerialName("current_page")
-    val page: Int,
-    @SerialName("total_pages")
-    val totalPages: Int,
-    val results: List<T>,
-) {
-    fun hasNext() = page < totalPages
-}
-
-@Serializable
-class MangaDto(
-    @JsonNames("series_code")
-    val code: String,
-    @JsonNames("path_cover")
-    val cover: String,
-    @JsonNames("title", "series_name")
-    val name: String,
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@MangaDto.name
-        thumbnail_url = cover
-        url = "/series/$code"
-    }
-}
-
-@Serializable
-class LatestUpdatesDto(
-    val series: List<MangaDto>,
-)
 
 @Serializable
 class MangaDetailsDto(
@@ -70,18 +37,15 @@ class MangaDetailsDto(
 }
 
 @Serializable
-class ChapterContainerDto(
-    val results: WrapperDto,
-    val next: String?,
+class ContainerDto(
+    val chapters: List<ChapterDto>,
+    val currentPage: Int,
+    val series: MangaDetailsDto,
+    val totalPages: Int,
 ) {
-    fun toSChapter(seriesCode: String): List<SChapter> {
-        return results.chapters.map { it.toSChapter(seriesCode) }
-    }
+    fun hasNext() = currentPage < totalPages
 
-    @Serializable
-    class WrapperDto(
-        val chapters: List<ChapterDto>,
-    )
+    fun toSChapterList() = chapters.map { it.toSChapter(series.code) }
 }
 
 @Serializable
@@ -117,16 +81,24 @@ class ChapterDto(
 }
 
 @Serializable
-class SeriesDto(
-    val code: String,
-)
-
-@Serializable
 class SearchDto(
     val query: String,
 )
 
 @Serializable
-class PageListDto(
-    val images: List<String>,
+class SearchMangaDto(
+    val series: List<MangaDto>,
 )
+
+@Serializable
+class MangaDto(
+    val code: String,
+    val cover: String,
+    val name: String,
+) {
+    fun toSManga() = SManga.create().apply {
+        title = name
+        thumbnail_url = cover
+        url = "/series/$code"
+    }
+}
