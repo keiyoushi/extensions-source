@@ -199,7 +199,7 @@ abstract class MangaBox(
 
     protected open val alternateChapterDateSelector = String()
 
-    private fun Element.selectDateFromElement(): Element {
+    protected fun Element.selectDateFromElement(): Element {
         val defaultChapterDateSelector = "span"
         return this.select(defaultChapterDateSelector).lastOrNull() ?: this.select(alternateChapterDateSelector).last()!!
     }
@@ -305,10 +305,11 @@ abstract class MangaBox(
         )
     }
 
-    private class KeywordFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Keyword search ", vals)
-    private class SortFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Order by", vals)
-    private class StatusFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Status", vals)
-    private class GenreFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Category", vals)
+    // Technically, only Sort, Status, and Genre need to be non-private for Mangakakalot and Manganato, but I'll include Keyword to make it uniform.
+    protected class KeywordFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Keyword search ", vals)
+    protected class SortFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Order by", vals)
+    protected class StatusFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Status", vals)
+    protected class GenreFilter(vals: Array<Pair<String?, String>>) : UriPartFilter("Category", vals)
 
     // For advanced search, specifically tri-state genres
     private class AdvGenreFilter(vals: List<AdvGenre>) : Filter.Group<AdvGenre>("Category", vals)

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.photos18
 
-import android.app.Application
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,8 +21,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.select.Evaluator
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 class Photos18 : HttpSource(), ConfigurableSource {
     override val name = "Photos18"
@@ -34,7 +32,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
     private val baseUrlWithLang get() = if (useTrad) baseUrl else "$baseUrl/zh-hans"
     private fun String.stripLang() = removePrefix("/zh-hans")
 
-    override val client = network.client.newBuilder().followRedirects(false).build()
+    override val client = network.cloudflareClient.newBuilder().followRedirects(false).build()
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", baseUrl)
@@ -156,9 +154,7 @@ class Photos18 : HttpSource(), ConfigurableSource {
         }
     }
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
+    private val preferences by getPreferencesLazy()
 
     private val useTrad get() = preferences.getBoolean("ZH_HANT", false)
 

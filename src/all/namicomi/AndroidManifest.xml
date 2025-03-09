@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:tools="http://schemas.android.com/tools"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name=".all.namicomi.NamiComiUrlActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter
+                android:autoVerify="false"
+                tools:targetApi="23">
+
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:host="namicomi.com" />
+                <data android:scheme="https" />
+
+                <data android:pathPattern="/.*/title/..*" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Mirai Scans'
-    extClass = '.MiraiScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://miraiscans.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

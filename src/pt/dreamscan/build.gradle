@@ -2,8 +2,9 @@ ext {
     extName = 'Dream Scan'
     extClass = '.DreamScan'
     themePkg = 'madara'
-    baseUrl = 'https://dreamscan.com.br'
-    overrideVersionCode = 1
+    baseUrl = 'https://fairydream.com.br'
+    overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

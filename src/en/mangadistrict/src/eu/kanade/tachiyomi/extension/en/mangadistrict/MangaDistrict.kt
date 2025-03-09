@@ -1,24 +1,28 @@
 package eu.kanade.tachiyomi.extension.en.mangadistrict
 
 import android.annotation.SuppressLint
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -33,31 +37,19 @@ class MangaDistrict :
 
     override val mangaSubString = "read-scan"
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun popularMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
 
     private val titleVersion = Regex("\\(.*\\)")
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return super.popularMangaFromElement(element).apply {
-            if (isRemoveTitleVersion()) {
-                title = this.title.replace(titleVersion, "").trim()
-            }
-        }
-    }
-
-    override fun searchMangaFromElement(element: Element): SManga {
-        return super.searchMangaFromElement(element).apply {
-            if (isRemoveTitleVersion()) {
-                title = this.title.replace(titleVersion, "").trim()
-            }
-        }
-    }
-
     override fun mangaDetailsParse(document: Document): SManga {
+        val tags = document.select(mangaDetailsSelectorTag).mapNotNull { element ->
+            element.ownText() to element.attr("href")
+                .removeSuffix("/").substringAfterLast('/')
+        }
+        tagList = tagList.plus(tags)
+
         return super.mangaDetailsParse(document).apply {
             if (isRemoveTitleVersion()) {
                 title = this.title.replace(titleVersion, "").trim()
@@ -102,6 +94,60 @@ class MangaDistrict :
 
         return super.pageListParse(document)
     }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val tagFilter = filters.filterIsInstance<TagList>().firstOrNull()
+        if (tagFilter != null && tagFilter.state > 0) {
+            val urlBuilder = baseUrl.toHttpUrl().newBuilder()
+            urlBuilder.addPathSegment("publication-tag")
+            urlBuilder.addPathSegment(tagFilter.toUriPart())
+            urlBuilder.addPathSegments("page/$page")
+            return client.newCall(GET(urlBuilder.build(), headers))
+                .asObservableSuccess().map { response ->
+                    popularMangaParse(response)
+                }
+        } else {
+            return super.fetchSearchManga(page, query, filters)
+        }
+    }
+
+    private fun loadTagListFromPreferences(): Set<Pair<String, String>> =
+        preferences.getStringSet(TAG_LIST_PREF, emptySet())
+            ?.mapNotNull {
+                it.split('|')
+                    .let { splits ->
+                        if (splits.size == 2) {
+                            splits[0] to splits[1]
+                        } else {
+                            null
+                        }
+                    }
+            }
+            ?.toSet()
+            // Create at least 1 tag to avoid excessively reading preferences
+            .let { if (it.isNullOrEmpty()) setOf("Manhwa" to "manhwa") else it }
+
+    private var tagList: Set<Pair<String, String>> = loadTagListFromPreferences()
+        set(value) {
+            preferences.edit().putStringSet(
+                TAG_LIST_PREF,
+                value.map { "${it.first}|${it.second}" }.toSet(),
+            ).apply()
+            field = value
+        }
+
+    override fun getFilterList(): FilterList {
+        val filters = super.getFilterList().list.toMutableList()
+        if (tagList.isNotEmpty()) {
+            filters += Filter.Separator()
+            filters += Filter.Header("Tag browse will ignore other filters")
+            filters += TagList("Tag browse", listOf(Pair("<Browse tag>", "")) + tagList.toList())
+        }
+        return FilterList(filters)
+    }
+
+    private class TagList(title: String, options: List<Pair<String, String>>, state: Int = 0) :
+        UriPartFilter(title, options.toTypedArray(), state)
 
     private fun String.urlKey(): String {
         return toHttpUrl().pathSegments.let { path ->
@@ -154,6 +200,7 @@ class MangaDistrict :
 
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
+        private const val TAG_LIST_PREF = "TAG_LIST"
 
         private const val IMG_RES_PREF = "IMG_RES"
         private const val IMG_RES_ALL = "all"

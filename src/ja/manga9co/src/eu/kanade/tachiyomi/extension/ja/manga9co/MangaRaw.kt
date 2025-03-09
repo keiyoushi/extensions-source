@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ja.manga9co
 
-import android.app.Application
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangaraw.ImageListParser
@@ -9,12 +8,11 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.utils.getPreferences
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import kotlin.random.Random
 
 class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
@@ -36,7 +34,7 @@ class MangaRaw : MangaRawTheme("MangaRaw", ""), ConfigurableSource {
 
     init {
         val mirrors = MIRRORS
-        val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val preferences = getPreferences()
         var mirrorIndex = preferences.getString(MIRROR_PREF, "-1")!!.toInt()
 
         if (mirrorIndex !in mirrors.indices) {

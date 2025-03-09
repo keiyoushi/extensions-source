@@ -20,7 +20,7 @@ import java.util.Locale
 
 class BacaKomik : ParsedHttpSource() {
     override val name = "BacaKomik"
-    override val baseUrl = "https://bacakomik.net"
+    override val baseUrl = "https://bacakomik.one"
     override val lang = "id"
     override val supportsLatest = true
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)

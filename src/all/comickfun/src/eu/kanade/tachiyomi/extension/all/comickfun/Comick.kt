@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comickfun
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -25,8 +25,6 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -65,10 +63,7 @@ abstract class Comick(
         )
     }
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-            .newLineIgnoredGroups()
-    }
+    private val preferences by getPreferencesLazy { newLineIgnoredGroups() }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
@@ -177,7 +172,7 @@ abstract class Comick(
         add("User-Agent", "Tachiyomi ${System.getProperty("http.agent")}")
     }
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(::errorInterceptor)
         .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()
@@ -396,17 +391,16 @@ abstract class Comick(
             val coversUrl =
                 "$apiUrl/comic/${mangaData.comic.slug ?: mangaData.comic.hid}/covers?tachiyomi=true"
             val covers = client.newCall(GET(coversUrl)).execute()
-                .parseAs<Covers>().mdCovers.reversed().toMutableList()
-            if (covers.any { it.vol == "1" }) covers.retainAll { it.vol == "1" }
-            if (
-                covers.any { it.locale == comickLang.split('-').first() }
-            ) {
-                covers.retainAll { it.locale == comickLang.split('-').first() }
-            }
+                .parseAs<Covers>().mdCovers.reversed()
+            val firstVol = covers.filter { it.vol == "1" }.ifEmpty { covers }
+            val originalCovers = firstVol
+                .filter { mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty()) }
+            val localCovers = firstVol
+                .filter { comickLang.startsWith(it.locale.orEmpty()) }
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
                 scorePosition = preferences.scorePosition,
-                covers = covers,
+                covers = localCovers.ifEmpty { originalCovers }.ifEmpty { firstVol },
                 groupTags = preferences.groupTags,
             )
         }
@@ -467,9 +461,10 @@ abstract class Comick(
             .map { it.toSChapter(mangaUrl) }
     }
 
-    private val publishedDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val publishedDateFormat =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
 
     override fun getChapterUrl(chapter: SChapter): String {
         return "$baseUrl${chapter.url}"
@@ -507,8 +502,9 @@ abstract class Comick(
 
     override fun getFilterList() = getFilters()
 
-    private fun SharedPreferences.newLineIgnoredGroups(): SharedPreferences {
-        if (getBoolean(MIGRATED_IGNORED_GROUPS, false)) return this
+    private fun SharedPreferences.newLineIgnoredGroups() {
+        if (getBoolean(MIGRATED_IGNORED_GROUPS, false)) return
+
         val ignoredGroups = getString(IGNORED_GROUPS_PREF, "").orEmpty()
 
         edit()
@@ -522,8 +518,6 @@ abstract class Comick(
             )
             .putBoolean(MIGRATED_IGNORED_GROUPS, true)
             .apply()
-
-        return this
     }
 
     companion object {

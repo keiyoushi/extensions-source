@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mangamo
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.MultiSelectListPreference
@@ -23,14 +22,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 
 class Mangamo : ConfigurableSource, HttpSource() {
@@ -39,13 +37,11 @@ class Mangamo : ConfigurableSource, HttpSource() {
 
     override val lang = "en"
 
-    override val baseUrl = "https://mangamo.com"
+    override val baseUrl = "https://www.mangamo.com"
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val helper = MangamoHelper(headers)
 

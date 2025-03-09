@@ -7,12 +7,12 @@ import okhttp3.OkHttpClient
 
 class Nartag : Madara(
     "Traducciones Amistosas",
-    "https://traduccionesamistosas.eyudud.net",
+    "https://traduccionesamistosas.cookni.net",
     "es",
 ) {
     override val versionId = 2
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 
