@@ -10,9 +10,11 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.getPreferences
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -56,6 +58,9 @@ class YomuComics :
         }
         return GET(page.imageUrl!!, newHeaders)
     }
+
+    override fun chapterListParse(response: Response): List<SChapter> =
+        super.chapterListParse(response).reversed()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)

@@ -1,7 +1,7 @@
 ext {
-    extName = 'ThichDoc'
+    extName = 'VlogTruyen'
     extClass = '.VlogTruyen'
-    extVersionCode = 7
+    extVersionCode = 8
     isNsfw = true
 }
 

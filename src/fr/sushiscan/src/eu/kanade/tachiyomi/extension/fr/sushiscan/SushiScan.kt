@@ -64,6 +64,9 @@ class SushiScan :
         else -> SManga.UNKNOWN
     }
 
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/catalogue/?page=$page&order=popular", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/catalogue/?page=$page&order=update", headers)
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/page/$page".toHttpUrl().newBuilder()
             .addQueryParameter("s", query)

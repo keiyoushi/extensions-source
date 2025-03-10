@@ -41,6 +41,10 @@ abstract class MadTheme(
         .rateLimit(1, 1, TimeUnit.SECONDS)
         .build()
 
+    protected open val useLegacyApi = false
+
+    protected open val useSlugSearch = false
+
     // TODO: better cookie sharing
     // TODO: don't count cached responses against rate limit
     private val chapterClient: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -177,59 +181,57 @@ abstract class MadTheme(
 
         val document = response.asJsoup()
 
-        // Need the total chapters to check against the request
-        val totalChapters = document.selectFirst(".title span:containsOwn(CHAPTERS \\()")?.text()
-            ?.substringAfter("(")
-            ?.substringBefore(")")
-            ?.toIntOrNull()
-
         val script = document.selectFirst("script:containsData(bookId)")
             ?: throw Exception("Cannot find script")
         val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
         val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
 
-        // Use slug search by default
-        val slugRequest = chapterClient.newCall(GET(buildChapterUrl(bookSlug), headers)).execute()
-        if (!slugRequest.isSuccessful) {
-            throw Exception("HTTP error ${slugRequest.code}")
+        var chaptersList = document.select(chapterListSelector()).map { chapterFromElement(it) }
+
+        val fetchApi = document.selectFirst("div#show-more-chapters > span")
+            ?.attr("onclick")?.equals("getChapters()")
+            ?: false
+
+        if (fetchApi) {
+            val apiChapters = client.newCall(GET(buildChapterUrl(bookId, bookSlug), headers)).execute()
+                .asJsoup().select(chapterListSelector()).map { chapterFromElement(it) }
+
+            val cutIndex = chaptersList.indexOfFirst { chapter ->
+                apiChapters.any { it.url == chapter.url }
+            }.takeIf { it != -1 } ?: chaptersList.size
+
+            chaptersList = (chaptersList.subList(0, cutIndex) + apiChapters)
         }
 
-        var finalDocument = slugRequest.asJsoup().select(chapterListSelector())
-
-        if (totalChapters != null && finalDocument.size < totalChapters) {
-            val idRequest = chapterClient.newCall(GET(buildChapterUrl(bookId), headers)).execute()
-            finalDocument = idRequest.asJsoup().select(chapterListSelector())
-        }
-
-        return finalDocument.map {
-            SChapter.create().apply {
-                url = it.selectFirst("a")!!.absUrl("href").removePrefix(baseUrl)
-                name = it.selectFirst(".chapter-title")!!.text()
-                date_upload = parseChapterDate(it.selectFirst(".chapter-update")?.text())
-            }
-        }
+        return chaptersList
     }
 
-    private fun buildChapterUrl(fetchByParam: String): HttpUrl {
+    private fun buildChapterUrl(mangaId: String, mangaSlug: String): HttpUrl {
         return baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("api")
             addPathSegment("manga")
-            addPathSegment(fetchByParam)
+            addPathSegment(if (useSlugSearch) mangaSlug else mangaId)
             addPathSegment("chapters")
             addQueryParameter("source", "detail")
         }.build()
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        MANGA_ID_REGEX.find(manga.url)?.groupValues?.get(1)?.let { mangaId ->
-            val url = "$baseUrl/service/backend/chaplist/".toHttpUrl().newBuilder()
-                .addQueryParameter("manga_id", mangaId)
-                .addQueryParameter("manga_name", manga.title)
-                .fragment("idFound")
-                .build()
+    override fun chapterListRequest(manga: SManga): Request {
+        if (useLegacyApi) {
+            val mangaId = MANGA_ID_REGEX.find(manga.url)?.groupValues?.get(1)
+            val url = mangaId?.let {
+                "$baseUrl/service/backend/chaplist/".toHttpUrl().newBuilder()
+                    .addQueryParameter("manga_id", it)
+                    .addQueryParameter("manga_name", manga.title)
+                    .fragment("idFound")
+                    .build()
+                    .toString()
+            } ?: (baseUrl + manga.url)
 
-            GET(url, headers)
-        } ?: GET("$baseUrl${manga.url}", headers)
+            return GET(url, headers)
+        }
+        return GET(baseUrl + manga.url, headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (genresList == null) {
