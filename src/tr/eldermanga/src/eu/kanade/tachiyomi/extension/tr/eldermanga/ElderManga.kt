@@ -155,7 +155,7 @@ class ElderManga : ParsedHttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val dto = json.decodeFromString<List<SearchDto>>(response.body.string())
+        val dto = response.parseAs<List<SearchDto>>()
         val mangas = dto.map {
             SManga.create().apply {
                 title = it.name
