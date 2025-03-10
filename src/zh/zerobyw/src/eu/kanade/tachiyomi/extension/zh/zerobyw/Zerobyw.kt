@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.zerobyw
 
-import android.app.Application
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -11,22 +9,19 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferences
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 class Zerobyw : ParsedHttpSource(), ConfigurableSource {
     override val name: String = "zero搬运网"
     override val lang: String = "zh"
     override val supportsLatest: Boolean get() = false
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-            .clearOldBaseUrl()
+    private val preferences = getPreferences { clearOldBaseUrl() }
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(UpdateUrlInterceptor(preferences))
