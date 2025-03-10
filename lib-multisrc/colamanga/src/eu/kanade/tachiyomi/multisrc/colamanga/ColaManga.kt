@@ -19,7 +19,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -169,12 +171,12 @@ abstract class ColaManga(
         }
     }
 
-    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterListSelector(): String = "div:not(.fed-hidden) > div.all_data_list > ul.fed-part-rows a"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("div:not(.fed-hidden) > div.all_data_list > ul.fed-part-rows a").map{ chapterFromElement(it) }.apply {
-            this[0].date_upload = dateFormat.parse(document.selectFirst("span.fed-text-muted:contains($lastUpdated) + a")?.text()).getTime()
+        return document.select(chapterListSelector()).map { chapterFromElement(it) }.apply {
+            this[0].date_upload = dateFormat.tryParse(document.selectFirst("span.fed-text-muted:contains($lastUpdated) + a")?.text())
         }
     }
 
