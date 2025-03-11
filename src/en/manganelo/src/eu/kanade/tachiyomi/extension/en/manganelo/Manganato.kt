@@ -9,7 +9,8 @@ class Manganato : MangaBox(
         "nelomanga.com",
         "manganato.gg",
     ),
-    "en") {
+    "en",
+) {
 
     override val id: Long = 1024627298672457456
 }
