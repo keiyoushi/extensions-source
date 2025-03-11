@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.extension.pt.yugenmangas
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_RANDOM_UA
+import eu.kanade.tachiyomi.lib.randomua.RANDOM_UA_VALUES
+import eu.kanade.tachiyomi.lib.randomua.UserAgentType
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
@@ -18,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -28,10 +31,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okio.Buffer
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
@@ -46,7 +47,12 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy()
+    private val preferences by getPreferencesLazy {
+        if (getPrefUAType() != UserAgentType.OFF || getPrefCustomUA().isNullOrBlank().not()) {
+            return@getPreferencesLazy
+        }
+        edit().putString(PREF_KEY_RANDOM_UA, RANDOM_UA_VALUES.last()).apply()
+    }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(2)
@@ -59,17 +65,6 @@ class YugenMangas : HttpSource(), ConfigurableSource {
     override val versionId = 2
 
     private val json: Json by injectLazy()
-
-    init {
-        with(preferences) {
-            getString(PREF_KEY_RANDOM_UA, "off").let {
-                if (it != "off" || getPrefCustomUA().isNullOrBlank()) {
-                    return@let
-                }
-                edit().putString(PREF_KEY_RANDOM_UA, "mobile").apply()
-            }
-        }
-    }
 
     // ================================ Popular =======================================
 
@@ -85,9 +80,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
         val mangas = POPULAR_MANGA_REGEX.findAll(jsonContent)
             .mapNotNull { result ->
-                result.groups.lastOrNull()?.value?.let {
-                    json.parseToJsonElement(it.sanitizeJson())
-                }?.jsonObject
+                result.groups.lastOrNull()?.value?.sanitizeJson()?.parseAs<JsonObject>()?.jsonObject
             }
             .map { element ->
                 val manga = element["children"]?.jsonArray
@@ -120,9 +113,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
         val mangas = LATEST_UPDATE_REGEX.findAll(jsonContent)
             .mapNotNull { result ->
-                result.groups.firstOrNull()?.value?.let {
-                    json.parseToJsonElement(it.sanitizeJson())
-                }?.jsonObject
+                result.groups.firstOrNull()?.value?.sanitizeJson()?.parseAs<JsonObject>()?.jsonObject
             }
             .map { element ->
                 val jsonString = element.toString()
@@ -151,8 +142,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
     // ================================ Details =======================================
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val jsonContent = getJsonFromResponse(response)
-        return json.decodeFromString<ContainerDto>(jsonContent).series.toSManga()
+        return getJsonFromResponse(response).parseAs<ContainerDto>().series.toSManga()
     }
 
     // ================================ Chapters =======================================
@@ -162,8 +152,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         val chapters = mutableListOf<SChapter>()
         do {
             val response = client.newCall(chapterListRequest(manga, page++)).execute()
-            val jsonContent = getJsonFromResponse(response)
-            val chapterContainer = json.decodeFromString<ContainerDto>(jsonContent)
+            val chapterContainer = getJsonFromResponse(response).parseAs<ContainerDto>()
             chapters += chapterContainer.toSChapterList()
         } while (chapterContainer.hasNext())
 
@@ -228,19 +217,13 @@ class YugenMangas : HttpSource(), ConfigurableSource {
             ?.toInt()?.let { it < lastPage } ?: false
     }
 
-    private fun String.sanitizeJson() = this.replace("\\\"", "\"")
+    private fun String.sanitizeJson() =
+        this.replace("""\\{1}"""".toRegex(), "\"")
+            .replace("""\\{2,}""".toRegex(), """\\""")
+            .trimIndent()
 
     private fun JsonObject.getValue(key: String): String =
         this[key]!!.jsonPrimitive.content
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(it.body.string())
-    }
-
-    private inline fun <reified T> RequestBody.parseAs(): T {
-        val jsonString = Buffer().also { writeTo(it) }.readUtf8()
-        return json.decodeFromString(jsonString)
-    }
 
     private fun getJsonFromResponse(response: Response): String {
         val document = response.asJsoup()
@@ -251,9 +234,10 @@ class YugenMangas : HttpSource(), ConfigurableSource {
             ?: throw Exception("Dados não encontrado")
 
         val jsonContent = MANGA_DETAILS_REGEX.find(script)
-            ?.groups?.get(1)?.value?.replace("\\\"", "\"")
+            ?.groups?.get(1)?.value
             ?: throw Exception("Erro ao obter JSON")
-        return jsonContent
+
+        return jsonContent.sanitizeJson()
     }
 
     companion object {
@@ -263,7 +247,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         private val LATEST_UPDATE_REGEX = """\{\\"href\\":\\"\/series\/\d+(.*?)\}\]\]\}\]\]\}\]\]\}""".toRegex()
         private val LATEST_PAGES_REGEX = """aria-disabled\\":([^,]+)""".toRegex()
         private val POPULAR_PAGES_REGEX = """series\?page=(\d+)""".toRegex()
-        private val MANGA_DETAILS_REGEX = """(\{\\"series\\":.*?"\})\],""".toRegex()
+        private val MANGA_DETAILS_REGEX = """(\{\\"series\\":.*?"\})\],\[""".toRegex()
         private val PAGES_REGEX = """images\\":(\[[^\]]+\])""".toRegex()
     }
 }
