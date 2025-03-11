@@ -216,7 +216,7 @@ abstract class MangaBox(
         }
     }
 
-    private fun parseChapterDate(date: String, host: String): Long? {
+    protected fun parseChapterDate(date: String, host: String): Long? {
         return if ("ago" in date) {
             val value = date.split(' ')[0].toIntOrNull()
             val cal = Calendar.getInstance()
