@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.multisrc.mangabox
 
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
+import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -13,7 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -27,18 +27,23 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
 // Based off of Mangakakalot 1.2.8
 abstract class MangaBox(
     override val name: String,
-    override val baseUrl: String,
+    private val mirrorEntries: Array<String>,
     override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM-dd-yyyy HH:mm", Locale.ENGLISH),
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM-dd-yyyy HH:mm", Locale.ENGLISH).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    },
 ) : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
+
+    override val baseUrl: String get() = mirror
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -46,14 +51,31 @@ abstract class MangaBox(
         .addInterceptor(::useAltCdnInterceptor)
         .build()
 
-    private val preferences: SharedPreferences = getPreferences()
+    private fun SharedPreferences.getSelectedMirror(): String = getString(PREF_USE_MIRROR, mirrorEntries[0])!!
+
+    private val preferences: SharedPreferences by getPreferencesLazy {
+        // if current mirror is not in mirrorEntries, remove and set default (first one)
+        if (getSelectedMirror() !in mirrorEntries.map { "${URL_PREFIX}$it" }) {
+            edit().putString(PREF_USE_MIRROR, "${URL_PREFIX}${mirrorEntries[0]}").apply()
+        }
+    }
+
+    private var mirror = ""
+        get() {
+            if (field.isNotEmpty()) {
+                return field
+            }
+
+            field = preferences.getSelectedMirror()
+            return field
+        }
 
     private val cdnSet = MangaBoxLinkedCdnSet() // Stores all unique CDNs that the extension can use to retrieve chapter images
 
-    private class MangaBoxFallBackTag() // Custom empty class tag to use as an identifier that the specific request is fallback-able
+    private class MangaBoxFallBackTag // Custom empty class tag to use as an identifier that the specific request is fallback-able
 
     private fun HttpUrl.getBaseUrl(): String =
-        "${this.scheme}://${this.host}${
+        "https://${this.host}${
         when (this.port) {
             80, 443 -> ""
             else -> ":${this.port}"
@@ -66,14 +88,14 @@ abstract class MangaBox(
         val originalResponse: Response? = try {
             chain.proceed(request)
         } catch (e: IOException) {
-            if (preferences.shouldUseFallbackCdn() && requestTag == null) {
+            if (requestTag == null) {
                 throw e
             } else {
                 null
             }
         }
 
-        if (!preferences.shouldUseFallbackCdn() || requestTag == null || originalResponse?.isSuccessful == true) {
+        if (requestTag == null || originalResponse?.isSuccessful == true) {
             requestTag?.let {
                 // Move working cdn to first so it gets priority during iteration
                 cdnSet.moveItemToFirst(request.url.getBaseUrl())
@@ -105,9 +127,7 @@ abstract class MangaBox(
                 // Check if the response is successful
                 if (tryResponse.isSuccessful) {
                     // Move working cdn to first so it gets priority during iteration
-                    if (requestTag != null) {
-                        cdnSet.moveItemToFirst(newRequest.url.getBaseUrl())
-                    }
+                    cdnSet.moveItemToFirst(newRequest.url.getBaseUrl())
 
                     return tryResponse
                 }
@@ -433,17 +453,29 @@ abstract class MangaBox(
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_USE_CDN_FALLBACK
-            title = "Allow CDN Fallback"
-            summary = "Allow to redirect to the next available/retrieved CDN that the extension uses if the main CDN fails"
-            setDefaultValue(true)
+        ListPreference(screen.context).apply {
+            key = PREF_USE_MIRROR
+            title = "Mirror"
+            entries = mirrorEntries
+            entryValues = mirrorEntries.map { "${URL_PREFIX}$it" }.toTypedArray()
+            setDefaultValue(entryValues[0]) // Set default value
+
+            // Set initial value from SharedPreferences or default value
+            val initialValue = preferences.getString(PREF_USE_MIRROR, mirrorEntries[0])
+            value = initialValue
+            summary = initialValue!!.removePrefix(URL_PREFIX)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                // Update values
+                mirror = newValue as String
+                summary = newValue.removePrefix(URL_PREFIX)
+                true
+            }
         }.let(screen::addPreference)
     }
 
-    private fun SharedPreferences.shouldUseFallbackCdn(): Boolean = getBoolean(PREF_USE_CDN_FALLBACK, true)
-
     companion object {
-        private const val PREF_USE_CDN_FALLBACK = "pref_use_cdn_fallback"
+        private const val PREF_USE_MIRROR = "pref_use_mirror"
+        private const val URL_PREFIX = "https://www."
     }
 }
