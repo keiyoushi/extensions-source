@@ -1,71 +1,39 @@
 package eu.kanade.tachiyomi.extension.id.shinigami
 
-import android.content.SharedPreferences
-import android.util.Base64
-import android.widget.Toast
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
-import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
-import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
+import okhttp3.Response
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), ConfigurableSource {
+class Shinigami : HttpSource() {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
-    override val baseUrl by lazy { getPrefBaseUrl() }
+    override val name = "Shinigami"
 
-    override val mangaSubString = "semua-series"
+    override val baseUrl = "https://app.shinigami.asia"
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    private val apiUrl = "https://api.shngm.io"
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val cdnUrl = "https://storage.shngm.id"
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            this.setDefaultValue(super.baseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: ${super.baseUrl}"
+    override val lang = "id"
 
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }
-        screen.addPreference(baseUrlPref)
-    }
+    override val supportsLatest = true
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != super.baseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, super.baseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    override fun headersBuilder() = super.headersBuilder().apply {
-        add("Sec-Fetch-Dest", "document")
-        add("Sec-Fetch-Mode", "navigate")
-        add("Sec-Fetch-Site", "same-origin")
-        add("Upgrade-Insecure-Requests", "1")
-        add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
-    }
+    private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
@@ -79,70 +47,158 @@ class Shinigami : Madara("Shinigami", "https://shinigami09.com", "id"), Configur
         .rateLimit(3)
         .build()
 
-    // Tags are useless as they are just SEO keywords.
-    override val mangaDetailsSelectorTag = ""
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("X-Requested-With", randomString((1..20).random())) // added for webview, and removed in interceptor for normal use
 
-    override val chapterUrlSelector = "div.chapter-link:not([style~=display:\\snone]) a"
-
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val urlElement = element.selectFirst(chapterUrlSelector)!!
-
-        name = urlElement.selectFirst("p.chapter-manhwa-title")?.text()
-            ?: urlElement.ownText()
-        date_upload = urlElement.selectFirst("span.chapter-release-date > i")?.text()
-            .let { parseChapterDate(it) }
-
-        val fixedUrl = urlElement.attr("abs:href")
-
-        setUrlWithoutDomain(fixedUrl)
+    private fun randomString(length: Int) = buildString {
+        val charPool = ('a'..'z') + ('A'..'Z')
+        repeat(length) { append(charPool.random()) }
     }
 
-    // Page list
-    @Serializable
-    data class CDT(val ct: String, val s: String)
+    private fun apiHeadersBuilder(): Headers.Builder = headersBuilder()
+        .add("Accept", "application/json")
+        .add("DNT", "1")
+        .add("Origin", baseUrl)
+        .add("Sec-GPC", "1")
 
-    override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script:containsData(chapter_data)")?.data()
-            ?: throw Exception("chapter_data script not found")
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("page_size", "30")
+            .addQueryParameter("sort", "popularity")
+            .build()
 
-        val deobfuscated = Deobfuscator.deobfuscateScript(script)
-            ?: throw Exception("Unable to deobfuscate chapter_data script")
+        return GET(url, apiHeaders)
+    }
 
-        val keyMatch = KEY_REGEX.find(deobfuscated)?.groupValues
-            ?: throw Exception("Unable to find key")
+    override fun popularMangaParse(response: Response): MangasPage {
+        val rootObject = response.parseAs<ShinigamiBrowseDto>()
+        val projectList = rootObject.data.map(::popularMangaFromObject)
 
-        val chapterData = json.decodeFromString<CDT>(
-            CHAPTER_DATA_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception("Unable to get chapter data"),
-        )
-        val postId = POST_ID_REGEX.find(script)?.groupValues?.get(1) ?: throw Exception("Unable to get post_id")
-        val otherId = OTHER_ID_REGEX.findAll(script).firstOrNull { it.groupValues[1] != "post" }?.groupValues?.get(2) ?: throw Exception("Unable to get other id")
-        val key = otherId + keyMatch[1] + postId + keyMatch[2] + postId
-        val salt = chapterData.s.decodeHex()
+        val hasNextPage = rootObject.meta.page < rootObject.meta.totalPage
 
-        val unsaltedCiphertext = Base64.decode(chapterData.ct, Base64.DEFAULT)
-        val ciphertext = salted + salt + unsaltedCiphertext
+        return MangasPage(projectList, hasNextPage)
+    }
 
-        val decrypted = CryptoAES.decrypt(Base64.encodeToString(ciphertext, Base64.DEFAULT), key)
-        val data = json.decodeFromString<List<String>>(decrypted)
-        return data.mapIndexed { idx, it ->
-            Page(idx, document.location(), it)
+    private fun popularMangaFromObject(obj: ShinigamiBrowseDataDto): SManga = SManga.create().apply {
+        title = obj.title!!
+        thumbnail_url = obj.thumbnail
+        url = obj.mangaId!!
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("page_size", "30")
+            .addQueryParameter("sort", "latest")
+            .build()
+
+        return GET(url, apiHeaders)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$apiUrl/v1/manga/list".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("page_size", "30")
+
+        if (query.isNotEmpty()) {
+            url.addQueryParameter("q", query)
+        }
+
+        // TODO: search by tag/genre/status/etc
+
+        return GET(url.build(), apiHeaders)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun getMangaUrl(manga: SManga): String {
+        return "$baseUrl/series/${manga.url}"
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        // Migration from old web urls to the new api based
+        if (manga.url.startsWith("/series/")) {
+            throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
+        }
+
+        return GET("$apiUrl/v1/manga/detail/${manga.url}", apiHeaders)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val mangaDetailsResponse = response.parseAs<ShinigamiMangaDetailDto>()
+        val mangaDetails = mangaDetailsResponse.data
+
+        return SManga.create().apply {
+            author = mangaDetails.taxonomy["Author"]?.joinToString { it.name }.orEmpty()
+            artist = mangaDetails.taxonomy["Artist"]?.joinToString { it.name }.orEmpty()
+            status = mangaDetails.status.toStatus()
+            description = mangaDetails.description
+
+            val genres = mangaDetails.taxonomy["Genre"]?.joinToString { it.name }.orEmpty()
+            val type = mangaDetails.taxonomy["Format"]?.joinToString { it.name }.orEmpty()
+            genre = listOf(genres, type).filter { it.isNotBlank() }.joinToString()
         }
     }
 
-    private fun randomString(length: Int): String {
-        val charPool = ('a'..'z') + ('A'..'Z')
-        return List(length) { charPool.random() }.joinToString("")
+    private fun Int.toStatus(): Int {
+        return when (this) {
+            1 -> SManga.ONGOING
+            2 -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        return GET("$apiUrl/v1/chapter/${manga.url}/list?page_size=3000", apiHeaders)
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val result = response.parseAs<ShinigamiChapterListDto>()
+
+        return result.chapterList.map(::chapterFromObject)
+    }
+
+    private fun chapterFromObject(obj: ShinigamiChapterListDataDto): SChapter = SChapter.create().apply {
+        date_upload = dateFormat.tryParse(obj.date)
+        name = "Chapter ${obj.name.toString().replace(".0","")} ${obj.title}"
+        url = obj.chapterId
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        // Migration from old web urls to the new api based
+        if (chapter.url.startsWith("/series/")) {
+            throw Exception("Migrate dari $name ke $name (ekstensi yang sama)")
+        }
+
+        return GET("$apiUrl/v1/chapter/detail/${chapter.url}", apiHeaders)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val result = response.parseAs<ShinigamiPageListDto>()
+
+        return result.pageList.chapterPage.pages.mapIndexed { index, imageName ->
+            Page(index = index, imageUrl = "$cdnUrl${result.pageList.chapterPage.path}$imageName")
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = ""
+
+    override fun imageRequest(page: Page): Request {
+        val newHeaders = headersBuilder()
+            .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+            .add("DNT", "1")
+            .add("referer", "$baseUrl/")
+            .add("sec-fetch-dest", "empty")
+            .add("Sec-GPC", "1")
+            .build()
+
+        return GET(page.imageUrl!!, newHeaders)
     }
 
     companion object {
-        private val KEY_REGEX by lazy { Regex("""_id\s+\+\s+'(.*?)'\s+\+\s+post_id\s+\+\s+'(.*?)'\s+\+\s+post_id""") }
-        private val CHAPTER_DATA_REGEX by lazy { Regex("""var chapter_data\s*=\s*'(.*?)'""") }
-        private val POST_ID_REGEX by lazy { Regex("""var post_id\s*=\s*'(.*?)'""") }
-        private val OTHER_ID_REGEX by lazy { Regex("""var (\w+)_id\s*=\s*'(.*?)'""") }
-        private const val RESTART_APP = "Untuk menerapkan perubahan, restart aplikasi."
-        private const val BASE_URL_PREF_TITLE = "Ubah Domain"
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY = "Untuk penggunaan sementara. Memperbarui aplikasi akan menghapus pengaturan"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
     }
 }
