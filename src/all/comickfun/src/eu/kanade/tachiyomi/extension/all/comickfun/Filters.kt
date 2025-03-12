@@ -11,6 +11,7 @@ fun getFilters(): FilterList {
         TypeFilter("Type", getTypeList),
         SortFilter("Sort", getSortsList),
         StatusFilter("Status", getStatusList),
+        ContentRatingFilter("Content Rating", getContentRatingList),
         CompletedFilter("Completely Scanlated?"),
         CreatedAtFilter("Created at", getCreatedAtList),
         MinimumFilter("Minimum Chapters"),
@@ -53,6 +54,9 @@ internal class SortFilter(name: String, sortList: List<Pair<String, String>>, st
     SelectFilter(name, sortList, state)
 
 internal class StatusFilter(name: String, statusList: List<Pair<String, String>>, state: Int = 0) :
+    SelectFilter(name, statusList, state)
+
+internal class ContentRatingFilter(name: String, statusList: List<Pair<String, String>>, state: Int = 0) :
     SelectFilter(name, statusList, state)
 
 /** Generics **/
@@ -194,4 +198,11 @@ private val getStatusList: List<Pair<String, String>> = listOf(
     Pair("Completed", "2"),
     Pair("Cancelled", "3"),
     Pair("Hiatus", "4"),
+)
+
+private val getContentRatingList: List<Pair<String, String>> = listOf(
+    Pair("All", ""),
+    Pair("Safe", "safe"),
+    Pair("Suggestive", "suggestive"),
+    Pair("Erotica", "erotica"),
 )

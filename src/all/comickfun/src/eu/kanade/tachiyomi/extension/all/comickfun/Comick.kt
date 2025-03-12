@@ -314,6 +314,12 @@ abstract class Comick(
                         }
                     }
 
+                    is ContentRatingFilter -> {
+                        if (it.state > 0) {
+                            addQueryParameter("content_rating", it.getValue())
+                        }
+                    }
+
                     is CreatedAtFilter -> {
                         if (it.state > 0) {
                             addQueryParameter("time", it.getValue())
