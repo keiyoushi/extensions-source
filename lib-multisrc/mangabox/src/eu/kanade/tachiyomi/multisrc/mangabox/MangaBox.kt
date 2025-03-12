@@ -50,7 +50,8 @@ abstract class MangaBox(
         .addInterceptor(::useAltCdnInterceptor)
         .build()
 
-    private fun SharedPreferences.getMirrorPref(): String = getString(PREF_USE_MIRROR, mirrorEntries[0])!!
+    private fun SharedPreferences.getMirrorPref(): String =
+        getString(PREF_USE_MIRROR, mirrorEntries[0])!!
 
     private val preferences: SharedPreferences by getPreferencesLazy {
         // if current mirror is not in mirrorEntries, set default
@@ -75,11 +76,11 @@ abstract class MangaBox(
     private class MangaBoxFallBackTag // Custom empty class tag to use as an identifier that the specific request is fallback-able
 
     private fun HttpUrl.getBaseUrl(): String =
-        "https://${this.host}${
-        when (this.port) {
-            80, 443 -> ""
-            else -> ":${this.port}"
-        }
+        "${URL_PREFIX}${this.host}${
+            when (this.port) {
+                80, 443 -> ""
+                else -> ":${this.port}"
+            }
         }"
 
     private fun useAltCdnInterceptor(chain: Interceptor.Chain): Response {
