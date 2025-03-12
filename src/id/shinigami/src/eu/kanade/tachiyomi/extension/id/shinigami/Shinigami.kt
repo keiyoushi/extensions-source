@@ -1,18 +1,13 @@
 package eu.kanade.tachiyomi.extension.id.shinigami
 
-import android.content.SharedPreferences
-import android.widget.Toast
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -22,15 +17,13 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Shinigami : ConfigurableSource, HttpSource() {
+class Shinigami : HttpSource() {
     // moved from Reaper Scans (id) to Shinigami (id)
     override val id = 3411809758861089969
 
     override val name = "Shinigami"
 
-    override val baseUrl by lazy { getPrefBaseUrl() }
-
-    private var defaultBaseUrl = "https://app.shinigami.asia"
+    override val baseUrl = "https://app.shinigami.asia"
 
     private val apiUrl = "https://api.shngm.io"
 
@@ -41,8 +34,6 @@ class Shinigami : ConfigurableSource, HttpSource() {
     override val supportsLatest = true
 
     private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
-
-    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
@@ -207,44 +198,7 @@ class Shinigami : ConfigurableSource, HttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val baseUrlPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            this.setDefaultValue(defaultBaseUrl)
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: $defaultBaseUrl"
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
-                true
-            }
-        }
-        screen.addPreference(baseUrlPref)
-    }
-
-    private fun getPrefBaseUrl(): String =
-        preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!.trimEnd('/')
-
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != defaultBaseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
-
     companion object {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
-
-        private const val RESTART_APP = "Restart aplikasi untuk menerapkan perubahan."
-        private const val BASE_URL_PREF_TITLE = "Ubah Domain"
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY = "Untuk penggunaan sementara. Memperbarui ekstensi akan menghapus pengaturan. \n\n❗ Restart aplikasi untuk menerapkan perubahan. ❗"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
     }
 }
