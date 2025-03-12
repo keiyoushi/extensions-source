@@ -77,10 +77,10 @@ abstract class MangaBox(
 
     private fun HttpUrl.getBaseUrl(): String =
         "${URL_PREFIX}${this.host}${
-            when (this.port) {
-                80, 443 -> ""
-                else -> ":${this.port}"
-            }
+        when (this.port) {
+            80, 443 -> ""
+            else -> ":${this.port}"
+        }
         }"
 
     private fun useAltCdnInterceptor(chain: Interceptor.Chain): Response {
