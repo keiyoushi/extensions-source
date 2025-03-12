@@ -293,7 +293,7 @@ abstract class Comick(
                     }
 
                     is DemographicFilter -> {
-                        it.state.filter { it.isIncluded() }.forEach {
+                        it.state.filter { it.state }.forEach {
                             addQueryParameter("demographic", it.value)
                         }
                     }

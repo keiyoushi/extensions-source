@@ -33,7 +33,7 @@ internal class TagFilter(name: String) : TextFilter(name)
 internal class ExcludedTagFilter(name: String) : TextFilter(name)
 
 internal class DemographicFilter(name: String, demographicList: List<Pair<String, String>>) :
-    Filter.Group<TriFilter>(name, demographicList.map { TriFilter(it.first, it.second) })
+    Filter.Group<CheckBoxFilter>(name, demographicList.map { CheckBoxFilter(it.first, it.second) })
 
 internal class TypeFilter(name: String, typeList: List<Pair<String, String>>) :
     Filter.Group<CheckBoxFilter>(name, typeList.map { CheckBoxFilter(it.first, it.second) })
@@ -159,12 +159,14 @@ private val getDemographicList: List<Pair<String, String>> = listOf(
     Pair("Shoujo", "2"),
     Pair("Seinen", "3"),
     Pair("Josei", "4"),
+    Pair("None", "5"),
 )
 
 private val getTypeList: List<Pair<String, String>> = listOf(
     Pair("Manga", "jp"),
     Pair("Manhwa", "kr"),
     Pair("Manhua", "cn"),
+    Pair("Others", "others"),
 )
 
 private val getCreatedAtList: List<Pair<String, String>> = listOf(
