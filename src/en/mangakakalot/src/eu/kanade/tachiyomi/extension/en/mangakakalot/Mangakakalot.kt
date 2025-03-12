@@ -5,8 +5,8 @@ import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 class Mangakakalot : MangaBox(
     "Mangakakalot",
     arrayOf(
-        "mangakakalot.gg",
-        "mangakakalove.com",
+        "www.mangakakalot.gg",
+        "www.mangakakalove.com",
     ),
     "en",
 )

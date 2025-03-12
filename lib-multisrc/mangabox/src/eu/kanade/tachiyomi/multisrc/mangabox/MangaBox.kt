@@ -28,15 +28,16 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
-// Based off of Mangakakalot 1.2.8
 abstract class MangaBox(
     override val name: String,
     private val mirrorEntries: Array<String>,
     override val lang: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM-dd-yyyy HH:mm", Locale.ENGLISH).apply {
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat(
+        "MMM-dd-yyyy HH:mm",
+        Locale.ENGLISH,
+    ).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     },
 ) : ParsedHttpSource(), ConfigurableSource {
@@ -46,16 +47,14 @@ abstract class MangaBox(
     override val baseUrl: String get() = mirror
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
         .addInterceptor(::useAltCdnInterceptor)
         .build()
 
-    private fun SharedPreferences.getSelectedMirror(): String = getString(PREF_USE_MIRROR, mirrorEntries[0])!!
+    private fun SharedPreferences.getMirrorPref(): String = getString(PREF_USE_MIRROR, mirrorEntries[0])!!
 
     private val preferences: SharedPreferences by getPreferencesLazy {
-        // if current mirror is not in mirrorEntries, remove and set default (first one)
-        if (getSelectedMirror() !in mirrorEntries.map { "${URL_PREFIX}$it" }) {
+        // if current mirror is not in mirrorEntries, set default
+        if (getMirrorPref() !in mirrorEntries.map { "${URL_PREFIX}$it" }) {
             edit().putString(PREF_USE_MIRROR, "${URL_PREFIX}${mirrorEntries[0]}").apply()
         }
     }
@@ -66,11 +65,12 @@ abstract class MangaBox(
                 return field
             }
 
-            field = preferences.getSelectedMirror()
+            field = preferences.getMirrorPref()
             return field
         }
 
-    private val cdnSet = MangaBoxLinkedCdnSet() // Stores all unique CDNs that the extension can use to retrieve chapter images
+    private val cdnSet =
+        MangaBoxLinkedCdnSet() // Stores all unique CDNs that the extension can use to retrieve chapter images
 
     private class MangaBoxFallBackTag // Custom empty class tag to use as an identifier that the specific request is fallback-able
 
@@ -138,8 +138,8 @@ abstract class MangaBox(
             }
         }
 
-        // If all CDNs fail, return the original response
-        return originalResponse ?: throw IOException("All CDN attempts failed.")
+        // If all CDNs fail, throw an error
+        return throw IOException("All CDN attempts failed.")
     }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -166,7 +166,8 @@ abstract class MangaBox(
     private fun mangaFromElement(element: Element, urlSelector: String = "h3 a"): SManga {
         return SManga.create().apply {
             element.select(urlSelector).first()!!.let {
-                url = it.attr("abs:href").substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
+                url = it.attr("abs:href")
+                    .substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
                 title = it.text()
             }
             thumbnail_url = element.select("img").first()!!.attr("abs:src")
@@ -177,7 +178,8 @@ abstract class MangaBox(
 
     override fun latestUpdatesFromElement(element: Element): SManga = mangaFromElement(element)
 
-    override fun popularMangaNextPageSelector() = "div.group_page, div.group-page a:not([href]) + a:not(:contains(Last))"
+    override fun popularMangaNextPageSelector() =
+        "div.group_page, div.group-page a:not([href]) + a:not(:contains(Last))"
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
@@ -209,7 +211,8 @@ abstract class MangaBox(
 
     override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
-    override fun searchMangaNextPageSelector() = "a.page_select + a:not(.page_last), a.page-select + a:not(.page-last)"
+    override fun searchMangaNextPageSelector() =
+        "a.page_select + a:not(.page_last), a.page-select + a:not(.page-last)"
 
     open val mangaDetailsMainSelector = "div.manga-info-top, div.panel-story-info"
 
@@ -234,11 +237,15 @@ abstract class MangaBox(
         return SManga.create().apply {
             document.select(mangaDetailsMainSelector).firstOrNull()?.let { infoElement ->
                 title = infoElement.select("h1, h2").first()!!.text()
-                author = infoElement.select("li:contains(author) a, td:containsOwn(author) + td a").eachText().joinToString()
-                status = parseStatus(infoElement.select("li:contains(status), td:containsOwn(status) + td").text())
+                author = infoElement.select("li:contains(author) a, td:containsOwn(author) + td a")
+                    .eachText().joinToString()
+                status = parseStatus(
+                    infoElement.select("li:contains(status), td:containsOwn(status) + td").text(),
+                )
                 genre = infoElement.select("div.manga-info-top li:contains(genres)").firstOrNull()
                     ?.select("a")?.joinToString { it.text() } // kakalot
-                    ?: infoElement.select("td:containsOwn(genres) + td a").joinToString { it.text() } // nelo
+                    ?: infoElement.select("td:containsOwn(genres) + td a")
+                        .joinToString { it.text() } // nelo
             } ?: checkForRedirectMessage(document)
             description = document.select(descriptionSelector).firstOrNull()?.ownText()
                 ?.replace("""^$title summary:\s""".toRegex(), "")
@@ -289,13 +296,16 @@ abstract class MangaBox(
 
     private fun Element.selectDateFromElement(): Element {
         val defaultChapterDateSelector = "span"
-        return this.select(defaultChapterDateSelector).lastOrNull() ?: this.select(alternateChapterDateSelector).last()!!
+        return this.select(defaultChapterDateSelector).lastOrNull() ?: this.select(
+            alternateChapterDateSelector,
+        ).last()!!
     }
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
             element.select("a").let {
-                url = it.attr("abs:href").substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
+                url = it.attr("abs:href")
+                    .substringAfter(baseUrl) // intentionally not using setUrlWithoutDomain
                 name = it.text()
                 scanlator =
                     it.attr("abs:href").toHttpUrl().host // show where chapters are actually from
@@ -337,7 +347,8 @@ abstract class MangaBox(
     override fun pageListParse(document: Document): List<Page> {
         val element = document.select("head > script").lastOrNull()
             ?: return emptyList()
-        val cdns = extractArray(element.html(), "cdns") + extractArray(element.html(), "backupImage")
+        val cdns =
+            extractArray(element.html(), "cdns") + extractArray(element.html(), "backupImage")
         val chapterImages = extractArray(element.html(), "chapterImages")
 
         // Add all parsed cdns to set
@@ -346,7 +357,12 @@ abstract class MangaBox(
         return chapterImages.mapIndexed { i, imagePath ->
             val parsedUrl = cdns[0].toHttpUrl().run {
                 newBuilder()
-                    .encodedPath("/$imagePath".replace("//", "/")) // replace ensures that there's at least one trailing slash prefix
+                    .encodedPath(
+                        "/$imagePath".replace(
+                            "//",
+                            "/",
+                        ),
+                    ) // replace ensures that there's at least one trailing slash prefix
                     .build()
                     .toString()
             }
@@ -356,7 +372,8 @@ abstract class MangaBox(
     }
 
     override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, headers).newBuilder().tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag()).build()
+        return GET(page.imageUrl!!, headers).newBuilder()
+            .tag(MangaBoxFallBackTag::class.java, MangaBoxFallBackTag()).build()
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
@@ -372,7 +389,10 @@ abstract class MangaBox(
         str = str.replace("[ùúụủũưừứựửữ]".toRegex(), "u")
         str = str.replace("[ỳýỵỷỹ]".toRegex(), "y")
         str = str.replace("đ".toRegex(), "d")
-        str = str.replace("""!|@|%|\^|\*|\(|\)|\+|=|<|>|\?|/|,|\.|:|;|'| |"|&|#|\[|]|~|-|$|_""".toRegex(), "_")
+        str = str.replace(
+            """!|@|%|\^|\*|\(|\)|\+|=|<|>|\?|/|,|\.|:|;|'| |"|&|#|\[|]|~|-|$|_""".toRegex(),
+            "_",
+        )
         str = str.replace("_+_".toRegex(), "_")
         str = str.replace("""^_+|_+$""".toRegex(), "")
         return str
@@ -458,17 +478,12 @@ abstract class MangaBox(
             title = "Mirror"
             entries = mirrorEntries
             entryValues = mirrorEntries.map { "${URL_PREFIX}$it" }.toTypedArray()
-            setDefaultValue(entryValues[0]) // Set default value
-
-            // Set initial value from SharedPreferences or default value
-            val initialValue = preferences.getString(PREF_USE_MIRROR, mirrorEntries[0])
-            value = initialValue
-            summary = initialValue!!.removePrefix(URL_PREFIX)
+            setDefaultValue(entryValues[0])
+            summary = "%s"
 
             setOnPreferenceChangeListener { _, newValue ->
                 // Update values
                 mirror = newValue as String
-                summary = newValue.removePrefix(URL_PREFIX)
                 true
             }
         }.let(screen::addPreference)
@@ -476,6 +491,6 @@ abstract class MangaBox(
 
     companion object {
         private const val PREF_USE_MIRROR = "pref_use_mirror"
-        private const val URL_PREFIX = "https://www."
+        private const val URL_PREFIX = "https://"
     }
 }

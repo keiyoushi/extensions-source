@@ -5,9 +5,9 @@ import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
 class Manganato : MangaBox(
     "Manganato",
     arrayOf(
-        "natomanga.com",
-        "nelomanga.com",
-        "manganato.gg",
+        "www.natomanga.com",
+        "www.nelomanga.com",
+        "www.manganato.gg",
     ),
     "en",
 ) {
