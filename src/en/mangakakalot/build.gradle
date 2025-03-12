@@ -3,7 +3,7 @@ ext {
     extClass = '.Mangakakalot'
     themePkg = 'mangabox'
     baseUrl = 'https://www.mangakakalot.gg'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
     isNsfw = true
 }
 
