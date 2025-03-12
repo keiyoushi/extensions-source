@@ -350,6 +350,18 @@ abstract class Comick(
                         }
                     }
 
+                    is ExcludedTagFilter -> {
+                        if (it.state.isNotEmpty()) {
+                            it.state.split(",").forEach {
+                                addQueryParameter(
+                                    "excluded-tags",
+                                    it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-")
+                                        .replace("'-", "-and-039-").replace("'", "-and-039-"),
+                                )
+                            }
+                        }
+                    }
+
                     else -> {}
                 }
             }

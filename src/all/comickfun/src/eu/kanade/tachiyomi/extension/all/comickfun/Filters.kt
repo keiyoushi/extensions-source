@@ -20,6 +20,7 @@ fun getFilters(): FilterList {
         ToYearFilter("To"),
         Filter.Header("Separate tags with commas"),
         TagFilter("Tags"),
+        ExcludedTagFilter("Excluded Tags"),
     )
 }
 
@@ -28,6 +29,8 @@ internal class GenreFilter(name: String, genreList: List<Pair<String, String>>) 
     Filter.Group<TriFilter>(name, genreList.map { TriFilter(it.first, it.second) })
 
 internal class TagFilter(name: String) : TextFilter(name)
+
+internal class ExcludedTagFilter(name: String) : TextFilter(name)
 
 internal class DemographicFilter(name: String, demographicList: List<Pair<String, String>>) :
     Filter.Group<TriFilter>(name, demographicList.map { TriFilter(it.first, it.second) })
