@@ -114,6 +114,8 @@ class Danbooru : HttpSource(), ConfigurableSource {
         setUrlWithoutDomain(document.location())
         title = document.selectFirst(".pool-category-series, .pool-category-collection")!!.text()
         description = document.getElementById("description")?.wholeText()
+        author = document.selectFirst("#description a[href*=artists]")?.ownText()
+        artist = author
         update_strategy = if (!preference.splitChaptersPref) {
             UpdateStrategy.ONLY_FETCH_ONCE
         } else {
@@ -134,7 +136,7 @@ class Danbooru : HttpSource(), ConfigurableSource {
                     name = "Post ${index + 1}"
                     chapter_number = index + 1f
                 }
-            }
+            }.reversed()
         } else {
             listOf(
                 SChapter.create().apply {
@@ -151,7 +153,7 @@ class Danbooru : HttpSource(), ConfigurableSource {
         GET("$baseUrl${chapter.url}.json", headers)
 
     override fun pageListParse(response: Response): List<Page> =
-        if (response.request.url.pathSegments.last().contains("posts")) {
+        if (response.request.url.toString().contains("/posts/")) {
             val data = response.parseAs<Post>()
 
             listOf(
