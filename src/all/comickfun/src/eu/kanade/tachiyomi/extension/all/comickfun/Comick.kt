@@ -79,6 +79,20 @@ abstract class Comick(
         }.also(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_ALTERNATIVE_TITLES_PREF
+            title = intl["show_alternative_titles_title"]
+            summaryOn = intl["show_alternative_titles_on"]
+            summaryOff = intl["show_alternative_titles_off"]
+            setDefaultValue(SHOW_ALTERNATIVE_TITLES_DEFAULT)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putBoolean(SHOW_ALTERNATIVE_TITLES_PREF, newValue as Boolean)
+                    .commit()
+            }
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = INCLUDE_MU_TAGS_PREF
             title = intl["include_tags_title"]
             summaryOn = intl["include_tags_on"]
@@ -154,6 +168,9 @@ abstract class Comick(
             ?.sorted()
             .orEmpty()
             .toSet()
+
+    private val SharedPreferences.showAlternativeTitles: Boolean
+        get() = getBoolean(SHOW_ALTERNATIVE_TITLES_PREF, SHOW_ALTERNATIVE_TITLES_DEFAULT)
 
     private val SharedPreferences.includeMuTags: Boolean
         get() = getBoolean(INCLUDE_MU_TAGS_PREF, INCLUDE_MU_TAGS_DEFAULT)
@@ -418,6 +435,7 @@ abstract class Comick(
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
                 scorePosition = preferences.scorePosition,
+                showAlternativeTitles = preferences.showAlternativeTitles,
                 covers = localCovers.ifEmpty { originalCovers }.ifEmpty { firstVol },
                 groupTags = preferences.groupTags,
             )
@@ -425,6 +443,7 @@ abstract class Comick(
         return mangaData.toSManga(
             includeMuTags = preferences.includeMuTags,
             scorePosition = preferences.scorePosition,
+            showAlternativeTitles = preferences.showAlternativeTitles,
             groupTags = preferences.groupTags,
         )
     }
@@ -542,6 +561,8 @@ abstract class Comick(
         const val SLUG_SEARCH_PREFIX = "id:"
         private val SPACE_AND_SLASH_REGEX = Regex("[ /]")
         private const val IGNORED_GROUPS_PREF = "IgnoredGroups"
+        private const val SHOW_ALTERNATIVE_TITLES_PREF = "ShowAlternativeTitles"
+        const val SHOW_ALTERNATIVE_TITLES_DEFAULT = false
         private const val INCLUDE_MU_TAGS_PREF = "IncludeMangaUpdatesTags"
         const val INCLUDE_MU_TAGS_DEFAULT = false
         private const val GROUP_TAGS_PREF = "GroupTags"
