@@ -136,7 +136,11 @@ class Danbooru : HttpSource(), ConfigurableSource {
                     name = "Post ${index + 1}"
                     chapter_number = index + 1f
                 }
-            }.reversed()
+            }.reversed().apply {
+                if (isNotEmpty()) {
+                    this[0].date_upload = dateFormat.tryParse(data.updatedAt)
+                }
+            }
         } else {
             listOf(
                 SChapter.create().apply {
