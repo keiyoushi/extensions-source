@@ -221,7 +221,8 @@ class BatCave : HttpSource() {
             .parseAs<Images>()
 
         return data.images.mapIndexed { idx, img ->
-            Page(idx, imageUrl = baseUrl + img.trim())
+            val imageUrl = if (img.startsWith("https")) img.trim() else baseUrl + img.trim()
+            Page(idx, imageUrl = imageUrl)
         }
     }
 

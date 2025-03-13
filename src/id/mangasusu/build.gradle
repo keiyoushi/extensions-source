@@ -2,8 +2,8 @@ ext {
     extName = 'Mangasusu'
     extClass = '.Mangasusu'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://mangasusuku.xyz'
-    overrideVersionCode = 4
+    baseUrl = 'https://mangasusuku.com'
+    overrideVersionCode = 5
     isNsfw = true
 }
 

@@ -1,0 +1,10 @@
+ext {
+    extName = 'First Kiss Manhua'
+    extClass = '.FirstKissManhua'
+    themePkg = 'madara'
+    baseUrl = 'https://1stkissmanhua.net'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

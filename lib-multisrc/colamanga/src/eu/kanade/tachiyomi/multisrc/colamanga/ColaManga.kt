@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -46,9 +47,7 @@ abstract class ColaManga(
 
     private val intl = ColaMangaIntl(lang)
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(
@@ -153,7 +152,7 @@ abstract class ColaManga(
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.fed-part-eone")!!.text()
-        thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-orignal")
+        thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-original")
         author = document.selectFirst("span.fed-text-muted:contains($authorTitle) + a")?.text()
         genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a").joinToString { it.text() }
         description = document
@@ -276,14 +275,14 @@ abstract class ColaManga(
         }.also(screen::addPreference)
     }
 
-    private val keyMappingRegex = Regex("""if\s*\(\s*([a-zA-Z0-9_]+)\s*==\s*(?<keyType>\d+)\s*\)\s*\{\s*return\s*'(?<key>[a-zA-Z0-9_]+)'\s*;""")
+    private val keyMappingRegex = Regex("""if\s*\(\s*([a-zA-Z0-9_]+)\s*==\s*(\d+)\s*\)\s*\{\s*return\s*'([a-zA-Z0-9_]+)'\s*;""")
 
     private val keyMapping by lazy {
         val obfuscatedReadJs = client.newCall(GET("$baseUrl/js/manga.read.js")).execute().body.string()
         val readJs = Deobfuscator.deobfuscateScript(obfuscatedReadJs)
             ?: throw Exception(intl.couldNotDeobufscateScript)
 
-        keyMappingRegex.findAll(readJs).associate { it.groups["keyType"]!!.value to it.groups["key"]!!.value }
+        keyMappingRegex.findAll(readJs).associate { it.groups[2]!!.value to it.groups[3]!!.value }
     }
 
     private fun randomString() = buildString(15) {

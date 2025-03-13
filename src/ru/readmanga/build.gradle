@@ -2,8 +2,8 @@ ext {
     extName = 'ReadManga'
     extClass = '.ReadManga'
     themePkg = 'grouple'
-    baseUrl = 'https://1.readmanga.io'
-    overrideVersionCode = 46
+    baseUrl = 'https://zz.readmanga.io'
+    overrideVersionCode = 47
 }
 
 apply from: "$rootDir/common.gradle"

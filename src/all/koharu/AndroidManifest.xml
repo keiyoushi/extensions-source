@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name=".all.koharu.KoharuUrlActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="https" android:pathPattern="/g/..*/..*"/>
+                <data android:host="koharu.to" />
+                <data android:host="schale.network" />
+                <data android:host="gehenna.jp" />
+                <data android:host="niyaniya.moe" />
+                <data android:host="seia.to" />
+                <data android:host="shupogaki.moe" />
+                <data android:host="hoshino.one" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -39,17 +39,17 @@ class AComics : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/comics?$DEFAULT_COMIC_QUERIES&sort=subscr_count&skip=${10 * (page - 1)}", headers)
 
-    override fun popularMangaSelector() = "table.list-loadable > tbody > tr"
+    override fun popularMangaSelector() = "section.serial-card"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.selectFirst("a > img")?.absUrl("src")
-        element.selectFirst("div.title > a")!!.run {
+        thumbnail_url = element.selectFirst("a > img")?.absUrl("data-real-src")
+        element.selectFirst("h2 > a")!!.run {
             setUrlWithoutDomain(attr("href") + "/about")
             title = text()
         }
     }
 
-    override fun popularMangaNextPageSelector() = "span.button:not(:has(a)) + span.button > a"
+    override fun popularMangaNextPageSelector() = "a.infinite-scroll"
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request =
@@ -58,7 +58,6 @@ class AComics : ParsedHttpSource() {
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // =============================== Search ===============================

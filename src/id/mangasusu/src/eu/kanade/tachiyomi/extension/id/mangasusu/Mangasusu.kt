@@ -12,7 +12,12 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.io.IOException
 
-class Mangasusu : MangaThemesia("Mangasusu", "https://mangasusuku.xyz", "id", "/komik") {
+class Mangasusu : MangaThemesia(
+    "Mangasusu",
+    "https://mangasusuku.com",
+    "id",
+    "/komik",
+) {
     override val client by lazy {
         super.client.newBuilder().addInterceptor(::sucuriInterceptor).build()
     }

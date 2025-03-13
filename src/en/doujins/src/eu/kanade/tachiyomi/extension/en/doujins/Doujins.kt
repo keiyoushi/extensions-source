@@ -85,12 +85,12 @@ class Doujins : HttpSource() {
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-            add(Calendar.DATE, -1 * PAGE_DAYS * (page - 1))
+            add(Calendar.DATE, -PAGE_DAYS * (page - 1))
         }
 
         val endDateSec = endDate.timeInMillis / 1000
         val startDateSec = endDate.apply {
-            add(Calendar.DATE, -1 * PAGE_DAYS)
+            add(Calendar.DATE, -PAGE_DAYS)
         }.timeInMillis / 1000
 
         return "$baseUrl/folders?start=$startDateSec&end=$endDateSec"

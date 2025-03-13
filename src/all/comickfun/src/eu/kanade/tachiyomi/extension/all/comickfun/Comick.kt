@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comickfun
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -25,8 +25,6 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -65,10 +63,7 @@ abstract class Comick(
         )
     }
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-            .newLineIgnoredGroups()
-    }
+    private val preferences by getPreferencesLazy { newLineIgnoredGroups() }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
@@ -93,6 +88,20 @@ abstract class Comick(
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit()
                     .putBoolean(INCLUDE_MU_TAGS_PREF, newValue as Boolean)
+                    .commit()
+            }
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = GROUP_TAGS_PREF
+            title = intl["group_tags_title"]
+            summaryOn = intl["group_tags_on"]
+            summaryOff = intl["group_tags_off"]
+            setDefaultValue(GROUP_TAGS_DEFAULT)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putBoolean(GROUP_TAGS_PREF, newValue as Boolean)
                     .commit()
             }
         }.also(screen::addPreference)
@@ -149,6 +158,9 @@ abstract class Comick(
     private val SharedPreferences.includeMuTags: Boolean
         get() = getBoolean(INCLUDE_MU_TAGS_PREF, INCLUDE_MU_TAGS_DEFAULT)
 
+    private val SharedPreferences.groupTags: Boolean
+        get() = getBoolean(GROUP_TAGS_PREF, GROUP_TAGS_DEFAULT)
+
     private val SharedPreferences.updateCover: Boolean
         get() = getBoolean(FIRST_COVER_PREF, FIRST_COVER_DEFAULT)
 
@@ -160,7 +172,7 @@ abstract class Comick(
         add("User-Agent", "Tachiyomi ${System.getProperty("http.agent")}")
     }
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(::errorInterceptor)
         .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()
@@ -329,7 +341,11 @@ abstract class Comick(
                     is TagFilter -> {
                         if (it.state.isNotEmpty()) {
                             it.state.split(",").forEach {
-                                addQueryParameter("tags", it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-").replace("'-", "-and-039-").replace("'", "-and-039-"))
+                                addQueryParameter(
+                                    "tags",
+                                    it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-")
+                                        .replace("'-", "-and-039-").replace("'", "-and-039-"),
+                                )
                             }
                         }
                     }
@@ -372,29 +388,27 @@ abstract class Comick(
     private fun mangaDetailsParse(response: Response, manga: SManga): SManga {
         val mangaData = response.parseAs<Manga>()
         if (!preferences.updateCover && manga.thumbnail_url != mangaData.comic.cover) {
-            if (manga.thumbnail_url.toString().endsWith("#1")) {
-                return mangaData.toSManga(
-                    includeMuTags = preferences.includeMuTags,
-                    scorePosition = preferences.scorePosition,
-                    covers = listOf(
-                        MDcovers(
-                            b2key = manga.thumbnail_url?.substringBeforeLast("#")
-                                ?.substringAfterLast("/"),
-                            vol = "1",
-                        ),
-                    ),
-                )
-            }
             val coversUrl =
                 "$apiUrl/comic/${mangaData.comic.slug ?: mangaData.comic.hid}/covers?tachiyomi=true"
             val covers = client.newCall(GET(coversUrl)).execute()
                 .parseAs<Covers>().mdCovers.reversed()
+            val firstVol = covers.filter { it.vol == "1" }.ifEmpty { covers }
+            val originalCovers = firstVol
+                .filter { mangaData.comic.isoLang.orEmpty().startsWith(it.locale.orEmpty()) }
+            val localCovers = firstVol
+                .filter { comickLang.startsWith(it.locale.orEmpty()) }
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
-                covers = if (covers.any { it.vol == "1" }) covers.filter { it.vol == "1" } else covers,
+                scorePosition = preferences.scorePosition,
+                covers = localCovers.ifEmpty { originalCovers }.ifEmpty { firstVol },
+                groupTags = preferences.groupTags,
             )
         }
-        return mangaData.toSManga(includeMuTags = preferences.includeMuTags)
+        return mangaData.toSManga(
+            includeMuTags = preferences.includeMuTags,
+            scorePosition = preferences.scorePosition,
+            groupTags = preferences.groupTags,
+        )
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -447,9 +461,10 @@ abstract class Comick(
             .map { it.toSChapter(mangaUrl) }
     }
 
-    private val publishedDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
+    private val publishedDateFormat =
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
 
     override fun getChapterUrl(chapter: SChapter): String {
         return "$baseUrl${chapter.url}"
@@ -487,8 +502,9 @@ abstract class Comick(
 
     override fun getFilterList() = getFilters()
 
-    private fun SharedPreferences.newLineIgnoredGroups(): SharedPreferences {
-        if (getBoolean(MIGRATED_IGNORED_GROUPS, false)) return this
+    private fun SharedPreferences.newLineIgnoredGroups() {
+        if (getBoolean(MIGRATED_IGNORED_GROUPS, false)) return
+
         val ignoredGroups = getString(IGNORED_GROUPS_PREF, "").orEmpty()
 
         edit()
@@ -502,8 +518,6 @@ abstract class Comick(
             )
             .putBoolean(MIGRATED_IGNORED_GROUPS, true)
             .apply()
-
-        return this
     }
 
     companion object {
@@ -511,12 +525,14 @@ abstract class Comick(
         private val SPACE_AND_SLASH_REGEX = Regex("[ /]")
         private const val IGNORED_GROUPS_PREF = "IgnoredGroups"
         private const val INCLUDE_MU_TAGS_PREF = "IncludeMangaUpdatesTags"
-        private const val INCLUDE_MU_TAGS_DEFAULT = false
+        const val INCLUDE_MU_TAGS_DEFAULT = false
+        private const val GROUP_TAGS_PREF = "GroupTags"
+        const val GROUP_TAGS_DEFAULT = false
         private const val MIGRATED_IGNORED_GROUPS = "MigratedIgnoredGroups"
         private const val FIRST_COVER_PREF = "DefaultCover"
         private const val FIRST_COVER_DEFAULT = true
         private const val SCORE_POSITION_PREF = "ScorePosition"
-        private const val SCORE_POSITION_DEFAULT = "top"
+        const val SCORE_POSITION_DEFAULT = "top"
         private const val LIMIT = 20
         private const val CHAPTERS_LIMIT = 99999
     }

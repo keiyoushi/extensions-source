@@ -18,7 +18,6 @@ class MagusManga : Keyoapp(
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::captchaInterceptor)
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
-        .rateLimitHost(cdnUrl.toHttpUrl(), 1)
         .build()
 
     private fun captchaInterceptor(chain: Interceptor.Chain): Response {
@@ -38,9 +37,5 @@ class MagusManga : Keyoapp(
         }
 
         return response
-    }
-
-    override fun chapterListSelector(): String {
-        return "${super.chapterListSelector()}:not(:has(img[src*=coin]))"
     }
 }

@@ -1,9 +1,0 @@
-ext {
-    extName = 'BestManga'
-    extClass = '.BestManga'
-    themePkg = 'madara'
-    baseUrl = 'https://bestmanga.club'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Rose Squad Scans'
+    extClass = '.RoseSquadScans'
+    themePkg = 'madara'
+    baseUrl = 'https://rosesquadscans.aishiteru.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

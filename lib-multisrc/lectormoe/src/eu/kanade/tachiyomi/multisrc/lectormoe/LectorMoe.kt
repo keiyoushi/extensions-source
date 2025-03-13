@@ -111,7 +111,11 @@ abstract class LectorMoe(
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = json.decodeFromString<Data<SeriesDto>>(response.body.string())
         val seriesSlug = result.data.slug
-        return result.data.chapters?.map { it.toSChapter(seriesSlug) } ?: emptyList()
+        return result.data.chapters
+            ?.filter { it.subscribersOnly.not() }
+            ?.map { it.toSChapter(seriesSlug) }
+            ?.filter { it.date_upload < System.currentTimeMillis() }
+            ?: emptyList()
     }
 
     override fun pageListRequest(chapter: SChapter): Request {

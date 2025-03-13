@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -24,8 +24,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -39,9 +37,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     // Private stuff
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val DATE_FORMAT by lazy {
         SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id"))
@@ -78,21 +74,21 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     }
 
     private val orderBy = arrayOf(
-        Order("All", ""),
+        Order("Semua", ""),
         Order("A-Z", "title"),
-        Order("Latest Update", "update"),
-        Order("Latest Added", "latest"),
-        Order("Popular", "popular"),
+        Order("Update Terbaru", "update"),
+        Order("Baru Ditambahkan", "latest"),
+        Order("Populer", "popular"),
     )
 
     private val statusList = arrayOf(
-        Status("All", ""),
-        Status("Publishing", "Publishing"),
-        Status("Finished", "Finished"),
+        Status("Semua", ""),
+        Status("Berlanjut", "Publishing"),
+        Status("Selesai", "Finished"),
     )
 
     private val categoryNames = arrayOf(
-        Category("All", ""),
+        Category("Semua", ""),
         Category("Doujinshi", "Doujinshi"),
         Category("Manga", "Manga"),
         Category("Manhwa", "Manhwa"),
@@ -136,7 +132,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Genre("Cunnilingus"),
         Genre("Dark Skin"),
         Genre("Daughter"),
-        Genre("Defloartion"),
+        Genre("Defloration"),
         Genre("Demon"),
         Genre("Demon Girl"),
         Genre("Dick Growth"),
@@ -252,17 +248,17 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Genre("Yuri"),
     )
 
-    private class CategoryNames(categories: Array<Category>) :
-        Filter.Select<Category>("Category", categories, 0)
-
-    private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Order", orders, 0)
+    private class AuthorFilter : Filter.Text("Author")
+    private class CharacterFilter : Filter.Text("Karakter")
+    private class CategoryNames(categories: Array<Category>) : Filter.Select<Category>("Kategori", categories, 0)
+    private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Urutkan", orders, 0)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
     private class StatusList(statuses: Array<Status>) : Filter.Select<Status>("Status", statuses, 0)
 
     private fun basicInformationFromElement(element: Element): SManga {
         val manga = SManga.create()
         element.select("a").let {
-            manga.title = it.attr("title")
+            manga.title = element.selectFirst("h3.title")!!.text()
             manga.setUrlWithoutDomain(it.attr("href"))
         }
         element.select("a > figure.thumbnail > img").first()?.let {
@@ -310,9 +306,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     // Element Selectors
 
-    override fun latestUpdatesSelector(): String = "#archives > div.entries > article"
     override fun popularMangaSelector(): String = "#archives > div.entries > article"
-    override fun searchMangaSelector(): String = "#archives > div.entries > article"
+    override fun latestUpdatesSelector() = popularMangaSelector()
+    override fun searchMangaSelector() = popularMangaSelector()
 
     override fun popularMangaNextPageSelector(): String = "nav.pagination > ul > li.last > a"
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
@@ -333,6 +329,12 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                     val order = filter.values[filter.state]
                     url.addQueryParameter("order", order.key)
                 }
+                is AuthorFilter -> {
+                    url.addQueryParameter("author", filter.state)
+                }
+                is CharacterFilter -> {
+                    url.addQueryParameter("character", filter.state)
+                }
                 is GenreList -> {
                     filter.state
                         .filter { it.state }
@@ -349,6 +351,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 else -> {}
             }
         }
+
         return GET(url.build(), headers)
     }
 
@@ -356,8 +359,10 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         basicInformationFromElement(element)
 
     override fun getFilterList() = FilterList(
-        Filter.Header("NB: Filter diabaikan jika memakai pencarian teks!"),
+        Filter.Header("NB: Filter bisa digabungkan dengan memakai pencarian teks!"),
         Filter.Separator(),
+        AuthorFilter(),
+        CharacterFilter(),
         StatusList(statusList),
         CategoryNames(categoryNames),
         OrderBy(orderBy),
@@ -367,30 +372,67 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     // Detail Parse
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("section.metadata").first()!!
+        val infoElement = document.selectFirst("section.metadata")!!
+        val authorName = if (infoElement.select("td:contains(Author) ~ td").isEmpty()) {
+            null
+        } else {
+            infoElement.select("td:contains(Author) ~ td").joinToString { it.text() }
+        }
+        val groupName = if (infoElement.select("td:contains(Group) ~ td").isEmpty()) {
+            "Tidak Diketahui"
+        } else {
+            infoElement.select("td:contains(Group) ~ td").joinToString { it.text() }
+        }
+        val authorParser = if (authorName.isNullOrEmpty()) {
+            groupName?.takeIf { !it.isNullOrEmpty() && it != "Tidak Diketahui" }
+        } else {
+            authorName
+        }
+        val characterName = if (infoElement.select("td:contains(Character) ~ td").isEmpty()) {
+            "Tidak Diketahui"
+        } else {
+            infoElement.select("td:contains(Character) ~ td").joinToString { it.text() }
+        }
+        val seriesParser = if (infoElement.select("td:contains(Series) ~ td").text() == "Manhwa") {
+            infoElement.select("td:contains(Serialization) ~ td").text()
+        } else {
+            infoElement.select("td:contains(Series) ~ td").text()
+        }
+        val alternativeTitle = if (infoElement.select("h1.title > span.alter").isEmpty()) {
+            "Tidak Diketahui"
+        } else {
+            infoElement.select("h1.title > span.alter").joinToString { it.text() }
+        }
         val manga = SManga.create()
-        manga.description = when {
-            document.select("section.metadata > div.pb-2 > p:nth-child(1)")
-                .isEmpty() -> "Tidak ada deskripsi yang tersedia bosque"
-            else -> document.select("section.metadata > div.pb-2 > p:nth-child(1)").first()!!.text()
+        manga.description = if (infoElement.select("div.pb-2 > p:nth-child(1)").isEmpty()) {
+            """
+            Tidak ada deskripsi yang tersedia bosque
+
+            Judul Alternatif : $alternativeTitle
+            Grup             : $groupName
+            Karakter         : $characterName
+            Seri             : $seriesParser
+            """.trimIndent()
+        } else {
+            val showDescription = infoElement.selectFirst("div.pb-2 > p:nth-child(1)")!!.text()
+            """
+            $showDescription
+
+            Judul Alternatif : $alternativeTitle
+            Seri             : $seriesParser
+            """.trimIndent()
         }
         val genres = mutableListOf<String>()
         infoElement.select("div.tags > a").forEach { element ->
             val genre = element.text()
             genres.add(genre)
         }
-        manga.author =
-            document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Author) + td:nth-child(2) > a")
-                .joinToString { it.text() }
+        manga.author = authorParser
         manga.genre = infoElement.select("div.tags > a").joinToString { it.text() }
         manga.status = parseStatus(
-            document.select("section.metadata > table:nth-child(2) > tbody > tr:nth-child(1) > td:nth-child(2) > a")
-                .first()!!.text(),
+            infoElement.selectFirst("td:contains(Status) ~ td")!!.text(),
         )
         manga.thumbnail_url = document.selectFirst("figure.thumbnail img")?.attr("src")
-        manga.artist =
-            document.select("section.metadata > table:nth-child(2) > tbody > tr.pages > td:contains(Character) + td:nth-child(2) > a")
-                .joinToString { it.text() }
 
         return manga
     }
@@ -441,9 +483,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     companion object {
         private val PREF_DOMAIN_KEY = "preferred_domain_name_v${AppInfo.getVersionName()}"
-        private const val PREF_DOMAIN_TITLE = "Override BaseUrl"
+        private const val PREF_DOMAIN_TITLE = "Mengganti BaseUrl"
         private const val PREF_DOMAIN_DEFAULT = "https://doujindesu.tv"
-        private const val PREF_DOMAIN_SUMMARY = "Override default domain with a different one"
+        private const val PREF_DOMAIN_SUMMARY = "Mengganti domain default dengan domain yang berbeda"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -456,7 +498,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             setDefaultValue(PREF_DOMAIN_DEFAULT)
 
             setOnPreferenceChangeListener { _, newValue ->
-                Toast.makeText(screen.context, "Restart App to apply new setting.", Toast.LENGTH_LONG).show()
+                Toast.makeText(screen.context, "Mulai ulang aplikasi untuk menerapkan pengaturan baru.", Toast.LENGTH_LONG).show()
                 true
             }
         }.also(screen::addPreference)

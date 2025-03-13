@@ -3,7 +3,8 @@ ext {
     extClass = '.NoblesseTranslations'
     themePkg = 'madara'
     baseUrl = 'https://www.swordalada.org'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

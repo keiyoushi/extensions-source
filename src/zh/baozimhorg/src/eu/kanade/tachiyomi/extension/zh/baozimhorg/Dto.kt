@@ -53,9 +53,12 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale
 class PageListDto(val info: PageListInfoDto)
 
 @Serializable
-class PageListInfoDto(val images: List<ImageDto>)
+class PageListInfoDto(val images: PageListInfoImagesDto)
+
+@Serializable
+class PageListInfoImagesDto(val images: List<ImageDto>)
 
 @Serializable
 class ImageDto(private val url: String, private val order: Int) {
-    fun toPage() = Page(order, imageUrl = url)
+    fun toPage() = Page(order, imageUrl = "https://f40-1-4.g-mh.online$url")
 }

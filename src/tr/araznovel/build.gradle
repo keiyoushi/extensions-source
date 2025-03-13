@@ -2,8 +2,9 @@ ext {
     extName = 'ArazNovel'
     extClass = '.ArazNovel'
     themePkg = 'madara'
-    baseUrl = 'https://www.araznovel.com'
-    overrideVersionCode = 3
+    baseUrl = 'https://araznovel.com'
+    overrideVersionCode = 4
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

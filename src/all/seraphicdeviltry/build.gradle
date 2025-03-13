@@ -1,0 +1,10 @@
+ext {
+    extName = 'SeraphicDeviltry'
+    extClass = '.SeraphicDeviltryFactory'
+    themePkg = 'madara'
+    baseUrl = "https://seraphic-deviltry.com"
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

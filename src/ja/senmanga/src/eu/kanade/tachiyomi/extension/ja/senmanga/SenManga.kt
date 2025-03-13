@@ -24,7 +24,7 @@ class SenManga : ParsedHttpSource() {
     override val baseUrl = "https://raw.senmanga.com"
 
     @SuppressLint("DefaultLocale")
-    override val client = super.client.newBuilder().addInterceptor {
+    override val client = network.cloudflareClient.newBuilder().addInterceptor {
         // Intercept any image requests and add a referer to them
         // Enables bandwidth stealing feature
         val request = if (it.request().url.pathSegments.firstOrNull()?.trim()?.lowercase() == "viewer") {

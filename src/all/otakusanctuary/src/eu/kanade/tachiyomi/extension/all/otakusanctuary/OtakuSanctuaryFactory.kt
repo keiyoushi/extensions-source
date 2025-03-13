@@ -5,11 +5,11 @@ import eu.kanade.tachiyomi.source.SourceFactory
 
 class OtakuSanctuaryFactory : SourceFactory {
     override fun createSources() = listOf(
-        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.net", "all"),
-        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.net", "vi"),
-        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.net", "en"),
-        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.net", "it"),
-        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.net", "fr"),
-        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.net", "es"),
+        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.me", "all"),
+        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.me", "vi"),
+        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.me", "en"),
+        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.me", "it"),
+        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.me", "fr"),
+        OtakuSanctuary("Otaku Sanctuary", "https://otakusan.me", "es"),
     )
 }

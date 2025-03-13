@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.es.plottwistnofansub
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
@@ -19,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
@@ -32,8 +32,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Entities
 import org.jsoup.select.Elements
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
@@ -48,8 +46,7 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x000)
+    private val preferences: SharedPreferences = getPreferences()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(
@@ -191,7 +188,7 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
         val script = document.select("script")
             .map(Element::data)
             .firstNotNullOf(CHAPTER_PAGES_REGEX::find)
-        val result = json.decodeFromString<PagesPayloadDto>(script.groups["json"]!!.value)
+        val result = json.decodeFromString<PagesPayloadDto>(script.groups[1]!!.value)
         val mangaSlug = "${result.cdnUrl}/${result.mangaSlug}"
         val chapterNumber = result.chapterNumber
         return result.images.mapIndexed { i, img ->
@@ -260,7 +257,7 @@ class PlotTwistNoFansub : ParsedHttpSource(), ConfigurableSource {
     companion object {
         private val MANGAID1_REGEX = ""","manid":"(\d+)",""".toRegex()
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
-        private val CHAPTER_PAGES_REGEX = """obj\s*=\s*(?<json>.*)\s*;""".toRegex()
+        private val CHAPTER_PAGES_REGEX = """obj\s*=\s*(.*)\s*;""".toRegex()
         private val ACTION_REGEX = """action:\s*?(['"])([^\r\n]+?)\1""".toRegex()
         private const val MAX_MANGA_RESULTS = 1000
     }
