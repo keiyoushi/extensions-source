@@ -130,6 +130,6 @@ class Yidan : HttpSource(), ConfigurableSource {
 
     companion object {
         private const val MIRROR_PREF = "MIRROR"
-        private val MIRRORS get() = arrayOf("ydan.cc", "yidan.one", "yidan.in", "yidan.info")
+        private val MIRRORS get() = arrayOf("yidan3.club", "yidan.one", "yidan.in", "yidan.info")
     }
 }
