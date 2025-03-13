@@ -7,10 +7,10 @@ import kotlinx.serialization.Serializable
 class Pool(
     val id: Int,
     @SerialName("updated_at") val updatedAt: String,
-    @SerialName("post_ids") val postIds: List<Int>
+    @SerialName("post_ids") val postIds: List<Int>,
 )
 
 @Serializable
 class Post(
-    @SerialName("file_url") val fileUrl: String
+    @SerialName("file_url") val fileUrl: String,
 )

@@ -102,7 +102,6 @@ class Danbooru : HttpSource(), ConfigurableSource {
             ?.substringBeforeLast(' ')?.trimStart()
     }
 
-
     override fun latestUpdatesRequest(page: Int): Request =
         searchMangaRequest(page, "", FilterList(FilterOrder("created_at")))
 
@@ -156,7 +155,7 @@ class Danbooru : HttpSource(), ConfigurableSource {
             val data = response.parseAs<Post>()
 
             listOf(
-                Page(index = 0, imageUrl = data.fileUrl)
+                Page(index = 0, imageUrl = data.fileUrl),
             )
         } else {
             val data = response.parseAs<Pool>()
@@ -192,7 +191,7 @@ class Danbooru : HttpSource(), ConfigurableSource {
             summary = """
                 Instead of showing one 'OneShot' chapter,
                 each post will be it's own chapter
-                """.trimIndent()
+            """.trimIndent()
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
