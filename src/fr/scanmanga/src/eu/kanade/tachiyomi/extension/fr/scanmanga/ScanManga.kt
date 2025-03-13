@@ -34,7 +34,7 @@ class ScanManga : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor { chain ->
             val originalCookies = chain.request().header("Cookie") ?: ""
             val newReq = chain

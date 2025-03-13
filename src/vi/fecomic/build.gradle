@@ -2,8 +2,8 @@ ext {
     extName = 'Fecomic'
     extClass = '.Fecomic'
     themePkg = 'madara'
-    baseUrl = 'https://fecomicc.xyz'
-    overrideVersionCode = 0
+    baseUrl = 'https://mangasup.net'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

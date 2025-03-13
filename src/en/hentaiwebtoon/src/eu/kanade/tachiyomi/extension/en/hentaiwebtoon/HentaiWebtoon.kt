@@ -2,11 +2,9 @@ package eu.kanade.tachiyomi.extension.en.hentaiwebtoon
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.FormBody
 import okhttp3.Request
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 
 class HentaiWebtoon : Madara("HentaiWebtoon", "https://hentaiwebtoon.com", "en") {
 
@@ -18,15 +16,8 @@ class HentaiWebtoon : Madara("HentaiWebtoon", "https://hentaiwebtoon.com", "en")
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override fun popularMangaNextPageSelector() = "a.next"
-    override fun searchMangaSelector() = "li.movie-item > a"
-    override fun searchMangaNextPageSelector() = "a.next"
-
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            setUrlWithoutDomain(element.absUrl("href"))
-            title = element.attr("title")
-        }
-    }
+    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun oldXhrChaptersRequest(mangaId: String): Request {
         val form = FormBody.Builder()

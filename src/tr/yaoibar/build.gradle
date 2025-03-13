@@ -1,0 +1,10 @@
+ext {
+    extName = 'Yaoibar'
+    extClass = '.Yaoibar'
+    themePkg = 'madara'
+    baseUrl = 'https://yaoibar.gay'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

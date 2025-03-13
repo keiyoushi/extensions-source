@@ -2,8 +2,9 @@ ext {
     extName = 'CosmicScans.id'
     extClass = '.CosmicScansID'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://cosmic1.co'
-    overrideVersionCode = 5
+    baseUrl = 'https://cosmic345.co'
+    overrideVersionCode = 7
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

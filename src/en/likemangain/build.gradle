@@ -1,0 +1,10 @@
+ext {
+    extName = 'LikeManga.in'
+    extClass = '.LikeMangaIn'
+    themePkg = 'madara'
+    baseUrl = 'https://likemanga.in'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

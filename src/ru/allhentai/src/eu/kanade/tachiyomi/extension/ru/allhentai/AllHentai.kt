@@ -1,22 +1,18 @@
 package eu.kanade.tachiyomi.extension.ru.allhentai
 
-import android.app.Application
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.utils.getPreferences
 import okhttp3.Request
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
-class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
+class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
+    override val id = 1809051393403180443
 
-    override val id: Long = 1809051393403180443
-
-    private val preferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -29,28 +25,47 @@ class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
                         url.addQueryParameter(genre.id, arrayOf("=", "=in", "=ex")[genre.state])
                     }
                 }
+
                 is Category -> filter.state.forEach { category ->
                     if (category.state != Filter.TriState.STATE_IGNORE) {
-                        url.addQueryParameter(category.id, arrayOf("=", "=in", "=ex")[category.state])
+                        url.addQueryParameter(
+                            category.id,
+                            arrayOf("=", "=in", "=ex")[category.state],
+                        )
                     }
                 }
-                is FilList -> filter.state.forEach { fils ->
-                    if (fils.state != Filter.TriState.STATE_IGNORE) {
-                        url.addQueryParameter(fils.id, arrayOf("=", "=in", "=ex")[fils.state])
+
+                is FiltersList -> filter.state.forEach { filters ->
+                    if (filters.state != Filter.TriState.STATE_IGNORE) {
+                        url.addQueryParameter(filters.id, arrayOf("=", "=in", "=ex")[filters.state])
                     }
                 }
+
                 is OrderBy -> {
                     if (filter.state > 0) {
-                        val ord = arrayOf("not", "year", "rate", "popularity", "votes", "created", "updated")[filter.state]
-                        return GET("$baseUrl/list?sortType=$ord&offset=${70 * (page - 1)}", headers)
+                        val sortType = arrayOf(
+                            "not",
+                            "year",
+                            "rate",
+                            "popularity",
+                            "votes",
+                            "created",
+                            "updated",
+                        )[filter.state]
+                        return GET(
+                            "$baseUrl/list?sortType=$sortType&offset=${70 * (page - 1)}",
+                            headers,
+                        )
                     }
                 }
+
                 is Tags -> {
                     if (filter.state > 0) {
-                        val tagName = getTagsList()[filter.state].url
+                        val tagName = tagsList[filter.state].url
                         return GET("$baseUrl/list/tag/$tagName?offset=${70 * (page - 1)}", headers)
                     }
                 }
+
                 else -> {}
             }
         }
@@ -63,14 +78,25 @@ class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
 
     private class OrderBy : Filter.Select<String>(
         "Сортировка (только)",
-        arrayOf("Без сортировки", "По году", "По популярности", "Популярно сейчас", "По рейтингу", "Новинки", "По дате обновления"),
+        arrayOf(
+            "Без сортировки",
+            "По году",
+            "По популярности",
+            "Популярно сейчас",
+            "По рейтингу",
+            "Новинки",
+            "По дате обновления",
+        ),
     )
 
     private class Genre(name: String, val id: String) : Filter.TriState(name)
 
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Жанры", genres)
+
     private class Category(categories: List<Genre>) : Filter.Group<Genre>("Категории", categories)
-    private class FilList(fils: List<Genre>) : Filter.Group<Genre>("Фильтры", fils)
+
+    private class FiltersList(filters: List<Genre>) : Filter.Group<Genre>("Фильтры", filters)
+
     private class Tags(tags: Array<String>) : Filter.Select<String>("Тэг (только)", tags)
 
     private data class Tag(val name: String, val url: String)
@@ -78,12 +104,12 @@ class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
     override fun getFilterList() = FilterList(
         OrderBy(),
         Tags(tagsName),
-        GenreList(getGenreList()),
-        Category(getCategoryList()),
-        FilList(getFilList()),
+        GenreList(genreList),
+        Category(categoryList),
+        FiltersList(filtersList),
     )
 
-    private fun getGenreList() = listOf(
+    private val genreList = listOf(
         Genre("ahegao", "el_855"),
         Genre("анал", "el_828"),
         Genre("бдсм", "el_78"),
@@ -120,7 +146,7 @@ class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
         Genre("яой", "el_83"),
     )
 
-    private fun getCategoryList() = listOf(
+    private val categoryList = listOf(
         Genre("3D", "el_626"),
         Genre("Анимация", "el_5777"),
         Genre("Без текста", "el_3157"),
@@ -128,7 +154,7 @@ class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
         Genre("Порно манхва", "el_1104"),
     )
 
-    private fun getFilList() = listOf(
+    private val filtersList = listOf(
         Genre("Высокий рейтинг", "s_high_rate"),
         Genre("Сингл", "s_single"),
         Genre("Для взрослых", "s_mature"),
@@ -139,7 +165,7 @@ class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
         Genre("Продается", "s_sale"),
     )
 
-    private fun getTagsList() = listOf(
+    private val tagsList = listOf(
         Tag("Без тега", "not"),
         Tag("handjob", "handjob"),
         Tag("inseki", "inseki"),
@@ -259,7 +285,7 @@ class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
         Tag("яндере", "yandere"),
     )
 
-    private val tagsName = getTagsList().map {
+    private val tagsName = tagsList.map {
         it.name
     }.toTypedArray()
 
@@ -272,7 +298,11 @@ class AllHentai : GroupLe("AllHentai", "https://z.ahen.me", "ru") {
             dialogTitle = DOMAIN_TITLE
             dialogMessage = "Default URL:\n\t${super.baseUrl}"
             setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Для смены домена необходимо перезапустить приложение с полной остановкой.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    screen.context,
+                    "Для смены домена необходимо перезапустить приложение с полной остановкой.",
+                    Toast.LENGTH_LONG,
+                ).show()
                 true
             }
         }.let(screen::addPreference)

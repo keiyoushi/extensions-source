@@ -6,7 +6,7 @@ import java.util.Locale
 
 class LumosKomik : Madara(
     "LumosKomik",
-    "https://lumoskomik.com",
+    "https://lumos01.com",
     "id",
     dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale("en")),
 ) {
@@ -14,5 +14,6 @@ class LumosKomik : Madara(
     override val useNewChapterEndpoint = true
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
+    override val mangaDetailsSelectorDescription = "#tab-manga-summary"
     override val mangaSubString = "komik"
 }

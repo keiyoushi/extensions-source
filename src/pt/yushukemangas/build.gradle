@@ -1,0 +1,7 @@
+ext {
+    extName = 'Yushuke Mangas'
+    extClass = '.YushukeMangas'
+    extVersionCode = 6
+}
+
+apply from: "$rootDir/common.gradle"

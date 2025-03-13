@@ -3,7 +3,8 @@ ext {
     extClass = '.KappaBeast'
     themePkg = 'mangathemesia'
     baseUrl = 'https://kappabeast.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

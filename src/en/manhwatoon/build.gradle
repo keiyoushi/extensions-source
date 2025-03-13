@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manhwa Toon'
+    extClass = '.ManhwaToon'
+    themePkg = 'madara'
+    baseUrl = 'https://www.manhwatoon.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

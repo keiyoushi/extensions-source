@@ -1,16 +1,19 @@
 package eu.kanade.tachiyomi.extension.en.suryascans
 
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import java.util.concurrent.TimeUnit
 
-class GenzToons : MangaThemesia(
+class GenzToons : Keyoapp(
     "Genz Toons",
-    "https://genztoons.com",
+    "https://genzupdates.com",
     "en",
 ) {
-    override val id = 2909429739457928148
 
     override val client = super.client.newBuilder()
         .rateLimit(3)
+        .connectTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(90, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
         .build()
 }

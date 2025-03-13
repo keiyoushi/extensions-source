@@ -80,8 +80,8 @@ class SortOrderFilter : UriPartFilter(
     "Sort Order",
     "order",
     arrayOf(
-        Pair("Ascending", "Ascending"),
         Pair("Descending", "Descending"),
+        Pair("Ascending", "Ascending"),
     ),
 )
 

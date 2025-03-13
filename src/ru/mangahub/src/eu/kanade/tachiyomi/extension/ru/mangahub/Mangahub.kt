@@ -83,16 +83,16 @@ open class Mangahub : ParsedHttpSource() {
         return GET("$baseUrl/explore/sort-is-update$pageStr", headers)
     }
 
-    override fun popularMangaSelector() = "div.comic-grid-col-xl"
+    override fun popularMangaSelector() = "div.item-grid"
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.thumbnail_url = element.select("div.fast-view-layer-scale").attr("data-background-image")
-        manga.title = element.select("a.fw-medium").text()
-        manga.setUrlWithoutDomain(element.select("a.fw-medium").attr("href"))
-        return manga
+        return SManga.create().apply {
+            thumbnail_url = element.selectFirst("img.item-grid-image")?.absUrl("src")
+            title = element.selectFirst("a.fw-medium")!!.text()
+            setUrlWithoutDomain(element.selectFirst("a.fw-medium")!!.absUrl("href"))
+        }
     }
 
     override fun latestUpdatesFromElement(element: Element): SManga =
@@ -103,7 +103,7 @@ open class Mangahub : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/manga".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/search/title".toHttpUrl().newBuilder().apply {
             addQueryParameter("query", query)
             if (page > 1) addQueryParameter("page", page.toString())
         }
@@ -122,18 +122,30 @@ open class Mangahub : ParsedHttpSource() {
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
-        manga.author = document.select(".attr-name:contains(Автор) + .attr-value").text() // TODO: Add "Сценарист" and "Художник"
-        manga.genre = document.select(".tags a").joinToString { it.text() }
-        manga.description = document.select("div.markdown-style").text()
-        manga.status = parseStatus(document.select("div.detail-attr:contains(перевод):eq(0)").toString())
-        manga.thumbnail_url = document.select("img.cover-detail").attr("src")
-        return manga
-    }
-
-    private fun parseStatus(elements: String): Int = when {
-        elements.contains("Переведена") or elements.contains("Выпуск завершен") -> SManga.COMPLETED
-        else -> SManga.ONGOING
+        return SManga.create().apply {
+            val authorElement = document.selectFirst(".attr-name:contains(Автор) + .attr-value a")
+            if (authorElement != null) {
+                author = authorElement.text()
+            } else {
+                author = document.selectFirst(".attr-name:contains(Сценарист) + .attr-value a")?.text()
+                artist = document.selectFirst(".attr-name:contains(Художник) + .attr-value a")?.text()
+            }
+            genre = document.select(".tags a").joinToString { it.text() }
+            description = document.selectFirst(".markdown-style.text-expandable-content")?.text()
+            val statusElement = document.selectFirst(".attr-name:contains(Томов) + .attr-value")?.text()
+            status = when {
+                statusElement?.contains("продолжается") == true -> SManga.ONGOING
+                statusElement?.contains("приостановлен") == true -> SManga.ON_HIATUS
+                statusElement?.contains("завершен") == true || statusElement?.contains("выпуск прекращён") == true ->
+                    if (document.selectFirst(".attr-name:contains(Перевод) + .attr-value")?.text()?.contains("Завершен") == true) {
+                        SManga.COMPLETED
+                    } else {
+                        SManga.PUBLISHING_FINISHED
+                    }
+                else -> SManga.UNKNOWN
+            }
+            thumbnail_url = document.selectFirst("img.cover-detail")?.absUrl("src")
+        }
     }
 
     override fun chapterListSelector() = "div.py-2.px-3"
@@ -145,7 +157,7 @@ open class Mangahub : ParsedHttpSource() {
         chapter.date_upload = element.select("div.text-muted").text().let {
             SimpleDateFormat("dd.MM.yyyy", Locale.US).parse(it)?.time ?: 0L
         }
-        chapter.setUrlWithoutDomain(urlElement.attr("href"))
+        chapter.setUrlWithoutDomain(urlElement.absUrl("href"))
         return chapter
     }
 

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Spectral Scan'
+    extClass = '.SpectralScan'
+    themePkg = 'madara'
+    baseUrl = 'https://spectralscan.xyz'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

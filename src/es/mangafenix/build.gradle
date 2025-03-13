@@ -1,9 +1,0 @@
-ext {
-    extName = 'MMFenix'
-    extClass = '.MMFenix'
-    themePkg = 'madara'
-    baseUrl = 'https://mmfenix.com'
-    overrideVersionCode = 5
-}
-
-apply from: "$rootDir/common.gradle"

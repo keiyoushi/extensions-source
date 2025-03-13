@@ -1,0 +1,10 @@
+ext {
+    extName = 'Yaoi Manga'
+    extClass = '.YaoiManga'
+    themePkg = 'madara'
+    baseUrl = 'https://yaoimanga.es'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,110 +1,61 @@
 package eu.kanade.tachiyomi.extension.ja.rawotaku
 
-import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader.UriMultiSelectFilter
+import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader.UriPartFilter
 
-object Note : Filter.Header("NOTE: Ignored if using text search!")
+class TypeFilter : UriPartFilter(
+    "タイプ",
+    "type",
+    arrayOf(
+        Pair("全て", "all"),
+        Pair("Raw Manga", "Raw Manga"),
+        Pair("BLコミック", "BLコミック"),
+        Pair("TLコミック", "TLコミック"),
+        Pair("オトナコミック", "オトナコミック"),
+        Pair("女性マンガ", "女性マンガ"),
+        Pair("少女マンガ", "少女マンガ"),
+        Pair("少年マンガ", "少年マンガ"),
+        Pair("青年マンガ", "青年マンガ"),
+    ),
+)
 
-sealed class Select(
-    name: String,
-    val param: String,
-    values: Array<String>,
-) : Filter.Select<String>(name, values) {
-    open val selection: String
-        get() = if (state == 0) "" else state.toString()
-}
+class StatusFilter : UriPartFilter(
+    "地位",
+    "status",
+    arrayOf(
+        Pair("全て", "all"),
+        Pair("Publishing", "Publishing"),
+        Pair("Finished", "Finished"),
+    ),
+)
 
-class TypeFilter(
-    values: Array<String> = types.keys.toTypedArray(),
-) : Select("タイプ", "type", values) {
-    override val selection: String
-        get() = types[values[state]]!!
+class LanguageFilter : UriPartFilter(
+    "言語",
+    "language",
+    arrayOf(
+        Pair("全て", "all"),
+        Pair("Japanese", "ja"),
+        Pair("English", "en"),
+    ),
+)
 
-    companion object {
-        private val types = mapOf(
-            "全て" to "all",
-            "Raw Manga" to "Raw Manga",
-            "BLコミック" to "BLコミック",
-            "TLコミック" to "TLコミック",
-            "オトナコミック" to "オトナコミック",
-            "女性マンガ" to "女性マンガ",
-            "少女マンガ" to "少女マンガ",
-            "少年マンガ" to "少年マンガ",
-            "青年マンガ" to "青年マンガ",
-        )
-    }
-}
-
-class StatusFilter(
-    values: Array<String> = statuses.keys.toTypedArray(),
-) : Select("地位", "status", values) {
-    override val selection: String
-        get() = statuses[values[state]]!!
-
-    companion object {
-        private val statuses = mapOf(
-            "全て" to "all",
-            "Publishing" to "Publishing",
-            "Finished" to "Finished",
-        )
-    }
-}
-
-class LanguageFilter(
-    values: Array<String> = languages.keys.toTypedArray(),
-) : Select("言語", "language", values) {
-    override val selection: String
-        get() = languages[values[state]]!!
-
-    companion object {
-        private val languages = mapOf(
-            "全て" to "all",
-            "Japanese" to "ja",
-            "English" to "en",
-        )
-    }
-}
-
-class SortFilter(
-    values: Array<String> = sort.keys.toTypedArray(),
-) : Select("選別", "sort", values) {
-    override val selection: String
-        get() = sort[values[state]]!!
-
-    companion object {
-        private val sort = mapOf(
-            "デフォルト" to "default",
-            "最新の更新" to "latest-updated",
-            "最も見られました" to "most-viewed",
-            "Title [A-Z]" to "title-az",
-            "Title [Z-A]" to "title-za",
-        )
-    }
-}
-
-class Genre(name: String, val id: String) : Filter.CheckBox(name)
-
-class GenresFilter(
-    values: List<Genre> = genres,
-) : Filter.Group<Genre>("ジャンル", values) {
-    val param = "genre[]"
-
-    companion object {
-        private val genres: List<Genre>
-            get() = listOf(
-                Genre("アクション", "55"),
-                Genre("エッチ", "15706"),
-                Genre("コメディ", "91"),
-                Genre("ドラマ", "56"),
-                Genre("ハーレム", "20"),
-                Genre("ファンタジー", "1"),
-                Genre("冒険", "54"),
-                Genre("悪魔", "6820"),
-                Genre("武道", "1064"),
-                Genre("歴史的", "9600"),
-                Genre("警察・特殊部隊", "6089"),
-                Genre("車･バイク", "4329"),
-                Genre("音楽", "473"),
-                Genre("魔法", "1416"),
-            )
-    }
-}
+class GenreFilter : UriMultiSelectFilter(
+    "ジャンル",
+    "genre[]",
+    arrayOf(
+        Pair("アクション", "55"),
+        Pair("エッチ", "15706"),
+        Pair("コメディ", "91"),
+        Pair("ドラマ", "56"),
+        Pair("ハーレム", "20"),
+        Pair("ファンタジー", "1"),
+        Pair("冒険", "54"),
+        Pair("悪魔", "6820"),
+        Pair("武道", "1064"),
+        Pair("歴史的", "9600"),
+        Pair("警察・特殊部隊", "6089"),
+        Pair("車･バイク", "4329"),
+        Pair("音楽", "473"),
+        Pair("魔法", "1416"),
+    ),
+)

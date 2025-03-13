@@ -131,6 +131,15 @@ class HattoriManga : HttpSource() {
             description = document.selectFirst(".anime-details-text p")?.text()
             author = document.selectFirst(".anime-details-widget li:has(span:contains(Yazar))")?.ownText()
             artist = document.selectFirst(".anime-details-widget li:has(span:contains(Çizer))")?.ownText()
+
+            document.selectFirst(".anime-details-widget li:has(span:contains(Durum))")?.ownText()?.let {
+                status = when (it.lowercase()) {
+                    "devam ediyor" -> SManga.ONGOING
+                    "tamamlandı" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+            }
+
             genre = document.selectFirst(".anime-details-widget li:has(span:contains(Etiketler))")
                 ?.ownText()
                 ?.split(",")
@@ -224,9 +233,6 @@ class HattoriManga : HttpSource() {
             val mangas = response.parseAs<List<SearchManga>>().map {
                 SManga.create().apply {
                     title = it.title
-                    description = it.description
-                    author = it.author
-                    artist = it.artist
                     thumbnail_url = "$baseUrl/storage/${it.thumbnail}"
                     url = "/manga/${it.slug}"
                 }
@@ -254,7 +260,7 @@ class HattoriManga : HttpSource() {
         thumbnail_url = element.selectFirst(".img-con")?.absUrl("data-setbg")
         genre = element.select(".product-card-con ul li").joinToString { it.text() }
         val script = element.attr("onclick")
-        setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups["url"]!!.value)
+        setUrlWithoutDomain(REGEX_MANGA_URL.find(script)!!.groups[1]!!.value)
     }
 
     private fun parseGenres(document: Document): List<Genre> {
@@ -279,7 +285,7 @@ class HattoriManga : HttpSource() {
 
     companion object {
         const val SEARCH_PREFIX = "slug:"
-        val REGEX_MANGA_URL = """='(?<url>[^']+)""".toRegex()
+        val REGEX_MANGA_URL = """='([^']+)""".toRegex()
         val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.US)
     }
 }

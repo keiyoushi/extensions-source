@@ -1,9 +1,0 @@
-ext {
-    extName = 'Laid Back Scans'
-    extClass = '.LaidBackScans'
-    themePkg = 'keyoapp'
-    baseUrl = 'https://laidbackscans.org'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

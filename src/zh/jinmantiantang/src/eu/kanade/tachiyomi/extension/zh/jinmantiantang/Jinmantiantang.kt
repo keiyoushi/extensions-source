@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
@@ -18,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,8 +35,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     override val name: String = "禁漫天堂"
     override val supportsLatest: Boolean = true
 
-    private val preferences: SharedPreferences =
-        getSharedPreferences(id)
+    private val preferences = getPreferences { preferenceMigration() }
 
     override val baseUrl: String = "https://" + preferences.baseUrl
 
@@ -251,13 +250,15 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     // 漫画图片信息
     override fun pageListParse(document: Document): List<Page> {
         tailrec fun internalParse(document: Document, pages: MutableList<Page>): List<Page> {
-            val elements = document.select("div[class=center scramble-page][id*=0]")
+            val elements = document.select("div[class=center scramble-page spnotice_chk][id*=0]")
             for (element in elements) {
                 pages.apply {
-                    if (element.select("div[class=center scramble-page][id*=0] img").attr("src").indexOf("blank.jpg") >= 0) {
-                        add(Page(size, "", element.select("div[class=center scramble-page][id*=0] img").attr("data-original").split("\\?")[0]))
+                    if (element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("src").indexOf("blank.jpg") >= 0 ||
+                        element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("data-cfsrc").indexOf("blank.jpg") >= 0
+                    ) {
+                        add(Page(size, "", element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("data-original").split("\\?")[0]))
                     } else {
-                        add(Page(size, "", element.select("div[class=center scramble-page][id*=0] img").attr("src").split("\\?")[0]))
+                        add(Page(size, "", element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("src").split("\\?")[0]))
                     }
                 }
             }

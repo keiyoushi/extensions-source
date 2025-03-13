@@ -1,0 +1,10 @@
+ext {
+    extName = 'Gekkou Scans'
+    extClass = '.GekkouScans'
+    themePkg = 'madara'
+    baseUrl = 'https://gekkou.space'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

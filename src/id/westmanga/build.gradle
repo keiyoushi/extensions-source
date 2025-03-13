@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangathemesia'
     baseUrl = 'https://westmanga.fun'
     overrideVersionCode = 4
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

@@ -30,31 +30,31 @@ class SeriManga : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request {
         return if (page == 1) {
-            GET("$baseUrl/mangalar", headers)
+            GET("$baseUrl/mangalar?filtrele=goruntulenme&sirala=DESC", headers)
         } else {
-            GET("$baseUrl/mangalar?page=$page", headers)
+            GET("$baseUrl/mangalar?filtrele=goruntulenme&sirala=DESC&page=$page", headers)
         }
     }
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         title = element.select("span.mlb-name").text()
-        thumbnail_url = styleToUrl(element).removeSurrounding("'")
+        thumbnail_url = styleToUrl(element)
     }
 
     private fun styleToUrl(element: Element): String {
-        return element.attr("style").substringAfter("(").substringBefore(")")
+        return element.attr("style").substringAfter("('").substringBefore("')")
     }
 
     override fun popularMangaNextPageSelector() = "[rel=next]"
 
-    override fun latestUpdatesSelector() = "a.sli2-img"
+    override fun latestUpdatesSelector() = "a.mlist-bg"
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?a=a&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
-        title = element.attr("title")
+        title = element.attr("title").substringBefore(" Manga Oku")
         thumbnail_url = styleToUrl(element)
     }
 

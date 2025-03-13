@@ -1,34 +1,28 @@
 package eu.kanade.tachiyomi.extension.fr.reaperscans
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.source.model.SChapter
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
+import eu.kanade.tachiyomi.source.model.SManga
+import org.jsoup.nodes.Document
 
-class ReaperScans : Madara(
+class ReaperScans : Keyoapp(
     "Reaper Scans",
-    "https://reaperscans.fr",
+    "https://reaper-scans.fr",
     "fr",
-    SimpleDateFormat("dd/MM/yyyy", Locale.US),
 ) {
-    // Migrated from WpMangaReader to Madara.
-    override val versionId = 2
+    override val dateSelector = ".text-xs.w-fit"
 
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        val urlElement = element.selectFirst(chapterUrlSelector)!!
+    override fun mangaDetailsParse(document: Document): SManga =
+        super.mangaDetailsParse(document).apply {
+            if (description.isNullOrBlank() == true) {
+                description = document.selectFirst("#expand_content > p")?.text()
+            }
 
-        name = urlElement.selectFirst("p.chapter-manhwa-title")?.text()
-            ?: urlElement.ownText()
-        date_upload = urlElement.selectFirst("span.chapter-release-date > i")?.text()
-            .let { parseChapterDate(it) }
+            // Search for the sibling div of the image with the status icon
+            status = document.selectFirst("div:has(> img[src*=status]) + div").parseStatus()
 
-        val fixedUrl = urlElement.attr("abs:href").toHttpUrl().newBuilder()
-            .removeAllQueryParameters("style")
-            .addQueryParameter("style", "list")
-            .toString()
+            genre = document.select("div:has(>h1) > div > a").joinToString { it.text() }
+        }
 
-        setUrlWithoutDomain(fixedUrl)
-    }
+    // Migrated from Madara to Keyoapp.
+    override val versionId = 4
 }

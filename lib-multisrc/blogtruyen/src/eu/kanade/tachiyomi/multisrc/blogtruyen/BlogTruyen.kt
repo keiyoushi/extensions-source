@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.blogtruyen
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -35,6 +36,8 @@ abstract class BlogTruyen(
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
+
+    override val client = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -366,7 +369,11 @@ abstract class BlogTruyen(
         )
 
         Single.fromCallable {
-            client.newCall(request).execute().close()
+            try {
+                client.newCall(request).execute().close()
+            } catch (e: Exception) {
+                Log.e("BlogTruyen", "Error updating view count", e)
+            }
         }
             .subscribeOn(Schedulers.io())
             .observeOn(Schedulers.io())
