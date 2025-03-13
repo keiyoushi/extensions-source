@@ -6,30 +6,30 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Danbooru : ParsedHttpSource(), ConfigurableSource {
+class Danbooru : HttpSource(), ConfigurableSource {
     override val name: String = "Danbooru"
     override val baseUrl: String = "https://danbooru.donmai.us"
     override val lang: String = "all"
     override val supportsLatest: Boolean = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client = network.cloudflareClient
 
     private val dateFormat =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
@@ -39,14 +39,8 @@ class Danbooru : ParsedHttpSource(), ConfigurableSource {
     override fun popularMangaRequest(page: Int): Request =
         searchMangaRequest(page, "", FilterList())
 
-    override fun popularMangaFromElement(element: Element): SManga =
-        searchMangaFromElement(element)
-
-    override fun popularMangaNextPageSelector(): String =
-        searchMangaNextPageSelector()
-
-    override fun popularMangaSelector(): String =
-        searchMangaSelector()
+    override fun popularMangaParse(response: Response) =
+        searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/pools/gallery".toHttpUrl().newBuilder()
@@ -88,10 +82,18 @@ class Danbooru : ParsedHttpSource(), ConfigurableSource {
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaSelector(): String =
-        "article.post-preview"
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
 
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        val entries = document.select("article.post-preview").map {
+            searchMangaFromElement(it)
+        }
+        val hasNextPage = document.selectFirst("a.paginator-next") != null
+
+        return MangasPage(entries, hasNextPage)
+    }
+
+    private fun searchMangaFromElement(element: Element) = SManga.create().apply {
         url = element.selectFirst(".post-preview-link")!!.attr("href")
         title = element.selectFirst("div.text-center")!!.text()
 
@@ -100,27 +102,19 @@ class Danbooru : ParsedHttpSource(), ConfigurableSource {
             ?.substringBeforeLast(' ')?.trimStart()
     }
 
-    override fun searchMangaNextPageSelector(): String =
-        "a.paginator-next"
 
     override fun latestUpdatesRequest(page: Int): Request =
         searchMangaRequest(page, "", FilterList(FilterOrder("created_at")))
 
-    override fun latestUpdatesSelector(): String =
-        searchMangaSelector()
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        latestUpdatesParse(response)
 
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        searchMangaFromElement(element)
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
 
-    override fun latestUpdatesNextPageSelector(): String =
-        searchMangaNextPageSelector()
-
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         setUrlWithoutDomain(document.location())
-
         title = document.selectFirst(".pool-category-series, .pool-category-collection")!!.text()
         description = document.getElementById("description")?.wholeText()
-
         update_strategy = if (!preference.splitChaptersPref) {
             UpdateStrategy.ONLY_FETCH_ONCE
         } else {
@@ -147,18 +141,12 @@ class Danbooru : ParsedHttpSource(), ConfigurableSource {
                 SChapter.create().apply {
                     url = "/pools/${data.id}"
                     name = "Oneshot"
-                    date_upload = dateFormat.tryParse(data.createdAt)
+                    date_upload = dateFormat.tryParse(data.updatedAt)
                     chapter_number = 0F
                 },
             )
         }
     }
-
-    override fun chapterListSelector(): String =
-        throw IllegalStateException("Not used")
-
-    override fun chapterFromElement(element: Element): SChapter =
-        throw IllegalStateException("Not used")
 
     override fun pageListRequest(chapter: SChapter): Request =
         GET("$baseUrl${chapter.url}.json", headers)
@@ -178,17 +166,11 @@ class Danbooru : ParsedHttpSource(), ConfigurableSource {
             }
         }
 
-    override fun pageListParse(document: Document): List<Page> =
-        throw IllegalStateException("Not used")
-
     override fun imageUrlRequest(page: Page): Request =
         GET("$baseUrl${page.url}.json", headers)
 
     override fun imageUrlParse(response: Response): String =
         response.parseAs<Post>().fileUrl
-
-    override fun imageUrlParse(document: Document): String =
-        throw IllegalStateException("Not used")
 
     override fun getChapterUrl(chapter: SChapter): String =
         baseUrl + chapter.url
