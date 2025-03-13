@@ -1,0 +1,10 @@
+ext {
+    extName = 'Moodtoon'
+    extClass = '.Moodtoon'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://moodtoon.net'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
