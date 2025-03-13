@@ -27,6 +27,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.concurrent.thread
+import kotlin.math.min
 
 class OlympusScanlation : HttpSource(), ConfigurableSource {
 
@@ -38,7 +39,7 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         else -> preferences.prefBaseUrl
     }
 
-    private val defaultBaseUrl: String = "https://olympuslectura.com"
+    private val defaultBaseUrl: String = "https://olympusbiblioteca.com"
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
@@ -108,8 +109,11 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
+            if (query.length < 3) {
+                throw Exception("La búsqueda debe tener al menos 3 caracteres")
+            }
             val apiUrl = "$apiBaseUrl/api/search".toHttpUrl().newBuilder()
-                .addQueryParameter("name", query)
+                .addQueryParameter("name", query.substring(0, min(query.length, 40)))
                 .build()
             return GET(apiUrl, headers)
         }
