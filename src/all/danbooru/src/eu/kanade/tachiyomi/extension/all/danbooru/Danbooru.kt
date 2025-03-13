@@ -1,17 +1,19 @@
 package eu.kanade.tachiyomi.extension.all.danbooru
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -21,7 +23,7 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Danbooru : ParsedHttpSource() {
+class Danbooru : ParsedHttpSource(), ConfigurableSource {
     override val name: String = "Danbooru"
     override val baseUrl: String = "https://danbooru.donmai.us"
     override val lang: String = "all"
@@ -31,6 +33,8 @@ class Danbooru : ParsedHttpSource() {
 
     private val dateFormat =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
+
+    private val preference by getPreferencesLazy()
 
     override fun popularMangaRequest(page: Int): Request =
         searchMangaRequest(page, "", FilterList())
@@ -88,8 +92,8 @@ class Danbooru : ParsedHttpSource() {
         "article.post-preview"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        url = element.selectFirst(".post-preview-link")?.attr("href")!!
-        title = element.selectFirst("div.text-center")?.text() ?: ""
+        url = element.selectFirst(".post-preview-link")!!.attr("href")
+        title = element.selectFirst("div.text-center")!!.text()
 
         thumbnail_url = element.selectFirst("source")?.attr("srcset")
             ?.substringAfterLast(',')?.trim()
@@ -114,27 +118,41 @@ class Danbooru : ParsedHttpSource() {
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         setUrlWithoutDomain(document.location())
 
-        title = document.selectFirst(".pool-category-series, .pool-category-collection")?.text() ?: ""
-        description = document.getElementById("description")?.wholeText() ?: ""
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        title = document.selectFirst(".pool-category-series, .pool-category-collection")!!.text()
+        description = document.getElementById("description")?.wholeText()
+
+        update_strategy = if (!preference.splitChaptersPref) {
+            UpdateStrategy.ONLY_FETCH_ONCE
+        } else {
+            UpdateStrategy.ALWAYS_UPDATE
+        }
     }
 
     override fun chapterListRequest(manga: SManga): Request =
-        GET("$baseUrl${manga.url}.json?only=id,created_at", headers)
+        GET("$baseUrl${manga.url}.json", headers)
 
-    override fun chapterListParse(response: Response): List<SChapter> = listOf(
-        SChapter.create().apply {
-            val data = response.parseAs<JsonObject>()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val data = response.parseAs<Pool>()
 
-            val id = data["id"]!!.jsonPrimitive.content
-            val createdAt = data["created_at"]?.jsonPrimitive?.content
-
-            url = "/pools/$id"
-            name = "Oneshot"
-            date_upload = dateFormat.tryParse(createdAt)
-            chapter_number = 0F
-        },
-    )
+        return if (preference.splitChaptersPref) {
+            data.postIds.mapIndexed { index, id ->
+                SChapter.create().apply {
+                    url = "/posts/$id"
+                    name = "Post ${index + 1}"
+                    chapter_number = index + 1f
+                }
+            }
+        } else {
+            listOf(
+                SChapter.create().apply {
+                    url = "/pools/${data.id}"
+                    name = "Oneshot"
+                    date_upload = dateFormat.tryParse(data.createdAt)
+                    chapter_number = 0F
+                },
+            )
+        }
+    }
 
     override fun chapterListSelector(): String =
         throw IllegalStateException("Not used")
@@ -143,22 +161,31 @@ class Danbooru : ParsedHttpSource() {
         throw IllegalStateException("Not used")
 
     override fun pageListRequest(chapter: SChapter): Request =
-        GET("$baseUrl${chapter.url}.json?only=post_ids", headers)
+        GET("$baseUrl${chapter.url}.json", headers)
 
     override fun pageListParse(response: Response): List<Page> =
-        response.parseAs<JsonObject>()["post_ids"]?.jsonArray
-            ?.map { it.jsonPrimitive.content }
-            ?.mapIndexed { i, id -> Page(index = i, url = "/posts/$id") }
-            ?: emptyList()
+        if (response.request.url.pathSegments.last().contains("posts")) {
+            val data = response.parseAs<Post>()
+
+            listOf(
+                Page(index = 0, imageUrl = data.fileUrl)
+            )
+        } else {
+            val data = response.parseAs<Pool>()
+
+            data.postIds.mapIndexed { index, id ->
+                Page(index, url = "/posts/$id")
+            }
+        }
 
     override fun pageListParse(document: Document): List<Page> =
         throw IllegalStateException("Not used")
 
     override fun imageUrlRequest(page: Page): Request =
-        GET("$baseUrl${page.url}.json?only=file_url", headers)
+        GET("$baseUrl${page.url}.json", headers)
 
     override fun imageUrlParse(response: Response): String =
-        response.parseAs<JsonObject>()["file_url"]!!.jsonPrimitive.content
+        response.parseAs<Post>().fileUrl
 
     override fun imageUrlParse(document: Document): String =
         throw IllegalStateException("Not used")
@@ -175,4 +202,21 @@ class Danbooru : ParsedHttpSource() {
             FilterOrder(),
         ),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = CHAPTER_LIST_PREF
+            title = "Split posts into individual chapters"
+            summary = """
+                Instead of showing one 'OneShot' chapter,
+                each post will be it's own chapter
+                """.trimIndent()
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
+    private val SharedPreferences.splitChaptersPref: Boolean
+        get() = getBoolean(CHAPTER_LIST_PREF, false)
 }
+
+private const val CHAPTER_LIST_PREF = "prefChapterList"
