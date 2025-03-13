@@ -11,4 +11,6 @@ class MangaLivre : Madara(
     SimpleDateFormat("MMMM dd, yyyy", Locale("pt")),
 ) {
     override val useNewChapterEndpoint = true
+
+    override val id: Long = 2834885536325274328
 }
