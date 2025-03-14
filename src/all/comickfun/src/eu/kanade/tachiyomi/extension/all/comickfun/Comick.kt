@@ -20,6 +20,7 @@ import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -289,6 +290,16 @@ abstract class Comick(
         return MangasPage(entries, end < searchResponse.size)
     }
 
+    private fun addTagQueryParameters(builder: Builder, tags: String, parameterName: String) {
+        tags.split(",").forEach {
+            builder.addQueryParameter(
+                parameterName,
+                it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-")
+                    .replace("'-", "-and-039-").replace("'", "-and-039-"),
+            )
+        }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/v1.0/search".toHttpUrl().newBuilder().apply {
             filters.forEach { it ->
@@ -363,25 +374,13 @@ abstract class Comick(
 
                     is TagFilter -> {
                         if (it.state.isNotEmpty()) {
-                            it.state.split(",").forEach {
-                                addQueryParameter(
-                                    "tags",
-                                    it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-")
-                                        .replace("'-", "-and-039-").replace("'", "-and-039-"),
-                                )
-                            }
+                            addTagQueryParameters(this, it.state, "tags")
                         }
                     }
 
                     is ExcludedTagFilter -> {
                         if (it.state.isNotEmpty()) {
-                            it.state.split(",").forEach {
-                                addQueryParameter(
-                                    "excluded-tags",
-                                    it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-")
-                                        .replace("'-", "-and-039-").replace("'", "-and-039-"),
-                                )
-                            }
+                            addTagQueryParameters(this, it.state, "excluded-tags")
                         }
                     }
 
