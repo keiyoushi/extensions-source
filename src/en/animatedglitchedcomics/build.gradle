@@ -4,6 +4,7 @@ ext {
     themePkg = 'keyoapp'
     baseUrl = 'https://agrcomics.com'
     overrideVersionCode = 23
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

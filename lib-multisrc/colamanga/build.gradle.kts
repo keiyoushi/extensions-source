@@ -2,7 +2,7 @@ plugins {
     id("lib-multisrc")
 }
 
-baseVersionCode = 7
+baseVersionCode = 9
 
 dependencies {
     api(project(":lib:synchrony"))
