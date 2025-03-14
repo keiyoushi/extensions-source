@@ -1,0 +1,9 @@
+ext {
+    extName = 'Manga Livre'
+    extClass = '.MangaLivre'
+    themePkg = 'madara'
+    baseUrl = 'https://mangalivre.ru'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
