@@ -27,6 +27,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.IOException
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -104,9 +105,32 @@ abstract class MangaHub(
             baseUrl.toHttpUrl()
         }
 
-        // Clear key cookie
-        val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
-        client.cookieJar.saveFromResponse(url, listOf(cookie))
+        val regex = Regex("mhub_access=([^;]+)")
+        val oldKey = client.cookieJar
+            .loadForRequest(baseUrl.toHttpUrl())
+            .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }?.value
+
+        for (i in 1..2) {
+            // Clear key cookie
+            val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
+            client.cookieJar.saveFromResponse(url, listOf(cookie))
+
+            // We try requesting again with param if the first one fails
+            val query = if (i == 2) "?reloadKey=1" else ""
+
+            try {
+                val response = client.newCall(GET("$url$query", headers)).execute()
+                val returnedKey = response.headers["set-cookie"]?.let { regex.find(it)?.groupValues?.get(1) }
+
+                if (returnedKey == oldKey) {
+                    continue // Site gave an old key so we try again
+                }
+
+                break; // Break out of loop since we got an allegedly valid API key
+            } catch (_: IOException) {
+                throw IOException("An error occurred while obtaining a new API key") // Show error
+            }
+        }
 
         // Set required cookie (for cache busting?)
         val recently = buildJsonObject {
@@ -127,9 +151,6 @@ abstract class MangaHub(
                     .build(),
             ),
         )
-
-        val request = GET("$url?reloadKey=1", headers)
-        client.newCall(request).execute()
     }
 
     data class SMangaDTO(
