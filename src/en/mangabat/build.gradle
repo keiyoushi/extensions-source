@@ -2,8 +2,8 @@ ext {
     extName = 'Mangabat'
     extClass = '.Mangabat'
     themePkg = 'mangabox'
-    baseUrl = 'https://h.mangabat.com'
-    overrideVersionCode = 5
+    baseUrl = 'https://www.mangabats.com'
+    overrideVersionCode = 6
     isNsfw = true
 }
 

@@ -1,14 +1,7 @@
 ext {
     extName = 'Shinigami'
     extClass = '.Shinigami'
-    themePkg = 'madara'
-    baseUrl = 'https://shinigami09.com'
-    overrideVersionCode = 31
-    isNsfw = false
+    extVersionCode = 72
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(":lib:synchrony"))
-}
