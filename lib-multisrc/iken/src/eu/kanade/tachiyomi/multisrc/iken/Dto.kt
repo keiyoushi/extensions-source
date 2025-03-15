@@ -112,7 +112,6 @@ class Chapter(
         val seriesSlug = mangaSlug ?: mangaPost.slug
         url = "/series/$seriesSlug/$slug#$id"
         name = "${prefix}Chapter $number"
-        scanlator = createdBy.name
         date_upload = try {
             dateFormat.parse(createdAt)!!.time
         } catch (_: ParseException) {
