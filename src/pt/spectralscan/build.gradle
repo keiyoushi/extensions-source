@@ -1,9 +1,9 @@
 ext {
     extName = 'Spectral Scan'
     extClass = '.SpectralScan'
-    themePkg = 'madara'
+    themePkg = 'yuyu'
     baseUrl = 'https://spectralscan.xyz'
-    overrideVersionCode = 0
+    overrideVersionCode = 41
     isNsfw = false
 }
 
