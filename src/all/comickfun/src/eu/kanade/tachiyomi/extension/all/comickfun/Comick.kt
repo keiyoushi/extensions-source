@@ -20,6 +20,7 @@ import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl.Builder
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -74,6 +75,20 @@ abstract class Comick(
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit()
                     .putString(IGNORED_GROUPS_PREF, newValue.toString())
+                    .commit()
+            }
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_ALTERNATIVE_TITLES_PREF
+            title = intl["show_alternative_titles_title"]
+            summaryOn = intl["show_alternative_titles_on"]
+            summaryOff = intl["show_alternative_titles_off"]
+            setDefaultValue(SHOW_ALTERNATIVE_TITLES_DEFAULT)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putBoolean(SHOW_ALTERNATIVE_TITLES_PREF, newValue as Boolean)
                     .commit()
             }
         }.also(screen::addPreference)
@@ -154,6 +169,9 @@ abstract class Comick(
             ?.sorted()
             .orEmpty()
             .toSet()
+
+    private val SharedPreferences.showAlternativeTitles: Boolean
+        get() = getBoolean(SHOW_ALTERNATIVE_TITLES_PREF, SHOW_ALTERNATIVE_TITLES_DEFAULT)
 
     private val SharedPreferences.includeMuTags: Boolean
         get() = getBoolean(INCLUDE_MU_TAGS_PREF, INCLUDE_MU_TAGS_DEFAULT)
@@ -272,6 +290,16 @@ abstract class Comick(
         return MangasPage(entries, end < searchResponse.size)
     }
 
+    private fun addTagQueryParameters(builder: Builder, tags: String, parameterName: String) {
+        tags.split(",").forEach {
+            builder.addQueryParameter(
+                parameterName,
+                it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-")
+                    .replace("'-", "-and-039-").replace("'", "-and-039-"),
+            )
+        }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/v1.0/search".toHttpUrl().newBuilder().apply {
             filters.forEach { it ->
@@ -293,7 +321,7 @@ abstract class Comick(
                     }
 
                     is DemographicFilter -> {
-                        it.state.filter { it.isIncluded() }.forEach {
+                        it.state.filter { it.state }.forEach {
                             addQueryParameter("demographic", it.value)
                         }
                     }
@@ -311,6 +339,12 @@ abstract class Comick(
                     is StatusFilter -> {
                         if (it.state > 0) {
                             addQueryParameter("status", it.getValue())
+                        }
+                    }
+
+                    is ContentRatingFilter -> {
+                        if (it.state > 0) {
+                            addQueryParameter("content_rating", it.getValue())
                         }
                     }
 
@@ -340,13 +374,13 @@ abstract class Comick(
 
                     is TagFilter -> {
                         if (it.state.isNotEmpty()) {
-                            it.state.split(",").forEach {
-                                addQueryParameter(
-                                    "tags",
-                                    it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-")
-                                        .replace("'-", "-and-039-").replace("'", "-and-039-"),
-                                )
-                            }
+                            addTagQueryParameters(this, it.state, "tags")
+                        }
+                    }
+
+                    is ExcludedTagFilter -> {
+                        if (it.state.isNotEmpty()) {
+                            addTagQueryParameters(this, it.state, "excluded-tags")
                         }
                     }
 
@@ -400,6 +434,7 @@ abstract class Comick(
             return mangaData.toSManga(
                 includeMuTags = preferences.includeMuTags,
                 scorePosition = preferences.scorePosition,
+                showAlternativeTitles = preferences.showAlternativeTitles,
                 covers = localCovers.ifEmpty { originalCovers }.ifEmpty { firstVol },
                 groupTags = preferences.groupTags,
             )
@@ -407,6 +442,7 @@ abstract class Comick(
         return mangaData.toSManga(
             includeMuTags = preferences.includeMuTags,
             scorePosition = preferences.scorePosition,
+            showAlternativeTitles = preferences.showAlternativeTitles,
             groupTags = preferences.groupTags,
         )
     }
@@ -524,6 +560,8 @@ abstract class Comick(
         const val SLUG_SEARCH_PREFIX = "id:"
         private val SPACE_AND_SLASH_REGEX = Regex("[ /]")
         private const val IGNORED_GROUPS_PREF = "IgnoredGroups"
+        private const val SHOW_ALTERNATIVE_TITLES_PREF = "ShowAlternativeTitles"
+        const val SHOW_ALTERNATIVE_TITLES_DEFAULT = false
         private const val INCLUDE_MU_TAGS_PREF = "IncludeMangaUpdatesTags"
         const val INCLUDE_MU_TAGS_DEFAULT = false
         private const val GROUP_TAGS_PREF = "GroupTags"
