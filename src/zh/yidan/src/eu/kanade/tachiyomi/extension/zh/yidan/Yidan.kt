@@ -236,9 +236,8 @@ class Yidan : HttpSource(), ConfigurableSource {
             addPreference(
                 EditTextPreference(context).apply {
                     key = PREF_KEY_CUSTOM_HOST
-                    title = "自定义网址：${
-                        this@Yidan.getPreferences().getString(PREF_KEY_CUSTOM_HOST, "")
-                    }"
+                    val customUrl = this@Yidan.getPreferences().getString(PREF_KEY_CUSTOM_HOST, "")
+                    title = "自定义网址：$customUrl"
                     summary =
                         "请点击后输入自定义网址（例如：https://yidan1.club），如果不需要自定义时请设置为空"
                     setOnPreferenceChangeListener { _, _ ->
