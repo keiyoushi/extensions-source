@@ -117,6 +117,7 @@ abstract class MangaHub(
             try {
                 val response = client.newCall(GET("$url$query", headers)).execute()
                 val returnedKey = response.headers["set-cookie"]?.let { regex.find(it)?.groupValues?.get(1) }
+                response.close() // Avoid potential resource leaks
 
                 if (returnedKey != oldKey) break; // Break out of loop since we got an allegedly valid API key
             } catch (_: IOException) {
