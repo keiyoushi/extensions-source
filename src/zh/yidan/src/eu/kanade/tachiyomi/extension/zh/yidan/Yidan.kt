@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -294,7 +293,6 @@ class Yidan : HttpSource(), ConfigurableSource {
                         request: WebResourceRequest?,
                     ): WebResourceResponse? {
                         // wait the auto register request
-                        Log.w("wzd", "request url: ${request?.url}")
                         if (request?.url?.encodedPath?.contains("api/regUser") == true) {
                             latch.countDown()
                         }
