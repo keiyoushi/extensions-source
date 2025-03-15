@@ -1,7 +1,10 @@
 ext {
     extName = 'Yushuke Mangas'
     extClass = '.YushukeMangas'
-    extVersionCode = 6
+    themePkg = 'yuyu'
+    baseUrl = 'https://new.yushukemangas.com'
+    overrideVersionCode = 6
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

@@ -1,17 +1,15 @@
-package eu.kanade.tachiyomi.extension.pt.plumacomics
+package eu.kanade.tachiyomi.extension.pt.nekotoons
 
 import eu.kanade.tachiyomi.multisrc.yuyu.YuYu
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class PlumaComics : YuYu(
-    "Pluma Comics",
-    "https://new.plumacomics.cloud",
+class NekoToons : YuYu(
+    "Neko Toons",
+    "https://nekotoons.site",
     "pt-BR",
 ) {
+
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
-
-    // Moved from Madara to YuYu
-    override val versionId = 3
 }
