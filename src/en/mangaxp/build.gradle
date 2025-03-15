@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaXP'
-    extClass = '.MangaXP'
-    themePkg = 'madara'
-    baseUrl = 'https://mangaxp.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
