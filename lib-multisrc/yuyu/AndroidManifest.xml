@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
-            android:name=".pt.yushukemangas.YushukeMangasUrlActivity"
+            android:name="eu.kanade.tachiyomi.multisrc.yuyu.YuYuUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -11,11 +11,10 @@
 
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
                 <data
-                    android:host="new.yushukemangas.com"
-                    android:pathPattern="/manga/..*"
-                    android:scheme="https" />
+                    android:host="${SOURCEHOST}"
+                    android:pathPattern="/..*"
+                    android:scheme="${SOURCESCHEME}" />
             </intent-filter>
         </activity>
     </application>

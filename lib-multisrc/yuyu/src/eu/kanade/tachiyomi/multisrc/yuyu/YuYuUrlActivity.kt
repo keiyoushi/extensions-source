@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.yushukemangas
+package eu.kanade.tachiyomi.multisrc.yuyu
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
-class YushukeMangasUrlActivity : Activity() {
+class YuYuUrlActivity : Activity() {
 
     private val tag = javaClass.simpleName
 
@@ -17,7 +17,7 @@ class YushukeMangasUrlActivity : Activity() {
         if (pathSegment != null && pathSegment.size > 1) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${YushukeMangas.PREFIX_SEARCH}${pathSegment[1]}")
+                putExtra("query", "${YuYu.PREFIX_SEARCH}${pathSegment[1]}")
                 putExtra("filter", packageName)
             }
 
