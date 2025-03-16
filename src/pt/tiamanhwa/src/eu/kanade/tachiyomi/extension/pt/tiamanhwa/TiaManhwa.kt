@@ -18,4 +18,8 @@ class TiaManhwa : Madara(
         .build()
 
     override val mangaSubString = "manhwa-em-portugues"
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+
+    override val useNewChapterEndpoint = true
 }
