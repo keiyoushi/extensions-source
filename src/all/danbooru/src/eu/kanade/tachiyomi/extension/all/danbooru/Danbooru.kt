@@ -106,7 +106,7 @@ class Danbooru : HttpSource(), ConfigurableSource {
         searchMangaRequest(page, "", FilterList(FilterOrder("created_at")))
 
     override fun latestUpdatesParse(response: Response): MangasPage =
-        latestUpdatesParse(response)
+        searchMangaParse(response)
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
