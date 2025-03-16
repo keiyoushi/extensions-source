@@ -121,8 +121,6 @@ class BookDto(
     }
 
     override fun toSManga(baseUrl: String) = SManga.create().apply {
-//        title = seriesTitle
-//        url = "$baseUrl/api/v1/series/$seriesId"
         title = metadata.title
         url = "$baseUrl/api/v1/books/$id"
         thumbnail_url = "$url/thumbnail"
