@@ -14,4 +14,8 @@ class WindScan : Madara(
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+
+    override val useNewChapterEndpoint = true
 }
