@@ -27,6 +27,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -76,7 +77,7 @@ class Yidan : HttpSource(), ConfigurableSource {
     }.build()
 
     private val json: Json by injectLazy()
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
 
     override fun popularMangaRequest(page: Int) = POST(
         "$baseUrl/api/getByComicByRow",
@@ -124,10 +125,9 @@ class Yidan : HttpSource(), ConfigurableSource {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val searchByKeyword = response.request.url.toString().contains("searchNovel")
-        val records = if (searchByKeyword) {
-            response.parseAs<CommonResponse<List<Record>>>().result
-        } else {
-            response.parseAs<CommonResponse<FilterResult>>().result.list
+        val records = when {
+            searchByKeyword -> response.parseAs<CommonResponse<List<Record>>>().result
+            else -> response.parseAs<CommonResponse<FilterResult>>().result.list
         }
         return createMangasPage(records, paginated = !searchByKeyword)
     }
@@ -141,16 +141,14 @@ class Yidan : HttpSource(), ConfigurableSource {
                     thumbnail_url = it.imgUrl
                 }
             },
-            if (paginated) {
-                records.size >= PAGE_SIZE
-            } else {
-                false
-            },
+            paginated && records.size >= PAGE_SIZE,
         )
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/pages/comic/info?id=${manga.url}"
+        return "$baseUrl/pages/comic/info".toHttpUrl().newBuilder()
+            .addQueryParameter("id", manga.url)
+            .toString()
     }
 
     override fun mangaDetailsRequest(manga: SManga) = chapterListRequest(manga)
@@ -173,7 +171,10 @@ class Yidan : HttpSource(), ConfigurableSource {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/pages/comic/content?f=1&s=${chapter.chapter_number.toInt()}"
+        return "$baseUrl/pages/comic/content".toHttpUrl().newBuilder()
+            .addQueryParameter("f", "1")
+            .addQueryParameter("s", chapter.chapter_number.toInt().toString())
+            .toString()
     }
 
     override fun chapterListRequest(manga: SManga) = withUserId { userId ->
@@ -321,13 +322,10 @@ class Yidan : HttpSource(), ConfigurableSource {
                 }
                 webView = null
             }
-            block(
-                if (this::_userId.isInitialized) {
-                    _userId
-                } else {
-                    ""
-                },
-            )
+            if (!this::_userId.isInitialized) {
+                throw Exception("无法自动获取UserId，请先尝试通过内置WebView进入网站")
+            }
+            block(_userId)
         }
     }
 
