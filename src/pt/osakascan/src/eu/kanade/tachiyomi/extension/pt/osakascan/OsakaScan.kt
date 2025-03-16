@@ -42,6 +42,8 @@ class OsakaScan : ZeistManga(
             .sortedBy(SChapter::chapter_number).reversed()
     }
 
+    override val pageListSelector = "#reader div.separator"
+
     companion object {
         val CHAPTER_NUMBER_REGEX = """\d+(\.\d+)?""".toRegex()
     }
