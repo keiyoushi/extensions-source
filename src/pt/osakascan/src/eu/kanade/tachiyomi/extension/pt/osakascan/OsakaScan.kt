@@ -28,11 +28,21 @@ class OsakaScan : ZeistManga(
             status = parseStatus(it)
         }
         genre = document.select("dt:contains(Gênero) + dd a").joinToString { it.text() }
-        setUrlWithoutDomain(document.location())
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         return super.chapterListParse(response)
-            .sortedBy(SChapter::chapter_number)
+            .map { chapter ->
+                chapter.apply {
+                    CHAPTER_NUMBER_REGEX.find(name)?.groups?.get(0)?.value?.let {
+                        chapter_number = it.toFloat()
+                    }
+                }
+            }
+            .sortedBy(SChapter::chapter_number).reversed()
+    }
+
+    companion object {
+        val CHAPTER_NUMBER_REGEX = """\d+(\.\d+)?""".toRegex()
     }
 }
