@@ -135,6 +135,20 @@ abstract class Comick(
             }
         }.also(screen::addPreference)
 
+        SwitchPreferenceCompat(screen.context).apply {
+            key = LOCAL_TITLE_PREF
+            title = intl["local_title_title"]
+            summaryOff = intl["local_title_off"]
+            summaryOn = intl["local_title_on"]
+            setDefaultValue(LOCAL_TITLE_DEFAULT)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putBoolean(LOCAL_TITLE_PREF, newValue as Boolean)
+                    .commit()
+            }
+        }.also(screen::addPreference)
+
         ListPreference(screen.context).apply {
             key = SCORE_POSITION_PREF
             title = intl["score_position_title"]
@@ -181,6 +195,17 @@ abstract class Comick(
 
     private val SharedPreferences.updateCover: Boolean
         get() = getBoolean(FIRST_COVER_PREF, FIRST_COVER_DEFAULT)
+
+    private val SharedPreferences.localTitle: String
+        get() = if (getBoolean(
+                LOCAL_TITLE_PREF,
+                LOCAL_TITLE_DEFAULT,
+            )
+        ) {
+            comickLang.lowercase()
+        } else {
+            "all"
+        }
 
     private val SharedPreferences.scorePosition: String
         get() = getString(SCORE_POSITION_PREF, SCORE_POSITION_DEFAULT) ?: SCORE_POSITION_DEFAULT
@@ -437,6 +462,7 @@ abstract class Comick(
                 showAlternativeTitles = preferences.showAlternativeTitles,
                 covers = localCovers.ifEmpty { originalCovers }.ifEmpty { firstVol },
                 groupTags = preferences.groupTags,
+                titleLang = preferences.localTitle,
             )
         }
         return mangaData.toSManga(
@@ -444,6 +470,7 @@ abstract class Comick(
             scorePosition = preferences.scorePosition,
             showAlternativeTitles = preferences.showAlternativeTitles,
             groupTags = preferences.groupTags,
+            titleLang = preferences.localTitle,
         )
     }
 
@@ -571,6 +598,8 @@ abstract class Comick(
         private const val FIRST_COVER_DEFAULT = true
         private const val SCORE_POSITION_PREF = "ScorePosition"
         const val SCORE_POSITION_DEFAULT = "top"
+        private const val LOCAL_TITLE_PREF = "LocalTitle"
+        private const val LOCAL_TITLE_DEFAULT = false
         private const val LIMIT = 20
         private const val CHAPTERS_LIMIT = 99999
     }
