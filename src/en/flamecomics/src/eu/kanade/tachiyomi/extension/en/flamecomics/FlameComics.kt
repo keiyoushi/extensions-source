@@ -55,14 +55,16 @@ class FlameComics : HttpSource() {
         addPathSegment("image")
     }.build().toString() + "?url=$dataUrl"
 
-    private fun thumbnailUrl(seriesData: Series) = cdn.toHttpUrl().newBuilder().apply {
-        addPathSegment("series")
-        addPathSegment(seriesData.series_id.toString())
-        addPathSegment(seriesData.cover)
-        addQueryParameter(seriesData.last_edit, null)
-        addQueryParameter("w", "640")
-        addQueryParameter("q", "75")
-    }.build().toString()
+    private fun thumbnailUrl(seriesData: Series) = imageApiUrlBuilder(
+        cdn.toHttpUrl().newBuilder().apply {
+            addPathSegment("series")
+            addPathSegment(seriesData.series_id.toString())
+            addPathSegment(seriesData.cover)
+            addQueryParameter(seriesData.last_edit, null)
+            addQueryParameter("w", "384")
+            addQueryParameter("q", "75")
+        }.build().toString(),
+    )
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         GET(
@@ -121,7 +123,7 @@ class FlameComics : HttpSource() {
                             addPathSegment(seriesData.series_id.toString())
                         }.build().toString(),
                     )
-                    thumbnail_url = thumbnailUrl(seriesData) // for some reason they don`t include the ?
+                    thumbnail_url = thumbnailUrl(seriesData)
                 }
             },
             false,
