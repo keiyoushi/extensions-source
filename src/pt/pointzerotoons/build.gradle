@@ -1,0 +1,10 @@
+ext {
+    extName = 'Point Zero Toons'
+    extClass = '.PointZeroToons'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://pointzerotoons.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
