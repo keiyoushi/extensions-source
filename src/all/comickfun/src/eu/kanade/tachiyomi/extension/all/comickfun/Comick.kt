@@ -201,7 +201,11 @@ abstract class Comick(
                 LOCAL_TITLE_PREF,
                 LOCAL_TITLE_DEFAULT,
             )
-        ) comickLang.lowercase() else "all"
+        ) {
+            comickLang.lowercase()
+        } else {
+            "all"
+        }
 
     private val SharedPreferences.scorePosition: String
         get() = getString(SCORE_POSITION_PREF, SCORE_POSITION_DEFAULT) ?: SCORE_POSITION_DEFAULT
