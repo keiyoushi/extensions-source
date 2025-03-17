@@ -60,7 +60,7 @@ class Yidan : HttpSource(), ConfigurableSource {
         }
     }
 
-    override val client: OkHttpClient = super.client.newBuilder().addInterceptor { chain ->
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor { chain ->
         val request = chain.request()
         val response = chain.proceed(request)
         val requestUrl = request.url.toString()
@@ -278,6 +278,7 @@ class Yidan : HttpSource(), ConfigurableSource {
                         javaScriptEnabled = true
                         domStorageEnabled = true
                         databaseEnabled = true
+                        blockNetworkImage = true
                     }
                 }
                 webView?.webViewClient = object : WebViewClient() {
