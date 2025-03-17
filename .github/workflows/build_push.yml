@@ -40,6 +40,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@94baf225fe0a508e581a564467443d0e2379123b # v4.3.0
+        with:
+          cache-read-only: true
 
       - name: Get last successful CI commit
         id: last_successful_ci_commit
