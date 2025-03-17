@@ -1,0 +1,10 @@
+ext {
+    extName = 'Tia Manhwa'
+    extClass = '.TiaManhwa'
+    themePkg = 'madara'
+    baseUrl = 'https://tiamanhwa.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
