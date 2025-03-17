@@ -40,11 +40,17 @@ class Manga(
         showAlternativeTitles: Boolean = SHOW_ALTERNATIVE_TITLES_DEFAULT,
         covers: List<MDcovers>? = null,
         groupTags: Boolean = GROUP_TAGS_DEFAULT,
-    ) =
-        SManga.create().apply {
+        titleLang: String,
+    ): SManga {
+        val entryTitle = comic.altTitles.firstOrNull {
+            titleLang != "all" && !it.lang.isNullOrBlank() && titleLang.startsWith(it.lang)
+        }?.title ?: comic.title
+        val titles = listOf(Title(title = comic.title)) + comic.altTitles
+
+        return SManga.create().apply {
             // appennding # at end as part of migration from slug to hid
             url = "/comic/${comic.hid}#"
-            title = comic.title
+            title = entryTitle
             description = buildString {
                 if (scorePosition == "top") append(comic.fancyScore)
                 val desc = comic.desc?.beautifyDescription()
@@ -60,9 +66,10 @@ class Manga(
                     if (this.isNotEmpty()) append("\n\n")
                     append("Alternative Titles:\n")
                     append(
-                        comic.altTitles.mapNotNull { title ->
-                            title.title?.let { "• $it" }
-                        }.joinToString("\n"),
+                        titles.distinctBy { it.title }.filter { it.title != entryTitle }
+                            .mapNotNull { title ->
+                                title.title?.let { "• $it" }
+                            }.joinToString("\n"),
                     )
                 }
                 if (scorePosition == "bottom") {
@@ -97,6 +104,7 @@ class Manga(
                 .filterNot { it.name.isNullOrBlank() || it.group.isNullOrBlank() }
                 .joinToString { if (groupTags) "${it.group}:${it.name?.trim()}" else "${it.name?.trim()}" }
         }
+    }
 }
 
 @Serializable
@@ -171,6 +179,7 @@ class MDcovers(
 @Serializable
 class Title(
     val title: String?,
+    val lang: String? = null,
 )
 
 @Serializable
