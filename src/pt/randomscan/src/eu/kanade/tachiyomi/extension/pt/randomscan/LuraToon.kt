@@ -58,9 +58,9 @@ class LuraToon : HttpSource(), ConfigurableSource {
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
         )
-        .connectTimeout(120, TimeUnit.SECONDS)
-        .writeTimeout(120, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
+        .connectTimeout(400, TimeUnit.SECONDS)
+        .writeTimeout(400, TimeUnit.SECONDS)
+        .readTimeout(400, TimeUnit.SECONDS)
         .build()
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/main/?part=${page - 1}", headers)
@@ -133,7 +133,7 @@ class LuraToon : HttpSource(), ConfigurableSource {
     private fun chapterFromElement(manga: SManga, capitulo: Capitulo) = SChapter.create().apply {
         val capSlug = capitulo.slug.trimStart('/')
         val mangaUrl = manga.url.trimEnd('/').trimStart('/')
-        url = "http://62.146.183.244:81/?manga=$mangaUrl&cap=$capSlug"
+        url = "http://191.252.92.61/?manga=$mangaUrl&cap=$capSlug"
         name = capitulo.num.toString().removeSuffix(".0")
         date_upload = runCatching {
             dateFormat.parse(capitulo.data)!!.time
