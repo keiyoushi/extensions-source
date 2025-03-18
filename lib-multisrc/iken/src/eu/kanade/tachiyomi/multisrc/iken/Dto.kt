@@ -93,7 +93,6 @@ class Chapter(
     private val id: Int,
     private val slug: String,
     private val number: JsonPrimitive,
-    private val createdBy: Name,
     private val createdAt: String,
     private val chapterStatus: String,
     private val isAccessible: Boolean,
@@ -112,7 +111,6 @@ class Chapter(
         val seriesSlug = mangaSlug ?: mangaPost.slug
         url = "/series/$seriesSlug/$slug#$id"
         name = "${prefix}Chapter $number"
-        scanlator = createdBy.name
         date_upload = try {
             dateFormat.parse(createdAt)!!.time
         } catch (_: ParseException) {
