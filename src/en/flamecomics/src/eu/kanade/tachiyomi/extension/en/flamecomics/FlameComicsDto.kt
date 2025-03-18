@@ -75,6 +75,7 @@ class Series(
     val author: String?,
     val status: String,
     val series_id: Int,
+    val last_edit: String,
     val views: Int?,
 )
 
