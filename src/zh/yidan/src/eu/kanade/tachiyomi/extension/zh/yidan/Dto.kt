@@ -1,62 +1,90 @@
 package eu.kanade.tachiyomi.extension.zh.yidan
 
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.jsoup.nodes.Entities
 
 @Serializable
-class MangaDto(
-    private val title: String,
-    private val mhcate: String?,
-    private val cateids: String?,
-    private val author: String?,
-    private val summary: String?,
-    private val coverPic: String?,
-    private val id: Int,
+class ComicFetchRequest(
+    val column: String,
+    val page: Int,
+    val limit: Int,
+)
+
+@Serializable
+class ComicDetailRequest(
+    val comicId: String,
+    val userId: String,
+    val limit: Int = 5,
+)
+
+@Serializable
+class ChapterContentRequest(
+    val chapterId: String,
+    val userId: String,
+    val type: Int = 1,
+)
+
+@Serializable
+class KeywordSearchRequest(
+    val key: String,
+    val type: Int = 1,
+)
+
+@Serializable
+class FilterRequest(
+    val page: Int,
+    val limit: Int,
+    val categoryId: Int,
+    val orderType: Int,
+    val overType: Int,
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
-        url = id.toString()
-        title = this@MangaDto.title
-        author = this@MangaDto.author
-        description = summary?.trim()
-        genre = when {
-            cateids.isNullOrEmpty() -> null
-            else -> cateids.split(",").joinToString { GENRES[it.toInt()] }
-        }
-        status = when {
-            mhcate.isNullOrEmpty() -> SManga.ONGOING
-            "5" in mhcate.split(",") -> SManga.COMPLETED
-            else -> SManga.ONGOING
-        }
-        thumbnail_url = if (coverPic?.startsWith("http") == true) coverPic else baseUrl + coverPic
-        initialized = true
+    @SerialName("updated_recent")
+    val updatedRecent: Int? = if (orderType == 3) {
+        1
+    } else {
+        null
     }
 }
 
 @Serializable
-class ChapterDto(
-    private val createTime: Long,
-    private val mhid: String,
-    private val title: String,
-    private val jiNo: Int,
-) {
-    fun toSChapter() = SChapter.create().apply {
-        url = "$mhid/$jiNo"
-        name = Entities.unescape(title)
-        date_upload = createTime * 1000L
-    }
-}
+class CommonResponse<T>(val result: T)
 
 @Serializable
-class PageListDto(private val pics: String) {
-    val images get() = pics.split(",")
-}
+class RecordResult(val records: List<Record>, val total: Int)
 
 @Serializable
-class ListingDto(val list: List<MangaDto>, private val total: String) {
-    val totalCount get() = total.toInt()
-}
+class FilterResult(val list: List<Record>, val total: Int)
 
 @Serializable
-class ResponseDto<T>(val data: T)
+class Record(
+    val id: Long,
+    val novelTitle: String,
+    val imgUrl: String,
+)
+
+@Serializable
+class ComicInfoResult(val comic: Comic, val chapterList: List<Chapter>)
+
+@Serializable
+class Comic(
+    val id: Long,
+    val novelTitle: String,
+    val author: String,
+    val tags: String,
+    val bigImgUrl: String,
+    val introduction: String,
+    val overType: Int,
+)
+
+@Serializable
+class Chapter(
+    val id: Long,
+    val chapterName: String,
+    val createTime: String,
+)
+
+@Serializable
+class ChapterContentResult(val content: List<Content>)
+
+@Serializable
+class Content(val url: String)
