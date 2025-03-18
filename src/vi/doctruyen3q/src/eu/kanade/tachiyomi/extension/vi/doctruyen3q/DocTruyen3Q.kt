@@ -23,7 +23,7 @@ import java.util.TimeZone
 class DocTruyen3Q :
     WPComics(
         "DocTruyen3Q",
-        "https://doctruyen3qui.pro",
+        "https://doctruyen3qui3.pro",
         "vi",
         dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
@@ -38,7 +38,11 @@ class DocTruyen3Q :
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select(".page-chapter[id] a img, .page-chapter[id] img").mapIndexed { index, element ->
-            val img = element.attr("abs:src").takeIf { it.isNotBlank() } ?: element.attr("abs:data-original")
+            val img = if (element.hasAttr("data-original")) {
+                element.attr("abs:data-original")
+            } else {
+                element.attr("abs:src")
+            }
             Page(index, imageUrl = img)
         }.distinctBy { it.imageUrl }
     }
