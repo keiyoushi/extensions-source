@@ -3,7 +3,7 @@ ext {
     extClass = '.LilyManga'
     themePkg = 'madara'
     baseUrl = 'https://lilymanga.net'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 
