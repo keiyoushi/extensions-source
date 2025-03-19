@@ -7,7 +7,7 @@ import org.jsoup.nodes.Document
 
 class OtaScans : MangaThemesia(
     "Ota Scans",
-    "https://yurilab.my.id",
+    "https://yurilabs.my.id",
     "id",
 ) {
     override val client = super.client.newBuilder()
