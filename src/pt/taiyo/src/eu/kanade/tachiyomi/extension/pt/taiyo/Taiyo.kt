@@ -317,7 +317,7 @@ class Taiyo : ParsedHttpSource() {
         val script = getScriptContainingToken(scripts)
             ?: throw Exception("Não foi possivel localizar o token")
 
-        return TOKEN_REGEX.find(script)?.groups?.get(1)?.value
+        return TOKEN_REGEX.find(script)?.groups?.get(2)?.value
             ?: throw Exception("Não foi possivel extrair o token")
     }
 
