@@ -39,6 +39,6 @@ class YetiskinRuyaManga : Madara(
     }
 
     companion object {
-        val CHAPTER_NUMBER_REGEX = """\d+(\.\d+)?""".toRegex()
+        val CHAPTER_NUMBER_REGEX = """\d+(?:\.\d+)?""".toRegex()
     }
 }
