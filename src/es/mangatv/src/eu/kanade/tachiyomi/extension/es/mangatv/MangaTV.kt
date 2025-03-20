@@ -13,7 +13,7 @@ class MangaTV : MangaThemesia(
     "https://www.mangatv.net",
     "es",
     mangaUrlDirectory = "/lista",
-    dateFormat = SimpleDateFormat("yyyy-MM-dd, ", Locale.ROOT),
+    dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT),
 ) {
 
     override val seriesDescriptionSelector = "b:contains(Sinopsis) + span"
