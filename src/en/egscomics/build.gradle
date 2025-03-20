@@ -1,0 +1,8 @@
+ext {
+    extName = 'El Goonish Shive'
+    extClass = '.ElGoonishShive'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
