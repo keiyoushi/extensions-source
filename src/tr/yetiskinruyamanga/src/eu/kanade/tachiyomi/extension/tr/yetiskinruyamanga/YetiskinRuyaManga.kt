@@ -34,8 +34,11 @@ class YetiskinRuyaManga : Madara(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return super.pageListParse(document).takeIf(List<Page>::isNotEmpty)
-            ?: throw IOException("You may need to login via WebView")
+        val isLoginRequired = document.select(".content-blocked.login-required").isNotEmpty()
+        if (isLoginRequired) {
+            throw IOException("You may need to login via WebView")
+        }
+        return super.pageListParse(document)
     }
 
     companion object {
