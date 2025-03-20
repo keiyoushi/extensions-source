@@ -23,7 +23,7 @@ import java.util.TimeZone
 class TopTruyen :
     WPComics(
         "Top Truyen",
-        "https://www.toptruyentv.pro",
+        "https://www.toptruyentv2.pro",
         "vi",
         dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
@@ -37,10 +37,10 @@ class TopTruyen :
         .build()
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(".page-chapter[id] img")
-            .mapNotNull(::imageOrNull)
-            .distinct()
-            .mapIndexed { i, image -> Page(i, imageUrl = image) }
+        return document.select("div[id^=page_].page-chapter img").mapIndexed { index, element ->
+            val img = element.attr("abs:src")
+            Page(index, imageUrl = img)
+        }.distinctBy { it.imageUrl }
     }
 
     override fun popularMangaSelector() = "div.item-manga div.item"
