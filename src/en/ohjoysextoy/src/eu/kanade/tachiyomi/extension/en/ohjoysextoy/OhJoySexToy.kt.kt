@@ -27,12 +27,12 @@ class OhJoySexToy : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/category/comic/page/$page/")
 
-    override fun popularMangaSelector(): String = "div.post-content div.comicthumbwrap"
+    override fun popularMangaSelector(): String = ".comicthumbwrap"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.select("div.comicarchiveframe > a").attr("href"))
-        title = element.selectFirst("div.comicthumbdate")!!.text().substringBefore(" by")
-        thumbnail_url = element.selectFirst("div.comicarchiveframe > a > img")!!.attr("src")
+        setUrlWithoutDomain(element.select(".comicarchiveframe > a").attr("href"))
+        title = element.selectFirst(".comicthumbdate")!!.text().substringBefore(" by")
+        thumbnail_url = element.selectFirst(".comicarchiveframe > a > img")!!.attr("src")
     }
 
     override fun popularMangaNextPageSelector(): String = ".pagenav-left a"
@@ -44,9 +44,9 @@ class OhJoySexToy : ParsedHttpSource() {
     override fun latestUpdatesSelector(): String = "#MattsRecentComicsBar > ul > div"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.select("div.comicarchiveframe > a").attr("href"))
-        title = element.selectFirst("div.comicthumbdate")!!.text().substringBefore(" by")
-        thumbnail_url = element.selectFirst("div.comicarchiveframe > a > img")!!.attr("src")
+        setUrlWithoutDomain(element.select(".comicarchiveframe > a").attr("href"))
+        title = element.selectFirst(".comicthumbdate")!!.text().substringBefore(" by")
+        thumbnail_url = element.selectFirst(".comicarchiveframe > a > img")!!.attr("src")
     }
 
     override fun latestUpdatesNextPageSelector(): String? = null
@@ -55,11 +55,11 @@ class OhJoySexToy : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/?s=$query")
 
-    override fun searchMangaSelector(): String = "div.post-content"
+    override fun searchMangaSelector(): String = "h2.post-title"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("h2.post-title a")!!.attr("href"))
-        title = element.selectFirst("h2.post-title a")!!.text().substringBefore(" by")
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        title = element.selectFirst("a")!!.text().substringBefore(" by")
     }
 
     override fun searchMangaNextPageSelector(): String? = null
