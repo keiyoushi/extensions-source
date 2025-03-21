@@ -78,7 +78,7 @@ class OhJoySexToy : ParsedHttpSource() {
             ?: ""
         author = document.selectFirst("meta[property=\"og:title\"]")
             ?.attr("content")
-            ?.substringAfter("by ")
+            ?.substringAfter("by ", "")
             ?: ""
         description = parseDescription(document)
         genre = document.select("meta[property=\"article:section\"]:not(:first-of-type)")
