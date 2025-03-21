@@ -16,6 +16,8 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+private val MULTI_SPACE_REGEX = "\\s{6,}".toRegex()
+
 class OhJoySexToy : ParsedHttpSource() {
 
     override val name = "Oh Joy Sex Toy"
@@ -25,40 +27,40 @@ class OhJoySexToy : ParsedHttpSource() {
 
     // Browse
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/category/comic/page/$page/")
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/category/comic/page/$page/", headers)
 
     override fun popularMangaSelector(): String = ".comicthumbwrap"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.select(".comicarchiveframe > a").attr("href"))
+        setUrlWithoutDomain(element.selectFirst(".comicarchiveframe > a")!!.absUrl("href"))
         title = element.selectFirst(".comicthumbdate")!!.text().substringBefore(" by")
-        thumbnail_url = element.selectFirst(".comicarchiveframe > a > img")!!.attr("src")
+        thumbnail_url = element.selectFirst(".comicarchiveframe > a > img")?.absUrl("src")
     }
 
     override fun popularMangaNextPageSelector(): String = ".pagenav-left a"
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl)
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun latestUpdatesSelector(): String = "#MattsRecentComicsBar > ul > div"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.select(".comicarchiveframe > a").attr("href"))
+        setUrlWithoutDomain(element.selectFirst(".comicarchiveframe > a")!!.absUrl("href"))
         title = element.selectFirst(".comicthumbdate")!!.text().substringBefore(" by")
-        thumbnail_url = element.selectFirst(".comicarchiveframe > a > img")!!.attr("src")
+        thumbnail_url = element.selectFirst(".comicarchiveframe > a > img")?.absUrl("src")
     }
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/?s=$query")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET("$baseUrl/?s=$query", headers)
 
     override fun searchMangaSelector(): String = "h2.post-title"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         title = element.selectFirst("a")!!.text().substringBefore(" by")
     }
 
@@ -68,8 +70,7 @@ class OhJoySexToy : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         thumbnail_url = document.selectFirst("meta[property=\"og:image\"]")
-            ?.attr("content")
-            ?: ""
+            ?.absUrl("content")
         status = SManga.COMPLETED
         title = document.selectFirst("meta[property=\"og:title\"]")
             ?.attr("content")
@@ -82,22 +83,24 @@ class OhJoySexToy : ParsedHttpSource() {
         description = parseDescription(document)
         genre = document.select("meta[property=\"article:section\"]:not(:first-of-type)")
             .eachAttr("content")
-            .joinToString(", ")
+            .joinToString()
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        url = document.selectFirst("meta[property=\"og:url\"]")
-            ?.attr("content")
-            ?: ""
+        setUrlWithoutDomain(
+            document.selectFirst("meta[property=\"og:url\"]")
+                ?.absUrl("content")
+                ?: "",
+        )
     }
 
     private fun parseDescription(document: Document): String {
         val desc = document.selectFirst("meta[property=\"og:description\"]")
             ?.attr("content")
-            ?.split("\\s{6,}".toRegex())
+            ?.split(MULTI_SPACE_REGEX)
             ?.get(0) + "..."
 
         val authorCredits = document.select(".entry div.ui-tabs div a")
             .joinToString("\n") { link ->
-                "${link.text()}: ${link.attr("href")}"
+                "${link.text()}: ${link.absUrl("href")}"
             }
 
         return listOf(desc, authorCredits, "(Full description and credits in WebView)").joinToString("\n\n")
@@ -114,7 +117,7 @@ class OhJoySexToy : ParsedHttpSource() {
                 name = document.title()
                 scanlator = document.selectFirst(".post-author a")?.text()
                 date_upload = SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH).tryParse(dateString)
-                setUrlWithoutDomain(response.request.url.encodedPath)
+                setUrlWithoutDomain(response.request.url.toString())
             },
         )
     }
@@ -125,7 +128,7 @@ class OhJoySexToy : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("div.comicpane img")
-            .mapIndexed { index, img -> Page(index = index, imageUrl = img.attr("src")) }
+            .mapIndexed { index, img -> Page(index = index, imageUrl = img.absUrl("src")) }
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
