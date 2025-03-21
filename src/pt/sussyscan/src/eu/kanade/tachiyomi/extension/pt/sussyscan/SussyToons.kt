@@ -29,6 +29,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -145,29 +146,17 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
-            .addPathSegment(manga.id)
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun mangaDetailsParse(response: Response) =
-        response.parseAs<PageableDto<MangaDto>>().results.toSManga()
-
-    private val SManga.id: String get() {
-        val mangaUrl = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments(url)
-            .build()
-        return mangaUrl.pathSegments[2]
+    override fun mangaDetailsParse(response: Response): SManga {
+        val json = response.parseScriptToJson()
+            ?: throw IOException("Details do mangá não foi encontrado")
+        return json.parseAs<ResultDto<MangaDto>>().results.toSManga()
     }
 
     // ============================= Chapters =================================
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
     override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<PageableDto<WrapperChapterDto>>().results.chapters.map {
+        val json = response.parseScriptToJson() ?: return emptyList()
+        return json.parseAs<ResultDto<WrapperChapterDto>>().results.chapters.map {
             SChapter.create().apply {
                 name = it.name
                 it.chapterNumber?.let {
@@ -176,7 +165,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
                 setUrlWithoutDomain("$baseUrl/capitulo/${it.id}")
                 date_upload = dateFormat.tryParse(it.updateAt)
             }
-        }.sortedBy(SChapter::chapter_number).reversed()
+        }.sortedByDescending(SChapter::chapter_number)
     }
 
     // ============================= Pages ====================================
@@ -228,7 +217,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     private fun parseJsonToChapterPageDto(jsonContent: String): ChapterPageDto {
         return try {
-            jsonContent.parseAs<PageableDto<ChapterPageDto>>().results
+            jsonContent.parseAs<ResultDto<ChapterPageDto>>().results
         } catch (e: Exception) {
             throw Exception("Failed to load pages: ${e.message}")
         }
@@ -358,7 +347,8 @@ class SussyToons : HttpSource(), ConfigurableSource {
         val pageRegex = """capituloInicial.{3}(.*?)(\}\]\})""".toRegex()
         val POPULAR_JSON_REGEX = """\{\"dataFeatured.+totalPaginas":\d+\}{2}""".toRegex()
         val LATEST_JSON_REGEX = """\{\"atualizacoesInicial.+\}\}""".toRegex()
-        val PAGE_JSON_REGEX = """$POPULAR_JSON_REGEX|$LATEST_JSON_REGEX""".toRegex()
+        val DETAILS_CHAPTER_REGEX = """\{\"resultado.+"\}{3}""".toRegex()
+        val PAGE_JSON_REGEX = """$POPULAR_JSON_REGEX|$LATEST_JSON_REGEX|$DETAILS_CHAPTER_REGEX""".toRegex()
 
         private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
 

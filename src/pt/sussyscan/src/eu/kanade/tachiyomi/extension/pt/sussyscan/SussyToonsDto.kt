@@ -8,7 +8,7 @@ import kotlinx.serialization.json.JsonNames
 import org.jsoup.Jsoup
 
 @Serializable
-data class PageableDto<T>(
+class ResultDto<T>(
     @SerialName("pagina")
     val currentPage: Int = 0,
     @SerialName("totalPaginas")
@@ -27,11 +27,11 @@ data class PageableDto<T>(
 @Serializable
 class WrapperDto(
     @SerialName("dataTop")
-    val popular: PageableDto<List<MangaDto>>?,
+    val popular: ResultDto<List<MangaDto>>?,
     @JsonNames("atualizacoesInicial")
-    private val dataLatest: PageableDto<List<MangaDto>>,
+    private val dataLatest: ResultDto<List<MangaDto>>,
 ) {
-    val latest: PageableDto<List<MangaDto>> get() = dataLatest
+    val latest: ResultDto<List<MangaDto>> get() = dataLatest
 }
 
 @Serializable
