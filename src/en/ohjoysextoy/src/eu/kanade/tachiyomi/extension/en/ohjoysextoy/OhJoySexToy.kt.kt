@@ -89,19 +89,14 @@ class OhJoySexToy : ParsedHttpSource() {
         val desc = document.selectFirst("meta[property=\"og:description\"]")
             ?.attr("content")
             ?.split("\\s{6,}".toRegex())
-            ?.get(0)
+            ?.get(0) + "..."
 
-        val authorCredits = "  Follow author:\n" + document.select(".entry div.ui-tabs div a")
+        val authorCredits = document.select(".entry div.ui-tabs div a")
             .joinToString("\n") { link ->
                 "${link.text()}: ${link.attr("href")}"
             }
 
-        val websiteCredits = "  Follow Oh Joy Sex Toy:\n" + document.select(".entry p:nth-last-of-type(2) a, .entry p:nth-last-of-type(1) a")
-            .joinToString("\n") { link ->
-                "${link.text()}: ${link.attr("href")}"
-            }
-
-        return listOf(desc, authorCredits, websiteCredits).joinToString("\n\n")
+        return listOf(desc, authorCredits, "Full description and credits in WebView").joinToString("\n\n")
     }
 
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
