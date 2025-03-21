@@ -60,7 +60,10 @@ class Chapter(
 class ChapterMetadata(val identifier: String)
 
 @Serializable
-class ChapterPage(val href: String)
+class ChapterPage(
+    val href: String,
+    val type: String,
+)
 
 @Serializable
 class ChapterManifest(
@@ -68,13 +71,17 @@ class ChapterManifest(
     @SerialName("readingOrder")
     private val pages: List<ChapterPage>,
 ) {
-    fun toPageList() = pages.mapIndexed { i, page ->
-        Page(
-            index = i,
-            url = metadata.identifier,
-            imageUrl = page.href,
-        )
-    }
+    fun toPageList() =
+        pages
+            .filter { page ->
+                page.type.startsWith("image")
+            }.mapIndexed { i, page ->
+                Page(
+                    index = i,
+                    url = metadata.identifier,
+                    imageUrl = page.href,
+                )
+            }
 }
 
 @Serializable
