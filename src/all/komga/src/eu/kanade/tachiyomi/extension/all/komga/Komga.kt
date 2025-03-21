@@ -201,10 +201,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
     override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books", "/book")
 
     override fun chapterListRequest(manga: SManga): Request = when {
-        manga.url.contains("/api/v1/books") -> GET(
-            "${manga.url}?unpaged=true&media_status=READY&deleted=false",
-            headers,
-        )
+        manga.url.isFromBook() -> GET("${manga.url}?unpaged=true&media_status=READY&deleted=false", headers,)
         else -> GET("${manga.url}/books?unpaged=true&media_status=READY&deleted=false", headers)
     }
 
@@ -492,9 +489,13 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         }
     }
 
-    fun Response.isFromReadList() = request.url.toString().contains("/api/v1/readlists")
+    fun String.isFromReadList() = contains("/api/v1/readlists")
 
-    fun Response.isFromBook() = request.url.toString().contains("/api/v1/books")
+    fun String.isFromBook() = contains("/api/v1/books")
+
+    fun Response.isFromReadList() = request.url.toString().isFromReadList()
+
+    fun Response.isFromBook() = request.url.toString().isFromBook()
 
     private inline fun <reified T> Response.parseAs(): T =
         json.decodeFromString(body.string())
