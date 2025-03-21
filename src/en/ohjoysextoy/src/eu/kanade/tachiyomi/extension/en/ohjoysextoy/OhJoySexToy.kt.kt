@@ -100,14 +100,14 @@ class OhJoySexToy : ParsedHttpSource() {
                 "${link.text()}: ${link.attr("href")}"
             }
 
-        return listOf(desc, authorCredits, "Full description and credits in WebView").joinToString("\n\n")
+        return listOf(desc, authorCredits, "(Full description and credits in WebView)").joinToString("\n\n")
     }
 
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val dateString = document.selectFirst(".post-date")?.attr("content") ?: ""
+        val dateString = document.selectFirst(".post-date")?.text() ?: ""
 
         return listOf(
             SChapter.create().apply {
