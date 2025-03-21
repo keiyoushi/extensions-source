@@ -1,7 +1,7 @@
 ext {
     extName = 'Toomics'
     extClass = '.ToomicsFactory'
-    extVersionCode = 8
+    extVersionCode = 9
     isNsfw = true
 }
 

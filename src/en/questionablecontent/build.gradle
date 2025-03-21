@@ -1,7 +1,8 @@
 ext {
     extName = 'Questionable Content'
     extClass = '.QuestionableContent'
-    extVersionCode = 8
+    extVersionCode = 9
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

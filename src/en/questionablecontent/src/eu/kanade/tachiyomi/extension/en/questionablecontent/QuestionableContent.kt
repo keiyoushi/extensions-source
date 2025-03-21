@@ -29,7 +29,7 @@ class QuestionableContent : ParsedHttpSource(), ConfigurableSource {
     override val lang = "en"
 
     override val supportsLatest = false
-    override val client: OkHttpClient = super.client.newBuilder().addInterceptor(TextInterceptor()).build()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor(TextInterceptor()).build()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val manga = SManga.create().apply {
