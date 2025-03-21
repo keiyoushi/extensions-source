@@ -1,7 +1,8 @@
 ext {
     extName = 'Bruttal'
     extClass = '.Bruttal'
-    extVersionCode = 6
+    extVersionCode = 7
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

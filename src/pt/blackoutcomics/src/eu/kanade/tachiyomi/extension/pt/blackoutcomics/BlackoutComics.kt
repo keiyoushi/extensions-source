@@ -39,7 +39,7 @@ class BlackoutComics : ParsedHttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
     override val client by lazy {
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .addInterceptor { chain ->
                 checkingCredentials()
 

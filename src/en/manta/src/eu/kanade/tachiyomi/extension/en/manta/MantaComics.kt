@@ -29,7 +29,7 @@ class MantaComics : HttpSource() {
 
     private var token: String? = null
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .cookieJar(
             object : CookieJar {
                 override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {

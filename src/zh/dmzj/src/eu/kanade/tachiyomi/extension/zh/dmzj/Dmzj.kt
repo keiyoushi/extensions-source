@@ -29,7 +29,7 @@ class Dmzj : ConfigurableSource, HttpSource() {
 
     private val preferences: SharedPreferences = getPreferences()
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageUrlInterceptor)
         .addInterceptor(CommentsInterceptor)
         .rateLimit(4)
@@ -43,7 +43,7 @@ class Dmzj : ConfigurableSource, HttpSource() {
         .build()
 
     // API v4 randomly fails
-    private val retryClient = network.client.newBuilder()
+    private val retryClient = network.cloudflareClient.newBuilder()
         .addInterceptor(RetryInterceptor)
         .rateLimit(2)
         .build()

@@ -38,7 +38,7 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
         urlSuffix = mirror.urlSuffix
 
         val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang)
-        client = network.client.newBuilder()
+        client = network.cloudflareClient.newBuilder()
             .rateLimit(5)
             .addNetworkInterceptor(cookieInterceptor)
             .build()

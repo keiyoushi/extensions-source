@@ -34,7 +34,7 @@ abstract class SinMH(
     protected open val mobileUrl = _baseUrl.replaceFirst("www.", "m.")
     override val supportsLatest = true
 
-    override val client = network.client.newBuilder().rateLimit(2).build()
+    override val client = network.cloudflareClient.newBuilder().rateLimit(2).build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("User-Agent", System.getProperty("http.agent")!!)
