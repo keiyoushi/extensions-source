@@ -66,7 +66,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
     }
 
     private val defaultBaseUrl: String = "https://www.sussytoons.wtf"
-    private val defaultApiUrl: String = "https://api-dev.sussytoons.site"
+    private val defaultApiUrl: String = "https://api.sussytoons.wtf"
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageLocation)
@@ -133,18 +133,20 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/obras".toHttpUrl().newBuilder()
-            .addQueryParameter("pagina", page.toString())
-            .addQueryParameter("limite", "8")
             .addQueryParameter("obr_nome", query)
+            .addQueryParameter("limite", "8")
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("todos_generos", "true")
             .build()
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val dto = response.parseAs<ResultDto<List<MangaDto>>>()
+        return MangasPage(dto.toSMangaList(), dto.hasNextPage())
+    }
 
     // ============================= Details ==================================
-
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
         val json = response.parseScriptToJson()

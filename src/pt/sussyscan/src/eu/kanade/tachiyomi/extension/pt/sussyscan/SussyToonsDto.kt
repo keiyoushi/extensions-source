@@ -29,9 +29,10 @@ class WrapperDto(
     @SerialName("dataTop")
     val popular: ResultDto<List<MangaDto>>?,
     @JsonNames("atualizacoesInicial")
-    private val dataLatest: ResultDto<List<MangaDto>>,
+    private val dataLatest: ResultDto<List<MangaDto>>?,
+
 ) {
-    val latest: ResultDto<List<MangaDto>> get() = dataLatest
+    val latest: ResultDto<List<MangaDto>> get() = dataLatest!!
 }
 
 @Serializable
@@ -50,6 +51,8 @@ class MangaDto(
     val status: MangaStatus,
     @SerialName("scan_id")
     val scanId: Int,
+    @SerialName("tags")
+    val genres: List<Genre>,
 ) {
 
     fun toSManga(): SManga {
@@ -63,12 +66,21 @@ class MangaDto(
             }
             initialized = true
             url = "/obra/${this@MangaDto.id}/${this@MangaDto.slug}"
+            genre = genres.joinToString()
         }
 
         description?.let { Jsoup.parseBodyFragment(it).let { sManga.description = it.text() } }
         sManga.status = status.toStatus()
 
         return sManga
+    }
+
+    @Serializable
+    class Genre(
+        @SerialName("tag_nome")
+        val value: String,
+    ) {
+        override fun toString(): String = value
     }
 
     @Serializable
