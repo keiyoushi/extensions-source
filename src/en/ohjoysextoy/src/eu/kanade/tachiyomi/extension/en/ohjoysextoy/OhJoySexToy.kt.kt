@@ -71,6 +71,10 @@ class OhJoySexToy : ParsedHttpSource() {
             ?.attr("content")
             ?: ""
         status = SManga.COMPLETED
+        title = document.selectFirst("meta[property=\"og:title\"]")
+            ?.attr("content")
+            ?.substringBefore(" by")
+            ?: ""
         author = document.selectFirst("meta[property=\"og:title\"]")
             ?.attr("content")
             ?.substringAfter("by ")
