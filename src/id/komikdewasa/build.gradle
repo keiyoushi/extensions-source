@@ -1,0 +1,10 @@
+ext {
+    extName = 'Komik Dewasa'
+    extClass = '.KomikDewasa'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://komikdewasa.mom'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
