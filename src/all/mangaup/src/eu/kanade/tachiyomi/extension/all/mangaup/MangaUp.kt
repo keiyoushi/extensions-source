@@ -32,7 +32,7 @@ class MangaUp(override val lang: String) : HttpSource() {
         .add("Referer", baseUrl)
         .add("User-Agent", USER_AGENT)
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::thumbnailIntercept)
         .rateLimitHost(API_URL.toHttpUrl(), 1)
         .rateLimitHost(baseUrl.toHttpUrl(), 2)

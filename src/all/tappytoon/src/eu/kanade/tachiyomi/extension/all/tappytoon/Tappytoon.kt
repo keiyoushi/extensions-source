@@ -31,7 +31,7 @@ class Tappytoon(override val lang: String) : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.client.newBuilder().addInterceptor { chain ->
+    override val client = network.cloudflareClient.newBuilder().addInterceptor { chain ->
         val res = chain.proceed(chain.request())
         val mime = res.headers["Content-Type"]
         if (res.isSuccessful) {

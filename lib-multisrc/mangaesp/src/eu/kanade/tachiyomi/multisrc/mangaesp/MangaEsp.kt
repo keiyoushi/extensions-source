@@ -48,7 +48,7 @@ abstract class MangaEsp(
 
     protected open val useApiSearch = false
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 

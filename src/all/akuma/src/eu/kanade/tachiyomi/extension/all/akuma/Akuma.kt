@@ -46,12 +46,12 @@ class Akuma(
 
     private var storedToken: String? = null
 
-    private val ddosGuardIntercept = DDosGuardInterceptor(network.client)
+    private val ddosGuardIntercept = DDosGuardInterceptor(network.cloudflareClient)
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(ddosGuardIntercept)
         .addInterceptor(::tokenInterceptor)
         .rateLimit(2)

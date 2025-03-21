@@ -36,7 +36,7 @@ class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
 
     override val versionId = 2
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor).build()
 
     private val apiUrl = "$ORIGIN/$lang/api/catalog/detail/webtoon"

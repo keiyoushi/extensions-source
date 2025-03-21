@@ -24,7 +24,7 @@ class DigitalComicMuseum() : ParsedHttpSource() {
     override val name = "Digital Comic Museum"
     override val supportsLatest = true
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::errorIntercept)
         .build()
 

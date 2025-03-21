@@ -1,7 +1,8 @@
 ext {
     extName = 'MangaToon (Limited)'
     extClass = '.MangaToonFactory'
-    extVersionCode = 5
+    extVersionCode = 6
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

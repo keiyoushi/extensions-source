@@ -33,7 +33,7 @@ open class MCCMS(
     private val json: Json by injectLazy()
 
     override val client by lazy {
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
     }

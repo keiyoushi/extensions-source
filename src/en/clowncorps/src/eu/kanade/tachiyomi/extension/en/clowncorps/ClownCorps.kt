@@ -34,7 +34,7 @@ class ClownCorps : ConfigurableSource, HttpSource() {
     override val name = "Clown Corps"
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(TextInterceptor())
         .build()
 

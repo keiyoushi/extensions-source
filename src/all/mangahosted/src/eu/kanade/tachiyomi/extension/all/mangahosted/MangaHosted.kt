@@ -32,7 +32,7 @@ class MangaHosted(private val langOption: LanguageOption) : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 

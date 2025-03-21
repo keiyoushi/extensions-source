@@ -26,7 +26,7 @@ class Holonometria(
 
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
