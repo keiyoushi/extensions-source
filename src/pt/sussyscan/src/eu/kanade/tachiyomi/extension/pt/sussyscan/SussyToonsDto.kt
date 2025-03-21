@@ -1,12 +1,14 @@
 package eu.kanade.tachiyomi.extension.pt.sussyscan
 
+import eu.kanade.tachiyomi.extension.pt.sussyscan.SussyToons.Companion.CDN_URL
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
+import org.jsoup.Jsoup
 
 @Serializable
-data class WrapperDto<T>(
+data class PageableDto<T>(
     @SerialName("pagina")
     val currentPage: Int = 0,
     @SerialName("totalPaginas")
@@ -17,6 +19,19 @@ data class WrapperDto<T>(
     val results: T get() = resultados
 
     fun hasNextPage() = currentPage < lastPage
+
+    fun toSMangaList() = (results as List<MangaDto>)
+        .filterNot { it.slug.isNullOrBlank() }.map { it.toSManga() }
+}
+
+@Serializable
+class WrapperDto(
+    @SerialName("dataTop")
+    val popular: PageableDto<List<MangaDto>>?,
+    @JsonNames("atualizacoesInicial")
+    private val dataLatest: PageableDto<List<MangaDto>>,
+) {
+    val latest: PageableDto<List<MangaDto>> get() = dataLatest
 }
 
 @Serializable
@@ -36,6 +51,26 @@ class MangaDto(
     @SerialName("scan_id")
     val scanId: Int,
 ) {
+
+    fun toSManga(): SManga {
+        val sManga = SManga.create().apply {
+            title = name
+            thumbnail_url = thumbnail?.let {
+                when {
+                    it.startsWith("http") -> thumbnail
+                    else -> "$CDN_URL/scans/$scanId/obras/${this@MangaDto.id}/$thumbnail"
+                }
+            }
+            initialized = true
+            url = "/obra/${this@MangaDto.id}/${this@MangaDto.slug}"
+        }
+
+        description?.let { Jsoup.parseBodyFragment(it).let { sManga.description = it.text() } }
+        sManga.status = status.toStatus()
+
+        return sManga
+    }
+
     @Serializable
     class MangaStatus(
         @SerialName("stt_nome")
