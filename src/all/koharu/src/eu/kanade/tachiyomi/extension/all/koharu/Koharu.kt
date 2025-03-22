@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.tagsFetchAttempts
 import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.tagsFetched
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -29,8 +30,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -366,10 +365,10 @@ class Koharu(
 
     // Page List
 
-    override suspend fun getPageList(chapter: SChapter): List<Page> {
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return interceptedClient.newCall(pageListRequest(chapter))
-            .execute()
-            .let { response ->
+            .asObservableSuccess()
+            .map { response ->
                 pageListParse(response)
             }
     }
@@ -395,24 +394,6 @@ class Koharu(
     }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    override suspend fun fetchRelatedMangaList(manga: SManga): List<SManga> = coroutineScope {
-        async {
-            interceptedClient.newCall(relatedMangaListRequest(manga))
-                .execute()
-                .let { response ->
-                    relatedMangaListParse(response)
-                }
-        }.await()
-    }
-
-    override fun relatedMangaListRequest(manga: SManga) =
-        POST("$apiBooksUrl/detail/${manga.url}?crt=$token", lazyHeaders)
-
-    override fun relatedMangaListParse(response: Response): List<SManga> {
-        val data = response.parseAs<MangaData>()
-        return data.similar.map(::getManga)
-    }
 
     // Settings
 
