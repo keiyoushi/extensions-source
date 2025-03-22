@@ -1,9 +1,0 @@
-ext {
-    extName = 'Meow Meow Comics'
-    extClass = '.MeowMeowComics'
-    themePkg = 'madara'
-    baseUrl = 'https://meowmeowcomics.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

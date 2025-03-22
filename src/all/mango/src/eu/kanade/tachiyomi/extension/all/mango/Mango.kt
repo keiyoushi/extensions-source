@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mango
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.text.InputType
 import android.widget.Toast
@@ -18,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import info.debatty.java.stringsimilarity.JaroWinkler
 import info.debatty.java.stringsimilarity.Levenshtein
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -34,8 +34,6 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 
@@ -214,9 +212,7 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
         Headers.Builder()
             .add("User-Agent", "Tachiyomi Mango v${AppInfo.getVersionName()}")
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client: OkHttpClient =
         network.client.newBuilder()

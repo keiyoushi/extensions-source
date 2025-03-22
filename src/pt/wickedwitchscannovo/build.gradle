@@ -4,6 +4,7 @@ ext {
     themePkg = 'peachscan'
     baseUrl = 'https://wicked-witch-scan.com'
     overrideVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

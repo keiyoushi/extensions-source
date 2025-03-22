@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.mangagun
 
+import android.util.Base64
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -11,6 +12,7 @@ import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
@@ -30,6 +32,20 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
     override fun popularMangaRequest(page: Int): Request = mangaRequest("views", page)
 
     override fun latestUpdatesRequest(page: Int): Request = mangaRequest("last_update", page)
+
+    override fun getImgAttr(element: Element?): String? {
+        return when {
+            element == null -> null
+            element.hasAttr("data-original") -> element.attr("abs:data-original")
+            element.hasAttr("data-src") -> element.attr("abs:data-src")
+            element.hasAttr("data-bg") -> element.attr("abs:data-bg")
+            element.hasAttr("data-srcset") -> element.attr("abs:data-srcset")
+            element.hasAttr("style") -> element.attr("style").substringAfter("('")
+                .substringBefore("')")
+
+            else -> element.attr("abs:src")
+        }
+    }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val slug = manga.url.substringAfter("manga-").substringBefore(".html")
@@ -101,21 +117,10 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
             handleDdosProtect(document)
         } else {
             document
-        }.select("script:containsData(load_image)")
-            .html()
-            .substringAfter("(")
-            .substringBefore(",")
-            .let { cid ->
-                client.newCall(
-                    GET(
-                        "$baseUrl/app/manga/controllers/cont.Showimage.php?cid=$cid",
-                        headers,
-                    ),
-                ).execute().asJsoup()
-            }
-            .select(".lazyload")
-            .mapIndexed { i, e ->
-                Page(i, "", e.attr("abs:data-src"))
+        }.select(".chapter-content img.chapter-img")
+            .eachAttr("data-img")
+            .mapIndexed { index, img ->
+                Page(index, "", Base64.decode(img, Base64.DEFAULT).decodeToString())
             }
     }
 }

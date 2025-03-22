@@ -1,9 +1,9 @@
 ext {
-    extName = 'Shojo Scans'
-    extClass = '.ShojoScans'
+    extName = 'Violet Scans'
+    extClass = '.VioletScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://shojoscans.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://violetscans.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 

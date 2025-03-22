@@ -1,7 +1,7 @@
 ext {
     extName = 'CosplayTele'
     extClass = '.CosplayTele'
-    extVersionCode = 3
+    extVersionCode = 4
     isNsfw = true
 }
 

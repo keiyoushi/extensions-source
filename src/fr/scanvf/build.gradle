@@ -4,6 +4,7 @@ ext {
     themePkg = 'mmrcms'
     baseUrl = 'https://www.scan-vf.net'
     overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

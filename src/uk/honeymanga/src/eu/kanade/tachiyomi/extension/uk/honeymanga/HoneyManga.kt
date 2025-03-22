@@ -106,7 +106,7 @@ class HoneyManga : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.asClass<HoneyMangaChapterResponseDto>()
-        return result.data.map {
+        return result.data.filter { !it.isMonetized }.map {
             val suffix = if (it.subChapterNum == 0) "" else ".${it.subChapterNum}"
             SChapter.create().apply {
                 url = "$baseUrl/read/${it.id}/${it.mangaId}"
@@ -174,7 +174,7 @@ class HoneyManga : HttpSource() {
 
         private const val SEARCH_API_URL = "https://search.api.honey-manga.com.ua"
 
-        private const val IMAGE_STORAGE_URL = "https://manga-storage.fra1.digitaloceanspaces.com/public-resources"
+        private const val IMAGE_STORAGE_URL = "https://hmvolumestorage.b-cdn.net/public-resources"
 
         private const val DEFAULT_PAGE_SIZE = 30
 

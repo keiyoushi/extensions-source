@@ -11,6 +11,7 @@ fun getFilters(): FilterList {
         TypeFilter("Type", getTypeList),
         SortFilter("Sort", getSortsList),
         StatusFilter("Status", getStatusList),
+        ContentRatingFilter("Content Rating", getContentRatingList),
         CompletedFilter("Completely Scanlated?"),
         CreatedAtFilter("Created at", getCreatedAtList),
         MinimumFilter("Minimum Chapters"),
@@ -20,6 +21,7 @@ fun getFilters(): FilterList {
         ToYearFilter("To"),
         Filter.Header("Separate tags with commas"),
         TagFilter("Tags"),
+        ExcludedTagFilter("Excluded Tags"),
     )
 }
 
@@ -29,8 +31,10 @@ internal class GenreFilter(name: String, genreList: List<Pair<String, String>>) 
 
 internal class TagFilter(name: String) : TextFilter(name)
 
+internal class ExcludedTagFilter(name: String) : TextFilter(name)
+
 internal class DemographicFilter(name: String, demographicList: List<Pair<String, String>>) :
-    Filter.Group<TriFilter>(name, demographicList.map { TriFilter(it.first, it.second) })
+    Filter.Group<CheckBoxFilter>(name, demographicList.map { CheckBoxFilter(it.first, it.second) })
 
 internal class TypeFilter(name: String, typeList: List<Pair<String, String>>) :
     Filter.Group<CheckBoxFilter>(name, typeList.map { CheckBoxFilter(it.first, it.second) })
@@ -50,6 +54,9 @@ internal class SortFilter(name: String, sortList: List<Pair<String, String>>, st
     SelectFilter(name, sortList, state)
 
 internal class StatusFilter(name: String, statusList: List<Pair<String, String>>, state: Int = 0) :
+    SelectFilter(name, statusList, state)
+
+internal class ContentRatingFilter(name: String, statusList: List<Pair<String, String>>, state: Int = 0) :
     SelectFilter(name, statusList, state)
 
 /** Generics **/
@@ -156,12 +163,14 @@ private val getDemographicList: List<Pair<String, String>> = listOf(
     Pair("Shoujo", "2"),
     Pair("Seinen", "3"),
     Pair("Josei", "4"),
+    Pair("None", "5"),
 )
 
 private val getTypeList: List<Pair<String, String>> = listOf(
     Pair("Manga", "jp"),
     Pair("Manhwa", "kr"),
     Pair("Manhua", "cn"),
+    Pair("Others", "others"),
 )
 
 private val getCreatedAtList: List<Pair<String, String>> = listOf(
@@ -189,4 +198,11 @@ private val getStatusList: List<Pair<String, String>> = listOf(
     Pair("Completed", "2"),
     Pair("Cancelled", "3"),
     Pair("Hiatus", "4"),
+)
+
+private val getContentRatingList: List<Pair<String, String>> = listOf(
+    Pair("All", ""),
+    Pair("Safe", "safe"),
+    Pair("Suggestive", "suggestive"),
+    Pair("Erotica", "erotica"),
 )

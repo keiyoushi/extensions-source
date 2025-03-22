@@ -3,7 +3,8 @@ ext {
     extClass = '.HiveScans'
     themePkg = 'iken'
     baseUrl = 'https://hivetoon.com'
-    overrideVersionCode = 36
+    overrideVersionCode = 37
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

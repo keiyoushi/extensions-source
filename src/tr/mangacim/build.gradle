@@ -1,9 +1,0 @@
-ext {
-    extName = 'Mangacim'
-    extClass = '.Mangacim'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://www.mangacim.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

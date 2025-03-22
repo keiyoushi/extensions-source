@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.manwa
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.net.Uri
 import androidx.preference.CheckBoxPreference
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -31,8 +31,6 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
@@ -43,8 +41,7 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     override val lang: String = "zh"
     override val supportsLatest: Boolean = true
     private val json: Json by injectLazy()
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
     override val baseUrl = "https://" + MIRROR_ENTRIES.run { this[preferences.getString(MIRROR_KEY, "0")!!.toInt().coerceAtMost(size)] }
 
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->

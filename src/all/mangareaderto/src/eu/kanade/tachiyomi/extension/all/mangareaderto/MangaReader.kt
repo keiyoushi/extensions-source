@@ -1,163 +1,103 @@
 package eu.kanade.tachiyomi.extension.all.mangareaderto
 
+import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.mangareader.MangaReader
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import org.jsoup.nodes.TextNode
-import org.jsoup.select.Evaluator
 import rx.Observable
 
-open class MangaReader(
-    val language: Language,
-) : MangaReader() {
-
-    override val lang = language.code
-
-    override val name = "MangaReader"
-
-    override val baseUrl = "https://mangareader.to"
+class MangaReader(
+    language: Language,
+) : MangaReader(
+    "MangaReader",
+    "https://mangareader.to",
+    language.code,
+),
+    ConfigurableSource {
 
     override val client = super.client.newBuilder()
         .addInterceptor(ImageInterceptor)
         .build()
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/filter?sort=latest-updated&language=${language.infix}&page=$page", headers)
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/filter?sort=most-viewed&language=${language.infix}&page=$page", headers)
+    // =============================== Search ===============================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
-        if (query.isNotBlank()) {
-            urlBuilder.addPathSegment("search").apply {
-                addQueryParameter("keyword", query)
-                addQueryParameter("page", page.toString())
-            }
-        } else {
-            urlBuilder.addPathSegment("filter").apply {
-                addQueryParameter("language", language.infix)
-                addQueryParameter("page", page.toString())
-                filters.ifEmpty(::getFilterList).forEach { filter ->
-                    when (filter) {
-                        is Select -> {
-                            addQueryParameter(filter.param, filter.selection)
-                        }
-                        is DateFilter -> {
-                            filter.state.forEach {
-                                addQueryParameter(it.param, it.selection)
-                            }
-                        }
-                        is GenresFilter -> {
-                            addQueryParameter(filter.param, filter.selection)
-                        }
-                        else -> {}
-                    }
+    override fun searchMangaParse(response: Response): MangasPage {
+        val mangasPage = super.searchMangaParse(response)
+        var entries = mangasPage.mangas
+        if (preferences.getBoolean(SHOW_VOLUME_PREF, false)) {
+            entries = entries.flatMapTo(ArrayList(entries.size * 2)) { manga ->
+                val volume = SManga.create().apply {
+                    url = manga.url + VOLUME_URL_SUFFIX
+                    title = VOLUME_TITLE_PREFIX + manga.title
+                    thumbnail_url = manga.thumbnail_url
                 }
+                listOf(manga, volume)
             }
         }
-        return GET(urlBuilder.build(), headers)
+        return MangasPage(entries, mangasPage.hasNextPage)
     }
 
-    override fun searchMangaSelector() = ".manga_list-sbs .manga-poster"
+    // ============================== Chapters ==============================
 
-    override fun searchMangaNextPageSelector() = ".page-link[title=Next]"
+    private val volumeType = "vol"
+    private val chapterType = "chap"
 
-    override fun searchMangaFromElement(element: Element) =
-        SManga.create().apply {
-            url = element.attr("href")
-            element.selectFirst(Evaluator.Tag("img"))!!.let {
-                title = it.attr("alt")
-                thumbnail_url = it.attr("src")
-            }
-        }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val path = manga.url
+        val isVolume = path.endsWith(VOLUME_URL_SUFFIX)
+        val type = if (isVolume) volumeType else chapterType
 
-    private fun Element.parseAuthorsTo(manga: SManga) {
-        val authors = select(Evaluator.Tag("a"))
-        val text = authors.map { it.ownText().replace(",", "") }
-        val count = authors.size
-        when (count) {
-            0 -> return
-            1 -> {
-                manga.author = text[0]
-                return
-            }
-        }
-        val authorList = ArrayList<String>(count)
-        val artistList = ArrayList<String>(count)
-        for ((index, author) in authors.withIndex()) {
-            val textNode = author.nextSibling() as? TextNode
-            val list = if (textNode != null && "(Art)" in textNode.wholeText) artistList else authorList
-            list.add(text[index])
-        }
-        if (authorList.isEmpty().not()) manga.author = authorList.joinToString()
-        if (artistList.isEmpty().not()) manga.artist = artistList.joinToString()
+        val request = chapterListRequest(path.removeSuffix(VOLUME_URL_SUFFIX), type)
+        val response = client.newCall(request).execute()
+
+        return Observable.just(chapterListParse(response, isVolume))
     }
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val root = document.selectFirst(Evaluator.Id("ani_detail"))!!
-        val mangaTitle = root.selectFirst(Evaluator.Tag("h2"))!!.ownText()
-        title = mangaTitle
-        description = root.run {
-            val description = selectFirst(Evaluator.Class("description"))!!.ownText()
-            when (val altTitle = selectFirst(Evaluator.Class("manga-name-or"))!!.ownText()) {
-                "", mangaTitle -> description
-                else -> "$description\n\nAlternative Title: $altTitle"
-            }
-        }
-        thumbnail_url = root.selectFirst(Evaluator.Tag("img"))!!.attr("src")
-        genre = root.selectFirst(Evaluator.Class("genres"))!!.children().joinToString { it.ownText() }
-        for (item in root.selectFirst(Evaluator.Class("anisc-info"))!!.children()) {
-            if (item.hasClass("item").not()) continue
-            when (item.selectFirst(Evaluator.Class("item-head"))!!.ownText()) {
-                "Authors:" -> item.parseAuthorsTo(this)
-                "Status:" -> status = when (item.selectFirst(Evaluator.Class("name"))!!.ownText()) {
-                    "Finished" -> SManga.COMPLETED
-                    "Publishing" -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
-                }
-            }
-        }
-    }
-
-    override val chapterType get() = "chap"
-    override val volumeType get() = "vol"
-
-    override fun chapterListRequest(mangaUrl: String, type: String): Request {
+    private fun chapterListRequest(mangaUrl: String, type: String): Request {
         val id = mangaUrl.substringAfterLast('-')
         return GET("$baseUrl/ajax/manga/reading-list/$id?readingBy=$type", headers)
     }
 
-    override fun parseChapterElements(response: Response, isVolume: Boolean): List<Element> {
+    private fun chapterListParse(response: Response, isVolume: Boolean): List<SChapter> {
         val container = response.parseHtmlProperty().run {
             val type = if (isVolume) "volumes" else "chapters"
-            selectFirst(Evaluator.Id("${language.chapterInfix}-$type")) ?: return emptyList()
+            selectFirst("#$lang-$type") ?: return emptyList()
         }
-        return container.children()
+        return container.children().map { element ->
+            chapterFromElement(element).apply {
+                val dataId = url.substringAfterLast('#', "")
+                if (dataId.isNotEmpty()) {
+                    url = "${url.substringBeforeLast('#')}#${if (isVolume) volumeType else chapterType}/$dataId"
+                }
+            }
+        }
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
+    // =============================== Pages ================================
+
+    override fun pageListRequest(chapter: SChapter): Request {
         val typeAndId = chapter.url.substringAfterLast('#', "").ifEmpty {
-            val document = client.newCall(pageListRequest(chapter)).execute().asJsoup()
-            val wrapper = document.selectFirst(Evaluator.Id("wrapper"))!!
+            val document = client.newCall(GET(baseUrl + chapter.url, headers)).execute().asJsoup()
+            val wrapper = document.selectFirst("#wrapper")!!
             wrapper.attr("data-reading-by") + '/' + wrapper.attr("data-reading-id")
         }
+
         val ajaxUrl = "$baseUrl/ajax/image/list/$typeAndId?quality=${preferences.quality}"
-        client.newCall(GET(ajaxUrl, headers)).execute().let(::pageListParse)
+        return GET(ajaxUrl, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -170,26 +110,38 @@ open class MangaReader(
         }
     }
 
+    // ============================ Preferences =============================
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         getPreferences(screen.context).forEach(screen::addPreference)
-        super.setupPreferenceScreen(screen)
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_VOLUME_PREF
+            title = "Show volume entries in search result"
+            setDefaultValue(false)
+        }.let(screen::addPreference)
     }
 
-    override fun getFilterList() =
-        FilterList(
-            Note,
-            TypeFilter(),
-            StatusFilter(),
-            RatingFilter(),
-            ScoreFilter(),
-            StartDateFilter(),
-            EndDateFilter(),
-            SortFilter(),
-            GenresFilter(),
-        )
+    // ============================= Utilities ==============================
 
-    private fun Response.parseHtmlProperty(): Document {
-        val html = Json.parseToJsonElement(body.string()).jsonObject["html"]!!.jsonPrimitive.content
-        return Jsoup.parseBodyFragment(html)
+    companion object {
+        private const val SHOW_VOLUME_PREF = "show_volume"
+
+        private const val VOLUME_URL_FRAGMENT = "vol"
+        private const val VOLUME_URL_SUFFIX = "#$VOLUME_URL_FRAGMENT"
+        private const val VOLUME_TITLE_PREFIX = "[VOL] "
     }
+
+    // ============================== Filters ===============================
+
+    override fun getFilterList() = FilterList(
+        Note,
+        TypeFilter(),
+        StatusFilter(),
+        RatingFilter(),
+        ScoreFilter(),
+        StartDateFilter(),
+        EndDateFilter(),
+        getSortFilter(),
+        GenreFilter(),
+    )
 }

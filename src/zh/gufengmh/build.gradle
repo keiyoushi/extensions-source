@@ -4,6 +4,7 @@ ext {
     themePkg = 'sinmh'
     baseUrl = 'https://www.gufengmh9.com'
     overrideVersionCode = 7
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Zahard'
-    extClass = '.Zahard'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://zahard.xyz'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.hitomi
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.preference.ListPreference
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -32,8 +32,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.internal.http2.StreamResetException
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -64,16 +62,17 @@ class Hitomi(
 
     private val json: Json by injectLazy()
 
+    private val REGEX_IMAGE_URL = """https://.*?a\.$domain/(jxl|avif|webp)/\d+?/\d+/([0-9a-f]{64})\.\1""".toRegex()
+
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::jxlContentTypeInterceptor)
+        .addInterceptor(::updateImageUrlInterceptor)
         .apply {
             interceptors().add(0, ::streamResetRetry)
         }
         .build()
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
     private fun imageType() = preferences.getString(PREF_IMAGETYPE, "webp")!!
 
     override fun headersBuilder() = super.headersBuilder()
@@ -746,6 +745,25 @@ class Hitomi(
                 throw e
             }
         }
+    }
+
+    private fun updateImageUrlInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        val cleanUrl = request.url.run { "$scheme://$host$encodedPath" }
+        REGEX_IMAGE_URL.matchEntire(cleanUrl)?.let { match ->
+            val (ext, hash) = match.destructured
+
+            val commonId = runBlocking { commonImageId() }
+            val imageId = imageIdFromHash(hash)
+            val subDomain = 'a' + runBlocking { subdomainOffset(imageId) }
+
+            val newUrl = "https://${subDomain}a.$domain/$ext/$commonId$imageId/$hash.$ext"
+            val newRequest = request.newBuilder().url(newUrl).build()
+            return chain.proceed(newRequest)
+        }
+
+        return chain.proceed(request)
     }
 
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()

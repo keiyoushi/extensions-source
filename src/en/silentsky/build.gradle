@@ -1,9 +1,0 @@
-ext {
-    extName = 'Silent Sky'
-    extClass = '.SilentSky'
-    themePkg = 'foolslide'
-    baseUrl = 'https://reader.silentsky-scans.net'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

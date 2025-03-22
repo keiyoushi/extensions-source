@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangadventure'
     baseUrl = 'https://assortedscans.com'
     overrideVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

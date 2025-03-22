@@ -25,4 +25,6 @@ class RoseSquadScans : Madara("Rose Squad Scans", "https://rosesquadscans.aishit
 
         return response
     }
+
+    override val mangaDetailsSelectorStatus = "div.post-content_item:contains(Status) > div.summary-content"
 }

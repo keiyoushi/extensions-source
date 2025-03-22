@@ -1,7 +1,7 @@
 ext {
     extName = 'Komga'
     extClass = '.KomgaFactory'
-    extVersionCode = 59
+    extVersionCode = 60
 }
 
 apply from: "$rootDir/common.gradle"

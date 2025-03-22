@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaNow'
+    extClass = '.MangaNow'
+    themePkg = 'mangareader'
+    baseUrl = 'https://manganow.to'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

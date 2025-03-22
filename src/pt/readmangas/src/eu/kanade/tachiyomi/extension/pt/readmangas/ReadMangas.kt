@@ -20,8 +20,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONObject
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -42,7 +44,7 @@ class ReadMangas() : HttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .readTimeout(2, TimeUnit.MINUTES)
-        .rateLimit(2)
+        .rateLimit(1, 2)
         .build()
 
     override val versionId = 2
@@ -73,7 +75,7 @@ class ReadMangas() : HttpSource() {
             )
         }
 
-        val url = "$baseUrl/api/trpc/manga.getAllManga?batch=1".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/deprecated/manga.getAllManga?batch=1".toHttpUrl().newBuilder()
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
             .build()
@@ -111,7 +113,7 @@ class ReadMangas() : HttpSource() {
             )
         }
 
-        val url = "$baseUrl/api/trpc/discover.updated".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/deprecated/discover.updated".toHttpUrl().newBuilder()
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
             .build()
@@ -127,7 +129,7 @@ class ReadMangas() : HttpSource() {
     // =========================== Search =================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/trpc/discover.search?batch=1"
+        val url = "$baseUrl/api/deprecated/discover.search?batch=1"
         val payload = buildJsonObject {
             put(
                 "0",
@@ -153,13 +155,16 @@ class ReadMangas() : HttpSource() {
         val document = response.asJsoup()
         return SManga.create().apply {
             title = document.selectFirst("h1")!!.text()
+
             thumbnail_url = document.selectFirst("img.w-full")?.absUrl("src")
+
             genre = document.select("div > label + div > div").joinToString { it.text() }
 
             description = document.select("script").map { it.data() }
-                .firstOrNull { MANGA_DETAILS_DESCRIPTION_REGEX.containsMatchIn(it) }
+                .firstOrNull { it.contains("description", ignoreCase = true) }
                 ?.let {
-                    MANGA_DETAILS_DESCRIPTION_REGEX.find(it)?.groups?.get("description")?.value
+                    val jsonObject = JSONObject(it)
+                    jsonObject.optString("description", "")
                 }
 
             document.selectFirst("div.flex > div.inline-flex.items-center:last-child")?.text()?.let {
@@ -194,13 +199,15 @@ class ReadMangas() : HttpSource() {
             )
         }
 
-        val url = "$baseUrl/api/trpc/chapter.publicAllChapters".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/deprecated/chapter.publicAllChapters".toHttpUrl().newBuilder()
             .addQueryParameter("batch", "1")
             .addQueryParameter("input", input.toString())
             .build()
 
+        val encodedUrl = URLEncoder.encode(manga.url.substringBeforeLast("#"), "UTF-8")
+
         val apiHeaders = headers.newBuilder()
-            .set("Referer", "$baseUrl${manga.url.substringBeforeLast("#")}")
+            .set("Referer", "$baseUrl$encodedUrl")
             .set("Content-Type", "application/json")
             .set("Cache-Control", "no-cache")
             .build()
@@ -249,7 +256,7 @@ class ReadMangas() : HttpSource() {
         val document = response.asJsoup()
         val scripts = document.select("script").joinToString("\n") { it.data() }
         val pages = IMAGE_URL_REGEX.findAll(scripts).mapIndexed { index, match ->
-            Page(index, imageUrl = match.groups["imageUrl"]!!.value)
+            Page(index, imageUrl = match.groups[1]!!.value)
         }.toList()
 
         return pages
@@ -290,8 +297,7 @@ class ReadMangas() : HttpSource() {
 
     @SuppressLint("SimpleDateFormat")
     companion object {
-        val MANGA_DETAILS_DESCRIPTION_REGEX = """description":(?<description>"[^"]+)""".toRegex()
-        val IMAGE_URL_REGEX = """url\\":\\"(?<imageUrl>[^(\\")]+)""".toRegex()
+        val IMAGE_URL_REGEX = """url\\":\\"([^(\\")]+)""".toRegex()
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
 

@@ -7,7 +7,6 @@ class HiveScans : Iken(
     "en",
     "https://hivetoon.com",
 ) {
-
     override val versionId = 2
 
     override val client = super.client.newBuilder()

@@ -180,7 +180,7 @@ class LeerCapitulo : ParsedHttpSource() {
 
         val arrayData = document.selectFirst("#array_data")!!.text()
 
-        val scripts = document.select("head > script[src^=/assets/][src$=.js]").map { it.attr("abs:src") }.reversed().toMutableList()
+        val scripts = document.select("head > script[src^=/assets/][src*=.js]").map { it.attr("abs:src") }.reversed().toMutableList()
 
         var dataScript: String? = null
 

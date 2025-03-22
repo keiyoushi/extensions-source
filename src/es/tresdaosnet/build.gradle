@@ -1,0 +1,10 @@
+ext {
+    extName = 'Tres Daos Net'
+    extClass = '.TresDaosNet'
+    themePkg = 'madara'
+    baseUrl = 'https://tresdaos.net'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

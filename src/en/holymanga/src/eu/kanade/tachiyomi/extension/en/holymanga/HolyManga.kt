@@ -1,15 +1,16 @@
 package eu.kanade.tachiyomi.extension.en.holymanga
 
-import eu.kanade.tachiyomi.multisrc.zbulu.Zbulu
-import eu.kanade.tachiyomi.network.GET
-import okhttp3.Request
+import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class HolyManga : Zbulu(
+class HolyManga : FMReader(
     "HolyManga",
     "https://w34.holymanga.net",
     "en",
+    SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH),
 ) {
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/popular-manga/page-$page/", headers)
-    }
+    override val versionId = 2
+
+    override val chapterUrlSelector = ""
 }

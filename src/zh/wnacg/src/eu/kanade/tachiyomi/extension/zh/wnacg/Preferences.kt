@@ -1,14 +1,11 @@
 package eu.kanade.tachiyomi.extension.zh.wnacg
 
-import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
 import okhttp3.Interceptor
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 import kotlin.random.Random
 
@@ -42,15 +39,14 @@ val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.s
 
 fun getCiBaseUrl() = DEFAULT_LIST.replace(",", "#, ")
 
-fun getSharedPreferences(id: Long): SharedPreferences {
-    val preferences: SharedPreferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    if (preferences.getString(DEFAULT_LIST_PREF, "")!! == DEFAULT_LIST) return preferences
-    preferences.edit()
-        .remove("overrideBaseUrl")
-        .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
-        .setUrlList(DEFAULT_LIST, preferences.urlIndex)
-        .apply()
-    return preferences
+fun SharedPreferences.preferenceMigration() {
+    if (getString(DEFAULT_LIST_PREF, "")!! != DEFAULT_LIST) {
+        edit()
+            .remove("overrideBaseUrl")
+            .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
+            .setUrlList(DEFAULT_LIST, urlIndex)
+            .apply()
+    }
 }
 
 fun SharedPreferences.Editor.setUrlList(urlList: String, oldIndex: Int): SharedPreferences.Editor {

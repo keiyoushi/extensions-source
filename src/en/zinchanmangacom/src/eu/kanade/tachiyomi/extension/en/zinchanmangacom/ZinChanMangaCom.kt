@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class ZinChanMangaCom : Madara("ZinChanManga.com", "https://zinchanmanga.com", "en") {
+class ZinChanMangaCom : Madara("ZinChanManga.com", "https://zinchangmanga.com", "en") {
     override val useNewChapterEndpoint = true
 
     override fun popularMangaFromElement(element: Element): SManga {

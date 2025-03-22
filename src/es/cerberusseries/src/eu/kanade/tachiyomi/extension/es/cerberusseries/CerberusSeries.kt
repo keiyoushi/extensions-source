@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
 class CerberusSeries : MangaThemesia(
     "Cerberus Series",
-    "https://cerberuseries.xyz",
+    "https://legionscans.com/wp",
     "es",
 ) {
     // Moved from custom to MangaThemesia

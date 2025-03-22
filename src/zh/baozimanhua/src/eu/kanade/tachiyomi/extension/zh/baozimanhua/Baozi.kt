@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.baozimanhua
 
-import android.app.Application
 import android.content.SharedPreferences
+import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import com.github.stevenyomi.baozibanner.BaoziBanner
@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -23,8 +24,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Evaluator
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -34,8 +33,7 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "包子漫画"
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
 
     private val domain: String = run {
         val mirrors = MIRRORS
@@ -144,16 +142,18 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.fromCallable {
-        val pathToUrl = LinkedHashMap<String, String>()
-        var request = GET(baseUrl + chapter.url, headers).newBuilder()
-            .tag(RedirectDomainInterceptor.Tag::class, RedirectDomainInterceptor.Tag()).build()
+        val urls = mutableListOf<String>()
+
+        var chapterUrl = baseUrl + chapter.url
+        if (preferences.getBoolean(QUICK_PAGES_PREF, true)) {
+            chapterUrl = quickPageUrl(chapterUrl)
+        }
+
+        var request = GET(chapterUrl, headers).newBuilder().build()
         while (true) {
             val document = client.newCall(request).execute().asJsoup()
-            for (element in document.select(".comic-contain amp-img")) {
-                val imageUrl = element.attr("data-src")
-                val path = imageUrl.substring(imageUrl.indexOf('/', startIndex = 8)) // Skip "https://"
-                pathToUrl[path] = imageUrl
-            }
+            urls.addAll(document.select(".comic-contain amp-img").map { it.absUrl("src") })
+
             val url = document.selectFirst(Evaluator.Id("next-chapter"))
                 ?.takeIf {
                     val text = it.text()
@@ -161,10 +161,19 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
                 }
                 ?.attr("href")
                 ?: break
+
             request = GET(url, headers)
         }
-        pathToUrl.values.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
+        urls.mapIndexed { index, imageUrl -> Page(index, imageUrl = imageUrl) }
     }
+
+    private fun quickPageUrl(url: String): String =
+        baseUrl.toHttpUrl().newBuilder().apply {
+            val chapUrl = url.toHttpUrl()
+            addPathSegments("/comic/chapter")
+            chapUrl.queryParameter("comic_id")?.let { addPathSegment(it) }
+            addPathSegment("${chapUrl.queryParameter("section_slot")}_${chapUrl.queryParameter("chapter_slot")}.html")
+        }.build().toString()
 
     override fun imageRequest(page: Page): Request {
         val url = page.imageUrl!!.replace(".baozicdn.com", ".baozimh.com")
@@ -271,6 +280,13 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
             entryValues = arrayOf(CHAPTER_ORDER_DISABLED, CHAPTER_ORDER_ENABLED, CHAPTER_ORDER_AGGRESSIVE)
             setDefaultValue(CHAPTER_ORDER_DISABLED)
         }.let { screen.addPreference(it) }
+
+        CheckBoxPreference(screen.context).apply {
+            key = QUICK_PAGES_PREF
+            title = "Quick Pages/快速页面"
+            summary = "跳过页面上的重定向。五月休息。(对不起，必须使用翻译器)"
+            setDefaultValue(true)
+        }.let { screen.addPreference(it) }
     }
 
     companion object {
@@ -303,5 +319,7 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
         private const val CHAPTER_ORDER_AGGRESSIVE = "2"
 
         private val DATE_FORMAT by lazy { SimpleDateFormat("yyyy年MM月dd日", Locale.ENGLISH) }
+
+        private const val QUICK_PAGES_PREF = "QUICK_PAGES"
     }
 }

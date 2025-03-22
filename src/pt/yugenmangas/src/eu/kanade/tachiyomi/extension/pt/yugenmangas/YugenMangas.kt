@@ -1,142 +1,187 @@
 package eu.kanade.tachiyomi.extension.pt.yugenmangas
 
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_RANDOM_UA
+import eu.kanade.tachiyomi.lib.randomua.RANDOM_UA_VALUES
+import eu.kanade.tachiyomi.lib.randomua.UserAgentType
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okio.Buffer
+import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.util.concurrent.TimeUnit
 
-class YugenMangas : HttpSource() {
+class YugenMangas : HttpSource(), ConfigurableSource {
 
     override val name = "Yugen Mangás"
 
-    override val baseUrl = "https://yugenmangasbr.voblog.xyz"
+    override val baseUrl = "https://yugenmangasbr.readmis.com"
 
     override val lang = "pt-BR"
 
     override val supportsLatest = true
 
+    private val preferences by getPreferencesLazy {
+        if (getPrefUAType() != UserAgentType.OFF || getPrefCustomUA().isNullOrBlank().not()) {
+            return@getPreferencesLazy
+        }
+        edit().putString(PREF_KEY_RANDOM_UA, RANDOM_UA_VALUES.last()).apply()
+    }
+
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(2)
+        .setRandomUserAgent(
+            preferences.getPrefUAType(),
+            preferences.getPrefCustomUA(),
+        )
         .build()
 
     override val versionId = 2
 
     private val json: Json by injectLazy()
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", "$baseUrl/")
+    // ================================ Popular =======================================
 
-    val apiHeaders by lazy { apiHeadersBuilder().build() }
-
-    private fun apiHeadersBuilder(): Headers.Builder = headersBuilder()
-        .add("Accept", "application/json, text/plain, */*")
-        .add("Origin", baseUrl)
-        .add("Sec-Fetch-Dest", "empty")
-        .add("Sec-Fetch-Mode", "no-cors")
-        .add("Sec-Fetch-Site", "same-site")
-
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$BASE_API/widgets/sort_and_filter/".toHttpUrl().newBuilder()
-            .addQueryParameter("page", "$page")
-            .addQueryParameter("sort", "views")
-            .addQueryParameter("order", "desc")
-            .build()
-
-        return GET(url, apiHeaders)
-    }
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseUrl/series?page=$page&order=desc&sort=views", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<PageDto<MangaDto>>()
-        val mangaList = dto.results.map { it.toSManga() }
-        return MangasPage(mangaList, hasNextPage = dto.hasNext())
+        val document = response.asJsoup()
+        val jsonContent = document.select("script")
+            .map(Element::data)
+            .firstOrNull(POPULAR_MANGA_REGEX::containsMatchIn)
+            ?: throw Exception("Não foi possivel encontrar a lista de mangás/manhwas")
+
+        val mangas = POPULAR_MANGA_REGEX.findAll(jsonContent)
+            .mapNotNull { result ->
+                result.groups.lastOrNull()?.value?.sanitizeJson()?.parseAs<JsonObject>()?.jsonObject
+            }
+            .map { element ->
+                val manga = element["children"]?.jsonArray
+                    ?.firstOrNull()?.jsonArray
+                    ?.firstOrNull { it is JsonObject }?.jsonObject
+                    ?.get("children")?.jsonArray
+                    ?.firstOrNull { it is JsonObject }?.jsonObject
+
+                SManga.create().apply {
+                    title = manga!!.getValue("alt")
+                    thumbnail_url = manga.getValue("src")
+                    url = element.getValue("href")
+                }
+            }.toList()
+
+        return MangasPage(mangas, jsonContent.hasNextPage(response))
     }
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$BASE_API/widgets/home/updates/", apiHeaders)
-    }
+    // ================================ Latest =======================================
+
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$baseUrl/chapters?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val dto = response.parseAs<LatestUpdatesDto>()
-        val mangaList = dto.series.map { it.toSManga() }
-        return MangasPage(mangaList, hasNextPage = false)
+        val document = response.asJsoup()
+        val jsonContent = document.select("script")
+            .map(Element::data)
+            .firstOrNull(LATEST_UPDATE_REGEX::containsMatchIn)
+            ?: throw Exception("Não foi possivel encontrar a lista de mangás/manhwas")
+
+        val mangas = LATEST_UPDATE_REGEX.findAll(jsonContent)
+            .mapNotNull { result ->
+                result.groups.firstOrNull()?.value?.sanitizeJson()?.parseAs<JsonObject>()?.jsonObject
+            }
+            .map { element ->
+                val jsonString = element.toString()
+                SManga.create().apply {
+                    this.title = jsonString.getFirstValueByKey("children")!!
+                    thumbnail_url = jsonString.getFirstValueByKey("src")!!
+                    url = element.getValue("href")
+                }
+            }.toList()
+
+        return MangasPage(mangas, jsonContent.hasNextPage())
     }
+
+    // ================================ Search =======================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val payload = json.encodeToString(SearchDto(query)).toRequestBody(JSON_MEDIA_TYPE)
-        return POST("$BASE_API/widgets/search/", apiHeaders, payload)
+        return POST("$baseUrl/api/search", headers, payload)
     }
 
-    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val code = manga.url.substringAfterLast("/")
-        val payload = json.encodeToString(SeriesDto(code)).toRequestBody(JSON_MEDIA_TYPE)
-        return POST("$BASE_API/series/detail/series/", apiHeaders, payload)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val mangas = response.parseAs<SearchMangaDto>().series.map(MangaDto::toSManga)
+        return MangasPage(mangas, hasNextPage = false)
     }
 
-    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
+    // ================================ Details =======================================
 
     override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<MangaDetailsDto>().toSManga()
+        return getJsonFromResponse(response).parseAs<ContainerDto>().series.toSManga()
     }
 
-    private fun chapterListRequest(manga: SManga, page: Int): Request {
-        val code = manga.url.substringAfterLast("/")
-        val payload = json.encodeToString(SeriesDto(code)).toRequestBody(JSON_MEDIA_TYPE)
-        return POST("$BASE_API/series/chapters/get-series-chapters/?page=$page", apiHeaders, payload)
-    }
+    // ================================ Chapters =======================================
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         var page = 1
         val chapters = mutableListOf<SChapter>()
         do {
             val response = client.newCall(chapterListRequest(manga, page++)).execute()
-            val series = response.getSeriesCode()
-            val chapterContainer = response.parseAs<ChapterContainerDto>()
-            chapters += chapterContainer.toSChapter(series.code)
-        } while (chapterContainer.next != null)
+            val chapterContainer = getJsonFromResponse(response).parseAs<ContainerDto>()
+            chapters += chapterContainer.toSChapterList()
+        } while (chapterContainer.hasNext())
 
         return Observable.just(chapters)
     }
 
-    private fun Response.getSeriesCode(): SeriesDto =
-        this.request.body!!.parseAs<SeriesDto>()
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        val code = chapter.url.substringAfterLast("/")
-        val payload = json.encodeToString(SeriesDto(code)).toRequestBody(JSON_MEDIA_TYPE)
-        return POST("$BASE_API/chapters/chapter-info/", apiHeaders, payload)
+    private fun chapterListRequest(manga: SManga, page: Int): Request {
+        val url = super.chapterListRequest(manga).url.newBuilder()
+            .addQueryParameter("reverse", "true")
+            .addQueryParameter("page", page.toString())
+            .build()
+        return GET(url, headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val series = response.request.body!!.parseAs<SeriesDto>()
-        return response.parseAs<ChapterContainerDto>().toSChapter(series.code)
-    }
+    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url
+    // ================================ Pages =======================================}
 
     override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PageListDto>().images.mapIndexed { index, imageUrl ->
+        val document = response.asJsoup()
+        val script = document.select("script")
+            .map(Element::data)
+            .firstOrNull(PAGES_REGEX::containsMatchIn)
+            ?: throw Exception("Páginas não encontradas")
+
+        val jsonContent = PAGES_REGEX.find(script)?.groups?.get(1)?.value?.sanitizeJson()
+            ?: throw Exception("Erro ao obter as páginas")
+
+        return json.decodeFromString<List<String>>(jsonContent).mapIndexed { index, imageUrl ->
             Page(index, baseUrl, "$BASE_MEDIA/$imageUrl")
         }
     }
@@ -151,18 +196,58 @@ class YugenMangas : HttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(it.body.string())
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
     }
 
-    private inline fun <reified T> RequestBody.parseAs(): T {
-        val jsonString = Buffer().also { writeTo(it) }.readUtf8()
-        return json.decodeFromString(jsonString)
+    // ================================ Utils =======================================
+
+    private fun String.getFirstValueByKey(field: String) =
+        """$field":"([^"]+)""".toRegex().find(this)?.groups?.get(1)?.value
+
+    private fun String.hasNextPage(): Boolean =
+        LATEST_PAGES_REGEX.findAll(this).lastOrNull()?.groups?.get(1)?.value?.toBoolean()?.not() ?: false
+
+    private fun String.hasNextPage(response: Response): Boolean {
+        val lastPage = POPULAR_PAGES_REGEX.findAll(this).mapNotNull {
+            it.groups[1]?.value?.toInt()
+        }.max() - 1
+
+        return response.request.url.queryParameter("page")
+            ?.toInt()?.let { it < lastPage } ?: false
+    }
+
+    private fun String.sanitizeJson() =
+        this.replace("""\\{1}"""".toRegex(), "\"")
+            .replace("""\\{2,}""".toRegex(), """\\""")
+            .trimIndent()
+
+    private fun JsonObject.getValue(key: String): String =
+        this[key]!!.jsonPrimitive.content
+
+    private fun getJsonFromResponse(response: Response): String {
+        val document = response.asJsoup()
+
+        val script = document.select("script")
+            .map(Element::data)
+            .firstOrNull(MANGA_DETAILS_REGEX::containsMatchIn)
+            ?: throw Exception("Dados não encontrado")
+
+        val jsonContent = MANGA_DETAILS_REGEX.find(script)
+            ?.groups?.get(1)?.value
+            ?: throw Exception("Erro ao obter JSON")
+
+        return jsonContent.sanitizeJson()
     }
 
     companion object {
-        private const val BASE_API = "https://api.yugenweb.com/api"
         private const val BASE_MEDIA = "https://media.yugenweb.com"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+        private val POPULAR_MANGA_REGEX = """\d+\\",(\{\\"href\\":\\"\/series\/.*?\]\]\})""".toRegex()
+        private val LATEST_UPDATE_REGEX = """\{\\"href\\":\\"\/series\/\d+(.*?)\}\]\]\}\]\]\}\]\]\}""".toRegex()
+        private val LATEST_PAGES_REGEX = """aria-disabled\\":([^,]+)""".toRegex()
+        private val POPULAR_PAGES_REGEX = """series\?page=(\d+)""".toRegex()
+        private val MANGA_DETAILS_REGEX = """(\{\\"series\\":.*?"\})\],\[""".toRegex()
+        private val PAGES_REGEX = """images\\":(\[[^\]]+\])""".toRegex()
     }
 }

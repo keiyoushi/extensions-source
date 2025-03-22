@@ -9,11 +9,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferences
 import okhttp3.Request
 import okhttp3.Response
 import okio.IOException
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
@@ -62,17 +64,19 @@ class TCBScans : ParsedHttpSource() {
     override fun latestUpdatesSelector() = throw UnsupportedOperationException()
     override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
     override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/projects#$query", headers)
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        val query = response.request.url.fragment!!
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        val response = client.newCall(popularMangaRequest(page)).execute()
         val mangas = popularMangaParse(response).mangas.filter {
             it.title.contains(query, true)
         }
-        return MangasPage(mangas, false)
+        return Observable.just(MangasPage(mangas, false))
     }
 
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
@@ -123,7 +127,7 @@ class TCBScans : ParsedHttpSource() {
 
     init {
         val context = Injekt.get<Application>()
-        val prefs = context.getSharedPreferences("source_$id", 0x0000)
+        val prefs = getPreferences()
 
         if (!prefs.getBoolean("legacy_updateTime_removed", false)) {
             try {

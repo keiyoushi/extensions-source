@@ -4,6 +4,7 @@ ext {
     themePkg = 'keyoapp'
     baseUrl = 'https://magustoon.com'
     overrideVersionCode = 35
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

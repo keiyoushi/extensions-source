@@ -8,9 +8,10 @@ class CoffeeManga : Madara("Coffee Manga", "https://coffeemanga.io", "en") {
 
     override fun imageFromElement(element: Element): String? {
         return when {
-            element.hasAttr("data-src") && element.attr("data-src").isNotEmpty() -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") && element.attr("data-lazy-src").isNotEmpty() -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") && element.attr("srcset").isNotEmpty() -> element.attr("abs:srcset").substringBefore(" ")
+            element.attr("data-src").isNotBlank() -> element.attr("abs:data-src")
+            element.attr("data-lazy-src").isNotBlank() -> element.attr("abs:data-lazy-src")
+            element.attr("srcset").isNotBlank() -> element.attr("abs:srcset").getSrcSetImage()
+            element.attr("data-cfsrc").isNotBlank() -> element.attr("abs:data-cfsrc")
             else -> element.attr("abs:src")
         }
     }

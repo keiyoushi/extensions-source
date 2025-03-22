@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.Request
 
-class MangaChan : MultiChan("MangaChan", "https://manga-chan.me", "ru") {
+class MangaChan : MultiChan("MangaChan", "https://im.manga-chan.me", "ru") {
 
     override val id: Long = 7
 

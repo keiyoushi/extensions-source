@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangadex
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.os.Build
 import androidx.preference.EditTextPreference
@@ -32,6 +31,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import okhttp3.CacheControl
 import okhttp3.Headers
@@ -40,8 +40,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.util.Date
 
 abstract class MangaDex(final override val lang: String, private val dexLang: String = lang) :
@@ -53,10 +51,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
 
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-            .sanitizeExistingUuidPrefs()
-    }
+    private val preferences by getPreferencesLazy { sanitizeExistingUuidPrefs() }
 
     private val helper = MangaDexHelper(lang)
 
@@ -424,6 +419,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             preferences.coverQuality,
             preferences.altTitlesInDesc,
             preferences.preferExtensionLangTitle,
+            preferences.finalChapterInDesc,
         )
     }
 
@@ -773,12 +769,28 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             }
         }
 
+        val finalChapterInDescPref = SwitchPreferenceCompat(screen.context).apply {
+            key = MDConstants.getFinalChapterInDescPrefKey(dexLang)
+            title = helper.intl["final_chapter_in_description"]
+            summary = helper.intl["final_chapter_in_description_summary"]
+            setDefaultValue(true)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val checkValue = newValue as Boolean
+
+                preferences.edit()
+                    .putBoolean(MDConstants.getFinalChapterInDescPrefKey(dexLang), checkValue)
+                    .commit()
+            }
+        }
+
         screen.addPreference(coverQualityPref)
         screen.addPreference(tryUsingFirstVolumeCoverPref)
         screen.addPreference(dataSaverPref)
         screen.addPreference(standardHttpsPortPref)
         screen.addPreference(altTitlesInDescPref)
         screen.addPreference(preferExtensionLangTitlePref)
+        screen.addPreference(finalChapterInDescPref)
         screen.addPreference(contentRatingPref)
         screen.addPreference(originalLanguagePref)
         screen.addPreference(blockedGroupsPref)
@@ -860,14 +872,17 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
     private val SharedPreferences.preferExtensionLangTitle
         get() = getBoolean(MDConstants.getPreferExtensionLangTitlePrefKey(dexLang), true)
 
+    private val SharedPreferences.finalChapterInDesc
+        get() = getBoolean(MDConstants.getFinalChapterInDescPrefKey(dexLang), true)
+
     /**
      * Previous versions of the extension allowed invalid UUID values to be stored in the
      * preferences. This method clear invalid UUIDs in case the user have updated from
      * a previous version with that behaviour.
      */
-    private fun SharedPreferences.sanitizeExistingUuidPrefs(): SharedPreferences {
+    private fun SharedPreferences.sanitizeExistingUuidPrefs() {
         if (getBoolean(MDConstants.getHasSanitizedUuidsPrefKey(dexLang), false)) {
-            return this
+            return
         }
 
         val blockedGroups = getString(MDConstants.getBlockedGroupsPrefKey(dexLang), "")!!
@@ -887,7 +902,5 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             .putString(MDConstants.getBlockedUploaderPrefKey(dexLang), blockedUploaders)
             .putBoolean(MDConstants.getHasSanitizedUuidsPrefKey(dexLang), true)
             .apply()
-
-        return this
     }
 }

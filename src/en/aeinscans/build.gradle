@@ -1,0 +1,10 @@
+ext {
+    extName = 'Aein Scans'
+    extClass = '.AeinScans'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://aeinscans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

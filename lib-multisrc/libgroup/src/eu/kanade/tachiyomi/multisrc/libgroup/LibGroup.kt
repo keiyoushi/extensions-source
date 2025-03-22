@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.libgroup
 
 import android.annotation.SuppressLint
 import android.app.Application
-import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -24,6 +23,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -57,9 +57,10 @@ abstract class LibGroup(
         encodeDefaults = true
     }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-            .migrateOldImageServer()
+    private val preferences by getPreferencesLazy {
+        if (getString(SERVER_PREF, "main") == "fourth") {
+            edit().putString(SERVER_PREF, "secondary").apply()
+        }
     }
 
     override val supportsLatest = true
@@ -313,37 +314,33 @@ abstract class LibGroup(
     override fun chapterListParse(response: Response): List<SChapter> {
         val slugUrl = response.request.url.toString().substringAfter("manga/").substringBefore("/chapters")
         val chaptersData = response.parseAs<Data<List<Chapter>>>()
-        if (chaptersData.data.isEmpty()) {
-            throw Exception("Нет глав")
-        }
-
+            .also { if (it.data.isEmpty()) return emptyList() }
         val sortingList = preferences.getString(SORTING_PREF, "ms_mixing")
-        val defaultBranchId = if (chaptersData.data.getBranchCount() > 1) { // excess request if branchesCount is only alone = slow update library witch rateLimitHost(apiDomain.toHttpUrl(), 1)
+        val defaultBranchId = if (sortingList == "ms_mixing" && chaptersData.data.getBranchCount() > 1) {
             runCatching { getDefaultBranch(slugUrl.substringBefore("-")).first().id }.getOrNull()
         } else {
             null
         }
 
-        val chapters = mutableListOf<SChapter>()
-        for (it in chaptersData.data.withIndex()) {
-            if (it.value.branchesCount > 1) {
-                for (currentBranch in it.value.branches.withIndex()) {
-                    if (currentBranch.value.branchId == defaultBranchId && sortingList == "ms_mixing") { // ms_mixing with default branch from api
-                        chapters.add(it.value.toSChapter(slugUrl, defaultBranchId, isScanUser()))
-                    } else if (defaultBranchId == null && sortingList == "ms_mixing") { // ms_mixing with first branch in chapter
-                        if (chapters.any { chpIt -> chpIt.chapter_number == it.value.number.toFloat() }) {
-                            chapters.add(it.value.toSChapter(slugUrl, currentBranch.value.branchId, isScanUser()))
-                        }
-                    } else if (sortingList == "ms_combining") { // ms_combining
-                        chapters.add(it.value.toSChapter(slugUrl, currentBranch.value.branchId, isScanUser()))
+        return chaptersData.data.flatMap { chapter ->
+            when {
+                chapter.branchesCount > 1 && sortingList == "ms_mixing" -> {
+                    val branch = chapter.branches
+                        .firstOrNull { it.branchId == defaultBranchId }?.branchId
+                        ?: chapter.branches.first().branchId
+
+                    listOf(
+                        chapter.toSChapter(slugUrl, branch, isScanUser()),
+                    )
+                }
+                chapter.branchesCount > 1 && sortingList == "ms_combining" -> {
+                    chapter.branches.map { branch ->
+                        chapter.toSChapter(slugUrl, branch.branchId, isScanUser())
                     }
                 }
-            } else {
-                chapters.add(it.value.toSChapter(slugUrl, isScanUser = isScanUser()))
+                else -> listOf(chapter.toSChapter(slugUrl, isScanUser = isScanUser()))
             }
-        }
-
-        return chapters.reversed()
+        }.reversed()
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -688,12 +685,5 @@ abstract class LibGroup(
                 true
             }
         }
-    }
-
-    // api changed id of servers, remap SERVER_PREF old("fourth") to new("secondary")
-    private fun SharedPreferences.migrateOldImageServer(): SharedPreferences {
-        if (getString(SERVER_PREF, "main") != "fourth") return this
-        edit().putString(SERVER_PREF, "secondary").apply()
-        return this
     }
 }

@@ -1,13 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.galaxy
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.SourceFactory
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import keiyoushi.utils.getPreferencesLazy
 
 class GalaxyFactory : SourceFactory {
 
@@ -22,9 +20,7 @@ class GalaxyFactory : SourceFactory {
 
         override val baseUrl by lazy { getPrefBaseUrl() }
 
-        private val preferences: SharedPreferences by lazy {
-            Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-        }
+        private val preferences: SharedPreferences by getPreferencesLazy()
 
         companion object {
             private const val RESTART_APP = ".لتطبيق الإعدادات الجديدة أعد تشغيل التطبيق"

@@ -2,7 +2,7 @@ ext {
     extName = 'Monochrome Custom'
     extClass = '.MonochromeCustom'
     themePkg = 'monochrome'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"

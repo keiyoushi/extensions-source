@@ -4,6 +4,7 @@ ext {
     themePkg = 'mangathemesia'
     baseUrl = 'https://cosmic345.co'
     overrideVersionCode = 7
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

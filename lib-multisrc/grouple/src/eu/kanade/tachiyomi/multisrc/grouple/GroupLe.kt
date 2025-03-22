@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.grouple
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import eu.kanade.tachiyomi.network.GET
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -22,8 +22,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.text.DecimalFormat
 import java.text.ParseException
@@ -37,9 +35,7 @@ abstract class GroupLe(
     final override val lang: String,
 ) : ConfigurableSource, ParsedHttpSource() {
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val supportsLatest = true
 
@@ -129,7 +125,7 @@ abstract class GroupLe(
             infoElement.select(".info-icon").attr("data-content").substringBeforeLast("/5</b><br/>")
                 .substringAfterLast(": <b>").replace(",", ".").toFloat() * 2
         val ratingVotes =
-            infoElement.select(".col-sm-7 .user-rating meta[itemprop=\"ratingCount\"]")
+            infoElement.select(".col-sm-6 .user-rating meta[itemprop=\"ratingCount\"]")
                 .attr("content")
         val ratingStar = when {
             ratingValue > 9.5 -> "★★★★★"
@@ -177,9 +173,11 @@ abstract class GroupLe(
             "div#tab-description  .manga-description",
         ).text()
         manga.status = when {
-            document.html()
-                .contains("Запрещена публикация произведения по копирайту") || document.html()
-                .contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!") -> SManga.LICENSED
+            (
+                document.html()
+                    .contains("Запрещена публикация произведения по копирайту") || document.html()
+                    .contains("ЗАПРЕЩЕНА К ПУБЛИКАЦИИ НА ТЕРРИТОРИИ РФ!")
+                ) && document.select("div.chapters").isEmpty() -> SManga.LICENSED
             infoElement.html().contains("<b>Сингл") -> SManga.COMPLETED
             else ->
                 when (infoElement.selectFirst("span.badge:contains(выпуск)")?.text()) {
@@ -207,14 +205,16 @@ abstract class GroupLe(
     }
 
     protected open fun getChapterSearchParams(document: Document): String {
-        return "?mtr=true"
+        val scriptContent = document.selectFirst("script:containsData(user_hash)")?.data()
+        val userHash = scriptContent?.let { USER_HASH_REGEX.find(it)?.groupValues?.get(1) }
+        return userHash?.let { "?d=$it&mtr=true" } ?: "?mtr=true"
     }
 
     private fun chapterListParse(response: Response, manga: SManga): List<SChapter> {
         val document = response.asJsoup()
 
         if (document.select(".user-avatar").isEmpty() &&
-            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") }
+            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") || contains("RuMix") }
         ) {
             throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
         }
@@ -307,7 +307,7 @@ abstract class GroupLe(
         val html = document.html()
 
         if (document.select(".user-avatar").isEmpty() &&
-            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") }
+            document.title().run { contains("AllHentai") || contains("MintManga") || contains("МинтМанга") || contains("RuMix") }
 
         ) {
             throw Exception("Для просмотра контента необходима авторизация через WebView\uD83C\uDF0E")
@@ -320,6 +320,9 @@ abstract class GroupLe(
                 throw Exception("Не удалось загрузить главу. Url: ${response.request.url}")
             }
             else -> {
+                if (document.selectFirst("div.alert") != null || document.selectFirst("form.purchase-form") != null) {
+                    throw Exception("Эта глава платная. Используйте сайт, чтобы купить и прочитать ее.")
+                }
                 throw Exception("Дизайн сайта обновлен, для дальнейшей работы необходимо обновление дополнения")
             }
         }
@@ -434,5 +437,6 @@ abstract class GroupLe(
         private const val UAGENT_TITLE = "User-Agent(для некоторых стран)"
         private const val UAGENT_DEFAULT = "arora"
         const val PREFIX_SLUG_SEARCH = "slug:"
+        private val USER_HASH_REGEX = "user_hash.+'(.+)'".toRegex()
     }
 }

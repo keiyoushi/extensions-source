@@ -31,7 +31,7 @@ class LittleGarden : ParsedHttpSource() {
         private const val cdnUrl = "https://littlexgarden.com/static/images/webp/"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
         private val slugRegex = Regex("\\\\\"slug\\\\\":\\\\\"(.*?(?=\\\\\"))")
-        private val oricolPageRegex = Regex("\\{colored:(?<colored>.*?(?=,)),original:(?<original>.*?(?=,))")
+        private val oricolPageRegex = Regex("\\{colored:(.*?(?=,)),original:(.*?(?=,))")
         private val oriPageRegex = Regex("""original:"(.*?(?="))""")
     }
 
@@ -176,10 +176,10 @@ class LittleGarden : ParsedHttpSource() {
         val engChaps: IntArray = intArrayOf(970, 987, 992)
         if (document.selectFirst("div.manga-name")!!.text().trim() == "One Piece" && (engChaps.contains(chapNb) || chapNb > 1004)) { // Permits to get French pages rather than English pages for some chapters
             oricolPageRegex.findAll(document.select("script:containsData(pages)").toString()).asIterable().mapIndexed { i, it ->
-                if (it.groups["colored"]?.value?.contains("\"") == true) { // Their JS dict has " " around the link only when available. Also uses colored pages rather than B&W as it's the main strength of this site
-                    pages.add(Page(i, "", cdnUrl + it.groups["colored"]?.value?.replace("\"", "") + ".webp"))
+                if (it.groups[1]?.value?.contains("\"") == true) { // Their JS dict has " " around the link only when available. Also uses colored pages rather than B&W as it's the main strength of this site
+                    pages.add(Page(i, "", cdnUrl + it.groups[1]?.value?.replace("\"", "") + ".webp"))
                 } else {
-                    pages.add(Page(i, "", cdnUrl + it.groups["original"]?.value?.replace("\"", "") + ".webp"))
+                    pages.add(Page(i, "", cdnUrl + it.groups[2]?.value?.replace("\"", "") + ".webp"))
                 }
             }
         } else {

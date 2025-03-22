@@ -4,6 +4,7 @@ ext {
     themePkg = 'webtoons'
     baseUrl = 'https://www.dongmanmanhua.cn'
     overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

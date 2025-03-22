@@ -1,7 +1,0 @@
-ext {
-    extName = 'Rmanga.app'
-    extClass = '.Rmanga'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

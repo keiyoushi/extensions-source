@@ -19,4 +19,6 @@ class CovenScan : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
+
+    override val mangaDetailsSelectorAuthor = "div.post-content_item:contains(Author) > div.summary-content"
 }

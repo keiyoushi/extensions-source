@@ -3,7 +3,7 @@ ext {
     extClass = '.NekoScans'
     themePkg = 'zeistmanga'
     baseUrl = 'https://nekoscanlationlector.blogspot.com'
-    overrideVersionCode = 24
+    overrideVersionCode = 25
     isNsfw = true
 }
 

@@ -2,8 +2,8 @@ ext {
     extName = 'ManyToon'
     extClass = '.ManyToon'
     themePkg = 'madara'
-    baseUrl = 'https://manytoon.org'
-    overrideVersionCode = 9
+    baseUrl = 'https://manytoon.com'
+    overrideVersionCode = 10
     isNsfw = true
 }
 

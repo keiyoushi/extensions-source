@@ -2,8 +2,8 @@ ext {
     extName = 'Hades no Fansub'
     extClass = '.HadesNoFansub'
     themePkg = 'madara'
-    baseUrl = 'https://hadesnofansub.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://mangareaderpro.com'
+    overrideVersionCode = 3
     isNsfw = true
 }
 

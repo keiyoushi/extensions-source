@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
-import org.jsoup.select.Evaluator
 import kotlin.math.ceil
 
 @Serializable
@@ -28,26 +27,17 @@ data class MangaDto(
     val lastChapter: ChapterDto? = null,
     val chapters: List<ChapterDto>? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
+    fun toSManga(storageUrl: String): SManga = SManga.create().apply {
         val dto = this@MangaDto
         url = "/manga/${dto.id}"
         title = dto.originalName
         author = dto.author.joinToString(", ") { author -> author.name }
-
-        val descElem = Jsoup.parseBodyFragment(dto.description)
-        description = if (descElem.select("p").any()) {
-            Jsoup.parse(dto.description).select("p").joinToString("\n") {
-                it.run {
-                    select(Evaluator.Tag("br")).prepend("\\n")
-                    this.text().replace("\\n", "\n").replace("\n ", "\n")
-                }
-            }.trim()
+        val descElem = Jsoup.parseBodyFragment(dto.description).select("p")
+            .joinToString("\n") { it.wholeText() }.trim()
+        description = if (dto.otherName.isNotEmpty()) {
+            "Tên khác: ${dto.otherName}\n\n" + descElem
         } else {
-            dto.description
-        }
-
-        if (dto.otherName.isNotEmpty()) {
-            description = "Tên khác: ${dto.otherName}\n\n" + description
+            descElem
         }
 
         genre = dto.tag.joinToString(", ") { tag -> tag.name }
@@ -61,7 +51,7 @@ data class MangaDto(
             7 -> SManga.CANCELLED // "Ngừng xuất bản" -> No more publications
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = "https://storage.yurineko.my/" + dto.thumbnail
+        thumbnail_url = "$storageUrl/" + dto.thumbnail
         initialized = true
     }
 }
@@ -71,10 +61,10 @@ data class MangaListDto(
     val result: List<MangaDto>,
     val resultCount: Int,
 ) {
-    fun toMangasPage(currentPage: Float = 1f): MangasPage {
+    fun toMangasPage(currentPage: Float = 1f, storageUrl: String): MangasPage {
         val dto = this@MangaListDto
         return MangasPage(
-            dto.result.map { it.toSManga() },
+            dto.result.map { it.toSManga(storageUrl) },
             currentPage + 1f <= ceil(dto.resultCount.toFloat() / 20f),
         )
     }

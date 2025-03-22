@@ -82,7 +82,12 @@ abstract class Madara(
     /**
      * Automatically fetched genres from the source to be used in the filters.
      */
-    private var genresList: List<Genre> = emptyList()
+    protected open var genresList: List<Genre> = emptyList()
+
+    /**
+     * Whether genres have been fetched
+     */
+    private var genresFetched: Boolean = false
 
     /**
      * Inner variable to control how much tries the genres request was called.
@@ -155,7 +160,7 @@ abstract class Madara(
     }
 
     // exclude/filter bilibili manga from list
-    override fun popularMangaSelector() = "div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector"
+    override fun popularMangaSelector() = "div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector , .manga__item"
 
     open val popularMangaUrlSelector = "div.post-title a"
 
@@ -237,11 +242,14 @@ abstract class Madara(
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val mangaUrl = "/$mangaSubString/${query.substringAfter(URL_SEARCH_PREFIX)}/"
-            return client.newCall(GET("$baseUrl$mangaUrl", headers))
+            val mangaUrl = baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment(mangaSubString)
+                addPathSegment(query.substringAfter(URL_SEARCH_PREFIX))
+            }.build()
+            return client.newCall(GET(mangaUrl, headers))
                 .asObservableSuccess().map { response ->
                     val manga = mangaDetailsParse(response).apply {
-                        url = mangaUrl
+                        setUrlWithoutDomain(mangaUrl.toString())
                     }
 
                     MangasPage(listOf(manga), false)
@@ -576,13 +584,15 @@ abstract class Madara(
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun searchMangaSelector() = "div.c-tabs-item__content"
+    override fun searchMangaSelector() = "div.c-tabs-item__content , .manga__item"
+
+    protected open val searchMangaUrlSelector = "div.post-title a"
 
     override fun searchMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
         with(element) {
-            selectFirst("div.post-title a")!!.let {
+            selectFirst(searchMangaUrlSelector)!!.let {
                 manga.setUrlWithoutDomain(it.attr("abs:href"))
                 manga.title = it.ownText()
             }
@@ -623,7 +633,7 @@ abstract class Madara(
         "Em Andamento", "En cours", "En Cours", "En cours de publication", "Ativo", "Lançando", "Đang Tiến Hành", "Devam Ediyor",
         "Devam ediyor", "In Corso", "In Arrivo", "مستمرة", "مستمر", "En Curso", "En curso", "Emision",
         "Curso", "En marcha", "Publicandose", "Publicándose", "En emision", "连载中", "Em Lançamento", "Devam Ediyo",
-        "Đang làm", "Em postagem", "Devam Eden", "Em progresso", "Em curso",
+        "Đang làm", "Em postagem", "Devam Eden", "Em progresso", "Em curso", "Atualizações Semanais",
     )
 
     protected val hiatusStatusList: Array<String> = arrayOf(
@@ -678,7 +688,7 @@ abstract class Madara(
                 manga.thumbnail_url = imageFromElement(it)
             }
             select(mangaDetailsSelectorStatus).last()?.let {
-                manga.status = with(it.text()) {
+                manga.status = with(it.text().filter { ch -> ch.isLetterOrDigit() || ch.isWhitespace() }.trim()) {
                     when {
                         containsIn(completedStatusList) -> SManga.COMPLETED
                         containsIn(ongoingStatusList) -> SManga.ONGOING
@@ -742,9 +752,9 @@ abstract class Madara(
 
     // Manga Details Selector
     open val mangaDetailsSelectorTitle = "div.post-title h3, div.post-title h1, #manga-title > h1"
-    open val mangaDetailsSelectorAuthor = "div.author-content > a"
+    open val mangaDetailsSelectorAuthor = "div.author-content > a, div.manga-authors > a"
     open val mangaDetailsSelectorArtist = "div.artist-content > a"
-    open val mangaDetailsSelectorStatus = "div.summary-content"
+    open val mangaDetailsSelectorStatus = "div.summary-content, div.summary-heading:contains(Status) + div"
     open val mangaDetailsSelectorDescription = "div.description-summary div.summary__content, div.summary_content div.post-content_item > h5 + div, div.summary_content div.manga-excerpt"
     open val mangaDetailsSelectorThumbnail = "div.summary_image img"
     open val mangaDetailsSelectorGenre = "div.genres-content a"
@@ -776,7 +786,7 @@ abstract class Madara(
     /**
      *  Get the best image quality available from srcset
      */
-    private fun String.getSrcSetImage(): String? {
+    protected fun String.getSrcSetImage(): String? {
         return this.split(" ")
             .filter(URL_REGEX::matches)
             .maxOfOrNull(String::toString)
@@ -918,6 +928,10 @@ abstract class Madara(
                 parseRelativeDate(date)
             }
             WordSet("hace").startsWith(date) -> {
+                parseRelativeDate(date)
+            }
+            // Handle "jour" with a number before it
+            date.contains(Regex("""\b\d+ jour""")) -> {
                 parseRelativeDate(date)
             }
             date.contains(Regex("""\d(st|nd|rd|th)""")) -> {
@@ -1063,10 +1077,17 @@ abstract class Madara(
      * Fetch the genres from the source to be used in the filters.
      */
     protected fun fetchGenres() {
-        if (fetchGenres && fetchGenresAttempts < 3 && genresList.isEmpty()) {
+        if (fetchGenres && fetchGenresAttempts < 3 && !genresFetched) {
             try {
-                genresList = client.newCall(genresRequest()).execute()
+                client.newCall(genresRequest()).execute()
                     .use { parseGenres(it.asJsoup()) }
+                    .also {
+                        genresFetched = true
+                    }
+                    .takeIf { it.isNotEmpty() }
+                    ?.also {
+                        genresList = it
+                    }
             } catch (_: Exception) {
             } finally {
                 fetchGenresAttempts++

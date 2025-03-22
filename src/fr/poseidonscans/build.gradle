@@ -1,0 +1,10 @@
+ext {
+    extName = 'Poseidon Scans'
+    extClass = '.PoseidonScans'
+    themePkg = 'madara'
+    baseUrl = 'https://poseidonscans.fr'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

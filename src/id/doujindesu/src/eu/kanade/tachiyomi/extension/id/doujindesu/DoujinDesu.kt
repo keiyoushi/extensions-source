@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -24,8 +24,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -39,9 +37,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     // Private stuff
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val DATE_FORMAT by lazy {
         SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id"))
@@ -136,7 +132,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Genre("Cunnilingus"),
         Genre("Dark Skin"),
         Genre("Daughter"),
-        Genre("Defloartion"),
+        Genre("Defloration"),
         Genre("Demon"),
         Genre("Demon Girl"),
         Genre("Dick Growth"),

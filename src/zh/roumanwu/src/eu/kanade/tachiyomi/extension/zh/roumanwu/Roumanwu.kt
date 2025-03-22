@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.roumanwu
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -13,11 +12,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import kotlin.math.max
 
 class Roumanwu : ParsedHttpSource(), ConfigurableSource {
@@ -25,8 +23,7 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
 
     override val baseUrl = MIRRORS[
         max(MIRRORS.size - 1, preferences.getString(MIRROR_PREF, MIRROR_DEFAULT)!!.toInt()),
@@ -34,7 +31,7 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder().addInterceptor(ScrambledImageInterceptor).build()
 
-    private val imageUrlRegex = """\\"imageUrl\\":\\"(?<imageUrl>[^\\]+)""".toRegex()
+    private val imageUrlRegex = """\\"imageUrl\\":\\"([^\\]+)""".toRegex()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
     override fun popularMangaNextPageSelector(): String? = null
@@ -110,7 +107,7 @@ class Roumanwu : ParsedHttpSource(), ConfigurableSource {
         val images = document.selectFirst("script:containsData(imageUrl)")?.data()
             ?.let { content ->
                 imageUrlRegex
-                    .findAll(content).map { it.groups["imageUrl"]?.value }
+                    .findAll(content).map { it.groups[1]?.value }
                     .toList()
             } ?: return emptyList()
 

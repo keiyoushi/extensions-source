@@ -4,6 +4,7 @@ ext {
     themePkg = 'iken'
     baseUrl = 'https://promanga.pro'
     overrideVersionCode = 28
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
