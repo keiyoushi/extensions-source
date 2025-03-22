@@ -339,7 +339,7 @@ class Koharu(
         return mangaDetail.toSManga().apply {
             setUrlWithoutDomain("${mangaDetail.id}/${mangaDetail.key}")
             title = if (remadd()) mangaDetail.title.shortenTitle() else mangaDetail.title
-    }
+        }
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/g/${manga.url}"
