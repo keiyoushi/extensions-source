@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -16,17 +17,19 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -63,7 +66,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
     }
 
     private val defaultBaseUrl: String = "https://www.sussytoons.wtf"
-    private val defaultApiUrl: String = "https://api-dev.sussytoons.site"
+    private val defaultApiUrl: String = "https://api.sussytoons.wtf"
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageLocation)
@@ -99,81 +102,72 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     // ============================= Popular ==================================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/obras/top5", headers)
-    }
+    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
-        val mangas = dto.results.filterNot { it.slug.isNullOrBlank() }.map { it.toSManga() }
-        return MangasPage(mangas, false) // There's a pagination bug
+        val json = response.parseScriptToJson()
+            ?: return MangasPage(emptyList(), false)
+        val mangas = json.parseAs<WrapperDto>().popular?.toSMangaList()
+            ?: emptyList()
+        return MangasPage(mangas, false)
     }
 
     // ============================= Latest ===================================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/obras/novos-capitulos".toHttpUrl().newBuilder()
+        val url = "$baseUrl/atualizacoes".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
-            .addQueryParameter("limite", "24")
             .build()
         return GET(url, headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val dto = response.parseAs<WrapperDto<List<MangaDto>>>()
-        val mangas = dto.results.filterNot { it.slug.isNullOrBlank() }.map { it.toSManga() }
-        return MangasPage(mangas, dto.hasNextPage())
+        val json = response.parseScriptToJson()
+            ?: return MangasPage(emptyList(), false)
+        val dto = json.parseAs<WrapperDto>()
+        val mangas = dto.latest.toSMangaList()
+        return MangasPage(mangas, dto.latest.hasNextPage())
     }
 
     // ============================= Search ===================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/obras".toHttpUrl().newBuilder()
-            .addQueryParameter("pagina", page.toString())
-            .addQueryParameter("limite", "8")
             .addQueryParameter("obr_nome", query)
+            .addQueryParameter("limite", "8")
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("todos_generos", "true")
             .build()
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val dto = response.parseAs<ResultDto<List<MangaDto>>>()
+        return MangasPage(dto.toSMangaList(), dto.hasNextPage())
+    }
 
     // ============================= Details ==================================
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
-
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
-            .addPathSegment(manga.id)
-            .build()
-        return GET(url, headers)
-    }
-
-    override fun mangaDetailsParse(response: Response) =
-        response.parseAs<WrapperDto<MangaDto>>().results.toSManga()
-
-    private val SManga.id: String get() {
-        val mangaUrl = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegments(url)
-            .build()
-        return mangaUrl.pathSegments[2]
+    override fun mangaDetailsParse(response: Response): SManga {
+        val json = response.parseScriptToJson()
+            ?: throw IOException("Details do mangá não foi encontrado")
+        return json.parseAs<ResultDto<MangaDto>>().results.toSManga()
     }
 
     // ============================= Chapters =================================
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
     override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<WrapperDto<WrapperChapterDto>>().results.chapters.map {
+        val json = response.parseScriptToJson() ?: return emptyList()
+        return json.parseAs<ResultDto<WrapperChapterDto>>().results.chapters.map {
             SChapter.create().apply {
                 name = it.name
                 it.chapterNumber?.let {
                     chapter_number = it
                 }
                 setUrlWithoutDomain("$baseUrl/capitulo/${it.id}")
-                date_upload = it.updateAt.toDate()
+                date_upload = dateFormat.tryParse(it.updateAt)
             }
-        }.sortedBy(SChapter::chapter_number).reversed()
+        }.sortedByDescending(SChapter::chapter_number)
     }
 
     // ============================= Pages ====================================
@@ -225,7 +219,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     private fun parseJsonToChapterPageDto(jsonContent: String): ChapterPageDto {
         return try {
-            jsonContent.parseAs<WrapperDto<ChapterPageDto>>().results
+            jsonContent.parseAs<ResultDto<ChapterPageDto>>().results
         } catch (e: Exception) {
             throw Exception("Failed to load pages: ${e.message}")
         }
@@ -249,17 +243,16 @@ class SussyToons : HttpSource(), ConfigurableSource {
             return response
         }
 
-        val url = request.url.toString()
-        if (url.contains(CDN_URL, ignoreCase = true)) {
-            response.close()
+        response.close()
 
-            val newRequest = request.newBuilder()
-                .url(url.replace(CDN_URL, OLDI_URL, ignoreCase = true))
-                .build()
+        val url = request.url.newBuilder()
+            .dropPathSegment(4)
+            .build()
 
-            return chain.proceed(newRequest)
-        }
-        return response
+        val newRequest = request.newBuilder()
+            .url(url)
+            .build()
+        return chain.proceed(newRequest)
     }
 
     // ============================= Settings ====================================
@@ -315,39 +308,31 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     // ============================= Utilities ====================================
 
-    private fun MangaDto.toSManga(): SManga {
-        val sManga = SManga.create().apply {
-            title = name
-            thumbnail_url = thumbnail?.let {
-                when {
-                    it.startsWith("http") -> thumbnail
-                    else -> "$OLDI_URL/scans/$scanId/obras/${this@toSManga.id}/$thumbnail"
-                }
-            }
-            initialized = true
-            val mangaUrl = "$baseUrl/obra".toHttpUrl().newBuilder()
-                .addPathSegment(this@toSManga.id.toString())
-                .addPathSegment(this@toSManga.slug!!)
-                .build()
-            setUrlWithoutDomain(mangaUrl.toString())
+    private fun Response.parseScriptToJson(): String? {
+        val quickJs = QuickJs.create()
+        val document = asJsoup()
+        val script = document.select("script")
+            .map(Element::data)
+            .filter(String::isNotEmpty)
+            .joinToString("\n")
+
+        val content = quickJs.evaluate(
+            """
+                globalThis.self = globalThis;
+                $script
+                self.__next_f.map(it => it[it.length - 1]).join('')
+            """.trimIndent(),
+        ) as String
+
+        return PAGE_JSON_REGEX.find(content)?.groups?.get(0)?.value
+    }
+
+    private fun HttpUrl.Builder.dropPathSegment(count: Int): HttpUrl.Builder {
+        repeat(count) {
+            removePathSegment(0)
         }
-
-        description?.let { Jsoup.parseBodyFragment(it).let { sManga.description = it.text() } }
-        sManga.status = status.toStatus()
-
-        return sManga
+        return this
     }
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        return json.decodeFromStream(body.byteStream())
-    }
-
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
-
-    private fun String.toDate() =
-        try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0L }
 
     /**
      * Normalizes path segments:
@@ -360,9 +345,12 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     companion object {
         const val CDN_URL = "https://cdn.sussytoons.site"
-        const val OLDI_URL = "https://oldi.sussytoons.site"
 
         val pageRegex = """capituloInicial.{3}(.*?)(\}\]\})""".toRegex()
+        val POPULAR_JSON_REGEX = """\{\"dataFeatured.+totalPaginas":\d+\}{2}""".toRegex()
+        val LATEST_JSON_REGEX = """\{\"atualizacoesInicial.+\}\}""".toRegex()
+        val DETAILS_CHAPTER_REGEX = """\{\"resultado.+"\}{3}""".toRegex()
+        val PAGE_JSON_REGEX = """$POPULAR_JSON_REGEX|$LATEST_JSON_REGEX|$DETAILS_CHAPTER_REGEX""".toRegex()
 
         private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
 
