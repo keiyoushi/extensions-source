@@ -34,7 +34,7 @@ class MangaPlanet : ParsedHttpSource() {
     // No need to be lazy if you're going to use it immediately below.
     private val json = Injekt.get<Json>()
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(json))
         .addNetworkInterceptor(CookieInterceptor(baseUrl.toHttpUrl().host, "mpaconf" to "18"))
         .build()

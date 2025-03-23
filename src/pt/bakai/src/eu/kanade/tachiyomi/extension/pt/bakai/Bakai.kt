@@ -46,7 +46,7 @@ class Bakai : ParsedHttpSource() {
                         it.name.startsWith("ips4_") || it.path == searchPathSegment
                     }
 
-                    private val cookieJar = network.client.cookieJar
+                    private val cookieJar = network.cloudflareClient.cookieJar
 
                     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) =
                         cookieJar.saveFromResponse(url, cookies.removeLimit())

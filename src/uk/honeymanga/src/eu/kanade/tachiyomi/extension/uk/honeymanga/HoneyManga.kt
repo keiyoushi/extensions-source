@@ -39,7 +39,7 @@ class HoneyManga : HttpSource() {
         .add("Origin", baseUrl)
         .add("Referer", baseUrl)
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(API_URL.toHttpUrl(), 10)
         .build()
 

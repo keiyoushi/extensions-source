@@ -34,7 +34,7 @@ class Hentaidexy : HttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1)
         .build()
 

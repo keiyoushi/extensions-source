@@ -32,7 +32,7 @@ class wnacg : ParsedHttpSource(), ConfigurableSource {
 
     private val updateUrlInterceptor = UpdateUrlInterceptor(preferences)
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(updateUrlInterceptor)
         .build()
 

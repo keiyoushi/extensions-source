@@ -26,7 +26,7 @@ class NicovideoSeiga : HttpSource() {
     override val lang: String = "ja"
     override val name: String = "Nicovideo Seiga"
     override val supportsLatest: Boolean = false
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageIntercept)
         .build()
     override val versionId: Int = 2
