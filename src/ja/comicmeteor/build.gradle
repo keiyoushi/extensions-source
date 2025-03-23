@@ -1,7 +1,8 @@
 ext {
     extName = "Comic Meteor"
     extClass = ".ComicMeteor"
-    extVersionCode = 1
+    extVersionCode = 2
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

@@ -71,9 +71,9 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
         return builder
     }
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
-        .addInterceptor(MdAtHomeReportInterceptor(network.client, headers))
+        .addInterceptor(MdAtHomeReportInterceptor(network.cloudflareClient, headers))
         .build()
 
     // Popular manga section

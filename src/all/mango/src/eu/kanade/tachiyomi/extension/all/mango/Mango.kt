@@ -215,7 +215,7 @@ class Mango : ConfigurableSource, UnmeteredSource, HttpSource() {
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client: OkHttpClient =
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .dns(Dns.SYSTEM)
             .addInterceptor { authIntercept(it) }
             .build()

@@ -51,7 +51,7 @@ class Tapastic : ConfigurableSource, ParsedHttpSource() {
 
     private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .cookieJar(
             // Syncs okhttp with webview cookies, allowing logged-in users do logged-in stuff
             object : CookieJar {

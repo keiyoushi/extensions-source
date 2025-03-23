@@ -54,7 +54,7 @@ class KadoComi : HttpSource() {
         }
     }
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(imageDescrambler)
         .build()
 

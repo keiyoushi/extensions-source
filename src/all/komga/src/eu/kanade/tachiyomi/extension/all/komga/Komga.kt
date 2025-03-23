@@ -85,7 +85,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         .set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
 
     override val client: OkHttpClient =
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .authenticator { _, response ->
                 if (response.request.header("Authorization") != null) {
                     null // Give up, we've already failed to authenticate.

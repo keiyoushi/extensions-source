@@ -31,7 +31,7 @@ class Cartoon18 : HttpSource(), ConfigurableSource {
 
     private val baseUrlWithLang get() = if (useTrad) baseUrl else "$baseUrl/zh-hans"
 
-    override val client = network.client.newBuilder().followRedirects(false).build()
+    override val client = network.cloudflareClient.newBuilder().followRedirects(false).build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

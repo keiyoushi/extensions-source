@@ -47,7 +47,7 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
         return request.newBuilder().header("Authorization", credential).build()
     }
 
-    override val client: OkHttpClient = super.client.newBuilder().addInterceptor { chain ->
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor { chain ->
         val response = chain.proceed(chain.request())
         if (response.code == 401) throw IOException("You are currently logged out.\nGo to Extensions > Details to input your credentials.")
         response

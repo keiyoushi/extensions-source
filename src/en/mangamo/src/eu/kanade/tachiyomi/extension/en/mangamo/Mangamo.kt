@@ -82,7 +82,7 @@ class Mangamo : ConfigurableSource, HttpSource() {
     private val exclusivesOnlyPref
         get() = preferences.getStringSet(MangamoConstants.EXCLUSIVES_ONLY_PREF, setOf())!!
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor {
             val request = it.request()
             val response = it.proceed(request)
