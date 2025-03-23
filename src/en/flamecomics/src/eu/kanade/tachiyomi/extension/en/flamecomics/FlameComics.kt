@@ -55,6 +55,17 @@ class FlameComics : HttpSource() {
         addPathSegment("image")
     }.build().toString() + "?url=$dataUrl"
 
+    private fun thumbnailUrl(seriesData: Series) = imageApiUrlBuilder(
+        cdn.toHttpUrl().newBuilder().apply {
+            addPathSegment("series")
+            addPathSegment(seriesData.series_id.toString())
+            addPathSegment(seriesData.cover)
+            addQueryParameter(seriesData.last_edit, null)
+            addQueryParameter("w", "384")
+            addQueryParameter("q", "75")
+        }.build().toString(),
+    )
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         GET(
             dataApiReqBuilder().apply {
@@ -112,14 +123,7 @@ class FlameComics : HttpSource() {
                             addPathSegment(seriesData.series_id.toString())
                         }.build().toString(),
                     )
-                    thumbnail_url = imageApiUrlBuilder(
-                        cdn.toHttpUrl().newBuilder().apply {
-                            addPathSegment("series")
-                            addPathSegment(seriesData.series_id.toString())
-                            addPathSegment(seriesData.cover)
-                        }.build()
-                            .toString() + "&w=640&q=75", // for some reason they don`t include the ?
-                    )
+                    thumbnail_url = thumbnailUrl(seriesData)
                 }
             },
             false,
@@ -151,14 +155,7 @@ class FlameComics : HttpSource() {
                         addPathSegment(seriesData.series_id.toString())
                     }.build().toString(),
                 )
-                thumbnail_url = imageApiUrlBuilder(
-                    cdn.toHttpUrl().newBuilder().apply {
-                        addPathSegment("series")
-                        addPathSegment(seriesData.series_id.toString())
-                        addPathSegment(seriesData.cover)
-                    }.build()
-                        .toString() + "&w=640&q=75", // for some reason they don`t include the ?
-                )
+                thumbnail_url = thumbnailUrl(seriesData)
             }
         }
 
@@ -187,13 +184,7 @@ class FlameComics : HttpSource() {
         val seriesData =
             json.decodeFromString<MangaPageData>(response.body.string()).pageProps.series
         title = seriesData.title
-        thumbnail_url = imageApiUrlBuilder(
-            cdn.toHttpUrl().newBuilder().apply {
-                addPathSegment("series")
-                addPathSegment(seriesData.series_id.toString())
-                addPathSegment(seriesData.cover)
-            }.build().toString() + "&w=640&q=75",
-        )
+        thumbnail_url = thumbnailUrl(seriesData)
         description = seriesData.description
 
         genre = seriesData.tags?.let { tags ->

@@ -17,7 +17,6 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
 import okhttp3.Cookie
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -31,7 +30,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.net.URLEncoder
+import java.io.IOException
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -49,6 +48,7 @@ abstract class MangaHub(
 
     private var baseApiUrl = "https://api.mghcdn.com"
     private var baseCdnUrl = "https://imgx.mghcdn.com"
+    private val regex = Regex("mhub_access=([^;]+)")
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(
@@ -91,8 +91,6 @@ abstract class MangaHub(
     }
 
     private fun refreshApiKey(chapter: SChapter) {
-        val now = Calendar.getInstance().time.time
-
         val slug = "$baseUrl${chapter.url}"
             .toHttpUrlOrNull()
             ?.pathSegments
@@ -104,32 +102,28 @@ abstract class MangaHub(
             baseUrl.toHttpUrl()
         }
 
-        // Clear key cookie
-        val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
-        client.cookieJar.saveFromResponse(url, listOf(cookie))
+        val oldKey = client.cookieJar
+            .loadForRequest(baseUrl.toHttpUrl())
+            .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }?.value
 
-        // Set required cookie (for cache busting?)
-        val recently = buildJsonObject {
-            putJsonObject((now - (0..3600).random()).toString()) {
-                put("mangaID", (1..42_000).random())
-                put("number", (1..20).random())
+        for (i in 1..2) {
+            // Clear key cookie
+            val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
+            client.cookieJar.saveFromResponse(url, listOf(cookie))
+
+            // We try requesting again with param if the first one fails
+            val query = if (i == 2) "?reloadKey=1" else ""
+
+            try {
+                val response = client.newCall(GET("$url$query", headers)).execute()
+                val returnedKey = response.headers["set-cookie"]?.let { regex.find(it)?.groupValues?.get(1) }
+                response.close() // Avoid potential resource leaks
+
+                if (returnedKey != oldKey) break; // Break out of loop since we got an allegedly valid API key
+            } catch (_: IOException) {
+                throw IOException("An error occurred while obtaining a new API key") // Show error
             }
-        }.toString()
-
-        client.cookieJar.saveFromResponse(
-            url,
-            listOf(
-                Cookie.Builder()
-                    .domain(url.host)
-                    .name("recently")
-                    .value(URLEncoder.encode(recently, "utf-8"))
-                    .expiresAt(now + 2 * 60 * 60 * 24 * 31) // +2 months
-                    .build(),
-            ),
-        )
-
-        val request = GET("$url?reloadKey=1", headers)
-        client.newCall(request).execute()
+        }
     }
 
     data class SMangaDTO(
