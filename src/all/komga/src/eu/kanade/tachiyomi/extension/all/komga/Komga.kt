@@ -130,6 +130,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         val type = when {
             collectionId != null -> "collections/$collectionId/series"
             filters.find { it is TypeSelect }?.state == 1 -> "readlists"
+            filters.find { it is TypeSelect }?.state == 2 -> "books"
             else -> "series"
         }
 
@@ -171,6 +172,8 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
     private fun processSeriesPage(response: Response, baseUrl: String): MangasPage {
         val data = if (response.isFromReadList()) {
             response.parseAs<PageWrapperDto<ReadListDto>>()
+        } else if (response.isFromBook()) {
+            response.parseAs<PageWrapperDto<BookDto>>()
         } else {
             response.parseAs<PageWrapperDto<SeriesDto>>()
         }
@@ -185,6 +188,8 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
     override fun mangaDetailsParse(response: Response): SManga {
         return if (response.isFromReadList()) {
             response.parseAs<ReadListDto>().toSManga(baseUrl)
+        } else if (response.isFromBook()) {
+            response.parseAs<BookDto>().toSManga(baseUrl)
         } else {
             response.parseAs<SeriesDto>().toSManga(baseUrl)
         }
@@ -195,10 +200,30 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books", "/book")
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET("${manga.url}/books?unpaged=true&media_status=READY&deleted=false", headers)
+    override fun chapterListRequest(manga: SManga): Request = when {
+        manga.url.isFromBook() -> GET("${manga.url}?unpaged=true&media_status=READY&deleted=false", headers)
+        else -> GET("${manga.url}/books?unpaged=true&media_status=READY&deleted=false", headers)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        if (response.isFromBook()) {
+            val book = response.parseAs<BookDto>()
+            return listOf(
+                SChapter.create().apply {
+                    chapter_number = 1F
+                    url = "$baseUrl/api/v1/books/${book.id}"
+                    name = book.getChapterName(chapterNameTemplate, isFromReadList = true)
+                    scanlator = book.metadata.authors
+                        .filter { it.role == "translator" }
+                        .joinToString { it.name }
+                    date_upload = when {
+                        book.metadata.releaseDate != null -> parseDate(book.metadata.releaseDate)
+                        book.created != null -> parseDateTime(book.created)
+                        else -> parseDateTime(book.fileLastModified)
+                    }
+                },
+            )
+        }
         val page = response.parseAs<PageWrapperDto<BookDto>>().content
         val isFromReadList = response.isFromReadList()
         val chapterNameTemplate = chapterNameTemplate
@@ -464,7 +489,13 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         }
     }
 
-    fun Response.isFromReadList() = request.url.toString().contains("/api/v1/readlists")
+    fun String.isFromReadList() = contains("/api/v1/readlists")
+
+    fun String.isFromBook() = contains("/api/v1/books")
+
+    fun Response.isFromReadList() = request.url.toString().isFromReadList()
+
+    fun Response.isFromBook() = request.url.toString().isFromBook()
 
     private inline fun <reified T> Response.parseAs(): T =
         json.decodeFromString(body.string())
@@ -477,6 +508,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
         internal const val TYPE_SERIES = "Series"
         internal const val TYPE_READLISTS = "Read lists"
+        internal const val TYPE_BOOKS = "Books"
     }
 }
 
