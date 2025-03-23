@@ -47,4 +47,3 @@ This project does not have any affiliation with the content providers available.
 
 This project is not affiliated with Mihon/Tachiyomi. Don't ask for help about these extensions at the
 official support means of Mihon/Tachiyomi. All credits to the codebase goes to the original contributors.
-

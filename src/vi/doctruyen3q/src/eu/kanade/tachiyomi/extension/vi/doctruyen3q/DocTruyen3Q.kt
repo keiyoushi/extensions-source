@@ -31,7 +31,7 @@ class DocTruyen3Q :
         gmtOffset = null,
     ),
     ConfigurableSource {
-	
+
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
@@ -97,7 +97,7 @@ class DocTruyen3Q :
     }
 
     override val genresSelector = ".categories-detail ul.nav li:not(.active) a"
-	
+
     private val preferences: SharedPreferences = getPreferences()
 
     init {

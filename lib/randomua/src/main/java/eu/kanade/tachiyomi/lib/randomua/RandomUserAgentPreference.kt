@@ -69,4 +69,3 @@ val RANDOM_UA_VALUES = arrayOf("off", "desktop", "mobile")
 const val TITLE_CUSTOM_UA = "Custom user agent string (requires restart)"
 const val PREF_KEY_CUSTOM_UA = "pref_key_custom_ua_"
 const val CUSTOM_UA_SUMMARY = "Leave blank to use the default user agent string (ignored if random user agent string is enabled)"
-
