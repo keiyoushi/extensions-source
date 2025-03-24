@@ -1,11 +1,11 @@
 # Contributing
 
 This guide have some instructions and tips on how to create a new Tachiyomi extension. Please **read
-it carefully** if you're a new contributor or don't have any experience on the required languages 
+it carefully** if you're a new contributor or don't have any experience on the required languages
 and knowledges.
 
-This guide is not definitive and it's being updated over time. If you find any issue on it, feel 
-free to report it through a [Meta Issue](https://github.com/keiyoushi/extensions-source/issues/new?assignees=&labels=Meta+request&template=06_request_meta.yml) 
+This guide is not definitive and it's being updated over time. If you find any issue on it, feel
+free to report it through a [Meta Issue](https://github.com/keiyoushi/extensions-source/issues/new?assignees=&labels=Meta+request&template=06_request_meta.yml)
 or fixing it directly by submitting a Pull Request.
 
 ## Table of Contents
@@ -38,7 +38,7 @@ or fixing it directly by submitting a Pull Request.
 
 ## Prerequisites
 
-Before you start, please note that the ability to use following technologies is **required** and 
+Before you start, please note that the ability to use following technologies is **required** and
 that existing contributors will not actively teach them to you.
 
 - Basic [Android development](https://developer.android.com/)
@@ -160,23 +160,23 @@ and [negative refspecs](https://github.blog/2020-10-19-git-2-29-released/#user-c
 
 ## Getting help
 
-- Join [the Discord server](https://discord.gg/3FbCpdKbdY) for online help and to ask questions while 
+- Join [the Discord server](https://discord.gg/3FbCpdKbdY) for online help and to ask questions while
 developing your extension. When doing so, please ask it in the `#programming` channel.
-- There are some features and tricks that are not explored in this document. Refer to existing 
+- There are some features and tricks that are not explored in this document. Refer to existing
 extension code for examples.
 
 ## Writing an extension
 
-The quickest way to get started is to copy an existing extension's folder structure and renaming it 
+The quickest way to get started is to copy an existing extension's folder structure and renaming it
 as needed. We also recommend reading through a few existing extensions' code before you start.
 
 ### Setting up a new Gradle module
 
-Each extension should reside in `src/<lang>/<mysourcename>`. Use `all` as `<lang>` if your target 
+Each extension should reside in `src/<lang>/<mysourcename>`. Use `all` as `<lang>` if your target
 source supports multiple languages or if it could support multiple sources.
 
-The `<lang>` used in the folder inside `src` should be the major `language` part. For example, if 
-you will be creating a `pt-BR` source, use `<lang>` here as `pt` only. Inside the source class, use 
+The `<lang>` used in the folder inside `src` should be the major `language` part. For example, if
+you will be creating a `pt-BR` source, use `<lang>` here as `pt` only. Inside the source class, use
 the full locale string instead.
 
 ### Loading a subset of Gradle modules
@@ -261,7 +261,7 @@ Referencing the actual implementation will help with understanding extensions' c
 
 #### DataImage library
 
-[`lib-dataimage`](https://github.com/keiyoushi/extensions-source/tree/main/lib/dataimage) is a library 
+[`lib-dataimage`](https://github.com/keiyoushi/extensions-source/tree/main/lib/dataimage) is a library
 for handling [base 64 encoded image data](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs)
 using an [OkHttp interceptor](https://square.github.io/okhttp/interceptors/).
 
@@ -285,20 +285,20 @@ dependencies {
 
 #### Additional dependencies
 
-If you find yourself needing additional functionality, you can add more dependencies to your `build.gradle` 
-file. Many of [the dependencies](https://github.com/tachiyomiorg/tachiyomi/blob/master/app/build.gradle.kts) 
+If you find yourself needing additional functionality, you can add more dependencies to your `build.gradle`
+file. Many of [the dependencies](https://github.com/tachiyomiorg/tachiyomi/blob/master/app/build.gradle.kts)
 from the main Tachiyomi app are exposed to extensions by default.
 
 > [!NOTE]
 > Several dependencies are already exposed to all extensions via Gradle's version catalog.
 > To view which are available check the `gradle/libs.versions.toml` file.
 
-Notice that we're using `compileOnly` instead of `implementation` if the app already contains it. 
-You could use `implementation` instead for a new dependency, or you prefer not to rely on whatever 
+Notice that we're using `compileOnly` instead of `implementation` if the app already contains it.
+You could use `implementation` instead for a new dependency, or you prefer not to rely on whatever
 the main app has at the expense of app size.
 
 > [!IMPORTANT]
-> Using `compileOnly` restricts you to versions that must be compatible with those used in 
+> Using `compileOnly` restricts you to versions that must be compatible with those used in
 > [the latest stable version of Tachiyomi](https://github.com/tachiyomiorg/tachiyomi/releases/latest).
 
 ### Extension main class
@@ -330,16 +330,16 @@ a.k.a. the Browse source entry point in the app (invoked by tapping on the sourc
 - The app calls `fetchPopularManga` which should return a `MangasPage` containing the first batch of
 found `SManga` entries.
     - This method supports pagination. When user scrolls the manga list and more results must be fetched,
-    the app calls it again with increasing `page` values (starting with `page=1`). This continues while 
+    the app calls it again with increasing `page` values (starting with `page=1`). This continues while
     `MangasPage.hasNextPage` is passed as `true` and `MangasPage.mangas` is not empty.
-- To show the list properly, the app needs `url`, `title` and `thumbnail_url`. You **must** set them 
+- To show the list properly, the app needs `url`, `title` and `thumbnail_url`. You **must** set them
 here. The rest of the fields could be filled later (refer to Manga Details below).
     - You should set `thumbnail_url` if is available, if not, `getMangaDetails` will be **immediately**
     called (this will increase network calls heavily and should be avoided).
 
 #### Latest Manga
 
-a.k.a. the Latest source entry point in the app (invoked by tapping on the "Latest" button beside 
+a.k.a. the Latest source entry point in the app (invoked by tapping on the "Latest" button beside
 the source name).
 
 - Enabled if `supportsLatest` is `true` for a source
@@ -347,7 +347,7 @@ the source name).
 
 #### Manga Search
 
-- When the user searches inside the app, `fetchSearchManga` will be called and the rest of the flow 
+- When the user searches inside the app, `fetchSearchManga` will be called and the rest of the flow
 is similar to what happens with `fetchPopularManga`.
     - If search functionality is not available, return `Observable.just(MangasPage(emptyList(), false))`
 - `getFilterList` will be called to get all filters and filter types.
@@ -409,11 +409,11 @@ will be cached.
 
 - After a chapter list for the manga is fetched and the app is going to cache the data,
 `prepareNewChapter` will be called.
-- `SChapter.date_upload` is the [UNIX Epoch time](https://en.wikipedia.org/wiki/Unix_time) 
+- `SChapter.date_upload` is the [UNIX Epoch time](https://en.wikipedia.org/wiki/Unix_time)
 **expressed in milliseconds**.
     - If you don't pass `SChapter.date_upload` and leave it zero, the app will use the default date
     instead, but it's recommended to always fill it if it's available.
-    - To get the time in milliseconds from a date string, you can use a `SimpleDateFormat` like in 
+    - To get the time in milliseconds from a date string, you can use a `SimpleDateFormat` like in
     the example below.
 
       ```kotlin
@@ -430,13 +430,13 @@ will be cached.
       }
       ```
 
-      Make sure you make the `SimpleDateFormat` a class constant or variable so it doesn't get 
-    recreated for every chapter. If you need to parse or format dates in manga description, create 
+      Make sure you make the `SimpleDateFormat` a class constant or variable so it doesn't get
+    recreated for every chapter. If you need to parse or format dates in manga description, create
     another instance since `SimpleDateFormat` is not thread-safe.
     - If the parsing have any problem, make sure to return `0L` so the app will use the default date
     instead.
     - The app will overwrite dates of existing old chapters **UNLESS** `0L` is returned.
-    - The default date has [changed](https://github.com/tachiyomiorg/tachiyomi/pull/7197) in 
+    - The default date has [changed](https://github.com/tachiyomiorg/tachiyomi/pull/7197) in
     preview ≥ r4442 or stable > 0.13.4.
       - In older versions, the default date is always the fetch date.
       - In newer versions, this is the same if every (new) chapter has `0L` returned.
@@ -460,12 +460,12 @@ empty, so the app will skip the `fetchImageUrl` source and call directly `fetchI
 
 ### Misc notes
 
-- Sometimes you may find no use for some inherited methods. If so just override them and throw 
+- Sometimes you may find no use for some inherited methods. If so just override them and throw
 exceptions: `throw UnsupportedOperationException()`
-- You probably will find `getUrlWithoutDomain` useful when parsing the target source URLs. Keep in 
+- You probably will find `getUrlWithoutDomain` useful when parsing the target source URLs. Keep in
 mind there's a current issue with spaces in the URL though, so if you use it, replace all spaces with
 URL encoded characters (like `%20`).
-- If possible try to stick to the general workflow from `HttpSource`/`ParsedHttpSource`; breaking 
+- If possible try to stick to the general workflow from `HttpSource`/`ParsedHttpSource`; breaking
 them may cause you more headache than necessary.
 - By implementing `ConfigurableSource` you can add settings to your source, which is backed by
 [`SharedPreferences`](https://developer.android.com/reference/android/content/SharedPreferences).
@@ -477,8 +477,8 @@ them may cause you more headache than necessary.
 Extensions can define URL intent filters by defining it inside a custom `AndroidManifest.xml` file.
 (Example TBD.)
 
-To test if the URL intent filter is working as expected, you can try opening the website in a browser 
-and navigating to the endpoint that was added as a filter or clicking a hyperlink. Alternatively, 
+To test if the URL intent filter is working as expected, you can try opening the website in a browser
+and navigating to the endpoint that was added as a filter or clicking a hyperlink. Alternatively,
 you can use the `adb` command below.
 
 ```console
@@ -501,7 +501,7 @@ a lot of requests and preventing causing unnecessary damage to the source server
 update strategy of a `SManga`, use the `update_strategy` field. You can find below a description of
 the current possible values.
 
-- `UpdateStrategy.ALWAYS_UPDATE`: Titles marked as always update will be included in the library 
+- `UpdateStrategy.ALWAYS_UPDATE`: Titles marked as always update will be included in the library
 update if they aren't excluded by additional restrictions.
 - `UpdateStrategy.ONLY_FETCH_ONCE`: Titles marked as only fetch once will be automatically skipped
 during library updates. Useful for cases where the series is previously known to be finished and have
@@ -527,7 +527,7 @@ Then the class name and the `name` attribute value can be changed. Also don't fo
 extension name and class name in the individual Gradle file.
 
 > [!IMPORTANT]
-> The package name **needs** to be the same (even if it has the old name), otherwise users will not 
+> The package name **needs** to be the same (even if it has the old name), otherwise users will not
 > receive the extension update when it gets published in the repository.
 
 The `id` also needs to be explicity set to the old value if you're changing the `lang` attribute.
@@ -691,7 +691,7 @@ with open(f"{package}/src/{source}.kt", "w") as f:
 
 ## Running
 
-To make local development more convenient, you can use the following run configuration to launch 
+To make local development more convenient, you can use the following run configuration to launch
 Tachiyomi directly at the Browse panel:
 
 ![](https://i.imgur.com/STy0UFY.png)
@@ -724,7 +724,7 @@ You can leverage the Android Debugger to step through your extension while debug
 You *cannot* simply use Android Studio's `Debug 'module.name'` -> this will most likely result in an
 error while launching.
 
-Instead, once you've built and installed your extension on the target device, use 
+Instead, once you've built and installed your extension on the target device, use
 `Attach Debugger to Android Process` to start debugging Tachiyomi.
 
 ![](https://i.imgur.com/muhXyfu.png)
@@ -834,7 +834,7 @@ of `mitmweb`.
 
 ## Building
 
-APKs can be created in Android Studio via `Build > Build Bundle(s) / APK(s) > Build APK(s)` or 
+APKs can be created in Android Studio via `Build > Build Bundle(s) / APK(s) > Build APK(s)` or
 `Build > Generate Signed Bundle / APK`.
 
 If for some reason you decide to build the APK from the command line, you can use the following
@@ -853,13 +853,13 @@ and merged if it's approved. We encourage following a [GitHub Standard Fork & Pu
 and following the good practices of the workflow, such as not commiting directly to `main`: always
 create a new branch for your changes.
 
-If you are more comfortable about using Git GUI-based tools, you can refer to [this guide](https://learntodroid.com/how-to-use-git-and-github-in-android-studio/) 
+If you are more comfortable about using Git GUI-based tools, you can refer to [this guide](https://learntodroid.com/how-to-use-git-and-github-in-android-studio/)
 about the Git integration inside Android Studio, specifically the "How to Contribute to an to Existing
 Git Repository in Android Studio" section of the guide.
 
 > [!IMPORTANT]
-> Make sure you have generated the extension icon using the linked Icon Generator tool in the [Tools](#tools) 
-> section. The icon **must follow the pattern** adopted by all other extensions: a square with rounded 
+> Make sure you have generated the extension icon using the linked Icon Generator tool in the [Tools](#tools)
+> section. The icon **must follow the pattern** adopted by all other extensions: a square with rounded
 > corners. Make sure to remove the generated `web_hi_res_512.png`.
 
 Please **do test your changes by compiling it through Android Studio** before submitting it. Obvious

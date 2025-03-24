@@ -5,7 +5,7 @@ Table of Content
   - [Version 5 API Rewrite](#version-5-api-rewrite)
 - [Guides](#Guides)
   - [How can I block particular Scanlator Groups?](#how-can-i-block-particular-scanlator-groups)
-    
+
 Don't find the question you are look for go check out our general FAQs and Guides over at [Extension FAQ](https://tachiyomi.org/help/faq/#extensions) or [Getting Started](https://tachiyomi.org/help/guides/getting-started/#installation)
 
 ## FAQ
