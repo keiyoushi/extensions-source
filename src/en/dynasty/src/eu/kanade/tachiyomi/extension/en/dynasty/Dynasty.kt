@@ -19,7 +19,6 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import okio.use
-import org.jsoup.nodes.Element
 import rx.Observable
 
 class Dynasty : HttpSource() {
@@ -71,7 +70,7 @@ class Dynasty : HttpSource() {
                 MangaEntry(
                     url = "/${parent.directory!!}/${parent.permalink}",
                     title = parent.name,
-                    cover = getCover(parent.directory, parent.permalink),
+                    cover = getCoverUrl(parent.directory, parent.permalink),
                 ),
             )
         }
@@ -82,13 +81,13 @@ class Dynasty : HttpSource() {
                 MangaEntry(
                     url = "/chapters/${chap.permalink}",
                     title = chap.title,
-                    cover = buildCoverFetchUrl(chap.permalink),
+                    cover = buildChapterCoverFetchUrl(chap.permalink),
                 ),
             )
         }
     }
 
-    private var _authorScanlatorCache: Element? = null
+    private var _authorScanlatorCache: String? = null
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         val empty = query.isBlank() && filters.firstInstance<GenreFilter>().isEmpty()
@@ -112,7 +111,7 @@ class Dynasty : HttpSource() {
             // don't fetch it again if it is cached
             if (page > 1 && _authorScanlatorCache != null) {
                 return fetchAuthorOrScanlator(
-                    _authorScanlatorCache!!.absUrl("href"),
+                    _authorScanlatorCache!!,
                     page,
                 )
             }
@@ -127,7 +126,7 @@ class Dynasty : HttpSource() {
             val result = document.selectFirst(".chapter-list a.name")
                 ?: throw Exception("$type: $search not found")
 
-            _authorScanlatorCache = result
+            _authorScanlatorCache = result.absUrl("href")
 
             return fetchAuthorOrScanlator(
                 result.absUrl("href"),
@@ -185,30 +184,26 @@ class Dynasty : HttpSource() {
         val entries = LinkedHashSet<MangaEntry>()
 
         document.select(".chapter-list a.name").forEach { element ->
-            var (directory, slug) = element.absUrl("href")
+            var (directory, permalink) = element.absUrl("href")
                 .toHttpUrl().pathSegments
                 .let { it[0] to it[1] }
             var title = element.ownText()
 
             if (directory == "chapters") {
-                val seriesSlug = CHAPTER_SLUG_REGEX.find(slug)?.groupValues?.get(1)
+                val seriesPermalink = CHAPTER_SLUG_REGEX.find(permalink)?.groupValues?.get(1)
 
-                if (seriesSlug != null) {
+                if (seriesPermalink != null) {
                     directory = "series"
-                    slug = seriesSlug
-                    title = seriesSlug.slugToTitle()
+                    permalink = seriesPermalink
+                    title = seriesPermalink.permalinkToTitle()
                 }
             }
 
             entries.add(
                 MangaEntry(
-                    url = "/$directory/$slug",
+                    url = "/$directory/$permalink",
                     title = title,
-                    cover = if (directory == "chapters") {
-                        buildCoverFetchUrl(slug)
-                    } else {
-                        getCover(directory, slug)
-                    },
+                    cover = getCoverUrl(directory, permalink),
                 ),
             )
         }
@@ -274,7 +269,7 @@ class Dynasty : HttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        throw Exception("Not yet implemented")
+        return GET("$baseUrl${manga.url}.json", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -320,8 +315,12 @@ class Dynasty : HttpSource() {
             .parseAs()
     }
 
-    private fun getCover(directory: String?, permalink: String): String? {
+    private fun getCoverUrl(directory: String?, permalink: String): String? {
         directory ?: return null
+
+        if (directory == "chapters") {
+            return buildChapterCoverFetchUrl(permalink)
+        }
 
         val file = covers[directory]?.get(permalink)
             ?: return null
@@ -342,11 +341,11 @@ class Dynasty : HttpSource() {
         }.build().toString()
     }
 
-    private fun buildCoverFetchUrl(chapter: String): String {
+    private fun buildChapterCoverFetchUrl(permalink: String): String {
         return HttpUrl.Builder().apply {
             scheme("http")
             host(COVER_FETCH_HOST)
-            fragment(chapter)
+            addQueryParameter("permalink", permalink)
         }.build().toString()
     }
 
@@ -357,22 +356,18 @@ class Dynasty : HttpSource() {
             return chain.proceed(request)
         }
 
+        val permalink = request.url.queryParameter("permalink")!!
+
         val chapterUrl = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("chapters")
-            addPathSegments("${request.url.fragment!!}.json")
+            addPathSegments("$permalink.json")
         }.build()
 
-        val page = chain.proceed(GET(chapterUrl, headers))
+        val page = client.newCall(GET(chapterUrl, headers)).execute()
             .parseAs<ChapterResponse>()
             .pages.first()
 
-        val url = HttpUrl.Builder().apply {
-            scheme("https")
-            host("x.0ms.dev")
-            addPathSegments("q70")
-            addEncodedPathSegments(baseUrl)
-            addEncodedPathSegments(page.url.removePrefix("/"))
-        }.build()
+        val url = buildCoverUrl(page.url)
 
         val newRequest = request.newBuilder()
             .url(url)
@@ -381,7 +376,7 @@ class Dynasty : HttpSource() {
         return chain.proceed(newRequest)
     }
 
-    private fun String.slugToTitle(): String {
+    private fun String.permalinkToTitle(): String {
         val result = StringBuilder(length)
         var capitalize = true
         for (char in this) {
