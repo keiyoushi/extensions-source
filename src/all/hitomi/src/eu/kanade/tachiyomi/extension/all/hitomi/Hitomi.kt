@@ -502,7 +502,7 @@ class Hitomi(
             val imageId = imageIdFromHash(hash)
             val subDomain = 'a' + subdomainOffset(imageId)
 
-            "https://${subDomain}tn.$cdnDomain/webpbigtn/${thumbPathFromHash(hash)}/$hash.webp"
+            "https://${subDomain}tn.$cdnDomain/avifbigtn/${thumbPathFromHash(hash)}/$hash.avif"
         }
         description = buildString {
             japaneseTitle?.let {
