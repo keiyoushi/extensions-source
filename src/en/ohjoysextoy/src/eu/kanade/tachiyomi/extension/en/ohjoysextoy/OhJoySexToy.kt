@@ -25,6 +25,8 @@ class OhJoySexToy : ParsedHttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
+    private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH)
+
     // Browse
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/category/comic/page/$page/", headers)
@@ -72,23 +74,19 @@ class OhJoySexToy : ParsedHttpSource() {
         thumbnail_url = document.selectFirst("meta[property=\"og:image\"]")
             ?.absUrl("content")
         status = SManga.COMPLETED
-        title = document.selectFirst("meta[property=\"og:title\"]")
-            ?.attr("content")
-            ?.substringBefore(" by")
-            ?: ""
+        title = document.selectFirst("meta[property=\"og:title\"]")!!
+            .attr("content")
+            .substringBefore(" by")
         author = document.selectFirst("meta[property=\"og:title\"]")
             ?.attr("content")
             ?.substringAfter("by ", "")
-            ?: ""
         description = parseDescription(document)
         genre = document.select("meta[property=\"article:section\"]:not(:first-of-type)")
             .eachAttr("content")
             .joinToString()
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         setUrlWithoutDomain(
-            document.selectFirst("meta[property=\"og:url\"]")
-                ?.absUrl("content")
-                ?: "",
+            document.selectFirst("meta[property=\"og:url\"]")!!.absUrl("content"),
         )
     }
 
@@ -110,13 +108,13 @@ class OhJoySexToy : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val dateString = document.selectFirst(".post-date")?.text() ?: ""
+        val dateString = document.selectFirst(".post-date")?.text()
 
         return listOf(
             SChapter.create().apply {
                 name = document.title()
                 scanlator = document.selectFirst(".post-author a")?.text()
-                date_upload = SimpleDateFormat("MM/dd/yyyy", Locale.ENGLISH).tryParse(dateString)
+                date_upload = dateFormat.tryParse(dateString)
                 setUrlWithoutDomain(response.request.url.toString())
             },
         )
