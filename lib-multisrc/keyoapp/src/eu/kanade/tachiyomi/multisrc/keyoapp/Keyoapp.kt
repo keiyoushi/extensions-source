@@ -366,7 +366,7 @@ abstract class Keyoapp(
     }
 
     private fun selector(selector: String, contains: List<String>): String {
-        return contains.joinToString(", ") { selector.replace("%s", it) }
+        return contains.joinToString { selector.replace("%s", it) }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
