@@ -59,7 +59,8 @@ abstract class Keyoapp(
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun popularMangaSelector(): String = "div.flex-col div.grid > div.group.border"
+    override fun popularMangaSelector(): String =
+        "div.flex-col div.grid > div.group.border, div:has(h2:contains(Trending)) + div .group.overflow-hidden.grid"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.getImageUrl("*[style*=background-image]")
