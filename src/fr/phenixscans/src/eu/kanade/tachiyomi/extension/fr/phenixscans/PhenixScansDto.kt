@@ -28,6 +28,7 @@ class MangaInfoDto(
     val coverImage: String? = null,
     val slug: String,
     val synopsis: String? = "",
+    val status: String? = null,
 )
 
 @Serializable

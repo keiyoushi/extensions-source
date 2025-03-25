@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.fr.phenixscans
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -53,8 +52,6 @@ class PhenixScans : HttpSource() {
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
         val apiUrl = "$apiBaseUrl/front/homepage?page=$page&section=latest&limit=12"
-
-        Log.e("PhenixScans", apiUrl)
 
         return GET(apiUrl, headers)
     }
@@ -114,8 +111,6 @@ class PhenixScans : HttpSource() {
         }
         url.addQueryParameter("limit", "18") // Be cool on the API
         url.addQueryParameter("page", page.toString())
-
-        Log.e("PhenixScans", "Search url: ${url.build()}")
 
         return GET(url.build(), headers)
     }
@@ -236,12 +231,7 @@ class PhenixScans : HttpSource() {
     // =============================== Manga ==================================
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val apiUrl = apiBaseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("front").addPathSegment("manga")
-            .addPathSegment(manga.url)
-            .build()
-
-        Log.e("PhenixScans", apiUrl.toString())
+        val apiUrl = "$apiBaseUrl/front/manga/${manga.url}"
 
         return GET(apiUrl, headers)
     }
@@ -254,6 +244,12 @@ class PhenixScans : HttpSource() {
             thumbnail_url = "$apiBaseUrl/${data.manga.coverImage}"
             url = data.manga.slug
             description = data.manga.synopsis
+            status = when (data.manga.status) {
+                "Ongoing" -> SManga.ONGOING
+                "Hiatus" -> SManga.ON_HIATUS
+                "Completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
         }
     }
 
