@@ -4,88 +4,87 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 
+// ---------------------------
+// 1. SEARCH & PAGINATION DTOs
+// ---------------------------
 @Serializable
-class LatestMangaResponse(
-    val pagination: PaginationFront,
-    val latest: List<LatestManga>,
+class SearchResultsDto(
+    val mangas: List<LatestMangaItemDto>,
+    val pagination: PaginationFilterDto? = null,
 )
 
 @Serializable
-class PaginationFront(
-    val currentPage: Int,
+class PaginationFilterDto(
+    val page: Int,
     val totalPages: Int,
-    val totalItems: Int,
 )
 
+// ---------------------------
+// 2. MANGA DETAILS & CHAPTER DTOs
+// ---------------------------
 @Serializable
-class LatestManga(
-    @SerialName("_id") val id: String,
+class MangaInfoDto(
     val title: String,
-    val coverImage: String,
-    val type: String,
-    val slug: String,
-    @SerialName("__v") val v: Int? = null,
-)
-
-@Serializable
-class Chapter(
-    @SerialName("_id") val id: String,
-    val number: JsonPrimitive,
-    val state: String,
-
-    val price: Int? = 0,
-    val freeAt: String? = null,
-
-    val createdAt: String? = null,
-    val publishAt: String? = null,
-
-    val chapterUrl: String? = null,
-)
-
-@Serializable
-class MangaDetailResponse(
-    val manga: MangaDetail,
-    val chapters: List<ChapterDetail>,
-
-)
-
-@Serializable
-class MangaDetail(
-    val title: String,
-//    val genres: List<String>,  // This is wrong
     val coverImage: String? = null,
-    val status: String? = "",
     val slug: String,
     val synopsis: String? = "",
-//    val team: List<String>
 )
 
 @Serializable
-class ChapterDetail(
+class ChapterInfoDto(
     val number: JsonPrimitive,
     val createdAt: String?,
 )
 
 @Serializable
-class TopResponse(
-    val top: List<MangaDetail>,
+class MangaDetailDto(
+    val manga: MangaInfoDto,
+    val chapters: List<ChapterInfoDto>,
+)
+
+// ---------------------------
+// 3. LATEST & TOP MANGA DTOs
+// ---------------------------
+@Serializable
+class LatestMangaItemDto(
+    val title: String,
+    val coverImage: String,
+    val slug: String,
 )
 
 @Serializable
-class ChapterReadingDetail(
+class PaginationDto(
+    val currentPage: Int,
+    val totalPages: Int,
+)
+
+@Serializable
+class LatestMangaDto(
+    val pagination: PaginationDto,
+    val latest: List<LatestMangaItemDto>,
+)
+
+@Serializable
+class TopMangaDto(
+    val top: List<MangaInfoDto>,
+)
+
+// ---------------------------
+// 4. CHAPTER READING DTOs
+// ---------------------------
+@Serializable
+class ChapterImagesDto(
     val images: List<String>,
 )
 
 @Serializable
-class ChapterReadingResponse(
-    val chapter: ChapterReadingDetail,
+class ChapterContentDto(
+    val chapter: ChapterImagesDto,
 )
 
-@Serializable
-class GenresDto(
-    val data: List<GenreDto>,
-)
-
+// ---------------------------
+// 5. GENRE DTOs
+// ---------------------------
 @Serializable
 class GenreDto(
     @SerialName("_id") val id: String,
@@ -93,13 +92,6 @@ class GenreDto(
 )
 
 @Serializable
-class PaginationFilter(
-    val page: Int,
-    val totalPages: Int,
-)
-
-@Serializable
-class SearchResultDto(
-    val mangas: List<LatestManga>,
-    val pagination: PaginationFilter? = null,
+class GenreListDto(
+    val data: List<GenreDto>,
 )

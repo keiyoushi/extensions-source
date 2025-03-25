@@ -16,33 +16,34 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
 import kotlin.concurrent.thread
 
 class PhenixScans : HttpSource() {
     override val baseUrl = "https://phenix-scans.com"
-    val apiBaseUrl = baseUrl.replace("https://", "https://api.")
+    private val apiBaseUrl = "https://api.phenix-scans.com"
     override val lang = "fr"
     override val name = "Phenix Scans"
     override val supportsLatest = true
+    override val versionId = 2
 
-    val simpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.FRENCH)
+    private val simpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.FRENCH)
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiBaseUrl/front/homepage?section=top"
+        val apiUrl = "$apiBaseUrl/front/homepage?section=top"
 
-        return GET(url, headers)
+        return GET(apiUrl, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<TopResponse>()
+        val data = response.parseAs<TopMangaDto>()
 
         val mangas = data.top.map {
             SManga.create().apply {
                 title = it.title
-                thumbnail_url = "$apiBaseUrl/${it.coverImage}" // Possibility of using ?width=75
-                url = "$baseUrl/manga/${it.slug}"
+                thumbnail_url = "$apiBaseUrl/${it.coverImage}" // Possibility of using ?width=75 and cdn.[...]/?url=
+                url = it.slug
             }
         }
 
@@ -51,30 +52,25 @@ class PhenixScans : HttpSource() {
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = apiBaseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("front").addPathSegment("homepage")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("section", "latest")
-            .addQueryParameter("limit", "12")
-            .build()
+        val apiUrl = "$apiBaseUrl/front/homepage?page=$page&section=latest&limit=12"
 
-        Log.e("PhenixScans", url.toString())
+        Log.e("PhenixScans", apiUrl)
 
-        return GET(url.toString(), headers)
+        return GET(apiUrl, headers)
     }
 
-    private fun parseMangaList(mangaList: List<LatestManga>): List<SManga> {
+    private fun parseMangaList(mangaList: List<LatestMangaItemDto>): List<SManga> {
         return mangaList.map {
             SManga.create().apply {
                 title = it.title
                 thumbnail_url = "$apiBaseUrl/${it.coverImage}" // Possibility of using ?width=75
-                url = "$baseUrl/manga/${it.slug}"
+                url = it.slug
             }
         }
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = response.parseAs<LatestMangaResponse>()
+        val data = response.parseAs<LatestMangaDto>()
 
         val mangas = parseMangaList(data.latest)
 
@@ -125,7 +121,7 @@ class PhenixScans : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<SearchResultDto>()
+        val data = response.parseAs<SearchResultsDto>()
 
         val hasNextPage = (data.pagination?.page ?: 0) < (data.pagination?.totalPages ?: 0)
 
@@ -219,7 +215,7 @@ class PhenixScans : HttpSource() {
         thread {
             try {
                 val response = client.newCall(GET("$apiBaseUrl/genres", headers)).execute()
-                val filters = response.parseAs<GenresDto>()
+                val filters = response.parseAs<GenreListDto>()
 
                 genresList = filters.data.map { Tag(it.name, it.id) }
 
@@ -240,44 +236,52 @@ class PhenixScans : HttpSource() {
     // =============================== Manga ==================================
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = apiBaseUrl.toHttpUrl().newBuilder()
+        val apiUrl = apiBaseUrl.toHttpUrl().newBuilder()
             .addPathSegment("front").addPathSegment("manga")
-            .addPathSegment(manga.url.substringAfterLast("manga/"))
+            .addPathSegment(manga.url)
             .build()
 
-        Log.e("PhenixScans", url.toString())
+        Log.e("PhenixScans", apiUrl.toString())
 
-        return GET(url.toString(), headers)
+        return GET(apiUrl, headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.parseAs<MangaDetailResponse>()
+        val data = response.parseAs<MangaDetailDto>()
 
         return SManga.create().apply {
             title = data.manga.title
             thumbnail_url = "$apiBaseUrl/${data.manga.coverImage}"
-            url = "/manga/${data.manga.slug}"
+            url = data.manga.slug
             description = data.manga.synopsis
         }
     }
 
+    override fun getMangaUrl(manga: SManga): String {
+        return "$baseUrl/manga/${manga.url}"
+    }
+
     // ============================== Chapters ==============================
 
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val data = response.parseAs<MangaDetailResponse>()
+        val data = response.parseAs<MangaDetailDto>()
 
         return data.chapters.map {
             SChapter.create().apply {
                 chapter_number = it.number.float
                 date_upload = simpleDateFormat.tryParse(it.createdAt)
                 name = "Chapter ${it.number}"
-                url = "/manga/${data.manga.slug}/chapitre/${it.number}"
+                url = "${data.manga.slug}/${it.number}"
             }
         }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
+    override fun getChapterUrl(chapter: SChapter): String {
+        val slug = chapter.url.substringBeforeLast("/")
+        val chapterNumber = chapter.url.substringAfterLast("/")
+        return "$baseUrl/manga/$slug/chapitre/$chapterNumber"
     }
 
     // =============================== Pages ================================
@@ -287,15 +291,16 @@ class PhenixScans : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val endpoint = chapter.url.substringAfterLast("manga/")
-            .replace("/chapitre/", "/chapter/")
-        val url = "$apiBaseUrl/front/manga/$endpoint"
+        val slug = chapter.url.substringBeforeLast("/")
+        val chapterNumber = chapter.url.substringAfterLast("/")
 
-        return GET(url, headers)
+        val apiUrl = "$apiBaseUrl/front/manga/$slug/chapter/$chapterNumber"
+
+        return GET(apiUrl, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val data = response.parseAs<ChapterReadingResponse>()
+        val data = response.parseAs<ChapterContentDto>()
 
         return data.chapter.images.mapIndexed { index, url ->
             Page(index, imageUrl = "$apiBaseUrl/$url")
