@@ -5,13 +5,13 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
-data class LatestMangaResponse(
-    val pagination: Pagination,
+class LatestMangaResponse(
+    val pagination: PaginationFront,
     val latest: List<LatestManga>,
 )
 
 @Serializable
-data class Pagination(
+class PaginationFront(
     val currentPage: Int,
     val totalPages: Int,
     val totalItems: Int,
@@ -25,9 +25,6 @@ class LatestManga(
     val type: String,
     val slug: String,
     @SerialName("__v") val v: Int? = null,
-    val chapters: List<Chapter>,
-    val firstChapter: Chapter?,
-    val synopsis: String = "",
 )
 
 @Serializable
@@ -82,4 +79,27 @@ class ChapterReadingDetail(
 @Serializable
 class ChapterReadingResponse(
     val chapter: ChapterReadingDetail,
+)
+
+@Serializable
+class GenresDto(
+    val data: List<GenreDto>,
+)
+
+@Serializable
+class GenreDto(
+    @SerialName("_id") val id: String,
+    val name: String,
+)
+
+@Serializable
+class PaginationFilter(
+    val page: Int,
+    val totalPages: Int,
+)
+
+@Serializable
+class SearchResultDto(
+    val mangas: List<LatestManga>,
+    val pagination: PaginationFilter? = null,
 )
