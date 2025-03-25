@@ -29,11 +29,7 @@ class PhenixScans : HttpSource() {
     private val simpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.FRENCH)
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request {
-        val apiUrl = "$apiBaseUrl/front/homepage?section=top"
-
-        return GET(apiUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiBaseUrl/front/homepage?section=top", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<TopMangaDto>()
