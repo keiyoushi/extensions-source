@@ -316,13 +316,15 @@ class SussyToons : HttpSource(), ConfigurableSource {
             .filter(String::isNotEmpty)
             .joinToString("\n")
 
-        val content = quickJs.evaluate(
-            """
+        val content = quickJs.use {
+            it.evaluate(
+                """
                 globalThis.self = globalThis;
                 $script
                 self.__next_f.map(it => it[it.length - 1]).join('')
-            """.trimIndent(),
-        ) as String
+                """.trimIndent(),
+            ) as String
+        }
 
         return PAGE_JSON_REGEX.find(content)?.groups?.get(0)?.value
     }
