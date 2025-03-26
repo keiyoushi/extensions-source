@@ -45,14 +45,7 @@ class ReadMangas() : HttpSource() {
     private var popularNextCursorPage = ""
 
     private val popularMangaToken: String by lazy {
-        var document = client.newCall(popularMangaRequest(1)).execute().asJsoup()
-        val url = document.selectFirst("script[src*='projects/page-']")?.absUrl("src")
-            ?: return@lazy ""
-
-        val script = client.newCall(GET(url, headers))
-            .execute().body.string()
-
-        return@lazy TOKEN_REGEX.find(script)?.groups?.get(1)?.value ?: ""
+        getToken(popularMangaRequest(1), "script[src*='projects/page-']")
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -87,14 +80,7 @@ class ReadMangas() : HttpSource() {
     private var latestNextCursorPage = ""
 
     private val latestMangaToken: String by lazy {
-        var document = client.newCall(latestUpdatesRequest(1)).execute().asJsoup()
-        val url = document.selectFirst("script[src*='updates/page-']")?.absUrl("src")
-            ?: return@lazy ""
-
-        val script = client.newCall(GET(url, headers))
-            .execute().body.string()
-
-        return@lazy TOKEN_REGEX.find(script)?.groups?.get(1)?.value ?: ""
+        getToken(latestUpdatesRequest(1), "script[src*='updates/page-']")
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -118,8 +104,6 @@ class ReadMangas() : HttpSource() {
         return POST(url, newHeaders, payload.toRequestBody())
     }
 
-    private fun JsonElement.toRequestBody() = toString().toRequestBody(APPLICATION_JSON)
-
     override fun latestUpdatesParse(response: Response): MangasPage {
         val (mangaPage, nextCursor) = response.mangasPageParse<LatestResultDto>()
         latestNextCursorPage = nextCursor
@@ -128,23 +112,24 @@ class ReadMangas() : HttpSource() {
 
     // =========================== Search =================================
 
+    private val searchMangaToken: String by lazy {
+        getToken(latestUpdatesRequest(1), "script[src*='app/layout-']")
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/deprecated/discover.search?batch=1"
-        val payload = buildJsonObject {
-            put(
-                "0",
+        val payload = buildJsonArray {
+            add(
                 buildJsonObject {
-                    put(
-                        "json",
-                        buildJsonObject {
-                            put("name", query)
-                        },
-                    )
+                    put("name", query)
                 },
             )
-        }.toString().toRequestBody("application/json".toMediaType())
+        }
 
-        return POST(url, headers, payload)
+        val newHeaders = headers.newBuilder()
+            .set("Next-Action", searchMangaToken)
+            .build()
+
+        return POST(baseUrl, newHeaders, payload.toRequestBody())
     }
 
     override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
@@ -173,7 +158,7 @@ class ReadMangas() : HttpSource() {
 
     private fun chapterListRequest(manga: SManga, page: Int, chapterToken: String): Request {
         val id = manga.url.substringAfterLast("#")
-        val input = buildJsonArray {
+        val payload = buildJsonArray {
             add(
                 buildJsonObject {
                     put("id", id)
@@ -189,9 +174,7 @@ class ReadMangas() : HttpSource() {
             .set("Next-Action", chapterToken)
             .build()
 
-        val payload = input.toString().toRequestBody(APPLICATION_JSON)
-
-        return POST("$baseUrl/title/$id", newHeaders, payload)
+        return POST("$baseUrl/title/$id", newHeaders, payload.toRequestBody())
     }
 
     private fun findChapterToken(manga: SManga): String {
@@ -289,7 +272,6 @@ class ReadMangas() : HttpSource() {
     }
 
     private fun Response.parseScriptToJson(): String? {
-        val quickJs = QuickJs.create()
         val document = asJsoup()
         val script = document.select("script")
             .map(Element::data)
@@ -298,7 +280,7 @@ class ReadMangas() : HttpSource() {
             }
             .joinToString("\n")
 
-        val content = quickJs.use {
+        val content = QuickJs.create().use {
             it.evaluate(
                 """
                 globalThis.self = globalThis;
@@ -313,14 +295,27 @@ class ReadMangas() : HttpSource() {
 
     private fun Int.isFirst(): Boolean = this == 1
 
+    private fun JsonElement.toRequestBody() = toString().toRequestBody(APPLICATION_JSON)
+
+    private fun getToken(request: Request, selector: String): String {
+        var document = client.newCall(request).execute().asJsoup()
+        val url = document.selectFirst(selector)?.absUrl("src")
+            ?: return ""
+
+        val script = client.newCall(GET(url, headers))
+            .execute().body.string()
+
+        return TOKEN_REGEX.find(script)?.groups?.get(1)?.value ?: ""
+    }
+
     @SuppressLint("SimpleDateFormat")
     companion object {
         val IMAGE_URL_REGEX = """url\\":\\"([^(\\")]+)""".toRegex()
         val POPULAR_REGEX = """\{"(?:cursor|mangas)".+?\}{2}""".toRegex()
-        val LATEST_REGEX = """\{"(items|mangas)".+?hasNextPage[^,]+""".toRegex()
+        val LATEST_REGEX = """\{"(?:items|mangas)".+?(?:hasNextPage[^,]+|query.+\})""".toRegex()
         val DETAILS_REGEX = """\{"oId".+\}{3}""".toRegex()
         val CHAPTERS_REGEX = """\{"count".+totalPages.+\}""".toRegex()
-        val TOKEN_REGEX = """\("([^\)]+)",[^"]+"(?:getChapters|getProjects|getUpdatedProjects)""".toRegex()
+        val TOKEN_REGEX = """\("([^\)]+)",[^"]+"(?:getChapters|getProjects|getUpdatedProjects|searchProjects)""".toRegex()
         val JSON_REGEX = listOf(
             POPULAR_REGEX,
             LATEST_REGEX,
