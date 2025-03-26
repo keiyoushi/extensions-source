@@ -309,14 +309,13 @@ class SussyToons : HttpSource(), ConfigurableSource {
     // ============================= Utilities ====================================
 
     private fun Response.parseScriptToJson(): String? {
-        val quickJs = QuickJs.create()
         val document = asJsoup()
         val script = document.select("script")
             .map(Element::data)
             .filter(String::isNotEmpty)
             .joinToString("\n")
 
-        val content = quickJs.use {
+        val content = QuickJs.create().use {
             it.evaluate(
                 """
                 globalThis.self = globalThis;
