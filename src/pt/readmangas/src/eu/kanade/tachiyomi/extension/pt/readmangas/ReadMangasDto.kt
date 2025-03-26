@@ -15,11 +15,64 @@ class WrapperResult<T>(
     class Data<T>(val json: T)
 }
 
+interface Dto {
+    val mangas: List<MangaDto>
+    val nextCursor: String
+    val hasNextPage: Boolean
+}
+
+@Serializable
+class PopularResultDto(
+    @SerialName("initialData")
+    val result: MangaListDto,
+    override val nextCursor: String = "",
+) : Dto {
+    override val mangas: List<MangaDto> get() = result.mangas
+    override val hasNextPage: Boolean = false
+}
+
+@Serializable
+class LatestResultDto(
+    @SerialName("items")
+    override val mangas: List<MangaDto>,
+    override val nextCursor: String = "",
+    override val hasNextPage: Boolean = false,
+) : Dto
+
+@Serializable
+class MangaDetailsDto(
+    @SerialName("oId")
+    val slug: String,
+    @SerialName("data")
+    val details: MangaDto,
+) {
+
+    @Serializable
+    class MangaDto(
+        val id: String,
+        @SerialName("title")
+        val titles: List<Map<String, String>>,
+        val description: String,
+        @SerialName("coverImage")
+        val thumbnailUrl: String,
+        val status: String,
+        val genres: List<Genre>,
+    ) {
+        val title: String get() = titles.first().values.first()
+    }
+
+    @Serializable
+    class Genre(
+        val name: String,
+    )
+}
+
 @Serializable
 class MangaListDto(
-    @JsonNames("items")
+    @JsonNames("pages")
     val mangas: List<MangaDto>,
-    val nextCursor: String?,
+    @JsonNames("pageParams")
+    val nextCursor: String = "",
 )
 
 @Serializable
