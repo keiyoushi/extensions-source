@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.pt.readmangas
 
 import android.annotation.SuppressLint
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -23,6 +27,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 
 class ReadMangas() : HttpSource() {
@@ -40,6 +46,8 @@ class ReadMangas() : HttpSource() {
 
     override val versionId = 2
 
+    private val application: Application = Injekt.get<Application>()
+
     // =========================== Popular ================================
 
     private var popularNextCursorPage = ""
@@ -50,7 +58,7 @@ class ReadMangas() : HttpSource() {
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/projects"
-        if (page.isFirst()) {
+        if (page == 1) {
             return GET(url, headers)
         }
 
@@ -85,7 +93,7 @@ class ReadMangas() : HttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/updates"
-        if (page.isFirst()) {
+        if (page == 1) {
             return GET(url, headers)
         }
         val payload = buildJsonArray {
@@ -190,17 +198,20 @@ class ReadMangas() : HttpSource() {
         return TOKEN_REGEX.find(response.body.string())?.groups?.get(1)?.value
             ?: throw Exception("Não foi possivel obter token")
     }
-
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val chapterToken = findChapterToken(manga)
         val chapters = mutableListOf<SChapter>()
         var page = 1
-        do {
-            val response = tryFetchChapterPage(manga, page++, chapterToken)
-            val json = CHAPTERS_REGEX.find(response.body.string())?.groups?.get(0)?.value
-            val dto = json!!.parseAs<ChapterListDto>()
-            chapters += chapterListParse(dto.chapters)
-        } while (dto.hasNext())
+        try {
+            do {
+                val response = tryFetchChapterPage(manga, page++, chapterToken)
+                val json = CHAPTERS_REGEX.find(response.body.string())?.groups?.get(0)?.value!!
+                val dto = json.parseAs<ChapterListDto>()
+                chapters += chapterListParse(dto.chapters)
+            } while (dto.hasNext())
+        } catch (e: Exception) {
+            showToast(e.message!!)
+        }
 
         return Observable.just(chapters)
     }
@@ -276,7 +287,7 @@ class ReadMangas() : HttpSource() {
         val script = document.select("script")
             .map(Element::data)
             .filter {
-                it.contains("self.__next_f", ignoreCase = true)
+                it.contains("self.__next_f")
             }
             .joinToString("\n")
 
@@ -293,8 +304,6 @@ class ReadMangas() : HttpSource() {
         return JSON_REGEX.find(content)?.groups?.get(0)?.value
     }
 
-    private fun Int.isFirst(): Boolean = this == 1
-
     private fun JsonElement.toRequestBody() = toString().toRequestBody(APPLICATION_JSON)
 
     private fun getToken(request: Request, selector: String): String {
@@ -306,6 +315,14 @@ class ReadMangas() : HttpSource() {
             .execute().body.string()
 
         return TOKEN_REGEX.find(script)?.groups?.get(1)?.value ?: ""
+    }
+
+    private val handler = Handler(Looper.getMainLooper())
+
+    private fun showToast(message: String) {
+        handler.post {
+            Toast.makeText(application, message, Toast.LENGTH_LONG).show()
+        }
     }
 
     @SuppressLint("SimpleDateFormat")
