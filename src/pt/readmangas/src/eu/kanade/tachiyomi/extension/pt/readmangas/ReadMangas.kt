@@ -44,9 +44,20 @@ class ReadMangas() : HttpSource() {
 
     private var popularNextCursorPage = ""
 
+    private val popularMangaToken: String by lazy {
+        var document = client.newCall(popularMangaRequest(1)).execute().asJsoup()
+        val url = document.selectFirst("script[src*='projects/page-']")?.absUrl("src")
+            ?: return@lazy ""
+
+        val script = client.newCall(GET(url, headers))
+            .execute().body.string()
+
+        return@lazy TOKEN_REGEX.find(script)?.groups?.get(1)?.value ?: ""
+    }
+
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/projects"
-        if (page == 1) {
+        if (page.isFirst()) {
             return GET(url, headers)
         }
 
@@ -58,12 +69,8 @@ class ReadMangas() : HttpSource() {
             )
         }
 
-        // https://mangalivre.one/_next/static/chunks/app/%5Blocale%5D/(website)/title/%5Boid%5D/page-b71e9a5f301ac90e.js
-
         val newHeaders = headers.newBuilder()
-//            .set("Next-Router-State-Tree", """["",{"children":[["locale","pt","d"],{"children":["(website)",{"children":["projects",{"children":["__PAGE__",{},"/projects","refresh"]}]}]}]},null,null,true]""")
-            .set("Next-Action", "7f00452c28ff68edd78a5b28fac17278fc95b2f9b6")
-            .set("Referer", url)
+            .set("Next-Action", popularMangaToken)
             .build()
 
         return POST(url, newHeaders, payload.toRequestBody())
@@ -79,9 +86,20 @@ class ReadMangas() : HttpSource() {
 
     private var latestNextCursorPage = ""
 
+    private val latestMangaToken: String by lazy {
+        var document = client.newCall(latestUpdatesRequest(1)).execute().asJsoup()
+        val url = document.selectFirst("script[src*='updates/page-']")?.absUrl("src")
+            ?: return@lazy ""
+
+        val script = client.newCall(GET(url, headers))
+            .execute().body.string()
+
+        return@lazy TOKEN_REGEX.find(script)?.groups?.get(1)?.value ?: ""
+    }
+
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/updates"
-        if (page == 1) {
+        if (page.isFirst()) {
             return GET(url, headers)
         }
         val payload = buildJsonArray {
@@ -94,9 +112,7 @@ class ReadMangas() : HttpSource() {
         }
 
         val newHeaders = headers.newBuilder()
-//            .set("Next-Router-State-Tree", """["",{"children":[["locale","pt","d"],{"children":["(website)",{"children":["projects",{"children":["__PAGE__",{},"/projects","refresh"]}]}]}]},null,null,true]""")
-            .set("Next-Action", "7f00452c28ff68edd78a5b28fac17278fc95b2f9b6")
-            .set("Referer", url)
+            .set("Next-Action", latestMangaToken)
             .build()
 
         return POST(url, newHeaders, payload.toRequestBody())
@@ -188,10 +204,8 @@ class ReadMangas() : HttpSource() {
 
         response = client.newCall(GET(scriptUlr, headers)).execute()
 
-        val nextAction: String =
-            CHAPTER_TOKEN_REGEX.find(response.body.string())?.groups?.get(1)?.value
-                ?: throw Exception("Não foi possivel obter token")
-        return nextAction
+        return TOKEN_REGEX.find(response.body.string())?.groups?.get(1)?.value
+            ?: throw Exception("Não foi possivel obter token")
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -244,11 +258,10 @@ class ReadMangas() : HttpSource() {
 
     // =========================== Utilities ===============================
 
-    private inline fun <reified T : Dto> Response.mangasPageParse(): Pair<MangasPage, String> {
-        val json = if (request.method.equals("get", ignoreCase = true)) {
-            parseScriptToJson()
-        } else {
-            JSON_REGEX.find(body.string())?.groups?.get(0)?.value
+    private inline fun <reified T : ResultDto> Response.mangasPageParse(): Pair<MangasPage, String> {
+        val json = when (request.method) {
+            "GET" -> parseScriptToJson()
+            else -> JSON_REGEX.find(body.string())?.groups?.get(0)?.value
         }
 
         if (json.isNullOrBlank()) {
@@ -266,7 +279,7 @@ class ReadMangas() : HttpSource() {
                 url = "/title/${it.slug}#${it.id}"
             }
         }
-        return MangasPage(mangas, dto.hasNextPage || dto.nextCursor.isNotBlank()) to dto.nextCursor
+        return MangasPage(mangas, dto.hasNextPage) to dto.nextCursor
     }
 
     private fun String.toStatus() = when (lowercase()) {
@@ -298,14 +311,16 @@ class ReadMangas() : HttpSource() {
         return JSON_REGEX.find(content)?.groups?.get(0)?.value
     }
 
+    private fun Int.isFirst(): Boolean = this == 1
+
     @SuppressLint("SimpleDateFormat")
     companion object {
         val IMAGE_URL_REGEX = """url\\":\\"([^(\\")]+)""".toRegex()
-        val POPULAR_REGEX = """\{"cursor".+?\}{2}""".toRegex()
-        val LATEST_REGEX = """\{"items".+?hasNextPage[^,]+""".toRegex()
+        val POPULAR_REGEX = """\{"(?:cursor|mangas)".+?\}{2}""".toRegex()
+        val LATEST_REGEX = """\{"(items|mangas)".+?hasNextPage[^,]+""".toRegex()
         val DETAILS_REGEX = """\{"oId".+\}{3}""".toRegex()
         val CHAPTERS_REGEX = """\{"count".+totalPages.+\}""".toRegex()
-        val CHAPTER_TOKEN_REGEX = """\("([^\)]+)",[^"]+"getChapters""".toRegex()
+        val TOKEN_REGEX = """\("([^\)]+)",[^"]+"(?:getChapters|getProjects|getUpdatedProjects)""".toRegex()
         val JSON_REGEX = listOf(
             POPULAR_REGEX,
             LATEST_REGEX,

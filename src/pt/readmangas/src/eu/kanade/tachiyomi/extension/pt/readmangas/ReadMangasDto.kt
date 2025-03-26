@@ -4,18 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 
-@Serializable
-class WrapperResult<T>(
-    val result: Result<T>? = null,
-) {
-    @Serializable
-    class Result<T>(val `data`: Data<T>)
-
-    @Serializable
-    class Data<T>(val json: T)
-}
-
-interface Dto {
+interface ResultDto {
     val mangas: List<MangaDto>
     val nextCursor: String
     val hasNextPage: Boolean
@@ -23,12 +12,14 @@ interface Dto {
 
 @Serializable
 class PopularResultDto(
-    @SerialName("initialData")
-    val result: MangaListDto,
-    override val nextCursor: String = "",
-) : Dto {
-    override val mangas: List<MangaDto> get() = result.mangas
-    override val hasNextPage: Boolean = false
+    @JsonNames("initialData")
+    val result: MangaListDto?,
+    @SerialName("mangas")
+    val list: List<MangaDto> = emptyList(),
+    override val nextCursor: String = result?.nextCursor ?: "",
+) : ResultDto {
+    override val mangas: List<MangaDto> get() = result?.mangas ?: list
+    override val hasNextPage: Boolean = nextCursor.isNotBlank()
 }
 
 @Serializable
@@ -37,7 +28,7 @@ class LatestResultDto(
     override val mangas: List<MangaDto>,
     override val nextCursor: String = "",
     override val hasNextPage: Boolean = false,
-) : Dto
+) : ResultDto
 
 @Serializable
 class MangaDetailsDto(
