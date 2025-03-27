@@ -31,12 +31,16 @@ class MissKon() : SimpleParsedHttpSource() {
         .build()
 
     override fun simpleMangaSelector() = "article.item-list"
-    override fun simpleMangaFromElement(element: Element) = SManga.create().apply {
-        val titleEL = element.select(".post-box-title")
-        title = titleEL.text()
-        thumbnail_url = element.selectFirst(".post-thumbnail img")!!.absUrl("data-src")
-        setUrlWithoutDomain(titleEL.select("a").attr("abs:href"))
+
+    override fun simpleMangaFromElement(element: Element): SManga {
+        val titleEL = element.selectFirst(".post-box-title")!!
+        return SManga.create().apply {
+            title = titleEL.text()
+            thumbnail_url = element.selectFirst(".post-thumbnail img")?.absUrl("data-src")
+            setUrlWithoutDomain(titleEL.selectFirst("a")!!.absUrl("href"))
+        }
     }
+
 
     override fun simpleNextPageSelector(): String? = null
 
@@ -56,8 +60,7 @@ class MissKon() : SimpleParsedHttpSource() {
         return filter.selectedCategory?.let {
             GET(it.url, headers)
         } ?: run {
-            baseUrl.toHttpUrl().newBuilder()
-                .addPathSegment("/page/$page/")
+            "$baseUrl/page/$page/".toHttpUrl().newBuilder()
                 .addEncodedQueryParameter("s", query)
                 .build()
                 .let { GET(it, headers) }
@@ -69,20 +72,22 @@ class MissKon() : SimpleParsedHttpSource() {
     // endregion
 
     // region Details
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val postInnerEl = document.select("article > .post-inner")
-        title = postInnerEl.select(".post-title").text()
-        description = ""
-        genre = postInnerEl.select(".post-tag > a").joinToString { it.text() }
+    override fun mangaDetailsParse(document: Document): SManga {
+        val postInnerEl = document.selectFirst("article > .post-inner")!!
+        return SManga.create().apply {
+            title = postInnerEl.select(".post-title").text()
+            genre = postInnerEl.select(".post-tag > a").joinToString { it.text() }
+        }
     }
 
     override fun chapterListSelector() = "html"
 
     override fun chapterFromElement(element: Element): SChapter {
-        val dateStr = element.selectFirst(".entry img")?.absUrl("data-src")?.let { url ->
-            FULL_DATE_REGEX.find(url)?.groupValues?.get(1)
-                ?: YEAR_MONTH_REGEX.find(url)?.groupValues?.get(1)?.let { "$it/01" }
-        } ?: DEFAULT_DATE_STR
+        val dateStr = element.selectFirst(".entry img")?.absUrl("data-src")
+            ?.let { url ->
+                FULL_DATE_REGEX.find(url)?.groupValues?.get(1)
+                    ?: YEAR_MONTH_REGEX.find(url)?.groupValues?.get(1)?.let { "$it/01" }
+            } ?: DEFAULT_DATE_STR
 
         return SChapter.create().apply {
             chapter_number = 0F
@@ -95,7 +100,7 @@ class MissKon() : SimpleParsedHttpSource() {
 
     // region Pages
     override fun pageListParse(document: Document): List<Page> {
-        val basePageUrl = document.selectFirst("""link[rel="canonical"]""")!!.attr("href")
+        val basePageUrl = document.selectFirst("""link[rel="canonical"]""")!!.absUrl("href")
 
         val pages = mutableListOf<Page>()
         document.select("div.post-inner div.page-link:nth-child(1) .post-page-numbers")
@@ -108,7 +113,7 @@ class MissKon() : SimpleParsedHttpSource() {
                     }
                 }
                 doc.select("div.post-inner > div.entry > p > img")
-                    .map { it.attr("data-src") }
+                    .map { it.absUrl("data-src") }
                     .forEach { pages.add(Page(pages.size, imageUrl = it)) }
             }
         return pages
