@@ -317,7 +317,7 @@ class ReadMangas() : HttpSource() {
         return TOKEN_REGEX.find(script)?.groups?.get(1)?.value ?: ""
     }
 
-    private val handler = Handler(Looper.getMainLooper())
+    private val handler by lazy { Handler(Looper.getMainLooper()) }
 
     private fun showToast(message: String) {
         handler.post {
