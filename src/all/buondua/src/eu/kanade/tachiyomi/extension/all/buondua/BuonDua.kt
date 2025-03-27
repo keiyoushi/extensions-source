@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -28,13 +29,9 @@ class BuonDua() : ParsedHttpSource() {
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
         .setRandomUserAgent(UserAgentType.MOBILE)
-        .addInterceptor { chain ->
-            val request = chain.request().newBuilder()
-                .header("Referer", "$baseUrl/")
-                .build()
-            chain.proceed(request)
-        }
         .build()
+
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
@@ -95,9 +92,7 @@ class BuonDua() : ParsedHttpSource() {
         chapter.setUrlWithoutDomain(element.select(".is-current").first()!!.attr("abs:href"))
         chapter.chapter_number = 0F
         chapter.name = element.select(".article-header").text()
-        chapter.date_upload =
-            SimpleDateFormat("H:m DD-MM-yyyy", Locale.US).parse(element.select(".article-info > small").text())?.time
-                ?: 0L
+        chapter.date_upload = DATE_FORMAT.tryParse(element.selectFirst(".article-info > small")?.text())
         return chapter
     }
 
@@ -134,4 +129,8 @@ class BuonDua() : ParsedHttpSource() {
     class TagFilter : Filter.Text("Tag ID")
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
+
+    companion object {
+        private val DATE_FORMAT = SimpleDateFormat("H:m DD-MM-yyyy", Locale.US)
+    }
 }
