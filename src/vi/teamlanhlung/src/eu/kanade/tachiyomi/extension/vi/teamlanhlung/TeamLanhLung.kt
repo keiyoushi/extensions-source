@@ -9,8 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -20,7 +19,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -41,8 +39,6 @@ class TeamLanhLung : ParsedHttpSource() {
     override val supportsLatest: Boolean = false
 
     override val client: OkHttpClient = network.cloudflareClient
-
-    private val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", "$baseUrl/")
 
@@ -156,7 +152,7 @@ class TeamLanhLung : ParsedHttpSource() {
             ?.replace("\\\\", "\\")
             ?.replace("\\/", "/")
             ?: throw Exception("Couldn't find script with image data.")
-        val htmlContent = json.decodeFromString<CipherDto>(htmlContentScript)
+        val htmlContent = htmlContentScript.parseAs<CipherDto>()
         val ciphertext = Base64.decode(htmlContent.ciphertext, Base64.DEFAULT)
         val iv = htmlContent.iv.decodeHex()
         val salt = htmlContent.salt.decodeHex()
@@ -215,10 +211,6 @@ class TeamLanhLung : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
-    }
 
     // https://stackoverflow.com/a/66614516
     private fun String.decodeHex(): ByteArray {
