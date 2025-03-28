@@ -7,7 +7,7 @@ import java.util.Locale
 
 class GekkouScans : Madara(
     "Gekkou Scans",
-    "https://gekkou.space",
+    "https://new.gekkou.space/",
     "pt-BR",
     SimpleDateFormat("dd 'de' MMM 'de' yyyy", Locale("pt", "BR")),
 ) {
