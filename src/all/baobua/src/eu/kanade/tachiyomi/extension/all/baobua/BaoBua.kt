@@ -59,7 +59,7 @@ class BaoBua() : SimpleParsedHttpSource() {
     override fun mangaDetailsParse(document: Document): SManga {
         val trailItemsEl = document.selectFirst("div.breadcrumb-trail > ul.trail-items")!!
         return SManga.create().apply {
-            title = trailItemsEl.selectFirst("li.trail-end")!!.text().trim()
+            title = trailItemsEl.selectFirst("li.trail-end")!!.text()
             genre = trailItemsEl.select("li:not(.trail-end):not(.trail-begin)").joinToString { it.text() }
         }
     }
@@ -69,7 +69,7 @@ class BaoBua() : SimpleParsedHttpSource() {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         chapter_number = 0F
         setUrlWithoutDomain(element.selectFirst("div.breadcrumb-trail li.trail-end > a")!!.absUrl("href"))
-        date_upload = POST_DATE_FORMAT.tryParse(element.selectFirst("span.item-metadata.posts-date")?.text()?.trim())
+        date_upload = POST_DATE_FORMAT.tryParse(element.selectFirst("span.item-metadata.posts-date")?.text())
         name = DISPLAY_DATE_FORMAT.format(Date(date_upload))
     }
     // endregion
