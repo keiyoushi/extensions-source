@@ -1,8 +1,12 @@
 ext {
     extName = 'Buon Dua'
     extClass = '.BuonDua'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:randomua"))
+}
