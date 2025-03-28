@@ -2,8 +2,8 @@ ext {
     extName = 'Arven Scans'
     extClass = '.ArvenComics'
     themePkg = 'keyoapp'
-    baseUrl = 'https://arvencomics.com'
-    overrideVersionCode = 24
+    baseUrl = 'https://arvencomic.net'
+    overrideVersionCode = 25
     isNsfw = false
 }
 
