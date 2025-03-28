@@ -41,7 +41,6 @@ class MissKon() : SimpleParsedHttpSource() {
         }
     }
 
-
     override fun simpleNextPageSelector(): String? = null
 
     // region popular
