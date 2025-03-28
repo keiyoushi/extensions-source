@@ -2,7 +2,7 @@
  * Add or remove modules to load as needed for local development here.
  */
 loadAllIndividualExtensions()
-// loadIndividualExtension("all", "mangadex")
+loadIndividualExtension("all", "baobua")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================

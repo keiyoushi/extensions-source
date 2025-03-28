@@ -21,7 +21,7 @@ class BaoBua() : SimpleParsedHttpSource() {
     override val baseUrl = "https://www.baobua.net"
     override val lang = "all"
     override val name = "BaoBua"
-    override val supportsLatest = true
+    override val supportsLatest = false
 
     override fun simpleMangaSelector() = "article.post"
 
@@ -31,14 +31,14 @@ class BaoBua() : SimpleParsedHttpSource() {
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    override fun simpleNextPageSelector(): String = "div.newsium-pagination .nav-links a"
+    override fun simpleNextPageSelector(): String = "nav.pagination a.next"
 
     // region popular
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl?page=$page", headers)
     // endregion
 
     // region latest
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/?page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = throw Exception("Stub!")
     // endregion
 
     // region Search
@@ -47,13 +47,13 @@ class BaoBua() : SimpleParsedHttpSource() {
         return filter.selectedCategory?.let {
             GET(it.url, headers)
         } ?: run {
-            "$baseUrl/".toHttpUrl().newBuilder()
+            baseUrl.toHttpUrl().newBuilder()
                 .addEncodedQueryParameter("q", query)
+                .addEncodedQueryParameter("page", page.toString())
                 .build()
                 .let { GET(it, headers) }
         }
     }
-    // endregion
 
     // region Details
     override fun mangaDetailsParse(document: Document): SManga {

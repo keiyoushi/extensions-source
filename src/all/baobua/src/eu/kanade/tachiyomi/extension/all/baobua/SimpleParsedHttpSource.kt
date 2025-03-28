@@ -20,9 +20,13 @@ abstract class SimpleParsedHttpSource : ParsedHttpSource() {
     // endregion
 
     // region last
-    override fun latestUpdatesSelector() = simpleMangaSelector()
-    override fun latestUpdatesFromElement(element: Element) = simpleMangaFromElement(element)
-    override fun latestUpdatesNextPageSelector() = simpleNextPageSelector()
+    override fun latestUpdatesSelector() = if (supportsLatest) simpleMangaSelector() else throw Exception("Stub!")
+
+    override fun latestUpdatesFromElement(element: Element) =
+        if (supportsLatest) simpleMangaFromElement(element) else throw Exception("Stub!")
+
+    override fun latestUpdatesNextPageSelector() =
+        if (supportsLatest) simpleNextPageSelector() else throw Exception("Stub!")
     // endregion
 
     // region search
