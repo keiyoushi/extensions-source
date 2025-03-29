@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.a3manga
+package eu.kanade.tachiyomi.extension.vi.teamlanhlung
 
 import kotlinx.serialization.Serializable
 
