@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -38,14 +39,14 @@ class BaoBua() : SimpleParsedHttpSource() {
     // endregion
 
     // region latest
-    override fun latestUpdatesRequest(page: Int) = throw Exception("Stub!")
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
     // endregion
 
     // region Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filter = filters.findInstance<SourceCategorySelector>()!!
+        val filter = filters.firstInstance<SourceCategorySelector>()
         return filter.selectedCategory?.let {
-            GET(it.url, headers)
+            GET(it.buildUrl(baseUrl), headers)
         } ?: run {
             baseUrl.toHttpUrl().newBuilder()
                 .addEncodedQueryParameter("q", query)
@@ -70,7 +71,7 @@ class BaoBua() : SimpleParsedHttpSource() {
         chapter_number = 0F
         setUrlWithoutDomain(element.selectFirst("div.breadcrumb-trail li.trail-end > a")!!.absUrl("href"))
         date_upload = POST_DATE_FORMAT.tryParse(element.selectFirst("span.item-metadata.posts-date")?.text())
-        name = DISPLAY_DATE_FORMAT.format(Date(date_upload))
+        name = "Gallery"
     }
     // endregion
 
@@ -99,8 +100,6 @@ class BaoBua() : SimpleParsedHttpSource() {
         Filter.Separator(),
         SourceCategorySelector.create(baseUrl),
     )
-
-    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
     companion object {
 

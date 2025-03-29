@@ -3,8 +3,15 @@ package eu.kanade.tachiyomi.extension.all.baobua
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
-data class SourceCategory(private val name: String, var url: String) {
+data class SourceCategory(private val name: String, var cat: String) {
     override fun toString() = this.name
+
+    fun buildUrl(baseUrl: String): String {
+        return "$baseUrl/".toHttpUrl().newBuilder()
+            .addEncodedQueryParameter("cat", this.cat)
+            .build()
+            .toString()
+    }
 }
 
 class SourceCategorySelector(
@@ -34,14 +41,10 @@ class SourceCategorySelector(
                 SourceCategory("cosplay", "OEI2c000ZDBxakwydjZIUVJaRnlMQT09"),
                 SourceCategory("hot", "c3VRb3RJZ2wrU2tTYmpGSUVqMnFndz09"),
                 SourceCategory("big breast", "dkQ3b0RiK0xpZDRlMVNSY3lUNkJXQT09"),
-            ).onEach {
-                it.url = "$baseUrl/".toHttpUrl().newBuilder()
-                    .addEncodedQueryParameter("cat", it.url)
-                    .build()
-                    .toString()
-            }
+            )
 
             return SourceCategorySelector("Category", options)
         }
     }
 }
+
