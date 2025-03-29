@@ -12,6 +12,8 @@ import eu.kanade.tachiyomi.extension.all.koharu.Koharu.Companion.authorization
 import eu.kanade.tachiyomi.extension.all.koharu.Koharu.Companion.token
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -120,7 +122,9 @@ class TurnstileInterceptor(
                             try {
                                 val noRedirectClient = client.newBuilder().followRedirects(false).build()
                                 val authHeaders = authHeaders(authHeader)
-                                val response = noRedirectClient.newCall(POST(authUrl, authHeaders)).execute()
+                                val response = runBlocking(Dispatchers.IO) {
+                                    noRedirectClient.newCall(POST(authUrl, authHeaders)).execute()
+                                }
                                 response.use {
                                     if (response.isSuccessful) {
                                         with(response) {
@@ -176,7 +180,9 @@ class TurnstileInterceptor(
                     try {
                         val noRedirectClient = client.newBuilder().followRedirects(false).build()
                         val authHeaders = authHeaders("Bearer $token")
-                        val response = noRedirectClient.newCall(GET(authUrl, authHeaders)).execute()
+                        val response = runBlocking(Dispatchers.IO) {
+                            noRedirectClient.newCall(GET(authUrl, authHeaders)).execute()
+                        }
                         response.use {
                             if (response.isSuccessful) {
                                 return true
