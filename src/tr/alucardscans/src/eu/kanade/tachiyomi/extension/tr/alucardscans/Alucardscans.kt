@@ -8,5 +8,5 @@ class Alucardscans : MangaThemesia(
     "Alucard Scans",
     "https://alucardscans.com",
     "tr",
-    dateFormat = SimpleDateFormat("MMMM dd,yyyy", Locale("tr")),
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 )
