@@ -10,6 +10,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -48,16 +50,16 @@ class MissKon() : SimpleParsedHttpSource() {
     // endregion
 
     // region latest
-    override fun latestUpdatesRequest(page: Int) = GET(baseUrl + if (page != 1) "/page/$page" else "", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("#baseUrl/page/$page", headers)
 
     override fun latestUpdatesNextPageSelector() = ".current + a.page"
     // endregion
 
     // region Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filter = filters.findInstance<SourceCategorySelector>()!!
+        val filter = filters.firstInstance<SourceCategorySelector>()
         return filter.selectedCategory?.let {
-            GET(it.url, headers)
+            GET("$baseUrl$it.url", headers)
         } ?: run {
             "$baseUrl/page/$page/".toHttpUrl().newBuilder()
                 .addEncodedQueryParameter("s", query)
@@ -86,20 +88,20 @@ class MissKon() : SimpleParsedHttpSource() {
             ?.let { url ->
                 FULL_DATE_REGEX.find(url)?.groupValues?.get(1)
                     ?: YEAR_MONTH_REGEX.find(url)?.groupValues?.get(1)?.let { "$it/01" }
-            } ?: DEFAULT_DATE_STR
+            }
 
         return SChapter.create().apply {
             chapter_number = 0F
-            setUrlWithoutDomain(element.selectFirst("""link[rel="canonical"]""")!!.absUrl("href"))
-            name = dateStr
-            date_upload = FULL_DATE_FORMAT.parse(dateStr)!!.time
+            setUrlWithoutDomain(element.selectFirst("link[rel=canonical]")!!.absUrl("href"))
+            name = dateStr ?: "Gallery"
+            date_upload = FULL_DATE_FORMAT.tryParse(dateStr)
         }
     }
     // endregion
 
     // region Pages
     override fun pageListParse(document: Document): List<Page> {
-        val basePageUrl = document.selectFirst("""link[rel="canonical"]""")!!.absUrl("href")
+        val basePageUrl = document.selectFirst("link[rel=canonical]")!!.absUrl("href")
 
         val pages = mutableListOf<Page>()
         document.select("div.post-inner div.page-link:nth-child(1) .post-page-numbers")
@@ -125,15 +127,11 @@ class MissKon() : SimpleParsedHttpSource() {
         SourceCategorySelector.create(),
     )
 
-    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
-
     companion object {
 
         private val FULL_DATE_REGEX = Regex("""/(\d{4}/\d{2}/\d{2})/""")
         private val YEAR_MONTH_REGEX = Regex("""/(\d{4}/\d{2})/""")
 
         private val FULL_DATE_FORMAT = SimpleDateFormat("yyyy/MM/dd", Locale.US)
-
-        private const val DEFAULT_DATE_STR = "1997/01/01"
     }
 }
