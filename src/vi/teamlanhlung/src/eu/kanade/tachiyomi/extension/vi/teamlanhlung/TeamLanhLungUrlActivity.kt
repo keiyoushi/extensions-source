@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.a3manga
+package eu.kanade.tachiyomi.extension.vi.teamlanhlung
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -10,7 +10,7 @@ import kotlin.system.exitProcess
 /*
     Springboard that accepts https://<domain>/truyen-tranh/$id/ intents
  */
-class A3MangaUrlActivity : Activity() {
+class TeamLanhLungUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
@@ -25,10 +25,10 @@ class A3MangaUrlActivity : Activity() {
                     },
                 )
             } catch (e: ActivityNotFoundException) {
-                Log.e("A3MangaThemeUrlActivity", e.toString())
+                Log.e("TeamLanhLungUrlActivity", e.toString())
             }
         } else {
-            Log.e("A3MangaThemeUrlActivity", "Could not parse URI from intent $intent")
+            Log.e("TeamLanhLungUrlActivity", "Could not parse URI from intent $intent")
         }
 
         finish()
