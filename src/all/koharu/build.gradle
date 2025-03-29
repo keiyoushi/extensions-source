@@ -1,7 +1,7 @@
 ext {
     extName = 'SchaleNetwork'
     extClass = '.KoharuFactory'
-    extVersionCode = 13
+    extVersionCode = 14
     isNsfw = true
 }
 
