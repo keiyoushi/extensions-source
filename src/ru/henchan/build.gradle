@@ -1,0 +1,10 @@
+ext {
+    extName = 'HenChan'
+    extClass = '.HenChan'
+    themePkg = 'multichan'
+    baseUrl = 'https://xxl.hentaichan.live'
+    overrideVersionCode = 40
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
