@@ -361,17 +361,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     return GET(url.build(), headers)
 }
-
-fun scrapeGroups(): List<Group> {
-    val url = "$baseUrl/group/"
-    // Implement scraping logic here to fetch groups
-}
-
-fun scrapeSeries(): List<Series> {
-    val url = "$baseUrl/series/"
-    // Implement scraping logic here to fetch series
-}
-
+    
     override fun searchMangaFromElement(element: Element): SManga =
         basicInformationFromElement(element)
 
