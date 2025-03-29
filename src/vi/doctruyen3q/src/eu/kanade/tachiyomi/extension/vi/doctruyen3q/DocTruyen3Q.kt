@@ -23,7 +23,7 @@ import java.util.TimeZone
 class DocTruyen3Q :
     WPComics(
         "DocTruyen3Q",
-        "https://doctruyen3qui3.pro",
+        "https://doctruyen3qui5.pro",
         "vi",
         dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
@@ -31,17 +31,19 @@ class DocTruyen3Q :
         gmtOffset = null,
     ),
     ConfigurableSource {
-
+	
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(".page-chapter[id] a img, .page-chapter[id] img").mapIndexed { index, element ->
-            val img = if (element.hasAttr("data-original")) {
-                element.attr("abs:data-original")
-            } else {
-                element.attr("abs:src")
+        return document.select(".page-chapter[id] img").mapIndexed { index, element ->
+            val img = element.attr("abs:src").let { url ->
+                if (url.startsWith("//")) {
+                    "https:$url"
+                } else {
+                    url
+                }
             }
             Page(index, imageUrl = img)
         }.distinctBy { it.imageUrl }
@@ -97,7 +99,7 @@ class DocTruyen3Q :
     }
 
     override val genresSelector = ".categories-detail ul.nav li:not(.active) a"
-
+	
     private val preferences: SharedPreferences = getPreferences()
 
     init {
