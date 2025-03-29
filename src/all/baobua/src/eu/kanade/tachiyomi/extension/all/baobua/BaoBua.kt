@@ -104,7 +104,5 @@ class BaoBua() : SimpleParsedHttpSource() {
     companion object {
 
         private val POST_DATE_FORMAT = SimpleDateFormat("EEE MMM dd yyyy", Locale.US)
-
-        private val DISPLAY_DATE_FORMAT = SimpleDateFormat("yyyy/MM/dd", Locale.US)
     }
 }
