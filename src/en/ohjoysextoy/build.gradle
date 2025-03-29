@@ -1,0 +1,8 @@
+ext {
+    extName = "Oh Joy Sex Toy"
+    extClass = ".OhJoySexToy"
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

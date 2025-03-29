@@ -46,7 +46,7 @@ jobs:
       - name: Get last successful CI commit
         id: last_successful_ci_commit
         uses: nrwl/nx-set-shas@dbe0650947e5f2c81f59190a38512cf49126fe6b # v4.3.0
-      
+
       - id: generate-matrices
         name: Create output matrices
         run: |

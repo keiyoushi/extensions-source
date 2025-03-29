@@ -4,22 +4,66 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 
+interface ResultDto {
+    val mangas: List<MangaDto>
+    val nextCursor: String
+    val hasNextPage: Boolean
+}
+
 @Serializable
-class WrapperResult<T>(
-    val result: Result<T>? = null,
+class PopularResultDto(
+    @JsonNames("initialData")
+    val result: MangaListDto?,
+    @SerialName("mangas")
+    val list: List<MangaDto> = emptyList(),
+    override val nextCursor: String = result?.nextCursor ?: "",
+) : ResultDto {
+    override val mangas: List<MangaDto> get() = result?.mangas ?: list
+    override val hasNextPage: Boolean = nextCursor.isNotBlank()
+}
+
+@Serializable
+class LatestResultDto(
+    @SerialName("items")
+    override val mangas: List<MangaDto>,
+    override val nextCursor: String = "",
+    override val hasNextPage: Boolean = false,
+) : ResultDto
+
+@Serializable
+class MangaDetailsDto(
+    @SerialName("oId")
+    val slug: String,
+    @SerialName("data")
+    val details: MangaDto,
 ) {
-    @Serializable
-    class Result<T>(val `data`: Data<T>)
 
     @Serializable
-    class Data<T>(val json: T)
+    class MangaDto(
+        val id: String,
+        @SerialName("title")
+        val titles: List<Map<String, String>>,
+        val description: String,
+        @SerialName("coverImage")
+        val thumbnailUrl: String,
+        val status: String,
+        val genres: List<Genre>,
+    ) {
+        val title: String get() = titles.first().values.first()
+    }
+
+    @Serializable
+    class Genre(
+        val name: String,
+    )
 }
 
 @Serializable
 class MangaListDto(
-    @JsonNames("items")
+    @JsonNames("pages")
     val mangas: List<MangaDto>,
-    val nextCursor: String?,
+    @JsonNames("pageParams")
+    val nextCursor: String = "",
 )
 
 @Serializable

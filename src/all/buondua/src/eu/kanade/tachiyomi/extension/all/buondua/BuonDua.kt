@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.buondua
 
+import eu.kanade.tachiyomi.lib.randomua.UserAgentType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,17 +11,27 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class BuonDua() : ParsedHttpSource() {
     override val baseUrl = "https://buondua.com"
     override val lang = "all"
     override val name = "Buon Dua"
     override val supportsLatest = true
+
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
+        .setRandomUserAgent(UserAgentType.MOBILE)
+        .build()
+
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
@@ -43,6 +56,7 @@ class BuonDua() : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/hot?start=${20 * (page - 1)}")
     }
+
     override fun popularMangaSelector() = latestUpdatesSelector()
 
     // Search
@@ -57,6 +71,7 @@ class BuonDua() : ParsedHttpSource() {
             else -> popularMangaRequest(page)
         }
     }
+
     override fun searchMangaSelector() = latestUpdatesSelector()
 
     // Details
@@ -77,7 +92,7 @@ class BuonDua() : ParsedHttpSource() {
         chapter.setUrlWithoutDomain(element.select(".is-current").first()!!.attr("abs:href"))
         chapter.chapter_number = 0F
         chapter.name = element.select(".article-header").text()
-        chapter.date_upload = SimpleDateFormat("H:m DD-MM-yyyy", Locale.US).parse(element.select(".article-info > small").text())?.time ?: 0L
+        chapter.date_upload = DATE_FORMAT.tryParse(element.selectFirst(".article-info > small")?.text())
         return chapter
     }
 
@@ -114,4 +129,8 @@ class BuonDua() : ParsedHttpSource() {
     class TagFilter : Filter.Text("Tag ID")
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
+
+    companion object {
+        private val DATE_FORMAT = SimpleDateFormat("H:m DD-MM-yyyy", Locale.US)
+    }
 }
