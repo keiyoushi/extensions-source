@@ -1,7 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.dynasty
 
+import android.util.LruCache
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,13 +14,13 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
+import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import okio.use
-import rx.Observable
 
 class Dynasty : HttpSource() {
 
@@ -48,94 +49,72 @@ class Dynasty : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<BrowseResponse>()
-        val entries = LinkedHashSet<MangaEntry>()
-
-        data.chapters.forEach { buildMangaListFromChapter(it, entries::add) }
+        val entries = data.chapters.flatMap { chapter ->
+            chapter.getMangasFromChapter()
+        }.distinct()
+            .map(MangaEntry::toSManga)
 
         return MangasPage(
-            mangas = entries.map(MangaEntry::toSManga),
+            mangas = entries,
             hasNextPage = data.hasNextPage(),
         )
     }
 
-    private fun buildMangaListFromChapter(chap: BrowseChapter, add: (MangaEntry) -> Unit) {
-        val parent = chap.tags.firstOrNull { it.type == "Series" }
-            ?: chap.tags.firstOrNull { it.type == "Doujin" }
-            ?: chap.tags.firstOrNull { it.type == "Anthology" }
-            ?: chap.tags.firstOrNull { it.type == "Issue" }
+    private fun BrowseChapter.getMangasFromChapter(): List<MangaEntry> {
+        val entries = mutableListOf<MangaEntry>()
+        var isSeries = false
 
-        // add parent entry when chapter parent is an associated series/doujin/anthology/issue
-        if (parent != null) {
-            add(
+        tags.forEach { tag ->
+            if (tag.directory in listOf("series", "anthologies", "doujins", "issues")) {
                 MangaEntry(
-                    url = "/${parent.directory!!}/${parent.permalink}",
-                    title = parent.name,
-                    cover = getCoverUrl(parent.directory, parent.permalink),
-                ),
-            )
+                    url = "/${tag.directory!!}/${tag.permalink}",
+                    title = tag.name,
+                    cover = getCoverUrl(tag.directory, tag.permalink),
+                ).also(entries::add)
+
+                // true if an associated series is found
+                isSeries = isSeries || tag.directory == "series"
+            }
         }
 
-        // add individual chapter if it doesn't have associated series
-        if (parent?.type != "Series") {
-            add(
-                MangaEntry(
-                    url = "/chapters/${chap.permalink}",
-                    title = chap.title,
-                    cover = buildChapterCoverFetchUrl(chap.permalink),
-                ),
-            )
+        // individual chapter if no linked series
+        // mostly the case for uploaded doujins
+        if (!isSeries) {
+            MangaEntry(
+                url = "/chapters/$permalink",
+                title = title,
+                cover = buildChapterCoverFetchUrl(permalink),
+            ).also(entries::add)
         }
+
+        return entries
     }
 
-    private var _authorScanlatorCache: String? = null
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val empty = query.isBlank() && filters.firstInstance<GenreFilter>().isEmpty()
-
-        if (!empty) {
-            return super.fetchSearchManga(page, query, filters)
-        } else {
-            val (type, search) = run {
-                val author = filters.firstInstance<AuthorFilter>()
-                val scanlator = filters.firstInstance<ScanlatorFilter>()
-
-                if (author.state.isNotBlank()) {
-                    "Author" to author.state.trim()
-                } else if (scanlator.state.isNotBlank()) {
-                    "Scanlator" to scanlator.state.trim()
-                } else {
-                    return super.fetchSearchManga(page, query, filters)
-                }
-            }
-
-            // don't fetch it again if it is cached
-            if (page > 1 && _authorScanlatorCache != null) {
-                return fetchAuthorOrScanlator(
-                    _authorScanlatorCache!!,
-                    page,
-                )
-            }
-
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", search)
-                .addQueryParameter("classes[]", type)
-                .build()
-
-            val document = client.newCall(GET(url, headers)).execute().asJsoup()
-
-            val result = document.selectFirst(".chapter-list a.name")
-                ?: throw Exception("$type: $search not found")
-
-            _authorScanlatorCache = result.absUrl("href")
-
-            return fetchAuthorOrScanlator(
-                result.absUrl("href"),
-                page,
-            )
-        }
-    }
+    // lazy because extension inspector doesn't have implementation
+    private val lruCache by lazy { LruCache<String, Int>(10) }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val authors = run {
+            val authorQueries = filters.firstInstance<AuthorFilter>().values
+
+            authorQueries.map { author ->
+                lruCache[author]
+                    ?: fetchTagId(author, "Author")
+                        ?.also { lruCache.put(author, it) }
+                    ?: throw Exception("Unknown Author: $author")
+            }
+        }
+        val scanlators = run {
+            val scanlatorQueries = filters.firstInstance<ScanlatorFilter>().values
+
+            scanlatorQueries.map { scanlator ->
+                lruCache[scanlator]
+                    ?: fetchTagId(scanlator, "Scanlator")
+                        ?.also { lruCache.put(scanlator, it) }
+                    ?: throw Exception("Unknown Scanlator: $scanlator")
+            }
+        }
+
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query.trim())
             filters.firstInstance<SortFilter>().also {
@@ -154,12 +133,32 @@ class Dynasty : HttpSource() {
                     addQueryParameter("without[]", without.toString())
                 }
             }
+            authors.forEach { author ->
+                addQueryParameter("with[]", author.toString())
+            }
+            scanlators.forEach { scanlator ->
+                addQueryParameter("with[]", scanlator.toString())
+            }
             if (page > 1) {
                 addQueryParameter("page", page.toString())
             }
         }.build()
 
         return GET(url, headers)
+    }
+
+    private fun fetchTagId(query: String, type: String): Int? {
+        val url = "$baseUrl/tags/suggest"
+        val body = FormBody.Builder()
+            .add("query", query)
+            .build()
+
+        val data = client.newCall(POST(url, headers, body)).execute()
+            .parseAs<List<TagSuggest>>()
+
+        return data.firstOrNull {
+            it.type == type && it.name.almostEquals(query, 10f)
+        }?.id
     }
 
     override fun getFilterList(): FilterList {
@@ -172,10 +171,10 @@ class Dynasty : HttpSource() {
             SortFilter(),
             TypeFilter(),
             GenreFilter(tags),
-            Filter.Separator(),
-            Filter.Header("Author and Scanlator filter doesn't work with Tag filter or text search; also only works one at a time"),
             AuthorFilter(),
             ScanlatorFilter(),
+            Filter.Header("Author and Scanlator filter require almost exact name"),
+            Filter.Header("Add multiple by comma (,) separation"),
         )
     }
 
@@ -199,13 +198,11 @@ class Dynasty : HttpSource() {
                 }
             }
 
-            entries.add(
-                MangaEntry(
-                    url = "/$directory/$permalink",
-                    title = title,
-                    cover = getCoverUrl(directory, permalink),
-                ),
-            )
+            MangaEntry(
+                url = "/$directory/$permalink",
+                title = title,
+                cover = getCoverUrl(directory, permalink),
+            ).also(entries::add)
         }
 
         val hasNextPage = document.selectFirst("div.pagination > ul > li.active + li > a") != null
@@ -213,54 +210,6 @@ class Dynasty : HttpSource() {
         return MangasPage(
             mangas = entries.map(MangaEntry::toSManga),
             hasNextPage = hasNextPage,
-        )
-    }
-
-    private fun fetchAuthorOrScanlator(url: String, page: Int): Observable<MangasPage> {
-        return client.newCall(GET("$url.json?page=$page", headers))
-            .asObservableSuccess()
-            .map { response ->
-                if (url.contains("/authors/")) {
-                    parseAuthorList(response)
-                } else {
-                    parseScanlatorList(response)
-                }
-            }
-    }
-
-    private fun parseAuthorList(response: Response): MangasPage {
-        val data = response.parseAs<AuthorResponse>()
-        val entries = LinkedHashSet<MangaEntry>()
-
-        data.taggables.forEach {
-            it.directory ?: return@forEach
-
-            entries.add(
-                MangaEntry(
-                    url = "/${it.directory}/${it.permalink}",
-                    title = it.name,
-                    cover = it.cover?.let { cover -> buildCoverUrl(cover) },
-                ),
-            )
-        }
-
-        data.taggings.forEach { buildMangaListFromChapter(it, entries::add) }
-
-        return MangasPage(
-            mangas = entries.map(MangaEntry::toSManga),
-            hasNextPage = false,
-        )
-    }
-
-    private fun parseScanlatorList(response: Response): MangasPage {
-        val data = response.parseAs<ScanlatorResponse>()
-        val entries = LinkedHashSet<MangaEntry>()
-
-        data.taggings.forEach { buildMangaListFromChapter(it, entries::add) }
-
-        return MangasPage(
-            mangas = entries.map(MangaEntry::toSManga),
-            hasNextPage = data.hasNextPage(),
         )
     }
 
@@ -328,17 +277,27 @@ class Dynasty : HttpSource() {
         return buildCoverUrl(file)
     }
 
+//    private fun buildCoverUrl(file: String): String {
+//        return HttpUrl.Builder().apply {
+//            scheme("https")
+//            host("x.0ms.dev")
+//            addPathSegment("q70")
+//            addEncodedPathSegments(baseUrl)
+//            addEncodedPathSegments(
+//                file.removePrefix("/")
+//                    .substringBefore("?"),
+//            )
+//        }.build().toString()
+//    }
+
     private fun buildCoverUrl(file: String): String {
-        return HttpUrl.Builder().apply {
-            scheme("https")
-            host("x.0ms.dev")
-            addPathSegment("q70")
-            addEncodedPathSegments(baseUrl)
-            addEncodedPathSegments(
+        return baseUrl.toHttpUrl()
+            .newBuilder()
+            .addEncodedPathSegments(
                 file.removePrefix("/")
                     .substringBefore("?"),
-            )
-        }.build().toString()
+            ).build()
+            .toString()
     }
 
     private fun buildChapterCoverFetchUrl(permalink: String): String {
@@ -381,7 +340,9 @@ class Dynasty : HttpSource() {
         var capitalize = true
         for (char in this) {
             result.append(
-                if (capitalize) {
+                if (char == '_') {
+                    ' '
+                } else if (capitalize) {
                     char.uppercase()
                 } else {
                     char.lowercase()
@@ -396,4 +357,4 @@ class Dynasty : HttpSource() {
 }
 
 private const val COVER_FETCH_HOST = "keiyoushi-chapter-cover"
-private val CHAPTER_SLUG_REGEX = Regex("""(.*?)_ch[0-9_]+""")
+private val CHAPTER_SLUG_REGEX = Regex("""(.*?)_(ch[0-9_]+|volume_[0-9_\w]+)""")

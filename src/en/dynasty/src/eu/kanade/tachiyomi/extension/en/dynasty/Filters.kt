@@ -61,7 +61,12 @@ class GenreFilter(
     fun isEmpty() = included.isEmpty() && excluded.isEmpty()
 }
 
-abstract class TextFilter(name: String) : Filter.Text(name)
+abstract class TextFilter(name: String) : Filter.Text(name) {
+    val values get() = state
+        .split(",")
+        .map(String::trim)
+        .filterNot(String::isBlank)
+}
 
 class AuthorFilter : TextFilter("Author")
 

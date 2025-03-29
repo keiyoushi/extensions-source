@@ -8,7 +8,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonTransformingSerializer
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
 @Serializable
@@ -29,7 +28,7 @@ class BrowseChapter(
 
 @Serializable
 class BrowseTag(
-    val type: String,
+    private val type: String,
     val name: String,
     val permalink: String,
     val cover: String? = null,
@@ -43,9 +42,16 @@ class BrowseTag(
     }
 }
 
+@Serializable
+class TagSuggest(
+    val id: Int,
+    val name: String,
+    val type: String,
+)
+
 class MangaEntry(
     private val title: String,
-    private val url: String,
+    val url: String,
     private val cover: String?,
 ) {
     fun toSManga() = SManga.create().apply {
@@ -85,16 +91,18 @@ class MangaResponse(
     val description: String?,
     val aliases: List<String>,
     @Serializable(with = NonHeaderTaggingsSerializer::class)
-    val taggings: List<BrowseChapter>
+    val taggings: List<BrowseChapter>,
 )
 
 object NonHeaderTaggingsSerializer : JsonTransformingSerializer<List<BrowseChapter>>(ListSerializer(BrowseChapter.serializer())) {
     override fun transformSerialize(element: JsonElement): JsonElement {
         if (element !is JsonArray) return element
 
-        val filteredArray = JsonArray(element.filterIsInstance<JsonObject>().filter { jsonObject ->
-            jsonObject.keys.size > 1 || !jsonObject.containsKey("header")
-        })
+        val filteredArray = JsonArray(
+            element.filterIsInstance<JsonObject>().filter { jsonObject ->
+                jsonObject.keys.size > 1 || !jsonObject.containsKey("header")
+            },
+        )
 
         return filteredArray
     }
