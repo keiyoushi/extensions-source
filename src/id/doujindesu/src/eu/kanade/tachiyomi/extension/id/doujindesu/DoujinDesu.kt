@@ -317,43 +317,60 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     // Search & FIlter
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/manga/page/$page/".toHttpUrl().newBuilder()
-            .addQueryParameter("title", query)
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-            when (filter) {
-                is CategoryNames -> {
-                    val category = filter.values[filter.state]
-                    url.addQueryParameter("typex", category.key)
-                }
-                is OrderBy -> {
-                    val order = filter.values[filter.state]
-                    url.addQueryParameter("order", order.key)
-                }
-                is AuthorFilter -> {
-                    url.addQueryParameter("author", filter.state)
-                }
-                is CharacterFilter -> {
-                    url.addQueryParameter("character", filter.state)
-                }
-                is GenreList -> {
-                    filter.state
-                        .filter { it.state }
-                        .let { list ->
-                            if (list.isNotEmpty()) {
-                                list.forEach { genre -> url.addQueryParameter("genre[]", genre.id) }
-                            }
-                        }
-                }
-                is StatusList -> {
-                    val status = filter.values[filter.state]
-                    url.addQueryParameter("statusx", status.key)
-                }
-                else -> {}
-            }
-        }
+    val url = "$baseUrl/manga/page/$page/".toHttpUrl().newBuilder()
+        .addQueryParameter("title", query)
 
-        return GET(url.build(), headers)
+    (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+        when (filter) {
+            is CategoryNames -> {
+                val category = filter.values[filter.state]
+                url.addQueryParameter("typex", category.key)
+            }
+            is OrderBy -> {
+                val order = filter.values[filter.state]
+                url.addQueryParameter("order", order.key)
+            }
+            is AuthorFilter -> {
+                url.addQueryParameter("author", filter.state)
+            }
+            is CharacterFilter -> {
+                url.addQueryParameter("character", filter.state)
+            }
+            is GenreList -> {
+                filter.state
+                    .filter { it.state }
+                    .let { list ->
+                        if (list.isNotEmpty()) {
+                            list.forEach { genre -> url.addQueryParameter("genre[]", genre.id) }
+                        }
+                    }
+            }
+            is StatusList -> {
+                val status = filter.values[filter.state]
+                url.addQueryParameter("statusx", status.key)
+            }
+            is GroupFilter -> {
+                url.addQueryParameter("group", filter.state)
+            }
+            is SeriesFilter -> {
+                url.addQueryParameter("series", filter.state)
+            }
+            else -> {}
+        }
     }
+
+    return GET(url.build(), headers)
+}
+
+fun scrapeGroups(): List<Group> {
+    val url = "$baseUrl/group/"
+    // Implement scraping logic here to fetch groups
+}
+
+fun scrapeSeries(): List<Series> {
+    val url = "$baseUrl/series/"
+    // Implement scraping logic here to fetch series
+}
 
     override fun searchMangaFromElement(element: Element): SManga =
         basicInformationFromElement(element)
@@ -362,6 +379,8 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Filter.Header("NB: Filter bisa digabungkan dengan memakai pencarian teks!"),
         Filter.Separator(),
         AuthorFilter(),
+        GroupFilter(),
+        SeriesFilter(),
         CharacterFilter(),
         StatusList(statusList),
         CategoryNames(categoryNames),
