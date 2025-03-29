@@ -26,6 +26,7 @@ class SourceCategorySelector(
 
         fun create(baseUrl: String): SourceCategorySelector {
             val options = listOf(
+                SourceCategory("unselected", ""),
                 SourceCategory("大胸美女", "YmpydEtkNzV5NHJKcDJYVGtOVW0yZz09"),
                 SourceCategory("巨乳美女", "Q09EdlMvMHgweERrUitScTFTaDM4Zz09"),
                 SourceCategory("全裸写真", "eXZzejJPNFRVNzJqKzFDUmNzZEU2QT09"),
