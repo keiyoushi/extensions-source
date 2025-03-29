@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 
 class ArvenComics : Keyoapp(
     "Arven Scans",
-    "https://arvencomic.net",
+    "https://arvencomics.com",
     "en",
 ) {
     // migrated from Mangathemesia to Keyoapp
