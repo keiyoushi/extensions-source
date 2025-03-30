@@ -4,7 +4,7 @@ import android.util.LruCache
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -38,9 +38,12 @@ class Dynasty : HttpSource() {
     override val id = 669095474988166464
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::fetchCover)
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
+        .addInterceptor(::fetchCoverUrlInterceptor)
+        .addInterceptor(::coverInterceptor)
+        .rateLimit(1, 2)
         .build()
+
+    private val coverClient = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -460,7 +463,9 @@ class Dynasty : HttpSource() {
             .addEncodedPathSegments(
                 file.removePrefix("/")
                     .substringBefore("?"),
-            ).build()
+            )
+            .fragment(COVER_URL_FRAGMENT)
+            .build()
             .toString()
     }
 
@@ -472,7 +477,7 @@ class Dynasty : HttpSource() {
         }.build().toString()
     }
 
-    private fun fetchCover(chain: Interceptor.Chain): Response {
+    private fun fetchCoverUrlInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
         if (request.url.host != COVER_FETCH_HOST) {
@@ -499,6 +504,16 @@ class Dynasty : HttpSource() {
         return chain.proceed(newRequest)
     }
 
+    private fun coverInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        return if (request.url.fragment == COVER_URL_FRAGMENT) {
+            coverClient.newCall(request).execute()
+        } else {
+            chain.proceed(request)
+        }
+    }
+
     private fun String.permalinkToTitle(): String {
         val result = StringBuilder(length)
         var capitalize = true
@@ -521,4 +536,5 @@ class Dynasty : HttpSource() {
 }
 
 private const val COVER_FETCH_HOST = "keiyoushi-chapter-cover"
+private const val COVER_URL_FRAGMENT = "thumbnail"
 private val CHAPTER_SLUG_REGEX = Regex("""(.*?)_(ch[0-9_]+|volume_[0-9_\w]+)""")
