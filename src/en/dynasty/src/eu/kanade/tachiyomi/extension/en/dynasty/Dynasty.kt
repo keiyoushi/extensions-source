@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
@@ -70,6 +71,10 @@ class Dynasty : HttpSource() {
         val entries = mutableListOf<MangaEntry>()
         var isSeries = false
 
+        val chapterAuthors = LinkedHashSet<String>()
+        val chapterTags = LinkedHashSet<String>()
+        val chapterOthers = LinkedHashSet<Pair<String, String>>()
+
         tags.forEach { tag ->
             if (tag.directory in listOf("series", "anthologies", "doujins", "issues")) {
                 MangaEntry(
@@ -81,6 +86,12 @@ class Dynasty : HttpSource() {
                 // true if an associated series is found
                 isSeries = isSeries || tag.directory == "series"
             }
+
+            when (tag.type) {
+                "Author" -> chapterAuthors.add(tag.name)
+                "General" -> chapterTags.add(tag.name)
+                else -> chapterOthers.add(tag.type to tag.name)
+            }
         }
 
         // individual chapter if no linked series
@@ -90,6 +101,18 @@ class Dynasty : HttpSource() {
                 url = "/chapters/$permalink",
                 title = title,
                 cover = buildChapterCoverFetchUrl(permalink),
+                author = chapterAuthors.joinToString(),
+                description = buildString {
+                    for ((type, value) in chapterOthers.groupBy { it.first }) {
+                        append(type, ": \n")
+                        value.forEach { append("\t• ", it.second, "\n") }
+                        append("\n")
+                    }
+                }.trim(),
+                genre = chapterTags.joinToString(),
+                status = SManga.COMPLETED,
+                updateStrategy = UpdateStrategy.ONLY_FETCH_ONCE,
+                initialized = true
             ).also(entries::add)
         }
 
@@ -236,8 +259,9 @@ class Dynasty : HttpSource() {
         val document = response.asJsoup()
         val entries = LinkedHashSet<MangaEntry>()
 
-        document.select(".chapter-list a.name").forEach { element ->
-            var (directory, permalink) = element.absUrl("href")
+        document.select(".chapter-list").forEach { element ->
+            var (directory, permalink) = element.selectFirst("a.name")!!
+                .absUrl("href")
                 .toHttpUrl().pathSegments
                 .let { it[0] to it[1] }
             var title = element.ownText()
@@ -252,11 +276,33 @@ class Dynasty : HttpSource() {
                 }
             }
 
-            MangaEntry(
-                url = "/$directory/$permalink",
-                title = title,
-                cover = getCoverUrl(directory, permalink),
-            ).also(entries::add)
+            if (directory == "chapters") {
+                MangaEntry(
+                    url = "/$directory/$permalink",
+                    title = title,
+                    cover = getCoverUrl(directory, permalink),
+                    author = element.select("a[href*=authors]").eachText().joinToString(),
+                    description = buildString {
+                        element.select(".doujin_tags a").let {
+                            append("Doujins:\n")
+                            it.forEach { tag ->
+                                append("\t• ", tag.ownText(), "\n")
+                            }
+                        }
+                    }.trim(),
+                    genre = element.select("a[href*=tags]").eachText().joinToString(),
+                    status = SManga.COMPLETED,
+                    updateStrategy = UpdateStrategy.ONLY_FETCH_ONCE,
+                    initialized = true
+                )
+            } else {
+                MangaEntry(
+                    url = "/$directory/$permalink",
+                    title = title,
+                    cover = getCoverUrl(directory, permalink),
+                ).also(entries::add)
+            }
+
         }
 
         val hasNextPage = document.selectFirst("div.pagination > ul > li.active + li > a") != null
