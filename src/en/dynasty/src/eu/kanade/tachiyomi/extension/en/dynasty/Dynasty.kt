@@ -294,7 +294,7 @@ class Dynasty : HttpSource() {
                     status = SManga.COMPLETED,
                     updateStrategy = UpdateStrategy.ONLY_FETCH_ONCE,
                     initialized = true
-                )
+                ).also(entries::add)
             } else {
                 MangaEntry(
                     url = "/$directory/$permalink",
@@ -303,6 +303,17 @@ class Dynasty : HttpSource() {
                 ).also(entries::add)
             }
 
+            element.select(".doujin_tags a").forEach {
+                val (directory, permalink) = it.absUrl("href")
+                    .toHttpUrl().pathSegments
+                    .let { path -> path[0] to path[1] }
+
+                MangaEntry(
+                    url = "/$directory/$permalink",
+                    title = it.ownText(),
+                    cover = getCoverUrl(directory, permalink),
+                ).also(entries::add)
+            }
         }
 
         val hasNextPage = document.selectFirst("div.pagination > ul > li.active + li > a") != null
