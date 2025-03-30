@@ -22,6 +22,7 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import okio.use
+import org.jsoup.Jsoup
 import rx.Observable
 
 class Dynasty : HttpSource() {
@@ -388,6 +389,83 @@ class Dynasty : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
+        if (response.request.url.pathSegments[0] == "chapters") {
+            return chapterDetailsParse(response)
+        }
+
+        val data = response.parseAs<MangaResponse>()
+        val authors = LinkedHashSet<String>()
+        val tags = LinkedHashSet<String>()
+        val others = LinkedHashSet<Pair<String, String>>()
+        var publishingStatus: Int = SManga.UNKNOWN
+
+        data.tags.forEach { tag ->
+            when (tag.type) {
+                "Status" -> when (tag.permalink) {
+                    "ongoing" -> SManga.ONGOING
+                    "complete" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }.also { publishingStatus = it }
+
+                "Author" -> authors.add(tag.name)
+                "General" -> tags.add(tag.name)
+                else -> others.add(tag.type to tag.name)
+            }
+        }
+
+        data.taggings.filterIsInstance<MangaChapter>().forEach { tagging ->
+            tagging.tags.forEach { tag ->
+                when (tag.type) {
+                    "Author" -> authors.add(tag.name)
+                    "General" -> tags.add(tag.name)
+                    "Series", "Scanlator", "Doujin", "Anthology" -> {}
+                    else -> others.add(tag.type to tag.name)
+                }
+            }
+        }
+
+        return SManga.create().apply {
+            title = data.name
+            author = authors.joinToString()
+            artist = author
+            description = buildString {
+                data.description?.let {
+                    val desc = Jsoup.parseBodyFragment(
+                        decodeUnicode(it),
+                    )
+                    desc.select("a").remove()
+
+                    append(desc.wholeText())
+                }
+
+                if (isNotEmpty() && !endsWith("\n")) {
+                    append("\n")
+                }
+
+                for ((type, values) in others.groupBy { it.first }) {
+                    append("\n", type, ":\n")
+                    values.forEach { append("\t• ", it.second, "\n") }
+                }
+                if (data.aliases.isNotEmpty()) {
+                    append("\nAliases:\n")
+                    data.aliases.forEach { append("\t• ", it, "\n") }
+                }
+            }.trim()
+            genre = tags.joinToString()
+            status = publishingStatus
+            thumbnail_url = data.cover?.let { buildCoverUrl(it) }
+        }
+    }
+
+    private fun decodeUnicode(input: String): String {
+        return UNICODE_REGEX.replace(input) { matchResult ->
+            val hexCode = matchResult.groupValues[1]
+            val char = hexCode.toInt(16).toChar()
+            char.toString()
+        }
+    }
+
+    private fun chapterDetailsParse(response: Response): SManga {
         throw Exception("Not yet implemented")
     }
 
@@ -538,3 +616,4 @@ class Dynasty : HttpSource() {
 private const val COVER_FETCH_HOST = "keiyoushi-chapter-cover"
 private const val COVER_URL_FRAGMENT = "thumbnail"
 private val CHAPTER_SLUG_REGEX = Regex("""(.*?)_(ch[0-9_]+|volume_[0-9_\w]+)""")
+private val UNICODE_REGEX = Regex("\\\\u([0-9A-Fa-f]{4})")

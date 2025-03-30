@@ -7,7 +7,9 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 
 @Serializable
@@ -28,7 +30,7 @@ class BrowseChapter(
 
 @Serializable
 class BrowseTag(
-    private val type: String,
+    val type: String,
     val name: String,
     val permalink: String,
     val cover: String? = null,
@@ -85,43 +87,67 @@ class MangaEntry(
 }
 
 @Serializable
-class AuthorResponse(
-    val taggables: List<BrowseTag>,
-    val taggings: List<BrowseChapter>,
-)
-
-@Serializable
-class ScanlatorResponse(
-    val taggings: List<BrowseChapter>,
-    @SerialName("current_page") private val currentPage: Int,
-    @SerialName("total_pages") private val totalPages: Int,
-) {
-    fun hasNextPage() = currentPage <= totalPages
-}
-
 class MangaResponse(
     val name: String,
+    val type: String,
     val tags: List<BrowseTag>,
     val cover: String?,
     val description: String?,
     val aliases: List<String>,
-    @Serializable(with = NonHeaderTaggingsSerializer::class)
-    val taggings: List<BrowseChapter>,
+    @Serializable(with = ChapterItemListSerializer::class)
+    val taggings: List<ChapterItem>,
+    @SerialName("total_pages") val totalPages: Int = 0,
 )
 
-object NonHeaderTaggingsSerializer : JsonTransformingSerializer<List<BrowseChapter>>(ListSerializer(BrowseChapter.serializer())) {
-    override fun transformSerialize(element: JsonElement): JsonElement {
-        if (element !is JsonArray) return element
+@Serializable
+sealed class ChapterItem
 
-        val filteredArray = JsonArray(
-            element.filterIsInstance<JsonObject>().filter { jsonObject ->
-                jsonObject.keys.size > 1 || !jsonObject.containsKey("header")
+@Serializable
+@SerialName("header")
+class MangaChapterHeader(
+    val header: String,
+) : ChapterItem()
+
+@Serializable
+@SerialName("chapter")
+class MangaChapter(
+    val title: String,
+    val permalink: String,
+    @SerialName("released_on") val releasedOn: String,
+    val tags: List<BrowseTag>,
+) : ChapterItem()
+
+object ChapterItemListSerializer : JsonTransformingSerializer<List<ChapterItem>>(ListSerializer(ChapterItem.serializer())) {
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        return JsonArray(
+            element.jsonArray.map { jsonElement ->
+                val jsonObject = jsonElement.jsonObject
+                when {
+                    "header" in jsonObject -> JsonObject(
+                        jsonObject + ("type" to JsonPrimitive("header")),
+                    )
+                    else -> JsonObject(
+                        jsonObject + ("type" to JsonPrimitive("chapter")),
+                    )
+                }
             },
         )
-
-        return filteredArray
     }
 }
+
+// object NonHeaderTaggingsSerializer : JsonTransformingSerializer<List<BrowseChapter>>(ListSerializer(BrowseChapter.serializer())) {
+//    override fun transformSerialize(element: JsonElement): JsonElement {
+//        if (element !is JsonArray) return element
+//
+//        val filteredArray = JsonArray(
+//            element.filterIsInstance<JsonObject>().filter { jsonObject ->
+//                jsonObject.keys.size > 1 || !jsonObject.containsKey("header")
+//            },
+//        )
+//
+//        return filteredArray
+//    }
+// }
 
 @Serializable
 class ChapterResponse(
