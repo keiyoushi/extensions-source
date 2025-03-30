@@ -1,9 +1,9 @@
 ext {
     extName = 'SummerToon'
     extClass = '.SummerToon'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://summertoon.co'
-    overrideVersionCode = 4
+    themePkg = 'madara'
+    baseUrl = 'https://summertoons.com'
+    overrideVersionCode = 0
     isNsfw = false
 }
 
