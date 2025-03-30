@@ -135,23 +135,13 @@ object ChapterItemListSerializer : JsonTransformingSerializer<List<ChapterItem>>
     }
 }
 
-// object NonHeaderTaggingsSerializer : JsonTransformingSerializer<List<BrowseChapter>>(ListSerializer(BrowseChapter.serializer())) {
-//    override fun transformSerialize(element: JsonElement): JsonElement {
-//        if (element !is JsonArray) return element
-//
-//        val filteredArray = JsonArray(
-//            element.filterIsInstance<JsonObject>().filter { jsonObject ->
-//                jsonObject.keys.size > 1 || !jsonObject.containsKey("header")
-//            },
-//        )
-//
-//        return filteredArray
-//    }
-// }
-
 @Serializable
 class ChapterResponse(
+    val title: String,
+    @SerialName("long_title") val longTitle: String,
+    val tags: List<BrowseTag>,
     val pages: List<Page>,
+    @SerialName("released_on") val releasedOn: String,
 )
 
 @Serializable

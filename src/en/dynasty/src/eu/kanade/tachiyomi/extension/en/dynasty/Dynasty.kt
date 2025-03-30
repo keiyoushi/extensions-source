@@ -1,20 +1,27 @@
 package eu.kanade.tachiyomi.extension.en.dynasty
 
+import android.content.SharedPreferences
 import android.util.LruCache
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -24,8 +31,10 @@ import okhttp3.Response
 import okio.use
 import org.jsoup.Jsoup
 import rx.Observable
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class Dynasty : HttpSource() {
+class Dynasty : HttpSource(), ConfigurableSource {
 
     override val name = "Dynasty"
 
@@ -34,6 +43,8 @@ class Dynasty : HttpSource() {
     override val baseUrl = "https://dynasty-scans.com"
 
     override val supportsLatest = false
+
+    private val preferences by getPreferencesLazy()
 
     // Dynasty-Series
     override val id = 669095474988166464
@@ -453,8 +464,12 @@ class Dynasty : HttpSource() {
                 }
 
                 for ((type, values) in others.groupBy { it.first }) {
-                    append("\n", type, ":\n")
-                    values.forEach { append("\t• ", it.second, "\n") }
+                    if (values.size == 1) {
+                        append(type, ": ", values.first().second, "\n")
+                    } else {
+                        append(type, ":\n")
+                        values.forEach { append("\t• ", it.second, "\n") }
+                    }
                 }
                 if (data.aliases.isNotEmpty()) {
                     append("\nAliases:\n")
@@ -476,15 +491,111 @@ class Dynasty : HttpSource() {
     }
 
     private fun chapterDetailsParse(response: Response): SManga {
-        throw Exception("Not yet implemented")
+        val data = response.parseAs<ChapterResponse>()
+
+        val authors = LinkedHashSet<String>()
+        val tags = LinkedHashSet<String>()
+        val others = LinkedHashSet<Pair<String, String>>()
+
+        data.tags.forEach { tag ->
+            when (tag.type) {
+                "Author" -> authors.add(tag.name)
+                "General" -> tags.add(tag.name)
+                else -> others.add(tag.type to tag.name)
+            }
+        }
+
+        return SManga.create().apply {
+            title = data.title
+            author = authors.joinToString()
+            artist = author
+            description = buildString {
+                for ((type, values) in others.groupBy { it.first }) {
+                    if (values.size == 1) {
+                        append(type, ": ", values.first().second, "\n")
+                    } else {
+                        append(type, ":\n")
+                        values.forEach { append("\t• ", it.second, "\n") }
+                    }
+                }
+                append("\nReleased: ", data.releasedOn)
+            }.trim()
+            genre = tags.joinToString()
+            thumbnail_url = buildCoverUrl(data.pages.first().url)
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+        }
+    }
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return if (manga.url.contains("/chapters/")) {
+            Observable.just(
+                listOf(
+                    SChapter.create().apply {
+                        url = manga.url
+                        name = "Chapter"
+                        date_upload = dateFormat.tryParse(
+                            manga.description
+                                ?.substringAfter("Released:", ""),
+                        )
+                    },
+                ),
+            )
+        } else {
+            super.fetchChapterList(manga)
+        }
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        throw Exception("Not yet implemented")
+        return mangaDetailsRequest(manga)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        throw Exception("Not yet implemented")
+        val data = response.parseAs<MangaResponse>()
+        val chapters = data.taggings.toMutableList()
+
+        var page = 2
+        val limit = preferences.chapterFetchLimit.let {
+            if (it == "all") {
+                Int.MAX_VALUE
+            } else {
+                it.toInt()
+            }
+        }
+
+        while (page <= data.totalPages && page <= limit) {
+            val url = response.request.url.newBuilder()
+                .addQueryParameter("page", page.toString())
+                .build()
+
+            chapters += client.newCall(GET(url, headers)).execute()
+                .parseAs<MangaResponse>().taggings
+            page += 1
+        }
+
+        var header: String? = null
+
+        val chapterList = chapters.mapNotNull { item ->
+            if (item is MangaChapterHeader) {
+                header = item.header
+                return@mapNotNull null
+            }
+
+            with(item as MangaChapter) {
+                SChapter.create().apply {
+                    url = "/chapters/$permalink"
+                    name = header?.let { "$it $title" } ?: title
+                    scanlator = tags.filter { it.type == "Scanlator" }.joinToString { it.name }
+                    date_upload = dateFormat.tryParse(releasedOn)
+                }
+            }
+        }
+
+        return if (data.type == "Series") {
+            chapterList.reversed()
+        } else {
+            chapterList
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -492,12 +603,37 @@ class Dynasty : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        throw Exception("Not yet implemented")
+        return GET("$baseUrl${chapter.url}.json", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        throw Exception("Not yet implemented")
+        val data = response.parseAs<ChapterResponse>()
+
+        return data.pages.mapIndexed { index, page ->
+            Page(index, imageUrl = baseUrl + page.url)
+        }
     }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = CHAPTER_FETCH_LIMIT_PREF
+            title = "Chapters Fetch Limit"
+            entries = CHAPTER_FETCH_LIMITS.map { "$it pages" }.toTypedArray()
+            entryValues = CHAPTER_FETCH_LIMITS
+            setDefaultValue(CHAPTER_FETCH_LIMITS[0])
+            summary = """
+                Limits how many pages of an entry are fetched for chapters
+                Mostly applies to Doujins/Anthologies/Issues
+
+                More pages mean slower loading of chapter list
+
+                Currently fetching %s
+            """.trimIndent()
+        }.also(screen::addPreference)
+    }
+
+    private val SharedPreferences.chapterFetchLimit: String
+        get() = getString(CHAPTER_FETCH_LIMIT_PREF, CHAPTER_FETCH_LIMITS[0])!!
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
@@ -627,3 +763,7 @@ private const val COVER_FETCH_HOST = "keiyoushi-chapter-cover"
 private const val COVER_URL_FRAGMENT = "thumbnail"
 private val CHAPTER_SLUG_REGEX = Regex("""(.*?)_(ch[0-9_]+|volume_[0-9_\w]+)""")
 private val UNICODE_REGEX = Regex("\\\\u([0-9A-Fa-f]{4})")
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+
+private const val CHAPTER_FETCH_LIMIT_PREF = "chapterFetchLimit"
+private val CHAPTER_FETCH_LIMITS = arrayOf("2", "5", "10", "all")
