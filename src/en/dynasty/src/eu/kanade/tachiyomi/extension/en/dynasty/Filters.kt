@@ -64,8 +64,9 @@ class GenreFilter(
 abstract class TextFilter(name: String) : Filter.Text(name) {
     val values get() = state
         .split(",")
-        .map(String::trim)
         .filterNot(String::isBlank)
+        .map(String::trim)
+        .map(String::lowercase)
 }
 
 class AuthorFilter : TextFilter("Author")

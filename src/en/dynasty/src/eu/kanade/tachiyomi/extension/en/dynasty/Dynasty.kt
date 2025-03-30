@@ -97,26 +97,50 @@ class Dynasty : HttpSource() {
         val authorFilter = filters.firstInstance<AuthorFilter>()
         val scanlatorFilter = filters.firstInstance<ScanlatorFilter>()
 
-        if (query.isBlank()) {
+        if (query.startsWith("deeplink:")) {
+            var (_, directory, permalink) = query.split(":", limit = 3)
+
+            if (directory == "chapters") {
+                val seriesPermalink = CHAPTER_SLUG_REGEX.find(permalink)?.groupValues?.get(1)
+
+                if (seriesPermalink != null) {
+                    directory = "series"
+                    permalink = seriesPermalink
+                }
+            }
+
+            val entry = MangaEntry(
+                url = "/$directory/$permalink",
+                title = permalink.permalinkToTitle(),
+                cover = getCoverUrl(directory, permalink),
+            ).toSManga()
+
+            return Observable.just(
+                MangasPage(
+                    mangas = listOf(entry),
+                    hasNextPage = false,
+                ),
+            )
+        } else if (query.isBlank()) {
             when {
                 // only one genre/tag included
                 genreFilter.included.size == 1 &&
                     genreFilter.excluded.isEmpty() &&
                     authorFilter.values.isEmpty() &&
                     scanlatorFilter.values.isEmpty()
-                    -> return fetchSingleGenre(genreFilter.included.first().permalink, page)
+                -> return fetchSingleGenre(genreFilter.included.first().permalink, page)
 
                 // only one author specified
                 genreFilter.isEmpty() &&
                     authorFilter.values.size == 1 &&
                     scanlatorFilter.values.isEmpty()
-                    -> return fetchSingleAuthor(authorFilter.values.first())
+                -> return fetchSingleAuthor(authorFilter.values.first())
 
                 // only one scanlator specified
                 genreFilter.isEmpty() &&
                     authorFilter.values.isEmpty() &&
                     scanlatorFilter.values.size == 1
-                    -> return fetchSingleScanlator(scanlatorFilter.values.first(), page)
+                -> return fetchSingleScanlator(scanlatorFilter.values.first(), page)
             }
         }
 
@@ -200,7 +224,7 @@ class Dynasty : HttpSource() {
             ScanlatorFilter(),
             Filter.Header("Author and Scanlator filter require exact name. Add multiple by comma (,) separation"),
             Filter.Separator(),
-            Filter.Header("Note: include only one genre/author/scanlator at a time for better results"),
+            Filter.Header("Note: include only one tag/author/scanlator at a time for better results"),
         )
     }
 
@@ -240,7 +264,13 @@ class Dynasty : HttpSource() {
     }
 
     private fun fetchSingleGenre(permalink: String, page: Int): Observable<MangasPage> {
-        return client.newCall(GET("$baseUrl/tags/$permalink.json?page=$page", headers))
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("tags")
+            .addPathSegment("$permalink.json")
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return client.newCall(GET(url, headers))
             .asObservableSuccess()
             .map { response ->
                 val data = response.parseAs<BrowseTagResponse>()
@@ -257,7 +287,7 @@ class Dynasty : HttpSource() {
     }
 
     private fun fetchSingleAuthor(query: String): Observable<MangasPage> {
-        val authorLink = run {
+        val author = run {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
                 .addQueryParameter("classes[]", "Author")
@@ -268,10 +298,17 @@ class Dynasty : HttpSource() {
             document.selectFirst(".chapter-list a.name")
                 ?.takeIf { it.ownText().lowercase() == query }
                 ?.absUrl("href")
+                ?.toHttpUrl()
+                ?.pathSegments?.last()
                 ?: throw Exception("Unknown Author: $query")
         }
 
-        return client.newCall(GET(authorLink, headers))
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("authors")
+            .addPathSegment("$author.json")
+            .build()
+
+        return client.newCall(GET(url, headers))
             .asObservableSuccess()
             .map { response ->
                 val data = response.parseAs<BrowseAuthorResponse>()
@@ -281,7 +318,7 @@ class Dynasty : HttpSource() {
                     MangaEntry(
                         url = "/${tag.directory!!}/${tag.permalink}",
                         title = tag.name,
-                        cover = tag.cover?.let { buildCoverUrl(it) }
+                        cover = tag.cover?.let { buildCoverUrl(it) },
                     ).also(entries::add)
                 }
                 data.taggings.forEach { chapter ->
@@ -291,14 +328,14 @@ class Dynasty : HttpSource() {
 
                 MangasPage(
                     mangas = entries.map(MangaEntry::toSManga),
-                    hasNextPage = false
+                    hasNextPage = false,
                 )
             }
     }
 
     private var scanlatorPermalink: String? = null
     private fun fetchSingleScanlator(query: String, page: Int): Observable<MangasPage> {
-        val scanlatorLink = if (page > 1 && scanlatorPermalink != null) {
+        val scanlator = if (page > 1 && scanlatorPermalink != null) {
             scanlatorPermalink!!
         } else {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
@@ -311,11 +348,15 @@ class Dynasty : HttpSource() {
             document.selectFirst(".chapter-list a.name")
                 ?.takeIf { it.ownText().lowercase() == query }
                 ?.absUrl("href")
+                ?.toHttpUrl()
+                ?.pathSegments?.last()
                 ?.also { scanlatorPermalink = it }
                 ?: throw Exception("Unknown Scanlator: $query")
         }
 
-        val url = scanlatorLink.toHttpUrl().newBuilder()
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("scanlators")
+            .addPathSegment("$scanlator.json")
             .addQueryParameter("page", page.toString())
             .build()
 
