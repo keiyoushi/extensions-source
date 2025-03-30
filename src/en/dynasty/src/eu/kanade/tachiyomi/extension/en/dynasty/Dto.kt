@@ -49,6 +49,21 @@ class TagSuggest(
     val type: String,
 )
 
+@Serializable
+class BrowseTagResponse(
+    val taggings: List<BrowseChapter>,
+    @SerialName("current_page") private val currentPage: Int,
+    @SerialName("total_pages") private val totalPages: Int,
+) {
+    fun hasNextPage() = currentPage <= totalPages
+}
+
+@Serializable
+class BrowseAuthorResponse(
+    val taggables: List<BrowseTag>,
+    val taggings: List<BrowseChapter>,
+)
+
 class MangaEntry(
     private val title: String,
     val url: String,

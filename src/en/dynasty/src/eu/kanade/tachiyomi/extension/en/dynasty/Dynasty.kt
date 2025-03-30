@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.dynasty
 import android.util.LruCache
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -21,6 +22,7 @@ import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import okio.use
+import rx.Observable
 
 class Dynasty : HttpSource() {
 
@@ -90,6 +92,37 @@ class Dynasty : HttpSource() {
         return entries
     }
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val genreFilter = filters.firstInstance<GenreFilter>()
+        val authorFilter = filters.firstInstance<AuthorFilter>()
+        val scanlatorFilter = filters.firstInstance<ScanlatorFilter>()
+
+        if (query.isBlank()) {
+            when {
+                // only one genre/tag included
+                genreFilter.included.size == 1 &&
+                    genreFilter.excluded.isEmpty() &&
+                    authorFilter.values.isEmpty() &&
+                    scanlatorFilter.values.isEmpty()
+                    -> return fetchSingleGenre(genreFilter.included.first().permalink, page)
+
+                // only one author specified
+                genreFilter.isEmpty() &&
+                    authorFilter.values.size == 1 &&
+                    scanlatorFilter.values.isEmpty()
+                    -> return fetchSingleAuthor(authorFilter.values.first())
+
+                // only one scanlator specified
+                genreFilter.isEmpty() &&
+                    authorFilter.values.isEmpty() &&
+                    scanlatorFilter.values.size == 1
+                    -> return fetchSingleScanlator(scanlatorFilter.values.first(), page)
+            }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     // lazy because extension inspector doesn't have implementation
     private val lruCache by lazy { LruCache<String, Int>(10) }
 
@@ -119,10 +152,10 @@ class Dynasty : HttpSource() {
             }
             filters.firstInstance<GenreFilter>().also {
                 it.included.forEach { with ->
-                    addQueryParameter("with[]", with.toString())
+                    addQueryParameter("with[]", with.id.toString())
                 }
                 it.excluded.forEach { without ->
-                    addQueryParameter("without[]", without.toString())
+                    addQueryParameter("without[]", without.id.toString())
                 }
             }
             authors.forEach { author ->
@@ -165,8 +198,9 @@ class Dynasty : HttpSource() {
             GenreFilter(tags),
             AuthorFilter(),
             ScanlatorFilter(),
-            Filter.Header("Author and Scanlator filter require exact name"),
-            Filter.Header("Add multiple by comma (,) separation"),
+            Filter.Header("Author and Scanlator filter require exact name. Add multiple by comma (,) separation"),
+            Filter.Separator(),
+            Filter.Header("Note: include only one genre/author/scanlator at a time for better results"),
         )
     }
 
@@ -203,6 +237,102 @@ class Dynasty : HttpSource() {
             mangas = entries.map(MangaEntry::toSManga),
             hasNextPage = hasNextPage,
         )
+    }
+
+    private fun fetchSingleGenre(permalink: String, page: Int): Observable<MangasPage> {
+        return client.newCall(GET("$baseUrl/tags/$permalink.json?page=$page", headers))
+            .asObservableSuccess()
+            .map { response ->
+                val data = response.parseAs<BrowseTagResponse>()
+                val entries = data.taggings.flatMap { chapter ->
+                    chapter.getMangasFromChapter()
+                }.distinct()
+                    .map(MangaEntry::toSManga)
+
+                MangasPage(
+                    mangas = entries,
+                    hasNextPage = data.hasNextPage(),
+                )
+            }
+    }
+
+    private fun fetchSingleAuthor(query: String): Observable<MangasPage> {
+        val authorLink = run {
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("classes[]", "Author")
+                .build()
+
+            val document = client.newCall(GET(url, headers)).execute().asJsoup()
+
+            document.selectFirst(".chapter-list a.name")
+                ?.takeIf { it.ownText().lowercase() == query }
+                ?.absUrl("href")
+                ?: throw Exception("Unknown Author: $query")
+        }
+
+        return client.newCall(GET(authorLink, headers))
+            .asObservableSuccess()
+            .map { response ->
+                val data = response.parseAs<BrowseAuthorResponse>()
+                val entries = LinkedHashSet<MangaEntry>()
+
+                data.taggables.forEach { tag ->
+                    MangaEntry(
+                        url = "/${tag.directory!!}/${tag.permalink}",
+                        title = tag.name,
+                        cover = tag.cover?.let { buildCoverUrl(it) }
+                    ).also(entries::add)
+                }
+                data.taggings.forEach { chapter ->
+                    chapter.getMangasFromChapter()
+                        .also(entries::addAll)
+                }
+
+                MangasPage(
+                    mangas = entries.map(MangaEntry::toSManga),
+                    hasNextPage = false
+                )
+            }
+    }
+
+    private var scanlatorPermalink: String? = null
+    private fun fetchSingleScanlator(query: String, page: Int): Observable<MangasPage> {
+        val scanlatorLink = if (page > 1 && scanlatorPermalink != null) {
+            scanlatorPermalink!!
+        } else {
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+                .addQueryParameter("q", query)
+                .addQueryParameter("classes[]", "Scanlator")
+                .build()
+
+            val document = client.newCall(GET(url, headers)).execute().asJsoup()
+
+            document.selectFirst(".chapter-list a.name")
+                ?.takeIf { it.ownText().lowercase() == query }
+                ?.absUrl("href")
+                ?.also { scanlatorPermalink = it }
+                ?: throw Exception("Unknown Scanlator: $query")
+        }
+
+        val url = scanlatorLink.toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return client.newCall(GET(url, headers))
+            .asObservableSuccess()
+            .map { response ->
+                val data = response.parseAs<BrowseTagResponse>()
+                val entries = data.taggings.flatMap { chapter ->
+                    chapter.getMangasFromChapter()
+                }.distinct()
+                    .map(MangaEntry::toSManga)
+
+                MangasPage(
+                    mangas = entries,
+                    hasNextPage = data.hasNextPage(),
+                )
+            }
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -270,10 +400,11 @@ class Dynasty : HttpSource() {
     }
 
 //    private fun buildCoverUrl(file: String): String {
+//        // TODO: correct mirror url
 //        return HttpUrl.Builder().apply {
 //            scheme("https")
-//            host("x.0ms.dev")
-//            addPathSegment("q70")
+//            host("0ms.dev")
+//            addPathSegment("mirrors")
 //            addEncodedPathSegments(baseUrl)
 //            addEncodedPathSegments(
 //                file.removePrefix("/")

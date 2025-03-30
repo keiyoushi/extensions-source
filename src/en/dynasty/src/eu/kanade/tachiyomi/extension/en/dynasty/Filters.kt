@@ -17,14 +17,6 @@ private val selectOptions = listOf(
     "Release Date" to "released_on",
 )
 
-private val typeOptions = listOf(
-    "Series",
-    "Chapter",
-    "Anthology",
-    "Doujin",
-    "Issue",
-)
-
 class TypeOption(name: String) : Filter.CheckBox(name, true)
 
 class TypeFilter : Filter.Group<TypeOption>(
@@ -33,6 +25,14 @@ class TypeFilter : Filter.Group<TypeOption>(
 ) {
     val checked get() = state.filter { it.state }.map { it.name }
 }
+
+private val typeOptions = listOf(
+    "Series",
+    "Chapter",
+    "Anthology",
+    "Doujin",
+    "Issue",
+)
 
 @Serializable
 class GenreTag(
@@ -55,8 +55,8 @@ class GenreFilter(
     name = "Tags",
     state = tags.map(GenreTag::checkBoxOption),
 ) {
-    val included get() = state.filter { it.isIncluded() }.map { it.id }
-    val excluded get() = state.filter { it.isExcluded() }.map { it.id }
+    val included get() = state.filter { it.isIncluded() }
+    val excluded get() = state.filter { it.isExcluded() }
 
     fun isEmpty() = included.isEmpty() && excluded.isEmpty()
 }
