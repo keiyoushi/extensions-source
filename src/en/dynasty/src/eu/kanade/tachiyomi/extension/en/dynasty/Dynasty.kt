@@ -415,6 +415,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
         }
 
         val data = response.parseAs<MangaResponse>()
+
         val authors = LinkedHashSet<String>()
         val tags = LinkedHashSet<String>()
         val others = LinkedHashSet<Pair<String, String>>()
@@ -450,6 +451,9 @@ class Dynasty : HttpSource(), ConfigurableSource {
             author = authors.joinToString()
             artist = author
             description = buildString {
+                if (data.type == "Doujin" && preferences.chapterFetchLimit < data.totalPages) {
+                    append("IMPORTANT: Only first two pages of chapters will be fetched.\nYou can change this in extension settings.\n\n")
+                }
                 data.description?.let {
                     val desc = Jsoup.parseBodyFragment(
                         decodeUnicode(it),
@@ -555,13 +559,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
         val chapters = data.taggings.toMutableList()
 
         var page = 2
-        val limit = preferences.chapterFetchLimit.let {
-            if (it == "all") {
-                Int.MAX_VALUE
-            } else {
-                it.toInt()
-            }
-        }
+        val limit = preferences.chapterFetchLimit
 
         while (page <= data.totalPages && page <= limit) {
             val url = response.request.url.newBuilder()
@@ -575,7 +573,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
 
         var header: String? = null
 
-        val chapterList = chapters.mapNotNull { item ->
+        return chapters.mapNotNull { item ->
             if (item is MangaChapterHeader) {
                 header = item.header
                 return@mapNotNull null
@@ -589,13 +587,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
                     date_upload = dateFormat.tryParse(releasedOn)
                 }
             }
-        }
-
-        return if (data.type == "Series") {
-            chapterList.reversed()
-        } else {
-            chapterList
-        }
+        }.reversed()
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -623,7 +615,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
             setDefaultValue(CHAPTER_FETCH_LIMITS[0])
             summary = """
                 Limits how many pages of an entry are fetched for chapters
-                Mostly applies to Doujins/Anthologies/Issues
+                Mostly applies to Doujins
 
                 More pages mean slower loading of chapter list
 
@@ -632,8 +624,14 @@ class Dynasty : HttpSource(), ConfigurableSource {
         }.also(screen::addPreference)
     }
 
-    private val SharedPreferences.chapterFetchLimit: String
-        get() = getString(CHAPTER_FETCH_LIMIT_PREF, CHAPTER_FETCH_LIMITS[0])!!
+    private val SharedPreferences.chapterFetchLimit: Int
+        get() = getString(CHAPTER_FETCH_LIMIT_PREF, CHAPTER_FETCH_LIMITS[0])!!.let {
+            if (it == "all") {
+                Int.MAX_VALUE
+            } else {
+                it.toInt()
+            }
+        }
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
