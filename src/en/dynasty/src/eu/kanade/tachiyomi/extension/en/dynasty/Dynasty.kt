@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
@@ -101,18 +100,6 @@ class Dynasty : HttpSource() {
                 url = "/chapters/$permalink",
                 title = title,
                 cover = buildChapterCoverFetchUrl(permalink),
-                author = chapterAuthors.joinToString(),
-                description = buildString {
-                    for ((type, value) in chapterOthers.groupBy { it.first }) {
-                        append(type, ": \n")
-                        value.forEach { append("\t• ", it.second, "\n") }
-                        append("\n")
-                    }
-                }.trim(),
-                genre = chapterTags.joinToString(),
-                status = SManga.COMPLETED,
-                updateStrategy = UpdateStrategy.ONLY_FETCH_ONCE,
-                initialized = true
             ).also(entries::add)
         }
 
@@ -259,9 +246,8 @@ class Dynasty : HttpSource() {
         val document = response.asJsoup()
         val entries = LinkedHashSet<MangaEntry>()
 
-        document.select(".chapter-list").forEach { element ->
-            var (directory, permalink) = element.selectFirst("a.name")!!
-                .absUrl("href")
+        document.select(".chapter-list a.name, .chapter-list .doujin_tags a").forEach { element ->
+            var (directory, permalink) = element.absUrl("href")
                 .toHttpUrl().pathSegments
                 .let { it[0] to it[1] }
             var title = element.ownText()
@@ -276,44 +262,11 @@ class Dynasty : HttpSource() {
                 }
             }
 
-            if (directory == "chapters") {
-                MangaEntry(
-                    url = "/$directory/$permalink",
-                    title = title,
-                    cover = getCoverUrl(directory, permalink),
-                    author = element.select("a[href*=authors]").eachText().joinToString(),
-                    description = buildString {
-                        element.select(".doujin_tags a").let {
-                            append("Doujins:\n")
-                            it.forEach { tag ->
-                                append("\t• ", tag.ownText(), "\n")
-                            }
-                        }
-                    }.trim(),
-                    genre = element.select("a[href*=tags]").eachText().joinToString(),
-                    status = SManga.COMPLETED,
-                    updateStrategy = UpdateStrategy.ONLY_FETCH_ONCE,
-                    initialized = true
-                ).also(entries::add)
-            } else {
-                MangaEntry(
-                    url = "/$directory/$permalink",
-                    title = title,
-                    cover = getCoverUrl(directory, permalink),
-                ).also(entries::add)
-            }
-
-            element.select(".doujin_tags a").forEach {
-                val (directory, permalink) = it.absUrl("href")
-                    .toHttpUrl().pathSegments
-                    .let { path -> path[0] to path[1] }
-
-                MangaEntry(
-                    url = "/$directory/$permalink",
-                    title = it.ownText(),
-                    cover = getCoverUrl(directory, permalink),
-                ).also(entries::add)
-            }
+            MangaEntry(
+                url = "/$directory/$permalink",
+                title = title,
+                cover = getCoverUrl(directory, permalink),
+            ).also(entries::add)
         }
 
         val hasNextPage = document.selectFirst("div.pagination > ul > li.active + li > a") != null

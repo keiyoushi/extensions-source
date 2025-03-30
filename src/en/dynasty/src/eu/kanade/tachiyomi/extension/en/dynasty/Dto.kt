@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.dynasty
 
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -12,7 +11,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import okhttp3.internal.tls.OkHostnameVerifier.asciiToLowercase
 
 @Serializable
 class BrowseResponse(
@@ -72,24 +70,11 @@ class MangaEntry(
     private val title: String,
     val url: String,
     private val cover: String?,
-    private val author: String? = null,
-    private val description: String? = null,
-    private val genre: String? = null,
-    private val status: Int = SManga.UNKNOWN,
-    private val updateStrategy: UpdateStrategy = UpdateStrategy.ALWAYS_UPDATE,
-    private val initialized: Boolean = false
 ) {
     fun toSManga() = SManga.create().apply {
         url = this@MangaEntry.url
         title = this@MangaEntry.title
         thumbnail_url = cover
-        author = this@MangaEntry.author
-        artist = author
-        description = this@MangaEntry.description
-        genre = this@MangaEntry.genre
-        status = this@MangaEntry.status
-        update_strategy = updateStrategy
-        initialized = this@MangaEntry.initialized
     }
 
     override fun equals(other: Any?): Boolean {
