@@ -94,25 +94,17 @@ class Dynasty : HttpSource() {
     private val lruCache by lazy { LruCache<String, Int>(10) }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val authors = run {
-            val authorQueries = filters.firstInstance<AuthorFilter>().values
-
-            authorQueries.map { author ->
-                lruCache[author]
-                    ?: fetchTagId(author, "Author")
-                        ?.also { lruCache.put(author, it) }
-                    ?: throw Exception("Unknown Author: $author")
-            }
+        val authors = filters.firstInstance<AuthorFilter>().values.map { author ->
+            lruCache[author]
+                ?: fetchTagId(author, "Author")
+                    ?.also { lruCache.put(author, it) }
+                ?: throw Exception("Unknown Author: $author")
         }
-        val scanlators = run {
-            val scanlatorQueries = filters.firstInstance<ScanlatorFilter>().values
-
-            scanlatorQueries.map { scanlator ->
-                lruCache[scanlator]
-                    ?: fetchTagId(scanlator, "Scanlator")
-                        ?.also { lruCache.put(scanlator, it) }
-                    ?: throw Exception("Unknown Scanlator: $scanlator")
-            }
+        val scanlators = filters.firstInstance<ScanlatorFilter>().values.map { scanlator ->
+            lruCache[scanlator]
+                ?: fetchTagId(scanlator, "Scanlator")
+                    ?.also { lruCache.put(scanlator, it) }
+                ?: throw Exception("Unknown Scanlator: $scanlator")
         }
 
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
@@ -157,7 +149,7 @@ class Dynasty : HttpSource() {
             .parseAs<List<TagSuggest>>()
 
         return data.firstOrNull {
-            it.type == type && it.name.almostEquals(query, 10f)
+            it.type == type && it.name.trim().lowercase() == query
         }?.id
     }
 
@@ -173,7 +165,7 @@ class Dynasty : HttpSource() {
             GenreFilter(tags),
             AuthorFilter(),
             ScanlatorFilter(),
-            Filter.Header("Author and Scanlator filter require almost exact name"),
+            Filter.Header("Author and Scanlator filter require exact name"),
             Filter.Header("Add multiple by comma (,) separation"),
         )
     }
