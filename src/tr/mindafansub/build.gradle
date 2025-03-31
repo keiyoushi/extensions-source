@@ -2,8 +2,8 @@ ext {
     extName = 'Minda Fansub'
     extClass = '.MindaFansub'
     themePkg = 'madara'
-    baseUrl = 'https://mindafansub.online'
-    overrideVersionCode = 0
+    baseUrl = 'https://mindafansub.pro'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

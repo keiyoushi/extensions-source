@@ -6,10 +6,9 @@ import java.util.Locale
 
 class MindaFansub : Madara(
     "Minda Fansub",
-    "https://mindafansub.online",
+    "https://mindafansub.pro",
     "tr",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("tr")),
 ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val useNewChapterEndpoint = true
 }
