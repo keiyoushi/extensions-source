@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.misskon
 
-import eu.kanade.tachiyomi.lib.randomua.UserAgentType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
@@ -9,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
@@ -29,7 +28,6 @@ class MissKon() : SimpleParsedHttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
-        .setRandomUserAgent(UserAgentType.MOBILE)
         .build()
 
     override fun simpleMangaSelector() = "article.item-list"
@@ -40,6 +38,7 @@ class MissKon() : SimpleParsedHttpSource() {
             title = titleEL.text()
             thumbnail_url = element.selectFirst(".post-thumbnail img")?.absUrl("data-src")
             setUrlWithoutDomain(titleEL.selectFirst("a")!!.absUrl("href"))
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
@@ -59,7 +58,7 @@ class MissKon() : SimpleParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filter = filters.firstInstance<SourceCategorySelector>()
         return filter.selectedCategory?.let {
-            GET("$baseUrl$it.url", headers)
+            GET("$baseUrl${it.url}", headers)
         } ?: run {
             "$baseUrl/page/$page/".toHttpUrl().newBuilder()
                 .addEncodedQueryParameter("s", query)
