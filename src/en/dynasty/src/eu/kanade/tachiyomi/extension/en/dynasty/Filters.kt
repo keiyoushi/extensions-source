@@ -36,25 +36,25 @@ private val typeOptions = listOf(
 )
 
 @Serializable
-class GenreTag(
+class Tag(
     private val id: Int,
     private val name: String,
     private val permalink: String,
 ) {
-    val checkBoxOption get() = GenreCheckBox(id, name, permalink)
+    val checkBoxOption get() = TagCheckBox(id, name, permalink)
 }
 
-class GenreCheckBox(
+class TagCheckBox(
     val id: Int,
     name: String,
     val permalink: String,
 ) : Filter.TriState(name)
 
-class GenreFilter(
-    tags: List<GenreTag>,
-) : Filter.Group<GenreCheckBox>(
+class TagFilter(
+    tags: List<Tag>,
+) : Filter.Group<TagCheckBox>(
     name = "Tags",
-    state = tags.map(GenreTag::checkBoxOption),
+    state = tags.map(Tag::checkBoxOption),
 ) {
     val included get() = state.filter { it.isIncluded() }
     val excluded get() = state.filter { it.isExcluded() }

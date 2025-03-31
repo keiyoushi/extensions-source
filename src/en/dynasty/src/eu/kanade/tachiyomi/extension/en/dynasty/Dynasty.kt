@@ -66,13 +66,14 @@ class Dynasty : HttpSource(), ConfigurableSource {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<BrowseResponse>()
-        val entries = data.chapters.flatMap { chapter ->
+        val entries = LinkedHashSet<MangaEntry>()
+
+        data.chapters.flatMapTo(entries) { chapter ->
             chapter.getMangasFromChapter()
-        }.distinct()
-            .map(MangaEntry::toSManga)
+        }
 
         return MangasPage(
-            mangas = entries,
+            mangas = entries.map(MangaEntry::toSManga),
             hasNextPage = data.hasNextPage(),
         )
     }
@@ -80,10 +81,6 @@ class Dynasty : HttpSource(), ConfigurableSource {
     private fun BrowseChapter.getMangasFromChapter(): List<MangaEntry> {
         val entries = mutableListOf<MangaEntry>()
         var isSeries = false
-
-        val chapterAuthors = LinkedHashSet<String>()
-        val chapterTags = LinkedHashSet<String>()
-        val chapterOthers = LinkedHashSet<Pair<String, String>>()
 
         tags.forEach { tag ->
             if (tag.directory in listOf("series", "anthologies", "doujins", "issues")) {
@@ -95,12 +92,6 @@ class Dynasty : HttpSource(), ConfigurableSource {
 
                 // true if an associated series is found
                 isSeries = isSeries || tag.directory == "series"
-            }
-
-            when (tag.type) {
-                "Author" -> chapterAuthors.add(tag.name)
-                "General" -> chapterTags.add(tag.name)
-                else -> chapterOthers.add(tag.type to tag.name)
             }
         }
 
@@ -118,7 +109,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val genreFilter = filters.firstInstance<GenreFilter>()
+        val tagFilter = filters.firstInstance<TagFilter>()
         val authorFilter = filters.firstInstance<AuthorFilter>()
         val scanlatorFilter = filters.firstInstance<ScanlatorFilter>()
 
@@ -148,21 +139,21 @@ class Dynasty : HttpSource(), ConfigurableSource {
             )
         } else if (query.isBlank()) {
             when {
-                // only one genre/tag included
-                genreFilter.included.size == 1 &&
-                    genreFilter.excluded.isEmpty() &&
+                // only one tag included
+                tagFilter.included.size == 1 &&
+                    tagFilter.excluded.isEmpty() &&
                     authorFilter.values.isEmpty() &&
                     scanlatorFilter.values.isEmpty()
-                -> return fetchSingleGenre(genreFilter.included.first().permalink, page)
+                -> return fetchSingleTag(tagFilter.included.first().permalink, page)
 
                 // only one author specified
-                genreFilter.isEmpty() &&
+                tagFilter.isEmpty() &&
                     authorFilter.values.size == 1 &&
                     scanlatorFilter.values.isEmpty()
                 -> return fetchSingleAuthor(authorFilter.values.first())
 
                 // only one scanlator specified
-                genreFilter.isEmpty() &&
+                tagFilter.isEmpty() &&
                     authorFilter.values.isEmpty() &&
                     scanlatorFilter.values.size == 1
                 -> return fetchSingleScanlator(scanlatorFilter.values.first(), page)
@@ -199,7 +190,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
                     addQueryParameter("classes[]", type)
                 }
             }
-            filters.firstInstance<GenreFilter>().also {
+            filters.firstInstance<TagFilter>().also {
                 it.included.forEach { with ->
                     addQueryParameter("with[]", with.id.toString())
                 }
@@ -239,16 +230,17 @@ class Dynasty : HttpSource(), ConfigurableSource {
         val tags = this::class.java
             .getResourceAsStream("/assets/tags.json")!!
             .bufferedReader().use { it.readText() }
-            .parseAs<List<GenreTag>>()
+            .parseAs<List<Tag>>()
 
         return FilterList(
             SortFilter(),
             TypeFilter(),
-            GenreFilter(tags),
+            Filter.Header("Note: Sort and Type may not always work"),
+            Filter.Separator(),
+            TagFilter(tags),
             AuthorFilter(),
             ScanlatorFilter(),
             Filter.Header("Author and Scanlator filter require exact name. Add multiple by comma (,) separation"),
-            Filter.Separator(),
             Filter.Header("Note: include only one tag/author/scanlator at a time for better results"),
         )
     }
@@ -288,7 +280,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
         )
     }
 
-    private fun fetchSingleGenre(permalink: String, page: Int): Observable<MangasPage> {
+    private fun fetchSingleTag(permalink: String, page: Int): Observable<MangasPage> {
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("tags")
             .addPathSegment("$permalink.json")
@@ -299,13 +291,14 @@ class Dynasty : HttpSource(), ConfigurableSource {
             .asObservableSuccess()
             .map { response ->
                 val data = response.parseAs<BrowseTagResponse>()
-                val entries = data.taggings.flatMap { chapter ->
+                val entries = LinkedHashSet<MangaEntry>()
+
+                data.taggings.flatMapTo(entries) { chapter ->
                     chapter.getMangasFromChapter()
-                }.distinct()
-                    .map(MangaEntry::toSManga)
+                }
 
                 MangasPage(
-                    mangas = entries,
+                    mangas = entries.map(MangaEntry::toSManga),
                     hasNextPage = data.hasNextPage(),
                 )
             }
@@ -339,16 +332,16 @@ class Dynasty : HttpSource(), ConfigurableSource {
                 val data = response.parseAs<BrowseAuthorResponse>()
                 val entries = LinkedHashSet<MangaEntry>()
 
-                data.taggables.forEach { tag ->
+                data.taggables.mapTo(entries) { tag ->
                     MangaEntry(
                         url = "/${tag.directory!!}/${tag.permalink}",
                         title = tag.name,
                         cover = tag.cover?.let { buildCoverUrl(it) },
-                    ).also(entries::add)
+                    )
                 }
-                data.taggings.forEach { chapter ->
+
+                data.taggings.flatMapTo(entries) { chapter ->
                     chapter.getMangasFromChapter()
-                        .also(entries::addAll)
                 }
 
                 MangasPage(
@@ -389,13 +382,14 @@ class Dynasty : HttpSource(), ConfigurableSource {
             .asObservableSuccess()
             .map { response ->
                 val data = response.parseAs<BrowseTagResponse>()
-                val entries = data.taggings.flatMap { chapter ->
+                val entries = LinkedHashSet<MangaEntry>()
+
+                data.taggings.flatMapTo(entries) { chapter ->
                     chapter.getMangasFromChapter()
-                }.distinct()
-                    .map(MangaEntry::toSManga)
+                }
 
                 MangasPage(
-                    mangas = entries,
+                    mangas = entries.map(MangaEntry::toSManga),
                     hasNextPage = data.hasNextPage(),
                 )
             }
@@ -426,6 +420,12 @@ class Dynasty : HttpSource(), ConfigurableSource {
                 "Status" -> when (tag.permalink) {
                     "ongoing" -> SManga.ONGOING
                     "complete" -> SManga.COMPLETED
+                    // when manga is both ongoing and licenced, prefer ongoing
+                    "licensed" -> if (publishingStatus == SManga.ONGOING) {
+                        SManga.ONGOING
+                    } else {
+                        SManga.LICENSED
+                    }
                     else -> SManga.UNKNOWN
                 }.also { publishingStatus = it }
 
@@ -451,9 +451,11 @@ class Dynasty : HttpSource(), ConfigurableSource {
             author = authors.joinToString()
             artist = author
             description = buildString {
-                if (data.type == "Doujin" && preferences.chapterFetchLimit < data.totalPages) {
-                    append("IMPORTANT: Only first two pages of chapters will be fetched.\nYou can change this in extension settings.\n\n")
+                val prefChapterFetchLimit = preferences.chapterFetchLimit
+                if (prefChapterFetchLimit < data.totalPages) {
+                    append("IMPORTANT: Only first $prefChapterFetchLimit pages of chapter list will be fetched. You can change this in extension settings.\n\n")
                 }
+
                 data.description?.let {
                     val desc = Jsoup.parseBodyFragment(
                         decodeUnicode(it),
@@ -476,8 +478,12 @@ class Dynasty : HttpSource(), ConfigurableSource {
                     }
                 }
                 if (data.aliases.isNotEmpty()) {
-                    append("\nAliases:\n")
-                    data.aliases.forEach { append("\t• ", it, "\n") }
+                    if (data.aliases.size == 1) {
+                        append("Alias: ", data.aliases.first(), "\n")
+                    } else {
+                        append("Aliases:\n")
+                        data.aliases.forEach { append("\t• ", it, "\n") }
+                    }
                 }
             }.trim()
             genre = tags.joinToString()
@@ -614,7 +620,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
             entryValues = CHAPTER_FETCH_LIMITS
             setDefaultValue(CHAPTER_FETCH_LIMITS[0])
             summary = """
-                Limits how many pages of an entry are fetched for chapters
+                Limits how many pages of an entry are fetched for chapter list
                 Mostly applies to Doujins
 
                 More pages mean slower loading of chapter list
@@ -664,20 +670,6 @@ class Dynasty : HttpSource(), ConfigurableSource {
 
         return buildCoverUrl(file)
     }
-
-//    private fun buildCoverUrl(file: String): String {
-//        // TODO: correct mirror url
-//        return HttpUrl.Builder().apply {
-//            scheme("https")
-//            host("0ms.dev")
-//            addPathSegment("mirrors")
-//            addEncodedPathSegments(baseUrl)
-//            addEncodedPathSegments(
-//                file.removePrefix("/")
-//                    .substringBefore("?"),
-//            )
-//        }.build().toString()
-//    }
 
     private fun buildCoverUrl(file: String): String {
         return baseUrl.toHttpUrl()
