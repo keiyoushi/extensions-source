@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaFab'
+    extClass = '.MangaFab'
+    themePkg = 'madtheme'
+    baseUrl = 'https://mangafab.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
