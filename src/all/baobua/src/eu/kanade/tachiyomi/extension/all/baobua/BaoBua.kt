@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
@@ -29,6 +30,7 @@ class BaoBua() : SimpleParsedHttpSource() {
         setUrlWithoutDomain(element.selectFirst("a.popunder")!!.absUrl("href"))
         title = element.selectFirst("div.read-title")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
     override fun simpleNextPageSelector(): String = "nav.pagination a.next"
