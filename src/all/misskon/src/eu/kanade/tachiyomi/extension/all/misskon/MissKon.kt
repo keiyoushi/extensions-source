@@ -50,7 +50,7 @@ class MissKon() : SimpleParsedHttpSource() {
     // endregion
 
     // region latest
-    override fun latestUpdatesRequest(page: Int) = GET("#baseUrl/page/$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/page/$page", headers)
 
     override fun latestUpdatesNextPageSelector() = ".current + a.page"
     // endregion
@@ -69,7 +69,6 @@ class MissKon() : SimpleParsedHttpSource() {
     }
 
     override fun searchMangaNextPageSelector() = "div.content > div.pagination > span.current + a"
-    override fun searchMangaSelector() = "article.item-list"
     // endregion
 
     // region Details
@@ -93,7 +92,7 @@ class MissKon() : SimpleParsedHttpSource() {
         return SChapter.create().apply {
             chapter_number = 0F
             setUrlWithoutDomain(element.selectFirst("link[rel=canonical]")!!.absUrl("href"))
-            name = dateStr ?: "Gallery"
+            name = "Gallery"
             date_upload = FULL_DATE_FORMAT.tryParse(dateStr)
         }
     }
