@@ -28,6 +28,9 @@ class Dmzj : ConfigurableSource, HttpSource() {
     override val baseUrl = "https://m.idmzj.com"
 
     private val preferences: SharedPreferences = getPreferences()
+    init {
+        ApiV3.preferences = preferences
+    }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageUrlInterceptor)
