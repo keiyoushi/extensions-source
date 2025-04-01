@@ -122,7 +122,6 @@ object ChapterItemListSerializer : JsonTransformingSerializer<List<ChapterItem>>
 @Serializable
 class ChapterResponse(
     val title: String,
-    @SerialName("long_title") val longTitle: String,
     val tags: List<BrowseTag>,
     val pages: List<Page>,
     @SerialName("released_on") val releasedOn: String,
