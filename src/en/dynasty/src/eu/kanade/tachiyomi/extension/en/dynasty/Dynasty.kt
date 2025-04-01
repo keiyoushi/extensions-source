@@ -244,8 +244,18 @@ class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
+        val includedTypes = response.request.url
+            .queryParameterValues("classes[]")
+        val includedSeries = includedTypes.contains("Series")
+        val includedChapters = includedTypes.contains("Chapter")
+        val includedDoujins = includedTypes.contains("Doujin")
+
         val document = response.asJsoup()
         val entries = LinkedHashSet<MangaEntry>()
+
+        // saves the first entry found
+        // returned if everything was filtered out to avoid "No Results found" error
+        var firstEntry: MangaEntry? = null
 
         document.select(".chapter-list a.name, .chapter-list .doujin_tags a").forEach { element ->
             var (directory, permalink) = element.absUrl("href")
@@ -263,11 +273,31 @@ class Dynasty : HttpSource(), ConfigurableSource {
                 }
             }
 
-            MangaEntry(
+            val entry = MangaEntry(
                 url = "/$directory/$permalink",
                 title = title,
                 cover = getCoverUrl(directory, permalink),
-            ).also(entries::add)
+            )
+
+            // since we convert chapters to their series counterpart, and select doujins from chapters
+            // it is possible to get a certain type even if it is unselected from filters
+            // so don't include in that case
+            if ((!includedSeries && directory == "series") ||
+                (!includedChapters && directory == "chapters") ||
+                (!includedDoujins && directory == "doujins")) {
+                return@forEach
+            }
+
+            if (firstEntry == null) {
+                firstEntry = entry
+            }
+
+            entries.add(entry)
+        }
+
+        // avoid "No Results found" error in case everything was filtered out from above check
+        if (entries.isEmpty() && firstEntry != null) {
+            entries.add(firstEntry!!)
         }
 
         val hasNextPage = document.selectFirst("div.pagination > ul > li.active + li > a") != null
