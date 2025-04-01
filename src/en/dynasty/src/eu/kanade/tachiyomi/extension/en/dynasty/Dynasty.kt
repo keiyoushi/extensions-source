@@ -503,28 +503,21 @@ class Dynasty : HttpSource(), ConfigurableSource {
                     )
                     desc.select("a").remove()
 
-                    append(desc.wholeText())
+                    append(desc.wholeText().trim())
+                    append("\n\n")
                 }
 
-                if (isNotEmpty() && !endsWith("\n")) {
-                    append("\n")
-                }
+                append("Type: ", data.type, "\n\n")
 
                 for ((type, values) in others.groupBy { it.first }) {
-                    if (values.size == 1) {
-                        append(type, ": ", values.first().second, "\n")
-                    } else {
-                        append(type, ":\n")
-                        values.forEach { append("\t• ", it.second, "\n") }
-                    }
+                    append(type, ":\n")
+                    values.forEach { append("• ", it.second, "\n") }
+                    append("\n")
                 }
                 if (data.aliases.isNotEmpty()) {
-                    if (data.aliases.size == 1) {
-                        append("Alias: ", data.aliases.first(), "\n")
-                    } else {
-                        append("Aliases:\n")
-                        data.aliases.forEach { append("\t• ", it, "\n") }
-                    }
+                    append("Aliases:\n")
+                    data.aliases.forEach { append("• ", it, "\n") }
+                    append("\n")
                 }
             }.trim()
             genre = tags.joinToString()
@@ -561,15 +554,13 @@ class Dynasty : HttpSource(), ConfigurableSource {
             author = authors.joinToString()
             artist = author
             description = buildString {
+                append("Type: ", "Chapter", "\n\n")
                 for ((type, values) in others.groupBy { it.first }) {
-                    if (values.size == 1) {
-                        append(type, ": ", values.first().second, "\n")
-                    } else {
-                        append(type, ":\n")
-                        values.forEach { append("\t• ", it.second, "\n") }
-                    }
+                    append(type, ":\n")
+                    values.forEach { append("• ", it.second, "\n") }
+                    append("\n")
                 }
-                append("\nReleased: ", data.releasedOn)
+                append("Released: ", data.releasedOn)
             }.trim()
             genre = tags.joinToString()
             thumbnail_url = buildCoverUrl(data.pages.first().url)
