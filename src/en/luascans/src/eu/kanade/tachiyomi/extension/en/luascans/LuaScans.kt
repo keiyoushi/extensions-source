@@ -11,7 +11,7 @@ class LuaScans : HeanCms(
     "en",
 ) {
     // Moved from Keyoapp to HeanCms
-    override val versionId = 4
+    override val versionId = 3
 
     override val useNewChapterEndpoint = true
 
