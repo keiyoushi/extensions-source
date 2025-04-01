@@ -1,8 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.pornpics
 
-import android.util.Log
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -24,41 +23,22 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class PornPics : SimpleParsedHttpSource(), ConfigurableSource {
+class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
     override val baseUrl = "https://www.pornpics.com"
     override val lang = "all"
     override val name = "PornPics"
     override val supportsLatest = true
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val categories = listOf(
-            "默认: default" to null,
-            "亚洲: asian" to "/asian",
-            "中国: chinese" to "/chinese",
-            "韩国: korean" to "/korean",
-            "日本: japanese" to "/japanese",
-            "俄罗斯: russian" to "/russian",
-            "乌克兰: ukrainian" to "/ukrainian",
+    private val intl = Intl(
+        language = lang,
+        baseLanguage = "en",
+        availableLanguages = setOf("en", "zh"),
+        classLoader = this::class.java.classLoader!!,
+    )
 
-            "巨乳: big-tits" to "/big-tits",
-            "巨乳: natural-tits" to "/natural-tits",
-            "角色扮演: cosplay" to "/cosplay",
-            "可以: cute" to "/cute",
-            "眼镜: glasses" to "/glasses",
-            "女仆: maid" to "/maid",
-            "护士: nurse" to "/nurse",
-            "修女: nun" to "/nun",
-            "丝袜: stockings" to "/stockings",
-            "双胞胎: twins" to "/twins",
-        )
-        ListPreference(screen.context).apply {
-            key = "CATEGORIES_KEY"
-            title = "Categories"
-            summary = "Categories"
-            entries = categories.map { it.first }.toTypedArray()
-            entryValues = categories.map { it.second }.toTypedArray()
-        }.also(screen::addPreference)
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        PornPicsPreferences.buildPreferences(screen.context, intl).forEach(screen::addPreference)
     }
 
     override fun simpleMangaSelector() = "#main li.thumbwook > a.rel-link"
@@ -75,10 +55,8 @@ class PornPics : SimpleParsedHttpSource(), ConfigurableSource {
     )
 
     override fun simpleMangaParse(response: Response): MangasPage {
-        val httpUrl = response.request.url
-        val responseAsJson = httpUrl.queryParameter("category_id") == null &&
-            httpUrl.queryParameter("offset")!!.toInt() > 0
-
+        val contentType = response.request.header(PornPicsConstants.http.HEADER_CONTENT_TYPE)!!
+        val responseAsJson = PornPicsConstants.http.HEADER_APPLICATION_JSON == contentType
         val mangas = if (responseAsJson) {
             val data = response.parseAs<List<MangaDto>>()
             data.map {
@@ -89,8 +67,8 @@ class PornPics : SimpleParsedHttpSource(), ConfigurableSource {
                 }
             }
         } else {
-            val doc = response.asJsoup()
-            doc.select(simpleMangaSelector()).map {
+            val doc = response.asJsoup().select(simpleMangaSelector())
+            doc.map {
                 SManga.create().apply {
                     val imgEl = it.selectFirst("img")!!
                     setUrlWithoutDomain(it.absUrl("href"))
@@ -99,7 +77,7 @@ class PornPics : SimpleParsedHttpSource(), ConfigurableSource {
                 }
             }
         }
-        return MangasPage(mangas, mangas.size == PAGE_SIZE)
+        return MangasPage(mangas, mangas.size == PornPicsConstants.http.QUERY_PAGE_SIZE)
     }
 
     override fun simpleNextPageSelector(): String? = null
@@ -121,26 +99,33 @@ class PornPics : SimpleParsedHttpSource(), ConfigurableSource {
      *  2585 + period
      */
     private fun buildMangasPageRequest(page: Int, period: Int): Request {
-        val categories = getPreferences().getString("CATEGORIES_KEY", "")!!
-        Log.d(this.name, "buildMangasPageRequest: $categories")
         val builder = baseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("limit", PAGE_SIZE)
-            .addQueryParameter("offset", (page - 1) * PAGE_SIZE)
+            .addQueryParameter("limit", PornPicsConstants.http.QUERY_PAGE_SIZE)
+            .addQueryParameter("offset", (page - 1) * PornPicsConstants.http.QUERY_PAGE_SIZE)
 
+        val categoryOption = PornPicsPreferences.getCategoryOption(getPreferences())
         when {
-            categories.isBlank() -> {
-                Log.d(this.name, "categories.isNotBlank(): $categories")
-                builder.addPathSegment("/popular/api/galleries/list")
+            categoryOption == PornPicsPreferences.DEFAULT_CATEGORY_OPTION ->
+                builder
+                    .addPathSegment("/popular/api/galleries/list")
                     .addQueryParameter("category_id", 2585 + period)
                     .addQueryParameter("period", period)
                     .addEncodedQueryParameter("lang", "en")
-            }
 
-            period == 1 -> builder.addPathSegment("/$categories")
-            period == 2 -> builder.addPathSegment("/$categories/recent")
+            period == 1 -> builder.addPathSegment("/$categoryOption")
+            period == 2 -> builder.addPathSegment("/$categoryOption/recent")
         }
 
-        return GET(builder.build(), headers)
+        // The default list is always JSON, the first page of other classification lists is HTML, and other pages are JSON
+        val contentType = when {
+            categoryOption == null && page > 1 -> PornPicsConstants.http.HEADER_APPLICATION_JSON
+            else -> PornPicsConstants.http.HEADER_HTML_TEXT
+        }
+
+        val newHeaders = headers.newBuilder()
+            .add(PornPicsConstants.http.HEADER_CONTENT_TYPE, contentType)
+            .build()
+        return GET(builder.build(), newHeaders)
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -193,8 +178,4 @@ class PornPics : SimpleParsedHttpSource(), ConfigurableSource {
 
     private fun HttpUrl.Builder.addQueryParameter(encodedName: String, encodedValue: Int) =
         addQueryParameter(encodedName, encodedValue.toString())
-
-    companion object {
-        val PAGE_SIZE = 20
-    }
 }
