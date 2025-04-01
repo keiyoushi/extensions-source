@@ -51,6 +51,6 @@ object PornPicsPreferences {
 
     fun getCategoryOption(sharedPreferences: SharedPreferences): String? {
         val option = sharedPreferences.getString(PS_KEY_CATEGORY, DEFAULT_CATEGORY_OPTION)
-        return if (DEFAULT_CATEGORY_OPTION == option) null else option
+        return if (DEFAULT_CATEGORY_OPTION == option) DEFAULT_CATEGORY_OPTION else option
     }
 }
