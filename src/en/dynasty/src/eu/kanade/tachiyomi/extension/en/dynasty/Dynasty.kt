@@ -33,7 +33,6 @@ import org.jsoup.Jsoup
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.PriorityQueue
 
 open class Dynasty : HttpSource(), ConfigurableSource {
 
@@ -338,19 +337,16 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         val authors = LinkedHashSet<String>()
         val tags = LinkedHashSet<String>()
         val others = LinkedHashSet<Pair<String, String>>()
-        val publishingStatus = PriorityQueue<Int>()
+        val publishingStatus = LinkedHashSet<String>()
 
         data.tags.forEach { tag ->
             when (tag.type) {
-                "Status" -> when (tag.permalink) {
-                    "ongoing" -> SManga.ONGOING
-                    "complete" -> SManga.COMPLETED
-                    "licensed" -> SManga.LICENSED
-                    else -> return@forEach
-                }.also(publishingStatus::add)
-
                 "Author" -> authors.add(tag.name)
                 "General" -> tags.add(tag.name)
+                "Status" -> {
+                    publishingStatus.add(tag.name)
+                    others.add(tag.type to tag.name)
+                }
                 else -> others.add(tag.type to tag.name)
             }
         }
@@ -400,7 +396,15 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                 }
             }.trim()
             genre = tags.joinToString()
-            status = publishingStatus.firstOrNull() ?: SManga.UNKNOWN
+            status = when {
+                publishingStatus.contains("Ongoing") -> SManga.ONGOING
+                publishingStatus.contains("Completed") -> SManga.COMPLETED
+                publishingStatus.contains("On Hiatus") -> SManga.ON_HIATUS
+                // publishingStatus.contains("Licensed") -> SManga.LICENSED
+                listOf("Dropped", "Cancelled", "Not Updated", "Abandoned", "Removed")
+                    .any { publishingStatus.contains(it) } -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
             thumbnail_url = data.cover?.let { buildCoverUrl(it) }
         }
     }
