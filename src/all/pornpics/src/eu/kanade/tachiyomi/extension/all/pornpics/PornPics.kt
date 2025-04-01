@@ -55,8 +55,9 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     )
 
     override fun simpleMangaParse(response: Response): MangasPage {
-        val contentType = response.request.header(PornPicsConstants.http.HEADER_CONTENT_TYPE)!!
-        val responseAsJson = PornPicsConstants.http.HEADER_APPLICATION_JSON == contentType
+        val requestContentType = response.request.header(PornPicsConstants.http.HEADER_CONTENT_TYPE)
+        val responseAsJson = PornPicsConstants.http.HEADER_APPLICATION_JSON == requestContentType
+
         val mangas = if (responseAsJson) {
             val data = response.parseAs<List<MangaDto>>()
             data.map {
@@ -118,7 +119,9 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
         // The default list is always JSON, the first page of other classification lists is HTML, and other pages are JSON
         val contentType = when {
-            categoryOption == null && page > 1 -> PornPicsConstants.http.HEADER_APPLICATION_JSON
+            categoryOption == PornPicsPreferences.DEFAULT_CATEGORY_OPTION ||
+                page > 1 -> PornPicsConstants.http.HEADER_APPLICATION_JSON
+
             else -> PornPicsConstants.http.HEADER_HTML_TEXT
         }
 
