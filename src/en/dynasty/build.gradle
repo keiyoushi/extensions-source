@@ -1,6 +1,6 @@
 ext {
     extName = 'Dynasty'
-    extClass = '.Dynasty'
+    extClass = '.DynastyFactory'
     extVersionCode = 26
     isNsfw = true
 }

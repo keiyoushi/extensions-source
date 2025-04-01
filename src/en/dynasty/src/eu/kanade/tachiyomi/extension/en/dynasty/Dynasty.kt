@@ -34,9 +34,9 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Dynasty : HttpSource(), ConfigurableSource {
+open class Dynasty : HttpSource(), ConfigurableSource {
 
-    override val name = "Dynasty"
+    override val name = "Dynasty Scans"
 
     override val lang = "en"
 
@@ -316,7 +316,15 @@ class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl${manga.url}.json", headers)
+        val url = manga.url
+            .removeSuffix("/") // in case of old url having it
+
+        assert(
+            url.count { it == '/' } == 2 &&
+                url.matches(VALID_URL_REGEX),
+        ) { "Migrate to Dynasty Scans to update url" }
+
+        return GET("$baseUrl$url.json", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -516,6 +524,16 @@ class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
+        val url = chapter.url
+            .removeSuffix("/")
+
+        assert(
+            url.count { it == '/' } == 2 &&
+                url.startsWith("/chapters/"),
+        ) {
+            "Refresh Chapter List"
+        }
+
         return GET("$baseUrl${chapter.url}.json", headers)
     }
 
@@ -553,22 +571,6 @@ class Dynasty : HttpSource(), ConfigurableSource {
                 it.toInt()
             }
         }
-
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
 
     private val covers: Map<String, Map<String, String>> by lazy {
         this::class.java
@@ -666,6 +668,15 @@ class Dynasty : HttpSource(), ConfigurableSource {
 
         return result.toString()
     }
+
+    override fun imageUrlParse(response: Response) =
+        throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) =
+        throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response) =
+        throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response) =
+        throw UnsupportedOperationException()
 }
 
 private const val COVER_FETCH_HOST = "keiyoushi-chapter-cover"
@@ -673,6 +684,6 @@ private const val COVER_URL_FRAGMENT = "thumbnail"
 private val CHAPTER_SLUG_REGEX = Regex("""(.*?)_(ch[0-9_]+|volume_[0-9_\w]+)""")
 private val UNICODE_REGEX = Regex("\\\\u([0-9A-Fa-f]{4})")
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
-
 private const val CHAPTER_FETCH_LIMIT_PREF = "chapterFetchLimit"
 private val CHAPTER_FETCH_LIMITS = arrayOf("2", "5", "10", "all")
+private val VALID_URL_REGEX = Regex("""^/(series|anthologies|doujins|issues|chapters)/.*""")
