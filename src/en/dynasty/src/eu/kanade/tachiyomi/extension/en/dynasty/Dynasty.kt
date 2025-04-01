@@ -131,35 +131,6 @@ class Dynasty : HttpSource(), ConfigurableSource {
                     hasNextPage = false,
                 ),
             )
-        } else if (query.isBlank()) {
-            val tagFilter = filters.firstInstance<TagFilter>()
-            val authorFilter = filters.firstInstance<AuthorFilter>()
-            val scanlatorFilter = filters.firstInstance<ScanlatorFilter>()
-            val pairingFilter = filters.firstInstance<PairingFilter>()
-
-            when {
-                // only one tag included
-                tagFilter.included.size == 1 &&
-                    tagFilter.excluded.isEmpty() &&
-                    authorFilter.values.isEmpty() &&
-                    scanlatorFilter.values.isEmpty() &&
-                    pairingFilter.values.isEmpty()
-                -> return fetchSingleTag(tagFilter.included.first().permalink, page)
-
-                // only one author specified
-                tagFilter.isEmpty() &&
-                    authorFilter.values.size == 1 &&
-                    scanlatorFilter.values.isEmpty() &&
-                    pairingFilter.values.isEmpty()
-                -> return fetchSingleAuthor(authorFilter.values.first())
-
-                // only one scanlator specified
-                tagFilter.isEmpty() &&
-                    authorFilter.values.isEmpty() &&
-                    scanlatorFilter.values.size == 1 &&
-                    pairingFilter.values.isEmpty()
-                -> return fetchSingleScanlator(scanlatorFilter.values.first(), page)
-            }
         }
 
         return client.newCall(searchMangaRequest(page, query, filters))
@@ -271,8 +242,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
             AuthorFilter(),
             ScanlatorFilter(),
             PairingFilter(),
-            Filter.Header("Author, Scanlator and Pairing filters require exact name. You can add multiple by comma (,) separation"),
-            Filter.Header("Note: include only one tag/author/scanlator/pairing at a time for better results"),
+            Filter.Header("Note: Author, Scanlator and Pairing filters require exact name. You can add multiple by comma (,) separation"),
         )
     }
 
@@ -339,115 +309,6 @@ class Dynasty : HttpSource(), ConfigurableSource {
             mangas = entries.map(MangaEntry::toSManga),
             hasNextPage = hasNextPage,
         )
-    }
-
-    private fun fetchSingleTag(permalink: String, page: Int): Observable<MangasPage> {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("tags")
-            .addPathSegment("$permalink.json")
-            .addQueryParameter("page", page.toString())
-            .build()
-
-        return client.newCall(GET(url, headers))
-            .asObservableSuccess()
-            .map { response ->
-                val data = response.parseAs<BrowseTagResponse>()
-                val entries = LinkedHashSet<MangaEntry>()
-
-                data.taggings.flatMapTo(entries, ::getMangasFromChapter)
-
-                MangasPage(
-                    mangas = entries.map(MangaEntry::toSManga),
-                    hasNextPage = data.hasNextPage(),
-                )
-            }
-    }
-
-    private fun fetchSingleAuthor(query: String): Observable<MangasPage> {
-        val author = run {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .addQueryParameter("classes[]", "Author")
-                .build()
-
-            val document = client.newCall(GET(url, headers)).execute().asJsoup()
-
-            document.selectFirst(".chapter-list a.name")
-                ?.takeIf { it.ownText().lowercase() == query }
-                ?.absUrl("href")
-                ?.toHttpUrl()
-                ?.pathSegments?.last()
-                ?: throw Exception("Unknown Author: $query")
-        }
-
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("authors")
-            .addPathSegment("$author.json")
-            .build()
-
-        return client.newCall(GET(url, headers))
-            .asObservableSuccess()
-            .map { response ->
-                val data = response.parseAs<BrowseAuthorResponse>()
-                val entries = LinkedHashSet<MangaEntry>()
-
-                data.taggables.mapTo(entries) { tag ->
-                    MangaEntry(
-                        url = "/${tag.directory!!}/${tag.permalink}",
-                        title = tag.name,
-                        cover = tag.cover?.let { buildCoverUrl(it) },
-                    )
-                }
-
-                data.taggings.flatMapTo(entries, ::getMangasFromChapter)
-
-                MangasPage(
-                    mangas = entries.map(MangaEntry::toSManga),
-                    hasNextPage = false,
-                )
-            }
-    }
-
-    private var scanlatorPermalink: String? = null
-    private fun fetchSingleScanlator(query: String, page: Int): Observable<MangasPage> {
-        val scanlator = if (page > 1 && scanlatorPermalink != null) {
-            scanlatorPermalink!!
-        } else {
-            val url = "$baseUrl/search".toHttpUrl().newBuilder()
-                .addQueryParameter("q", query)
-                .addQueryParameter("classes[]", "Scanlator")
-                .build()
-
-            val document = client.newCall(GET(url, headers)).execute().asJsoup()
-
-            document.selectFirst(".chapter-list a.name")
-                ?.takeIf { it.ownText().lowercase() == query }
-                ?.absUrl("href")
-                ?.toHttpUrl()
-                ?.pathSegments?.last()
-                ?.also { scanlatorPermalink = it }
-                ?: throw Exception("Unknown Scanlator: $query")
-        }
-
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("scanlators")
-            .addPathSegment("$scanlator.json")
-            .addQueryParameter("page", page.toString())
-            .build()
-
-        return client.newCall(GET(url, headers))
-            .asObservableSuccess()
-            .map { response ->
-                val data = response.parseAs<BrowseTagResponse>()
-                val entries = LinkedHashSet<MangaEntry>()
-
-                data.taggings.flatMapTo(entries, ::getMangasFromChapter)
-
-                MangasPage(
-                    mangas = entries.map(MangaEntry::toSManga),
-                    hasNextPage = data.hasNextPage(),
-                )
-            }
     }
 
     override fun getMangaUrl(manga: SManga): String {
