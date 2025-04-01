@@ -73,3 +73,5 @@ abstract class TextFilter(name: String) : Filter.Text(name) {
 class AuthorFilter : TextFilter("Author")
 
 class ScanlatorFilter : TextFilter("Scanlator")
+
+class PairingFilter : TextFilter("Pairing")

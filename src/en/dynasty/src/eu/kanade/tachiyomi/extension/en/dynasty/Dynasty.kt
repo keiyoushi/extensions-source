@@ -107,10 +107,6 @@ class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val tagFilter = filters.firstInstance<TagFilter>()
-        val authorFilter = filters.firstInstance<AuthorFilter>()
-        val scanlatorFilter = filters.firstInstance<ScanlatorFilter>()
-
         if (query.startsWith("deeplink:")) {
             var (_, directory, permalink) = query.split(":", limit = 3)
 
@@ -136,24 +132,32 @@ class Dynasty : HttpSource(), ConfigurableSource {
                 ),
             )
         } else if (query.isBlank()) {
+            val tagFilter = filters.firstInstance<TagFilter>()
+            val authorFilter = filters.firstInstance<AuthorFilter>()
+            val scanlatorFilter = filters.firstInstance<ScanlatorFilter>()
+            val pairingFilter = filters.firstInstance<PairingFilter>()
+
             when {
                 // only one tag included
                 tagFilter.included.size == 1 &&
                     tagFilter.excluded.isEmpty() &&
                     authorFilter.values.isEmpty() &&
-                    scanlatorFilter.values.isEmpty()
+                    scanlatorFilter.values.isEmpty() &&
+                    pairingFilter.values.isEmpty()
                 -> return fetchSingleTag(tagFilter.included.first().permalink, page)
 
                 // only one author specified
                 tagFilter.isEmpty() &&
                     authorFilter.values.size == 1 &&
-                    scanlatorFilter.values.isEmpty()
+                    scanlatorFilter.values.isEmpty() &&
+                    pairingFilter.values.isEmpty()
                 -> return fetchSingleAuthor(authorFilter.values.first())
 
                 // only one scanlator specified
                 tagFilter.isEmpty() &&
                     authorFilter.values.isEmpty() &&
-                    scanlatorFilter.values.size == 1
+                    scanlatorFilter.values.size == 1 &&
+                    pairingFilter.values.isEmpty()
                 -> return fetchSingleScanlator(scanlatorFilter.values.first(), page)
             }
         }
@@ -164,7 +168,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     // lazy because extension inspector doesn't have implementation
-    private val lruCache by lazy { LruCache<String, Int>(10) }
+    private val lruCache by lazy { LruCache<String, Int>(15) }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val authors = filters.firstInstance<AuthorFilter>().values.map { author ->
@@ -178,6 +182,12 @@ class Dynasty : HttpSource(), ConfigurableSource {
                 ?: fetchTagId(scanlator, "Scanlator")
                     ?.also { lruCache.put(scanlator, it) }
                 ?: throw Exception("Unknown Scanlator: $scanlator")
+        }
+        val pairing = filters.firstInstance<PairingFilter>().values.map { pairing ->
+            lruCache[pairing]
+                ?: fetchTagId(pairing, "Pairing")
+                    ?.also { lruCache.put(pairing, it) }
+                ?: throw Exception("Unknown Pairing: $pairing")
         }
 
         // series results are best when chapters are included as type so keep track of this
@@ -221,6 +231,9 @@ class Dynasty : HttpSource(), ConfigurableSource {
             scanlators.forEach { scanlator ->
                 addQueryParameter("with[]", scanlator.toString())
             }
+            pairing.forEach { pairing ->
+                addQueryParameter("with[]", pairing.toString())
+            }
             if (page > 1) {
                 addQueryParameter("page", page.toString())
             }
@@ -257,8 +270,9 @@ class Dynasty : HttpSource(), ConfigurableSource {
             TagFilter(tags),
             AuthorFilter(),
             ScanlatorFilter(),
-            Filter.Header("Author and Scanlator filter require exact name. Add multiple by comma (,) separation"),
-            Filter.Header("Note: include only one tag/author/scanlator at a time for better results"),
+            PairingFilter(),
+            Filter.Header("Author, Scanlator and Pairing filters require exact name. You can add multiple by comma (,) separation"),
+            Filter.Header("Note: include only one tag/author/scanlator/pairing at a time for better results"),
         )
     }
 
