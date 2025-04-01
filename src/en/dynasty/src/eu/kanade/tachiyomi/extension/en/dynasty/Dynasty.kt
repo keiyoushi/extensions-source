@@ -620,10 +620,12 @@ class Dynasty : HttpSource(), ConfigurableSource {
 
         var header: String? = null
 
-        return chapters.mapNotNull { item ->
+        val chapterList = mutableListOf<SChapter>()
+
+        chapters.forEach { item ->
             if (item is MangaChapterHeader) {
                 header = item.header
-                return@mapNotNull null
+                return@forEach
             }
 
             with(item as MangaChapter) {
@@ -632,9 +634,15 @@ class Dynasty : HttpSource(), ConfigurableSource {
                     name = header?.let { "$it $title" } ?: title
                     scanlator = tags.filter { it.type == "Scanlator" }.joinToString { it.name }
                     date_upload = dateFormat.tryParse(releasedOn)
-                }
+                }.also(chapterList::add)
             }
-        }.reversed()
+        }
+
+        return if (data.type != "Doujin") {
+            chapterList.asReversed()
+        } else {
+            chapterList
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
