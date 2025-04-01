@@ -68,9 +68,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
         val data = response.parseAs<BrowseResponse>()
         val entries = LinkedHashSet<MangaEntry>()
 
-        data.chapters.flatMapTo(entries) { chapter ->
-            chapter.getMangasFromChapter()
-        }
+        data.chapters.flatMapTo(entries, ::getMangasFromChapter)
 
         return MangasPage(
             mangas = entries.map(MangaEntry::toSManga),
@@ -78,11 +76,11 @@ class Dynasty : HttpSource(), ConfigurableSource {
         )
     }
 
-    private fun BrowseChapter.getMangasFromChapter(): List<MangaEntry> {
+    private fun getMangasFromChapter(chapter: BrowseChapter): List<MangaEntry> {
         val entries = mutableListOf<MangaEntry>()
         var isSeries = false
 
-        tags.forEach { tag ->
+        chapter.tags.forEach { tag ->
             if (tag.directory in listOf("series", "anthologies", "doujins", "issues")) {
                 MangaEntry(
                     url = "/${tag.directory!!}/${tag.permalink}",
@@ -99,9 +97,9 @@ class Dynasty : HttpSource(), ConfigurableSource {
         // mostly the case for uploaded doujins
         if (!isSeries) {
             MangaEntry(
-                url = "/chapters/$permalink",
-                title = title,
-                cover = buildChapterCoverFetchUrl(permalink),
+                url = "/chapters/${chapter.permalink}",
+                title = chapter.title,
+                cover = buildChapterCoverFetchUrl(chapter.permalink),
             ).also(entries::add)
         }
 
@@ -293,9 +291,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
                 val data = response.parseAs<BrowseTagResponse>()
                 val entries = LinkedHashSet<MangaEntry>()
 
-                data.taggings.flatMapTo(entries) { chapter ->
-                    chapter.getMangasFromChapter()
-                }
+                data.taggings.flatMapTo(entries, ::getMangasFromChapter)
 
                 MangasPage(
                     mangas = entries.map(MangaEntry::toSManga),
@@ -340,9 +336,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
                     )
                 }
 
-                data.taggings.flatMapTo(entries) { chapter ->
-                    chapter.getMangasFromChapter()
-                }
+                data.taggings.flatMapTo(entries, ::getMangasFromChapter)
 
                 MangasPage(
                     mangas = entries.map(MangaEntry::toSManga),
@@ -384,9 +378,7 @@ class Dynasty : HttpSource(), ConfigurableSource {
                 val data = response.parseAs<BrowseTagResponse>()
                 val entries = LinkedHashSet<MangaEntry>()
 
-                data.taggings.flatMapTo(entries) { chapter ->
-                    chapter.getMangasFromChapter()
-                }
+                data.taggings.flatMapTo(entries, ::getMangasFromChapter)
 
                 MangasPage(
                     mangas = entries.map(MangaEntry::toSManga),
