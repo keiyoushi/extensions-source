@@ -103,7 +103,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
                 "$accountApiUrl/userInfo/get",
                 headersBuilder().setToken(token).build(),
             ),
-        ).execute().parseAs<ResponseDto<UserDto>>()
+        ).execute().parseAs<SimpleResponseDto>()
         return response.errno == 0
     }
 
@@ -127,7 +127,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     // Detail
     // path: "/comic/detail/mangaId"
     override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$apiUrl/comic/detail/${manga.url}", apiHeaders)
+        GET("$apiUrl/comic/detail/${manga.url}?channel=android", apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ResponseDto<DataWrapperDto<MangaDto>>>()
