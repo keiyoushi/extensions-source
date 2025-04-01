@@ -33,7 +33,6 @@ class BrowseTag(
     val type: String,
     val name: String,
     val permalink: String,
-    val cover: String? = null,
 ) {
     val directory get() = when (type) {
         "Series" -> "series"
@@ -49,21 +48,6 @@ class TagSuggest(
     val id: Int,
     val name: String,
     val type: String,
-)
-
-@Serializable
-class BrowseTagResponse(
-    val taggings: List<BrowseChapter>,
-    @SerialName("current_page") private val currentPage: Int,
-    @SerialName("total_pages") private val totalPages: Int,
-) {
-    fun hasNextPage() = currentPage <= totalPages
-}
-
-@Serializable
-class BrowseAuthorResponse(
-    val taggables: List<BrowseTag>,
-    val taggings: List<BrowseChapter>,
 )
 
 class MangaEntry(
