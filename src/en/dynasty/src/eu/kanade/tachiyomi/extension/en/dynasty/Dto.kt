@@ -89,7 +89,7 @@ sealed class ChapterItem
 @Serializable
 @SerialName("header")
 class MangaChapterHeader(
-    val header: String,
+    val header: String?,
 ) : ChapterItem()
 
 @Serializable

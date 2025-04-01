@@ -33,6 +33,7 @@ import org.jsoup.Jsoup
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.PriorityQueue
 
 open class Dynasty : HttpSource(), ConfigurableSource {
 
@@ -337,21 +338,16 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         val authors = LinkedHashSet<String>()
         val tags = LinkedHashSet<String>()
         val others = LinkedHashSet<Pair<String, String>>()
-        var publishingStatus: Int = SManga.UNKNOWN
+        val publishingStatus = PriorityQueue<Int>()
 
         data.tags.forEach { tag ->
             when (tag.type) {
                 "Status" -> when (tag.permalink) {
                     "ongoing" -> SManga.ONGOING
                     "complete" -> SManga.COMPLETED
-                    // when manga is both ongoing and licenced, prefer ongoing
-                    "licensed" -> if (publishingStatus == SManga.ONGOING) {
-                        SManga.ONGOING
-                    } else {
-                        SManga.LICENSED
-                    }
-                    else -> SManga.UNKNOWN
-                }.also { publishingStatus = it }
+                    "licensed" -> SManga.LICENSED
+                    else -> return@forEach
+                }.also(publishingStatus::add)
 
                 "Author" -> authors.add(tag.name)
                 "General" -> tags.add(tag.name)
@@ -404,7 +400,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                 }
             }.trim()
             genre = tags.joinToString()
-            status = publishingStatus
+            status = publishingStatus.firstOrNull() ?: SManga.UNKNOWN
             thumbnail_url = data.cover?.let { buildCoverUrl(it) }
         }
     }
