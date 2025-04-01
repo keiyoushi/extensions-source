@@ -35,6 +35,13 @@ fun getPreferencesInternal(context: Context) = arrayOf(
         summary = "可以更精细地筛选出同时符合多个题材的作品。"
         setDefaultValue(false)
     },
+
+    SwitchPreferenceCompat(context).apply {
+        key = DMZJ_V3API_PREF
+        title = "V3API选择"
+        summary = "是否使用旧版v3API(默认nnv3api)"
+        setDefaultValue(false)
+    },
 )
 
 val SharedPreferences.imageQuality get() = getString(IMAGE_QUALITY_PREF, AUTO_RES)!!
@@ -43,6 +50,8 @@ val SharedPreferences.showChapterComments get() = getBoolean(CHAPTER_COMMENTS_PR
 
 val SharedPreferences.isMultiGenreFilter get() = getBoolean(MULTI_GENRE_FILTER_PREF, false)
 
+val SharedPreferences.isOlderV3API get() = getBoolean(DMZJ_V3API_PREF, false)
+
 private const val IMAGE_QUALITY_PREF = "imageSourcePreference"
 const val AUTO_RES = "PREFER_ORIG_RES"
 const val ORIGINAL_RES = "ORIG_RES_ONLY"
@@ -50,3 +59,5 @@ const val LOW_RES = "LOW_RES_ONLY"
 
 private const val CHAPTER_COMMENTS_PREF = "chapterComments"
 private const val MULTI_GENRE_FILTER_PREF = "multiGenreFilter"
+
+private const val DMZJ_V3API_PREF = "v3APIVersion"

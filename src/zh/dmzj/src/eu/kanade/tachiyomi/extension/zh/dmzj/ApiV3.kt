@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.dmzj
 
+import android.content.SharedPreferences
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -10,8 +11,14 @@ import okhttp3.Response
 import org.jsoup.parser.Parser
 
 object ApiV3 {
+    lateinit var preferences: SharedPreferences
+    private val v3apiUrl: String
+        get() = if (preferences.isOlderV3API == true) {
+            "https://v3api.idmzj.com"
+        } else {
+            "https://nnv3api.dmzj.com"
+        }
 
-    private const val v3apiUrl = "https://v3api.idmzj.com"
     private const val apiUrl = "https://api.dmzj.com"
 
     fun popularMangaUrl(page: Int) = "$v3apiUrl/classify/0/0/${page - 1}.json"
