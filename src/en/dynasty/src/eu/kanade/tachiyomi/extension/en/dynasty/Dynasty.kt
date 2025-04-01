@@ -158,7 +158,9 @@ class Dynasty : HttpSource(), ConfigurableSource {
             }
         }
 
-        return super.fetchSearchManga(page, query, filters)
+        return client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { searchMangaParse(it, filters) }
     }
 
     // lazy because extension inspector doesn't have implementation
@@ -178,6 +180,10 @@ class Dynasty : HttpSource(), ConfigurableSource {
                 ?: throw Exception("Unknown Scanlator: $scanlator")
         }
 
+        // series results are best when chapters are included as type so keep track of this
+        var seriesSelected = false
+        var chapterSelected = false
+
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", query.trim())
             filters.firstInstance<SortFilter>().also {
@@ -185,9 +191,22 @@ class Dynasty : HttpSource(), ConfigurableSource {
             }
             filters.firstInstance<TypeFilter>().also {
                 it.checked.forEach { type ->
+                    if (type == "Series") {
+                        seriesSelected = true
+                    } else if (type == "Chapter") {
+                        chapterSelected = true
+                    }
+
                     addQueryParameter("classes[]", type)
                 }
             }
+
+            // series results are best when chapters are included
+            // they will be filtered client side in `searchMangaParse`
+            if (seriesSelected && !chapterSelected) {
+                addQueryParameter("classes[]", "Chapter")
+            }
+
             filters.firstInstance<TagFilter>().also {
                 it.included.forEach { with ->
                     addQueryParameter("with[]", with.id.toString())
@@ -243,12 +262,11 @@ class Dynasty : HttpSource(), ConfigurableSource {
         )
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val includedTypes = response.request.url
-            .queryParameterValues("classes[]")
-        val includedSeries = includedTypes.contains("Series")
-        val includedChapters = includedTypes.contains("Chapter")
-        val includedDoujins = includedTypes.contains("Doujin")
+    private fun searchMangaParse(response: Response, filters: FilterList): MangasPage {
+        val typeFilter = filters.firstInstance<TypeFilter>()
+        val includedSeries = typeFilter.checked.contains("Series")
+        val includedChapters = typeFilter.checked.contains("Chapter")
+        val includedDoujins = typeFilter.checked.contains("Doujin")
 
         val document = response.asJsoup()
         val entries = LinkedHashSet<MangaEntry>()
@@ -284,7 +302,8 @@ class Dynasty : HttpSource(), ConfigurableSource {
             // so don't include in that case
             if ((!includedSeries && directory == "series") ||
                 (!includedChapters && directory == "chapters") ||
-                (!includedDoujins && directory == "doujins")) {
+                (!includedDoujins && directory == "doujins")
+            ) {
                 return@forEach
             }
 
@@ -670,6 +689,10 @@ class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
+        throw UnsupportedOperationException()
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
         throw UnsupportedOperationException()
     }
 
