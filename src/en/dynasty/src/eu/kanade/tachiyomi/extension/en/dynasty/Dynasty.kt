@@ -156,6 +156,13 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     private val lruCache by lazy { LruCache<String, Int>(15) }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val typeFilter = filters.firstInstance<TypeFilter>()
+            .also {
+                if (it.checked.isEmpty()) {
+                    throw Exception("Select atleast one type")
+                }
+            }
+
         val authors = filters.firstInstance<AuthorFilter>().values.map { author ->
             lruCache[author]
                 ?: fetchTagId(author, "Author")
@@ -185,7 +192,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             filters.firstInstance<SortFilter>().also {
                 addQueryParameter("sort", it.sort)
             }
-            filters.firstInstance<TypeFilter>().also {
+            typeFilter.also {
                 it.checked.forEach { type ->
                     seriesSelected = seriesSelected || type == "Series"
                     doujinSelected = doujinSelected || type == "Doujin"
