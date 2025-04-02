@@ -133,6 +133,25 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             .map { searchMangaParse(it, filters) }
     }
 
+    override fun getFilterList(): FilterList {
+        val tags = this::class.java
+            .getResourceAsStream("/assets/tags.json")!!
+            .bufferedReader().use { it.readText() }
+            .parseAs<List<Tag>>()
+
+        return FilterList(
+            SortFilter(),
+            TypeFilter(),
+            Filter.Header("Note: Sort and Type may not always work"),
+            Filter.Separator(),
+            TagFilter(tags),
+            AuthorFilter(),
+            ScanlatorFilter(),
+            PairingFilter(),
+            Filter.Header("Note: Author, Scanlator and Pairing filters require exact name. You can add multiple by comma (,) separation"),
+        )
+    }
+
     // lazy because extension inspector doesn't have implementation
     private val lruCache by lazy { LruCache<String, Int>(15) }
 
@@ -156,8 +175,9 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                 ?: throw Exception("Unknown Pairing: $pairing")
         }
 
-        // series results are best when chapters are included as type so keep track of this
+        // series and doujin results are best when chapters are included as type so keep track of this
         var seriesSelected = false
+        var doujinSelected = false
         var chapterSelected = false
 
         val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
@@ -167,19 +187,17 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             }
             filters.firstInstance<TypeFilter>().also {
                 it.checked.forEach { type ->
-                    if (type == "Series") {
-                        seriesSelected = true
-                    } else if (type == "Chapter") {
-                        chapterSelected = true
-                    }
+                    seriesSelected = seriesSelected || type == "Series"
+                    doujinSelected = doujinSelected || type == "Doujin"
+                    chapterSelected = chapterSelected || type == "Chapter"
 
                     addQueryParameter("classes[]", type)
                 }
             }
 
-            // series results are best when chapters are included
+            // series and doujin results are best when chapters are included
             // they will be filtered client side in `searchMangaParse`
-            if (seriesSelected && !chapterSelected) {
+            if ((seriesSelected || doujinSelected) && !chapterSelected) {
                 addQueryParameter("classes[]", "Chapter")
             }
 
@@ -222,25 +240,6 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         }?.id
     }
 
-    override fun getFilterList(): FilterList {
-        val tags = this::class.java
-            .getResourceAsStream("/assets/tags.json")!!
-            .bufferedReader().use { it.readText() }
-            .parseAs<List<Tag>>()
-
-        return FilterList(
-            SortFilter(),
-            TypeFilter(),
-            Filter.Header("Note: Sort and Type may not always work"),
-            Filter.Separator(),
-            TagFilter(tags),
-            AuthorFilter(),
-            ScanlatorFilter(),
-            PairingFilter(),
-            Filter.Header("Note: Author, Scanlator and Pairing filters require exact name. You can add multiple by comma (,) separation"),
-        )
-    }
-
     private fun searchMangaParse(response: Response, filters: FilterList): MangasPage {
         val typeFilter = filters.firstInstance<TypeFilter>()
         val includedSeries = typeFilter.checked.contains("Series")
@@ -254,7 +253,10 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         // returned if everything was filtered out to avoid "No Results found" error
         var firstEntry: MangaEntry? = null
 
-        document.select(".chapter-list a.name, .chapter-list .doujin_tags a").forEach { element ->
+        document.select(
+            ".chapter-list a.name[href~=/(series|anthologies|chapters|doujins|issues)/], " +
+                ".chapter-list .doujin_tags a[href~=/doujins/]"
+        ).forEach { element ->
             var (directory, permalink) = element.absUrl("href")
                 .toHttpUrl().pathSegments
                 .let { it[0] to it[1] }
