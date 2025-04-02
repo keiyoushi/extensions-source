@@ -112,8 +112,9 @@ class PageDto(
 
 @Serializable
 class PageItemDto(
-    @JsonNames("comic_id")
-    private val id: Int,
+    private val id: Int = 0,
+    @SerialName("comic_id")
+    private val comicId: Int = 0,
     private val title: String,
     private val authors: String = "",
     private val status: String,
@@ -121,7 +122,11 @@ class PageItemDto(
     private val types: String,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = this@PageItemDto.id.toString()
+        url = if (this@PageItemDto.id != 0) {
+            this@PageItemDto.id.toString()
+        } else {
+            this@PageItemDto.comicId.toString()
+        }
         title = this@PageItemDto.title
         author = authors.formatList()
         genre = types.formatList()
