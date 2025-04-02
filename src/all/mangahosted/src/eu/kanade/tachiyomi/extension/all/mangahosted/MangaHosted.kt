@@ -26,7 +26,7 @@ class MangaHosted(private val langOption: LanguageOption) : HttpSource() {
 
     override val name: String = "Manga Hosted${langOption.nameSuffix}"
 
-    override val baseUrl: String = "https://mangahosted.org"
+    override val baseUrl: String = "https://mangago.fit/${langOption.infix}"
 
     override val supportsLatest = true
 
@@ -80,7 +80,7 @@ class MangaHosted(private val langOption: LanguageOption) : HttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(SEARCH_PREFIX)) {
-            val url = "$baseUrl/${langOption.infix}/${query.substringAfter(SEARCH_PREFIX)}"
+            val url = "$baseUrl/${query.substringAfter(SEARCH_PREFIX)}"
             return client.newCall(GET(url, headers))
                 .asObservableSuccess().map { response ->
                     val mangas = try { listOf(mangaDetailsParse(response)) } catch (_: Exception) { emptyList() }
@@ -184,7 +184,7 @@ class MangaHosted(private val langOption: LanguageOption) : HttpSource() {
             title = dto.title
             thumbnail_url = dto.thumbnailUrl
             status = dto.status
-            url = "/${langOption.infix}/${dto.slug}"
+            url = "/${dto.slug}"
             genre = dto.genres
             initialized = true
         }
@@ -195,7 +195,7 @@ class MangaHosted(private val langOption: LanguageOption) : HttpSource() {
 
     companion object {
         const val SEARCH_PREFIX = "slug:"
-        val baseApiUrl = "https://api.novelfull.us"
+        val baseApiUrl = "https://api.mangago.fit"
         val apiUrl = "$baseApiUrl/api"
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.ENGLISH)
     }
