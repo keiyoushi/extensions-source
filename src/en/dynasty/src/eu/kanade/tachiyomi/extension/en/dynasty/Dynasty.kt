@@ -255,7 +255,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
 
         document.select(
             ".chapter-list a.name[href~=/(series|anthologies|chapters|doujins|issues)/], " +
-                ".chapter-list .doujin_tags a[href~=/doujins/]"
+                ".chapter-list .doujin_tags a[href~=/doujins/]",
         ).forEach { element ->
             var (directory, permalink) = element.absUrl("href")
                 .toHttpUrl().pathSegments
