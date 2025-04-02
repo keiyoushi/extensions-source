@@ -23,7 +23,7 @@ val languages = listOf(
     LanguageOption("id", "manga-indo", "id"),
     LanguageOption("it", "manga-italia", "manga-it"),
     LanguageOption("ja", "mangaraw", "raw"),
-    LanguageOption("pt-BR", "manga-br", orderBy = "ASC"),
+    LanguageOption("pt-BR", "manga-br"),
     LanguageOption("ru", "manga-ru", "mangaru"),
     LanguageOption("ru", "manga-ru-hentai", "hentai", " +18"),
     LanguageOption("ru", "manga-ru-yaoi", "yaoi", " +18 Yaoi"),
