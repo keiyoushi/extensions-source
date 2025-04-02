@@ -1,14 +1,12 @@
 package eu.kanade.tachiyomi.extension.fr.animesama
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -37,10 +35,15 @@ class AnimeSama : ParsedHttpSource() {
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/catalogue/", headers)
+        val url = "$baseUrl/catalogue".toHttpUrl().newBuilder()
+            .addQueryParameter("type[0]", "Scans")
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return GET(url, headers)
     }
 
-    override fun popularMangaSelector() = ".cardListAnime.Scans"
+    override fun popularMangaSelector() = "#list_catalog > div"
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
@@ -50,7 +53,7 @@ class AnimeSama : ParsedHttpSource() {
         }
     }
 
-    override fun popularMangaNextPageSelector(): String? = null
+    override fun popularMangaNextPageSelector(): String = "#list_pagination > a.bg-sky-900 + a"
 
     // Latest
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
@@ -63,23 +66,18 @@ class AnimeSama : ParsedHttpSource() {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/catalogue/searchbar.php"
-        val formBody = FormBody.Builder()
-            .add("query", query)
+        val url = "$baseUrl/catalogue".toHttpUrl().newBuilder()
+            .addQueryParameter("type[0]", "Scans")
+            .addQueryParameter("search", query)
+            .addQueryParameter("page", page.toString())
             .build()
 
-        return POST(url, headers, formBody)
+        return GET(url, headers)
     }
 
-    override fun searchMangaSelector() = ".cardListAnime.Scans"
-    override fun searchMangaNextPageSelector(): String? = null
-    override fun searchMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            title = element.select("h1").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").attr("src")
-        }
-    }
+    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaNextPageSelector(): String = popularMangaNextPageSelector()
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
