@@ -68,42 +68,37 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         val data = response.parseAs<BrowseResponse>()
         val entries = LinkedHashSet<MangaEntry>()
 
-        data.chapters.flatMapTo(entries, ::getMangasFromChapter)
+        data.chapters.forEach { chapter ->
+            var isSeries = false
+
+            chapter.tags.forEach { tag ->
+                if (tag.directory in listOf("series", "anthologies", "doujins", "issues")) {
+                    MangaEntry(
+                        url = "/${tag.directory!!}/${tag.permalink}",
+                        title = tag.name,
+                        cover = getCoverUrl(tag.directory, tag.permalink),
+                    ).also(entries::add)
+
+                    // true if an associated series is found
+                    isSeries = isSeries || tag.directory == "series"
+                }
+            }
+
+            // individual chapter if no linked series
+            // mostly the case for uploaded doujins
+            if (!isSeries) {
+                MangaEntry(
+                    url = "/chapters/${chapter.permalink}",
+                    title = chapter.title,
+                    cover = buildChapterCoverFetchUrl(chapter.permalink),
+                ).also(entries::add)
+            }
+        }
 
         return MangasPage(
             mangas = entries.map(MangaEntry::toSManga),
             hasNextPage = data.hasNextPage(),
         )
-    }
-
-    private fun getMangasFromChapter(chapter: BrowseChapter): List<MangaEntry> {
-        val entries = mutableListOf<MangaEntry>()
-        var isSeries = false
-
-        chapter.tags.forEach { tag ->
-            if (tag.directory in listOf("series", "anthologies", "doujins", "issues")) {
-                MangaEntry(
-                    url = "/${tag.directory!!}/${tag.permalink}",
-                    title = tag.name,
-                    cover = getCoverUrl(tag.directory, tag.permalink),
-                ).also(entries::add)
-
-                // true if an associated series is found
-                isSeries = isSeries || tag.directory == "series"
-            }
-        }
-
-        // individual chapter if no linked series
-        // mostly the case for uploaded doujins
-        if (!isSeries) {
-            MangaEntry(
-                url = "/chapters/${chapter.permalink}",
-                title = chapter.title,
-                cover = buildChapterCoverFetchUrl(chapter.permalink),
-            ).also(entries::add)
-        }
-
-        return entries
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
