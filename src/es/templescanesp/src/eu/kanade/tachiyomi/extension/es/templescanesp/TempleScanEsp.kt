@@ -1,49 +1,60 @@
 package eu.kanade.tachiyomi.extension.es.templescanesp
 
-import eu.kanade.tachiyomi.multisrc.mangaesp.MangaEsp
-import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.FormBody
-import okhttp3.Request
-import okhttp3.Response
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class TempleScanEsp : MangaEsp(
+class TempleScanEsp : Madara(
     "Temple Scan",
     "https://templescanesp.caserosvive.com.ar",
     "es",
-    apiBaseUrl = "https://apis.templescanesp.net",
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
+    override val versionId = 4
 
-    // Site moved from custom theme to MangaEsp
-    override val versionId = 3
+    override val mangaSubString = "serie"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return super.mangaDetailsRequest(manga.apply { url = "$url?allow=true" })
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
+    override val client = super.client.newBuilder()
+        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+        .build()
+
+    override fun popularMangaSelector() = "div.latest-poster"
+
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst("h3")!!.text()
+        thumbnail_url = element.selectFirst("a[style].bg-cover")?.imageFromStyle()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+    override fun searchMangaSelector() = "button.group > div.grid"
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return super.pageListRequest(chapter.apply { url = "$url?allow=true" })
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        title = element.selectFirst("h3")!!.text()
+        thumbnail_url = element.selectFirst("div[style].bg-cover")?.imageFromStyle()
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        var doc = response.asJsoup()
-        val form = doc.selectFirst("body > form[method=post]")
-        if (form != null) {
-            val url = form.attr("action")
-            val headers = headersBuilder().set("Referer", doc.location()).build()
-            val body = FormBody.Builder()
-            form.select("input").forEach {
-                body.add(it.attr("name"), it.attr("value"))
-            }
-            doc = client.newCall(POST(url, headers, body.build())).execute().asJsoup()
-        }
-        return doc.select("main.contenedor.read img, main > img[src]").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
-        }
+    override val mangaDetailsSelectorTitle = "div.wp-manga div.grid > h1"
+    override val mangaDetailsSelectorStatus = "div.wp-manga div[alt=type]:eq(0) > span"
+    override val mangaDetailsSelectorGenre = "div.wp-manga div[alt=type]:gt(0) > span"
+    override val mangaDetailsSelectorDescription = "div.wp-manga div#expand_content"
+
+    override fun chapterListSelector() = "ul#list-chapters li > a"
+
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.selectFirst("div.grid > span")!!.text()
+        date_upload = element.selectFirst("div.grid > div")?.text()?.let { parseChapterDate(it) } ?: 0
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
+
+    private fun Element.imageFromStyle(): String {
+        return this.attr("style").substringAfter("url(").substringBefore(")")
     }
 }
