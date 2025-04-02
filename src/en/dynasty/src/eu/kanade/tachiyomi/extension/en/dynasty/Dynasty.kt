@@ -507,9 +507,14 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             }
 
             with(item as MangaChapter) {
+                var chapterName = header?.let { "$it $title" } ?: title
+                if (data.type != "Series") {
+                    chapterName += tags.filter { it.type == "Author" }
+                        .joinToString(prefix = " by ", separator = " and ") { it.name }
+                }
                 SChapter.create().apply {
                     url = "/chapters/$permalink"
-                    name = header?.let { "$it $title" } ?: title
+                    name = chapterName
                     scanlator = tags.filter { it.type == "Scanlator" }.joinToString { it.name }
                     date_upload = dateFormat.tryParse(releasedOn)
                 }.also(chapterList::add)
