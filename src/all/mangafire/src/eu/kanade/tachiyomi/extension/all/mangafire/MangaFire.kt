@@ -45,6 +45,9 @@ class MangaFire(
 
     override val client = network.cloudflareClient.newBuilder().addInterceptor(ImageInterceptor).build()
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
