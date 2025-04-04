@@ -10,11 +10,12 @@ import java.util.Locale
 
 class MangaTilkisi : Madara(
     "MangaTilkisi",
-    "https://www.manga-tilkisi.com",
+    "https://www.tilkiscans.com",
     "tr",
     dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("tr")),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useNewChapterEndpoint = true
 
     override fun pageListRequest(chapter: SChapter): Request {
         val payload = FormBody.Builder()
