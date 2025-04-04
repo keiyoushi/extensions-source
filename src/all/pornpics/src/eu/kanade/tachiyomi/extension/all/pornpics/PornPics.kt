@@ -17,7 +17,6 @@ import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -56,9 +55,14 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     )
 
     override fun simpleMangaParse(response: Response): MangasPage {
+        // the default list is always JSON,
+        // the search list is always JSON,
+        // the first page of other classification lists is HTML, and other pages are JSON
         val url = response.request.url
-        val parseType = url.queryParameter(PornPicsConstants.http.QUERY_PARSE_TYPE)
-        val responseAsJson = PornPicsConstants.http.QUERY_PARSE_TYPE_JSON == parseType
+        val isSearch = url.queryParameter("q") != null
+        val isDefault = url.queryParameter("period") != null
+        val page = url.queryParameter("offset")!!.toInt()
+        val responseAsJson = isSearch || isDefault || page > 0
 
         val mangas = if (responseAsJson) {
             val data = response.parseAs<List<MangaDto>>()
@@ -70,8 +74,8 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
                 }
             }
         } else {
-            val doc = response.asJsoup().select(simpleMangaSelector())
-            doc.map {
+            val doc = response.asJsoup()
+            doc.select(simpleMangaSelector()).map {
                 val imgEl = it.selectFirst("img")!!
                 SManga.create().apply {
                     setUrlWithoutDomain(it.absUrl("href"))
@@ -80,9 +84,9 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
                 }
             }
         }
-        // response maybe [],Add +1 to requested image count per page,
+        // response maybe [], Add +1 to requested image count per page,
         // Compare actual received count with pageSize to determine next page.
-        val hasNextPage = mangas.size > PornPicsConstants.http.QUERY_PAGE_SIZE
+        val hasNextPage = mangas.size > QUERY_PAGE_SIZE
         val readerMangas = if (hasNextPage) mangas.dropLast(1) else mangas
         return MangasPage(readerMangas, hasNextPage)
     }
@@ -104,19 +108,12 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
             else -> baseUrl
         }.toHttpUrl().newBuilder()
             .addQueryPageParameter(page)
+            .addQueryParameter("lang", intl.chosenLanguage)
 
         if (isDefaultCategory) {
             builder.addQueryParameter("category_id", 2585 + period)
                 .addQueryParameter("period", period)
-                .addQueryParameter("lang", "en")
         }
-
-        // The default list is always JSON, the first page of other classification lists is HTML, and other pages are JSON
-        when {
-            categoryOption == PornPicsPreferences.DEFAULT_CATEGORY_OPTION -> PornPicsConstants.http.QUERY_PARSE_TYPE_JSON
-            page > 1 -> PornPicsConstants.http.QUERY_PARSE_TYPE_JSON
-            else -> PornPicsConstants.http.QUERY_PARSE_TYPE_DOCUMENT
-        }.also { builder.addQueryParameter(PornPicsConstants.http.QUERY_PARSE_TYPE, it) }
 
         return GET(builder.build(), headers)
     }
@@ -151,39 +148,53 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchUrl = "$baseUrl/search/srch.php".toHttpUrl().newBuilder()
-            .addQueryParameter(PornPicsConstants.http.QUERY_PARSE_TYPE, PornPicsConstants.http.QUERY_PARSE_TYPE_JSON)
-            .addQueryParameter("lang", "en")
-            .addQueryPageParameter(page)
-            .addEncodedQueryParameter("q", query)
-
-        filters.firstInstance<UriPartFilter>().toUriPart()?.let {
-            searchUrl.addEncodedQueryParameter("date", it)
+        val activeCategoryTypeSelector = filters.firstInstance<PornPicsFilters.ActiveCategoryTypeSelector>()
+        return if (query.isBlank() && activeCategoryTypeSelector.isSelected()) {
+            buildCategoryRequest(page, activeCategoryTypeSelector, filters)
+        } else {
+            buildSearchRequest(page, query, filters)
         }
-        return GET(searchUrl.build(), headers)
+    }
+
+    private fun buildCategoryRequest(
+        page: Int,
+        activeCategoryTypeSelector: PornPicsFilters.ActiveCategoryTypeSelector,
+        filters: FilterList,
+    ): Request {
+        val categoryOption = activeCategoryTypeSelector.selectedCategoryOption(filters)
+        val sortUrlPart = filters.firstInstance<PornPicsFilters.SortSelector>().toUriPart()
+        val isSearch = categoryOption.toUrlPart().contains('?')
+        val builder = baseUrl.toHttpUrl().newBuilder()
+            .addUrlPart(categoryOption.toUrlPart())
+            .addQueryParameter("lang", intl.chosenLanguage)
+            .addUrlPart(sortUrlPart, addPath = !isSearch)
+            .addQueryPageParameter(page)
+        return GET(builder.build(), headers)
+    }
+
+    private fun buildSearchRequest(page: Int, query: String, filters: FilterList): Request {
+        val sortOption = filters.firstInstance<PornPicsFilters.SortSelector>()
+        val builder = "$baseUrl/search/srch.php".toHttpUrl().newBuilder()
+            .addQueryParameter("lang", intl.chosenLanguage)
+            .addUrlPart(sortOption.toUriPart(), addPath = false)
+            .addQueryPageParameter(page)
+            .addQueryParameter("q", query)
+        return GET(builder.build(), headers)
     }
 
     override fun getFilterList() = FilterList(
-        UriPartFilter(
-            intl["filter.time.title"],
-            arrayOf(
-                Pair(intl["filter.time.option.popular"], null),
-                Pair(intl["filter.time.option.recent"], "latest"),
-            ),
-        ),
+        PornPicsFilters.createSortSelector(intl),
+        Filter.Separator(),
+        Filter.Header(intl["filter.header.ignored-when-search"]),
+        Filter.Separator(),
+        Filter.Header(intl["filter.header.select-active-category-type"]),
+        PornPicsFilters.createActiveCategoryTypeSelector(intl),
+        Filter.Separator(),
+        Filter.Header(intl["filter.header.select-category-type-param"]),
+        PornPicsFilters.createRecommendSelector(intl),
+        PornPicsFilters.createCategorySelector(intl),
+        PornPicsFilters.createTagSelector(intl),
+        PornPicsFilters.createPornStarSelector(intl),
+        PornPicsFilters.createChannelSelector(intl),
     )
-
-    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, String?>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
-    }
-
-    private fun HttpUrl.Builder.addQueryParameter(encodedName: String, encodedValue: Int) =
-        addQueryParameter(encodedName, encodedValue.toString())
-
-    private fun HttpUrl.Builder.addQueryPageParameter(page: Int) =
-    // Add +1 to requested image count per page,
-        // Compare actual received count with pageSize to determine next page.
-        this.addQueryParameter("limit", PornPicsConstants.http.QUERY_PAGE_SIZE + 1)
-            .addQueryParameter("offset", (page - 1) * PornPicsConstants.http.QUERY_PAGE_SIZE)
 }
