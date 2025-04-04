@@ -32,7 +32,7 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
     private val intl = Intl(
         language = lang,
-        baseLanguage = "en",
+        baseLanguage = "zh",
         availableLanguages = setOf("en", "zh"),
         classLoader = this::class.java.classLoader!!,
     )
@@ -46,7 +46,7 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     override fun simpleMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     @Serializable
-    class MangaDto(
+    internal data class MangaDto(
         val desc: String,
         @SerialName("g_url")
         val url: String,
@@ -55,8 +55,8 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     )
 
     override fun simpleMangaParse(response: Response): MangasPage {
-        val requestContentType = response.request.header(PornPicsConstants.http.HEADER_CONTENT_TYPE)
-        val responseAsJson = PornPicsConstants.http.HEADER_APPLICATION_JSON == requestContentType
+        val parseType = response.request.url.queryParameter(PornPicsConstants.http.QUERY_PARSE_TYPE)
+        val responseAsJson = PornPicsConstants.http.QUERY_PARSE_TYPE_JSON == parseType
 
         val mangas = if (responseAsJson) {
             val data = response.parseAs<List<MangaDto>>()
@@ -87,25 +87,24 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
     override fun latestUpdatesRequest(page: Int) = buildMangasPageRequest(page, 2)
 
-    /**
-     * period:
-     *  popular  : 1
-     *  recent   : 2
-     *  rating   : 3
-     *  likes    : 4
-     *  views    : 5
-     *  comments : 6
-     *
-     * category_id
-     *  2585 + period
-     */
     private fun buildMangasPageRequest(page: Int, period: Int): Request {
         val builder = baseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("limit", PornPicsConstants.http.QUERY_PAGE_SIZE)
-            .addQueryParameter("offset", (page - 1) * PornPicsConstants.http.QUERY_PAGE_SIZE)
+            .addQueryPageParameter(page)
 
         val categoryOption = PornPicsPreferences.getCategoryOption(getPreferences())
         when {
+            /**
+             * period:
+             *  popular  : 1
+             *  recent   : 2
+             *  rating   : 3
+             *  likes    : 4
+             *  views    : 5
+             *  comments : 6
+             *
+             * category_id
+             *  2585 + period
+             */
             categoryOption == PornPicsPreferences.DEFAULT_CATEGORY_OPTION ->
                 builder
                     .addPathSegment("/popular/api/galleries/list")
@@ -118,17 +117,14 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
         }
 
         // The default list is always JSON, the first page of other classification lists is HTML, and other pages are JSON
-        val contentType = when {
+        when {
             categoryOption == PornPicsPreferences.DEFAULT_CATEGORY_OPTION ||
-                page > 1 -> PornPicsConstants.http.HEADER_APPLICATION_JSON
+                page > 1 -> PornPicsConstants.http.QUERY_PARSE_TYPE_JSON
 
-            else -> PornPicsConstants.http.HEADER_HTML_TEXT
-        }
+            else -> PornPicsConstants.http.QUERY_PARSE_TYPE_DOCUMENT
+        }.also { builder.addQueryParameter(PornPicsConstants.http.QUERY_PARSE_TYPE, it) }
 
-        val newHeaders = headers.newBuilder()
-            .add(PornPicsConstants.http.HEADER_CONTENT_TYPE, contentType)
-            .build()
-        return GET(builder.build(), newHeaders)
+        return GET(builder.build(), headers)
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -155,7 +151,10 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchUrl = baseUrl.toHttpUrl().newBuilder()
+        val searchUrl = "$baseUrl/search/srch.php".toHttpUrl().newBuilder()
+            .addQueryParameter(PornPicsConstants.http.QUERY_PARSE_TYPE, PornPicsConstants.http.QUERY_PARSE_TYPE_JSON)
+            .addQueryParameter("lang", "en")
+            .addQueryPageParameter(page)
             .addEncodedQueryParameter("q", query)
 
         filters.firstInstance<UriPartFilter>().toUriPart()?.let {
@@ -166,10 +165,10 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
     override fun getFilterList() = FilterList(
         UriPartFilter(
-            "sort",
+            intl["filter.time.title"],
             arrayOf(
-                Pair("Most Popular", null),
-                Pair("Most Recent", "latest"),
+                Pair(intl["filter.time.option.popular"], null),
+                Pair(intl["filter.time.option.recent"], "latest"),
             ),
         ),
     )
@@ -181,4 +180,8 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
     private fun HttpUrl.Builder.addQueryParameter(encodedName: String, encodedValue: Int) =
         addQueryParameter(encodedName, encodedValue.toString())
+
+    private fun HttpUrl.Builder.addQueryPageParameter(page: Int) =
+        this.addQueryParameter("limit", PornPicsConstants.http.QUERY_PAGE_SIZE)
+            .addQueryParameter("offset", (page - 1) * PornPicsConstants.http.QUERY_PAGE_SIZE)
 }
