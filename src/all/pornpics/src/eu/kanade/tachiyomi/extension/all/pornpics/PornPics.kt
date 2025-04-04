@@ -34,7 +34,7 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
     private val intl = Intl(
         language = lang,
-        baseLanguage = "zh",
+        baseLanguage = "en",
         availableLanguages = setOf("en", "zh"),
         classLoader = this::class.java.classLoader!!,
     )
@@ -197,7 +197,7 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
         addQueryParameter(encodedName, encodedValue.toString())
 
     private fun HttpUrl.Builder.addQueryPageParameter(page: Int) =
-        // Add +1 to requested image count per page,
+    // Add +1 to requested image count per page,
         // Compare actual received count with pageSize to determine next page.
         this.addQueryParameter("limit", PornPicsConstants.http.QUERY_PAGE_SIZE + 1)
             .addQueryParameter("offset", (page - 1) * PornPicsConstants.http.QUERY_PAGE_SIZE)
