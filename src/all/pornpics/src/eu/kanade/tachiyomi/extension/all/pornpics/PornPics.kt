@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.pornpics
 
+import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
@@ -10,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferences
@@ -54,31 +56,35 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
         val thumbnailUrl: String,
     )
 
+    private fun MangaDto.toSManga() = SManga.create().apply {
+        setUrlWithoutDomain(url)
+        title = desc
+        thumbnail_url = thumbnailUrl
+    }
+
     override fun simpleMangaParse(response: Response): MangasPage {
         val parseType = response.request.url.queryParameter(PornPicsConstants.http.QUERY_PARSE_TYPE)
         val responseAsJson = PornPicsConstants.http.QUERY_PARSE_TYPE_JSON == parseType
 
         val mangas = if (responseAsJson) {
             val data = response.parseAs<List<MangaDto>>()
-            data.map {
-                SManga.create().apply {
-                    setUrlWithoutDomain(it.url)
-                    title = it.desc
-                    thumbnail_url = it.thumbnailUrl
-                }
-            }
+            data.map { it.toSManga() }
         } else {
             val doc = response.asJsoup().select(simpleMangaSelector())
             doc.map {
+                val imgEl = it.selectFirst("img")!!
                 SManga.create().apply {
-                    val imgEl = it.selectFirst("img")!!
                     setUrlWithoutDomain(it.absUrl("href"))
                     title = imgEl.attr("alt")
                     thumbnail_url = imgEl.absUrl("data-src")
                 }
             }
         }
-        return MangasPage(mangas, mangas.size == PornPicsConstants.http.QUERY_PAGE_SIZE)
+        // response maybe [],Add +1 to requested image count per page,
+        // Compare actual received count with pageSize to determine next page.
+        val hasNextPage = mangas.size > PornPicsConstants.http.QUERY_PAGE_SIZE
+        val readerMangas = if (hasNextPage) mangas.dropLast(1) else mangas
+        return MangasPage(readerMangas, hasNextPage)
     }
 
     override fun simpleNextPageSelector(): String? = null
@@ -130,9 +136,17 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document): SManga {
         val thumbEl = document.selectFirst(simpleMangaSelector())!!
         val imgEl = thumbEl.selectFirst("img")!!
+        val infoEls = document.select("div.gallery-info.to-gall-info > div.gallery-info__item")
+
         return SManga.create().apply {
             title = imgEl.attr("alt")
-            genre = document.select(".gallery-info__item a").joinToString { it.text() }
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            status = SManga.COMPLETED
+            author = infoEls[1].select("a").joinToString { it.text() }
+            genre = infoEls.filterIndexed { index, _ -> index != 1 }
+                .flatMap { it.select("a") }
+                .joinToString { it.text() }
+            description = infoEls[4]?.text()
         }
     }
 
@@ -144,6 +158,7 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(document: Document): List<Page> {
+        Log.d("PornPics", "pageListParse: ")
         return document.select(simpleMangaSelector())
             .mapIndexed { index, element ->
                 Page(index, imageUrl = element.absUrl("href"))
@@ -182,6 +197,8 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
         addQueryParameter(encodedName, encodedValue.toString())
 
     private fun HttpUrl.Builder.addQueryPageParameter(page: Int) =
-        this.addQueryParameter("limit", PornPicsConstants.http.QUERY_PAGE_SIZE)
+        // Add +1 to requested image count per page,
+        // Compare actual received count with pageSize to determine next page.
+        this.addQueryParameter("limit", PornPicsConstants.http.QUERY_PAGE_SIZE + 1)
             .addQueryParameter("offset", (page - 1) * PornPicsConstants.http.QUERY_PAGE_SIZE)
 }
