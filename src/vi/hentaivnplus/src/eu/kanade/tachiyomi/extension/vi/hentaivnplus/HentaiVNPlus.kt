@@ -22,6 +22,8 @@ class HentaiVNPlus :
 
     override val mangaSubString = "truyen-hentai"
 
+    override val pageListParseSelector = ".reading-content img"
+
     private val preferences: SharedPreferences = getPreferences()
 
     init {
