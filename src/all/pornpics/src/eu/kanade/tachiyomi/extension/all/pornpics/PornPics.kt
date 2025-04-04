@@ -140,7 +140,7 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         chapter_number = 0F
         setUrlWithoutDomain(element.absUrl("href"))
-        name = "Gallery"
+        name = intl["chapter.name.default"]
     }
 
     override fun pageListParse(document: Document): List<Page> {
