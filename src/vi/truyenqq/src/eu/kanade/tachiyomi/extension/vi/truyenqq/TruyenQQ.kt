@@ -134,8 +134,11 @@ class TruyenQQ : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> =
         document.select(".page-chapter img")
-            .mapIndexed { idx, it ->
-                Page(idx, imageUrl = it.attr("abs:src"))
+            .mapIndexedNotNull { idx, it ->
+                val pageUrl = it.attr("abs:src")
+                    .takeUnless { it.contains("stress.gif") }
+                    ?: return@mapIndexedNotNull null
+                Page(idx, imageUrl = pageUrl)
             }
 
     override fun imageUrlParse(document: Document): String =
