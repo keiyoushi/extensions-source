@@ -622,12 +622,13 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     private fun buildCoverUrl(file: String): String {
+        val path = "$baseUrl$file".toHttpUrl()
+            .encodedPath
+            .removePrefix("/")
+
         return baseUrl.toHttpUrl()
             .newBuilder()
-            .addEncodedPathSegments(
-                file.removePrefix("/")
-                    .substringBefore("?"),
-            )
+            .addEncodedPathSegments(path)
             .fragment(COVER_URL_FRAGMENT)
             .build()
             .toString()
