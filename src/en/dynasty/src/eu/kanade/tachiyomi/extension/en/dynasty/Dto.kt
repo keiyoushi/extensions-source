@@ -35,11 +35,11 @@ class BrowseTag(
     val permalink: String,
 ) {
     val directory get() = when (type) {
-        "Series" -> "series"
-        "Anthology" -> "anthologies"
-        "Doujin" -> "doujins"
-        "Issue" -> "issues"
-        else -> null
+        SERIES -> "series"
+        ANTHOLOGY -> "anthologies"
+        DOUJIN -> "doujins"
+        ISSUE -> "issues"
+        else -> throw Exception("Unsupported Type: $type")
     }
 }
 

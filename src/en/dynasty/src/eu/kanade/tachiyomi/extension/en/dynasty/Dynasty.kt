@@ -28,7 +28,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import okio.use
 import org.jsoup.Jsoup
 import rx.Observable
 import java.text.SimpleDateFormat
@@ -72,15 +71,15 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             var isSeries = false
 
             chapter.tags.forEach { tag ->
-                if (tag.directory in listOf("series", "anthologies", "doujins", "issues")) {
+                if (tag.type in listOf(SERIES, ANTHOLOGY, DOUJIN, ISSUE)) {
                     MangaEntry(
-                        url = "/${tag.directory!!}/${tag.permalink}",
+                        url = "/${tag.directory}/${tag.permalink}",
                         title = tag.name,
                         cover = getCoverUrl(tag.directory, tag.permalink),
                     ).also(entries::add)
 
                     // true if an associated series is found
-                    isSeries = isSeries || tag.directory == "series"
+                    isSeries = isSeries || tag.type == SERIES
                 }
             }
 
@@ -136,7 +135,6 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     override fun getFilterList(): FilterList {
         val tags = this::class.java
             .getResourceAsStream("/assets/tags.json")!!
-            .bufferedReader().use { it.readText() }
             .parseAs<List<Tag>>()
 
         return FilterList(
@@ -159,7 +157,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         val typeFilter = filters.firstInstance<TypeFilter>()
             .also {
                 if (it.checked.isEmpty()) {
-                    throw Exception("Select atleast one type")
+                    throw Exception("Select at least one type")
                 }
             }
 
@@ -194,9 +192,9 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             }
             typeFilter.also {
                 it.checked.forEach { type ->
-                    seriesSelected = seriesSelected || type == "Series"
-                    doujinSelected = doujinSelected || type == "Doujin"
-                    chapterSelected = chapterSelected || type == "Chapter"
+                    seriesSelected = seriesSelected || type == SERIES
+                    doujinSelected = doujinSelected || type == DOUJIN
+                    chapterSelected = chapterSelected || type == CHAPTER
 
                     addQueryParameter("classes[]", type)
                 }
@@ -205,7 +203,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             // series and doujin results are best when chapters are included
             // they will be filtered client side in `searchMangaParse`
             if ((seriesSelected || doujinSelected) && !chapterSelected) {
-                addQueryParameter("classes[]", "Chapter")
+                addQueryParameter("classes[]", CHAPTER)
             }
 
             filters.firstInstance<TagFilter>().also {
@@ -249,9 +247,9 @@ open class Dynasty : HttpSource(), ConfigurableSource {
 
     private fun searchMangaParse(response: Response, filters: FilterList): MangasPage {
         val typeFilter = filters.firstInstance<TypeFilter>()
-        val includedSeries = typeFilter.checked.contains("Series")
-        val includedChapters = typeFilter.checked.contains("Chapter")
-        val includedDoujins = typeFilter.checked.contains("Doujin")
+        val includedSeries = typeFilter.checked.contains(SERIES)
+        val includedChapters = typeFilter.checked.contains(CHAPTER)
+        val includedDoujins = typeFilter.checked.contains(DOUJIN)
 
         val document = response.asJsoup()
         val entries = LinkedHashSet<MangaEntry>()
@@ -285,6 +283,10 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                 cover = getCoverUrl(directory, permalink),
             )
 
+            if (firstEntry == null) {
+                firstEntry = entry
+            }
+
             // since we convert chapters to their series counterpart, and select doujins from chapters
             // it is possible to get a certain type even if it is unselected from filters
             // so don't include in that case
@@ -295,19 +297,15 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                 return@forEach
             }
 
-            if (firstEntry == null) {
-                firstEntry = entry
-            }
-
             entries.add(entry)
         }
 
         // avoid "No Results found" error in case everything was filtered out from above check
-        if (entries.isEmpty() && firstEntry != null) {
-            entries.add(firstEntry!!)
+        if (entries.isEmpty()) {
+            firstEntry?.also { entries.add(it) }
         }
 
-        val hasNextPage = document.selectFirst("div.pagination > ul > li.active + li > a") != null
+        val hasNextPage = document.selectFirst(".pagination [rel=next]") != null
 
         return MangasPage(
             mangas = entries.map(MangaEntry::toSManga),
@@ -320,15 +318,21 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = manga.url
-            .removeSuffix("/") // in case of old url having it
+        val mangaPath = "$baseUrl${manga.url}".toHttpUrl().pathSegments
 
         assert(
-            url.count { it == '/' } == 2 &&
-                url.matches(VALID_URL_REGEX),
+            mangaPath.size == 2 &&
+                mangaPath[0] in listOf("series", "anthologies", "doujins", "issues", "chapters"),
         ) { "Migrate to Dynasty Scans to update url" }
 
-        return GET("$baseUrl$url.json", headers)
+        val (directory, permalink) = mangaPath.let { it[0] to it[1] }
+
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment(directory)
+            .addPathSegment("$permalink.json")
+            .build()
+
+        return GET(url, headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -360,7 +364,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                 when (tag.type) {
                     "Author" -> authors.add(tag.name)
                     "General" -> tags.add(tag.name)
-                    "Series", "Scanlator", "Doujin", "Anthology" -> {}
+                    SERIES, DOUJIN, ANTHOLOGY, ISSUE, "Scanlator" -> {}
                     else -> others.add(tag.type to tag.name)
                 }
             }
@@ -404,7 +408,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                 publishingStatus.contains("Ongoing") -> SManga.ONGOING
                 publishingStatus.contains("Completed") -> SManga.COMPLETED
                 publishingStatus.contains("On Hiatus") -> SManga.ON_HIATUS
-                // publishingStatus.contains("Licensed") -> SManga.LICENSED
+                publishingStatus.contains("Licensed") -> SManga.LICENSED
                 listOf("Dropped", "Cancelled", "Not Updated", "Abandoned", "Removed")
                     .any { publishingStatus.contains(it) } -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
@@ -415,9 +419,10 @@ open class Dynasty : HttpSource(), ConfigurableSource {
 
     private fun decodeUnicode(input: String): String {
         return UNICODE_REGEX.replace(input) { matchResult ->
-            val hexCode = matchResult.groupValues[1]
-            val char = hexCode.toInt(16).toChar()
-            char.toString()
+            matchResult.groupValues[1]
+                .toInt(16)
+                .toChar()
+                .toString()
         }
     }
 
@@ -508,7 +513,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
 
             with(item as MangaChapter) {
                 var chapterName = header?.let { "$it $title" } ?: title
-                if (data.type != "Series") {
+                if (data.type != SERIES) {
                     chapterName += tags.filter { it.type == "Author" }
                         .joinToString(prefix = " by ", separator = " and ") { it.name }
                 }
@@ -521,7 +526,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             }
         }
 
-        return if (data.type != "Doujin") {
+        return if (data.type != DOUJIN) {
             chapterList.asReversed()
         } else {
             chapterList
@@ -533,17 +538,21 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = chapter.url
-            .removeSuffix("/")
+        val chapterPath = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
 
         assert(
-            url.count { it == '/' } == 2 &&
-                url.startsWith("/chapters/"),
-        ) {
-            "Refresh Chapter List"
-        }
+            chapterPath.size == 2 &&
+                chapterPath[0] == "chapters",
+        ) { "Refresh Chapter List" }
 
-        return GET("$baseUrl${chapter.url}.json", headers)
+        val permalink = chapterPath[1]
+
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("chapters")
+            .addPathSegment("$permalink.json")
+            .build()
+
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -584,7 +593,6 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     private val covers: Map<String, Map<String, String>> by lazy {
         this::class.java
             .getResourceAsStream("/assets/covers.json")!!
-            .bufferedReader().use { it.readText() }
             .parseAs()
     }
 
@@ -615,7 +623,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
 
     private fun buildChapterCoverFetchUrl(permalink: String): String {
         return HttpUrl.Builder().apply {
-            scheme("http")
+            scheme("https")
             host(COVER_FETCH_HOST)
             addQueryParameter("permalink", permalink)
         }.build().toString()
@@ -659,23 +667,10 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     private fun String.permalinkToTitle(): String {
-        val result = StringBuilder(length)
-        var capitalize = true
-        for (char in this) {
-            result.append(
-                if (char == '_') {
-                    ' '
-                } else if (capitalize) {
-                    char.uppercase()
-                } else {
-                    char.lowercase()
-                },
-            )
-
-            capitalize = char == '_'
-        }
-
-        return result.toString()
+        return split('_')
+            .joinToString(" ") { word ->
+                word.replaceFirstChar { it.uppercase() }
+            }
     }
 
     override fun imageUrlParse(response: Response) =
@@ -695,4 +690,3 @@ private val UNICODE_REGEX = Regex("\\\\u([0-9A-Fa-f]{4})")
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
 private const val CHAPTER_FETCH_LIMIT_PREF = "chapterFetchLimit"
 private val CHAPTER_FETCH_LIMITS = arrayOf("2", "5", "10", "all")
-private val VALID_URL_REGEX = Regex("""^/(series|anthologies|doujins|issues|chapters)/.*""")
