@@ -4,23 +4,20 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import uy.kohesive.injekt.injectLazy
 
-class JsonFileLoader {
+object JsonFileLoader {
 
-    companion object {
+    val json: Json by injectLazy()
 
-        val json: Json by injectLazy()
+    inline fun <reified T> loadJsonAs(fileName: String): T {
+        val classLoader = this::class.java.classLoader!!
+        val fileContent = classLoader.getResourceAsStream(fileName)
 
-        inline fun <reified T> loadJsonAs(fileName: String): T {
-            val classLoader = this::class.java.classLoader!!
-            val fileContent = classLoader.getResourceAsStream(fileName)
+        return json.decodeFromStream<T>(fileContent)
+    }
 
-            return json.decodeFromStream<T>(fileContent)
-        }
-
-        inline fun <reified T> loadLangJsonAs(name: String, lang: String): T {
-            val classLoader = this::class.java.classLoader!!
-            val fileName = "assets/i18n/${name}_$lang.json"
-            return loadJsonAs<T>(fileName)
-        }
+    inline fun <reified T> loadLangJsonAs(name: String, lang: String): T {
+        val classLoader = this::class.java.classLoader!!
+        val fileName = "assets/i18n/${name}_$lang.json"
+        return loadJsonAs<T>(fileName)
     }
 }
