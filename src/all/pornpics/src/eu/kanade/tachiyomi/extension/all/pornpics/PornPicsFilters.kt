@@ -109,7 +109,7 @@ class PornPicsFilters {
 
         fun createTagSelector(intl: Intl): CategorySelector {
             val options = JsonFileLoader.loadLangJsonAs<List<CategoryDto>>("tags", intl.chosenLanguage)
-                .map { CategoryOption(it.name, CategoryType.CATEGORY, it.link) }
+                .map { CategoryOption(it.name, CategoryType.TAG, it.link) }
                 .sortedBy { it.name }
                 .toTypedArray()
 
@@ -121,7 +121,7 @@ class PornPicsFilters {
 
         fun createPornStarSelector(intl: Intl): CategorySelector {
             val options = JsonFileLoader.loadLangJsonAs<List<CategoryDto>>("porn_stars", intl.chosenLanguage)
-                .map { CategoryOption(it.name, CategoryType.CATEGORY, it.link) }
+                .map { CategoryOption(it.name, CategoryType.PORN_STAR, it.link) }
                 .sortedBy { it.name }
                 .toTypedArray()
             return CategorySelector(
@@ -132,7 +132,7 @@ class PornPicsFilters {
 
         fun createChannelSelector(intl: Intl): CategorySelector {
             val options = JsonFileLoader.loadLangJsonAs<List<CategoryDto>>("channels", intl.chosenLanguage)
-                .map { CategoryOption(it.name, CategoryType.CATEGORY, it.link) }
+                .map { CategoryOption(it.name, CategoryType.CHANNEL, it.link) }
                 .sortedBy { it.name }
                 .toTypedArray()
             return CategorySelector(
