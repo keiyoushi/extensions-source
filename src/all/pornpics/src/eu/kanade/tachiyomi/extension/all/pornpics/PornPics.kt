@@ -61,8 +61,8 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
         val url = response.request.url
         val isSearch = url.queryParameter("q") != null
         val isDefault = url.queryParameter("period") != null
-        val page = url.queryParameter("offset")!!.toInt()
-        val responseAsJson = isSearch || isDefault || page > 0
+        val offset = url.queryParameter("offset")!!.toInt()
+        val responseAsJson = isSearch || isDefault || offset > 0
 
         val mangas = if (responseAsJson) {
             val data = response.parseAs<List<MangaDto>>()
@@ -149,7 +149,7 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val activeCategoryTypeSelector = filters.firstInstance<PornPicsFilters.ActiveCategoryTypeSelector>()
-        return if (query.isBlank() && activeCategoryTypeSelector.isSelected()) {
+        return if (query.isBlank()) {
             buildCategoryRequest(page, activeCategoryTypeSelector, filters)
         } else {
             buildSearchRequest(page, query, filters)

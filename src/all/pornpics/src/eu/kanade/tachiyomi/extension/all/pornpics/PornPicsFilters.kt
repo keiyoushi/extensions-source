@@ -43,7 +43,6 @@ class PornPicsFilters {
 
     class ActiveCategoryTypeSelector(name: String, values: Array<ActiveCategoryOption>) :
         Filter.Select<ActiveCategoryOption>(name, values) {
-        fun isSelected() = state > 0
         fun selected() = values[state].categoryType!!
         fun selectedCategoryOption(filters: FilterList): CategoryOption {
             val selectors = filters.filterIsInstance<CategorySelector>()
@@ -68,7 +67,6 @@ class PornPicsFilters {
         fun createActiveCategoryTypeSelector(intl: Intl) = ActiveCategoryTypeSelector(
             intl["filter.active-category-type.title"],
             arrayOf(
-                ActiveCategoryOption(intl["filter.active-category-type.option.unselected"], null),
                 ActiveCategoryOption(intl["filter.active-category-type.option.recommend"], CategoryType.RECOMMEND),
                 ActiveCategoryOption(intl["filter.active-category-type.option.categories"], CategoryType.CATEGORY),
                 ActiveCategoryOption(intl["filter.active-category-type.option.tags"], CategoryType.TAG),
@@ -89,7 +87,7 @@ class PornPicsFilters {
                 .sortedBy { it.name }
                 .toTypedArray()
             return CategorySelector(
-                intl["filter.active-category-type.option.recommend"],
+                intl["filter.category-type.recommend.title"],
                 options,
             )
         }
