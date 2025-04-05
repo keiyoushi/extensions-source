@@ -22,6 +22,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 
 class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
@@ -135,11 +136,16 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override fun chapterListSelector() = "li.mobile a.alt-lang-item[data-lang=en]"
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        chapter_number = 0F
-        setUrlWithoutDomain(element.absUrl("href"))
-        name = intl["chapter.name.default"]
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return Observable.just(manga)
+            .map {
+                SChapter.create().apply {
+                    chapter_number = 0F
+                    setUrlWithoutDomain(it.url)
+                    name = intl["chapter.name.default"]
+                }.let { listOf(it) }
+            }
     }
 
     override fun pageListParse(document: Document): List<Page> {
