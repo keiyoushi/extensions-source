@@ -2,8 +2,8 @@ ext {
     extName = 'Jiangzaitoon'
     extClass = '.Jiangzaitoon'
     themePkg = 'madara'
-    baseUrl = 'https://jiangzaitoon.kim'
-    overrideVersionCode = 10
+    baseUrl = 'https://jiangzaitoon.wtf'
+    overrideVersionCode = 11
     isNsfw = true
 }
 

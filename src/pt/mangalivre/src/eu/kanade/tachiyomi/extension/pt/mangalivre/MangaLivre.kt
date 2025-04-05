@@ -6,7 +6,7 @@ import java.util.Locale
 
 class MangaLivre : Madara(
     "Manga Livre",
-    "https://mangalivre.ru",
+    "https://mangalivre.tv",
     "pt-BR",
     SimpleDateFormat("MMMM dd, yyyy", Locale("pt")),
 ) {

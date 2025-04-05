@@ -1,0 +1,10 @@
+ext {
+    extName = 'Storm X'
+    extClass = '.Stormx'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://www.stormx.site'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
