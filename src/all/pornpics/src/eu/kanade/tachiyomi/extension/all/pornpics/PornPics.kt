@@ -30,6 +30,8 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     override val name = "PornPics"
     override val supportsLatest = true
 
+    private val preferences = getPreferences()
+
     private val intl = Intl(
         language = lang,
         baseLanguage = "en",
@@ -98,7 +100,7 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesRequest(page: Int) = buildMangasPageRequest(page, 2)
 
     private fun buildMangasPageRequest(page: Int, period: Int): Request {
-        val categoryOption = PornPicsPreferences.getCategoryOption(getPreferences())
+        val categoryOption = PornPicsPreferences.getCategoryOption(preferences)
         val isDefaultCategory = PornPicsPreferences.DEFAULT_CATEGORY_OPTION == categoryOption
 
         val builder = when {
