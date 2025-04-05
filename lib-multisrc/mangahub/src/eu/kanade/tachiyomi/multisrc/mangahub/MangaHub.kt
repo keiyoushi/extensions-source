@@ -276,7 +276,7 @@ abstract class MangaHub(
 
     private fun chapterFromElement(element: Element, head: Element): SChapter {
         val chapter = SChapter.create()
-        val potentialLinks = element.select("a[href*='$baseUrl/chapter/']:not([rel*=nofollow]):not([rel*=noreferrer])")
+        val potentialLinks = element.select("a[href*='$baseUrl/chapter/']")
         var visibleLink = ""
         potentialLinks.forEach { a ->
             val className = a.className()
