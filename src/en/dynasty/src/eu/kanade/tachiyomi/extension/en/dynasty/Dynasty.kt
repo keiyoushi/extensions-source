@@ -28,6 +28,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import okio.use
 import org.jsoup.Jsoup
 import rx.Observable
 import java.text.SimpleDateFormat
@@ -135,6 +136,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     override fun getFilterList(): FilterList {
         val tags = this::class.java
             .getResourceAsStream("/assets/tags.json")!!
+            .bufferedReader().use { it.readText() }
             .parseAs<List<Tag>>()
 
         return FilterList(
@@ -602,6 +604,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     private val covers: Map<String, Map<String, String>> by lazy {
         this::class.java
             .getResourceAsStream("/assets/covers.json")!!
+            .bufferedReader().use { it.readText() }
             .parseAs()
     }
 
