@@ -372,7 +372,12 @@ open class Dynasty : HttpSource(), ConfigurableSource {
 
         return SManga.create().apply {
             title = data.name
-            author = authors.joinToString()
+            author = if (authors.size > AUTHORS_UPPER_LIMIT) {
+                authors.take(AUTHORS_UPPER_LIMIT)
+                    .joinToString(postfix = "...")
+            } else {
+                authors.joinToString()
+            }
             artist = author
             description = buildString {
                 val prefChapterFetchLimit = preferences.chapterFetchLimit
@@ -391,6 +396,10 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                 }
 
                 append("Type: ", data.type, "\n\n")
+
+                if (authors.size > AUTHORS_UPPER_LIMIT) {
+                    others.addAll(authors.map { "Author" to it })
+                }
 
                 for ((type, values) in others.groupBy { it.first }) {
                     append(type, ":\n")
@@ -687,6 +696,7 @@ private const val COVER_FETCH_HOST = "keiyoushi-chapter-cover"
 private const val COVER_URL_FRAGMENT = "thumbnail"
 private val CHAPTER_SLUG_REGEX = Regex("""(.*?)_(ch[0-9_]+|volume_[0-9_\w]+)""")
 private val UNICODE_REGEX = Regex("\\\\u([0-9A-Fa-f]{4})")
+private const val AUTHORS_UPPER_LIMIT = 15
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
 private const val CHAPTER_FETCH_LIMIT_PREF = "chapterFetchLimit"
 private val CHAPTER_FETCH_LIMITS = arrayOf("2", "5", "10", "all")
