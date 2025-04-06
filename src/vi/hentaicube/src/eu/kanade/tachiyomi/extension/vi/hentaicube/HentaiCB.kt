@@ -63,11 +63,13 @@ class HentaiCB :
             val mangaUrl = baseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegment(mangaSubString)
                 addPathSegment(query.substringAfter(URL_SEARCH_PREFIX))
+                addPathSegment("")
             }.build()
             return client.newCall(GET(mangaUrl, headers))
                 .asObservableSuccess().map { response ->
                     val manga = mangaDetailsParse(response).apply {
                         setUrlWithoutDomain(mangaUrl.toString())
+                        initialized = true
                     }
 
                     MangasPage(listOf(manga), false)
