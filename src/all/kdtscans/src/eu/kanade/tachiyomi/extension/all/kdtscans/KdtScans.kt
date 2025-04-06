@@ -4,14 +4,11 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class KdtScans : Madara(
     "KDT Scans",
-    "https://kdtscans.com",
+    "https://kdt.akan01.com",
     "all",
-    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
     override val useNewChapterEndpoint = true
     override val fetchGenres = false
@@ -21,6 +18,8 @@ class KdtScans : Madara(
             title = title.cleanupTitle()
         }
     }
+
+    override fun searchMangaSelector() = "div.c-tabs-item__content:not(:contains([LN]))"
 
     override fun searchMangaFromElement(element: Element): SManga {
         return super.searchMangaFromElement(element).apply {
@@ -37,5 +36,5 @@ class KdtScans : Madara(
     private fun String.cleanupTitle() = replace(titleCleanupRegex, "").trim()
 
     private val titleCleanupRegex =
-        Regex("""^\[(ESPAÑOL|English)\]\s+(–\s+)?""", RegexOption.IGNORE_CASE)
+        Regex("""^\[(ESPAÑOL|English|HD)\]\s+(–\s+)?""", RegexOption.IGNORE_CASE)
 }
