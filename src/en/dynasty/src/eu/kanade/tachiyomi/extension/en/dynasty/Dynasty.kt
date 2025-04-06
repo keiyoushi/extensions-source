@@ -31,8 +31,6 @@ import okhttp3.Response
 import okio.use
 import org.jsoup.Jsoup
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 open class Dynasty : HttpSource(), ConfigurableSource {
 
@@ -61,7 +59,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/chapters/added.json?page=$page", headers)
+        return GET("$baseUrl/$CHAPTERS_DIR/added.json?page=$page", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -72,7 +70,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             var isSeries = false
 
             chapter.tags.forEach { tag ->
-                if (tag.type in listOf(SERIES, ANTHOLOGY, DOUJIN, ISSUE)) {
+                if (tag.type in listOf(SERIES_TYPE, ANTHOLOGY_TYPE, DOUJIN_TYPE, ISSUE_TYPE)) {
                     MangaEntry(
                         url = "/${tag.directory}/${tag.permalink}",
                         title = tag.name,
@@ -80,7 +78,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                     ).also(entries::add)
 
                     // true if an associated series is found
-                    isSeries = isSeries || tag.type == SERIES
+                    isSeries = isSeries || tag.type == SERIES_TYPE
                 }
             }
 
@@ -88,7 +86,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             // mostly the case for uploaded doujins
             if (!isSeries) {
                 MangaEntry(
-                    url = "/chapters/${chapter.permalink}",
+                    url = "/$CHAPTERS_DIR/${chapter.permalink}",
                     title = chapter.title,
                     cover = buildChapterCoverFetchUrl(chapter.permalink),
                 ).also(entries::add)
@@ -105,11 +103,11 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         if (query.startsWith("deeplink:")) {
             var (_, directory, permalink) = query.split(":", limit = 3)
 
-            if (directory == "chapters") {
+            if (directory == CHAPTERS_DIR) {
                 val seriesPermalink = CHAPTER_SLUG_REGEX.find(permalink)?.groupValues?.get(1)
 
                 if (seriesPermalink != null) {
-                    directory = "series"
+                    directory = SERIES_DIR
                     permalink = seriesPermalink
                 }
             }
@@ -194,9 +192,9 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             }
             typeFilter.also {
                 it.checked.forEach { type ->
-                    seriesSelected = seriesSelected || type == SERIES
-                    doujinSelected = doujinSelected || type == DOUJIN
-                    chapterSelected = chapterSelected || type == CHAPTER
+                    seriesSelected = seriesSelected || type == SERIES_TYPE
+                    doujinSelected = doujinSelected || type == DOUJIN_TYPE
+                    chapterSelected = chapterSelected || type == CHAPTER_TYPE
 
                     addQueryParameter("classes[]", type)
                 }
@@ -205,7 +203,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             // series and doujin results are best when chapters are included
             // they will be filtered client side in `searchMangaParse`
             if ((seriesSelected || doujinSelected) && !chapterSelected) {
-                addQueryParameter("classes[]", CHAPTER)
+                addQueryParameter("classes[]", CHAPTER_TYPE)
             }
 
             filters.firstInstance<TagFilter>().also {
@@ -249,9 +247,9 @@ open class Dynasty : HttpSource(), ConfigurableSource {
 
     private fun searchMangaParse(response: Response, filters: FilterList): MangasPage {
         val typeFilter = filters.firstInstance<TypeFilter>()
-        val includedSeries = typeFilter.checked.contains(SERIES)
-        val includedChapters = typeFilter.checked.contains(CHAPTER)
-        val includedDoujins = typeFilter.checked.contains(DOUJIN)
+        val includedSeries = typeFilter.checked.contains(SERIES_TYPE)
+        val includedChapters = typeFilter.checked.contains(CHAPTER_TYPE)
+        val includedDoujins = typeFilter.checked.contains(DOUJIN_TYPE)
 
         val document = response.asJsoup()
         val entries = LinkedHashSet<MangaEntry>()
@@ -261,19 +259,19 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         var firstEntry: MangaEntry? = null
 
         document.select(
-            ".chapter-list a.name[href~=/(series|anthologies|chapters|doujins|issues)/], " +
-                ".chapter-list .doujin_tags a[href~=/doujins/]",
+            ".chapter-list a.name[href~=/($SERIES_DIR|$ANTHOLOGIES_DIR|$CHAPTERS_DIR|$DOUJINS_DIR|$ISSUES_DIR)/], " +
+                ".chapter-list .doujin_tags a[href~=/$DOUJINS_DIR/]",
         ).forEach { element ->
             var (directory, permalink) = element.absUrl("href")
                 .toHttpUrl().pathSegments
                 .let { it[0] to it[1] }
             var title = element.ownText()
 
-            if (directory == "chapters") {
+            if (directory == CHAPTERS_DIR) {
                 val seriesPermalink = CHAPTER_SLUG_REGEX.find(permalink)?.groupValues?.get(1)
 
                 if (seriesPermalink != null) {
-                    directory = "series"
+                    directory = SERIES_DIR
                     permalink = seriesPermalink
                     title = seriesPermalink.permalinkToTitle()
                 }
@@ -292,9 +290,9 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             // since we convert chapters to their series counterpart, and select doujins from chapters
             // it is possible to get a certain type even if it is unselected from filters
             // so don't include in that case
-            if ((!includedSeries && directory == "series") ||
-                (!includedChapters && directory == "chapters") ||
-                (!includedDoujins && directory == "doujins")
+            if ((!includedSeries && directory == SERIES_DIR) ||
+                (!includedChapters && directory == CHAPTERS_DIR) ||
+                (!includedDoujins && directory == DOUJINS_DIR)
             ) {
                 return@forEach
             }
@@ -324,7 +322,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
 
         assert(
             mangaPath.size == 2 &&
-                mangaPath[0] in listOf("series", "anthologies", "doujins", "issues", "chapters"),
+                mangaPath[0] in listOf(SERIES_DIR, ANTHOLOGIES_DIR, DOUJINS_DIR, ISSUES_DIR, CHAPTERS_DIR),
         ) { "Migrate to Dynasty Scans to update url" }
 
         val (directory, permalink) = mangaPath.let { it[0] to it[1] }
@@ -338,7 +336,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        if (response.request.url.pathSegments[0] == "chapters") {
+        if (response.request.url.pathSegments[0] == CHAPTERS_DIR) {
             return chapterDetailsParse(response)
         }
 
@@ -366,7 +364,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                 when (tag.type) {
                     "Author" -> authors.add(tag.name)
                     "General" -> tags.add(tag.name)
-                    SERIES, DOUJIN, ANTHOLOGY, ISSUE, "Scanlator" -> {}
+                    SERIES_TYPE, DOUJIN_TYPE, ANTHOLOGY_TYPE, ISSUE_TYPE, "Scanlator" -> {}
                     else -> others.add(tag.type to tag.name)
                 }
             }
@@ -457,7 +455,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             author = authors.joinToString()
             artist = author
             description = buildString {
-                append("Type: ", "Chapter", "\n\n")
+                append("Type: ", CHAPTER_TYPE, "\n\n")
                 for ((type, values) in others.groupBy { it.first }) {
                     append(type, ":\n")
                     values.forEach { append("• ", it.second, "\n") }
@@ -473,7 +471,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return if (manga.url.contains("/chapters/")) {
+        return if (manga.url.contains("/$CHAPTERS_DIR/")) {
             Observable.just(
                 listOf(
                     SChapter.create().apply {
@@ -524,12 +522,12 @@ open class Dynasty : HttpSource(), ConfigurableSource {
 
             with(item as MangaChapter) {
                 var chapterName = header?.let { "$it $title" } ?: title
-                if (data.type != SERIES) {
+                if (data.type != SERIES_TYPE) {
                     chapterName += tags.filter { it.type == "Author" }
                         .joinToString(prefix = " by ", separator = " and ") { it.name }
                 }
                 SChapter.create().apply {
-                    url = "/chapters/$permalink"
+                    url = "/$CHAPTERS_DIR/$permalink"
                     name = chapterName
                     scanlator = tags.filter { it.type == "Scanlator" }.joinToString { it.name }
                     date_upload = dateFormat.tryParse(releasedOn)
@@ -537,7 +535,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             }
         }
 
-        return if (data.type != DOUJIN) {
+        return if (data.type != DOUJIN_TYPE) {
             chapterList.asReversed()
         } else {
             chapterList
@@ -553,13 +551,13 @@ open class Dynasty : HttpSource(), ConfigurableSource {
 
         assert(
             chapterPath.size == 2 &&
-                chapterPath[0] == "chapters",
+                chapterPath[0] == CHAPTERS_DIR,
         ) { "Refresh Chapter List" }
 
         val permalink = chapterPath[1]
 
         val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("chapters")
+            .addPathSegment(CHAPTERS_DIR)
             .addPathSegment("$permalink.json")
             .build()
 
@@ -611,7 +609,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     private fun getCoverUrl(directory: String?, permalink: String): String? {
         directory ?: return null
 
-        if (directory == "chapters") {
+        if (directory == CHAPTERS_DIR) {
             return buildChapterCoverFetchUrl(permalink)
         }
 
@@ -652,7 +650,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         val permalink = request.url.queryParameter("permalink")!!
 
         val chapterUrl = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("chapters")
+            addPathSegment(CHAPTERS_DIR)
             addPathSegments("$permalink.json")
         }.build()
 
@@ -695,12 +693,3 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     override fun searchMangaParse(response: Response) =
         throw UnsupportedOperationException()
 }
-
-private const val COVER_FETCH_HOST = "keiyoushi-chapter-cover"
-private const val COVER_URL_FRAGMENT = "thumbnail"
-private val CHAPTER_SLUG_REGEX = Regex("""(.*?)_(ch[0-9_]+|volume_[0-9_\w]+)""")
-private val UNICODE_REGEX = Regex("\\\\u([0-9A-Fa-f]{4})")
-private const val AUTHORS_UPPER_LIMIT = 15
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
-private const val CHAPTER_FETCH_LIMIT_PREF = "chapterFetchLimit"
-private val CHAPTER_FETCH_LIMITS = arrayOf("2", "5", "10", "all")

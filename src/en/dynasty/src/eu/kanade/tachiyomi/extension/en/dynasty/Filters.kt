@@ -27,18 +27,12 @@ class TypeFilter : Filter.Group<TypeOption>(
     val checked get() = state.filter { it.state }.map { it.name }
 }
 
-const val SERIES = "Series"
-const val CHAPTER = "Chapter"
-const val ANTHOLOGY = "Anthology"
-const val DOUJIN = "Doujin"
-const val ISSUE = "Issue"
-
 private val typeOptions = listOf(
-    SERIES,
-    CHAPTER,
-    ANTHOLOGY,
-    DOUJIN,
-    ISSUE,
+    SERIES_TYPE,
+    CHAPTER_TYPE,
+    ANTHOLOGY_TYPE,
+    DOUJIN_TYPE,
+    ISSUE_TYPE,
 )
 
 @Serializable
