@@ -230,7 +230,10 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         url = element.select("a").attr("href")
         name = element.select("a li").first()!!.ownText()
-        date_upload = sdf.parse(element.select("a li span.hidden-xs").text().trim())?.time ?: 0
+        date_upload = element.select("a li span.hidden-xs").text().trim()
+            .takeIf { it.isNotBlank() }
+            ?.let { sdf.parse(it)?.time }
+            ?: 0
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
