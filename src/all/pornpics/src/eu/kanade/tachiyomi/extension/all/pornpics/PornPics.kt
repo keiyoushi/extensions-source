@@ -96,29 +96,32 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
     override fun simpleNextPageSelector(): String? = null
 
-    override fun popularMangaRequest(page: Int) = buildMangasPageRequest(page, 1)
+    override fun popularMangaRequest(page: Int) = buildMangasPageRequest(page, true)
 
-    override fun latestUpdatesRequest(page: Int) = buildMangasPageRequest(page, 2)
+    override fun latestUpdatesRequest(page: Int) = buildMangasPageRequest(page, false)
 
-    private fun buildMangasPageRequest(page: Int, period: Int): Request {
+    private fun buildMangasPageRequest(page: Int, popular: Boolean): Request {
         val categoryOption = PornPicsPreferences.getCategoryOption(preferences)
-        val isDefaultCategory = PornPicsPreferences.DEFAULT_CATEGORY_OPTION == categoryOption
-
-        val builder = when {
-            isDefaultCategory -> "$baseUrl/popular/api/galleries/list"
-            period == 1 -> "$baseUrl/$categoryOption"
-            period == 2 -> "$baseUrl/$categoryOption/recent"
-            else -> baseUrl
-        }.toHttpUrl().newBuilder()
-            .addQueryPageParameter(page)
-            .addQueryParameter("lang", intl.chosenLanguage)
-
-        if (isDefaultCategory) {
-            builder.addQueryParameter("category_id", 2585 + period)
+        if (PornPicsPreferences.DEFAULT_CATEGORY_OPTION == categoryOption) {
+            // the source of is the options under the pics menu in the nav bar
+            val period = if (popular) 1 else 2
+            val categoryId = 2585 + period
+            return "$baseUrl/popular/api/galleries/list".toHttpUrl().newBuilder()
+                .addQueryParameterPage(page)
+                .addQueryParameter("lang", intl.chosenLanguage)
                 .addQueryParameter("period", period)
+                .addQueryParameter("category_id", categoryId)
+                .build()
+                .let { GET(it, headers) }
         }
 
-        return GET(builder.build(), headers)
+        // the source is the options under the categories/tags/pornstars/channels menu in the nav bar
+        val requestBaseUrl = if (popular) "$baseUrl/$categoryOption" else "$baseUrl/$categoryOption/recent"
+        return requestBaseUrl.toHttpUrl().newBuilder()
+            .addQueryParameterPage(page)
+            .addQueryParameter("lang", intl.chosenLanguage)
+            .build()
+            .let { GET(it, headers) }
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -176,7 +179,7 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
             .addUrlPart(categoryOption.toUrlPart())
             .addQueryParameter("lang", intl.chosenLanguage)
             .addUrlPart(sortUrlPart, addPath = !isSearch)
-            .addQueryPageParameter(page)
+            .addQueryParameterPage(page)
         return GET(builder.build(), headers)
     }
 
@@ -185,7 +188,7 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
         val builder = "$baseUrl/search/srch.php".toHttpUrl().newBuilder()
             .addQueryParameter("lang", intl.chosenLanguage)
             .addUrlPart(sortOption.toUriPart(), addPath = false)
-            .addQueryPageParameter(page)
+            .addQueryParameterPage(page)
             .addQueryParameter("q", query)
         return GET(builder.build(), headers)
     }
