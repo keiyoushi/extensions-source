@@ -35,6 +35,7 @@ class PornPicsFilters {
     data class CategoryOption(val name: String, val type: CategoryType, val urlPart: String) {
         override fun toString() = this.name
         fun toUrlPart() = urlPart
+        fun useSearch() = urlPart.contains("/search/srch.php?")
     }
 
     data class ActiveCategoryOption(val name: String, val categoryType: CategoryType?) {

@@ -159,9 +159,8 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val activeCategoryTypeSelector = filters.firstInstance<PornPicsFilters.ActiveCategoryTypeSelector>()
         return if (query.isBlank()) {
-            buildCategoryRequest(page, activeCategoryTypeSelector, filters)
+            buildCategoryRequest(page, filters)
         } else {
             buildSearchRequest(page, query, filters)
         }
@@ -169,16 +168,15 @@ class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
 
     private fun buildCategoryRequest(
         page: Int,
-        activeCategoryTypeSelector: PornPicsFilters.ActiveCategoryTypeSelector,
         filters: FilterList,
     ): Request {
-        val categoryOption = activeCategoryTypeSelector.selectedCategoryOption(filters)
-        val sortUrlPart = filters.firstInstance<PornPicsFilters.SortSelector>().toUriPart()
-        val isSearch = categoryOption.toUrlPart().contains('?')
+        val activeCategoryTypeOption = filters.firstInstance<PornPicsFilters.ActiveCategoryTypeSelector>()
+        val categoryOption = activeCategoryTypeOption.selectedCategoryOption(filters)
+        val sortOption = filters.firstInstance<PornPicsFilters.SortSelector>()
         val builder = baseUrl.toHttpUrl().newBuilder()
             .addUrlPart(categoryOption.toUrlPart())
             .addQueryParameter("lang", intl.chosenLanguage)
-            .addUrlPart(sortUrlPart, addPath = !isSearch)
+            .addUrlPart(sortOption.toUriPart(), addPath = !categoryOption.useSearch())
             .addQueryParameterPage(page)
         return GET(builder.build(), headers)
     }
