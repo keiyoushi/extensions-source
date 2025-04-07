@@ -18,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -225,12 +226,12 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     // 漫画章节信息
     override fun chapterListSelector(): String = "div[id=episode-block] a[href^=/photo/]"
 
-    private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         url = element.select("a").attr("href")
         name = element.select("a li").first()!!.ownText()
-        date_upload = sdf.parse(element.select("a li span.hidden-xs").text().trim())?.time ?: 0
+        date_upload = dateFormat.tryParse(element.select("a li span.hidden-xs").text().trim())
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -239,8 +240,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
             val singleChapter = SChapter.create().apply {
                 name = "单章节"
                 url = document.select("a[class=col btn btn-primary dropdown-toggle reading]").attr("href")
-                date_upload = sdf.parse(document.select("[itemprop=datePublished]").last()!!.attr("content"))?.time
-                    ?: 0
+                date_upload = dateFormat.tryParse(document.select("[itemprop=datePublished]").last()!!.attr("content"))
             }
             return listOf(singleChapter)
         }

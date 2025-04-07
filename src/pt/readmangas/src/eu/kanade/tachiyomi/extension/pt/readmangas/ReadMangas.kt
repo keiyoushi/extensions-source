@@ -21,6 +21,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -42,6 +44,7 @@ class ReadMangas() : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(::mangaSlugCompatibility)
         .build()
 
     override val versionId = 2
@@ -251,6 +254,34 @@ class ReadMangas() : HttpSource() {
     override fun imageUrlParse(response: Response) = ""
 
     // =========================== Utilities ===============================
+
+    private fun mangaSlugCompatibility(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (request.url.fragment.isNullOrBlank()) {
+            return chain.proceed(request)
+        }
+
+        val response = chain.proceed(request)
+        if (response.isSuccessful) {
+            return response
+        }
+
+        response.close()
+
+        val url = request.url.newBuilder()
+            .dropLastPathSegment()
+            .addPathSegment(request.url.fragment!!)
+            .build()
+
+        val newRequest = request.newBuilder()
+            .url(url)
+            .build()
+
+        return chain.proceed(newRequest)
+    }
+
+    private fun HttpUrl.Builder.dropLastPathSegment(): HttpUrl.Builder =
+        this.removePathSegment(this.build().pathSegments.size - 1)
 
     private inline fun <reified T : ResultDto> Response.mangasPageParse(): Pair<MangasPage, String> {
         val json = when (request.method) {
