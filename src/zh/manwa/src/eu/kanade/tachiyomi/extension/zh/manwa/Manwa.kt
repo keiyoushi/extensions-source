@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.zh.manwa
 import android.content.SharedPreferences
 import android.net.Uri
 import androidx.preference.CheckBoxPreference
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -42,7 +43,8 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     override val supportsLatest: Boolean = true
     private val json: Json by injectLazy()
     private val preferences: SharedPreferences = getPreferences()
-    override val baseUrl = "https://" + MIRROR_ENTRIES.run { this[preferences.getString(MIRROR_KEY, "0")!!.toInt().coerceAtMost(size)] }
+    override val baseUrl: String
+        get() = "https://" + preferences.getString(MIRROR_KEY, DEFAULT_ENTRIES)
 
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->
         val originalResponse: Response = chain.proceed(chain.request())
@@ -107,7 +109,6 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Search
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val uri = Uri.parse(baseUrl).buildUpon()
         uri.appendPath("search")
@@ -124,7 +125,6 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Details
-
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst(".detail-main-info-title")!!.text()
         thumbnail_url = document.selectFirst("div.detail-main-cover > img")!!.attr("data-original")
@@ -135,7 +135,6 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Chapters
-
     override fun chapterListSelector(): String = "ul#detail-list-select > li > a"
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         url = element.attr("href")
@@ -176,12 +175,11 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
+        EditTextPreference(screen.context).apply {
             key = MIRROR_KEY
-            title = "使用镜像网址"
-            entries = MIRROR_ENTRIES
-            entryValues = Array(entries.size, Int::toString)
-            setDefaultValue("0")
+            title = "主站网址"
+            summary = "默认值：manwass.cc\n手动获取新网址：fuwt.cc"
+            setDefaultValue(DEFAULT_ENTRIES)
         }.let { screen.addPreference(it) }
 
         ListPreference(screen.context).apply {
@@ -189,13 +187,13 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
             title = "图源"
             entries = IMAGE_HOST_ENTRIES
             entryValues = IMAGE_HOST_ENTRY_VALUES
+            summary = "已选择：%s"
             setDefaultValue(IMAGE_HOST_ENTRY_VALUES[0])
         }.let { screen.addPreference(it) }
 
         CheckBoxPreference(screen.context).apply {
             key = AUTO_CLEAR_COOKIE_KEY
             title = "自动删除 Cookie"
-
             setDefaultValue(false)
         }.let { screen.addPreference(it) }
     }
@@ -213,12 +211,11 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     }
 
     companion object {
-        private const val MIRROR_KEY = "MIRROR"
-        private val MIRROR_ENTRIES get() = arrayOf("manwa.fun", "manwa.me", "manwav3.xyz", "manwasa.cc", "manwadf.cc")
+        private const val MIRROR_KEY = "fuwt.cc"
+        private val DEFAULT_ENTRIES = "manwass.cc"
         private const val IMAGE_HOST_KEY = "IMG_HOST"
-        private val IMAGE_HOST_ENTRIES = arrayOf("图源1", "图源2", "图源3")
-        private val IMAGE_HOST_ENTRY_VALUES = arrayOf("1", "2", "3")
-
+        private val IMAGE_HOST_ENTRIES = arrayOf("随机", "图源1", "图源2", "图源3", "移动", "图源5")
+        private val IMAGE_HOST_ENTRY_VALUES = arrayOf("0", "1", "2", "3", "4", "5")
         private const val AUTO_CLEAR_COOKIE_KEY = "CLEAR_COOKIE"
     }
 }
