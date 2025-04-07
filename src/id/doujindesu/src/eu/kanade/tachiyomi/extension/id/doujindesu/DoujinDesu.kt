@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
+import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -16,7 +17,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -24,6 +24,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -37,7 +39,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     // Private stuff
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
 
     private val DATE_FORMAT by lazy {
         SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id"))
@@ -249,9 +253,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     )
 
     private class AuthorFilter : Filter.Text("Author")
-    private class CharacterFilter : Filter.Text("Karakter")
     private class GroupFilter : Filter.Text("Group")
     private class SeriesFilter : Filter.Text("Series")
+    private class CharacterFilter : Filter.Text("Karakter")
     private class CategoryNames(categories: Array<Category>) : Filter.Select<Category>("Kategori", categories, 0)
     private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Urutkan", orders, 0)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
@@ -319,59 +323,94 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     // Search & FIlter
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/manga/page/$page/".toHttpUrl().newBuilder()
-                .addQueryParameter("title", query)
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-                when (filter) {
-                    is CategoryNames -> {
-                        val category = filter.values[filter.state]
-                        url.addQueryParameter("typex", category.key)
-                    }
-                    is OrderBy -> {
-                        val order = filter.values[filter.state]
-                        url.addQueryParameter("order", order.key)
-                    }
-                    is AuthorFilter -> {
-                        url.addQueryParameter("author", filter.state)
-                    }
-                    is GroupFilter -> {
-                        url.addQueryParameter("group", filter.state)
-                    }
-                    is SeriesFilter -> {
-                        url.addQueryParameter("series", filter.state)
-                    }
-                    is CharacterFilter -> {
-                        url.addQueryParameter("character", filter.state)
-                    }
-                    is GenreList -> {
-                        filter.state
-                            .filter { it.state }
-                            .let { list ->
-                                if (list.isNotEmpty()) {
-                                    list.forEach { genre -> url.addQueryParameter("genre[]", genre.id) }
-                                }
-                            }
-                    }
-                    is StatusList -> {
-                        val status = filter.values[filter.state]
-                        url.addQueryParameter("statusx", status.key)
-                    }
-                    else -> {}
+        val group = filters.filterIsInstance<GroupFilter>().firstOrNull()?.state?.trim()
+        val series = filters.filterIsInstance<SeriesFilter>().firstOrNull()?.state?.trim()
+
+        // Group filter handling
+        if (!group.isNullOrBlank()) {
+            val slug = group.toGroupSeriesSlug()
+            if (slug.isNotBlank()) {
+                val groupUrl = if (page == 1) {
+                    "$baseUrl/group/$slug/"
+                } else {
+                    "$baseUrl/group/$slug/page/$page/"
                 }
+                return GET(groupUrl, headers)
             }
-    
-            return GET(url.build(), headers)
         }
-    
+
+        // Series filter handling
+        if (!series.isNullOrBlank()) {
+            val slug = series.toGroupSeriesSlug()
+            if (slug.isNotBlank()) {
+                val seriesUrl = if (page == 1) {
+                    "$baseUrl/series/$slug/"
+                } else {
+                    "$baseUrl/series/$slug/page/$page/"
+                }
+                return GET(seriesUrl, headers)
+            }
+        }
+
+        // Anything else filter handling
+        val url = "$baseUrl/manga/page/$page/".toHttpUrl().newBuilder()
+        url.addQueryParameter("title", query.ifBlank { "" })
+
+        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            when (filter) {
+                is CategoryNames -> {
+                    val category = filter.values[filter.state]
+                    url.addQueryParameter("typex", category.key)
+                }
+                is OrderBy -> {
+                    val order = filter.values[filter.state]
+                    url.addQueryParameter("order", order.key)
+                }
+                is AuthorFilter -> {
+                    url.addQueryParameter("author", filter.state)
+                }
+                is CharacterFilter -> {
+                    url.addQueryParameter("character", filter.state)
+                }
+                is GenreList -> {
+                    filter.state
+                        .filter { it.state }
+                        .forEach { genre ->
+                            url.addQueryParameter("genre[]", genre.id)
+                        }
+                }
+                is StatusList -> {
+                    val status = filter.values[filter.state]
+                    url.addQueryParameter("statusx", status.key)
+                }
+                else -> {}
+            }
+        }
+        return GET(url.build(), headers)
+    }
+
+    private fun String.toGroupSeriesSlug(): String {
+        return this
+            .trim()
+            .lowercase()
+            .replace(Regex("[^a-z0-9\\s-]"), "")
+            .replace(Regex("\\s+"), "-")
+    }
+
     override fun searchMangaFromElement(element: Element): SManga =
         basicInformationFromElement(element)
 
     override fun getFilterList() = FilterList(
-        Filter.Header("NB: Filter bisa digabungkan dengan memakai pencarian teks!"),
+        Filter.Header("NB: Filter bisa digabungkan dengan memakai pencarian teks selain Group dan Series!"),
         Filter.Separator(),
         AuthorFilter(),
+        Filter.Separator(),
+        Filter.Header("NB: Gunakan ini untuk filter per grup saja dan tidak bisa digabungkan dengan memakai pencarian teks dan filter lainnya!"),
         GroupFilter(),
+        Filter.Separator(),
+        Filter.Header("NB: Gunakan ini untuk filter per series saja, tidak bisa digabungkan dengan memakai pencarian teks dan filter lainnya!"),
         SeriesFilter(),
+        Filter.Separator(),
         CharacterFilter(),
         StatusList(statusList),
         CategoryNames(categoryNames),
@@ -424,7 +463,15 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             Seri             : $seriesParser
             """.trimIndent()
         } else {
-            val showDescription = infoElement.selectFirst("div.pb-2 > p:nth-child(1)")!!.text()
+            val firstParagraphText = infoElement.selectFirst("div.pb-2 > p:nth-child(1)")?.text()
+
+            val showDescription = if (firstParagraphText.equals("Sinopsis:", ignoreCase = true)) {
+                infoElement.select("div.pb-2").joinToString("\n") {
+                    it.html().replace("<br>", "\n").replace(Regex("<.*?>"), "")
+                }.replaceFirst("Sinopsis:", "", ignoreCase = true)
+            } else {
+                firstParagraphText.orEmpty()
+            }
             """
             $showDescription
 
