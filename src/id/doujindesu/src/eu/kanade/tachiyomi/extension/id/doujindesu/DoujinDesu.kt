@@ -250,6 +250,8 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     private class AuthorFilter : Filter.Text("Author")
     private class CharacterFilter : Filter.Text("Karakter")
+    private class GroupFilter : Filter.Text("Group")
+    private class SeriesFilter : Filter.Text("Series")
     private class CategoryNames(categories: Array<Category>) : Filter.Select<Category>("Kategori", categories, 0)
     private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Urutkan", orders, 0)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
