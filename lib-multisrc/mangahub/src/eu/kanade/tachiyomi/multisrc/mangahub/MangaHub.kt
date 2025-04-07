@@ -276,28 +276,39 @@ abstract class MangaHub(
 
     private fun chapterFromElement(element: Element, styles: String): SChapter {
         val chapter = SChapter.create()
-        val linkQuery = "a[href*='$baseUrl/chapter/']"
+        val potentialLinks = element.select("a[href*='$baseUrl/chapter/']")
 
-        // First look for a link with no "rel='nofollow noreferrer noindex'". If none found, the legit link most likely have the mentioned rel attribute.
-        val potentialLinks = element.select("$linkQuery:not([rel*=nofollow]):not([rel*=noreferrer]):not([rel*=noindex])").takeIf { it.isNotEmpty() }
-            ?: element.select(linkQuery)
-
-        // We will still get a couple of faulty links from the selector and they hide it via CSS so we have to check for those.
+        // We'll get a couple of faulty links from the selector and they hide it via CSS so we have to check for those.
         var visibleLink = ""
         potentialLinks.forEach { a ->
-            val className = a.className()
-
             // As an alternative, we can check for the class name itself (i.e. "className != '_1AxFv'") but those class names are most likely pre-generated
             // and would change if the css gets updated so we'll check it via their value.
-            if (!styles.contains(".$className{visibility:hidden;display:none;opacity:0}")) {
+            if (isValidChapterLink(a.className(), styles)) {
                 visibleLink = a.attr("href")
-                return@forEach
             }
         }
+
         chapter.setUrlWithoutDomain(visibleLink)
         chapter.name = chapter.url.trimEnd('/').substringAfterLast('/').replace('-', ' ')
         chapter.date_upload = element.select("small.UovLc").first()?.text()?.let { parseChapterDate(it) } ?: 0
         return chapter
+    }
+
+    private fun isValidChapterLink(classNames: String, styles: String): Boolean {
+        val classSplit = classNames.split(' ')
+
+        // There might be a case in the future where the element use multiple class to style the element so we have to account for that.
+        classSplit.forEach { className ->
+            // We'll get the class style via regex so that we can flexibly do more checks.
+            val style = Regex("(?s)\\Q.$className\\E\\s*\\{.*?\\}").find(styles)?.value
+
+            if (style == null || style.contains("display:none") || style.contains("visibility:none")) {
+                // The link is hidden so it is not valid.
+                return false
+            }
+        }
+
+        return true
     }
 
     override fun chapterFromElement(element: Element): SChapter {
