@@ -268,20 +268,28 @@ abstract class MangaHub(
     // chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val head = document.head()
-        return document.select(chapterListSelector()).map { chapterFromElement(it, head) }
+        val styles = document.head().select("style").html()
+        return document.select(chapterListSelector()).map { chapterFromElement(it, styles) }
     }
 
     override fun chapterListSelector() = ".tab-content ul li"
 
-    private fun chapterFromElement(element: Element, head: Element): SChapter {
+    private fun chapterFromElement(element: Element, styles: String): SChapter {
         val chapter = SChapter.create()
-        val potentialLinks = element.select("a[href*='$baseUrl/chapter/']")
+        val linkQuery = "a[href*='$baseUrl/chapter/']"
+
+        // First look for a link with no "rel='nofollow noreferrer noindex'". If none found, the legit link most likely have the mentioned rel attribute.
+        val potentialLinks = element.select("$linkQuery:not([rel*=nofollow]):not([rel*=noreferrer]):not([rel*=noindex])").takeIf { it.isNotEmpty() }
+            ?: element.select(linkQuery)
+
+        // We will still get a couple of faulty links from the selector and they hide it via CSS so we have to check for those.
         var visibleLink = ""
         potentialLinks.forEach { a ->
             val className = a.className()
-            val styles = head.select("style").html()
-            if (!styles.contains(".$className { display:none; }")) {
+
+            // As an alternative, we can check for the class name itself (i.e. "className != '_1AxFv'") but those class names are most likely pre-generated
+            // and would change if the css gets updated so we'll check it via their value.
+            if (!styles.contains(".$className{visibility:hidden;display:none;opacity:0}")) {
                 visibleLink = a.attr("href")
                 return@forEach
             }
