@@ -62,7 +62,7 @@ class KemonoPostDto(
     private val service: String,
     private val user: String,
     private val title: String,
-    private val added: String,
+    private val added: String?,
     private val published: String?,
     private val edited: String?,
     private val file: KemonoFileDto,
@@ -80,7 +80,7 @@ class KemonoPostDto(
         }.distinctBy { it.path }.map { it.toString() }
 
     fun toSChapter() = SChapter.create().apply {
-        val postDate = dateFormat.parse(edited ?: published ?: added)
+        val postDate = dateFormat.parse(edited ?: published ?: added ?: 0)
 
         url = "/$service/user/$user/post/$id"
         date_upload = postDate?.time ?: 0
