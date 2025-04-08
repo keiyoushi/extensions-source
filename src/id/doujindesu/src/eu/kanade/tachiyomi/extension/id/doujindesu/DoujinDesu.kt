@@ -481,33 +481,50 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
             val showDescription = if (pb2Element != null) {
                 val paragraphs = pb2Element.select("p")
-
-                // CASE 1: Manga 2 — Daftar Chapter via <br>
                 val firstText = paragraphs.firstOrNull()?.text()?.trim()?.lowercase()
-                val isChapterList = firstText == "sinopsis:" && paragraphs.size > 1 &&
-                    paragraphs[1].html().contains(Regex("""\d+\..+<br>"""))
 
-                if (isChapterList) {
-                    val chapterHtml = paragraphs[1].html()
-                    val lines = chapterHtml.split("<br>").map { it.trim() }.filter { it.isNotEmpty() }
-                    "Daftar Chapter:\n" + lines.joinToString("\n")
+                // CASE 1: Manga 2 — Versi 1 (Gabungan dalam satu paragraf setelah <br>)
+                val mergedChapterElement = paragraphs.find {
+                    it.html().contains("<strong>Sinopsis:</strong><br>") &&
+                        it.html().contains(Regex("""\d+[-–]?\d*\..+<br>"""))
+                }
+                if (mergedChapterElement != null) {
+                    val chapterList = mergedChapterElement.html()
+                        .substringAfter("<strong>Sinopsis:</strong><br>")
+                        .split("<br>")
+                        .map { it.replace(Regex("<[^>]*>"), "").trim() }
+                        .filter { it.isNotEmpty() }
+
+                    "Daftar Chapter: \n" + chapterList.joinToString(" | ")
                 }
 
-                // CASE 2: Manga 1 — sinopsis diawali dengan <strong>Sinopsis:</strong><br> dan lanjut ke <p> lain
+                // CASE 2: Dua paragraf, p[0] = "Sinopsis:", p[1] = daftar chapter
+                else if (
+                    firstText == "sinopsis:" &&
+                    paragraphs.size > 1 &&
+                    paragraphs[1].html().contains(Regex("""\d+[-–]?\d*\..+<br>"""))
+                ) {
+                    val chapterList = paragraphs[1].html()
+                        .split("<br>")
+                        .map { it.replace(Regex("<[^>]*>"), "").trim() }
+                        .filter { it.isNotEmpty() }
+
+                    "Daftar Chapter: \n" + chapterList.joinToString(" | ")
+                }
+
+                // CASE 3: Manga 1 — Sinopsis biasa, diawali oleh <strong>Sinopsis:</strong><br> dan paragraf lanjut
                 else if (paragraphs.any { it.html().contains("<strong>Sinopsis:</strong><br>") }) {
                     val sinopsisStartIndex = paragraphs.indexOfFirst {
                         it.html().contains("<strong>Sinopsis:</strong><br>")
                     }
 
                     val sinopsisTexts = buildList {
-                        // Ambil konten dari paragraf awal setelah <br>
                         val startText = paragraphs[sinopsisStartIndex].html()
                             .substringAfter("<strong>Sinopsis:</strong><br>")
                             .replace(Regex("<[^>]*>"), "")
                             .trim()
                         add(startText)
 
-                        // Ambil paragraf berikutnya kalau bukan "Download"
                         for (i in sinopsisStartIndex + 1 until paragraphs.size) {
                             val content = paragraphs[i].text().trim()
                             if (!content.lowercase().startsWith("download")) {
@@ -521,8 +538,11 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                     "Sinopsis:\n" + sinopsisTexts.joinToString("\n\n")
                 }
 
-                // CASE 3: Manhwa — hanya 1 paragraf (manhwa style)
-                else if (paragraphs.size == 1 && paragraphs[0].html().contains("<strong>Sinopsis:</strong><br>")) {
+                // CASE 4: Manhwa style — Hanya 1 paragraf dengan <br> di dalamnya
+                else if (
+                    paragraphs.size == 1 &&
+                    paragraphs[0].html().contains("<strong>Sinopsis:</strong><br>")
+                ) {
                     val single = paragraphs[0].html()
                         .substringAfter("<strong>Sinopsis:</strong><br>")
                         .replace(Regex("<[^>]*>"), "")
@@ -530,7 +550,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                     "Sinopsis:\n$single"
                 }
 
-                // CASE 4: Fallback Sinopsis dari "Sinopsis:" di paragraf pertama (jaga-jaga)
+                // CASE 5: Fallback — p[0] == "Sinopsis:" lalu p[1+] isi deskripsi
                 else if (firstText == "sinopsis:") {
                     val sinopsisLines = paragraphs.drop(1)
                         .map { it.text().trim() }
