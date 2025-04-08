@@ -463,21 +463,77 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             Seri             : $seriesParser
             """.trimIndent()
         } else {
-            val firstParagraphText = infoElement.selectFirst("div.pb-2 > p:nth-child(1)")?.text()
+            val pb2Element = infoElement.selectFirst("div.pb-2")
 
-            val showDescription = if (firstParagraphText.equals("Sinopsis:", ignoreCase = true)) {
-                infoElement.select("div.pb-2").joinToString("\n") {
-                    it.html().replace("<br>", "\n").replace(Regex("<.*?>"), "")
-                }.replaceFirst("Sinopsis:", "", ignoreCase = true)
+            val showDescription = if (pb2Element != null) {
+                val paragraphs = pb2Element.select("p")
+
+                // CASE 1: Manga 2 — Daftar Chapter via <br>
+                val firstText = paragraphs.firstOrNull()?.text()?.trim()?.lowercase()
+                val isChapterList = firstText == "sinopsis:" && paragraphs.size > 1 &&
+                    paragraphs[1].html().contains(Regex("""\d+\..+<br>"""))
+
+                if (isChapterList) {
+                    val chapterHtml = paragraphs[1].html()
+                    val lines = chapterHtml.split("<br>").map { it.trim() }.filter { it.isNotEmpty() }
+                    "Daftar Chapter:\n" + lines.joinToString("\n")
+                }
+
+                // CASE 2: Manga 1 — sinopsis diawali dengan <strong>Sinopsis:</strong><br> dan lanjut ke <p> lain
+                else if (paragraphs.any { it.html().contains("<strong>Sinopsis:</strong><br>") }) {
+                    val sinopsisStartIndex = paragraphs.indexOfFirst {
+                        it.html().contains("<strong>Sinopsis:</strong><br>")
+                    }
+
+                    val sinopsisTexts = buildList {
+                        // Ambil konten dari paragraf awal setelah <br>
+                        val startText = paragraphs[sinopsisStartIndex].html()
+                            .substringAfter("<strong>Sinopsis:</strong><br>")
+                            .replace(Regex("<[^>]*>"), "")
+                            .trim()
+                        add(startText)
+
+                        // Ambil paragraf berikutnya kalau bukan "Download"
+                        for (i in sinopsisStartIndex + 1 until paragraphs.size) {
+                            val content = paragraphs[i].text().trim()
+                            if (!content.lowercase().startsWith("download")) {
+                                add(content)
+                            } else {
+                                break
+                            }
+                        }
+                    }
+
+                    "Sinopsis:\n" + sinopsisTexts.joinToString("\n\n")
+                }
+
+                // CASE 3: Manhwa — hanya 1 paragraf (manhwa style)
+                else if (paragraphs.size == 1 && paragraphs[0].html().contains("<strong>Sinopsis:</strong><br>")) {
+                    val single = paragraphs[0].html()
+                        .substringAfter("<strong>Sinopsis:</strong><br>")
+                        .replace(Regex("<[^>]*>"), "")
+                        .trim()
+                    "Sinopsis:\n$single"
+                }
+
+                // CASE 4: Fallback Sinopsis dari "Sinopsis:" di paragraf pertama (jaga-jaga)
+                else if (firstText == "sinopsis:") {
+                    val sinopsisLines = paragraphs.drop(1)
+                        .map { it.text().trim() }
+                        .filter { !it.lowercase().startsWith("download") }
+                    "Sinopsis:\n" + sinopsisLines.joinToString("\n\n")
+                } else {
+                    ""
+                }
             } else {
-                firstParagraphText.orEmpty()
+                ""
             }
             """
-            $showDescription
-
-            Judul Alternatif : $alternativeTitle
-            Seri             : $seriesParser
-            """.trimIndent()
+            |$showDescription
+            |
+            |Judul Alternatif : $alternativeTitle
+            |Seri             : $seriesParser
+            """.trimMargin().replace(Regex(" +"), " ")
         }
         val genres = mutableListOf<String>()
         infoElement.select("div.tags > a").forEach { element ->
