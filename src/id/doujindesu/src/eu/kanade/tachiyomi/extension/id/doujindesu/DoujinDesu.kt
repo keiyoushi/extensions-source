@@ -323,12 +323,26 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     // Search & FIlter
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val author = filters.filterIsInstance<AuthorFilter>().firstOrNull()?.state?.trim()
         val group = filters.filterIsInstance<GroupFilter>().firstOrNull()?.state?.trim()
         val series = filters.filterIsInstance<SeriesFilter>().firstOrNull()?.state?.trim()
 
+        // Author filter handling ⬇️✨
+        if (!author.isNullOrBlank()) {
+            val slug = author.toMultiSlug()
+            if (slug.isNotBlank()) {
+                val authorUrl = if (page == 1) {
+                    "$baseUrl/author/$slug/"
+                } else {
+                    "$baseUrl/author/$slug/page/$page/"
+                }
+                return GET(authorUrl, headers)
+            }
+        }
+
         // Group filter handling
         if (!group.isNullOrBlank()) {
-            val slug = group.toGroupSeriesSlug()
+            val slug = group.toMultiSlug()
             if (slug.isNotBlank()) {
                 val groupUrl = if (page == 1) {
                     "$baseUrl/group/$slug/"
@@ -341,7 +355,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
         // Series filter handling
         if (!series.isNullOrBlank()) {
-            val slug = series.toGroupSeriesSlug()
+            val slug = series.toMultiSlug()
             if (slug.isNotBlank()) {
                 val seriesUrl = if (page == 1) {
                     "$baseUrl/series/$slug/"
@@ -366,9 +380,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                     val order = filter.values[filter.state]
                     url.addQueryParameter("order", order.key)
                 }
-                is AuthorFilter -> {
-                    url.addQueryParameter("author", filter.state)
-                }
                 is CharacterFilter -> {
                     url.addQueryParameter("character", filter.state)
                 }
@@ -389,7 +400,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         return GET(url.build(), headers)
     }
 
-    private fun String.toGroupSeriesSlug(): String {
+    private fun String.toMultiSlug(): String {
         return this
             .trim()
             .lowercase()
@@ -401,8 +412,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         basicInformationFromElement(element)
 
     override fun getFilterList() = FilterList(
-        Filter.Header("NB: Filter bisa digabungkan dengan memakai pencarian teks selain Group dan Series!"),
+        Filter.Header("NB: Filter bisa digabungkan dengan memakai pencarian teks selain Author, Group dan Series!"),
         Filter.Separator(),
+        Filter.Header("NB: Gunakan ini untuk filter per author saja dan tidak bisa digabungkan dengan memakai pencarian teks dan filter lainnya!"),
         AuthorFilter(),
         Filter.Separator(),
         Filter.Header("NB: Gunakan ini untuk filter per grup saja dan tidak bisa digabungkan dengan memakai pencarian teks dan filter lainnya!"),
@@ -411,7 +423,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Filter.Header("NB: Gunakan ini untuk filter per series saja, tidak bisa digabungkan dengan memakai pencarian teks dan filter lainnya!"),
         SeriesFilter(),
         Filter.Separator(),
+        Filter.Header("NB: Untuk Character Filter akan mengambil hasil apapun jika diinput, misal 'alice', maka hasil akan memunculkan semua Karakter yang memiliki nama 'Alice', bisa digabungkan dengan filter lainnya"),
         CharacterFilter(),
+        Filter.Separator(),
         StatusList(statusList),
         CategoryNames(categoryNames),
         OrderBy(orderBy),
