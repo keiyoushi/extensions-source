@@ -51,7 +51,7 @@ class ComicHubFree : Source, ParsedHttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return GET("$baseUrl/search-comic?key=$query&page=$page")
     }
-x
+
     override fun pageListRequest(chapter: SChapter): Request {
         return GET(baseUrl + chapter.url + "/all")
     }
