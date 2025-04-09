@@ -113,7 +113,6 @@ class DocTruyen3Q :
                     val newBaseUrl = "${response.request.url.scheme}://$newHost"
                     preferences.edit()
                         .putString(BASE_URL_PREF, newBaseUrl)
-                        .putString(DEFAULT_BASE_URL_PREF, newBaseUrl)
                         .apply()
                 }
             }
@@ -123,14 +122,12 @@ class DocTruyen3Q :
         .build()
 
     init {
-        if (preferences.getBoolean(AUTO_CHANGE_DOMAIN_PREF, false)) {
-            preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-                if (prefDefaultBaseUrl != super.baseUrl) {
-                    preferences.edit()
-                        .putString(BASE_URL_PREF, super.baseUrl)
-                        .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
-                        .apply()
-                }
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != super.baseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, super.baseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
+                    .apply()
             }
         }
     }
