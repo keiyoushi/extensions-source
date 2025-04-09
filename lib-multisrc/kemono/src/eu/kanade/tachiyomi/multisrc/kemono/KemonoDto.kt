@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 @Serializable
