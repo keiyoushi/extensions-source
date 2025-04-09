@@ -397,12 +397,15 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         return GET(url.build(), headers)
     }
 
+    private val nonAlphaNumSpaceDashRegex = Regex("[^a-z0-9\\s-]")
+    private val multiSpaceRegex = Regex("\\s+")
+
     private fun String.toMultiSlug(): String {
         return this
             .trim()
             .lowercase()
-            .replace(Regex("[^a-z0-9\\s-]"), "")
-            .replace(Regex("\\s+"), "-")
+            .replace(nonAlphaNumSpaceDashRegex, "")
+            .replace(multiSpaceRegex, "-")
     }
 
     override fun searchMangaFromElement(element: Element): SManga =
