@@ -56,8 +56,6 @@ class ComicHubFree : Source, ParsedHttpSource() {
         return GET(baseUrl + chapter.url + "/all")
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = super.mangaDetailsRequest(manga)
-
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             setUrlWithoutDomain(element.child(0).attr("abs:href"))
