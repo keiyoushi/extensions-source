@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -17,6 +16,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -24,8 +25,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -39,9 +38,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     // Private stuff
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val DATE_FORMAT by lazy {
         SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id"))
@@ -323,11 +320,43 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     // Search & FIlter
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val author = filters.filterIsInstance<AuthorFilter>().firstOrNull()?.state?.trim()
-        val group = filters.filterIsInstance<GroupFilter>().firstOrNull()?.state?.trim()
-        val series = filters.filterIsInstance<SeriesFilter>().firstOrNull()?.state?.trim()
+        // Anything else filter handling
+        val url = "$baseUrl/manga/page/$page/".toHttpUrl().newBuilder()
+        url.addQueryParameter("title", query.ifBlank { "" })
 
-        // Author filter handling ⬇️✨
+        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            when (filter) {
+                is CategoryNames -> {
+                    val category = filter.values[filter.state]
+                    url.addQueryParameter("typex", category.key)
+                }
+                is OrderBy -> {
+                    val order = filter.values[filter.state]
+                    url.addQueryParameter("order", order.key)
+                }
+                is CharacterFilter -> {
+                    url.addQueryParameter("character", filter.state)
+                }
+                is GenreList -> {
+                    filter.state
+                        .filter { it.state }
+                        .forEach { genre ->
+                            url.addQueryParameter("genre[]", genre.id)
+                        }
+                }
+                is StatusList -> {
+                    val status = filter.values[filter.state]
+                    url.addQueryParameter("statusx", status.key)
+                }
+                else -> {}
+            }
+        }
+
+        val author = filters.firstInstanceOrNull<AuthorFilter>()?.state?.trim()
+        val group = filters.firstInstanceOrNull<GroupFilter>()?.state?.trim()
+        val series = filters.firstInstanceOrNull<SeriesFilter>()?.state?.trim()
+
+        // Author filter handling
         if (!author.isNullOrBlank()) {
             val slug = author.toMultiSlug()
             if (slug.isNotBlank()) {
@@ -365,38 +394,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 return GET(seriesUrl, headers)
             }
         }
-
-        // Anything else filter handling
-        val url = "$baseUrl/manga/page/$page/".toHttpUrl().newBuilder()
-        url.addQueryParameter("title", query.ifBlank { "" })
-
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-            when (filter) {
-                is CategoryNames -> {
-                    val category = filter.values[filter.state]
-                    url.addQueryParameter("typex", category.key)
-                }
-                is OrderBy -> {
-                    val order = filter.values[filter.state]
-                    url.addQueryParameter("order", order.key)
-                }
-                is CharacterFilter -> {
-                    url.addQueryParameter("character", filter.state)
-                }
-                is GenreList -> {
-                    filter.state
-                        .filter { it.state }
-                        .forEach { genre ->
-                            url.addQueryParameter("genre[]", genre.id)
-                        }
-                }
-                is StatusList -> {
-                    val status = filter.values[filter.state]
-                    url.addQueryParameter("statusx", status.key)
-                }
-                else -> {}
-            }
-        }
         return GET(url.build(), headers)
     }
 
@@ -428,6 +425,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     )
 
     // Detail Parse
+
+    private val chapterListRegex = Regex("""\d+[-–]?\d*\..+<br>""", RegexOption.IGNORE_CASE)
+    private val htmlTagRegex = Regex("<[^>]*>")
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("section.metadata")!!
@@ -474,54 +474,55 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         } else {
             val pb2Element = infoElement.selectFirst("div.pb-2")
 
-            val showDescription = if (pb2Element != null) {
-                val paragraphs = pb2Element.select("p")
+            val showDescription = pb2Element?.let { element ->
+                val paragraphs = element.select("p")
                 val firstText = paragraphs.firstOrNull()?.text()?.trim()?.lowercase()
 
-                // CASE 1: Manga 2 — Versi 1 (Gabungan dalam satu paragraf setelah <br>)
-                val mergedChapterElement = paragraphs.find {
-                    it.html().contains("<strong>Sinopsis:</strong><br>") &&
-                        it.html().contains(Regex("""\d+[-–]?\d*\..+<br>"""))
+                // CASE 1: Gabungan chapter dalam satu paragraf
+                val mergedChapterElement = element.select("p:has(strong:matchesOwn(^\\s*Sinopsis\\s*:))").firstOrNull {
+                    chapterListRegex.containsMatchIn(it.html())
                 }
+
                 if (mergedChapterElement != null) {
                     val chapterList = mergedChapterElement.html()
-                        .substringAfter("<strong>Sinopsis:</strong><br>")
                         .split("<br>")
-                        .map { it.replace(Regex("<[^>]*>"), "").trim() }
+                        .drop(1)
+                        .map { it.replace(htmlTagRegex, "").trim() }
                         .filter { it.isNotEmpty() }
 
-                    "Daftar Chapter: \n" + chapterList.joinToString(" | ")
+                    return@let "Daftar Chapter:\n" + chapterList.joinToString(" | ")
                 }
 
-                // CASE 2: Dua paragraf, p[0] = "Sinopsis:", p[1] = daftar chapter
-                else if (
+                // CASE 2: Dua paragraf: p[0] = "Sinopsis:", p[1] = daftar chapter
+                if (
                     firstText == "sinopsis:" &&
                     paragraphs.size > 1 &&
-                    paragraphs[1].html().contains(Regex("""\d+[-–]?\d*\..+<br>"""))
+                    chapterListRegex.containsMatchIn(paragraphs[1].html())
                 ) {
                     val chapterList = paragraphs[1].html()
                         .split("<br>")
-                        .map { it.replace(Regex("<[^>]*>"), "").trim() }
+                        .map { it.replace(htmlTagRegex, "").trim() }
                         .filter { it.isNotEmpty() }
 
-                    "Daftar Chapter: \n" + chapterList.joinToString(" | ")
+                    return@let "Daftar Chapter:\n" + chapterList.joinToString(" | ")
                 }
 
-                // CASE 3: Manga 1 — Sinopsis biasa, diawali oleh <strong>Sinopsis:</strong><br> dan paragraf lanjut
-                else if (paragraphs.any { it.html().contains("<strong>Sinopsis:</strong><br>") }) {
-                    val sinopsisStartIndex = paragraphs.indexOfFirst {
-                        it.html().contains("<strong>Sinopsis:</strong><br>")
-                    }
+                // CASE 3: Sinopsis biasa pakai <strong>Sinopsis:</strong> di p awal
+                val sinopsisPara = element.select("p:has(strong:matchesOwn(^\\s*Sinopsis\\s*:))")
+                if (sinopsisPara.isNotEmpty()) {
+                    val sinopsisStart = sinopsisPara.first()!!
+                    val htmlSplit = sinopsisStart.html().split("<br>")
+
+                    val startText = htmlSplit.getOrNull(1)?.replace(htmlTagRegex, "")?.trim().orEmpty()
 
                     val sinopsisTexts = buildList {
-                        val startText = paragraphs[sinopsisStartIndex].html()
-                            .substringAfter("<strong>Sinopsis:</strong><br>")
-                            .replace(Regex("<[^>]*>"), "")
-                            .trim()
-                        add(startText)
+                        if (startText.isNotEmpty()) add(startText)
 
-                        for (i in sinopsisStartIndex + 1 until paragraphs.size) {
-                            val content = paragraphs[i].text().trim()
+                        val allP = element.select("p")
+                        val startIndex = allP.indexOf(sinopsisStart)
+
+                        for (i in startIndex + 1 until allP.size) {
+                            val content = allP[i].text().trim()
                             if (!content.lowercase().startsWith("download")) {
                                 add(content)
                             } else {
@@ -529,34 +530,32 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                             }
                         }
                     }
-
-                    "Sinopsis:\n" + sinopsisTexts.joinToString("\n\n")
+                    return@let "Sinopsis:\n" + sinopsisTexts.joinToString("\n\n")
                 }
 
-                // CASE 4: Manhwa style — Hanya 1 paragraf dengan <br> di dalamnya
-                else if (
+                // CASE 4: Satu paragraf saja dengan <strong> dan <br>
+                if (
                     paragraphs.size == 1 &&
-                    paragraphs[0].html().contains("<strong>Sinopsis:</strong><br>")
+                    element.select("p:has(strong:matchesOwn(^\\s*Sinopsis\\s*:))").isNotEmpty()
                 ) {
-                    val single = paragraphs[0].html()
-                        .substringAfter("<strong>Sinopsis:</strong><br>")
-                        .replace(Regex("<[^>]*>"), "")
-                        .trim()
-                    "Sinopsis:\n$single"
+                    val para = paragraphs[0]
+                    val htmlSplit = para.html().split("<br>")
+
+                    val content = htmlSplit.getOrNull(1)?.replace(htmlTagRegex, "")?.trim().orEmpty()
+
+                    return@let "Sinopsis:\n$content"
                 }
 
-                // CASE 5: Fallback — p[0] == "Sinopsis:" lalu p[1+] isi deskripsi
-                else if (firstText == "sinopsis:") {
+                // CASE 5: Fallback
+                if (firstText == "sinopsis:") {
                     val sinopsisLines = paragraphs.drop(1)
                         .map { it.text().trim() }
                         .filter { !it.lowercase().startsWith("download") }
-                    "Sinopsis:\n" + sinopsisLines.joinToString("\n\n")
-                } else {
-                    ""
+
+                    return@let "Sinopsis:\n" + sinopsisLines.joinToString("\n\n")
                 }
-            } else {
-                ""
-            }
+                return@let ""
+            } ?: ""
             """
             |$showDescription
             |
