@@ -6,7 +6,7 @@ import java.util.Locale
 
 class BarManga : Madara(
     "BarManga",
-    "https://barmanga.com",
+    "https://archiviumbar.com",
     "es",
     SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
