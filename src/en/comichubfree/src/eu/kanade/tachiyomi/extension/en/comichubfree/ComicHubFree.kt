@@ -1,21 +1,22 @@
 package eu.kanade.tachiyomi.extension.en.comichubfree
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ComicHubFree : Source, ParsedHttpSource() {
+class ComicHubFree : ParsedHttpSource() {
+    private val dateFormat = SimpleDateFormat("d-MMM-yyyy", Locale.getDefault())
+
     override val baseUrl = "https://comichubfree.com"
 
     override val lang = "en"
@@ -41,29 +42,44 @@ class ComicHubFree : Source, ParsedHttpSource() {
     override fun chapterListSelector() = "div.episode-list > div > table > tbody > tr"
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/popular-comic?page=$page")
+        val url = "$baseUrl/popular-comic".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+        }.build()
+
+        return GET(url, headers)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/new-comic?page=$page")
+        val url = "$baseUrl/new-comic".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+        }.build()
+
+        return GET(url, headers)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search-comic?key=$query&page=$page")
+        val url = "$baseUrl/search-comic".toHttpUrl().newBuilder().apply {
+            addQueryParameter("key", query)
+            addQueryParameter("page", page.toString())
+        }.build()
+
+        return GET(url, headers)
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + chapter.url + "/all")
+        val url = (baseUrl + chapter.url + "/all").toHttpUrl()
+
+        return GET(url, headers)
     }
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            setUrlWithoutDomain(element.child(0).attr("abs:href"))
+            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
             title = element.selectFirst("h3")!!.text()
-            val image = element.selectFirst("img")!!
+            val image = element.selectFirst("img")
             thumbnail_url = when {
-                image.hasAttr("data-src") -> image.attr("abs:data-src")
-                else -> image.attr("abs:src")
+                image?.hasAttr("data-src") == true -> image.absUrl("data-src")
+                else -> image?.absUrl("src")
             }
         }
     }
@@ -77,58 +93,47 @@ class ComicHubFree : Source, ParsedHttpSource() {
     }
 
     override fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.select("a").first()!!
-        val dateElement = element.select("td").last()!!
+        val urlElement = element.selectFirst("a")!!
+        val dateElement = element.select("td:last-of-type")
 
-        val chapter = SChapter.create()
-        chapter.name = urlElement.text()
-        chapter.setUrlWithoutDomain(urlElement.attr("href"))
-        chapter.date_upload = dateElement.text().let {
-            SimpleDateFormat("d-MMM-yyyy", Locale.getDefault()).parse(it)?.time ?: 0L
+        val chapter = SChapter.create().apply {
+            setUrlWithoutDomain(urlElement.attr("href"))
+            name = urlElement.text()
+            date_upload = dateFormat.tryParse(dateElement?.text())
         }
 
         return chapter
     }
 
     private fun parseStatus(status: String): Int {
-        if (status == "Ongoing") {
-            return SManga.ONGOING
-        } else if (status == "Completed") {
-            return SManga.COMPLETED
+        return when {
+            (status == "Ongoing") -> SManga.ONGOING
+            (status == "Completed") -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
-
-        return SManga.UNKNOWN
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("div.movie-info").first()!!
-        val seriesInfoElement = infoElement.select("div.series-info")
-        val seriesDescriptionElement = infoElement.select("div#film-content")
+        val infoElement = document.selectFirst("div.movie-info")!!
+        val seriesInfoElement = infoElement.selectFirst("div.series-info")
+        val seriesDescriptionElement = infoElement.selectFirst("div#film-content")
 
-        val authorElement = seriesInfoElement.select("dt").firstOrNull { it.text().trim() == "Author:" }?.nextElementSibling()
-        val statusElement = seriesInfoElement.select("dt").firstOrNull { it.text().trim() == "Status:" }?.nextElementSibling()
+        val authorElement = seriesInfoElement?.select("dt:contains(Authors:) + dd")
+        val statusElement = seriesInfoElement?.select("dt:contains(Status:) + dd")
 
-        val manga = SManga.create()
-        manga.description = seriesDescriptionElement.text()
-        val image = seriesInfoElement.select("img")
-        manga.thumbnail_url = when {
-            image.hasAttr("data-src") -> image.attr("abs:data-src")
-            else -> image.attr("abs:src")
-        }
-        if (authorElement?.tagName() == "dd") {
-            manga.author = authorElement.text()
-        }
-        if (statusElement?.tagName() == "dd") {
-            manga.status = statusElement.text().orEmpty().let { parseStatus(it) }
+        val image = seriesInfoElement?.select("img")
+
+        val manga = SManga.create().apply {
+            description = seriesDescriptionElement?.text()
+            thumbnail_url = when {
+                image?.hasAttr("data-src") == true -> image.attr("abs:data-src")
+                else -> image?.attr("abs:src")
+            }
+            author = authorElement?.text()
+            status = statusElement?.text().orEmpty().let { parseStatus(it) }
         }
 
         return manga
-    }
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(super.mangaDetailsRequest(manga))
-            .asObservableSuccess()
-            .map { it -> mangaDetailsParse(it).apply { initialized = true } }
     }
 
     override fun pageListParse(document: Document): List<Page> {
