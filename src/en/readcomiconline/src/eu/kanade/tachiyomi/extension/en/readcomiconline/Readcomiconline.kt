@@ -443,6 +443,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
-        private val KEY_REGEX = """\.attr\('src',\s*([^\(]+)\(([^\[]+)\[currImage\]\)""".toRegex()
+        private val KEY_REGEX = """\.attr\('src',\s*([^\(]+)\(([^\[]+)\[currImage \+ 1\]\)""".toRegex()
     }
 }
