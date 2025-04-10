@@ -379,7 +379,7 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         SwitchPreferenceCompat(screen.context).apply {
             key = FETCH_BOOKMARKS_PREF
             title = "Usar marcadores"
-            summary = "Usa los marcadores del sitio para obtener la url actual de la serie.\nRequiere iniciar sesión en WebView y seguir la serie.\nDeberá migrar almenos una vez para que funcione."
+            summary = "Usa los marcadores del sitio para obtener la url actual de la serie.\nRequiere iniciar sesión en WebView y seguir la serie."
             setDefaultValue(FETCH_BOOKMARKS_PREF_DEFAULT)
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, "Reinicie la aplicación para aplicar los cambios", Toast.LENGTH_LONG).show()
