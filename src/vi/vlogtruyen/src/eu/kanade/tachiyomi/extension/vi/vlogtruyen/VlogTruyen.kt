@@ -41,7 +41,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val id: Long = 6425642624422299254
 
-    private val defaultBaseUrl = "https://vlogtruyen45.com"
+    private val defaultBaseUrl = "https://vlogtruyen48.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -156,7 +156,10 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override fun searchMangaSelector(): String = latestUpdatesSelector()
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val loginRequired = document.selectFirst(".area-show-content span")
 
         if (loginRequired!!.text() == "Xin lỗi, bạn cần đăng nhập để đọc được chapter này!") {
