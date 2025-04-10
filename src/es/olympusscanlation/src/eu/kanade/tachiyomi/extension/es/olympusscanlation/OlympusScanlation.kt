@@ -31,7 +31,7 @@ import kotlin.math.min
 
 class OlympusScanlation : HttpSource(), ConfigurableSource {
 
-    override val versionId = 2
+    override val versionId = 3
     private val isCi = System.getenv("CI") == "true"
 
     override val baseUrl: String get() = when {
@@ -104,7 +104,14 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<PayloadHomeDto>()
-        val mangaList = result.data.popularComics.filter { it.type == "comic" }.map { it.toSManga() }
+        val mangaList = result.data.popularComics
+            .filter { it.type == "comic" }
+            .map {
+                preferences.slugMap = preferences.slugMap.toMutableMap()
+                    .also { map -> map[it.id] = it.slug }
+
+                it.toSManga()
+            }
         return MangasPage(mangaList, hasNextPage = false)
     }
 
@@ -116,7 +123,13 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<NewChaptersDto>()
-        val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
+        val mangaList = result.data.filter { it.type == "comic" }
+            .map {
+                preferences.slugMap = preferences.slugMap.toMutableMap()
+                    .also { map -> map[it.id] = it.slug }
+
+                it.toSManga()
+            }
         return MangasPage(mangaList, result.hasNextPage())
     }
 
@@ -162,7 +175,13 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.toString().startsWith("$apiBaseUrl/api/search")) {
             val result = response.parseAs<PayloadMangaDto>()
-            val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
+            val mangaList = result.data.filter { it.type == "comic" }
+                .map {
+                    preferences.slugMap = preferences.slugMap.toMutableMap()
+                        .also { map -> map[it.id] = it.slug }
+
+                    it.toSManga()
+                }
             return MangasPage(mangaList, hasNextPage = false)
         }
 
@@ -190,37 +209,21 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         } catch (_: Exception) { } finally {
             bookmarksState = BookmarksState.FETCHED
         }
-        preferences.bookmarks = bookmarksList
+        preferences.slugMap = preferences.slugMap.toMutableMap()
+            .also { map ->
+                bookmarksList.forEach { bookmark ->
+                    map[bookmark.id!!] = bookmark.slug!!
+                }
+            }
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        val id = manga.url.substringAfterLast("#", "")
-        var slug = manga.url
-            .substringAfter("/series/comic-")
-            .substringBefore("#")
-
-        if (id.isNotBlank() && preferences.bookmarks.isNotEmpty()) {
-            val bookmark = preferences.bookmarks.find { it.id == id.toIntOrNull() }
-            if (bookmark != null) {
-                slug = bookmark.slug!!
-            }
-        }
-
+        val slug = preferences.slugMap[manga.url.toInt()]!!
         return "$baseUrl/series/comic-$slug"
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("#", "")
-        var slug = manga.url
-            .substringAfter("/series/comic-")
-            .substringBefore("#")
-
-        if (id.isNotBlank() && preferences.bookmarks.isNotEmpty()) {
-            val bookmark = preferences.bookmarks.find { it.id == id.toIntOrNull() }
-            if (bookmark != null) {
-                slug = bookmark.slug!!
-            }
-        }
+        val slug = preferences.slugMap[manga.url.toInt()]!!
 
         val apiUrl = "$apiBaseUrl/api/series/$slug?type=comic"
         return GET(url = apiUrl, headers = headers)
@@ -232,52 +235,32 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val mangaId = chapter.url.substringAfterLast("#", "")
-        val chapterId = chapter.url
-            .substringAfter("/capitulo/")
-            .substringBefore("/comic")
-        var mangaSlug = chapter.url
-            .substringAfter("/comic-")
-            .substringBefore("#")
-
-        if (mangaId.isNotBlank() && preferences.bookmarks.isNotEmpty()) {
-            val bookmark = preferences.bookmarks.find { it.id == mangaId.toIntOrNull() }
-            if (bookmark != null) {
-                mangaSlug = bookmark.slug!!
-            }
-        }
+        val mangaId = chapter.url.substringBefore("/")
+        val chapterId = chapter.url.substringAfter("/")
+        val mangaSlug = preferences.slugMap[mangaId.toInt()]!!
         return "$baseUrl/capitulo/$chapterId/comic-$mangaSlug"
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url.substringAfterLast("#", "")
-        var slug = manga.url
-            .substringAfter("/series/comic-")
-            .substringBefore("#")
+        val mangaId = manga.url
+        val mangaSlug = preferences.slugMap[mangaId.toInt()]!!
 
-        if (id.isNotEmpty() && preferences.bookmarks.isNotEmpty()) {
-            val bookmark = preferences.bookmarks.find { it.id == id.toIntOrNull() }
-            if (bookmark != null) {
-                slug = bookmark.slug!!
-            }
-        }
-
-        return paginatedChapterListRequest(slug, id, 1)
+        return paginatedChapterListRequest(mangaSlug, mangaId, 1)
     }
 
-    private fun paginatedChapterListRequest(slug: String, id: String, page: Int): Request {
+    private fun paginatedChapterListRequest(mangaSlug: String, mangaId: String, page: Int): Request {
         return GET(
-            url = "$apiBaseUrl/api/series/$slug/chapters?page=$page&direction=desc&type=comic#$id",
+            url = "$apiBaseUrl/api/series/$mangaSlug/chapters?page=$page&direction=desc&type=comic#$mangaId",
             headers = headers,
         )
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaId = response.request.url.fragment ?: ""
-        val slug = response.request.url
-            .toString()
+        val slug = response.request.url.toString()
             .substringAfter("/series/")
             .substringBefore("/chapters")
+
         val data = response.parseAs<PayloadChapterDto>()
         var resultSize = data.data.size
         var page = 2
@@ -289,28 +272,15 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
             resultSize += newData.data.size
             page += 1
         }
-        return data.data.map { it.toSChapter(slug, mangaId, dateFormat) }
+        return data.data.map { it.toSChapter(mangaId, dateFormat) }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val mangaId = chapter.url.substringAfterLast("#", "")
+        val mangaId = chapter.url.substringBefore("/")
+        val chapterId = chapter.url.substringAfter("/")
+        val mangaSlug = preferences.slugMap[mangaId.toInt()]!!
 
-        val id = chapter.url
-            .substringAfter("/capitulo/")
-            .substringBefore("/comic")
-
-        var slug = chapter.url
-            .substringAfter("comic-")
-            .substringBefore("/comic")
-
-        if (mangaId.isNotBlank() && preferences.bookmarks.isNotEmpty()) {
-            val bookmark = preferences.bookmarks.find { it.id == mangaId.toIntOrNull() }
-            if (bookmark != null) {
-                slug = bookmark.slug!!
-            }
-        }
-
-        return GET("$apiBaseUrl/api/series/$slug/chapters/$id?type=comic")
+        return GET("$apiBaseUrl/api/series/$mangaSlug/chapters/$chapterId?type=comic")
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -454,20 +424,21 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, FETCH_DOMAIN_PREF_DEFAULT)
     private fun SharedPreferences.fetchBookmarksPref() = getBoolean(FETCH_BOOKMARKS_PREF, FETCH_BOOKMARKS_PREF_DEFAULT)
 
-    private var _bookmarks: List<BookmarkDto>? = null
-    private var SharedPreferences.bookmarks: List<BookmarkDto>
+    private var _slugMap: Map<Int, String>? = null
+    private var SharedPreferences.slugMap: Map<Int, String>
         get() {
-            _bookmarks?.let { return it }
-            val json = getString(BOOKMARKS_MAP, "[]")!!
-            return try {
-                json.parseAs<List<BookmarkDto>>().also { _bookmarks = it }
+            _slugMap?.let { return it }
+            val json = getString(SLUG_MAP, "{}")!!
+            _slugMap = try {
+                json.parseAs<MutableMap<Int, String>>()
             } catch (_: SerializationException) {
-                emptyList()
+                emptyMap<Int, String>().toMutableMap()
             }
+            return _slugMap!!
         }
-        set(list) {
-            _bookmarks = list
-            edit().putString(BOOKMARKS_MAP, list.toJson()).apply()
+        set(map) {
+            _slugMap = map
+            edit().putString(SLUG_MAP, map.toJson()).apply()
         }
 
     companion object {
@@ -480,6 +451,6 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         private const val FETCH_BOOKMARKS_PREF = "fetchBookmarks"
         private const val FETCH_BOOKMARKS_PREF_DEFAULT = false
 
-        private const val BOOKMARKS_MAP = "bookmarksMap"
+        private const val SLUG_MAP = "slugMap"
     }
 }

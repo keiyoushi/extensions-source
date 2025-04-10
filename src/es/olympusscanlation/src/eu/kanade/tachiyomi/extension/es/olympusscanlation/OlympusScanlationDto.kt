@@ -56,9 +56,9 @@ class PayloadMangaDto(val data: List<MangaDto>)
 
 @Serializable
 class MangaDto(
-    private val id: Int,
+    val id: Int,
     private val name: String,
-    private val slug: String,
+    val slug: String,
     private val cover: String? = null,
     val type: String? = null,
     private val summary: String? = null,
@@ -67,7 +67,7 @@ class MangaDto(
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
-        url = "/series/comic-$slug#$id"
+        url = id.toString()
         thumbnail_url = cover
     }
 
@@ -100,15 +100,15 @@ class NewChaptersDto(
 
 @Serializable
 class LatestMangaDto(
-    private val id: Int,
+    val id: Int,
     private val name: String,
-    private val slug: String,
+    val slug: String,
     private val cover: String? = null,
     val type: String? = null,
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
-        url = "/series/comic-$slug#$id"
+        url = id.toString()
         thumbnail_url = cover
     }
 }
@@ -127,9 +127,9 @@ class ChapterDto(
     private val name: String,
     @SerialName("published_at") private val date: String,
 ) {
-    fun toSChapter(mangaSlug: String, mangaId: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+    fun toSChapter(mangaId: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
         name = "Capitulo ${this@ChapterDto.name}"
-        url = "/capitulo/$id/comic-$mangaSlug#$mangaId"
+        url = "$mangaId/$id"
         date_upload = try {
             dateFormat.parse(date)!!.time
         } catch (e: ParseException) {
