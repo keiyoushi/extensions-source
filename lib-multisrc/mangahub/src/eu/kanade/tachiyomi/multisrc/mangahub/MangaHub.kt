@@ -12,9 +12,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.Cookie
@@ -27,7 +26,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -53,6 +51,7 @@ abstract class MangaHub(
             filterInclude = listOf("chrome"),
         )
         .addInterceptor(::apiAuthInterceptor)
+        .addInterceptor(::graphQLApiInterceptor)
         .rateLimit(1)
         .build()
 
@@ -66,24 +65,25 @@ abstract class MangaHub(
         .add("Sec-Fetch-Site", "same-origin")
         .add("Upgrade-Insecure-Requests", "1")
 
-    private fun graphQLHeader() = headersBuilder()
-        .set("Accept", "application/json")
-        .set("Content-Type", "application/json")
-        .set("Origin", baseUrl)
-        .set("Sec-Fetch-Dest", "empty")
-        .set("Sec-Fetch-Mode", "cors")
-        .set("Sec-Fetch-Site", "cross-site")
-        .removeAll("Upgrade-Insecure-Requests")
-        .build()
-
-    open val json: Json by injectLazy()
-
     private fun postRequestGraphQL(query: String): Request {
+        val requestHeaders = headersBuilder()
+            .set("Accept", "application/json")
+            .set("Content-Type", "application/json")
+            .set("Origin", baseUrl)
+            .set("Sec-Fetch-Dest", "empty")
+            .set("Sec-Fetch-Mode", "cors")
+            .set("Sec-Fetch-Site", "cross-site")
+            .removeAll("Upgrade-Insecure-Requests")
+            .build()
+
         val body = buildJsonObject {
             put("query", query)
         }
 
-        return POST("$baseApiUrl/graphql", graphQLHeader(), body.toString().toRequestBody())
+        return POST("$baseApiUrl/graphql", requestHeaders, body.toString().toRequestBody())
+            .newBuilder()
+            .tag(GraphQLTag())
+            .build()
     }
 
     private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
@@ -103,6 +103,32 @@ abstract class MangaHub(
             }
 
         return chain.proceed(request)
+    }
+
+    private fun graphQLApiInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        // We won't intercept non-graphql requests (like image retrieval)
+        if (!request.hasGraphQLTag()) {
+            return chain.proceed(request)
+        }
+
+        val response = chain.proceed(request)
+        val apiResponse = response.parseAs<ApiResponse<Unit>>() // We don't care about the data, only the possible error associated with it
+
+        // If we encounter an error, we'll intercept it and throw an error for app to catch
+        if (apiResponse.errors != null) {
+            response.close() // Avoid leaks
+            val errors = apiResponse.errors.joinToString("\n") { it.message }
+            throw IOException(errors)
+        }
+
+        // Everything works fine so proceed
+        return chain.proceed(request)
+    }
+
+    private fun Request.hasGraphQLTag(): Boolean {
+        return this.tag() is GraphQLTag
     }
 
     private fun refreshApiKey(chapter: SChapter) {
@@ -156,7 +182,9 @@ abstract class MangaHub(
         return author + chNum + genres
     }
 
-    private fun mangaRequest(page: Int, order: String): Request = postRequestGraphQL(SEARCH_QUERY(mangaSource, "", "all", order, (page - 1) * 30))
+    private fun mangaRequest(page: Int, order: String): Request {
+        return postRequestGraphQL(SEARCH_QUERY(mangaSource, "", "all", order, (page - 1) * 30))
+    }
 
     // popular
     override fun popularMangaRequest(page: Int): Request = mangaRequest(page, "POPULAR")
@@ -166,9 +194,9 @@ abstract class MangaHub(
     // assign a "signature" based on author name, chapter number, and genres
     // if all of those are the same, then it it's the same manga
     override fun popularMangaParse(response: Response): MangasPage {
-        val mangaList = json.decodeFromString<ApiSearchResponse>(response.body.string())
+        val mangaList = response.parseAs<ApiSearchResponse>()
 
-        val mangas = mangaList.data.search.rows.map {
+        val mangas = mangaList.data!!.search.rows.map {
             SMangaDTO(
                 "$baseUrl/manga/${it.slug}",
                 it.title,
@@ -185,11 +213,14 @@ abstract class MangaHub(
                 }
             }
 
-        return MangasPage(mangas, true)
+        // Entries have a max of 30 per request
+        return MangasPage(mangas, mangaList.data.search.rows.count() == 30)
     }
 
     // latest
-    override fun latestUpdatesRequest(page: Int): Request = mangaRequest(page, "LATEST")
+    override fun latestUpdatesRequest(page: Int): Request {
+        return mangaRequest(page, "LATEST")
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         return popularMangaParse(response)
@@ -197,22 +228,22 @@ abstract class MangaHub(
 
     // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/page/$page".toHttpUrl().newBuilder()
-        url.addQueryParameter("q", query)
+        var order = "POPULAR"
+        var genres = "all"
+
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
                 is OrderBy -> {
-                    val order = filter.values[filter.state]
-                    url.addQueryParameter("order", order.key)
+                    order = filter.values[filter.state].key
                 }
                 is GenreList -> {
-                    val genre = filter.values[filter.state]
-                    url.addQueryParameter("genre", genre.key)
+                    genres = filter.included.joinToString(",").takeIf { it.isNotBlank() } ?: "all"
                 }
                 else -> {}
             }
         }
-        return GET(url.build(), headers)
+
+        return postRequestGraphQL(SEARCH_QUERY(mangaSource, query, genres, order, (page - 1) * 30))
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -220,56 +251,71 @@ abstract class MangaHub(
     }
 
     // manga details
-    override fun mangaDetailsRequest(manga: SManga): Request = postRequestGraphQL(MANGA_DETAILS_QUERY(mangaSource, manga.url.removePrefix("/manga/")))
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return postRequestGraphQL(MANGA_DETAILS_QUERY(mangaSource, manga.url.removePrefix("/manga/")))
+    }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val rawManga = json.decodeFromString<ApiMangaDetailsResponse>(response.body.string())
-        val manga = SManga.create()
+        val rawManga = response.parseAs<ApiMangaDetailsResponse>()
 
-        manga.title = rawManga.data.manga.title!!
-        manga.author = rawManga.data.manga.author
-        manga.artist = rawManga.data.manga.artist
-        manga.genre = rawManga.data.manga.genres
-        manga.description = rawManga.data.manga.description
-        manga.thumbnail_url = "$baseThumbCdnUrl/${rawManga.data.manga.image}"
-        manga.status = when (rawManga.data.manga.status) {
-            "ongoing" -> SManga.ONGOING
-            "completed" -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
-        }
+        return SManga.create().apply {
+            title = rawManga.data!!.manga.title!!
+            author = rawManga.data.manga.author
+            artist = rawManga.data.manga.artist
+            genre = rawManga.data.manga.genres
+            description = rawManga.data.manga.description
+            thumbnail_url = "$baseThumbCdnUrl/${rawManga.data.manga.image}"
+            status = when (rawManga.data.manga.status) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
 
-        // Add alternative title
-        if (rawManga.data.manga.alternativeTitle != null) {
-            manga.description = manga.description.orEmpty().let {
-                if (it.isBlank()) {
-                    "Alternative Name: ${rawManga.data.manga.alternativeTitle}"
-                } else {
-                    "$it\n\nAlternative Name: ${rawManga.data.manga.alternativeTitle}"
+            // Add alternative title
+            if (!rawManga.data.manga.alternativeTitle.isNullOrBlank()) {
+                description = description.orEmpty().let {
+                    if (it.isBlank()) {
+                        "Alternative Name: ${rawManga.data.manga.alternativeTitle}"
+                    } else {
+                        "$it\n\nAlternative Name: ${rawManga.data.manga.alternativeTitle}"
+                    }
                 }
             }
         }
-
-        return manga
     }
 
-    override fun getMangaUrl(manga: SManga): String = "${baseUrl}${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     // Chapters
-    override fun chapterListRequest(manga: SManga): Request = postRequestGraphQL(MANGA_CHAPTER_LIST_QUERY(mangaSource, manga.url.removePrefix("/manga/")))
+    override fun chapterListRequest(manga: SManga): Request {
+        return postRequestGraphQL(MANGA_CHAPTER_LIST_QUERY(mangaSource, manga.url.removePrefix("/manga/")))
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapterList = json.decodeFromString<ApiMangaDetailsResponse>(response.body.string())
+        val chapterList = response.parseAs<ApiMangaDetailsResponse>()
 
-        return chapterList.data.manga.chapters!!.map {
+        return chapterList.data!!.manga.chapters!!.map {
             val chapter = SChapter.create()
 
-            chapter.name = it.title
+            chapter.name = generateChapterName(it.title.trim().replace("\n", " "), it.number)
             chapter.url = "/${chapterList.data.manga.slug}/chapter-${it.number}"
             chapter.chapter_number = it.number
-            chapter.scanlator = "#${if (it.number % 1 == 0f) it.number.toInt() else it.number}" // Title namings are very inconsistent, some of them don't have the numbers specified so we need a way to display it uniformly
             chapter.date_upload = dateFormat.tryParse(it.date)
+
             chapter
-        }.reversed()
+        }.reversed() // The response gives
+    }
+
+    private fun generateChapterName(title: String, number: Float): String {
+        val numberString = "${if (number % 1 == 0f) number.toInt() else number}"
+
+        return if (title.contains(numberString)) {
+            title
+        } else if (title.isNotBlank()) {
+            "Chapter $numberString - $title"
+        } else {
+            "Chapter $numberString"
+        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter${chapter.url}"
@@ -287,17 +333,13 @@ abstract class MangaHub(
             .retry(1)
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapterObject = json.decodeFromString<ApiChapterPagesResponse>(response.body.string())
+        val chapterObject = response.parseAs<ApiChapterPagesResponse>()
 
-        if (chapterObject.data?.chapter == null) {
-            if (chapterObject.errors != null) {
-                val errors = chapterObject.errors.joinToString("\n") { it.message }
-                throw Exception(errors)
-            }
+        if (chapterObject.data!!.chapter == null) {
             throw Exception("Unknown error while processing pages")
         }
 
-        val pages = json.decodeFromString<ApiChapterPages>(chapterObject.data.chapter.pages)
+        val pages = chapterObject.data.chapter!!.pages.parseAs<ApiChapterPages>()
 
         return pages.i.mapIndexed { i, page ->
             Page(i, "", "$baseCdnUrl/${pages.p}$page")
@@ -320,7 +362,11 @@ abstract class MangaHub(
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // filters
-    private class Genre(title: String, val key: String) : Filter.TriState(title) {
+    private class Genre(title: String, val key: String) : Filter.CheckBox(title) {
+        fun getGenreKey(): String {
+            return key
+        }
+
         override fun toString(): String {
             return name
         }
@@ -333,11 +379,14 @@ abstract class MangaHub(
     }
 
     private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Order", orders, 0)
-    private class GenreList(genres: Array<Genre>) : Filter.Select<Genre>("Genres", genres, 0)
+    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
+        val included: List<String>
+            get() = state.filter { it.state }.map { it.getGenreKey() }
+    }
 
     override fun getFilterList() = FilterList(
-        OrderBy(orderBy),
         GenreList(genres),
+        OrderBy(orderBy),
     )
 
     private val orderBy = arrayOf(
@@ -348,70 +397,106 @@ abstract class MangaHub(
         Order("Completed", "COMPLETED"),
     )
 
-    private val genres = arrayOf(
-        Genre("All Genres", "all"),
-        Genre("[no chapters]", "no-chapters"),
-        Genre("4-Koma", "4-koma"),
+    private val genres = listOf(
         Genre("Action", "action"),
         Genre("Adventure", "adventure"),
-        Genre("Award Winning", "award-winning"),
         Genre("Comedy", "comedy"),
-        Genre("Cooking", "cooking"),
-        Genre("Crime", "crime"),
-        Genre("Demons", "demons"),
-        Genre("Doujinshi", "doujinshi"),
+        Genre("Adult", "adult"),
         Genre("Drama", "drama"),
-        Genre("Ecchi", "ecchi"),
-        Genre("Fantasy", "fantasy"),
-        Genre("Food", "food"),
-        Genre("Game", "game"),
-        Genre("Gender bender", "gender-bender"),
-        Genre("Harem", "harem"),
         Genre("Historical", "historical"),
-        Genre("Horror", "horror"),
-        Genre("Isekai", "isekai"),
-        Genre("Josei", "josei"),
-        Genre("Kids", "kids"),
-        Genre("Magic", "magic"),
-        Genre("Magical Girls", "magical-girls"),
-        Genre("Manhua", "manhua"),
+        Genre("Martial Arts", "martial-arts"),
+        Genre("Romance", "romance"),
+        Genre("Ecchi", "ecchi"),
+        Genre("Supernatural", "supernatural"),
+        Genre("Webtoons", "webtoons"),
         Genre("Manhwa", "manhwa"),
-        Genre("Martial arts", "martial-arts"),
+        Genre("Fantasy", "fantasy"),
+        Genre("Harem", "harem"),
+        Genre("Shounen", "shounen"),
+        Genre("Manhua", "manhua"),
         Genre("Mature", "mature"),
+        Genre("Seinen", "seinen"),
+        Genre("Sports", "sports"),
+        Genre("School Life", "school-life"),
+        Genre("Smut", "smut"),
+        Genre("Mystery", "mystery"),
+        Genre("Psychological", "psychological"),
+        Genre("Shounen ai", "shounen-ai"),
+        Genre("Slice of life", "slice-of-life"),
+        Genre("Shoujo ai", "shoujo-ai"),
+        Genre("Cooking", "cooking"),
+        Genre("Horror", "horror"),
+        Genre("Tragedy", "tragedy"),
+        Genre("Doujinshi", "doujinshi"),
+        Genre("Sci-Fi", "sci-fi"),
+        Genre("Yuri", "yuri"),
+        Genre("Yaoi", "yaoi"),
+        Genre("Shoujo", "shoujo"),
+        Genre("Gender bender", "gender-bender"),
+        Genre("Josei", "josei"),
         Genre("Mecha", "mecha"),
         Genre("Medical", "medical"),
-        Genre("Military", "military"),
+        Genre("Magic", "magic"),
+        Genre("4-Koma", "4-koma"),
         Genre("Music", "music"),
-        Genre("Mystery", "mystery"),
-        Genre("One shot", "one-shot"),
-        Genre("Oneshot", "oneshot"),
-        Genre("Parody", "parody"),
-        Genre("Police", "police"),
-        Genre("Psychological", "psychological"),
-        Genre("Romance", "romance"),
-        Genre("School life", "school-life"),
-        Genre("Sci fi", "sci-fi"),
-        Genre("Seinen", "seinen"),
-        Genre("Shotacon", "shotacon"),
-        Genre("Shoujo", "shoujo"),
-        Genre("Shoujo ai", "shoujo-ai"),
-        Genre("Shoujoai", "shoujoai"),
-        Genre("Shounen", "shounen"),
-        Genre("Shounen ai", "shounen-ai"),
-        Genre("Shounenai", "shounenai"),
-        Genre("Slice of life", "slice-of-life"),
-        Genre("Smut", "smut"),
-        Genre("Space", "space"),
-        Genre("Sports", "sports"),
-        Genre("Super Power", "super-power"),
-        Genre("Superhero", "superhero"),
-        Genre("Supernatural", "supernatural"),
-        Genre("Thriller", "thriller"),
-        Genre("Tragedy", "tragedy"),
-        Genre("Vampire", "vampire"),
         Genre("Webtoon", "webtoon"),
-        Genre("Webtoons", "webtoons"),
+        Genre("Isekai", "isekai"),
+        Genre("Game", "game"),
+        Genre("Award Winning", "award-winning"),
+        Genre("Oneshot", "oneshot"),
+        Genre("Demons", "demons"),
+        Genre("Military", "military"),
+        Genre("Police", "police"),
+        Genre("Super Power", "super-power"),
+        Genre("Food", "food"),
+        Genre("Kids", "kids"),
+        Genre("Magical Girls", "magical-girls"),
         Genre("Wuxia", "wuxia"),
-        Genre("Yuri", "yuri"),
+        Genre("Superhero", "superhero"),
+        Genre("Thriller", "thriller"),
+        Genre("Crime", "crime"),
+        Genre("Philosophical", "philosophical"),
+        Genre("Adaptation", "adaptation"),
+        Genre("Full Color", "full-color"),
+        Genre("Crossdressing", "crossdressing"),
+        Genre("Reincarnation", "reincarnation"),
+        Genre("Manga", "manga"),
+        Genre("Cartoon", "cartoon"),
+        Genre("Survival", "survival"),
+        Genre("Comic", "comic"),
+        Genre("English", "english"),
+        Genre("Harlequin", "harlequin"),
+        Genre("Time Travel", "time-travel"),
+        Genre("Traditional Games", "traditional-games"),
+        Genre("Reverse Harem", "reverse-harem"),
+        Genre("Animals", "animals"),
+        Genre("Aliens", "aliens"),
+        Genre("Loli", "loli"),
+        Genre("Video Games", "video-games"),
+        Genre("Monsters", "monsters"),
+        Genre("Office Workers", "office-workers"),
+        Genre("system", "system"),
+        Genre("Villainess", "villainess"),
+        Genre("Zombies", "zombies"),
+        Genre("Vampires", "vampires"),
+        Genre("Violence", "violence"),
+        Genre("Monster Girls", "monster-girls"),
+        Genre("Anthology", "anthology"),
+        Genre("Ghosts", "ghosts"),
+        Genre("Delinquents", "delinquents"),
+        Genre("Post-Apocalyptic", "post-apocalyptic"),
+        Genre("Xianxia", "xianxia"),
+        Genre("Xuanhuan", "xuanhuan"),
+        Genre("R-18", "r-18"),
+        Genre("Cultivation", "cultivation"),
+        Genre("Rebirth", "rebirth"),
+        Genre("Gore", "gore"),
+        Genre("Russian", "russian"),
+        Genre("Samurai", "samurai"),
+        Genre("Ninja", "ninja"),
+        Genre("Revenge", "revenge"),
+        Genre("Cheat Systems", "cheat-systems"),
+        Genre("Dungeons", "dungeons"),
+        Genre("Overpowered", "overpowered"),
     )
 }
