@@ -20,7 +20,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.CacheControl
 import okhttp3.Call
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -52,7 +52,7 @@ class Hitomi(
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::updateImageUrlInterceptor)
+        .addInterceptor(::imageUrlInterceptor)
         .apply {
             interceptors().add(0, ::streamResetRetry)
         }
@@ -491,18 +491,20 @@ class Hitomi(
         }.awaitAll().filterNotNull()
     }
 
-    private suspend fun Gallery.toSManga() = SManga.create().apply {
+    private fun Gallery.toSManga() = SManga.create().apply {
         title = this@toSManga.title
         url = galleryurl
         author = groups?.joinToString { it.formatted } ?: artists?.joinToString { it.formatted }
         artist = artists?.joinToString { it.formatted }
         genre = tags?.joinToString { it.formatted }
         thumbnail_url = files.first().let {
-            val hash = it.hash
-            val imageId = imageIdFromHash(hash)
-            val subDomain = 'a' + subdomainOffset(imageId)
-
-            "https://${subDomain}tn.$cdnDomain/avifbigtn/${thumbPathFromHash(hash)}/$hash.avif"
+            HttpUrl.Builder().apply {
+                scheme("https")
+                host(IMAGE_LOOPBACK_HOST)
+                addQueryParameter(IMAGE_THUMBNAIL, "true")
+                addQueryParameter(IMAGE_GIF, it.isGif.toString())
+                fragment(it.hash)
+            }.toString()
         }
         description = buildString {
             japaneseTitle?.let {
@@ -571,11 +573,13 @@ class Hitomi(
             .substringBefore(".")
 
         return gallery.files.mapIndexed { idx, img ->
-            // actual logic in updateImageUrlInterceptor
-            val imageUrl = "http://127.0.0.1".toHttpUrl().newBuilder()
-                .fragment(img.hash)
-                .build()
-                .toString()
+            // actual logic in imageUrlInterceptor
+            val imageUrl = HttpUrl.Builder().apply {
+                scheme("https")
+                host(IMAGE_LOOPBACK_HOST)
+                addQueryParameter(IMAGE_GIF, img.isGif.toString())
+                fragment(img.hash)
+            }.toString()
 
             Page(
                 idx,
@@ -677,18 +681,38 @@ class Hitomi(
         }
     }
 
-    private fun updateImageUrlInterceptor(chain: Interceptor.Chain): Response {
+    private fun imageUrlInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (request.url.host != "127.0.0.1") {
+        if (request.url.host != IMAGE_LOOPBACK_HOST) {
             return chain.proceed(request)
         }
 
         val hash = request.url.fragment!!
-        val commonId = runBlocking { commonImageId() }
-        val imageId = imageIdFromHash(hash)
-        val subDomain = runBlocking { (subdomainOffset(imageId) + 1) }
+        val isThumbnail = request.url.queryParameter(IMAGE_THUMBNAIL) == "true"
+        val isGif = request.url.queryParameter(IMAGE_GIF) == "true"
 
-        val imageUrl = "https://a$subDomain.$cdnDomain/$commonId$imageId/$hash.avif"
+        val type = if (isGif) {
+            "webp"
+        } else {
+            "avif"
+        }
+        val imageId = imageIdFromHash(hash)
+        val subDomainOffset = runBlocking { subdomainOffset(imageId) }
+
+        val imageUrl = if (isThumbnail) {
+            val subDomain = "${'a' + subDomainOffset}tn"
+
+            "https://$subDomain.$cdnDomain/${type}bigtn/${thumbPathFromHash(hash)}/$hash.$type"
+        } else {
+            val commonId = runBlocking { commonImageId() }
+            val subDomain = if (isGif) {
+                "w${subDomainOffset + 1}"
+            } else {
+                "a${subDomainOffset + 1}"
+            }
+
+            "https://$subDomain.$cdnDomain/$commonId$imageId/$hash.$type"
+        }
 
         val newRequest = request.newBuilder()
             .url(imageUrl)
@@ -705,3 +729,7 @@ class Hitomi(
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 }
+
+const val IMAGE_LOOPBACK_HOST = "127.0.0.1"
+const val IMAGE_THUMBNAIL = "is_thumbnail"
+const val IMAGE_GIF = "is_gif"
