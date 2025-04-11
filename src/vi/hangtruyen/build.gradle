@@ -1,0 +1,10 @@
+ext {
+    extName = 'HangTruyen'
+    extClass = '.HangTruyen'
+    themePkg = 'wpcomics'
+    baseUrl = 'https://hangtruyen.net'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
