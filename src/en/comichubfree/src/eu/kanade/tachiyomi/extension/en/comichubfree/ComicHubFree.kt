@@ -27,7 +27,7 @@ class ComicHubFree : ParsedHttpSource() {
 
     override val client = network.cloudflareClient
 
-    override fun popularMangaSelector() = ".movie-list-index > .cartoon-box"
+    override fun popularMangaSelector() = ".movie-list-index > .cartoon-box:has(.detail)"
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -40,6 +40,13 @@ class ComicHubFree : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun chapterListSelector() = "div.episode-list > div > table > tbody > tr"
+
+    private fun Element.imageAttr(): String {
+        return when {
+            hasAttr("data-src") -> absUrl("data-src")
+            else -> absUrl("src")
+        }
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/popular-comic".toHttpUrl().newBuilder().apply {
@@ -77,10 +84,7 @@ class ComicHubFree : ParsedHttpSource() {
             setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
             title = element.selectFirst("h3")!!.text()
             val image = element.selectFirst("img")
-            thumbnail_url = when {
-                image?.hasAttr("data-src") == true -> image.absUrl("data-src")
-                else -> image?.absUrl("src")
-            }
+            thumbnail_url = image?.imageAttr()
         }
     }
 
@@ -106,9 +110,9 @@ class ComicHubFree : ParsedHttpSource() {
     }
 
     private fun parseStatus(status: String): Int {
-        return when {
-            (status == "Ongoing") -> SManga.ONGOING
-            (status == "Completed") -> SManga.COMPLETED
+        return when (status) {
+            "Ongoing" -> SManga.ONGOING
+            "Completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
     }
@@ -138,10 +142,7 @@ class ComicHubFree : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("img.chapter_img").mapIndexed { index, element ->
-            val img = when {
-                element.hasAttr("data-src") -> element.attr("abs:data-src")
-                else -> element.attr("abs:src")
-            }
+            val img = element.imageAttr()
             Page(index, imageUrl = img)
         }.distinctBy { it.imageUrl }
     }
