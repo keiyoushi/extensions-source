@@ -357,41 +357,43 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         val series = filters.firstInstanceOrNull<SeriesFilter>()?.state?.trim()
 
         // Author filter handling
-        if (!author.isNullOrBlank()) {
-            val slug = author.toMultiSlug()
-            if (slug.isNotBlank()) {
-                val authorUrl = if (page == 1) {
-                    "$baseUrl/author/$slug/"
-                } else {
-                    "$baseUrl/author/$slug/page/$page/"
+        if (query.isBlank()) {
+            if (!author.isNullOrBlank()) {
+                val slug = author.toMultiSlug()
+                if (slug.isNotBlank()) {
+                    val authorUrl = if (page == 1) {
+                        "$baseUrl/author/$slug/"
+                    } else {
+                        "$baseUrl/author/$slug/page/$page/"
+                    }
+                    return GET(authorUrl, headers)
                 }
-                return GET(authorUrl, headers)
             }
-        }
 
-        // Group filter handling
-        if (!group.isNullOrBlank()) {
-            val slug = group.toMultiSlug()
-            if (slug.isNotBlank()) {
-                val groupUrl = if (page == 1) {
-                    "$baseUrl/group/$slug/"
-                } else {
-                    "$baseUrl/group/$slug/page/$page/"
+            // Group filter handling
+            if (!group.isNullOrBlank()) {
+                val slug = group.toMultiSlug()
+                if (slug.isNotBlank()) {
+                    val groupUrl = if (page == 1) {
+                        "$baseUrl/group/$slug/"
+                    } else {
+                        "$baseUrl/group/$slug/page/$page/"
+                    }
+                    return GET(groupUrl, headers)
                 }
-                return GET(groupUrl, headers)
             }
-        }
 
-        // Series filter handling
-        if (!series.isNullOrBlank()) {
-            val slug = series.toMultiSlug()
-            if (slug.isNotBlank()) {
-                val seriesUrl = if (page == 1) {
-                    "$baseUrl/series/$slug/"
-                } else {
-                    "$baseUrl/series/$slug/page/$page/"
+            // Series filter handling
+            if (!series.isNullOrBlank()) {
+                val slug = series.toMultiSlug()
+                if (slug.isNotBlank()) {
+                    val seriesUrl = if (page == 1) {
+                        "$baseUrl/series/$slug/"
+                    } else {
+                        "$baseUrl/series/$slug/page/$page/"
+                    }
+                    return GET(seriesUrl, headers)
                 }
-                return GET(seriesUrl, headers)
             }
         }
         return GET(url.build(), headers)
