@@ -157,9 +157,9 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaSelector(): String = latestUpdatesSelector()
 
     override fun pageListParse(document: Document): List<Page> {
-        val loginRequired = document.select(".area-show-content span")
+        val loginRequired = document.selectFirst(".area-show-content span")
 
-        if (loginRequired.text() == "Xin lỗi, bạn cần đăng nhập để đọc được chapter này!") {
+        if (loginRequired?.text() == "Xin lỗi, bạn cần đăng nhập để đọc được chapter này!") {
             throw Exception("${loginRequired.text()} \n Hãy đăng nhập trong WebView.")
         }
         return document.select("img.image-commic").mapIndexed { i, e ->
