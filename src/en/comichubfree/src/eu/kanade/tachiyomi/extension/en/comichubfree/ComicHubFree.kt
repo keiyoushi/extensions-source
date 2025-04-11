@@ -41,6 +41,8 @@ class ComicHubFree : ParsedHttpSource() {
 
     override fun chapterListSelector() = "div.episode-list > div > table > tbody > tr"
 
+    override fun imageUrlParse(document: Document) = ""
+
     private fun Element.imageAttr(): String {
         return when {
             hasAttr("data-src") -> absUrl("data-src")
@@ -103,7 +105,7 @@ class ComicHubFree : ParsedHttpSource() {
         val chapter = SChapter.create().apply {
             setUrlWithoutDomain(urlElement.attr("href"))
             name = urlElement.text()
-            date_upload = dateFormat.tryParse(dateElement?.text())
+            date_upload = dateFormat.tryParse(dateElement.text())
         }
 
         return chapter
@@ -125,14 +127,11 @@ class ComicHubFree : ParsedHttpSource() {
         val authorElement = seriesInfoElement?.select("dt:contains(Authors:) + dd")
         val statusElement = seriesInfoElement?.select("dt:contains(Status:) + dd")
 
-        val image = seriesInfoElement?.select("img")
+        val image = seriesInfoElement?.selectFirst("img")
 
         val manga = SManga.create().apply {
             description = seriesDescriptionElement?.text()
-            thumbnail_url = when {
-                image?.hasAttr("data-src") == true -> image.attr("abs:data-src")
-                else -> image?.attr("abs:src")
-            }
+            thumbnail_url = image?.imageAttr()
             author = authorElement?.text()
             status = statusElement?.text().orEmpty().let { parseStatus(it) }
         }
@@ -146,6 +145,4 @@ class ComicHubFree : ParsedHttpSource() {
             Page(index, imageUrl = img)
         }.distinctBy { it.imageUrl }
     }
-
-    override fun imageUrlParse(document: Document) = ""
 }
