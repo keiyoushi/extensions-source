@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 @Serializable
@@ -62,7 +63,7 @@ class KemonoPostDto(
     private val service: String,
     private val user: String,
     private val title: String,
-    private val added: String,
+    private val added: String?,
     private val published: String?,
     private val edited: String?,
     private val file: KemonoFileDto,
@@ -80,7 +81,11 @@ class KemonoPostDto(
         }.distinctBy { it.path }.map { it.toString() }
 
     fun toSChapter() = SChapter.create().apply {
-        val postDate = dateFormat.parse(edited ?: published ?: added)
+        val postDate = try {
+            dateFormat.parse(edited ?: published ?: added ?: "")
+        } catch (e: ParseException) {
+            null
+        }
 
         url = "/$service/user/$user/post/$id"
         date_upload = postDate?.time ?: 0
