@@ -24,5 +24,5 @@ inline fun <reified T> Response.parseAs(json: Json = jsonInstance): T =
 /**
  * Serializes the object to a JSON String.
  */
-inline fun <reified T> T.toJson(json: Json = jsonInstance): String =
+inline fun <reified T> T.toJsonString(json: Json = jsonInstance): String =
     json.encodeToString(this)

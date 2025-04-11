@@ -169,13 +169,14 @@ class BookmarksWrapperDto(
     private val data: List<BookmarkDto> = emptyList(),
     val meta: BookmarksMetaDto,
 ) {
-    fun getBookmarks() = data.filter { it.id != null && it.slug != null }
+    fun getBookmarks() = data.filter { it.type == "comic" && it.id != null && it.slug != null }
 }
 
 @Serializable
 class BookmarkDto(
     val id: Int?,
     val slug: String?,
+    val type: String?,
 )
 
 @Serializable

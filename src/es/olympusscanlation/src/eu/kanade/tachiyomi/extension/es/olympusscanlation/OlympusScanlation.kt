@@ -18,7 +18,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJson
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.SerializationException
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -104,14 +104,14 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<PayloadHomeDto>()
+        val slugMap = preferences.slugMap.toMutableMap()
         val mangaList = result.data.popularComics
             .filter { it.type == "comic" }
             .map {
-                preferences.slugMap = preferences.slugMap.toMutableMap()
-                    .also { map -> map[it.id] = it.slug }
-
+                slugMap[it.id] = it.slug
                 it.toSManga()
             }
+        preferences.slugMap = slugMap
         return MangasPage(mangaList, hasNextPage = false)
     }
 
@@ -123,13 +123,13 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<NewChaptersDto>()
+        val slugMap = preferences.slugMap.toMutableMap()
         val mangaList = result.data.filter { it.type == "comic" }
             .map {
-                preferences.slugMap = preferences.slugMap.toMutableMap()
-                    .also { map -> map[it.id] = it.slug }
-
+                slugMap[it.id] = it.slug
                 it.toSManga()
             }
+        preferences.slugMap = slugMap
         return MangasPage(mangaList, result.hasNextPage())
     }
 
@@ -175,13 +175,13 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.toString().startsWith("$apiBaseUrl/api/search")) {
             val result = response.parseAs<PayloadMangaDto>()
+            val slugMap = preferences.slugMap.toMutableMap()
             val mangaList = result.data.filter { it.type == "comic" }
                 .map {
-                    preferences.slugMap = preferences.slugMap.toMutableMap()
-                        .also { map -> map[it.id] = it.slug }
-
+                    slugMap[it.id] = it.slug
                     it.toSManga()
                 }
+            preferences.slugMap = slugMap
             return MangasPage(mangaList, hasNextPage = false)
         }
 
@@ -196,25 +196,22 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         if (!preferences.fetchBookmarksPref()) return
         if (bookmarksState != BookmarksState.NOT_FETCHED) return
         bookmarksState = BookmarksState.FETCHING
-        val bookmarksList: MutableList<BookmarkDto> = mutableListOf()
+        val slugMap = preferences.slugMap.toMutableMap()
         var page = 1
         try {
             do {
                 val response = network.cloudflareClient.newCall(GET("$apiBaseUrl/api/user/bookmarks?page=$page", headers)).execute()
                 if (!response.isSuccessful) return
                 val result = response.parseAs<BookmarksWrapperDto>()
-                bookmarksList.addAll(result.getBookmarks())
+                result.getBookmarks().forEach { bookmark ->
+                    slugMap[bookmark.id!!] = bookmark.slug!!
+                }
                 page++
             } while (result.meta.hasNextPage())
         } catch (_: Exception) { } finally {
             bookmarksState = BookmarksState.FETCHED
         }
-        preferences.slugMap = preferences.slugMap.toMutableMap()
-            .also { map ->
-                bookmarksList.forEach { bookmark ->
-                    map[bookmark.id!!] = bookmark.slug!!
-                }
-            }
+        preferences.slugMap = slugMap
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -430,15 +427,15 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
             _slugMap?.let { return it }
             val json = getString(SLUG_MAP, "{}")!!
             _slugMap = try {
-                json.parseAs<MutableMap<Int, String>>()
+                json.parseAs<Map<Int, String>>()
             } catch (_: SerializationException) {
-                emptyMap<Int, String>().toMutableMap()
+                emptyMap()
             }
             return _slugMap!!
         }
         set(map) {
             _slugMap = map
-            edit().putString(SLUG_MAP, map.toJson()).apply()
+            edit().putString(SLUG_MAP, map.toJsonString()).apply()
         }
 
     companion object {
