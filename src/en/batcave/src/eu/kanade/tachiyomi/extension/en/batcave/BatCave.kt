@@ -11,16 +11,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.injectLazy
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -31,7 +30,8 @@ class BatCave : HttpSource() {
     override val supportsLatest = true
     override val baseUrl = "https://batcave.biz"
 
-    private val json: Json by injectLazy()
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", SortFilter.POPULAR)
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
@@ -54,11 +54,11 @@ class BatCave : HttpSource() {
         var filtersApplied = false
 
         val url = "$baseUrl/comix/".toHttpUrl().newBuilder().apply {
-            filters.get<YearFilter>()?.addFilterToUrl(this)
+            filters.firstInstanceOrNull<YearFilter>()?.addFilterToUrl(this)
                 ?.also { filtersApplied = it }
-            filters.get<PublisherFilter>()?.addFilterToUrl(this)
+            filters.firstInstanceOrNull<PublisherFilter>()?.addFilterToUrl(this)
                 ?.also { filtersApplied = filtersApplied || it }
-            filters.get<GenreFilter>()?.addFilterToUrl(this)
+            filters.firstInstanceOrNull<GenreFilter>()?.addFilterToUrl(this)
                 ?.also { filtersApplied = filtersApplied || it }
 
             if (filtersApplied) {
@@ -69,7 +69,7 @@ class BatCave : HttpSource() {
             }
         }.build().toString()
 
-        val sort = filters.get<SortFilter>()!!
+        val sort = filters.firstInstanceOrNull<SortFilter>()!!
 
         return if (sort.getSort() == "") {
             GET(url, headers)
@@ -201,11 +201,7 @@ class BatCave : HttpSource() {
                 url = "/reader/${data.comicId}/${chap.id}${data.xhash}"
                 name = chap.title
                 chapter_number = chap.number
-                date_upload = try {
-                    dateFormat.parse(chap.date)?.time ?: 0
-                } catch (_: ParseException) {
-                    0
-                }
+                date_upload = dateFormat.tryParse(chap.date)
             }
         }
     }
@@ -228,13 +224,5 @@ class BatCave : HttpSource() {
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
-    }
-
-    private inline fun <reified T> FilterList.get(): T? {
-        return filterIsInstance<T>().firstOrNull()
-    }
-
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
     }
 }
