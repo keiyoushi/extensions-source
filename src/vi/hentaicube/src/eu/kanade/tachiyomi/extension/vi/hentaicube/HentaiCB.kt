@@ -64,7 +64,7 @@ class HentaiCB :
     override fun popularMangaFromElement(element: Element): SManga {
         return super.popularMangaFromElement(element).apply {
             element.selectFirst("img")?.let { img ->
-                thumbnail_url = img.attr("abs:src").replace(thumbnailOriginalUrlRegex, "$1")
+                thumbnail_url = imageFromElement(img)?.replace(thumbnailOriginalUrlRegex, "$1")
             }
         }
     }
