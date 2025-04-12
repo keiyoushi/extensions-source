@@ -38,7 +38,7 @@ class SeriesDto(
             metadata.status == "HIATUS" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-        genre = (metadata.genres + metadata.tags + booksMetadata.tags).distinct().joinToString(", ")
+        genre = (metadata.genres + metadata.tags + booksMetadata.tags).sorted().distinct().joinToString(", ")
         description = metadata.summary.ifBlank { booksMetadata.summary }
         booksMetadata.authors.groupBy({ it.role }, { it.name }).let { map ->
             author = map["writer"]?.distinct()?.joinToString()
