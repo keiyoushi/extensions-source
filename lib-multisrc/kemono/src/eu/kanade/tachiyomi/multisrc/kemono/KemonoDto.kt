@@ -2,11 +2,13 @@ package eu.kanade.tachiyomi.multisrc.kemono
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
 import java.text.SimpleDateFormat
 import java.util.Locale
+
 @Serializable
 class KemonoFavouritesDto(
     val id: String,
@@ -25,7 +27,7 @@ class KemonoCreatorDto(
 ) {
     var fav: Long = 0
     val updatedDate get() = when {
-        updated.isString -> dateFormat.parse(updated.content)?.time ?: 0
+        updated.isString -> dateFormat.tryParse(updated.content)
         else -> (updated.double * 1000).toLong()
     }
 
@@ -62,7 +64,7 @@ class KemonoPostDto(
     private val service: String,
     private val user: String,
     private val title: String,
-    private val added: String,
+    private val added: String?,
     private val published: String?,
     private val edited: String?,
     private val file: KemonoFileDto,
@@ -80,13 +82,13 @@ class KemonoPostDto(
         }.distinctBy { it.path }.map { it.toString() }
 
     fun toSChapter() = SChapter.create().apply {
-        val postDate = dateFormat.parse(edited ?: published ?: added)
+        val postDate = dateFormat.tryParse(edited ?: published ?: added)
 
         url = "/$service/user/$user/post/$id"
-        date_upload = postDate?.time ?: 0
+        date_upload = postDate
         name = title.ifBlank {
             val postDateString = when {
-                postDate != null && postDate.time != 0L -> chapterNameDateFormat.format(postDate)
+                postDate != 0L -> chapterNameDateFormat.format(postDate)
                 else -> "unknown date"
             }
 
