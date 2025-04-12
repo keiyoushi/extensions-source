@@ -42,7 +42,7 @@ class FlameComics : HttpSource() {
         .addInterceptor(::composedImageIntercept)
         .build()
 
-    private val removeSpecialCharsregex = Regex("[^A-Za-z0-9 ]")
+    private val removeSpecialCharsRegex = Regex("[^A-Za-z0-9 ]")
 
     private fun dataApiReqBuilder() = baseUrl.toHttpUrl().newBuilder().apply {
         addPathSegment("_next")
@@ -70,7 +70,7 @@ class FlameComics : HttpSource() {
         GET(
             dataApiReqBuilder().apply {
                 addPathSegment("browse.json")
-                fragment("$page&${removeSpecialCharsregex.replace(query.lowercase(), "")}")
+                fragment("$page&${removeSpecialCharsRegex.replace(query.lowercase(), "")}")
             }.build(),
             headers,
         )
@@ -100,10 +100,10 @@ class FlameComics : HttpSource() {
                     titles += json.decodeFromString<List<String>>(series.altTitles)
                 }
                 titles.any { title ->
-                    removeSpecialCharsregex.replace(
+                    removeSpecialCharsRegex.replace(
                         query.lowercase(),
                         "",
-                    ) in removeSpecialCharsregex.replace(
+                    ) in removeSpecialCharsRegex.replace(
                         title.lowercase(),
                         "",
                     )
