@@ -1,0 +1,10 @@
+
+apply plugin: 'kotlin'
+
+ext {
+    extName = 'The Beginning After the End Manga'
+    pkgName = 'eu.kanade.tachiyomi.extension.en.tbatemanga'
+    lang = 'en'
+    sources = ['madara']
+    overrideVersionCode = 1
+}
