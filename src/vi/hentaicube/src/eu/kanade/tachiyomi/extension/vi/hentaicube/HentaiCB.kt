@@ -17,6 +17,7 @@ import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -24,7 +25,7 @@ import java.util.Locale
 class HentaiCB :
     Madara(
         "CBHentai",
-        "https://hentaicb.bar",
+        "https://hentaicb.fit",
         "vi",
         SimpleDateFormat("dd/MM/yyyy", Locale("vi")),
     ),
@@ -57,6 +58,16 @@ class HentaiCB :
     override val mangaSubString = "read"
 
     override val altNameSelector = ".post-content_item:contains(Tên khác) .summary-content"
+
+    private val thumbnailOriginalUrlRegex = Regex("-\\d+x\\d+(\\.[a-zA-Z]+)$")
+
+    override fun popularMangaFromElement(element: Element): SManga {
+        return super.popularMangaFromElement(element).apply {
+            element.selectFirst("img")?.let { img ->
+                thumbnail_url = imageFromElement(img)?.replace(thumbnailOriginalUrlRegex, "$1")
+            }
+        }
+    }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(URL_SEARCH_PREFIX)) {
