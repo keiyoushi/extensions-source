@@ -235,10 +235,9 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         var images: List<String> = emptyList()
 
         val html = document.outerHtml()
-        val match1 = KEY_REGEX1.find(html)
-        val match2 = KEY_REGEX2.find(html)
-        val key1 = match1?.groups?.get(1)?.value ?: match2?.groups?.get(1)?.value ?: throw Exception("Fail to get image links.")
-        val key2 = match1?.groups?.get(2)?.value ?: match2?.groups?.get(2)?.value ?: throw Exception("Fail to get image links.")
+        val match = KEY_REGEX.find(html)
+        val key1 = match?.groups?.get(1)?.value ?: throw Exception("Fail to get image links.")
+        val key2 = match?.groups?.get(2)?.value ?: throw Exception("Fail to get image links.")
         handler.post {
             val innerWv = WebView(Injekt.get<Application>())
 
@@ -445,11 +444,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
-
-        // Not logged in
-        private val KEY_REGEX1 = """\.attr\('src',\s*([^\(]+)\(([^\[]+)\[currImage \+ 1\]\)""".toRegex()
-
-        // Logged in
-        private val KEY_REGEX2 = """\.attr\('src',\s*([^\(]+)\(([^\[]+)\[currImage\]\)""".toRegex()
+        private val KEY_REGEX = """\.attr\(\s*['"]src['"]\s*,\s*([\w]+)\(\s*([\w]+)\[\s*currImage""".toRegex()
     }
 }
