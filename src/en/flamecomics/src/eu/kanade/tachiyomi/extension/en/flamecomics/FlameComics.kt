@@ -22,6 +22,7 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
@@ -185,13 +186,14 @@ class FlameComics : HttpSource() {
             json.decodeFromString<MangaPageData>(response.body.string()).pageProps.series
         title = seriesData.title
         thumbnail_url = thumbnailUrl(seriesData)
-        description = seriesData.description
+        description = Jsoup.parseBodyFragment(seriesData.description).wholeText()
 
         genre = seriesData.tags?.let { tags ->
             (listOf(seriesData.type) + tags).joinToString()
         } ?: seriesData.type
 
-        author = seriesData.author
+        author = seriesData.author?.joinToString()
+        artist = seriesData.artist?.joinToString()
         status = when (seriesData.status.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "dropped" -> SManga.CANCELLED
