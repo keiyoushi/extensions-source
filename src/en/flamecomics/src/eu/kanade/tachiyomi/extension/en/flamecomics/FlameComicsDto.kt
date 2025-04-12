@@ -72,7 +72,7 @@ class Series(
     val cover: String,
     val type: String,
     val tags: List<String>?,
-    val author: String?,
+    val author: List<String>?,
     val status: String,
     val series_id: Int,
     val last_edit: String,

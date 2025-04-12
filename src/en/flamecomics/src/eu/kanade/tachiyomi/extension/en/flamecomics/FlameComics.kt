@@ -191,7 +191,7 @@ class FlameComics : HttpSource() {
             (listOf(seriesData.type) + tags).joinToString()
         } ?: seriesData.type
 
-        author = seriesData.author
+        author = seriesData.author?.joinToString(",")
         status = when (seriesData.status.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "dropped" -> SManga.CANCELLED
