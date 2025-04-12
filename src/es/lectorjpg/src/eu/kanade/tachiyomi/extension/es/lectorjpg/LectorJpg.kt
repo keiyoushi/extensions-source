@@ -17,6 +17,8 @@ class LectorJpg : Madara(
     dateFormat = SimpleDateFormat("d MMMM, yyyy", Locale("es")),
 ) {
 
+    override val versionId = 2
+
     override val mangaSubString = "serie"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
