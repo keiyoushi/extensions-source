@@ -114,17 +114,18 @@ abstract class MangaHub(
         }
 
         val response = chain.proceed(request)
-        val apiResponse = response.parseAs<ApiResponse<Unit>>() // We don't care about the data, only the possible error associated with it
 
+        // We don't care about the data, only the possible error associated with it
         // If we encounter an error, we'll intercept it and throw an error for app to catch
+        val apiResponse = response.peekBody(Long.MAX_VALUE).string().parseAs<ApiResponseError>()
         if (apiResponse.errors != null) {
             response.close() // Avoid leaks
             val errors = apiResponse.errors.joinToString("\n") { it.message }
             throw IOException(errors)
         }
 
-        // Everything works fine so proceed
-        return chain.proceed(request)
+        // Everything works fine
+        return response
     }
 
     private fun Request.hasGraphQLTag(): Boolean {
@@ -196,7 +197,7 @@ abstract class MangaHub(
     override fun popularMangaParse(response: Response): MangasPage {
         val mangaList = response.parseAs<ApiSearchResponse>()
 
-        val mangas = mangaList.data!!.search.rows.map {
+        val mangas = mangaList.data.search.rows.map {
             SMangaDTO(
                 "$baseUrl/manga/${it.slug}",
                 it.title,
@@ -259,11 +260,10 @@ abstract class MangaHub(
         val rawManga = response.parseAs<ApiMangaDetailsResponse>()
 
         return SManga.create().apply {
-            title = rawManga.data!!.manga.title!!
+            title = rawManga.data.manga.title!!
             author = rawManga.data.manga.author
             artist = rawManga.data.manga.artist
             genre = rawManga.data.manga.genres
-            description = rawManga.data.manga.description
             thumbnail_url = "$baseThumbCdnUrl/${rawManga.data.manga.image}"
             status = when (rawManga.data.manga.status) {
                 "ongoing" -> SManga.ONGOING
@@ -271,14 +271,14 @@ abstract class MangaHub(
                 else -> SManga.UNKNOWN
             }
 
-            // Add alternative title
-            if (!rawManga.data.manga.alternativeTitle.isNullOrBlank()) {
-                description = description.orEmpty().let {
-                    if (it.isBlank()) {
-                        "Alternative Name: ${rawManga.data.manga.alternativeTitle}"
-                    } else {
-                        "$it\n\nAlternative Name: ${rawManga.data.manga.alternativeTitle}"
-                    }
+            description = buildString {
+                rawManga.data.manga.description?.let(::append)
+
+                // Add alternative title
+                val altTitle = rawManga.data.manga.alternativeTitle
+                if (!altTitle.isNullOrBlank()) {
+                    if (isNotBlank()) append("\n\n")
+                    append("Alternative Name: $altTitle")
                 }
             }
         }
@@ -294,15 +294,13 @@ abstract class MangaHub(
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterList = response.parseAs<ApiMangaDetailsResponse>()
 
-        return chapterList.data!!.manga.chapters!!.map {
-            val chapter = SChapter.create()
-
-            chapter.name = generateChapterName(it.title.trim().replace("\n", " "), it.number)
-            chapter.url = "/${chapterList.data.manga.slug}/chapter-${it.number}"
-            chapter.chapter_number = it.number
-            chapter.date_upload = dateFormat.tryParse(it.date)
-
-            chapter
+        return chapterList.data.manga.chapters!!.map {
+            SChapter.create().apply {
+                name = generateChapterName(it.title.trim().replace("\n", " "), it.number)
+                url = "/${chapterList.data.manga.slug}/chapter-${it.number}"
+                chapter_number = it.number
+                date_upload = dateFormat.tryParse(it.date)
+            }
         }.reversed() // The response gives
     }
 
@@ -335,14 +333,14 @@ abstract class MangaHub(
     override fun pageListParse(response: Response): List<Page> {
         val chapterObject = response.parseAs<ApiChapterPagesResponse>()
 
-        if (chapterObject.data!!.chapter == null) {
+        if (chapterObject.data.chapter == null) {
             throw Exception("Unknown error while processing pages")
         }
 
-        val pages = chapterObject.data.chapter!!.pages.parseAs<ApiChapterPages>()
+        val pages = chapterObject.data.chapter.pages.parseAs<ApiChapterPages>()
 
-        return pages.i.mapIndexed { i, page ->
-            Page(i, "", "$baseCdnUrl/${pages.p}$page")
+        return pages.images.mapIndexed { i, page ->
+            Page(i, "", "$baseCdnUrl/${pages.page}$page")
         }
     }
 

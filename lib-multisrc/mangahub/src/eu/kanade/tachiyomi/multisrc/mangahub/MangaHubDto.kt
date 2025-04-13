@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 typealias ApiChapterPagesResponse = ApiResponse<ApiChapterData>
@@ -9,7 +10,11 @@ typealias ApiMangaDetailsResponse = ApiResponse<ApiMangaObject>
 // Base classes
 @Serializable
 class ApiResponse<T>(
-    val data: T?,
+    val data: T,
+)
+
+@Serializable
+class ApiResponseError(
     val errors: List<ApiErrorMessages>?,
 )
 
@@ -31,8 +36,8 @@ class ApiChapter(
 
 @Serializable
 class ApiChapterPages(
-    val p: String,
-    val i: List<String>,
+    @SerialName("p") val page: String,
+    @SerialName("i") val images: List<String>,
 )
 
 // Search, Popular, Latest
