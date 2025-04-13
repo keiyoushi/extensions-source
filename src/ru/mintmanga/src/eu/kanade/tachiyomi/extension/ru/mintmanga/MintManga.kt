@@ -103,11 +103,11 @@ class MintManga : GroupLe("MintManga", "https://2.mintmanga.one", "ru") {
     )
 
     private fun getAgeList() = listOf(
-        Genre("G (0+)", "el_7040"),
-        Genre("PG-13 (12+)", "el_7046"),
-        Genre("PG (16+)", "el_7041"),
-        Genre("NC-17 (17+)", "el_3969"),
-        Genre("R (17+)", "el_3968"),
+        Genre("G", "el_7040"),
+        Genre("NC-17", "el_3969"),
+        Genre("PG", "el_7041"),
+        Genre("PG-13", "el_7046"),
+        Genre("R", "el_3968"),
     )
 
     private fun getCategoryList() = listOf(
