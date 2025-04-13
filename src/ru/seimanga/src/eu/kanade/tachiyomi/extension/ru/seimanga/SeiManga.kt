@@ -100,8 +100,8 @@ class SeiManga : GroupLe("SeiManga", "https://1.seimanga.me", "ru") {
     )
 
     private fun getAgeList() = listOf(
-        Genre("NC-17 (17+)", "el_3969"),
-        Genre("R (17+)", "el_3968"),
+        Genre("NC-17", "el_3969"),
+        Genre("R", "el_3968"),
     )
 
     private fun getCategoryList() = listOf(
