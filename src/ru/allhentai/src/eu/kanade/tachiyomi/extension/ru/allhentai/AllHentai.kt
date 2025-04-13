@@ -53,7 +53,7 @@ class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
                             "updated",
                         )[filter.state]
                         return GET(
-                            "$baseUrl/list?sortType=$sortType&offset=${70 * (page - 1)}",
+                            "$baseUrl/list?sortType=$sortType&offset=${50 * (page - 1)}",
                             headers,
                         )
                     }
@@ -62,7 +62,7 @@ class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
                 is Tags -> {
                     if (filter.state > 0) {
                         val tagName = tagsList[filter.state].url
-                        return GET("$baseUrl/list/tag/$tagName?offset=${70 * (page - 1)}", headers)
+                        return GET("$baseUrl/list/tag/$tagName?offset=${50 * (page - 1)}", headers)
                     }
                 }
 
