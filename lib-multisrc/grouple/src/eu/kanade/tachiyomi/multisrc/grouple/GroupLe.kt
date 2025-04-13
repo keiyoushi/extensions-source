@@ -73,10 +73,10 @@ abstract class GroupLe(
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/list?sortType=rate&offset=${70 * (page - 1)}", headers)
+        GET("$baseUrl/list?sortType=rate&offset=${50 * (page - 1)}", headers)
 
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/list?sortType=updated&offset=${70 * (page - 1)}", headers)
+        GET("$baseUrl/list?sortType=updated&offset=${50 * (page - 1)}", headers)
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()

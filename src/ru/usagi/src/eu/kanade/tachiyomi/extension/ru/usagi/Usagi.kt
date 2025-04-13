@@ -49,7 +49,7 @@ class Usagi : GroupLe("Usagi", "https://web.usagi.one/", "ru") {
                         url.addQueryParameter("sortType", arrayOf("RATING", "POPULARITY", "YEAR", "NAME", "DATE_CREATE", "DATE_UPDATE, USER_RATING")[filter.state])
                     } else {
                         val ord = arrayOf("rate", "popularity", "year", "name", "created", "updated", "votes")[filter.state]
-                        return GET("$baseUrl/list?sortType=$ord&offset=${70 * (page - 1)}", headers)
+                        return GET("$baseUrl/list?sortType=$ord&offset=${50 * (page - 1)}", headers)
                     }
                 }
                 else -> {}

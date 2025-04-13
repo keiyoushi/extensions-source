@@ -49,7 +49,7 @@ class SeiManga : GroupLe("SeiManga", "https://1.seimanga.me", "ru") {
                         url.addQueryParameter("sortType", arrayOf("RATING", "POPULARITY", "YEAR", "NAME", "DATE_CREATE", "DATE_UPDATE")[filter.state])
                     } else {
                         val ord = arrayOf("rate", "popularity", "year", "name", "created", "updated", "votes")[filter.state]
-                        return GET("$baseUrl/list?sortType=$ord&offset=${70 * (page - 1)}", headers)
+                        return GET("$baseUrl/list?sortType=$ord&offset=${50 * (page - 1)}", headers)
                     }
                 }
                 else -> {}
