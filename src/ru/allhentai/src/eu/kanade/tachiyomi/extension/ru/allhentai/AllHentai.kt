@@ -42,21 +42,10 @@ class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
                 }
 
                 is OrderBy -> {
-                    if (filter.state > 0) {
-                        val sortType = arrayOf(
-                            "not",
-                            "year",
-                            "rate",
-                            "popularity",
-                            "votes",
-                            "created",
-                            "updated",
-                        )[filter.state]
-                        return GET(
-                            "$baseUrl/list?sortType=$sortType&offset=${50 * (page - 1)}",
-                            headers,
-                        )
-                    }
+                    url.addQueryParameter(
+                        "sortType",
+                        arrayOf("RATING", "POPULARITY", "YEAR", "NAME", "DATE_CREATE", "DATE_UPDATE", "USER_RATING")[filter.state],
+                    )
                 }
 
                 is Tags -> {
@@ -77,16 +66,8 @@ class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
     }
 
     private class OrderBy : Filter.Select<String>(
-        "Сортировка (только)",
-        arrayOf(
-            "Без сортировки",
-            "По году",
-            "По популярности",
-            "Популярно сейчас",
-            "По рейтингу",
-            "Новинки",
-            "По дате обновления",
-        ),
+        "Сортировка",
+        arrayOf("По популярности", "Популярно сейчас", "По году", "По алфавиту", "Новинки", "По дате обновления", "По рейтингу"),
     )
 
     private class Genre(name: String, val id: String) : Filter.TriState(name)
@@ -142,16 +123,16 @@ class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
         Genre("фэнтези", "el_70"),
         Genre("чикан", "el_1059"),
         Genre("этти", "el_798"),
-        Genre("юри", "el_84"),
-        Genre("яой", "el_83"),
     )
 
     private val categoryList = listOf(
         Genre("3D", "el_626"),
         Genre("Анимация", "el_5777"),
         Genre("Без текста", "el_3157"),
+        Genre("Манхва", "el_1104"),
+        Genre("Маньхуа", "el_5902"),
         Genre("Порно комикс", "el_1003"),
-        Genre("Порно манхва", "el_1104"),
+        Genre("Руманга", "el_5896"),
     )
 
     private val filtersList = listOf(
@@ -160,9 +141,12 @@ class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
         Genre("Для взрослых", "s_mature"),
         Genre("Завершенная", "s_completed"),
         Genre("Переведено", "s_translated"),
+        Genre("Заброшен перевод", "s_abandoned_popular"),
         Genre("Длинная", "s_many_chapters"),
         Genre("Ожидает загрузки", "s_wait_upload"),
-        Genre("Продается", "s_sale"),
+        Genre("Лицензия", "s_sale"),
+        Genre("Белые жанры", "s_not_pessimized"),
+        Genre("Онгоинг", "s_ongoing"),
     )
 
     private val tagsList = listOf(
