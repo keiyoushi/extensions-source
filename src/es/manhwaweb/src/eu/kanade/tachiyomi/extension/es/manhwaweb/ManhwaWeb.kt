@@ -155,7 +155,7 @@ class ManhwaWeb : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val result = json.decodeFromString<PayloadPageDto>(response.body.string())
-        return result.data.images.filter { it.isNotBlank() && it.startsWith("http") }
+        return result.data.images.filter { it.startsWith("http") }
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
     }
 
