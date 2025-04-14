@@ -103,7 +103,6 @@ abstract class GroupLe(
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search/advancedResults?offset=${50 * (page - 1)}"
             .toHttpUrl()
