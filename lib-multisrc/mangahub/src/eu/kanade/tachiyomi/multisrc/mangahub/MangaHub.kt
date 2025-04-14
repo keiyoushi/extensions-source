@@ -1,10 +1,14 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.randomua.UserAgentType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,14 +16,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import okhttp3.Cookie
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -27,7 +32,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
 import java.io.IOException
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 abstract class MangaHub(
@@ -36,14 +43,21 @@ abstract class MangaHub(
     override val lang: String,
     private val mangaSource: String,
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH),
-) : HttpSource() {
+) : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    private var baseApiUrl = "https://api.mghcdn.com"
-    private var baseCdnUrl = "https://imgx.mghcdn.com"
-    private var baseThumbCdnUrl = "https://thumb.mghcdn.com"
+    private val baseApiUrl = "https://api.mghcdn.com"
+    private val baseCdnUrl = "https://imgx.mghcdn.com"
+    private val baseThumbCdnUrl = "https://thumb.mghcdn.com"
     private val regex = Regex("mhub_access=([^;]+)")
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
+    private fun SharedPreferences.getUseGenericTitlePref(): Boolean = getBoolean(
+        PREF_USE_GENERIC_TITLE,
+        false,
+    )
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(
@@ -133,39 +147,64 @@ abstract class MangaHub(
     }
 
     private fun refreshApiKey(chapter: SChapter) {
-        val slug = "$baseUrl${chapter.url}"
-            .toHttpUrlOrNull()
-            ?.pathSegments
-            ?.get(1)
+        val now = Calendar.getInstance().time.time
 
-        val url = if (slug != null) {
-            "$baseUrl/manga/$slug".toHttpUrl()
-        } else {
-            baseUrl.toHttpUrl()
-        }
-
+        val url = "$baseUrl/chapter${chapter.url}".toHttpUrl()
         val oldKey = client.cookieJar
             .loadForRequest(baseUrl.toHttpUrl())
             .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }?.value
 
+        // With the recent changes on how refresh API token works, we are now apparently required to have
+        // a cookie for recently when requesting for a new one. Not having this will result in a hit or miss.
+        val recently = buildJsonObject {
+            putJsonObject((now - (0..3600).random()).toString()) {
+                put("mangaID", (1..42_000).random())
+                put("number", (1..20).random())
+            }
+        }.toString()
+
+        val recentlyCookie = Cookie.Builder()
+            .domain(url.host)
+            .name("recently")
+            .value(URLEncoder.encode(recently, "utf-8"))
+            .expiresAt(now + 2 * 60 * 60 * 24 * 31) // +2 months
+            .build()
+
         for (i in 1..2) {
             // Clear key cookie
             val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
-            client.cookieJar.saveFromResponse(url, listOf(cookie))
+            client.cookieJar.saveFromResponse(url, listOf(cookie, recentlyCookie))
 
             // We try requesting again with param if the first one fails
             val query = if (i == 2) "?reloadKey=1" else ""
 
             try {
-                val response = client.newCall(GET("$url$query", headers)).execute()
+                val response = client.newCall(
+                    GET(
+                        "$url$query",
+                        headers.newBuilder()
+                            .set("Referer", "$baseUrl/manga/${url.pathSegments[1]}")
+                            .build(),
+                    ),
+                ).execute()
                 val returnedKey = response.headers["set-cookie"]?.let { regex.find(it)?.groupValues?.get(1) }
                 response.close() // Avoid potential resource leaks
 
-                if (returnedKey != oldKey) break; // Break out of loop since we got an allegedly valid API key
+                if (returnedKey != oldKey) break // Break out of loop since we got an allegedly valid API key
             } catch (_: IOException) {
                 throw IOException("An error occurred while obtaining a new API key") // Show error
             }
         }
+
+        // Sometimes, the new API key is still invalid. To ensure that the token will be fresh and available to use,
+        // we have to mimic how the browser site works. To put it simply, we will send a GET request that indicates what
+        // manga and chapter were browsing. If this succeeded, the API key that we use will be revalidated (assuming that we got an expired one.)
+        // We first need to obtain our public IP first since it is required as a query.
+        val ipRequest = client.newCall(GET("https://api.ipify.org?format=json")).execute()
+        val ip = ipRequest.parseAs<PublicIPResponse>().ip
+
+        // We'll log our action to the site to revalidate the API key in case we got an expired one
+        client.newCall(GET("$baseUrl/action/logHistory2/${url.pathSegments[1]}/${chapter.chapter_number}?browserID=$ip")).execute()
     }
 
     data class SMangaDTO(
@@ -184,7 +223,7 @@ abstract class MangaHub(
     }
 
     private fun mangaRequest(page: Int, order: String): Request {
-        return postRequestGraphQL(SEARCH_QUERY(mangaSource, "", "all", order, (page - 1) * 30))
+        return postRequestGraphQL(searchQuery(mangaSource, "", "all", order, page))
     }
 
     // popular
@@ -244,7 +283,7 @@ abstract class MangaHub(
             }
         }
 
-        return postRequestGraphQL(SEARCH_QUERY(mangaSource, query, genres, order, (page - 1) * 30))
+        return postRequestGraphQL(searchQuery(mangaSource, query, genres, order, page))
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -253,7 +292,7 @@ abstract class MangaHub(
 
     // manga details
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return postRequestGraphQL(MANGA_DETAILS_QUERY(mangaSource, manga.url.removePrefix("/manga/")))
+        return postRequestGraphQL(mangaDetailsQuery(mangaSource, manga.url.removePrefix("/manga/")))
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -288,32 +327,42 @@ abstract class MangaHub(
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        return postRequestGraphQL(MANGA_CHAPTER_LIST_QUERY(mangaSource, manga.url.removePrefix("/manga/")))
+        return postRequestGraphQL(mangaChapterListQuery(mangaSource, manga.url.removePrefix("/manga/")))
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterList = response.parseAs<ApiMangaDetailsResponse>()
+        val useGenericTitle = preferences.getUseGenericTitlePref()
 
         return chapterList.data.manga.chapters!!.map {
             SChapter.create().apply {
-                name = generateChapterName(it.title.trim().replace("\n", " "), it.number)
+                val numberString = "${if (it.number % 1 == 0f) it.number.toInt() else it.number}"
+
+                name = if (!useGenericTitle) {
+                    generateChapterName(it.title.trim().replace("\n", " "), numberString)
+                } else {
+                    generateGenericChapterName(numberString)
+                }
+
                 url = "/${chapterList.data.manga.slug}/chapter-${it.number}"
                 chapter_number = it.number
                 date_upload = dateFormat.tryParse(it.date)
             }
-        }.reversed() // The response gives
+        }.reversed() // The response is sorted in ASC format so we need to reverse it
     }
 
-    private fun generateChapterName(title: String, number: Float): String {
-        val numberString = "${if (number % 1 == 0f) number.toInt() else number}"
-
-        return if (title.contains(numberString)) {
+    private fun generateChapterName(title: String, number: String): String {
+        return if (title.contains(number)) {
             title
         } else if (title.isNotBlank()) {
-            "Chapter $numberString - $title"
+            "Chapter $number - $title"
         } else {
-            "Chapter $numberString"
+            generateGenericChapterName(number)
         }
+    }
+
+    private fun generateGenericChapterName(number: String): String {
+        return "Chapter $number"
     }
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter${chapter.url}"
@@ -322,7 +371,7 @@ abstract class MangaHub(
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.split("/")
 
-        return postRequestGraphQL(PAGES_QUERY(mangaSource, chapterUrl[1], chapterUrl[2].substringAfter("-").toFloat()))
+        return postRequestGraphQL(pagesQuery(mangaSource, chapterUrl[1], chapterUrl[2].substringAfter("-").toFloat()))
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
@@ -332,11 +381,6 @@ abstract class MangaHub(
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterObject = response.parseAs<ApiChapterPagesResponse>()
-
-        if (chapterObject.data.chapter == null) {
-            throw Exception("Unknown error while processing pages")
-        }
-
         val pages = chapterObject.data.chapter.pages.parseAs<ApiChapterPages>()
 
         return pages.images.mapIndexed { i, page ->
@@ -497,4 +541,17 @@ abstract class MangaHub(
         Genre("Dungeons", "dungeons"),
         Genre("Overpowered", "overpowered"),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_USE_GENERIC_TITLE
+            title = "Use generic title"
+            summary = "Use generic chapter title (\"Chapter 'x'\") instead of the given one.\nNote: May require manga entry to be refreshed."
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private const val PREF_USE_GENERIC_TITLE = "pref_use_generic_title"
+    }
 }

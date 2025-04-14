@@ -2,10 +2,10 @@ package eu.kanade.tachiyomi.multisrc.mangahub
 
 class GraphQLTag
 
-val SEARCH_QUERY = { mangaSource: String, query: String, genre: String, order: String, offset: Int ->
+val searchQuery = { mangaSource: String, query: String, genre: String, order: String, page: Int ->
     """
         {
-            search(x: $mangaSource, q: "$query", genre: "$genre", mod: $order, offset: $offset) {
+            search(x: $mangaSource, q: "$query", genre: "$genre", mod: $order, offset: ${(page - 1) * 30}) {
                 rows {
                     title,
                     author,
@@ -19,7 +19,7 @@ val SEARCH_QUERY = { mangaSource: String, query: String, genre: String, order: S
     """.trimIndent()
 }
 
-val MANGA_DETAILS_QUERY = { mangaSource: String, slug: String ->
+val mangaDetailsQuery = { mangaSource: String, slug: String ->
     """
         {
             manga(x: $mangaSource, slug: "$slug") {
@@ -37,7 +37,7 @@ val MANGA_DETAILS_QUERY = { mangaSource: String, slug: String ->
     """.trimIndent()
 }
 
-val MANGA_CHAPTER_LIST_QUERY = { mangaSource: String, slug: String ->
+val mangaChapterListQuery = { mangaSource: String, slug: String ->
     """
         {
             manga(x: $mangaSource, slug: "$slug") {
@@ -52,7 +52,7 @@ val MANGA_CHAPTER_LIST_QUERY = { mangaSource: String, slug: String ->
     """.trimIndent()
 }
 
-val PAGES_QUERY = { mangaSource: String, slug: String, number: Float ->
+val pagesQuery = { mangaSource: String, slug: String, number: Float ->
     """
         {
             chapter(x: $mangaSource, slug: "$slug", number: $number) {

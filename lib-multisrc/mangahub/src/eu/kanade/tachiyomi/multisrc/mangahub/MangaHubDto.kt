@@ -23,10 +23,15 @@ class ApiErrorMessages(
     val message: String,
 )
 
+@Serializable
+class PublicIPResponse(
+    val ip: String,
+)
+
 // Chapter metadata (pages)
 @Serializable
 class ApiChapterData(
-    val chapter: ApiChapter?,
+    val chapter: ApiChapter,
 )
 
 @Serializable
