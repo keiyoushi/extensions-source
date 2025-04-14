@@ -1,9 +1,9 @@
 ext {
-    extName = 'Pornhwa Scans'
-    extClass = '.PornhwaScans'
+    extName = 'Ortega Scans'
+    extClass = '.OrtegaScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://pornhwascans.fr'
-    overrideVersionCode = 2
+    baseUrl = 'https://ortegascans.fr'
+    overrideVersionCode = 3
     isNsfw = true
 }
 
