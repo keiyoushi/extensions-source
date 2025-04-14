@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.es.olympusscanlation
 
 import android.content.SharedPreferences
 import android.widget.Toast
-import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -17,12 +17,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import kotlinx.serialization.SerializationException
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -31,7 +31,7 @@ import kotlin.math.min
 
 class OlympusScanlation : HttpSource(), ConfigurableSource {
 
-    override val versionId = 2
+    override val versionId = 3
     private val isCi = System.getenv("CI") == "true"
 
     override val baseUrl: String get() = when {
@@ -67,16 +67,30 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
 
     override val supportsLatest: Boolean = true
 
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences: SharedPreferences = getPreferences {
+        this.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
+            if (domain != defaultBaseUrl) {
+                this.edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
 
     override val client by lazy {
-        network.cloudflareClient.newBuilder()
+        val client = network.cloudflareClient.newBuilder()
             .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
             .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
             .build()
+
+        fetchBookmarks()
+
+        return@lazy client
     }
 
-    private val json: Json by injectLazy()
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
@@ -89,8 +103,15 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = json.decodeFromString<PayloadHomeDto>(response.body.string())
-        val mangaList = result.data.popularComics.filter { it.type == "comic" }.map { it.toSManga() }
+        val result = response.parseAs<PayloadHomeDto>()
+        val slugMap = preferences.slugMap.toMutableMap()
+        val mangaList = result.data.popularComics
+            .filter { it.type == "comic" }
+            .map {
+                slugMap[it.id] = it.slug
+                it.toSManga()
+            }
+        preferences.slugMap = slugMap
         return MangasPage(mangaList, hasNextPage = false)
     }
 
@@ -101,10 +122,15 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = json.decodeFromString<NewChaptersDto>(response.body.string())
-        val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
-        val hasNextPage = result.current_page < result.last_page
-        return MangasPage(mangaList, hasNextPage)
+        val result = response.parseAs<NewChaptersDto>()
+        val slugMap = preferences.slugMap.toMutableMap()
+        val mangaList = result.data.filter { it.type == "comic" }
+            .map {
+                slugMap[it.id] = it.slug
+                it.toSManga()
+            }
+        preferences.slugMap = slugMap
+        return MangasPage(mangaList, result.hasNextPage())
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -148,80 +174,114 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.toString().startsWith("$apiBaseUrl/api/search")) {
-            val result = json.decodeFromString<PayloadMangaDto>(response.body.string())
-            val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
+            val result = response.parseAs<PayloadMangaDto>()
+            val slugMap = preferences.slugMap.toMutableMap()
+            val mangaList = result.data.filter { it.type == "comic" }
+                .map {
+                    slugMap[it.id] = it.slug
+                    it.toSManga()
+                }
+            preferences.slugMap = slugMap
             return MangasPage(mangaList, hasNextPage = false)
         }
 
-        val result = json.decodeFromString<PayloadSeriesDto>(response.body.string())
+        val result = response.parseAs<PayloadSeriesDto>()
         val mangaList = result.data.series.data.map { it.toSManga() }
-        val hasNextPage = result.data.series.current_page < result.data.series.last_page
-        return MangasPage(mangaList, hasNextPage)
+        return MangasPage(mangaList, result.data.series.hasNextPage())
+    }
+
+    private var bookmarksState = BookmarksState.NOT_FETCHED
+
+    private fun fetchBookmarks() {
+        if (!preferences.fetchBookmarksPref()) return
+        if (bookmarksState != BookmarksState.NOT_FETCHED) return
+        bookmarksState = BookmarksState.FETCHING
+        val slugMap = preferences.slugMap.toMutableMap()
+        var page = 1
+        try {
+            do {
+                val response = network.cloudflareClient.newCall(GET("$apiBaseUrl/api/user/bookmarks?page=$page", headers)).execute()
+                if (!response.isSuccessful) return
+                val result = response.parseAs<BookmarksWrapperDto>()
+                result.getBookmarks().forEach { bookmark ->
+                    slugMap[bookmark.id!!] = bookmark.slug!!
+                }
+                page++
+            } while (result.meta.hasNextPage())
+        } catch (_: Exception) { } finally {
+            bookmarksState = BookmarksState.FETCHED
+        }
+        preferences.slugMap = slugMap
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        val slug = preferences.slugMap[manga.url.toInt()]!!
+        return "$baseUrl/series/comic-$slug"
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = preferences.slugMap[manga.url.toInt()]!!
+
+        val apiUrl = "$apiBaseUrl/api/series/$slug?type=comic"
+        return GET(url = apiUrl, headers = headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val slug = response.request.url
-            .toString()
-            .substringAfter("/series/comic-")
-            .substringBefore("/chapters")
-        val apiUrl = "$apiBaseUrl/api/series/$slug?type=comic"
-        val newRequest = GET(url = apiUrl, headers = headers)
-        val newResponse = client.newCall(newRequest).execute()
-        val result = json.decodeFromString<MangaDetailDto>(newResponse.body.string())
+        val result = response.parseAs<MangaDetailDto>()
         return result.data.toSMangaDetails()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
-
-    override fun chapterListRequest(manga: SManga): Request {
-        return paginatedChapterListRequest(
-            manga.url
-                .substringAfter("/series/comic-")
-                .substringBefore("/chapters"),
-            1,
-        )
+    override fun getChapterUrl(chapter: SChapter): String {
+        val mangaId = chapter.url.substringBefore("/")
+        val chapterId = chapter.url.substringAfter("/")
+        val mangaSlug = preferences.slugMap[mangaId.toInt()]!!
+        return "$baseUrl/capitulo/$chapterId/comic-$mangaSlug"
     }
 
-    private fun paginatedChapterListRequest(mangaUrl: String, page: Int): Request {
+    override fun chapterListRequest(manga: SManga): Request {
+        val mangaId = manga.url
+        val mangaSlug = preferences.slugMap[mangaId.toInt()]!!
+
+        return paginatedChapterListRequest(mangaSlug, mangaId, 1)
+    }
+
+    private fun paginatedChapterListRequest(mangaSlug: String, mangaId: String, page: Int): Request {
         return GET(
-            url = "$apiBaseUrl/api/series/$mangaUrl/chapters?page=$page&direction=desc&type=comic",
+            url = "$apiBaseUrl/api/series/$mangaSlug/chapters?page=$page&direction=desc&type=comic#$mangaId",
             headers = headers,
         )
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val slug = response.request.url
-            .toString()
+        val mangaId = response.request.url.fragment ?: ""
+        val slug = response.request.url.toString()
             .substringAfter("/series/")
             .substringBefore("/chapters")
-        val data = json.decodeFromString<PayloadChapterDto>(response.body.string())
+
+        val data = response.parseAs<PayloadChapterDto>()
         var resultSize = data.data.size
         var page = 2
         while (data.meta.total > resultSize) {
-            val newRequest = paginatedChapterListRequest(slug, page)
+            val newRequest = paginatedChapterListRequest(slug, mangaId, page)
             val newResponse = client.newCall(newRequest).execute()
-            val newData = json.decodeFromString<PayloadChapterDto>(newResponse.body.string())
+            val newData = newResponse.parseAs<PayloadChapterDto>()
             data.data += newData.data
             resultSize += newData.data.size
             page += 1
         }
-        return data.data.map { it.toSChapter(slug, dateFormat) }
+        return data.data.map { it.toSChapter(mangaId, dateFormat) }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val id = chapter.url
-            .substringAfter("/capitulo/")
-            .substringBefore("/chapters")
-            .substringBefore("/comic")
-        val slug = chapter.url
-            .substringAfter("comic-")
-            .substringBefore("/chapters")
-            .substringBefore("/comic")
-        return GET("$apiBaseUrl/api/series/$slug/chapters/$id?type=comic")
+        val mangaId = chapter.url.substringBefore("/")
+        val chapterId = chapter.url.substringAfter("/")
+        val mangaSlug = preferences.slugMap[mangaId.toInt()]!!
+
+        return GET("$apiBaseUrl/api/series/$mangaSlug/chapters/$chapterId?type=comic")
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        return json.decodeFromString<PayloadPagesDto>(response.body.string()).chapter.pages.mapIndexed { i, img ->
+        return response.parseAs<PayloadPagesDto>().chapter.pages.mapIndexed { i, img ->
             Page(i, imageUrl = img)
         }
     }
@@ -292,7 +352,7 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         thread {
             try {
                 val response = client.newCall(GET("$apiBaseUrl/api/genres-statuses", headers)).execute()
-                val filters = json.decodeFromString<GenresStatusesDto>(response.body.string())
+                val filters = response.parseAs<GenresStatusesDto>()
 
                 genresList = filters.genres.map { it.name.trim() to it.id }
                 statusesList = filters.statuses.map { it.name.trim() to it.id }
@@ -304,30 +364,42 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         }
     }
 
-    open class UriPartFilter(displayName: String, val vals: Array<Pair<String, Int>>) :
+    open class UriPartFilter(displayName: String, private val vals: Array<Pair<String, Int>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
     }
 
     private enum class FiltersState { NOT_FETCHED, FETCHING, FETCHED }
+    private enum class BookmarksState { NOT_FETCHED, FETCHING, FETCHED }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        CheckBoxPreference(screen.context).apply {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = FETCH_BOOKMARKS_PREF
+            title = "Usar marcadores"
+            summary = "Usa los marcadores del sitio para obtener la url actual de la serie.\nRequiere iniciar sesión en WebView y seguir la serie."
+            setDefaultValue(FETCH_BOOKMARKS_PREF_DEFAULT)
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Reinicie la aplicación para aplicar los cambios", Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also { screen.addPreference(it) }
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = FETCH_DOMAIN_PREF
-            title = FETCH_DOMAIN_PREF_TITLE
-            summary = FETCH_DOMAIN_PREF_SUMMARY
+            title = "Buscar dominio automáticamente"
+            summary = "Intenta buscar el dominio automáticamente al abrir la fuente."
             setDefaultValue(FETCH_DOMAIN_PREF_DEFAULT)
         }.also { screen.addPreference(it) }
 
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            dialogTitle = BASE_URL_PREF_TITLE
+            title = "Editar URL de la fuente"
+            summary = "Para uso temporal, si la extensión se actualiza se perderá el cambio."
+            dialogTitle = "Editar URL de la fuente"
             dialogMessage = "URL por defecto:\n$defaultBaseUrl"
             setDefaultValue(defaultBaseUrl)
             setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
+                Toast.makeText(screen.context, "Reinicie la aplicación para aplicar los cambios", Toast.LENGTH_LONG).show()
                 true
             }
         }.also { screen.addPreference(it) }
@@ -347,29 +419,35 @@ class OlympusScanlation : HttpSource(), ConfigurableSource {
         }
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, FETCH_DOMAIN_PREF_DEFAULT)
+    private fun SharedPreferences.fetchBookmarksPref() = getBoolean(FETCH_BOOKMARKS_PREF, FETCH_BOOKMARKS_PREF_DEFAULT)
+
+    private var _slugMap: Map<Int, String>? = null
+    private var SharedPreferences.slugMap: Map<Int, String>
+        get() {
+            _slugMap?.let { return it }
+            val json = getString(SLUG_MAP, "{}")!!
+            _slugMap = try {
+                json.parseAs<Map<Int, String>>()
+            } catch (_: SerializationException) {
+                emptyMap()
+            }
+            return _slugMap!!
+        }
+        set(map) {
+            _slugMap = map
+            edit().putString(SLUG_MAP, map.toJsonString()).apply()
+        }
 
     companion object {
-
         private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_TITLE = "Editar URL de la fuente"
-        private const val BASE_URL_PREF_SUMMARY = "Para uso temporal, si la extensión se actualiza se perderá el cambio."
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
-        private const val RESTART_APP_MESSAGE = "Reinicie la aplicación para aplicar los cambios"
 
         private const val FETCH_DOMAIN_PREF = "fetchDomain"
-        private const val FETCH_DOMAIN_PREF_TITLE = "Buscar dominio automáticamente"
-        private const val FETCH_DOMAIN_PREF_SUMMARY = "Intenta buscar el dominio automáticamente al abrir la fuente."
         private const val FETCH_DOMAIN_PREF_DEFAULT = true
-    }
 
-    init {
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
-            if (domain != defaultBaseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
+        private const val FETCH_BOOKMARKS_PREF = "fetchBookmarks"
+        private const val FETCH_BOOKMARKS_PREF_DEFAULT = false
+
+        private const val SLUG_MAP = "slugMap"
     }
 }
