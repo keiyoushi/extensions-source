@@ -3,12 +3,8 @@ package eu.kanade.tachiyomi.extension.ru.selfmanga
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.utils.getPreferences
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 
 class SelfManga : GroupLe("SelfManga", "https://selfmanga.live", "ru") {
 

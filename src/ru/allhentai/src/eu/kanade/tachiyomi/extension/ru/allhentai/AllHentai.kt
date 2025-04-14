@@ -1,14 +1,10 @@
 package eu.kanade.tachiyomi.extension.ru.allhentai
 
-import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.utils.getPreferences
-import okhttp3.Request
 
 class AllHentai : GroupLe("AllHentai", "https://20.allhen.online", "ru") {
     override val id = 1809051393403180443
