@@ -15,65 +15,15 @@ class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = super.searchMangaRequest(page, query, filters).url.newBuilder()
-        (if (filters.isEmpty()) getFilterList().reversed() else filters.reversed()).forEach { filter ->
-            when (filter) {
-                is GenreList -> filter.state.forEach { genre ->
-                    if (genre.state != Filter.TriState.STATE_IGNORE) {
-                        url.addQueryParameter(genre.id, arrayOf("=", "=in", "=ex")[genre.state])
-                    }
-                }
-                is Category -> filter.state.forEach { category ->
-                    if (category.state != Filter.TriState.STATE_IGNORE) {
-                        url.addQueryParameter(category.id, arrayOf("=", "=in", "=ex")[category.state])
-                    }
-                }
-                is AgeList -> filter.state.forEach { age ->
-                    if (age.state != Filter.TriState.STATE_IGNORE) {
-                        url.addQueryParameter(age.id, arrayOf("=", "=in", "=ex")[age.state])
-                    }
-                }
-                is FilList -> filter.state.forEach { fils ->
-                    if (fils.state != Filter.TriState.STATE_IGNORE) {
-                        url.addQueryParameter(fils.id, arrayOf("=", "=in", "=ex")[fils.state])
-                    }
-                }
-                is OrderBy -> {
-                    url.addQueryParameter(
-                        "sortType",
-                        arrayOf("RATING", "POPULARITY", "YEAR", "NAME", "DATE_CREATE", "DATE_UPDATE", "USER_RATING")[filter.state],
-                    )
-                }
-                else -> return@forEach
-            }
-        }
-        return if (url.toString().contains("&")) {
-            GET(url.toString().replace("=%3D", "="), headers)
-        } else {
-            popularMangaRequest(page)
-        }
-    }
-    private class OrderBy : Filter.Select<String>(
-        "Сортировка",
-        arrayOf("По популярности", "Популярно сейчас", "По году", "По алфавиту", "Новинки", "По дате обновления", "По рейтингу"),
-    )
-
-    private class Genre(name: String, val id: String) : Filter.TriState(name)
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Жанры", genres)
-    private class Category(categories: List<Genre>) : Filter.Group<Genre>("Категории", categories)
-    private class AgeList(ages: List<Genre>) : Filter.Group<Genre>("Возрастная рекомендация", ages)
-    private class FilList(fils: List<Genre>) : Filter.Group<Genre>("Фильтры", fils)
-
     override fun getFilterList() = FilterList(
         OrderBy(),
-        Category(getCategoryList()),
+        CategoryList(getCategoryList()),
         GenreList(getGenreList()),
         AgeList(getAgeList()),
-        FilList(getFilList()),
+        AdditionalFilterList(getAdditionalFilterList()),
     )
 
-    private fun getFilList() = listOf(
+    private fun getAdditionalFilterList() = listOf(
         Genre("Высокий рейтинг", "s_high_rate"),
         Genre("Сингл", "s_single"),
         Genre("Для взрослых", "s_mature"),
