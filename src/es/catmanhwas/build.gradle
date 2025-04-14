@@ -2,8 +2,8 @@ ext {
     extName = 'CatManhwas'
     extClass = '.CatManhwas'
     themePkg = 'madara'
-    baseUrl = 'https://catmanhwas.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://newcat1.xyz'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
