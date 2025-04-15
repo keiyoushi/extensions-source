@@ -115,8 +115,9 @@ class MangaPark(
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SearchResponse>()
         val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "first")!!
+        val shortenTitle = preference.getBoolean(SHORTEN_TITLE_PREF, false)
 
-        val entries = result.data.searchComics.items.map { it.data.toSManga(pageAsCover) }
+        val entries = result.data.searchComics.items.map { it.data.toSManga(shortenTitle, pageAsCover) }
         val hasNextPage = entries.size == size
 
         return MangasPage(entries, hasNextPage)
@@ -184,8 +185,9 @@ class MangaPark(
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<DetailsResponse>()
         val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "first")!!
+        val shortenTitle = preference.getBoolean(SHORTEN_TITLE_PREF, false)
 
-        return result.data.comic.data.toSManga(pageAsCover)
+        return result.data.comic.data.toSManga(shortenTitle, pageAsCover)
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBeforeLast("#")
@@ -259,6 +261,14 @@ class MangaPark(
             setDefaultValue(true)
         }.also(screen::addPreference)
 
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHORTEN_TITLE_PREF
+            title = "Remove extra information from title"
+            summary = "Clear database to apply changes\n" +
+                "Note: doesn't not work for entries in library"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
         ListPreference(screen.context).apply {
             key = UNCENSORED_COVER_PREF
             title = "Attempt to use Uncensored Cover for Hentai"
@@ -330,6 +340,7 @@ class MangaPark(
 
         private const val ENABLE_NSFW = "pref_nsfw"
         private const val DUPLICATE_CHAPTER_PREF_KEY = "pref_dup_chapters"
+        private const val SHORTEN_TITLE_PREF = "pref_shorten_title"
         private const val UNCENSORED_COVER_PREF = "pref_uncensored_cover"
     }
 }

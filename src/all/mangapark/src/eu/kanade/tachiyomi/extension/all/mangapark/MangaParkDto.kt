@@ -44,9 +44,13 @@ class MangaParkComic(
     @SerialName("max_chapterNode") private val latestChapter: Data<ImageFiles>,
     @SerialName("first_chapterNode") private val firstChapter: Data<ImageFiles>,
 ) {
-    fun toSManga(pageAsCover: String) = SManga.create().apply {
+    fun toSManga(shortenTitle: Boolean, pageAsCover: String) = SManga.create().apply {
         url = "$urlPath#$id"
-        title = name
+        title = if (shortenTitle) {
+            name.replace(shortenTitleRegex, "").trim()
+        } else {
+            name
+        }
         thumbnail_url = if (pageAsCover != "off" && useLatestPageAsCover(genres)) {
             if (pageAsCover == "first") {
                 firstChapter.data.imageFile.urlList.firstOrNull()
@@ -65,6 +69,10 @@ class MangaParkComic(
         author = authors?.joinToString()
         artist = artists?.joinToString()
         description = buildString {
+            if (shortenTitle) {
+                append(name)
+                append("\n\n")
+            }
             summary?.also {
                 append(Jsoup.parse(it).wholeText().trim())
                 append("\n\n")
@@ -126,6 +134,8 @@ class MangaParkComic(
                 it.contains("hentai") && !it.contains("webtoon")
             }
         }
+
+        private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
     }
 }
 
