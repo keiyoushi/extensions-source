@@ -94,7 +94,7 @@ class MangaParkComic(
                 ?.also(::append)
         }.trim()
         genre = genres?.joinToString { it.replace("_", " ").toCamelCase() }
-        status = when (originalStatus) {
+        status = when (originalStatus ?: uploadStatus) {
             "ongoing" -> SManga.ONGOING
             "completed" -> {
                 if (uploadStatus == "ongoing") {
@@ -105,13 +105,7 @@ class MangaParkComic(
             }
             "hiatus" -> SManga.ON_HIATUS
             "cancelled" -> SManga.CANCELLED
-            else -> when (uploadStatus) {
-                "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                "hiatus" -> SManga.ON_HIATUS
-                "cancelled" -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
+            else -> SManga.UNKNOWN
         }
         initialized = true
     }
