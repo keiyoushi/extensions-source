@@ -41,8 +41,8 @@ class MangaParkComic(
     private val extraInfo: String? = null,
     @SerialName("urlCoverOri") private val cover: String? = null,
     private val urlPath: String,
-    @SerialName("max_chapterNode") private val latestChapter: Data<ImageFiles>,
-    @SerialName("first_chapterNode") private val firstChapter: Data<ImageFiles>,
+    @SerialName("max_chapterNode") private val latestChapter: Data<ImageFiles>? = null,
+    @SerialName("first_chapterNode") private val firstChapter: Data<ImageFiles>? = null,
 ) {
     fun toSManga(shortenTitle: Boolean, pageAsCover: String) = SManga.create().apply {
         url = "$urlPath#$id"
@@ -51,19 +51,23 @@ class MangaParkComic(
         } else {
             name
         }
-        thumbnail_url = if (pageAsCover != "off" && useLatestPageAsCover(genres)) {
-            if (pageAsCover == "first") {
-                firstChapter.data.imageFile.urlList.firstOrNull()
-            } else {
-                latestChapter.data.imageFile.urlList.firstOrNull()
-            }
-        } else {
-            cover?.let {
+        thumbnail_url = run {
+            val coverUrl = cover?.let {
                 when {
                     it.startsWith("http") -> it
                     it.startsWith("/") -> "https://$THUMBNAIL_LOOPBACK_HOST$it"
                     else -> null
                 }
+            }
+
+            if (pageAsCover != "off" && useLatestPageAsCover(genres)) {
+                if (pageAsCover == "first") {
+                    firstChapter?.data?.imageFile?.urlList?.firstOrNull() ?: coverUrl
+                } else {
+                    latestChapter?.data?.imageFile?.urlList?.firstOrNull() ?: coverUrl
+                }
+            } else {
+                coverUrl
             }
         }
         author = authors?.joinToString()
