@@ -24,10 +24,16 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 
-class PornPics() : SimpleParsedHttpSource(), ConfigurableSource {
+class PornPics(
+    override val lang: String,
+) : SimpleParsedHttpSource(), ConfigurableSource {
+
+    override val id = when (lang) {
+        "en" -> 1459635082044256286
+        else -> super.id
+    }
 
     override val baseUrl = "https://www.pornpics.com"
-    override val lang = "all"
     override val name = "PornPics"
     override val supportsLatest = true
 
