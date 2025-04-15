@@ -31,6 +31,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MangaPark(
@@ -59,7 +60,7 @@ class MangaPark(
             addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
         }
         rateLimitHost(apiUrl.toHttpUrl(), 1)
-        addNetworkInterceptor { chain ->
+        addInterceptor { chain ->
             val request = chain.request()
             val url = request.url
 
@@ -77,8 +78,7 @@ class MangaPark(
                 chain.proceed(request)
             }
         }
-    }
-        .build()
+    }.build()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -240,7 +240,7 @@ class MangaPark(
             summary = "%s"
 
             setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart Tachiyomi to apply changes", Toast.LENGTH_LONG).show()
+                Toast.makeText(screen.context, "Restart the app to apply changes", Toast.LENGTH_LONG).show()
                 true
             }
         }.also(screen::addPreference)
@@ -255,7 +255,7 @@ class MangaPark(
         SwitchPreferenceCompat(screen.context).apply {
             key = ENABLE_NSFW
             title = "Enable NSFW content"
-            summary = "Clear cookies and restart the app to apply changes"
+            summary = "Clear Cookies & Restart the app to apply changes."
             setDefaultValue(true)
         }.also(screen::addPreference)
 
@@ -266,12 +266,11 @@ class MangaPark(
             entries = arrayOf("Off", "First Chapter", "Last Chapter")
             entryValues = arrayOf("off", "first", "last")
             setDefaultValue("first")
-            setEnabled(preference.getBoolean(ENABLE_NSFW, true))
         }.also(screen::addPreference)
     }
 
     private inline fun <reified T : Any> T.toJsonRequestBody() =
-       toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+        toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 
     private val cookiesNotSet = AtomicBoolean(true)
     private val latch = CountDownLatch(1)
@@ -295,7 +294,7 @@ class MangaPark(
 
                 latch.countDown()
             } else {
-                latch.await()
+                latch.await(10, TimeUnit.SECONDS)
             }
         }
 
