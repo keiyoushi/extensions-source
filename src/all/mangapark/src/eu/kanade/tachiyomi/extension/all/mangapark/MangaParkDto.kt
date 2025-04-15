@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 
 typealias SearchResponse = Data<SearchComics>
@@ -43,7 +44,7 @@ class MangaParkComic(
     @SerialName("max_chapterNode") private val latestChapter: Data<ImageFiles>,
     @SerialName("first_chapterNode") private val firstChapter: Data<ImageFiles>,
 ) {
-    fun toSManga(baseUrl: String, pageAsCover: String) = SManga.create().apply {
+    fun toSManga(pageAsCover: String) = SManga.create().apply {
         url = "$urlPath#$id"
         title = name
         thumbnail_url = if (pageAsCover != "off" && useLatestPageAsCover(genres)) {
@@ -56,7 +57,7 @@ class MangaParkComic(
             cover?.let {
                 when {
                     it.startsWith("http") -> it
-                    it.startsWith("/") -> baseUrl + it
+                    it.startsWith("/") -> "https://$THUMBNAIL_LOOPBACK_HOST$it"
                     else -> null
                 }
             }

@@ -53,10 +53,31 @@ class MangaPark(
 
     private val apiUrl = "$baseUrl/apo/"
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::siteSettingsInterceptor)
-        .addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
-        .rateLimitHost(apiUrl.toHttpUrl(), 1)
+    override val client = network.cloudflareClient.newBuilder().apply {
+        if (preference.getBoolean(ENABLE_NSFW, true)) {
+            addInterceptor(::siteSettingsInterceptor)
+            addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
+        }
+        rateLimitHost(apiUrl.toHttpUrl(), 1)
+        addNetworkInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url
+
+            if (url.host == THUMBNAIL_LOOPBACK_HOST) {
+                val newUrl = url.newBuilder()
+                    .host(domain)
+                    .build()
+
+                val newRequest = request.newBuilder()
+                    .url(newUrl)
+                    .build()
+
+                chain.proceed(newRequest)
+            } else {
+                chain.proceed(request)
+            }
+        }
+    }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -95,7 +116,7 @@ class MangaPark(
         val result = response.parseAs<SearchResponse>()
         val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "first")!!
 
-        val entries = result.data.searchComics.items.map { it.data.toSManga(baseUrl, pageAsCover) }
+        val entries = result.data.searchComics.items.map { it.data.toSManga(pageAsCover) }
         val hasNextPage = entries.size == size
 
         return MangasPage(entries, hasNextPage)
@@ -164,7 +185,7 @@ class MangaPark(
         val result = response.parseAs<DetailsResponse>()
         val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "first")!!
 
-        return result.data.comic.data.toSManga(baseUrl, pageAsCover)
+        return result.data.comic.data.toSManga(pageAsCover)
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBeforeLast("#")
@@ -231,6 +252,13 @@ class MangaPark(
             setDefaultValue(false)
         }.also(screen::addPreference)
 
+        SwitchPreferenceCompat(screen.context).apply {
+            key = ENABLE_NSFW
+            title = "Enable NSFW content"
+            summary = "Clear cookies and restart the app to apply changes"
+            setDefaultValue(true)
+        }.also(screen::addPreference)
+
         ListPreference(screen.context).apply {
             key = UNCENSORED_COVER_PREF
             title = "Attempt to use Uncensored Cover for Hentai"
@@ -238,6 +266,7 @@ class MangaPark(
             entries = arrayOf("Off", "First Chapter", "Last Chapter")
             entryValues = arrayOf("off", "first", "last")
             setDefaultValue("first")
+            setEnabled(preference.getBoolean(ENABLE_NSFW, true))
         }.also(screen::addPreference)
     }
 
@@ -300,7 +329,10 @@ class MangaPark(
             "mpark.to",
         )
 
+        private const val ENABLE_NSFW = "pref_nsfw"
         private const val DUPLICATE_CHAPTER_PREF_KEY = "pref_dup_chapters"
         private const val UNCENSORED_COVER_PREF = "pref_uncensored_cover"
     }
 }
+
+const val THUMBNAIL_LOOPBACK_HOST = "127.0.0.1"
