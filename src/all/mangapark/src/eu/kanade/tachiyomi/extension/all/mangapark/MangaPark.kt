@@ -265,7 +265,7 @@ class MangaPark(
             summary = "Uses first or last chapter page as cover"
             entries = arrayOf("Off", "First Chapter", "Last Chapter")
             entryValues = arrayOf("off", "first", "last")
-            setDefaultValue("first")
+            setDefaultValue("off")
         }.also(screen::addPreference)
     }
 
