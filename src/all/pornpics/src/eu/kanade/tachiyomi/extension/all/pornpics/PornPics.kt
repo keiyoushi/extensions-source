@@ -28,7 +28,7 @@ class PornPics(
     override val lang: String,
 ) : SimpleParsedHttpSource(), ConfigurableSource {
 
-    override val id = when (lang) {
+    override val id get() = when (lang) {
         "en" -> 1459635082044256286
         else -> super.id
     }
@@ -112,7 +112,7 @@ class PornPics(
             // the source of is the options under the pics menu in the nav bar
             val period = if (popular) 1 else 2
             val categoryId = 2585 + period
-            return "$baseUrl/popular/api/galleries/list".toHttpUrl().newBuilder()
+            return "$baseUrl/popular/api/galleries/list/".toHttpUrl().newBuilder()
                 .addQueryParameterPage(page)
                 .addQueryParameter("lang", intl.chosenLanguage)
                 .addQueryParameter("period", period)
@@ -122,7 +122,7 @@ class PornPics(
         }
 
         // the source is the options under the categories/tags/pornstars/channels menu in the nav bar
-        val requestBaseUrl = if (popular) "$baseUrl/$categoryOption" else "$baseUrl/$categoryOption/recent"
+        val requestBaseUrl = if (popular) "$baseUrl/$categoryOption/" else "$baseUrl/$categoryOption/recent/"
         return requestBaseUrl.toHttpUrl().newBuilder()
             .addQueryParameterPage(page)
             .addQueryParameter("lang", intl.chosenLanguage)
