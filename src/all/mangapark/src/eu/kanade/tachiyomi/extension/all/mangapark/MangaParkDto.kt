@@ -38,6 +38,7 @@ class MangaParkComic(
     private val originalStatus: String? = null,
     private val uploadStatus: String? = null,
     private val summary: String? = null,
+    private val extraInfo: String? = null,
     @SerialName("urlCoverOri") private val cover: String? = null,
     private val urlPath: String,
     @SerialName("max_chapterNode") private val latestChapter: Data<ImageFiles>,
@@ -64,21 +65,22 @@ class MangaParkComic(
         author = authors?.joinToString()
         artist = artists?.joinToString()
         description = buildString {
-            val desc = summary?.let { Jsoup.parse(it).text() }
-            val names = altNames?.takeUnless { it.isEmpty() }
-                ?.joinToString("\n") { "• ${it.trim()}" }
-
-            if (desc.isNullOrEmpty()) {
-                if (!names.isNullOrEmpty()) {
-                    append("Alternative Names:\n", names)
-                }
-            } else {
-                append(desc)
-                if (!names.isNullOrEmpty()) {
-                    append("\n\nAlternative Names:\n", names)
-                }
+            summary?.also {
+                append(Jsoup.parse(it).wholeText().trim())
+                append("\n\n")
             }
-        }
+            extraInfo?.takeUnless(String::isBlank)?.also {
+                append("Extra Info:\n")
+                append(Jsoup.parse(it).wholeText().trim())
+                append("\n\n")
+            }
+            altNames?.takeUnless { it.isEmpty() }
+                ?.joinToString(
+                    prefix = "Alternative Names:\n",
+                    separator = "\n",
+                ) { "• ${it.trim()}" }
+                ?.also(::append)
+        }.trim()
         genre = genres?.joinToString { it.replace("_", " ").toCamelCase() }
         status = when (originalStatus) {
             "ongoing" -> SManga.ONGOING

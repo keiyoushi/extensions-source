@@ -25,6 +25,7 @@ val SEARCH_QUERY = buildQuery {
         				originalStatus
                         uploadStatus
         				summary
+                        extraInfo
         				urlCoverOri
         				urlPath
                         max_chapterNode {
@@ -66,6 +67,7 @@ val DETAILS_QUERY = buildQuery {
                     originalStatus
                     uploadStatus
                     summary
+                    extraInfo
                     urlCoverOri
                     urlPath
                     max_chapterNode {
