@@ -444,6 +444,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
-        private val KEY_REGEX = """\.attr\(\s*['"]src['"]\s*,\s*([\w]+)\(\s*([\w]+)\[\s*(cImgIndex|currImage|currIndex)""".toRegex()
+        private val KEY_REGEX = """\.attr\(\s*['"]src['"]\s*,\s*([\w]+)\(\s*([\w]+)\[\s*\w+""".toRegex()
     }
 }
