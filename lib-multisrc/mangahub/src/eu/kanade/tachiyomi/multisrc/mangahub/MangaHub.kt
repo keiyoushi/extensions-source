@@ -7,7 +7,6 @@ import eu.kanade.tachiyomi.lib.randomua.UserAgentType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -66,7 +65,6 @@ abstract class MangaHub(
         )
         .addInterceptor(::apiAuthInterceptor)
         .addInterceptor(::graphQLApiInterceptor)
-        .rateLimit(1)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
