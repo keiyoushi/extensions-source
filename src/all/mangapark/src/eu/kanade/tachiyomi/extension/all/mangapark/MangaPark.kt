@@ -17,20 +17,19 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -53,8 +52,6 @@ class MangaPark(
     override val baseUrl = "https://$domain"
 
     private val apiUrl = "$baseUrl/apo/"
-
-    private val json: Json by injectLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::siteSettingsInterceptor)
@@ -244,14 +241,8 @@ class MangaPark(
         }.also(screen::addPreference)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use { body.string() }.let(json::decodeFromString)
-
-    private inline fun <reified T> List<*>.firstInstanceOrNull(): T? =
-        filterIsInstance<T>().firstOrNull()
-
     private inline fun <reified T : Any> T.toJsonRequestBody() =
-        json.encodeToString(this).toRequestBody(JSON_MEDIA_TYPE)
+       toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 
     private val cookiesNotSet = AtomicBoolean(true)
     private val latch = CountDownLatch(1)
