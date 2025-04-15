@@ -27,6 +27,20 @@ val SEARCH_QUERY = buildQuery {
         				summary
         				urlCoverOri
         				urlPath
+                        max_chapterNode {
+                            data {
+                                imageFile {
+                                    urlList
+                                }
+                            }
+                        }
+                        first_chapterNode {
+                            data {
+                                imageFile {
+                                    urlList
+                                }
+                            }
+                        }
         			}
         		}
         	}
@@ -54,6 +68,20 @@ val DETAILS_QUERY = buildQuery {
                     summary
                     urlCoverOri
                     urlPath
+                    max_chapterNode {
+                        data {
+                            imageFile {
+                                urlList
+                            }
+                        }
+                    }
+                    first_chapterNode {
+                        data {
+                            imageFile {
+                                urlList
+                            }
+                        }
+                    }
                 }
             }
         }

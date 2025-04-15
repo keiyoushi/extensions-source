@@ -40,11 +40,27 @@ class MangaParkComic(
     private val summary: String? = null,
     @SerialName("urlCoverOri") private val cover: String? = null,
     private val urlPath: String,
+    @SerialName("max_chapterNode") private val latestChapter: Data<ImageFiles>,
+    @SerialName("first_chapterNode") private val firstChapter: Data<ImageFiles>,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(baseUrl: String, pageAsCover: String) = SManga.create().apply {
         url = "$urlPath#$id"
         title = name
-        thumbnail_url = cover
+        thumbnail_url = if (pageAsCover != "off" && useLatestPageAsCover(genres)) {
+            if (pageAsCover == "first") {
+                firstChapter.data.imageFile.urlList.firstOrNull()
+            } else {
+                latestChapter.data.imageFile.urlList.firstOrNull()
+            }
+        } else {
+            cover?.let {
+                when {
+                    it.startsWith("http") -> it
+                    it.startsWith("/") -> baseUrl + it
+                    else -> null
+                }
+            }
+        }
         author = authors?.joinToString()
         artist = artists?.joinToString()
         description = buildString {
@@ -95,6 +111,12 @@ class MangaParkComic(
                 capitalize = char.isWhitespace()
             }
             return result.toString()
+        }
+
+        private fun useLatestPageAsCover(genres: List<String>?): Boolean {
+            return genres.orEmpty().let {
+                it.contains("hentai") && !it.contains("webtoon")
+            }
         }
     }
 }

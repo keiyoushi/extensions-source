@@ -96,8 +96,9 @@ class MangaPark(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SearchResponse>()
+        val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "first")!!
 
-        val entries = result.data.searchComics.items.map { it.data.toSManga() }
+        val entries = result.data.searchComics.items.map { it.data.toSManga(baseUrl, pageAsCover) }
         val hasNextPage = entries.size == size
 
         return MangasPage(entries, hasNextPage)
@@ -164,8 +165,9 @@ class MangaPark(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<DetailsResponse>()
+        val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "first")!!
 
-        return result.data.comic.data.toSManga()
+        return result.data.comic.data.toSManga(baseUrl, pageAsCover)
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBeforeLast("#")
@@ -230,6 +232,15 @@ class MangaPark(
             title = "Fetch Duplicate Chapters"
             summary = "Refresh chapter list to apply changes"
             setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = UNCENSORED_COVER_PREF
+            title = "Attempt to use Uncensored Cover for Hentai"
+            summary = "Uses first or last chapter page as cover"
+            entries = arrayOf("Off", "First Chapter", "Last Chapter")
+            entryValues = arrayOf("off", "first", "last")
+            setDefaultValue("first")
         }.also(screen::addPreference)
     }
 
@@ -299,5 +310,6 @@ class MangaPark(
         )
 
         private const val DUPLICATE_CHAPTER_PREF_KEY = "pref_dup_chapters"
+        private const val UNCENSORED_COVER_PREF = "pref_uncensored_cover"
     }
 }
