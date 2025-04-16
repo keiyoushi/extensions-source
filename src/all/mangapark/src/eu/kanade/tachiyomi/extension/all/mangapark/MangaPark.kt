@@ -97,7 +97,7 @@ class MangaPark(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SearchResponse>()
-        val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "first")!!
+        val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "off")!!
         val shortenTitle = preference.getBoolean(SHORTEN_TITLE_PREF, false)
 
         val entries = result.data.searchComics.items.map { it.data.toSManga(shortenTitle, pageAsCover) }
@@ -167,7 +167,7 @@ class MangaPark(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<DetailsResponse>()
-        val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "first")!!
+        val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "off")!!
         val shortenTitle = preference.getBoolean(SHORTEN_TITLE_PREF, false)
 
         return result.data.comic.data.toSManga(shortenTitle, pageAsCover)
@@ -247,7 +247,7 @@ class MangaPark(
         SwitchPreferenceCompat(screen.context).apply {
             key = SHORTEN_TITLE_PREF
             title = "Remove extra information from title"
-            summary = "Clear database to apply changes\n" +
+            summary = "Clear database to apply changes\n\n" +
                 "Note: doesn't not work for entries in library"
             setDefaultValue(false)
         }.also(screen::addPreference)
