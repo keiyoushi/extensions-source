@@ -92,7 +92,7 @@ class YellowNote(
         val maxPage = doc.select("div.pager:first-of-type a:not([class])").last()?.text()?.toInt() ?: 1
         val basePageUrl = response.request.url.toString()
             .removeSuffix(".html")
-        return (1..maxPage).map { page ->
+        return (maxPage downTo 1).map { page ->
             SChapter.create().apply {
                 chapter_number = 0F
                 setUrlWithoutDomain("$basePageUrl/$page.html")
