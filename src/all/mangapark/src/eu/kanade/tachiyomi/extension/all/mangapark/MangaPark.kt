@@ -30,6 +30,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -60,24 +61,8 @@ class MangaPark(
             addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
         }
         rateLimitHost(apiUrl.toHttpUrl(), 1)
-        addInterceptor { chain ->
-            val request = chain.request()
-            val url = request.url
-
-            if (url.host == THUMBNAIL_LOOPBACK_HOST) {
-                val newUrl = url.newBuilder()
-                    .host(domain)
-                    .build()
-
-                val newRequest = request.newBuilder()
-                    .url(newUrl)
-                    .build()
-
-                chain.proceed(newRequest)
-            } else {
-                chain.proceed(request)
-            }
-        }
+        // intentionally after rate limit interceptor so thumbnails are not rate limited
+        addInterceptor(::thumbnailDomainInterceptor)
     }.build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -305,10 +290,35 @@ class MangaPark(
                 latch.countDown()
             } else {
                 latch.await(10, TimeUnit.SECONDS)
+
+                if (latch.count == 1L) {
+                    cookiesNotSet.set(true)
+
+                    throw IOException("Unable to set necessary cookies")
+                }
             }
         }
 
         return chain.proceed(request)
+    }
+
+    private fun thumbnailDomainInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val url = request.url
+
+        return if (url.host == THUMBNAIL_LOOPBACK_HOST) {
+            val newUrl = url.newBuilder()
+                .host(domain)
+                .build()
+
+            val newRequest = request.newBuilder()
+                .url(newUrl)
+                .build()
+
+            chain.proceed(newRequest)
+        } else {
+            chain.proceed(request)
+        }
     }
 
     override fun imageUrlParse(response: Response): String {

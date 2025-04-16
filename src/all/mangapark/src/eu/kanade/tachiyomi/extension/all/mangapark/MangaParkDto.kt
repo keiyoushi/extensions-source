@@ -47,7 +47,12 @@ class MangaParkComic(
     fun toSManga(shortenTitle: Boolean, pageAsCover: String) = SManga.create().apply {
         url = "$urlPath#$id"
         title = if (shortenTitle) {
-            name.replace(shortenTitleRegex, "").trim()
+            var shortName = name
+            while (shortenTitleRegex.containsMatchIn(shortName)) {
+                shortName = shortName.replace(shortenTitleRegex, "").trim()
+            }
+
+            shortName
         } else {
             name
         }
@@ -86,7 +91,7 @@ class MangaParkComic(
                 append(Jsoup.parse(it).wholeText().trim())
                 append("\n\n")
             }
-            altNames?.takeUnless { it.isEmpty() }
+            altNames?.takeUnless(List<String>::isEmpty)
                 ?.joinToString(
                     prefix = "Alternative Names:\n",
                     separator = "\n",
@@ -133,7 +138,7 @@ class MangaParkComic(
             }
         }
 
-        private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
+        private val shortenTitleRegex = Regex("""^(\[[^]]+\])|^(\([^)]+\))|^(\{[^}]+\})|(\[[^]]+\])${'$'}|(\([^)]+\))${'$'}|(\{[^}]+\})${'$'}""")
     }
 }
 
