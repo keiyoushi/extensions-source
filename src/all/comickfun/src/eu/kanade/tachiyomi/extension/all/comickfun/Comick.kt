@@ -340,7 +340,7 @@ abstract class Comick(
     }
 
     private fun addTagQueryParameters(builder: Builder, tags: String, parameterName: String) {
-        tags.split(",").forEach {
+        tags.split(",").filter(String::isNotEmpty).forEach {
             builder.addQueryParameter(
                 parameterName,
                 it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-")
