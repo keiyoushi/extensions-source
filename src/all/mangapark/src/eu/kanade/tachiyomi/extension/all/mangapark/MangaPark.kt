@@ -30,9 +30,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import java.io.IOException
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MangaPark(
@@ -289,13 +287,7 @@ class MangaPark(
 
                 latch.countDown()
             } else {
-                latch.await(10, TimeUnit.SECONDS)
-
-                if (latch.count == 1L) {
-                    cookiesNotSet.set(true)
-
-                    throw IOException("Unable to set necessary cookies")
-                }
+                latch.await()
             }
         }
 
