@@ -9,12 +9,15 @@ import android.util.Log
 import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.lib.randomua.UserAgentType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -23,8 +26,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -35,7 +41,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -51,7 +56,8 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(
@@ -173,6 +179,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val infoElement = document.select("div.barContent").first()!!
 
         val manga = SManga.create()
+        manga.title = infoElement.selectFirst("a.bigChar")!!.text()
         manga.artist = infoElement.select("p:has(span:contains(Artist:)) > a").first()?.text()
         manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").first()?.text()
         manga.genre = infoElement.select("p:has(span:contains(Genres:)) > *:gt(0)").text()
@@ -211,11 +218,11 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(urlElement.attr("href"))
         chapter.name = urlElement.text()
-        chapter.date_upload = element.select("td:eq(1)").first()?.text()?.let {
-            SimpleDateFormat("MM/dd/yyyy", Locale.getDefault()).parse(it)?.time ?: 0L
-        } ?: 0
+        chapter.date_upload = dateFormat.tryParse(element.selectFirst("td:eq(1)")?.text())
         return chapter
     }
+
+    private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
 
     override fun pageListRequest(chapter: SChapter): Request {
         val qualitySuffix = if ((qualitypref() != "lq" && serverpref() != "s2") || (qualitypref() == "lq" && serverpref() == "s2")) {
@@ -232,12 +239,8 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         var webView: WebView? = null
-        var images: List<String> = emptyList()
+        var urls: List<List<String>> = emptyList()
 
-        val html = document.outerHtml()
-        val match = KEY_REGEX.find(html)
-        val key1 = match?.groups?.get(1)?.value ?: throw Exception("Fail to get image links. Logging in via WebView may fix this issue.")
-        val key2 = match?.groups?.get(2)?.value ?: throw Exception("Fail to get image links. Logging in via WebView may fix this issue.")
         handler.post {
             val innerWv = WebView(Injekt.get<Application>())
 
@@ -249,14 +252,32 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
             innerWv.webViewClient = object : WebViewClient() {
-                override fun onLoadResource(view: WebView?, url: String?) {
+                private val emptyResponse = WebResourceResponse("text/plain", "utf-8", 200, "OK", mapOf(), "".byteInputStream())
+
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): WebResourceResponse? {
+                    val url = request?.url?.toString()
+
+                    url ?: return emptyResponse
+
+                    if (!url.contains("rguard")) {
+                        return emptyResponse
+                    }
+
+                    return super.shouldInterceptRequest(view, request)
+                }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
                     view?.evaluateJavascript(
-                        """
-                        window['$key2'].map(i => $key1(i));
-                        """.trimIndent(),
+                        Readcomiconline::class.java
+                            .getResourceAsStream("/assets/script.js")!!
+                            .bufferedReader()
+                            .use { it.readText() },
                     ) {
                         try {
-                            images = json.decodeFromString<List<String>>(it)
+                            urls = it.parseAs()
                             latch.countDown()
                         } catch (e: Exception) {
                             Log.e("RCO", e.stackTraceToString())
@@ -286,7 +307,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
             innerWv.loadDataWithBaseURL(
                 document.location(),
-                html,
+                document.outerHtml(),
                 "text/html",
                 "UTF-8",
                 null,
@@ -298,6 +319,30 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
         if (latch.count == 1L) {
             throw Exception("Timeout getting image links")
+        }
+
+        val images = runBlocking {
+            val valid = urls.map { urlList ->
+                async {
+                    val request = Request.Builder()
+                        .url(urlList.random())
+                        .method("HEAD", null)
+                        .headers(headers)
+                        .build()
+
+                    val response = client.newCall(request).await()
+                    val contentType = response.headers["content-type"] ?: ""
+                    val size = response.headers["content-length"]?.toLongOrNull() ?: 0L
+
+                    response.isSuccessful && contentType.startsWith("image") && size > 100
+                }
+            }.awaitAll()
+
+            val index = valid.indexOf(true)
+            if (index == -1) {
+                throw Exception("No valid image links found")
+            }
+            urls[index]
         }
 
         return images.mapIndexed { idx, img ->
@@ -444,6 +489,5 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
-        private val KEY_REGEX = """\.attr\(\s*['"]src['"]\s*,\s*([\w]+)\(\s*([\w]+)\[\s*\w+""".toRegex()
     }
 }
