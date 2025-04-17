@@ -52,21 +52,43 @@ class YellowNote(
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
+    private val styleUrlRegex = """url\(['"]?([^'"]+)['"]?\)""".toRegex()
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         YellowNotePreferences.buildPreferences(screen.context, intl)
             .forEach(screen::addPreference)
     }
 
-    override fun simpleMangaSelector() = "div.item.photo"
+    override fun simpleMangaSelector() = "div.article > div.list > div.item:not([class*=item exoclick_300x500])"
 
-    override fun simpleMangaFromElement(element: Element) = SManga.create().apply {
-        val imgEl = element.selectFirst("img")!!
+    override fun simpleMangaFromElement(element: Element): SManga {
+        if (element.hasClass("amateur")) {
+            return simpleMangaFromElementByAmateur(element)
+        }
+
+        return SManga.create().apply {
+            val imgEl = element.selectFirst("img")!!
+            val titleAppend = element.selectFirst("div.tag > div")?.text()?.let { "($it)" }.orEmpty()
+            title = "${imgEl.attr("alt")}$titleAppend"
+
+            thumbnail_url = imgEl.absUrl("src")
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        }
+    }
+
+    // /amateurs
+    private fun simpleMangaFromElementByAmateur(element: Element) = SManga.create().apply {
         val titleAppend = element.selectFirst("div.tag > div")?.text()?.let { "($it)" }.orEmpty()
-        title = "${imgEl.attr("alt")}$titleAppend"
+        title = "${element.selectFirst("div:nth-child(3)")!!.text()}$titleAppend"
 
-        thumbnail_url = imgEl.absUrl("src")
+        thumbnail_url = element.selectFirst(".img")?.attr("style")
+            ?.let { styleUrlRegex.find(it) }
+            ?.groupValues
+            ?.get(1)
+
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        setUrlWithoutDomain(element.selectFirst("a[href]")!!.absUrl("href"))
     }
 
     override fun simpleNextPageSelector() = "div.pager:first-of-type a[current] + a[href]"
