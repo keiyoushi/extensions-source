@@ -15,8 +15,8 @@ class CookieRedirectInterceptor(private val client: OkHttpClient) : Interceptor 
         val request = chain.request()
         val response = chain.proceed(request)
 
-        val path = request.url.encodedPath
-        if (path.startsWith("/chapters", ignoreCase = true) || path.startsWith("/mangas", ignoreCase = true)) {
+        val contentType = response.header("content-type")
+        if (contentType != null && contentType.startsWith("image/", ignoreCase = true)) {
             return response
         }
 
