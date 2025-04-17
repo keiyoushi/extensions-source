@@ -3,7 +3,7 @@ ext {
     extClass = '.Mangaworld'
     themePkg = 'mangaworld'
     baseUrl = 'https://www.mangaworld.nz'
-    overrideVersionCode = 8
+    overrideVersionCode = 7
     isNsfw = false
 }
 
