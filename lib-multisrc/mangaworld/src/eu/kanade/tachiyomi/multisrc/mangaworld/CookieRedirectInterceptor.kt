@@ -13,7 +13,7 @@ class CookieRedirectInterceptor(private val client: OkHttpClient) : Interceptor 
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        // dont intercept request coming from the cdn eg. skip images
+        
         val host = request.url.host
         if (host.startsWith("cdn", ignoreCase = true)) {
             return chain.proceed(request)
