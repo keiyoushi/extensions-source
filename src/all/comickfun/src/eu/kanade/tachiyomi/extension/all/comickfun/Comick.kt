@@ -79,6 +79,12 @@ abstract class Comick(
             }
         }.also(screen::addPreference)
 
+        EditTextPreference(screen.context).apply {
+            key = IGNORED_TAGS_PREF
+            title = intl["ignored_tags_title"]
+            summary = intl["ignored_tags_summary"]
+        }.also(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_ALTERNATIVE_TITLES_PREF
             title = intl["show_alternative_titles_title"]
@@ -184,6 +190,14 @@ abstract class Comick(
             .orEmpty()
             .toSet()
 
+    private val SharedPreferences.ignoredTags: String
+        get() = getString(IGNORED_TAGS_PREF, "")
+            ?.split("\n")
+            ?.map(String::trim)
+            ?.filter(String::isNotEmpty)
+            .orEmpty()
+            .joinToString(",")
+
     private val SharedPreferences.showAlternativeTitles: Boolean
         get() = getBoolean(SHOW_ALTERNATIVE_TITLES_PREF, SHOW_ALTERNATIVE_TITLES_DEFAULT)
 
@@ -243,8 +257,13 @@ abstract class Comick(
 
     /** Popular Manga **/
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/v1.0/search?sort=follow&limit=$LIMIT&page=$page&tachiyomi=true"
-        return GET(url, headers)
+        return searchMangaRequest(
+            page = page,
+            query = "",
+            filters = FilterList(
+                SortFilter("follow"),
+            ),
+        )
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -257,8 +276,13 @@ abstract class Comick(
 
     /** Latest Manga **/
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/v1.0/search?sort=uploaded&limit=$LIMIT&page=$page&tachiyomi=true"
-        return GET(url, headers)
+        return searchMangaRequest(
+            page = page,
+            query = "",
+            filters = FilterList(
+                SortFilter("uploaded"),
+            ),
+        )
     }
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
@@ -316,7 +340,7 @@ abstract class Comick(
     }
 
     private fun addTagQueryParameters(builder: Builder, tags: String, parameterName: String) {
-        tags.split(",").forEach {
+        tags.split(",").filter(String::isNotEmpty).forEach {
             builder.addQueryParameter(
                 parameterName,
                 it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-")
@@ -412,6 +436,7 @@ abstract class Comick(
                     else -> {}
                 }
             }
+            addTagQueryParameters(this, preferences.ignoredTags, "excluded-tags")
             addQueryParameter("tachiyomi", "true")
             addQueryParameter("limit", "$LIMIT")
             addQueryParameter("page", "$page")
@@ -587,6 +612,7 @@ abstract class Comick(
         const val SLUG_SEARCH_PREFIX = "id:"
         private val SPACE_AND_SLASH_REGEX = Regex("[ /]")
         private const val IGNORED_GROUPS_PREF = "IgnoredGroups"
+        private const val IGNORED_TAGS_PREF = "IgnoredTags"
         private const val SHOW_ALTERNATIVE_TITLES_PREF = "ShowAlternativeTitles"
         const val SHOW_ALTERNATIVE_TITLES_DEFAULT = false
         private const val INCLUDE_MU_TAGS_PREF = "IncludeMangaUpdatesTags"
