@@ -17,20 +17,19 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -54,13 +53,15 @@ class MangaPark(
 
     private val apiUrl = "$baseUrl/apo/"
 
-    private val json: Json by injectLazy()
-
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::siteSettingsInterceptor)
-        .addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
-        .rateLimitHost(apiUrl.toHttpUrl(), 1)
-        .build()
+    override val client = network.cloudflareClient.newBuilder().apply {
+        if (preference.getBoolean(ENABLE_NSFW, true)) {
+            addInterceptor(::siteSettingsInterceptor)
+            addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
+        }
+        rateLimitHost(apiUrl.toHttpUrl(), 1)
+        // intentionally after rate limit interceptor so thumbnails are not rate limited
+        addInterceptor(::thumbnailDomainInterceptor)
+    }.build()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -96,8 +97,10 @@ class MangaPark(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SearchResponse>()
+        val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "off")!!
+        val shortenTitle = preference.getBoolean(SHORTEN_TITLE_PREF, false)
 
-        val entries = result.data.searchComics.items.map { it.data.toSManga() }
+        val entries = result.data.searchComics.items.map { it.data.toSManga(shortenTitle, pageAsCover) }
         val hasNextPage = entries.size == size
 
         return MangasPage(entries, hasNextPage)
@@ -164,8 +167,10 @@ class MangaPark(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<DetailsResponse>()
+        val pageAsCover = preference.getString(UNCENSORED_COVER_PREF, "off")!!
+        val shortenTitle = preference.getBoolean(SHORTEN_TITLE_PREF, false)
 
-        return result.data.comic.data.toSManga()
+        return result.data.comic.data.toSManga(shortenTitle, pageAsCover)
     }
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url.substringBeforeLast("#")
@@ -220,7 +225,7 @@ class MangaPark(
             summary = "%s"
 
             setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart Tachiyomi to apply changes", Toast.LENGTH_LONG).show()
+                Toast.makeText(screen.context, "Restart the app to apply changes", Toast.LENGTH_LONG).show()
                 true
             }
         }.also(screen::addPreference)
@@ -231,16 +236,34 @@ class MangaPark(
             summary = "Refresh chapter list to apply changes"
             setDefaultValue(false)
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = ENABLE_NSFW
+            title = "Enable NSFW content"
+            summary = "Clear Cookies & Restart the app to apply changes."
+            setDefaultValue(true)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHORTEN_TITLE_PREF
+            title = "Remove extra information from title"
+            summary = "Clear database to apply changes\n\n" +
+                "Note: doesn't not work for entries in library"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = UNCENSORED_COVER_PREF
+            title = "Attempt to use Uncensored Cover for Hentai"
+            summary = "Uses first or last chapter page as cover"
+            entries = arrayOf("Off", "First Chapter", "Last Chapter")
+            entryValues = arrayOf("off", "first", "last")
+            setDefaultValue("off")
+        }.also(screen::addPreference)
     }
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use { body.string() }.let(json::decodeFromString)
-
-    private inline fun <reified T> List<*>.firstInstanceOrNull(): T? =
-        filterIsInstance<T>().firstOrNull()
-
     private inline fun <reified T : Any> T.toJsonRequestBody() =
-        json.encodeToString(this).toRequestBody(JSON_MEDIA_TYPE)
+        toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 
     private val cookiesNotSet = AtomicBoolean(true)
     private val latch = CountDownLatch(1)
@@ -271,6 +294,25 @@ class MangaPark(
         return chain.proceed(request)
     }
 
+    private fun thumbnailDomainInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val url = request.url
+
+        return if (url.host == THUMBNAIL_LOOPBACK_HOST) {
+            val newUrl = url.newBuilder()
+                .host(domain)
+                .build()
+
+            val newRequest = request.newBuilder()
+                .url(newUrl)
+                .build()
+
+            chain.proceed(newRequest)
+        } else {
+            chain.proceed(request)
+        }
+    }
+
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
     }
@@ -298,6 +340,11 @@ class MangaPark(
             "mpark.to",
         )
 
+        private const val ENABLE_NSFW = "pref_nsfw"
         private const val DUPLICATE_CHAPTER_PREF_KEY = "pref_dup_chapters"
+        private const val SHORTEN_TITLE_PREF = "pref_shorten_title"
+        private const val UNCENSORED_COVER_PREF = "pref_uncensored_cover"
     }
 }
+
+const val THUMBNAIL_LOOPBACK_HOST = "127.0.0.1"
