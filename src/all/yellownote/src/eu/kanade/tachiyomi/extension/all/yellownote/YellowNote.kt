@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.yellownote
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.all.yellownote.YellowNoteFilters.SortSelector
 import eu.kanade.tachiyomi.extension.all.yellownote.YellowNotePreferences.baseUrl
+import eu.kanade.tachiyomi.extension.all.yellownote.YellowNotePreferences.preferenceMigration
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -16,6 +17,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -28,7 +30,7 @@ class YellowNote(
     private val subdomain: String? = null,
 ) : SimpleParsedHttpSource(), ConfigurableSource {
 
-    override val baseUrl get() = preferences.baseUrl(subdomain)
+    override val baseUrl by lazy { preferences.baseUrl(subdomain) }
 
     override val name = "小黄书"
 
@@ -36,7 +38,7 @@ class YellowNote(
 
     override val client = network.cloudflareClient
 
-    private val preferences = getPreferences()
+    private val preferences = getPreferences { preferenceMigration() }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -51,7 +53,8 @@ class YellowNote(
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        YellowNotePreferences.buildPreferences(screen.context, intl).forEach(screen::addPreference)
+        YellowNotePreferences.buildPreferences(screen.context, intl)
+            .forEach(screen::addPreference)
     }
 
     override fun simpleMangaSelector() = "div.item.photo"
@@ -109,13 +112,18 @@ class YellowNote(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val categorySelector = filters.firstInstance<YellowNoteFilters.CategorySelector>()
+        val sortSelector = filters.firstInstance<SortSelector>()
         val uriPart = when {
-            query.isBlank() -> "$baseUrl${categorySelector.toUrlPart()}"
-            else -> "$baseUrl/photos/keyword-$query"
+            query.isBlank() -> categorySelector.toUriPart()
+            else -> "photos/keyword-$query"
         }
 
-        val sortSelector = filters.firstInstance<SortSelector>()
-        return GET("$uriPart${sortSelector.toUriPart()}/$page.html", headers)
+        val httpUrl = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments(uriPart)
+            .addPathSegment(sortSelector.toUriPart())
+            .addPathSegments("$page.html")
+            .build()
+        return GET(httpUrl, headers)
     }
 
     override fun getFilterList() = FilterList(
