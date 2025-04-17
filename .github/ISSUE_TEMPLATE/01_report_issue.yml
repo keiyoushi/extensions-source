@@ -99,7 +99,7 @@ body:
           required: true
         - label: I have updated all installed extensions.
           required: true
-        - label: I have tried the [troubleshooting guide](https://tachiyomi.org/help/guides/troubleshooting/).
+        - label: I have tried the [troubleshooting guide](https://mihon.app/docs/guides/troubleshooting/).
           required: true
         - label: If this is an issue with the app itself, I should be opening an issue in the [app repository](https://github.com/tachiyomiorg/tachiyomi/issues/new/choose).
           required: true
