@@ -13,11 +13,13 @@ class CookieRedirectInterceptor(private val client: OkHttpClient) : Interceptor 
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val host = request.url.host
-        if (host.startsWith("cdn", ignoreCase = true)) {
-            return chain.proceed(request)
-        }
         val response = chain.proceed(request)
+
+        val path = request.url.encodedPath
+        if (path.startsWith("/chapters", ignoreCase = true) || path.startsWith("/mangas", ignoreCase = true)) {
+            return response
+        }
+
         // ignore requests that already have completed the JS challenge
         if (response.headers["vary"] != null) return response
 
