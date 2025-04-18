@@ -118,8 +118,14 @@ class UpdateUrlInterceptor(private val preferences: SharedPreferences) : Interce
     var isUpdated = false
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
+        var request = chain.request()
         if (!request.url.toString().startsWith(baseUrl)) return chain.proceed(request)
+
+        request = request.newBuilder().headers(
+            request.headers.newBuilder()
+                .set("Referer", baseUrl)
+                .build(),
+        ).build()
 
         val failedResponse = try {
             val response = chain.proceed(request)
