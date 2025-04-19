@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
@@ -45,12 +46,38 @@ open class WebtoonsSrc(
             }
         }
         screen.addPreference(authorsNotesPref)
+
+        val maxQualityPref = SwitchPreferenceCompat(screen.context).apply {
+            key = USE_MAX_QUALITY_KEY
+            title = "Use maximum quality images"
+            summary = "Enable to load images in maximum quality."
+            setDefaultValue(false)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val checkValue = newValue as Boolean
+                preferences.edit().putBoolean(USE_MAX_QUALITY_KEY, checkValue).commit()
+            }
+        }
+        screen.addPreference(maxQualityPref)
     }
 
     private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
+    private fun useMaxQualityPref() = preferences.getBoolean(USE_MAX_QUALITY_KEY, false)
 
     override fun pageListParse(document: Document): List<Page> {
-        var pages = document.select("div#_imageList > img").mapIndexed { i, element -> Page(i, "", element.attr("data-url")) }
+        val useMaxQuality = useMaxQualityPref()
+        var pages = document.select("div#_imageList > img").mapIndexed { i, element ->
+            val imageUrl = element.attr("data-url").toHttpUrl()
+
+            if (useMaxQuality && imageUrl.queryParameter("type") == "q90") {
+                val newImageUrl = imageUrl.newBuilder().apply {
+                    removeAllQueryParameters("type")
+                }.build()
+                Page(i, "", newImageUrl.toString())
+            } else {
+                Page(i, "", imageUrl.toString())
+            }
+        }
 
         if (showAuthorsNotesPref()) {
             val note = document.select("div.creator_note p.author_text").text()
@@ -89,5 +116,6 @@ open class WebtoonsSrc(
 
     companion object {
         private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
+        private const val USE_MAX_QUALITY_KEY = "useMaxQuality"
     }
 }
