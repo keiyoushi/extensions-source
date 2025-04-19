@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaTRNet'
     themePkg = 'madara'
     baseUrl = 'https://mangatr.app'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
