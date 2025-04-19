@@ -11,4 +11,5 @@ class PoseidonScans : Madara(
     dateFormat = SimpleDateFormat("dd/mm/yyyy", Locale.FRANCE),
 ) {
     override val useNewChapterEndpoint = true
+    override val mangaSubString = "series"
 }
