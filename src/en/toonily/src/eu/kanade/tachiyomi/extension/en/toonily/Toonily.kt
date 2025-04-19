@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.toonily
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -29,6 +30,14 @@ class Toonily : Madara(
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override fun searchMangaSelector() = "div.page-item-detail.manga"
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        return super.searchMangaRequest(
+            page,
+            query.replace(titleSpecialCharactersRegex, " ").trim(),
+            filters,
+        )
+    }
 
     override fun genresRequest(): Request {
         return GET("$baseUrl/search/?post_type=wp-manga", headers)
@@ -82,6 +91,7 @@ class Toonily : Madara(
     }
 
     companion object {
+        val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()
         val sdCoverRegex = Regex("""(-\d+x\d+)(\.\w+)${'$'}""")
     }
 }
