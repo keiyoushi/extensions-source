@@ -3,7 +3,7 @@ ext {
     extClass = '.WebtoonsFactory'
     themePkg = 'webtoons'
     baseUrl = 'https://www.webtoons.com'
-    overrideVersionCode = 40
+    overrideVersionCode = 41
     isNsfw = false
 }
 
