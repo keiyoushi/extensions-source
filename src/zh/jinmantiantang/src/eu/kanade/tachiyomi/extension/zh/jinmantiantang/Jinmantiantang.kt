@@ -56,7 +56,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         .addInterceptor(ScrambledImageInterceptor).build()
 
     // 添加额外的header增加规避Cloudflare可能性
-    override fun headersBuilder() =  super.headersBuilder()
+    override fun headersBuilder() = super.headersBuilder()
         .set("Referer", baseUrl)
 
     // 点击量排序(人气)
