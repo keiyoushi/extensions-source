@@ -57,7 +57,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
 
     // 添加额外的header增加规避Cloudflare可能性
     override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", baseUrl)
+        .set("Referer", "$baseUrl/")
 
     // 点击量排序(人气)
     override fun popularMangaRequest(page: Int): Request {
