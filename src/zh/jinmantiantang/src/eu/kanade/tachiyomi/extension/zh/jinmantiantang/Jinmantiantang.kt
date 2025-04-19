@@ -55,6 +55,10 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         .apply { interceptors().add(0, updateUrlInterceptor) }
         .addInterceptor(ScrambledImageInterceptor).build()
 
+    // 添加额外的header增加规避Cloudflare可能性
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+
     // 点击量排序(人气)
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/albums?o=mv&page=$page", headers)
