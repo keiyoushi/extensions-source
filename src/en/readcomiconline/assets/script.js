@@ -29,19 +29,28 @@
 
     arrays.forEach(arrayValue => {
         functions.forEach(funcValue => {
-            try {
-                const mapped = arrayValue.map(x => funcValue(x));
+            const argCount = funcValue.length;
 
-                if (
-                    Array.isArray(mapped) &&
-                    mapped.length != 0 &&
-                    mapped.every(item => typeof item === 'string' && isValidUrl(item))
-                ) {
-                    results.push(mapped);
-                }
-            } catch (err) {}
+            for (let i = 0; i < argCount; i++) {
+                try {
+                    const mapped = arrayValue.map(elem => {
+                        const args = new Array(argCount).fill(undefined);
+                        args[i] = elem;
+                        return funcValue(...args);
+                    });
+
+                    if (
+                        Array.isArray(mapped) &&
+                        mapped.length !== 0 &&
+                        mapped.every(item => typeof item === 'string' && isValidUrl(item))
+                    ) {
+                        results.push(mapped);
+                        break;
+                    }
+                } catch (err) {}
+            }
         });
     });
 
-    return results
+    return results;
 })();
