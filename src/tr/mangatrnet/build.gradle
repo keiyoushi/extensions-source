@@ -2,7 +2,7 @@ ext {
     extName = 'MangaTR.net'
     extClass = '.MangaTRNet'
     themePkg = 'madara'
-    baseUrl = 'https://mangatr.net'
+    baseUrl = 'https://mangatr.app'
     overrideVersionCode = 0
     isNsfw = false
 }
