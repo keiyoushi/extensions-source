@@ -252,12 +252,12 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
             innerWv.webViewClient = object : WebViewClient() {
-                private val emptyResponse = WebResourceResponse("text/plain", "utf-8", 200, "OK", mapOf(), "".byteInputStream())
-
                 override fun shouldInterceptRequest(
                     view: WebView?,
                     request: WebResourceRequest?,
                 ): WebResourceResponse? {
+                    val emptyResponse = WebResourceResponse("text/plain", "utf-8", 200, "OK", mapOf(), "".byteInputStream())
+
                     val url = request?.url?.toString()
 
                     url ?: return emptyResponse
@@ -314,7 +314,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             )
         }
 
-        latch.await(10, TimeUnit.SECONDS)
+        latch.await(30, TimeUnit.SECONDS)
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
@@ -330,11 +330,15 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                         .headers(headers)
                         .build()
 
-                    val response = client.newCall(request).await()
-                    val contentType = response.headers["content-type"] ?: ""
-                    val size = response.headers["content-length"]?.toLongOrNull() ?: 0L
+                    try {
+                        val response = client.newCall(request).await()
+                        val contentType = response.headers["content-type"] ?: ""
+                        val size = response.headers["content-length"]?.toLongOrNull() ?: 0L
 
-                    response.isSuccessful && contentType.startsWith("image") && size > 100
+                        response.isSuccessful && contentType.startsWith("image") && size > 100
+                    } catch (e: Exception) {
+                        false
+                    }
                 }
             }.awaitAll()
 
