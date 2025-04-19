@@ -73,7 +73,7 @@ class Toonily : Madara(
                     .addPathSegment(
                         sdCoverRegex.replace(
                             url.pathSegments.last(),
-                            "$2",
+                            "$1",
                         ),
                     ).build()
                 val newRequest = request.newBuilder()
@@ -92,6 +92,6 @@ class Toonily : Madara(
 
     companion object {
         val titleSpecialCharactersRegex = "[^a-z0-9]+".toRegex()
-        val sdCoverRegex = Regex("""(-\d+x\d+)(\.\w+)${'$'}""")
+        val sdCoverRegex = Regex("""-[0-9]+x[0-9]+(\.\w+)$""")
     }
 }
