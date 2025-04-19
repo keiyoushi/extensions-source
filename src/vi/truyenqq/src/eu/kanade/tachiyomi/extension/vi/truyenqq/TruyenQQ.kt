@@ -27,7 +27,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class TruyenQQ : ParsedHttpSource(),ConfigurableSource {
+class TruyenQQ : ParsedHttpSource(), ConfigurableSource {
 
     override val name: String = "TruyenQQ"
 
