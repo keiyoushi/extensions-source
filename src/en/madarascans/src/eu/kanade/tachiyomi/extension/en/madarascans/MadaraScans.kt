@@ -8,7 +8,7 @@ class MadaraScans : MangaThemesia(
     "Madara Scans",
     "https://madarascans.com",
     "en",
-    mangaUrlDirectory = "/series"
+    mangaUrlDirectory = "/series",
 ) {
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
 
