@@ -7,7 +7,7 @@ import org.jsoup.nodes.Element
 
 class KdtScans : Madara(
     "KDT Scans",
-    "https://kdt.akan01.com",
+    "https://kdtscans.com",
     "all",
 ) {
     override val useNewChapterEndpoint = true
@@ -36,5 +36,7 @@ class KdtScans : Madara(
     private fun String.cleanupTitle() = replace(titleCleanupRegex, "").trim()
 
     private val titleCleanupRegex =
-        Regex("""^\[(ESPAÑOL|English|HD)\]\s+(–\s+)?""", RegexOption.IGNORE_CASE)
+        Regex("""^\[(ESPAÑOL|English|HD|VIP)\]\s+(–\s+)?""", RegexOption.IGNORE_CASE)
+
+    override fun chapterListSelector() = "li.wp-manga-chapter:not(:has(.required-login))"
 }
