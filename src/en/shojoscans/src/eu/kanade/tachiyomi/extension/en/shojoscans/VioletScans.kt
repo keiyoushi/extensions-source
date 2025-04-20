@@ -23,6 +23,6 @@ class VioletScans : MangaThemesiaAlt(
             preferences,
         )
     }
-    
+
     override val id = 9079184529211162476
 }
