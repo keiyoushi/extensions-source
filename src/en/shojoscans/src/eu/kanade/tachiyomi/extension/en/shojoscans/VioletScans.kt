@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.shojoscans
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 
-class VioletScans : MangaThemesia(
+class VioletScans : MangaThemesiaAlt(
     "Violet Scans",
     "https://violetscans.com",
     "en",
