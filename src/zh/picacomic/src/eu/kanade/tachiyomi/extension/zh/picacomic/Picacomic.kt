@@ -23,6 +23,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.Headers
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -40,6 +41,9 @@ class Picacomic : HttpSource(), ConfigurableSource {
     private val leeway: Long = 10
 
     private val preferences: SharedPreferences = getPreferences()
+
+    override val client: OkHttpClient = network.client.newBuilder()
+        .dns(ChannelDns(baseUrl.removePrefix("https://picaapi."), network.client, preferences)).build()
 
     private val blocklist = preferences.getString("BLOCK_GENRES", "")!!
         .split(',').map { it.trim() }
@@ -449,6 +453,16 @@ class Picacomic : HttpSource(), ConfigurableSource {
 
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit().putString(key, newValue as String).commit()
+            }
+        }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = "APP_CHANNEL_URL"
+            title = "分流url"
+            summary =
+                "自定义用于获取分流2、3的目标地址；分流1不受影响；（如果之前获取成功了需要重启才能生效，如果出现超时可以多重试几次）"
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putString("APP_CHANNEL_URL", newValue as String).commit()
             }
         }.let(screen::addPreference)
     }
