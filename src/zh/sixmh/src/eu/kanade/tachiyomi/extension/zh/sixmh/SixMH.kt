@@ -36,31 +36,29 @@ class SixMH : SimpleParsedHttpSource() {
     override fun simpleNextPageSelector(): String? = null
     override fun simpleMangaSelector(): String = "div.cy_list_mh ul"
     override fun simpleMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.select("li.title > a").text()
-        url = element.select("li.title > a").attr("href")
-        thumbnail_url = element.select("img").attr("src")
+        title = element.selectFirst("li.title > a")!!.text()
+        setUrlWithoutDomain(element.selectFirst("li.title > a")!!.absUrl("href"))
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val element = document.select("div.cy_info")
-        title = element.select("div.cy_title").text()
-        thumbnail_url = element.select("div.cy_info_cover > a > img.pic").attr("src")
-        description = element.select("div.cy_desc #comic-description").text()
+        val element = document.select("div.cy_info").first()!!
+        title = element.selectFirst("div.cy_title")!!.text()
+        thumbnail_url = element.selectFirst("div.cy_info_cover > a > img.pic")?.absUrl("src")
+        description = element.selectFirst("div.cy_desc #comic-description")?.text()
 
         val infoElements = element.select("div.cy_xinxi")
-        author = infoElements[0]!!.select("span:first-child > a").text()
-        artist = author
-        status = parseStatus(infoElements[0]!!.select("span:nth-child(2)").text())
-        genre = infoElements[1]!!.select("span:first-child > a").text()
-        initialized = true
+        author = infoElements[0].selectFirst("span:first-child > a")?.text()
+        status = parseStatus(infoElements[0].selectFirst("span:nth-child(2)")?.text())
+        genre = infoElements[1].selectFirst("span:first-child > a")?.text()
     }
 
     // Chapters
     override fun chapterListSelector(): String = "ul#mh-chapter-list-ol-0 li.chapter__item"
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        url = element.select("a").attr("href")
-        name = element.select("a > p").text()
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        name = element.selectFirst("a > p")!!.text()
     }
 
     // Pages
@@ -75,13 +73,12 @@ class SixMH : SimpleParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
 
-    private fun parseStatus(status: String): Int {
-        return if (status.contains("连载")) {
-            SManga.ONGOING
-        } else if (status.contains("完结")) {
-            SManga.COMPLETED
-        } else {
-            SManga.UNKNOWN
+    private fun parseStatus(status: String?): Int {
+        return when {
+            status == null -> SManga.UNKNOWN
+            status.contains("连载") -> SManga.ONGOING
+            status.contains("完结") -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
         }
     }
 }
