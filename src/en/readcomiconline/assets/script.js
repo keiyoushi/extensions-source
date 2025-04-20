@@ -1,56 +1,82 @@
 (() => {
-    const isValidUrl = (str) => {
+    const customProps = (() => {
+        const iframe = document.createElement('iframe');
+        document.body.appendChild(iframe);
+
+        const standardProps = new Set(Object.getOwnPropertyNames(iframe.contentWindow));
+        const currentProps = new Set(Object.getOwnPropertyNames(window));
+        const customProps = new Set([...currentProps].filter(el => !standardProps.has(el)));
+
+        document.body.removeChild(iframe);
+        return customProps;
+    })();
+
+    const multiMaybeUrls = [];
+    const multiMaybeFn = [];
+
+    customProps.forEach(k => {
+        const obj = window[k];
+        if (
+            Array.isArray(obj) &&
+            obj.length !== 0 &&
+            obj.every(el => typeof el === 'string') &&
+            obj.every(el => el.length > 8)
+        ) {
+            multiMaybeUrls.push(obj);
+        } else if (
+            typeof obj === 'function' &&
+            obj.length >= 1
+        ) {
+            multiMaybeFn.push(obj);
+        }
+    });
+
+    const isValidUrl = (maybeUrl) => {
         try {
-            new URL(str);
+            new URL(maybeUrl);
             return true;
-        } catch (e) {
+        } catch (_) {
             return false;
         }
     }
 
-    const arrays = [];
-    const functions = [];
     const results = [];
 
-    const iframe = document.createElement('iframe');
-    document.body.appendChild(iframe);
-    const builtInKeys = new Set(Object.getOwnPropertyNames(iframe.contentWindow));
-    document.body.removeChild(iframe);
+    multiMaybeUrls.forEach(maybeUrls => {
+        multiMaybeFn.forEach(maybeFn => {
+            const maybeFnArgCount = maybeFn.length;
 
-    for (const [key, value] of Object.entries(window)) {
-        if (builtInKeys.has(key)) continue;
-
-        if (Array.isArray(value)) {
-            arrays.push(value);
-        } else if (typeof value === 'function' && value.length >= 1) {
-            functions.push(value);
-        }
-    }
-
-    arrays.forEach(arrayValue => {
-        functions.forEach(funcValue => {
-            const argCount = funcValue.length;
-
-            for (let i = 0; i < argCount; i++) {
+            for (let i = 0; i < maybeFnArgCount; i++) {
                 try {
-                    const mapped = arrayValue.map(elem => {
-                        const args = new Array(argCount).fill(undefined);
-                        args[i] = elem;
-                        return funcValue(...args);
+                    const maybeUrlsDecoded = maybeUrls.map(el => {
+                        const args = new Array(maybeFnArgCount).fill(undefined);
+                        args[i] = el;
+                        return maybeFn(...args);
                     });
 
                     if (
-                        Array.isArray(mapped) &&
-                        mapped.length !== 0 &&
-                        mapped.every(item => typeof item === 'string' && isValidUrl(item))
+                        Array.isArray(maybeUrlsDecoded) &&
+                        maybeUrlsDecoded.length !== 0 &&
+                        maybeUrlsDecoded.every(el => typeof el === 'string') &&
+                        maybeUrlsDecoded.every(isValidUrl)
                     ) {
-                        results.push(mapped);
-                        break;
+                        results.push(maybeUrlsDecoded);
                     }
-                } catch (err) {}
+                } catch (_) {}
             }
         });
     });
 
-    return results;
+    const getPriority = (url) => {
+        if (url.includes('/pw/')) return 4;
+        if (url.includes('?rhlupa=')) return 3;
+        if (url.includes('?')) return 2;
+        if (url.endsWith('.jpg')) return 1;
+        if (url.endsWith('s0')) return -1;
+        return 0;
+    };
+
+    const resultsUnique = [...new Set(results.map(JSON.stringify))].map(JSON.parse);
+    const resultsSorted = [...resultsUnique].sort((a, b) => getPriority(b[0]) - getPriority(a[0]));
+    return resultsSorted;
 })();

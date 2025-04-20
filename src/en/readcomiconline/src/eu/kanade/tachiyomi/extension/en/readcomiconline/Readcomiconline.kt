@@ -28,8 +28,6 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -322,31 +320,27 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         }
 
         val images = runBlocking {
-            val valid = urls.map { urlList ->
-                async {
-                    val request = Request.Builder()
-                        .url(urlList.random())
-                        .method("HEAD", null)
-                        .headers(headers)
-                        .build()
+            val validUrls = urls.firstOrNull { urlList ->
+                val request = Request.Builder()
+                    .url(urlList.random())
+                    .method("HEAD", null)
+                    .headers(headers)
+                    .build()
 
-                    try {
-                        val response = client.newCall(request).await()
-                        val contentType = response.headers["content-type"] ?: ""
-                        val size = response.headers["content-length"]?.toLongOrNull() ?: 0L
-
-                        response.isSuccessful && contentType.startsWith("image") && size > 100
-                    } catch (e: Exception) {
-                        false
-                    }
+                try {
+                    val response = client.newCall(request).await()
+                    val contentType = response.headers["content-type"] ?: ""
+                    val size = response.headers["content-length"]?.toLongOrNull() ?: 0L
+                    response.isSuccessful && contentType.startsWith("image") && size > 100
+                } catch (e: Exception) {
+                    false
                 }
-            }.awaitAll()
+            }
 
-            val index = valid.indexOf(true)
-            if (index == -1) {
+            if (validUrls === null) {
                 throw Exception("No valid image links found")
             }
-            urls[index]
+            validUrls
         }
 
         return images.mapIndexed { idx, img ->
