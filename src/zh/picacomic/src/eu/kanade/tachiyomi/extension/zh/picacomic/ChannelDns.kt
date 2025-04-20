@@ -8,6 +8,7 @@ import okhttp3.Dns
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okio.IOException
+import uy.kohesive.injekt.injectLazy
 import java.net.InetAddress
 
 class ChannelDns(
@@ -15,7 +16,7 @@ class ChannelDns(
     private val client: OkHttpClient,
     private val preferences: SharedPreferences,
 ) : Dns {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json: Json by injectLazy()
 
     private val defaultInitUrl = "http://68.183.234.72/init"
 
