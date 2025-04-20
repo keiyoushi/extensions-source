@@ -35,7 +35,7 @@ class MangaDistrict :
     ),
     ConfigurableSource {
 
-    override val mangaSubString = "read-scan"
+    override val mangaSubString = "title"
 
     private val preferences: SharedPreferences by getPreferencesLazy {
         try {
