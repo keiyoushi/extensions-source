@@ -53,7 +53,7 @@ class Baozi : ParsedHttpSource(), ConfigurableSource {
         level = preferences.getString(BaoziBanner.PREF, DEFAULT_LEVEL)!!.toInt(),
     )
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(2)
         .addInterceptor(bannerInterceptor)
         .addNetworkInterceptor(MissingImageInterceptor)
