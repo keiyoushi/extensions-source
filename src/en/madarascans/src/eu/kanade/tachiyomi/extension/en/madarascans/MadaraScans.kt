@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.madarascans
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 
-class MadaraScans : MangaThemesia(
+class MadaraScans : MangaThemesiaAlt(
     "Madara Scans",
     "https://madarascans.com",
     "en",
