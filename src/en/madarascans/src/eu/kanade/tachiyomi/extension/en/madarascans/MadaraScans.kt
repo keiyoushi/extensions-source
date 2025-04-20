@@ -1,10 +1,15 @@
 package eu.kanade.tachiyomi.extension.en.madarascans
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
 
-class MadaraScans : MangaThemesiaAlt("Madara Scans", "https://madarascans.com", "en", "/series") {
+class MadaraScans : MangaThemesia(
+    "Madara Scans",
+    "https://madarascans.com",
+    "en",
+    mangaUrlDirectory = "/series"
+) {
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
