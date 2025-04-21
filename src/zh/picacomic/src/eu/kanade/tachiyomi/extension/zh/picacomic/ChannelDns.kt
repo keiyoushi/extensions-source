@@ -2,13 +2,11 @@ package eu.kanade.tachiyomi.extension.zh.picacomic
 
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.Dns
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okio.IOException
-import uy.kohesive.injekt.injectLazy
 import java.net.InetAddress
 
 class ChannelDns(
@@ -16,7 +14,6 @@ class ChannelDns(
     private val client: OkHttpClient,
     private val preferences: SharedPreferences,
 ) : Dns {
-    private val json: Json by injectLazy()
 
     private val defaultInitUrl = "http://68.183.234.72/init"
 
@@ -40,7 +37,7 @@ class ChannelDns(
         }
 
         val chUrl =
-            preferences.getString("APP_CHANNEL_URL", defaultInitUrl)?.takeIf { it.isNotBlank() }
+            preferences.getString(APP_CHANNEL_URL, defaultInitUrl)?.takeIf { it.isNotBlank() }
                 ?: defaultInitUrl
 
         val request = GET(
@@ -60,9 +57,8 @@ class ChannelDns(
             }
 
             val responseBody = response.body.string()
-            response.body.close()
 
-            val ch = json.decodeFromString<PicaChannel>(responseBody)
+            val ch = responseBody.parseAs<PicaChannel>()
             if (ch.status != "ok") {
                 throw Exception("Unexpected ${request.url} status ${ch.status}")
             }

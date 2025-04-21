@@ -457,13 +457,15 @@ class Picacomic : HttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
-            key = "APP_CHANNEL_URL"
+            key = APP_CHANNEL_URL
             title = "分流url"
             summary =
                 "自定义用于获取分流2、3的目标地址；分流1不受影响；（如果之前获取成功了需要重启才能生效，如果出现超时可以多重试几次）"
             setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString("APP_CHANNEL_URL", newValue as String).commit()
+                preferences.edit().putString(APP_CHANNEL_URL, newValue as String).commit()
             }
         }.let(screen::addPreference)
     }
 }
+
+const val APP_CHANNEL_URL = "APP_CHANNEL_URL"
