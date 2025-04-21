@@ -23,7 +23,7 @@ class ChannelDns(
         if (!hostname.endsWith(baseHost)) {
             return Dns.SYSTEM.lookup(hostname)
         }
-        val ch = preferences.getString("APP_CHANNEL", "2")!!
+        val ch = preferences.getString(APP_CHANNEL, "2")!!
         return when (ch) {
             "2" -> listOf(InetAddress.getByName(getChannelHost(0)))
             "3" -> listOf(InetAddress.getByName(getChannelHost(1)))

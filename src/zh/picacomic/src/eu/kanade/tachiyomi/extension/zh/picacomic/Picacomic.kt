@@ -50,7 +50,7 @@ class Picacomic : HttpSource(), ConfigurableSource {
 
     private val basicHeaders = mapOf(
         "api-key" to "C69BAF41DA5ABD1FFEDC6D2FEA56B",
-        "app-channel" to preferences.getString("APP_CHANNEL", "2")!!,
+        "app-channel" to preferences.getString(APP_CHANNEL, "2")!!,
         "app-version" to "2.2.1.3.3.4",
         "app-uuid" to "defaultUuid",
         "app-platform" to "android",
@@ -445,7 +445,7 @@ class Picacomic : HttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
 
         ListPreference(screen.context).apply {
-            key = "APP_CHANNEL"
+            key = APP_CHANNEL
             title = "分流"
             entries = arrayOf("1", "2", "3")
             entryValues = entries
@@ -468,4 +468,5 @@ class Picacomic : HttpSource(), ConfigurableSource {
     }
 }
 
+const val APP_CHANNEL = "APP_CHANNEL"
 const val APP_CHANNEL_URL = "APP_CHANNEL_URL"
