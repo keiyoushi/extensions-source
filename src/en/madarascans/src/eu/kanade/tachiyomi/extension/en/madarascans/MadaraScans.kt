@@ -8,5 +8,5 @@ class MadaraScans : MangaThemesia(
     "en",
     mangaUrlDirectory = "/series",
 ) {
-   override fun chapterListSelector() = "li[data-num]:has(> a[href]:not([data-bs-target='#lockedChapterModal']))"
+    override fun chapterListSelector() = "li[data-num]:has(> a[href]:not([data-bs-target='#lockedChapterModal']))"
 }
