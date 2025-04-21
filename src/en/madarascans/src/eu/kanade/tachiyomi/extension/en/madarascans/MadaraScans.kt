@@ -1,26 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.madarascans
 
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
-class MadaraScans : MangaThemesiaAlt(
+class MadaraScans : MangaThemesia(
     "Madara Scans",
     "https://madarascans.com",
     "en",
     mangaUrlDirectory = "/series",
 ) {
-    private val paidChapterHelper = MangaThemesiaPaidChapterHelper()
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        super.setupPreferenceScreen(screen)
-        paidChapterHelper.addHidePaidChaptersPreferenceToScreen(screen, intl)
-    }
-
-    override fun chapterListSelector(): String {
-        return paidChapterHelper.getChapterListSelectorBasedOnHidePaidChaptersPref(
-            super.chapterListSelector(),
-            preferences,
-        )
-    }
+   override fun chapterListSelector() = "li[data-num]:has(> a[href]:not([data-bs-target='#lockedChapterModal']))"
 }
