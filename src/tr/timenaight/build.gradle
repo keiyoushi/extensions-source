@@ -2,8 +2,8 @@ ext {
     extName = 'Time Naight'
     extClass = '.TimeNaight'
     themePkg = 'madara'
-    baseUrl = 'https://timenaight.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://timenaight.org'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
