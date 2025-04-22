@@ -5,18 +5,15 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 
 class SixMH : SimpleParsedHttpSource() {
     private val paramsRegex = Regex("params = '([A-Za-z0-9+/=]+)'")
-    private val json by injectLazy<Json>()
     override val versionId get() = 3
     override val name: String = "六漫画"
     override val lang: String = "zh"
@@ -66,7 +63,7 @@ class SixMH : SimpleParsedHttpSource() {
         val encodedData = paramsRegex.find(body)?.groupValues?.get(1) ?: ""
         val decodedData = decodeData(encodedData)
 
-        val images = json.decodeFromString<Data>(decodedData).images
+        val images = decodedData.parseAs<Data>().images
         return images.mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
 
