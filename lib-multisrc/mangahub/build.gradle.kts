@@ -2,7 +2,7 @@ plugins {
     id("lib-multisrc")
 }
 
-baseVersionCode = 32
+baseVersionCode = 33
 
 dependencies {
     api(project(":lib:randomua"))
