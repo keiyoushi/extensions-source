@@ -6,4 +6,5 @@ baseVersionCode = 32
 
 dependencies {
     api(project(":lib:randomua"))
+    implementation(libs.dec)
 }
