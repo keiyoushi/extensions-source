@@ -23,7 +23,7 @@ import java.io.File
 class TCBScans : ParsedHttpSource() {
 
     override val name = "TCB Scans"
-    override val baseUrl = "https://tcbscans.me"
+    override val baseUrl = "https://tcbonepiecechapters.com"
     override val lang = "en"
     override val supportsLatest = false
 

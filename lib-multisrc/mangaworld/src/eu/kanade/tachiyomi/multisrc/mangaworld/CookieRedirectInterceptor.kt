@@ -14,6 +14,12 @@ class CookieRedirectInterceptor(private val client: OkHttpClient) : Interceptor 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
+
+        val contentType = response.header("content-type")
+        if (contentType != null && contentType.startsWith("image/", ignoreCase = true)) {
+            return response
+        }
+
         // ignore requests that already have completed the JS challenge
         if (response.headers["vary"] != null) return response
 
