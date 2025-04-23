@@ -124,7 +124,7 @@ class RizzComic : MangaThemesiaAlt(
     override fun String?.parseStatus(): Int = when {
         this == null -> SManga.UNKNOWN
 
-        listOf("ongoing", "new Season", "mass released")
+        listOf("ongoing", "new season", "mass released")
             .any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
         listOf("completed")
             .any { this.contains(it, ignoreCase = true) } -> SManga.COMPLETED
