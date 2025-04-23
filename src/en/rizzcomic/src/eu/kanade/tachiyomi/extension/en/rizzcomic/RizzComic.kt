@@ -124,12 +124,16 @@ class RizzComic : MangaThemesiaAlt(
     override fun String?.parseStatus(): Int = when {
         this == null -> SManga.UNKNOWN
 
-        listOf("new Season", "mass released")
+        listOf("ongoing", "new Season", "mass released")
             .any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
-        listOf("season end")
+        listOf("completed")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.COMPLETED
+        listOf("dropped")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
+        listOf("hiatus", "season end")
             .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
 
-        else -> super.parseStatus()
+        else -> Manga.UNKNOWN
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
