@@ -133,7 +133,7 @@ class RizzComic : MangaThemesiaAlt(
         listOf("hiatus", "season end")
             .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
 
-        else -> Manga.UNKNOWN
+        else -> SManga.UNKNOWN
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
