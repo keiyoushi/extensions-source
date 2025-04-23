@@ -280,7 +280,7 @@ abstract class MangaThemesia(
             "đang tiến hành", "em lançamento", "онгоінг", "publishing", "devam ediyor", "em andamento",
             "in corso", "güncel", "berjalan", "продолжается", "updating", "lançando", "in arrivo",
             "emision", "en emision", "مستمر", "curso", "en marcha", "publicandose", "publicando",
-            "连载中", "devam etmekte", "連載中", "new season", "mass released",
+            "连载中", "devam etmekte", "連載中",
         ).any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
 
         listOf(
@@ -292,7 +292,7 @@ abstract class MangaThemesia(
         listOf("canceled", "cancelled", "cancelado", "cancellato", "cancelados", "dropped", "discontinued", "abandonné")
             .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
 
-        listOf("hiatus", "on hold", "pausado", "en espera", "en pause", "en attente", "hiato", "season end")
+        listOf("hiatus", "on hold", "pausado", "en espera", "en pause", "en attente", "hiato")
             .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
 
         else -> SManga.UNKNOWN
