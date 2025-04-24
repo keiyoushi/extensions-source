@@ -114,12 +114,10 @@ class AnimeSama : ParsedHttpSource() {
         val javascriptFileContent = javascriptFile.body.string()
 
         val parsedJavascriptFileToJson = javascriptFileContent
-            .split(" ", ",")
-            .filter { it.contains("eps") && !it.contains("drive.google.com") }
-            .mapNotNull { it.replace("=", "").replace("eps", "").toIntOrNull() }
-            .sorted()
-            .asReversed()
-            .toSet() // Remove duplicate episodes
+            .let { Regex("""eps(\d+)""").findAll(it) }
+            .map { it.groupValues[1].toInt() }
+            .distinct() // Remove duplicate episodes
+            .sortedDescending().toList()
         val parsedChapterList: MutableList<SChapter> = ArrayList()
         var chapterDelay = 0
 
@@ -214,19 +212,28 @@ class AnimeSama : ParsedHttpSource() {
         val title = url.queryParameter("title")
         val chapter = url.queryParameter("id")
 
-        val allChapters = document.body().toString().split("var")
+        val documentString = document.body().toString()
 
-        val chapterImageListString = allChapters.firstOrNull { it.contains("eps$chapter=") }
-            ?: return emptyList()
+        val allChapters: Map<Int, Int> = Regex("""eps(\d+)\s*(?:=\s*\[(.*?)\]|\.length\s*=\s*(\d+))""")
+            .findAll(documentString)
+            .associate { match ->
+                val episode = match.groupValues[1].toInt()
+                val arrayContent = match.groupValues[2]
+                val explicitLength = match.groupValues[3]
 
-        val chapterImageListParsed = chapterImageListString
-            .substringAfter("[")
-            .substringBefore("]")
-            .split(",")
+                val length = when {
+                    explicitLength.isNotEmpty() -> explicitLength.toInt()
+                    arrayContent.isNotEmpty() -> arrayContent.split(Regex(",\\s*")).count { it.isNotBlank() }
+                    else -> 0
+                }
+
+                episode to length
+            }
+
+        val chapterSize = allChapters.get(chapter?.toInt()) ?: 1
 
         val image_list = mutableListOf<Page>()
-
-        for (index in 1 until chapterImageListParsed.size) {
+        for (index in 1 until chapterSize + 1) {
             image_list.add(
                 Page(index, imageUrl = "$cdn$title/$chapter/$index.jpg"),
             )
