@@ -6,9 +6,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -33,13 +35,28 @@ class ComicHubFree : ParsedHttpSource() {
 
     override fun searchMangaSelector() = popularMangaSelector()
 
-    override fun popularMangaNextPageSelector() = "ul.pagination > li:last-child"
+    override fun popularMangaNextPageSelector() = "ul.pagination a[rel=next]:not(hidden)"
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun chapterListSelector() = "div.episode-list > div > table > tbody > tr"
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val chapters = mutableListOf<SChapter>()
+
+        fun parseChapters(document: Document) {
+            document.select(chapterListSelector()).map { chapters.add(chapterFromElement(it)) }
+            document.selectFirst(popularMangaNextPageSelector())?.let { it ->
+                parseChapters(client.newCall(GET(it.absUrl("href"), headers)).execute().asJsoup())
+            }
+        }
+
+        parseChapters(response.asJsoup())
+
+        return chapters
+    }
 
     override fun imageUrlParse(document: Document) = ""
 
