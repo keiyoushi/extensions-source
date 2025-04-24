@@ -3,7 +3,7 @@ ext {
     extClass = '.RizzComic'
     themePkg = 'mangathemesia'
     baseUrl = 'https://rizzfables.com'
-    overrideVersionCode = 10
+    overrideVersionCode = 11
     isNsfw = false
 }
 
