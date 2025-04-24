@@ -15,20 +15,22 @@
     const multiMaybeFn = [];
 
     customProps.forEach(k => {
-        const obj = window[k];
-        if (
-            Array.isArray(obj) &&
-            obj.length !== 0 &&
-            obj.every(el => typeof el === 'string') &&
-            obj.every(el => el.length > 8)
-        ) {
-            multiMaybeUrls.push(obj);
-        } else if (
-            typeof obj === 'function' &&
-            obj.length >= 1
-        ) {
-            multiMaybeFn.push(obj);
-        }
+        try {
+            const obj = window[k];
+            if (
+                Array.isArray(obj) &&
+                obj.length !== 0 &&
+                obj.every(el => typeof el === 'string') &&
+                obj.every(el => el.length > 8)
+            ) {
+                multiMaybeUrls.push(obj);
+            } else if (
+                typeof obj === 'function' &&
+                obj.length >= 1
+            ) {
+                multiMaybeFn.push(obj);
+            }
+        } catch(_) {}
     });
 
     const isValidUrl = (maybeUrl) => {
@@ -43,6 +45,7 @@
     const results = [];
 
     multiMaybeUrls.forEach(maybeUrls => {
+        const maybeUrlsLength = maybeUrls.length;
         multiMaybeFn.forEach(maybeFn => {
             const maybeFnArgCount = maybeFn.length;
 
@@ -56,7 +59,7 @@
 
                     if (
                         Array.isArray(maybeUrlsDecoded) &&
-                        maybeUrlsDecoded.length !== 0 &&
+                        maybeUrlsDecoded.length === maybeUrlsLength &&
                         maybeUrlsDecoded.every(el => typeof el === 'string') &&
                         maybeUrlsDecoded.every(isValidUrl)
                     ) {
