@@ -3,7 +3,7 @@ ext {
     extClass = '.FirstKissMangaNet'
     themePkg = 'madara'
     baseUrl = 'https://1stkissmanga.org'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
