@@ -225,7 +225,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        throw Exception("Extension is broken")
+        throw Exception("Extension is broken. Migrate to another source")
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
