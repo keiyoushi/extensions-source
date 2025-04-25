@@ -2,8 +2,8 @@ ext {
     extName = '1st-Kiss Manga.net'
     extClass = '.FirstKissMangaNet'
     themePkg = 'madara'
-    baseUrl = 'https://1st-kissmanga.net'
-    overrideVersionCode = 0
+    baseUrl = 'https://1stkissmanga.org'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
