@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import kotlin.system.exitProcess
 
 /**
@@ -20,8 +21,8 @@ class GlobalComixUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
 
         // Supported path: /c/title-slug
-        if (pathSegments != null && pathSegments.size > 2) {
-            val titleId = pathSegments[2]
+        if (pathSegments != null && pathSegments.size > 1) {
+            val titleId = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
                 putExtra("query", GlobalComixConstants.prefixIdSearch + titleId)
@@ -35,6 +36,7 @@ class GlobalComixUrlActivity : Activity() {
             }
         } else {
             Log.e("GlobalComixUrlActivity", "Received data URL is unsupported: ${intent?.data}")
+            Toast.makeText(this, "This URL cannot be handled by the GlobalComix extension.", Toast.LENGTH_SHORT).show()
         }
 
         finish()

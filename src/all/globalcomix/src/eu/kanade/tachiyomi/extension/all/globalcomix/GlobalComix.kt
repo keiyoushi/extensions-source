@@ -111,11 +111,28 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
             return MangasPage(emptyList(), false)
         }
 
-        val mangaPayloadDto = response.parseAs<MangasDto>().payload!!
-        return MangasPage(
-            mangaPayloadDto.results.map { dto -> dto.createManga() },
-            mangaPayloadDto.pagination.hasNextPage,
-        )
+        val isSingleItemLookup = response.request.url.toString().startsWith(apiMangaUrl)
+        return if (!isSingleItemLookup) {
+            // Normally, the response is a paginated list of mangas
+            // The results property will be a JSON array
+            response.parseAs<MangasDto>().payload!!.let { dto ->
+                MangasPage(
+                    dto.results.map { it -> it.createManga() },
+                    dto.pagination.hasNextPage,
+                )
+            }
+        } else {
+            // However, when using the 'id:' query prefix (via the UrlActivity for example),
+            // the response is a single manga and the results property will be a JSON object
+            MangasPage(
+                listOf(
+                    response.parseAs<MangaDto>().payload!!
+                        .results
+                        .createManga(),
+                ),
+                false,
+            )
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
