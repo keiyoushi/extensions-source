@@ -4,7 +4,17 @@ import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.apiChapterUrl
+import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.apiMangaUrl
+import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.apiSearchUrl
+import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.clientId
+import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.english
+import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.getDataSaverPreferenceKey
+import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.getShowLockedChaptersPreferenceKey
+import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.prefixIdSearch
+import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.webChapterUrl
 import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.webComicUrl
+import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.webUrl
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.ChapterDataDto.Companion.createChapter
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.ChaptersDto
@@ -42,7 +52,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
     ConfigurableSource, HttpSource() {
 
     override val name = "GlobalComix"
-    override val baseUrl = GlobalComixConstants.webUrl
+    override val baseUrl = webUrl
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by lazy {
@@ -61,8 +71,8 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
 
     private val intl = Intl(
         language = lang,
-        baseLanguage = GlobalComixConstants.english,
-        availableLanguages = setOf(GlobalComixConstants.english),
+        baseLanguage = english,
+        availableLanguages = setOf(english),
         classLoader = this::class.java.classLoader!!,
         createMessageFileName = { lang -> Intl.createDefaultMessageFileName(lang) },
     )
@@ -70,7 +80,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
     final override fun headersBuilder() = super.headersBuilder().apply {
         set("Referer", "$baseUrl/")
         set("Origin", baseUrl)
-        set("x-gc-client", GlobalComixConstants.clientId)
+        set("x-gc-client", clientId)
         set("x-gc-identmode", "cookie")
     }
 
@@ -79,7 +89,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
         .build()
 
     private fun simpleQueryRequest(page: Int, orderBy: String?, query: String?): Request {
-        val url = GlobalComixConstants.apiSearchUrl.toHttpUrl().newBuilder()
+        val url = apiSearchUrl.toHttpUrl().newBuilder()
             .addQueryParameter("lang_id[]", extLang)
             .addQueryParameter("p", page.toString())
 
@@ -137,14 +147,14 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // If the query is a slug ID, return the manga directly
-        if (query.startsWith(GlobalComixConstants.prefixIdSearch)) {
-            val mangaSlugId = query.removePrefix(GlobalComixConstants.prefixIdSearch)
+        if (query.startsWith(prefixIdSearch)) {
+            val mangaSlugId = query.removePrefix(prefixIdSearch)
 
             if (mangaSlugId.isEmpty()) {
                 throw Exception(intl["invalid_manga_id"])
             }
 
-            val url = GlobalComixConstants.apiMangaUrl.toHttpUrl().newBuilder()
+            val url = apiMangaUrl.toHttpUrl().newBuilder()
                 .addPathSegment(mangaSlugId)
                 .build()
 
@@ -156,11 +166,10 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    override fun getMangaUrl(manga: SManga): String =
-        "$webComicUrl/${titleToSlug(manga.title)}"
+    override fun getMangaUrl(manga: SManga): String = "$webComicUrl/${titleToSlug(manga.title)}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = GlobalComixConstants.apiMangaUrl.toHttpUrl().newBuilder()
+        val url = apiMangaUrl.toHttpUrl().newBuilder()
             .addPathSegment(titleToSlug(manga.title))
             .build()
 
@@ -173,7 +182,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
             .createManga()
 
     override fun chapterListRequest(manga: SManga): Request {
-        val url = GlobalComixConstants.apiSearchUrl.toHttpUrl().newBuilder()
+        val url = apiSearchUrl.toHttpUrl().newBuilder()
             .addPathSegment(manga.url) // manga.url contains the the comic id
             .addPathSegment("releases")
             .addQueryParameter("lang_id", extLang)
@@ -202,13 +211,13 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterKey = chapter.url
-        val url = "${GlobalComixConstants.apiChapterUrl}/$chapterKey"
+        val url = "$apiChapterUrl/$chapterKey"
         return GET(url, headers, CacheControl.FORCE_NETWORK)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterKey = response.request.url.pathSegments.last()
-        val chapterWebUrl = "${GlobalComixConstants.webChapterUrl}/$chapterKey"
+        val chapterWebUrl = "$webChapterUrl/$chapterKey"
 
         return response.parseAs<ChapterDto>()
             .payload!!
@@ -222,14 +231,14 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val dataSaverPref = SwitchPreferenceCompat(screen.context).apply {
-            key = GlobalComixConstants.getDataSaverPreferenceKey(extLang)
+            key = getDataSaverPreferenceKey(extLang)
             title = intl["data_saver"]
             summary = intl["data_saver_summary"]
             setDefaultValue(false)
         }
 
         val showLockedChaptersPref = SwitchPreferenceCompat(screen.context).apply {
-            key = GlobalComixConstants.getShowLockedChaptersPreferenceKey(extLang)
+            key = getShowLockedChaptersPreferenceKey(extLang)
             title = intl["show_locked_chapters"]
             summary = intl["show_locked_chapters_summary"]
             setDefaultValue(true)
@@ -244,10 +253,10 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
     }
 
     private val SharedPreferences.useDataSaver
-        get() = getBoolean(GlobalComixConstants.getDataSaverPreferenceKey(extLang), false)
+        get() = getBoolean(getDataSaverPreferenceKey(extLang), false)
 
     private val SharedPreferences.showLockedChapters
-        get() = getBoolean(GlobalComixConstants.getShowLockedChaptersPreferenceKey(extLang), true)
+        get() = getBoolean(getShowLockedChaptersPreferenceKey(extLang), true)
 
     companion object {
         fun titleToSlug(title: String) = title.trim()
