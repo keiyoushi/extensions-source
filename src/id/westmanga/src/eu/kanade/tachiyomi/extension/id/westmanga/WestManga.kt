@@ -7,7 +7,7 @@ import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import java.util.Locale
 
-class WestManga : MangaThemesia("West Manga", "https://westmanga.fun", "id") {
+class WestManga : MangaThemesia("West Manga", "https://westmanga.me", "id") {
     // Formerly "West Manga (WP Manga Stream)"
     override val id = 8883916630998758688
 

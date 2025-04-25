@@ -215,8 +215,8 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
     // Pages
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.image_list img[src]").mapIndexed { i, img ->
-            Page(i, "", img.absUrl("src"))
+        return document.select("div.image_list canvas[data-src]").mapIndexed { i, img ->
+            Page(i, "", img.absUrl("data-src"))
         }
     }
 
