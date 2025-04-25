@@ -224,6 +224,10 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
 
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        throw Exception("Extension is broken")
+    }
+
     override fun pageListRequest(chapter: SChapter): Request {
         val qualitySuffix = if ((qualitypref() != "lq" && serverpref() != "s2") || (qualitypref() == "lq" && serverpref() == "s2")) {
             "&s=${serverpref()}&quality=${qualitypref()}&readType=1"
