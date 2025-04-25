@@ -3,7 +3,7 @@ ext {
     extClass = '.WestManga'
     themePkg = 'mangathemesia'
     baseUrl = 'https://westmanga.fun'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
     isNsfw = true
 }
 
