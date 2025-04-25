@@ -99,7 +99,7 @@ class VyvyManga : ParsedHttpSource() {
             "Completed" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = document.selectFirst(".img-manga")!!.absUrl("src")
+        thumbnail_url = document.selectFirst(".img-manga img")!!.absUrl("src")
     }
 
     // Chapters
