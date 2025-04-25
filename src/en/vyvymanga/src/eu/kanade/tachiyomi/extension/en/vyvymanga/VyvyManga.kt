@@ -69,7 +69,7 @@ class VyvyManga : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
         title = element.selectFirst(".comic-title")!!.text()
-        thumbnail_url = element.selectFirst(".comic-image")!!.absUrl("data-background-image")
+        thumbnail_url = element.selectFirst(".comic-image img.image.lozad")!!.absUrl("data-src")
     }
 
     override fun searchMangaNextPageSelector(): String = "[rel=next]"
