@@ -222,6 +222,16 @@ class BatCave : HttpSource() {
         }
     }
 
+    override fun imageRequest(page: Page): Request {
+        val imageHeaders = headersBuilder().apply {
+            if (!page.imageUrl!!.toHttpUrl().host.contains("batcave")) {
+                removeAll("Referer")
+            }
+        }.build()
+
+        return GET(page.imageUrl!!, imageHeaders)
+    }
+
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
     }
