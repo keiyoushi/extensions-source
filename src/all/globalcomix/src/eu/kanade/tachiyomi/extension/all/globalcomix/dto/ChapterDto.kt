@@ -25,7 +25,7 @@ class ChapterDataDto(
     val page_objects: List<PageDataDto>?,
 ) : EntityDto() {
     val isPremium: Boolean
-        get() = premium_only == 1 || free_page_count < page_count - 1
+        get() = premium_only == 1
 
     companion object {
         /**
