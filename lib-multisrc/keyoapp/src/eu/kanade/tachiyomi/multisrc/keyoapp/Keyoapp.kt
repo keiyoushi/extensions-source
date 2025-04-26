@@ -251,7 +251,7 @@ abstract class Keyoapp(
 
     override fun chapterListSelector(): String {
         if (!preferences.showPaidChapters) {
-            return "#chapters > a:not(:has(.text-sm span:matches(Upcoming))):not(:has(img[src*=Coin.svg]))"
+            return "#chapters > a:not(:has(.text-sm span:matches(Upcoming))):not(:has(img[alt~=Coin]))"
         }
         return "#chapters > a:not(:has(.text-sm span:matches(Upcoming)))"
     }

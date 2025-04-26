@@ -22,7 +22,7 @@ class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
         return MangasPage(mangas, false)
     }
 
-    override fun genresRequest() = GET("$baseUrl/search/", headers)
+    override fun genresRequest() = GET("$baseUrl/search", headers)
 
     override fun parseGenres(document: Document): List<Genre> {
         return document.select("[x-data*=genre] button").map {
