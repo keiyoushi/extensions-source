@@ -55,6 +55,7 @@ class ChapterDataDto(
             return SChapter.create().apply {
                 url = key
                 name = chapterName.joinToString(" ")
+                chapter_number = chapter.toFloatOrNull() ?: 0f
                 date_upload = dateFormatter.parse(published_time)?.time ?: 0
             }
         }
