@@ -38,7 +38,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
-import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -94,7 +93,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
         orderBy?.let { url.addQueryParameter("sort", it) }
         query?.let { url.addQueryParameter("q", it) }
 
-        return GET(url.build(), headers, CacheControl.FORCE_NETWORK)
+        return GET(url.build(), headers)
     }
 
     override fun popularMangaRequest(page: Int): Request =
@@ -151,7 +150,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
                 .addPathSegment(mangaSlugId)
                 .build()
 
-            return GET(url, headers, CacheControl.FORCE_NETWORK)
+            return GET(url, headers)
         }
 
         return simpleQueryRequest(page, orderBy = "relevance", query)
@@ -166,7 +165,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
             .addPathSegment(titleToSlug(manga.title))
             .build()
 
-        return GET(url, headers, CacheControl.FORCE_NETWORK)
+        return GET(url, headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga =
@@ -182,7 +181,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
             .addQueryParameter("all", "true")
             .toString()
 
-        return GET(url, headers, CacheControl.FORCE_NETWORK)
+        return GET(url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -201,7 +200,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterKey = chapter.url
         val url = "$apiChapterUrl/$chapterKey"
-        return GET(url, headers, CacheControl.FORCE_NETWORK)
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
