@@ -13,12 +13,10 @@ typealias MangasDto = PaginatedResponseDto<MangaDataDto>
 @SerialName(GlobalComixConstants.comic)
 class MangaDataDto(
     val name: String,
-    val description: String,
-    val status: Int,
-    val status_name: String,
-    val category_name: String,
-    val image_url: String,
-    val url: String,
+    val description: String?,
+    val status_name: String?,
+    val category_name: String?,
+    val image_url: String?,
     val artist: ArtistDto,
 ) : EntityDto() {
     companion object {
@@ -31,7 +29,7 @@ class MangaDataDto(
                 it.url = id.toString()
                 it.description = description
                 it.author = artist.let { it.roman_name ?: it.name }
-                it.status = convertStatus(status_name)
+                it.status = status_name?.let(::convertStatus) ?: SManga.UNKNOWN
                 it.genre = category_name
                 it.title = name
                 it.thumbnail_url = image_url

@@ -15,10 +15,8 @@ typealias ChaptersDto = PaginatedResponseDto<ChapterDataDto>
 class ChapterDataDto(
     val title: String,
     val chapter: String, // Stringified number
-    val page_count: Int,
-    val free_page_count: Int,
     val key: String, // UUID, required for /readV2 endpoint
-    val premium_only: Int,
+    val premium_only: Int? = 0,
     val published_time: String,
 
     // Only available when calling the /readV2 endpoint
