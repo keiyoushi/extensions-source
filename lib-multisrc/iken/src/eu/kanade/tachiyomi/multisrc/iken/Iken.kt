@@ -127,7 +127,7 @@ abstract class Iken(
         val userId = userIdRegex.find(response.body.string())?.groupValues?.get(1) ?: ""
 
         val id = response.request.url.fragment!!
-        val chapterUrl = "$apiUrl/api/chapters?postId=$id&skip=0&take=1000&order=desc&userid=$userId"
+        val chapterUrl = "$apiUrl/api/chapters?postId=$id&skip=0&take=900&order=desc&userid=$userId"
         val chapterResponse = client.newCall(GET(chapterUrl, headers)).execute()
 
         val data = chapterResponse.parseAs<Post<ChapterListResponse>>()
