@@ -3,7 +3,7 @@ ext {
     extClass = '.XoxoComics'
     themePkg = 'wpcomics'
     baseUrl = 'https://xoxocomic.com'
-    overrideVersionCode = 4
+    overrideVersionCode = 5
     isNsfw = false
 }
 
