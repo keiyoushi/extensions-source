@@ -161,7 +161,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
             return GET(url, headers, CacheControl.FORCE_NETWORK)
         }
 
-        return simpleQueryRequest(page, orderBy = null, query)
+        return simpleQueryRequest(page, orderBy = "relevance", query)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
