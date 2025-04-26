@@ -237,9 +237,7 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
         screen.addPreference(showLockedChaptersPref)
     }
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(body.string())
-    }
+    private inline fun <reified T> Response.parseAs(): T = parseAs(json)
 
     private val SharedPreferences.useDataSaver
         get() = getBoolean(getDataSaverPreferenceKey(extLang), false)
