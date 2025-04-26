@@ -190,13 +190,9 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
             return emptyList()
         }
 
-        return response.parseAs<ChaptersDto>().payload!!.results.mapNotNull { dto ->
-            if (dto.isPremium && !preferences.showLockedChapters) {
-                null
-            } else {
-                dto.createChapter()
-            }
-        }
+        return response.parseAs<ChaptersDto>().payload!!.results.filterNot { dto ->
+            dto.isPremium && !preferences.showLockedChapters
+        }.map { it.createChapter() }
     }
 
     override fun getChapterUrl(chapter: SChapter): String =
