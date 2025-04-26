@@ -93,13 +93,8 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
             .addQueryParameter("lang_id[]", extLang)
             .addQueryParameter("p", page.toString())
 
-        if (orderBy != null) {
-            url.addQueryParameter("sort", orderBy)
-        }
-
-        if (query != null) {
-            url.addQueryParameter("q", query)
-        }
+        orderBy?.let { url.addQueryParameter("sort", it) }
+        query?.let { url.addQueryParameter("q", it) }
 
         return GET(url.build(), headers, CacheControl.FORCE_NETWORK)
     }
