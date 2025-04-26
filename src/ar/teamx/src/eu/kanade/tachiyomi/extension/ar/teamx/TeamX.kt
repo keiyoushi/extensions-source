@@ -215,9 +215,14 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
     // Pages
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.image_list img[src]").mapIndexed { i, img ->
-            Page(i, "", img.absUrl("src"))
-        }
+        return document.select("div.image_list canvas[data-src], div.image_list img[src]")
+            .mapIndexed { i, element ->
+                val url = when {
+                    element.hasAttr("src") -> element.absUrl("src")
+                    else -> element.absUrl("data-src")
+                }
+                Page(i, "", url)
+            }
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
