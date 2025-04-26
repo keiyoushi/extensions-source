@@ -32,16 +32,16 @@ class MyHentaiGallery : ParsedHttpSource() {
     // Popular
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/gallery/category/2/$page", headers)
+        return GET("$baseUrl/views/$page", headers)
     }
 
     override fun popularMangaSelector() = "div.comic-inner"
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("h2").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").attr("abs:src")
+            title = element.selectFirst("h2")!!.text()
+            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
     }
 
@@ -49,7 +49,7 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/gallery/$page")
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/gpage/$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -59,11 +59,11 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     // Search
 
-    private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/gallery/thumbnails/$id", headers)
+    private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/g/$id", headers)
 
     private fun searchMangaByIdParse(response: Response, id: String): MangasPage {
         val details = mangaDetailsParse(response)
-        details.url = "/gallery/thumbnails/$id"
+        details.url = "/g/$id"
         return MangasPage(listOf(details), false)
     }
 
@@ -80,9 +80,13 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank()) {
-            GET("$baseUrl/search/$page?query=$query", headers)
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+                .addPathSegment(page.toString())
+                .addQueryParameter("query", query)
+                .build()
+            GET(url, headers)
         } else {
-            val url = "$baseUrl/gallery/category".toHttpUrl().newBuilder()
+            val url = "$baseUrl/g/category".toHttpUrl().newBuilder()
 
             filters.forEach { filter ->
                 when (filter) {
@@ -107,17 +111,26 @@ class MyHentaiGallery : ParsedHttpSource() {
     // Details
 
     override fun mangaDetailsParse(document: Document): SManga {
-        return document.select("div.comic-header").let { info ->
+        return document.selectFirst("div.comic-header")!!.let { info ->
             SManga.create().apply {
-                title = info.select("h1").text()
+                title = info.selectFirst("h1")!!.text()
                 genre = info.select("div:containsOwn(categories) a").joinToString { it.text() }
-                artist = info.select("div:containsOwn(artists) a").text()
-                thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.attr("src")
-                description = info.select("div:containsOwn(groups) a").let { groups ->
-                    if (groups.isNotEmpty()) "Groups: ${groups.joinToString { it.text() }}\n" else ""
-                }
-                description += info.select("div:containsOwn(parodies) a").let { groups ->
-                    if (groups.isNotEmpty()) "Parodies: ${groups.joinToString { it.text() }}" else ""
+                artist = info.select("div:containsOwn(artists) a").joinToString { it.text() }
+                thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.absUrl("src")
+                description = buildString {
+                    info.select("div:containsOwn(groups) a")
+                        .takeIf { it.isNotEmpty() }
+                        ?.also { if (isNotEmpty()) append("\n\n") }
+                        ?.also { appendLine("Groups:") }
+                        ?.joinToString("\n") { "• ${it.text()}" }
+                        ?.also { append(it) }
+
+                    info.select("div:containsOwn(parodies) a")
+                        .takeIf { it.isNotEmpty() }
+                        ?.also { if (isNotEmpty()) append("\n\n") }
+                        ?.also { appendLine("Parodies:") }
+                        ?.joinToString("\n") { "• ${it.text()}" }
+                        ?.also { append(it) }
                 }
             }
         }
@@ -142,7 +155,8 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("div.comic-thumb img[src]").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:src").replace("/thumbnail/", "/original/"))
+            val imageUrl = img.absUrl("src").replace("/thumbnail/", "/original/")
+            Page(i, imageUrl = imageUrl)
         }
     }
 
