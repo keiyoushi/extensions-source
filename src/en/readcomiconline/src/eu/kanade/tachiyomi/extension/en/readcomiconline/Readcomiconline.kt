@@ -1,23 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.readcomiconline
 
-import android.annotation.SuppressLint
-import android.app.Application
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
-import android.view.View
-import android.webkit.ConsoleMessage
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.lib.randomua.UserAgentType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -26,11 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferencesLazy
-import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -39,12 +22,8 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
@@ -58,6 +37,8 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
+    private val scriptPageRegex = """(?s)pth\s*=\s*['"](.*?)['"]\s*;?""".toRegex()
+    private val urlDecryptionRegex = """l\s*\.replace\(\s*/(.*?)/([gimuy]*)\s*,\s*(['"`])(.*?)\3\s*\)""".toRegex()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(
@@ -234,123 +215,45 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         return GET(baseUrl + chapter.url + qualitySuffix, headers)
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(document: Document): List<Page> {
-        val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        var webView: WebView? = null
-        var urls: List<List<String>> = emptyList()
+        // Declare some important values first
+        val encryptedLinks = mutableListOf<String>()
+        val decryptionRegexKeys = mutableListOf<Pair<String, String>>()
 
-        handler.post {
-            val innerWv = WebView(Injekt.get<Application>())
+        // Get script elements
+        val scripts = document.select("script[type=text/javascript]")
 
-            webView = innerWv
-            innerWv.settings.javaScriptEnabled = true
-            innerWv.settings.blockNetworkImage = true
-            innerWv.settings.domStorageEnabled = true
-            innerWv.settings.userAgentString = headers["User-Agent"]
-            innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+        // We'll get a bunch of results on the selector but we only need 2: The script that contains the encrypted links and the script
+        // that contains the partial decryption key.
+        for (script in scripts) {
+            val scriptContent = script.data()
+            if (scriptContent.isNotEmpty()) {
+                val encryptedValues = scriptPageRegex.findAll(scriptContent)
+                val decryptionKeys = urlDecryptionRegex.findAll(scriptContent)
 
-            innerWv.webViewClient = object : WebViewClient() {
-                override fun shouldInterceptRequest(
-                    view: WebView?,
-                    request: WebResourceRequest?,
-                ): WebResourceResponse? {
-                    val emptyResponse = WebResourceResponse("text/plain", "utf-8", 200, "OK", mapOf(), "".byteInputStream())
+                // We found the encrypted links
+                if (encryptedValues.count() > 0) {
+                    encryptedValues.forEach {
+                        val url = it.groupValues[1]
 
-                    val url = request?.url?.toString()
-
-                    url ?: return emptyResponse
-
-                    if (!url.contains("rguard")) {
-                        return emptyResponse
-                    }
-
-                    return super.shouldInterceptRequest(view, request)
-                }
-
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    view?.evaluateJavascript(
-                        Readcomiconline::class.java
-                            .getResourceAsStream("/assets/script.js")!!
-                            .bufferedReader()
-                            .use { it.readText() },
-                    ) {
-                        try {
-                            urls = it.parseAs()
-                            latch.countDown()
-                        } catch (e: Exception) {
-                            Log.e("RCO", e.stackTraceToString())
+                        if (url.isNotBlank()) {
+                            encryptedLinks.add(url)
                         }
                     }
-
-                    super.onLoadResource(view, url)
                 }
-            }
 
-            innerWv.webChromeClient = object : WebChromeClient() {
-                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                    if (consoleMessage == null) { return false }
-                    val logContent = "wv: ${consoleMessage.message()} (${consoleMessage.sourceId()}, line ${consoleMessage.lineNumber()})"
-                    when (consoleMessage.messageLevel()) {
-                        ConsoleMessage.MessageLevel.DEBUG -> Log.d("RCO", logContent)
-                        ConsoleMessage.MessageLevel.ERROR -> Log.e("RCO", logContent)
-                        ConsoleMessage.MessageLevel.LOG -> Log.i("RCO", logContent)
-                        ConsoleMessage.MessageLevel.TIP -> Log.i("RCO", logContent)
-                        ConsoleMessage.MessageLevel.WARNING -> Log.w("RCO", logContent)
-                        else -> Log.d("RCO", logContent)
-                    }
-
-                    return true
-                }
-            }
-
-            innerWv.loadDataWithBaseURL(
-                document.location(),
-                document.outerHtml(),
-                "text/html",
-                "UTF-8",
-                null,
-            )
-        }
-
-        latch.await(30, TimeUnit.SECONDS)
-        handler.post { webView?.destroy() }
-
-        if (latch.count == 1L) {
-            throw Exception("Timeout getting image links")
-        }
-
-        val images = runBlocking {
-            val valid = urls.map { urlList ->
-                async {
-                    val request = Request.Builder()
-                        .url(urlList.random())
-                        .method("HEAD", null)
-                        .headers(headers)
-                        .build()
-
-                    try {
-                        val response = client.newCall(request).await()
-                        val contentType = response.headers["content-type"] ?: ""
-                        val size = response.headers["content-length"]?.toLongOrNull() ?: 0L
-
-                        response.isSuccessful && contentType.startsWith("image") && size > 100
-                    } catch (e: Exception) {
-                        false
+                // We found the keys
+                if (decryptionKeys.count() > 0) {
+                    decryptionKeys.forEach {
+                        // Corresponds to Pair<RegexPattern, ReplacementValue>
+                        decryptionRegexKeys.add(Pair(it.groupValues[1], it.groupValues[4]))
                     }
                 }
-            }.awaitAll()
-
-            val index = valid.indexOf(true)
-            if (index == -1) {
-                throw Exception("No valid image links found")
             }
-            urls[index]
         }
 
-        return images.mapIndexed { idx, img ->
-            Page(idx, imageUrl = img)
+        return encryptedLinks.mapIndexed { idx, rawUrl ->
+            Page(idx, imageUrl = decryptLink(rawUrl, decryptionRegexKeys, ""))
         }
     }
 

@@ -23,6 +23,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.Headers
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -41,12 +42,15 @@ class Picacomic : HttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences = getPreferences()
 
+    override val client: OkHttpClient = network.client.newBuilder()
+        .dns(ChannelDns(baseUrl.removePrefix("https://picaapi."), network.client, preferences)).build()
+
     private val blocklist = preferences.getString("BLOCK_GENRES", "")!!
         .split(',').map { it.trim() }
 
     private val basicHeaders = mapOf(
         "api-key" to "C69BAF41DA5ABD1FFEDC6D2FEA56B",
-        "app-channel" to preferences.getString("APP_CHANNEL", "2")!!,
+        "app-channel" to preferences.getString(APP_CHANNEL, "2")!!,
         "app-version" to "2.2.1.3.3.4",
         "app-uuid" to "defaultUuid",
         "app-platform" to "android",
@@ -441,7 +445,7 @@ class Picacomic : HttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
 
         ListPreference(screen.context).apply {
-            key = "APP_CHANNEL"
+            key = APP_CHANNEL
             title = "分流"
             entries = arrayOf("1", "2", "3")
             entryValues = entries
@@ -451,5 +455,18 @@ class Picacomic : HttpSource(), ConfigurableSource {
                 preferences.edit().putString(key, newValue as String).commit()
             }
         }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = APP_CHANNEL_URL
+            title = "分流url"
+            summary =
+                "自定义用于获取分流2、3的目标地址；分流1不受影响；（如果之前获取成功了需要重启才能生效，如果出现超时可以多重试几次）"
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putString(APP_CHANNEL_URL, newValue as String).commit()
+            }
+        }.let(screen::addPreference)
     }
 }
+
+const val APP_CHANNEL = "APP_CHANNEL"
+const val APP_CHANNEL_URL = "APP_CHANNEL_URL"

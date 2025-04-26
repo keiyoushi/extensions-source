@@ -1,0 +1,10 @@
+ext {
+    extName = 'Madara Scans'
+    extClass = '.MadaraScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://madarascans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

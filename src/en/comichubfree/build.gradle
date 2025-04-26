@@ -1,7 +1,7 @@
 ext {
     extName = "ComicHubFree"
     extClass = ".ComicHubFree"
-    extVersionCode = 1
+    extVersionCode = 2
     isNsfw = false
 }
 
