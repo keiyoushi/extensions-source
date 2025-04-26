@@ -7,6 +7,7 @@ class VortexScans : Iken(
     "Vortex Scans",
     "en",
     "https://vortexscans.org",
+    "https://api.vortexscans.org",
 ) {
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 }
