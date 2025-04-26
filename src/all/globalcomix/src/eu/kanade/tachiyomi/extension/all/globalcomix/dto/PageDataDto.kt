@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 @Suppress("PropertyName")
 @Serializable
 @SerialName(GlobalComixConstants.releasePage)
-class PageListDataDto(
+class PageDataDto(
     val is_page_paid: Boolean,
     val desktop_image_url: String,
     val mobile_image_url: String,

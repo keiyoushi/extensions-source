@@ -22,7 +22,7 @@ class ChapterDataDto(
     val published_time: String,
 
     // Only available when calling the /readV2 endpoint
-    val page_objects: List<PageListDataDto>?,
+    val page_objects: List<PageDataDto>?,
 ) : EntityDto() {
     val isPremium: Boolean
         get() = premium_only == 1 || free_page_count < page_count - 1
