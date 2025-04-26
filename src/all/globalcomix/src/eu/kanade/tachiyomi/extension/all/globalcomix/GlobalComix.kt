@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.globalcomix
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -22,7 +21,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
@@ -30,8 +30,6 @@ import kotlinx.serialization.modules.polymorphic
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -98,10 +96,6 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
         mangaListParse(response)
 
     private fun mangaListParse(response: Response): MangasPage {
-        if (response.code == 204) {
-            return MangasPage(emptyList(), false)
-        }
-
         val isSingleItemLookup = response.request.url.toString().startsWith(apiMangaUrl)
         return if (!isSingleItemLookup) {
             // Normally, the response is a paginated list of mangas
