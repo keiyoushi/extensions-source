@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.globalcomix.dto
 
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants
+import eu.kanade.tachiyomi.extension.all.globalcomix.comic
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -10,7 +10,7 @@ typealias MangasDto = PaginatedResponseDto<MangaDataDto>
 
 @Suppress("PropertyName")
 @Serializable
-@SerialName(GlobalComixConstants.comic)
+@SerialName(comic)
 class MangaDataDto(
     val name: String,
     val description: String?,

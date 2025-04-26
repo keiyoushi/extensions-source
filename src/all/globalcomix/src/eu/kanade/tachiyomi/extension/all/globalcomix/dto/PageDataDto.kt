@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.all.globalcomix.dto
 
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants
+import eu.kanade.tachiyomi.extension.all.globalcomix.releasePage
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Suppress("PropertyName")
 @Serializable
-@SerialName(GlobalComixConstants.releasePage)
+@SerialName(releasePage)
 class PageDataDto(
     val is_page_paid: Boolean,
     val desktop_image_url: String,

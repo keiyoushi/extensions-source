@@ -4,17 +4,6 @@ import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.apiChapterUrl
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.apiMangaUrl
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.apiSearchUrl
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.clientId
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.english
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.getDataSaverPreferenceKey
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.getShowLockedChaptersPreferenceKey
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.prefixIdSearch
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.webChapterUrl
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.webComicUrl
-import eu.kanade.tachiyomi.extension.all.globalcomix.GlobalComixConstants.webUrl
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.ChapterDataDto.Companion.createChapter
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.ChapterDto
 import eu.kanade.tachiyomi.extension.all.globalcomix.dto.ChaptersDto

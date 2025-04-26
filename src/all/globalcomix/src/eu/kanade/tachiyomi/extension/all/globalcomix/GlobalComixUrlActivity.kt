@@ -25,7 +25,7 @@ class GlobalComixUrlActivity : Activity() {
             val titleId = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", GlobalComixConstants.prefixIdSearch + titleId)
+                putExtra("query", prefixIdSearch + titleId)
                 putExtra("filter", packageName)
             }
 
