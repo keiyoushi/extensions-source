@@ -5,6 +5,6 @@ plugins {
 baseVersionCode = 33
 
 dependencies {
-    api(project(":lib:randomua"))
-    implementation(libs.dec)
+    //noinspection UseTomlInstead
+    implementation("org.brotli:dec:0.1.2")
 }

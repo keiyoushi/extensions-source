@@ -51,7 +51,8 @@ abstract class MangaHub(
     private val baseApiUrl = "https://api.mghcdn.com"
     private val baseCdnUrl = "https://imgx.mghcdn.com"
     private val baseThumbCdnUrl = "https://thumb.mghcdn.com"
-    private val regex = Regex("mhub_access=([^;]+)")
+    private val apiRegex = Regex("mhub_access=([^;]+)")
+    private val spaceRegex = Regex("\\s+")
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -204,7 +205,7 @@ abstract class MangaHub(
                             .build(),
                     ),
                 ).execute()
-                val returnedKey = response.headers["set-cookie"]?.let { regex.find(it)?.groupValues?.get(1) }
+                val returnedKey = response.headers["set-cookie"]?.let { apiRegex.find(it)?.groupValues?.get(1) }
                 response.close() // Avoid potential resource leaks
 
                 if (returnedKey != oldKey) break // Break out of loop since we got an allegedly valid API key
@@ -346,7 +347,7 @@ abstract class MangaHub(
                 val numberString = "${if (it.number % 1 == 0f) it.number.toInt() else it.number}"
 
                 name = if (!useGenericTitle) {
-                    generateChapterName(it.title.trim().replace("\n", " "), numberString)
+                    generateChapterName(it.title.trim().replace(spaceRegex, " "), numberString)
                 } else {
                     generateGenericChapterName(numberString)
                 }
@@ -561,7 +562,7 @@ abstract class MangaHub(
         Genre("Video Games", "video-games"),
         Genre("Monsters", "monsters"),
         Genre("Office Workers", "office-workers"),
-        Genre("system", "system"),
+        Genre("System", "system"),
         Genre("Villainess", "villainess"),
         Genre("Zombies", "zombies"),
         Genre("Vampires", "vampires"),
@@ -584,7 +585,7 @@ abstract class MangaHub(
         Genre("Cheat Systems", "cheat-systems"),
         Genre("Dungeons", "dungeons"),
         Genre("Overpowered", "overpowered"),
-    )
+    ).sortedBy { it.toString() }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
