@@ -167,15 +167,10 @@ abstract class GlobalComix(final override val lang: String, private val extLang:
         return GET(url, headers)
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        if (response.code == 204) {
-            return emptyList()
-        }
-
-        return response.parseAs<ChaptersDto>().payload!!.results.filterNot { dto ->
+    override fun chapterListParse(response: Response): List<SChapter> =
+        response.parseAs<ChaptersDto>().payload!!.results.filterNot { dto ->
             dto.isPremium && !preferences.showLockedChapters
         }.map { it.createChapter() }
-    }
 
     override fun getChapterUrl(chapter: SChapter): String =
         "$baseUrl/read/${chapter.url}"
