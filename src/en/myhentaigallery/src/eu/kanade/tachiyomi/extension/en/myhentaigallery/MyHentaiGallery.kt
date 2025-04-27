@@ -122,14 +122,14 @@ class MyHentaiGallery : ParsedHttpSource() {
                         .takeIf { it.isNotEmpty() }
                         ?.also { if (isNotEmpty()) append("\n\n") }
                         ?.also { appendLine("Groups:") }
-                        ?.joinToString("\n") { "• ${it.text()}" }
+                        ?.joinToString("\n") { "- ${it.text()}" }
                         ?.also { append(it) }
 
                     info.select("div:containsOwn(parodies) a")
                         .takeIf { it.isNotEmpty() }
                         ?.also { if (isNotEmpty()) append("\n\n") }
                         ?.also { appendLine("Parodies:") }
-                        ?.joinToString("\n") { "• ${it.text()}" }
+                        ?.joinToString("\n") { "- ${it.text()}" }
                         ?.also { append(it) }
                 }
             }
