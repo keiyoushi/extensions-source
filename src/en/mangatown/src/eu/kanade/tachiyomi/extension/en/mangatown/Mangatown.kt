@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangatown
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -9,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -31,18 +31,18 @@ class Mangatown : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Referer", baseUrl)
+        .add("Referer", "$baseUrl/")
 
     override fun popularMangaSelector() = "li:has(a.manga_cover)"
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/directory/0-0-0-0-0-0/$page.htm")
+        return GET("$baseUrl/directory/0-0-0-0-0-0/$page.htm", headers)
     }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/latest/$page.htm")
+        return GET("$baseUrl/latest/$page.htm", headers)
     }
 
     override fun popularMangaFromElement(element: Element): SManga {
@@ -62,7 +62,11 @@ class Mangatown : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return POST("$baseUrl/search?page=$page&name=$query", headers)
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("name", query)
+            .build()
+        return GET(url, headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -138,7 +142,7 @@ class Mangatown : ParsedHttpSource() {
     }
 
     // Get the page
-    override fun imageUrlRequest(page: Page) = GET(baseUrl + page.url)
+    override fun imageUrlRequest(page: Page) = GET(baseUrl + page.url, headers)
 
     // Get the image from the requested page
     override fun imageUrlParse(response: Response): String {
