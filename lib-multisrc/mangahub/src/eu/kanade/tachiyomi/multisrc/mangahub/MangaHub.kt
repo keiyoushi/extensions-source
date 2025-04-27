@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
 
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -139,10 +138,8 @@ abstract class MangaHub(
     }
 
     private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
-        Log.d("hub", "in apiAuthInterceptor")
         val request = chain.request()
         val tag = request.tag(GraphQLTag::class.java)
-            .also { Log.d("hub", "tag: $it") }
             ?: return chain.proceed(request) // We won't intercept non-graphql requests (like image retrieval)
 
         return try {
