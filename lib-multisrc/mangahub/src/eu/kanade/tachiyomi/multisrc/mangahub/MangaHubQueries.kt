@@ -56,7 +56,12 @@ val pagesQuery = { mangaSource: String, slug: String, number: Float ->
     """
         {
             chapter(x: $mangaSource, slug: "$slug", number: $number) {
-                    pages
+                    pages,
+                    mangaID,
+                    number,
+                    manga {
+                        slug
+                    }
                 }
         }
     """.trimIndent()
