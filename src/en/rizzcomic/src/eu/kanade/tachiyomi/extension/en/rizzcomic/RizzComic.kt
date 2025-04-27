@@ -114,13 +114,12 @@ class RizzComic : MangaThemesiaAlt(
             .replace(slugRegex, "-")
             .replace("-s-", "s-")
             .replace("-ll-", "ll-")
-            .replace(slugCleanupRegex, "")
+            .trim('-')
 
         val genreIds get() = genres?.split(",")?.map(String::trim)
 
         companion object {
             private val slugRegex = Regex("""[^a-z0-9]+""")
-            private val slugCleanupRegex = Regex("""^-+|-+$""")
         }
     }
 
