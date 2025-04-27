@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
 
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -29,7 +30,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.brotli.dec.BrotliInputStream
-import rx.Observable
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.URLEncoder
@@ -55,6 +55,7 @@ abstract class MangaHub(
     private val baseThumbCdnUrl = "https://thumb.mghcdn.com"
     private val apiRegex = Regex("mhub_access=([^;]+)")
     private val spaceRegex = Regex("\\s+")
+    private val apiErrorRegex = Regex("""rate\s*limit|api\s*key""")
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -65,7 +66,6 @@ abstract class MangaHub(
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::apiAuthInterceptor)
-        .addInterceptor(::graphQLApiInterceptor)
         .addNetworkInterceptor(::compatEncodingInterceptor)
         .build()
 
@@ -79,7 +79,7 @@ abstract class MangaHub(
         .add("Sec-Fetch-Site", "same-origin")
         .add("Upgrade-Insecure-Requests", "1")
 
-    private fun postRequestGraphQL(query: String): Request {
+    private fun postRequestGraphQL(query: String, refreshUrl: String? = null): Request {
         val requestHeaders = headersBuilder()
             .set("Accept", "application/json")
             .set("Content-Type", "application/json")
@@ -96,27 +96,8 @@ abstract class MangaHub(
 
         return POST("$baseApiUrl/graphql", requestHeaders, body.toString().toRequestBody())
             .newBuilder()
-            .tag(GraphQLTag())
+            .tag(GraphQLTag::class.java, GraphQLTag(refreshUrl))
             .build()
-    }
-
-    private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
-        val originalRequest = chain.request()
-
-        val cookie = client.cookieJar
-            .loadForRequest(baseUrl.toHttpUrl())
-            .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }
-
-        val request =
-            if (originalRequest.url.toString() == "$baseApiUrl/graphql" && cookie != null) {
-                originalRequest.newBuilder()
-                    .header("x-mhub-access", cookie.value)
-                    .build()
-            } else {
-                originalRequest
-            }
-
-        return chain.proceed(request)
     }
 
     // Normally this gets handled properly but in older forks such as TachiyomiJ2K, we have to manually intercept it
@@ -157,42 +138,64 @@ abstract class MangaHub(
             .build()
     }
 
-    private fun graphQLApiInterceptor(chain: Interceptor.Chain): Response {
+    private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
+        Log.d("hub", "in apiAuthInterceptor")
         val request = chain.request()
+        val tag = request.tag(GraphQLTag::class.java)
+            .also { Log.d("hub", "tag: $it") }
+            ?: return chain.proceed(request) // We won't intercept non-graphql requests (like image retrieval)
 
-        // We won't intercept non-graphql requests (like image retrieval)
-        if (!request.hasGraphQLTag()) {
-            return chain.proceed(request)
+        return try {
+            tryApiRequest(chain, request)
+        } catch (e: Throwable) {
+            val noCookie = e is MangaHubCookieNotFound
+            val apiError = e is ApiErrorException &&
+                apiErrorRegex.containsMatchIn(e.message ?: "")
+
+            if (noCookie || apiError) {
+                refreshApiKey(tag.refreshUrl)
+                tryApiRequest(chain, request)
+            } else {
+                throw e
+            }
         }
+    }
 
-        val response = chain.proceed(request)
+    private fun tryApiRequest(chain: Interceptor.Chain, request: Request): Response {
+        val cookie = client.cookieJar
+            .loadForRequest(baseUrl.toHttpUrl())
+            .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }
+            ?: throw MangaHubCookieNotFound()
 
-        // We don't care about the data, only the possible error associated with it
-        // If we encounter an error, we'll intercept it and throw an error for app to catch
-        val apiResponse = response.peekBody(Long.MAX_VALUE).string().parseAs<ApiResponseError>()
+        val apiRequest = request.newBuilder()
+            .header("x-mhub-access", cookie.value)
+            .build()
+
+        val response = chain.proceed(apiRequest)
+
+        val apiResponse = response.peekBody(Long.MAX_VALUE).string()
+            .parseAs<ApiResponseError>()
+
         if (apiResponse.errors != null) {
             response.close() // Avoid leaks
             val errors = apiResponse.errors.joinToString("\n") { it.message }
-            throw IOException(errors)
+            throw ApiErrorException(errors)
         }
 
-        // Everything works fine
         return response
     }
 
-    private fun Request.hasGraphQLTag(): Boolean {
-        return this.tag() is GraphQLTag
-    }
+    private class MangaHubCookieNotFound : IOException("mhub_access cookie not found")
+    private class ApiErrorException(errorMessage: String) : IOException(errorMessage)
 
     private val lock = ReentrantLock()
     private var refreshed = 0L
 
-    private fun refreshApiKey(manga: SManga? = null, chapter: SChapter? = null) {
+    private fun refreshApiKey(refreshUrl: String? = null) {
         if (refreshed + 10000 < System.currentTimeMillis() && lock.tryLock()) {
             val url = when {
-                chapter != null -> "$baseUrl/chapter${chapter.url}"
-                manga != null -> "$baseUrl${manga.url}"
-                else -> "$baseUrl/chapter/martial-peak/chapter-${Random.nextInt(2000, 3000)}"
+                refreshUrl != null -> refreshUrl
+                else -> "$baseUrl/chapter/martial-peak/chapter-${Random.nextInt(1000, 3000)}"
             }.toHttpUrl()
 
             val oldKey = client.cookieJar
@@ -233,23 +236,6 @@ abstract class MangaHub(
         }
     }
 
-    private inline fun <reified T> fetchAndRetry(
-        manga: SManga? = null,
-        chapter: SChapter? = null,
-        crossinline fetch: () -> Observable<T>,
-    ): Observable<T> {
-        return fetch()
-            .onErrorResumeNext { error ->
-                if (errorRegex.containsMatchIn(error.message ?: "")) {
-                    refreshApiKey(manga, chapter)
-                    fetch()
-                } else {
-                    Observable.error(error)
-                }
-            }
-    }
-    private val errorRegex = Regex("""(api)?\s*rate\s*limit\s*(excessed)?|api\s*key\s*(invalid)?""")
-
     data class SMangaDTO(
         val url: String,
         val title: String,
@@ -270,9 +256,6 @@ abstract class MangaHub(
     }
 
     // popular
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
-        fetchAndRetry { super.fetchPopularManga(page) }
-
     override fun popularMangaRequest(page: Int): Request = mangaRequest(page, "POPULAR")
 
     // often enough there will be nearly identical entries with slightly different
@@ -304,9 +287,6 @@ abstract class MangaHub(
     }
 
     // latest
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
-        fetchAndRetry { super.fetchLatestUpdates(page) }
-
     override fun latestUpdatesRequest(page: Int): Request {
         return mangaRequest(page, "LATEST")
     }
@@ -316,9 +296,6 @@ abstract class MangaHub(
     }
 
     // search
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
-        fetchAndRetry { super.fetchSearchManga(page, query, filters) }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         var order = "POPULAR"
         var genres = "all"
@@ -343,11 +320,11 @@ abstract class MangaHub(
     }
 
     // manga details
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        fetchAndRetry(manga = manga) { super.fetchMangaDetails(manga) }
-
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return postRequestGraphQL(mangaDetailsQuery(mangaSource, manga.url.removePrefix("/manga/")))
+        return postRequestGraphQL(
+            mangaDetailsQuery(mangaSource, manga.url.removePrefix("/manga/")),
+            refreshUrl = "$baseUrl${manga.url}",
+        )
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -381,11 +358,11 @@ abstract class MangaHub(
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     // Chapters
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
-        fetchAndRetry(manga = manga) { super.fetchChapterList(manga) }
-
     override fun chapterListRequest(manga: SManga): Request {
-        return postRequestGraphQL(mangaChapterListQuery(mangaSource, manga.url.removePrefix("/manga/")))
+        return postRequestGraphQL(
+            mangaChapterListQuery(mangaSource, manga.url.removePrefix("/manga/")),
+            refreshUrl = "$baseUrl${manga.url}",
+        )
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -429,11 +406,11 @@ abstract class MangaHub(
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.split("/")
 
-        return postRequestGraphQL(pagesQuery(mangaSource, chapterUrl[1], chapterUrl[2].substringAfter("-").toFloat()))
+        return postRequestGraphQL(
+            pagesQuery(mangaSource, chapterUrl[1], chapterUrl[2].substringAfter("-").toFloat()),
+            refreshUrl = "$baseUrl/chapter${chapter.url}",
+        )
     }
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        fetchAndRetry(chapter = chapter) { super.fetchPageList(chapter) }
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterObject = response.parseAs<ApiChapterPagesResponse>()
