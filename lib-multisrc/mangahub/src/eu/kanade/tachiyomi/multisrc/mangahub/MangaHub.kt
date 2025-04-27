@@ -36,7 +36,9 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.GZIPInputStream
+import kotlin.random.Random
 
 abstract class MangaHub(
     override val name: String,
@@ -182,38 +184,71 @@ abstract class MangaHub(
         return this.tag() is GraphQLTag
     }
 
-    private fun refreshApiKey(chapter: SChapter) {
-        val url = "$baseUrl/chapter${chapter.url}".toHttpUrl()
-        val oldKey = client.cookieJar
-            .loadForRequest(baseUrl.toHttpUrl())
-            .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }?.value
+    private val lock = ReentrantLock()
+    private var refreshed = 0L
 
-        for (i in 1..2) {
-            // Clear key cookie
-            val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
-            client.cookieJar.saveFromResponse(url, listOf(cookie))
+    private fun refreshApiKey(manga: SManga? = null, chapter: SChapter? = null) {
+        if (refreshed + 10000 < System.currentTimeMillis() && lock.tryLock()) {
+            val url = when {
+                chapter != null -> "$baseUrl/chapter${chapter.url}"
+                manga != null -> "$baseUrl${manga.url}"
+                else -> "$baseUrl/chapter/martial-peak/chapter-${Random.nextInt(2000, 3000)}"
+            }.toHttpUrl()
 
-            // We try requesting again with param if the first one fails
-            val query = if (i == 2) "?reloadKey=1" else ""
+            val oldKey = client.cookieJar
+                .loadForRequest(baseUrl.toHttpUrl())
+                .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }?.value
 
-            try {
-                val response = client.newCall(
-                    GET(
-                        "$url$query",
-                        headers.newBuilder()
-                            .set("Referer", "$baseUrl/manga/${url.pathSegments[1]}")
-                            .build(),
-                    ),
-                ).execute()
-                val returnedKey = response.headers["set-cookie"]?.let { apiRegex.find(it)?.groupValues?.get(1) }
-                response.close() // Avoid potential resource leaks
+            for (i in 1..2) {
+                // Clear key cookie
+                val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
+                client.cookieJar.saveFromResponse(url, listOf(cookie))
 
-                if (returnedKey != oldKey) break // Break out of loop since we got an allegedly valid API key
-            } catch (_: IOException) {
-                throw IOException("An error occurred while obtaining a new API key") // Show error
+                try {
+                    // We try requesting again with param if the first one fails
+                    val query = if (i == 2) "?reloadKey=1" else ""
+                    val response = client.newCall(
+                        GET(
+                            "$url$query",
+                            headers.newBuilder()
+                                .set("Referer", "$baseUrl/manga/${url.pathSegments[1]}")
+                                .build(),
+                        ),
+                    ).execute()
+                    val returnedKey =
+                        response.headers["set-cookie"]?.let { apiRegex.find(it)?.groupValues?.get(1) }
+                    response.close() // Avoid potential resource leaks
+
+                    if (returnedKey != oldKey) break // Break out of loop since we got an allegedly valid API key
+                } catch (_: Throwable) {
+                    lock.unlock()
+                    throw Exception("An error occurred while obtaining a new API key") // Show error
+                }
             }
+            refreshed = System.currentTimeMillis()
+            lock.unlock()
+        } else {
+            lock.lock() // wait here until lock is released
+            lock.unlock()
         }
     }
+
+    private inline fun <reified T> fetchAndRetry(
+        manga: SManga? = null,
+        chapter: SChapter? = null,
+        crossinline fetch: () -> Observable<T>,
+    ): Observable<T> {
+        return fetch()
+            .onErrorResumeNext { error ->
+                if (errorRegex.containsMatchIn(error.message ?: "")) {
+                    refreshApiKey(manga, chapter)
+                    fetch()
+                } else {
+                    Observable.error(error)
+                }
+            }
+    }
+    private val errorRegex = Regex("""(api)?\s*rate\s*limit\s*(excessed)?|api\s*key\s*(invalid)?""")
 
     data class SMangaDTO(
         val url: String,
@@ -235,6 +270,9 @@ abstract class MangaHub(
     }
 
     // popular
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> =
+        fetchAndRetry { super.fetchPopularManga(page) }
+
     override fun popularMangaRequest(page: Int): Request = mangaRequest(page, "POPULAR")
 
     // often enough there will be nearly identical entries with slightly different
@@ -266,6 +304,9 @@ abstract class MangaHub(
     }
 
     // latest
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> =
+        fetchAndRetry { super.fetchLatestUpdates(page) }
+
     override fun latestUpdatesRequest(page: Int): Request {
         return mangaRequest(page, "LATEST")
     }
@@ -275,6 +316,9 @@ abstract class MangaHub(
     }
 
     // search
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> =
+        fetchAndRetry { super.fetchSearchManga(page, query, filters) }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         var order = "POPULAR"
         var genres = "all"
@@ -299,6 +343,9 @@ abstract class MangaHub(
     }
 
     // manga details
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
+        fetchAndRetry(manga = manga) { super.fetchMangaDetails(manga) }
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         return postRequestGraphQL(mangaDetailsQuery(mangaSource, manga.url.removePrefix("/manga/")))
     }
@@ -334,6 +381,9 @@ abstract class MangaHub(
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     // Chapters
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        fetchAndRetry(manga = manga) { super.fetchChapterList(manga) }
+
     override fun chapterListRequest(manga: SManga): Request {
         return postRequestGraphQL(mangaChapterListQuery(mangaSource, manga.url.removePrefix("/manga/")))
     }
@@ -382,19 +432,8 @@ abstract class MangaHub(
         return postRequestGraphQL(pagesQuery(mangaSource, chapterUrl[1], chapterUrl[2].substringAfter("-").toFloat()))
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        var doApiRefresh = true
-
-        return super.fetchPageList(chapter)
-            .doOnError {
-                // Ensure that the api refresh call will happen only once
-                if (doApiRefresh) {
-                    refreshApiKey(chapter)
-                    doApiRefresh = false
-                }
-            }
-            .retry(1)
-    }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
+        fetchAndRetry(chapter = chapter) { super.fetchPageList(chapter) }
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterObject = response.parseAs<ApiChapterPagesResponse>()
