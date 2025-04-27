@@ -3,7 +3,7 @@ ext {
     extClass = '.LunarScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://lunarscan.org'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 
