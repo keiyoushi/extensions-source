@@ -64,25 +64,17 @@ class ReadAllComics : ParsedHttpSource() {
         return response
     }
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl${if (page > 1)"/page/$page/" else ""}", headers)
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create().apply {
-            val category = element.classNames()
-                .firstOrNull { it.startsWith("category-") }!!
-                .substringAfter("category-")
-
-            url = "/category/$category/"
-            title = category.replace("-", " ").capitalizeEachWord()
-            thumbnail_url = element.select("img").attr("abs:src")
-        }
-
-        return manga
+    override fun popularMangaRequest(page: Int): Request {
+        throw Exception("ReadAllComics has no popular titles Page. Please use the search function instead.")
     }
 
-    override fun popularMangaSelector() = "#post-area > div"
-    override fun popularMangaNextPageSelector() = "div.pagenavi > a.next"
+    // Never called
+    override fun popularMangaFromElement(element: Element): SManga {
+        throw Exception("")
+    }
+
+    override fun popularMangaSelector() = ""
+    override fun popularMangaNextPageSelector() = ""
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (page == 1) {
