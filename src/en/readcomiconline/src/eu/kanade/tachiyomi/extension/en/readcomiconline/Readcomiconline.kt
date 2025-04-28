@@ -221,12 +221,12 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         // Get script elements
         val scripts = document.select("script[type=text/javascript]")
 
-        // We'll get a bunch of results on the selector but we only need 2: The script that contains the encrypted links and the script
-        // that contains the partial decryption key.
+        // We'll get a bunch of results on the selector but we only need the script that contains the encrypted links
+        val imageRegex = imageRegexPref() // Avoid being instantiated multiple times
         for (script in scripts) {
             val scriptContent = script.data()
             if (scriptContent.isNotEmpty()) {
-                val encryptedValues = imageRegexPref().findAll(scriptContent)
+                val encryptedValues = imageRegex.findAll(scriptContent)
 
                 if (encryptedValues.count() < 1) continue
 
@@ -238,6 +238,8 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                         encryptedLinks.add(url)
                     }
                 }
+
+                break
             }
         }
 
@@ -356,7 +358,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val imageRegexPref = androidx.preference.EditTextPreference(screen.context).apply {
             key = IMAGE_REGEX_PREF
             title = IMAGE_REGEX_TITLE
-            setDefaultValue(IMAGE_REGEX_PREF_DEFAULT)
             summary = IMAGE_REGEX_SUMMARY
 
             setOnPreferenceChangeListener { _, newValue ->
@@ -368,8 +369,8 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val imageDecryptionPref = androidx.preference.EditTextPreference(screen.context).apply {
             key = IMAGE_DECRYPTION_PREF
             title = IMAGE_DECRYPTION_TITLE
-            setDefaultValue(IMAGE_DECRYPTION_DEFAULT)
             summary = IMAGE_DECRYPTION_SUMMARY
+            dialogMessage = IMAGE_DECRYPTION_DIALOG_MESSAGE
 
             setOnPreferenceChangeListener { _, newValue ->
                 val commitResult = preferences.edit().putString(IMAGE_DECRYPTION_PREF, newValue as String).commit()
@@ -420,7 +421,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     private fun serverPref() = preferences.getString(SERVER_PREF, "")
 
-    private fun imageRegexPref() = preferences.getString(IMAGE_REGEX_PREF, IMAGE_REGEX_PREF_DEFAULT)!!.toRegex()
+    private fun imageRegexPref() = (preferences.getString(IMAGE_REGEX_PREF, IMAGE_REGEX_DEFAULT)!!.takeUnless { it.isEmpty() } ?: IMAGE_REGEX_DEFAULT).toRegex()
 
     // This would get called a lot of times so better to save the value and conditionally update it (like useMemo in react)
     private var decryptionList: List<Pair<String, String>> = emptyList()
@@ -434,10 +435,10 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         }
 
     private fun imageDecryptionPref(): List<Pair<String, String>> {
-        val prefEntries = preferences.getString(IMAGE_DECRYPTION_PREF, IMAGE_DECRYPTION_DEFAULT)!!.split("\n")
+        val prefEntries = (preferences.getString(IMAGE_DECRYPTION_PREF, IMAGE_DECRYPTION_DEFAULT)!!.takeUnless { it.isEmpty() } ?: IMAGE_DECRYPTION_DEFAULT).split("\n")
 
         return prefEntries.map {
-            val entrySplit = it.split("|")
+            val entrySplit = it.split(IMAGE_DECRYPTION_DELIMITER)
 
             Pair(entrySplit[0], entrySplit[1])
         }
@@ -448,18 +449,25 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
-        private const val IMAGE_REGEX_TITLE = "Image Regex"
-        private const val IMAGE_REGEX_SUMMARY = "Regex to use in getting entry images"
+        private const val IMAGE_REGEX_TITLE = "Override Image Regex"
+        private const val IMAGE_REGEX_SUMMARY = "Override regex to use in getting entry images"
         private const val IMAGE_REGEX_PREF = "imageregexpref"
-        private const val IMAGE_REGEX_PREF_DEFAULT = """(?s)cdk\s*=\s*['"](.*?)['"]\s*;?"""
+        private const val IMAGE_REGEX_DEFAULT = """(?s)cdk\s*=\s*['"](.*?)['"]\s*;?"""
         private const val IMAGE_DECRYPTION_TITLE = "Image Decryption Steps"
-        private const val IMAGE_DECRYPTION_SUMMARY = "Format: 'RegexString|ReplacementString'\nNote: Each step is separated by a new line"
+        private const val IMAGE_DECRYPTION_SUMMARY = "Configure the first stage of image decryption"
+        private val IMAGE_DECRYPTION_DIALOG_MESSAGE = """
+            Format: 'RegexString|ReplacementString'
+            Note: Each step is separated by a new line, leaving it blank will use the default value(s) instead
+        """.trimIndent()
         private const val IMAGE_DECRYPTION_PREF = "imagedecryptionstep"
         private val IMAGE_DECRYPTION_DEFAULT = """
+            6UUQS__ACd__|g
+            Vz__x2OdwP_|a
             FHLS6__8p4__|g
             um__6PFfKU_|a
             b|pw_.g28x
             h|d2pr.x_27
         """.trimIndent()
+        private const val IMAGE_DECRYPTION_DELIMITER = "|"
     }
 }
