@@ -32,16 +32,16 @@ class MyHentaiGallery : ParsedHttpSource() {
     // Popular
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/gallery/category/2/$page", headers)
+        return GET("$baseUrl/views/$page", headers)
     }
 
     override fun popularMangaSelector() = "div.comic-inner"
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("h2").text()
-            setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").attr("abs:src")
+            title = element.selectFirst("h2")!!.text()
+            setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
     }
 
@@ -49,7 +49,7 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/gallery/$page")
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/gpage/$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -59,11 +59,11 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     // Search
 
-    private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/gallery/thumbnails/$id", headers)
+    private fun searchMangaByIdRequest(id: String) = GET("$baseUrl/g/$id", headers)
 
     private fun searchMangaByIdParse(response: Response, id: String): MangasPage {
         val details = mangaDetailsParse(response)
-        details.url = "/gallery/thumbnails/$id"
+        details.url = "/g/$id"
         return MangasPage(listOf(details), false)
     }
 
@@ -80,9 +80,13 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank()) {
-            GET("$baseUrl/search/$page?query=$query", headers)
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+                .addPathSegment(page.toString())
+                .addQueryParameter("query", query)
+                .build()
+            GET(url, headers)
         } else {
-            val url = "$baseUrl/gallery/category".toHttpUrl().newBuilder()
+            val url = "$baseUrl/g/category".toHttpUrl().newBuilder()
 
             filters.forEach { filter ->
                 when (filter) {
@@ -107,17 +111,26 @@ class MyHentaiGallery : ParsedHttpSource() {
     // Details
 
     override fun mangaDetailsParse(document: Document): SManga {
-        return document.select("div.comic-header").let { info ->
+        return document.selectFirst("div.comic-header")!!.let { info ->
             SManga.create().apply {
-                title = info.select("h1").text()
+                title = info.selectFirst("h1")!!.text()
                 genre = info.select("div:containsOwn(categories) a").joinToString { it.text() }
-                artist = info.select("div:containsOwn(artists) a").text()
-                thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.attr("src")
-                description = info.select("div:containsOwn(groups) a").let { groups ->
-                    if (groups.isNotEmpty()) "Groups: ${groups.joinToString { it.text() }}\n" else ""
-                }
-                description += info.select("div:containsOwn(parodies) a").let { groups ->
-                    if (groups.isNotEmpty()) "Parodies: ${groups.joinToString { it.text() }}" else ""
+                artist = info.select("div:containsOwn(artists) a").joinToString { it.text() }
+                thumbnail_url = document.selectFirst(".comic-listing .comic-inner img")?.absUrl("src")
+                description = buildString {
+                    info.select("div:containsOwn(groups) a")
+                        .takeIf { it.isNotEmpty() }
+                        ?.also { if (isNotEmpty()) append("\n\n") }
+                        ?.also { appendLine("Groups:") }
+                        ?.joinToString("\n") { "- ${it.text()}" }
+                        ?.also { append(it) }
+
+                    info.select("div:containsOwn(parodies) a")
+                        .takeIf { it.isNotEmpty() }
+                        ?.also { if (isNotEmpty()) append("\n\n") }
+                        ?.also { appendLine("Parodies:") }
+                        ?.joinToString("\n") { "- ${it.text()}" }
+                        ?.also { append(it) }
                 }
             }
         }
@@ -142,7 +155,8 @@ class MyHentaiGallery : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("div.comic-thumb img[src]").mapIndexed { i, img ->
-            Page(i, "", img.attr("abs:src").replace("/thumbnail/", "/original/"))
+            val imageUrl = img.absUrl("src").replace("/thumbnail/", "/original/")
+            Page(i, imageUrl = imageUrl)
         }
     }
 
@@ -159,81 +173,107 @@ class MyHentaiGallery : ParsedHttpSource() {
     private class GenreFilter : UriPartFilter(
         "Category",
         arrayOf(
+            // copy($$(".catagory-inner > a").map(el => {var id = /\d+$/.exec(el.href.replace())[0]; var name = el.querySelector("h2").innerText; return `Pair("${name}", "${id}"),`;}).join("\n"))
             Pair("<select>", "---"),
             Pair("3D Comic", "3"),
-            Pair("Ahegao", "2740"),
-            Pair("Anal", "2741"),
-            Pair("Asian", "4"),
+            Pair("Ahegao", "23"),
+            Pair("Anal", "25"),
+            Pair("Animated", "10"),
+            Pair("Asian", "54"),
             Pair("Ass Expansion", "5"),
             Pair("Aunt", "6"),
             Pair("BBW", "7"),
             Pair("Beastiality", "8"),
-            Pair("Bimbofication", "3430"),
+            Pair("Bimbofication", "2049"),
             Pair("Bisexual", "9"),
-            Pair("Black & Interracial", "10"),
+            Pair("Black | Interracial", "20"),
             Pair("Body Swap", "11"),
             Pair("Bondage", "12"),
             Pair("Breast Expansion", "13"),
-            Pair("Brother", "14"),
-            Pair("Bukakke", "15"),
-            Pair("Catgirl", "2742"),
-            Pair("Cheating", "16"),
+            Pair("Brother", "1012"),
+            Pair("Bukkake", "15"),
+            Pair("Catgirl", "1201"),
+            Pair("Cbt", "8133"),
+            Pair("Censored", "5136"),
+            Pair("Cheating", "49"),
+            Pair("Cosplay", "8157"),
             Pair("Cousin", "17"),
-            Pair("Crossdressing", "18"),
-            Pair("Dad", "19"),
-            Pair("Daughter", "20"),
+            Pair("Crossdressing", "43"),
+            Pair("Cuntboy", "8134"),
+            Pair("Dad | Father", "788"),
+            Pair("Daughter", "546"),
             Pair("Dick Growth", "21"),
-            Pair("Ebony", "3533"),
-            Pair("Elf", "2744"),
-            Pair("Exhibitionism", "2745"),
-            Pair("Father", "22"),
-            Pair("Femdom", "23"),
-            Pair("Foot Fetish", "3253"),
-            Pair("Furry", "24"),
-            Pair("Futanari & Shemale & Dickgirl", "25"),
-            Pair("Futanari X Female", "3416"),
-            Pair("Futanari X Futanari", "3415"),
+            Pair("Double Penetration", "8135"),
+            Pair("Ebony", "29"),
+            Pair("Elf", "1714"),
+            Pair("Exhibitionism", "1838"),
+            Pair("Family", "2094"),
+            Pair("Femboy | Tomgirl | Sissy", "8136"),
+            Pair("Femdom", "24"),
+            Pair("Foot Fetish", "1873"),
+            Pair("Forced", "18"),
+            Pair("Furry", "14"),
+            Pair("Futanari | Shemale | Dickgirl", "19"),
+            Pair("Futanari X Female", "1951"),
+            Pair("Futanari X Futanari", "1885"),
             Pair("Futanari X Male", "26"),
             Pair("Gangbang", "27"),
-            Pair("Gay & Yaoi", "28"),
-            Pair("Gender Bending", "29"),
-            Pair("Giantess", "30"),
+            Pair("Gay | Yaoi", "28"),
+            Pair("Gender Bender", "16"),
+            Pair("Giant", "8137"),
+            Pair("Giantess", "452"),
+            Pair("Gilf", "8138"),
             Pair("Gloryhole", "31"),
-            Pair("Hairy Female", "3418"),
+            Pair("Group", "101"),
+            Pair("Hairy Female", "1986"),
             Pair("Hardcore", "36"),
-            Pair("Harem", "37"),
-            Pair("Incest", "38"),
-            Pair("Inseki", "3417"),
-            Pair("Kemonomimi", "3368"),
+            Pair("Harem", "53"),
+            Pair("Inflation | Stomach Bulge", "57"),
+            Pair("Inseki", "1978"),
+            Pair("Kemonomimi", "1875"),
             Pair("Lactation", "39"),
-            Pair("Lesbian & Yuri & Girls Only", "40"),
-            Pair("Milf", "41"),
-            Pair("Mind Break", "3419"),
-            Pair("Mind Control & Hypnosis", "42"),
-            Pair("Mom", "43"),
-            Pair("Mother", "44"),
+            Pair("Lesbian | Yuri | Girls Only", "41"),
+            Pair("Milf", "30"),
+            Pair("Mind Break", "2023"),
+            Pair("Mind Control | Hypnosis", "42"),
+            Pair("Mom | Mother", "56"),
+            Pair("Monster", "8140"),
+            Pair("Monster Girl", "8139"),
+            Pair("Most Popular", "52"),
             Pair("Muscle Girl", "45"),
             Pair("Muscle Growth", "46"),
             Pair("Nephew", "47"),
             Pair("Niece", "48"),
-            Pair("Orgy", "49"),
+            Pair("Nipple Fuck | Nipple Penetration", "8141"),
             Pair("Pegging", "50"),
             Pair("Possession", "51"),
-            Pair("Pregnant & Impregnation", "52"),
-            Pair("Rape", "53"),
-            Pair("Sister", "54"),
-            Pair("Solo", "2746"),
-            Pair("Son", "55"),
-            Pair("Spanking", "56"),
-            Pair("Stomach Bulge", "57"),
-            Pair("Strap-On", "58"),
+            Pair("Pregnant | Impregnation", "55"),
+            Pair("Public Use", "8142"),
+            Pair("Selfcest", "8143"),
+            Pair("Sister", "58"),
+            Pair("Slave", "8144"),
+            Pair("Smegma", "8145"),
+            Pair("Solo", "1865"),
+            Pair("Solo Futa", "8154"),
+            Pair("Solo Girl", "8146"),
+            Pair("Solo Male", "8147"),
+            Pair("Son", "62"),
+            Pair("Spanking", "38"),
+            Pair("Speechless", "8148"),
+            Pair("Strap-On", "61"),
+            Pair("Stuck In Wall", "8149"),
             Pair("Superheroes", "59"),
             Pair("Tentacles", "60"),
-            Pair("Threesome", "61"),
-            Pair("Transformation", "62"),
+            Pair("Threesome", "40"),
+            Pair("Tickling", "2065"),
+            Pair("Titty Fuck | Paizuri", "8150"),
+            Pair("Tomboy", "8153"),
+            Pair("Transformation", "37"),
             Pair("Uncle", "63"),
             Pair("Urination", "64"),
-            Pair("Vore", "65"),
+            Pair("Vanilla | Wholesome", "8151"),
+            Pair("Variant Set", "8152"),
+            Pair("Vore | Unbirth", "65"),
             Pair("Weight Gain", "66"),
         ),
     )
