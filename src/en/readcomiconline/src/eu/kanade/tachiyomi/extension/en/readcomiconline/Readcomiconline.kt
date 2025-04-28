@@ -22,6 +22,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -37,8 +38,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-    private val scriptPageRegex = """(?s)pth\s*=\s*['"](.*?)['"]\s*;?""".toRegex()
-    private val urlDecryptionRegex = """l\s*\.replace\(\s*/(.*?)/([gimuy]*)\s*,\s*(['"`])(.*?)\3\s*\)""".toRegex()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(
@@ -206,10 +205,10 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val qualitySuffix = if ((qualitypref() != "lq" && serverpref() != "s2") || (qualitypref() == "lq" && serverpref() == "s2")) {
-            "&s=${serverpref()}&quality=${qualitypref()}&readType=1"
+        val qualitySuffix = if ((qualityPref() != "lq" && serverPref() != "s2") || (qualityPref() == "lq" && serverPref() == "s2")) {
+            "&s=${serverPref()}&quality=${qualityPref()}&readType=1"
         } else {
-            "&s=${serverpref()}&readType=1"
+            "&s=${serverPref()}&readType=1"
         }
 
         return GET(baseUrl + chapter.url + qualitySuffix, headers)
@@ -218,7 +217,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         // Declare some important values first
         val encryptedLinks = mutableListOf<String>()
-        val decryptionRegexKeys = mutableListOf<Pair<String, String>>()
 
         // Get script elements
         val scripts = document.select("script[type=text/javascript]")
@@ -228,32 +226,32 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         for (script in scripts) {
             val scriptContent = script.data()
             if (scriptContent.isNotEmpty()) {
-                val encryptedValues = scriptPageRegex.findAll(scriptContent)
-                val decryptionKeys = urlDecryptionRegex.findAll(scriptContent)
+                val encryptedValues = imageRegexPref().findAll(scriptContent)
+
+                if (encryptedValues.count() < 1) continue
 
                 // We found the encrypted links
-                if (encryptedValues.count() > 0) {
-                    encryptedValues.forEach {
-                        val url = it.groupValues[1]
+                encryptedValues.forEach {
+                    val url = it.groupValues[1]
 
-                        if (url.isNotBlank()) {
-                            encryptedLinks.add(url)
-                        }
-                    }
-                }
-
-                // We found the keys
-                if (decryptionKeys.count() > 0) {
-                    decryptionKeys.forEach {
-                        // Corresponds to Pair<RegexPattern, ReplacementValue>
-                        decryptionRegexKeys.add(Pair(it.groupValues[1], it.groupValues[4]))
+                    if (url.isNotBlank()) {
+                        encryptedLinks.add(url)
                     }
                 }
             }
         }
 
-        return encryptedLinks.mapIndexed { idx, rawUrl ->
-            Page(idx, imageUrl = decryptLink(rawUrl, decryptionRegexKeys, ""))
+        try {
+            return encryptedLinks.mapIndexed { idx, rawUrl ->
+                var semiParsedUrl = rawUrl
+                decryptionList.forEach {
+                    semiParsedUrl = semiParsedUrl.replace(it.first.toRegex(), it.second)
+                }
+
+                Page(idx, imageUrl = decryptLink(semiParsedUrl, ""))
+            }
+        } catch (_: Exception) { // We'll catch a generic exception since it can throw several types depending on the returned encrypted URL
+            throw IOException("Parse failed, check Keiyoushi discord for configuration updates")
         }
     }
 
@@ -355,8 +353,38 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     // Preferences Code
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val qualitypref = androidx.preference.ListPreference(screen.context).apply {
-            key = QUALITY_PREF_TITLE
+        val imageRegexPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = IMAGE_REGEX_PREF
+            title = IMAGE_REGEX_TITLE
+            setDefaultValue(IMAGE_REGEX_PREF_DEFAULT)
+            summary = IMAGE_REGEX_SUMMARY
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putString(IMAGE_REGEX_PREF, newValue as String).commit()
+            }
+        }
+        screen.addPreference(imageRegexPref)
+
+        val imageDecryptionPref = androidx.preference.EditTextPreference(screen.context).apply {
+            key = IMAGE_DECRYPTION_PREF
+            title = IMAGE_DECRYPTION_TITLE
+            setDefaultValue(IMAGE_DECRYPTION_DEFAULT)
+            summary = IMAGE_DECRYPTION_SUMMARY
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val commitResult = preferences.edit().putString(IMAGE_DECRYPTION_PREF, newValue as String).commit()
+
+                if (commitResult) {
+                    decryptionList = imageDecryptionPref()
+                }
+
+                commitResult
+            }
+        }
+        screen.addPreference(imageDecryptionPref)
+
+        val qualityPref = androidx.preference.ListPreference(screen.context).apply {
+            key = QUALITY_PREF
             title = QUALITY_PREF_TITLE
             entries = arrayOf("High Quality", "Low Quality")
             entryValues = arrayOf("hq", "lq")
@@ -369,9 +397,10 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                 preferences.edit().putString(QUALITY_PREF, entry).commit()
             }
         }
-        screen.addPreference(qualitypref)
-        val serverpref = androidx.preference.ListPreference(screen.context).apply {
-            key = SERVER_PREF_TITLE
+        screen.addPreference(qualityPref)
+
+        val serverPref = androidx.preference.ListPreference(screen.context).apply {
+            key = SERVER_PREF
             title = SERVER_PREF_TITLE
             entries = arrayOf("Server 1", "Server 2")
             entryValues = arrayOf("", "s2")
@@ -384,17 +413,53 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                 preferences.edit().putString(SERVER_PREF, entry).commit()
             }
         }
-        screen.addPreference(serverpref)
+        screen.addPreference(serverPref)
     }
 
-    private fun qualitypref() = preferences.getString(QUALITY_PREF, "hq")
+    private fun qualityPref() = preferences.getString(QUALITY_PREF, "hq")
 
-    private fun serverpref() = preferences.getString(SERVER_PREF, "")
+    private fun serverPref() = preferences.getString(SERVER_PREF, "")
+
+    private fun imageRegexPref() = preferences.getString(IMAGE_REGEX_PREF, IMAGE_REGEX_PREF_DEFAULT)!!.toRegex()
+
+    // This would get called a lot of times so better to save the value and conditionally update it (like useMemo in react)
+    private var decryptionList: List<Pair<String, String>> = emptyList()
+        get() {
+            if (field.isNotEmpty()) {
+                return imageDecryptionPref()
+            }
+
+            field = imageDecryptionPref()
+            return field
+        }
+
+    private fun imageDecryptionPref(): List<Pair<String, String>> {
+        val prefEntries = preferences.getString(IMAGE_DECRYPTION_PREF, IMAGE_DECRYPTION_DEFAULT)!!.split("\n")
+
+        return prefEntries.map {
+            val entrySplit = it.split("|")
+
+            Pair(entrySplit[0], entrySplit[1])
+        }
+    }
 
     companion object {
         private const val QUALITY_PREF_TITLE = "Image Quality Selector"
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
+        private const val IMAGE_REGEX_TITLE = "Image Regex"
+        private const val IMAGE_REGEX_SUMMARY = "Regex to use in getting entry images"
+        private const val IMAGE_REGEX_PREF = "imageregexpref"
+        private const val IMAGE_REGEX_PREF_DEFAULT = """(?s)cdk\s*=\s*['"](.*?)['"]\s*;?"""
+        private const val IMAGE_DECRYPTION_TITLE = "Image Decryption Steps"
+        private const val IMAGE_DECRYPTION_SUMMARY = "Format: 'RegexString|ReplacementString'\nNote: Each step is separated by a new line"
+        private const val IMAGE_DECRYPTION_PREF = "imagedecryptionstep"
+        private val IMAGE_DECRYPTION_DEFAULT = """
+            FHLS6__8p4__|g
+            um__6PFfKU_|a
+            b|pw_.g28x
+            h|d2pr.x_27
+        """.trimIndent()
     }
 }
