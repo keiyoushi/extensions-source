@@ -29,6 +29,8 @@ class ReadAllComics : ParsedHttpSource() {
 
     private lateinit var searchPageElements: Elements
 
+    override val client = network.cloudflareClient
+
     override fun popularMangaRequest(page: Int): Request {
         throw Exception("ReadAllComics has no popular titles Page. Please use the search function instead.")
     }
@@ -83,6 +85,7 @@ class ReadAllComics : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         title = element.text()
+        thumbnail_url = ""
     }
 
     override fun searchMangaSelector() = ".categories a"
