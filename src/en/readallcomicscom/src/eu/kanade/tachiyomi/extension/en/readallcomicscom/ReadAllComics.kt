@@ -83,7 +83,6 @@ class ReadAllComics : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         title = element.text()
-        thumbnail_url = ""
     }
 
     override fun searchMangaSelector() = ".categories a"
