@@ -110,9 +110,11 @@ class RizzComic : MangaThemesiaAlt(
         @SerialName("genre_id") val genres: String? = null,
     ) {
         val slug get() = title.trim().lowercase()
+            .replace("'", "")
             .replace(slugRegex, "-")
             .replace("-s-", "s-")
             .replace("-ll-", "ll-")
+            .trim('-')
 
         val genreIds get() = genres?.split(",")?.map(String::trim)
 
