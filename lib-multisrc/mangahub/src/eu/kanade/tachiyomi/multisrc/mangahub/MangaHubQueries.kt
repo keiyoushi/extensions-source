@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
 
-class GraphQLTag
+class GraphQLTag(
+    val refreshUrl: String? = null,
+)
 
 val searchQuery = { mangaSource: String, query: String, genre: String, order: String, page: Int ->
     """

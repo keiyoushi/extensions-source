@@ -2,7 +2,7 @@ plugins {
     id("lib-multisrc")
 }
 
-baseVersionCode = 33
+baseVersionCode = 34
 
 dependencies {
     //noinspection UseTomlInstead
