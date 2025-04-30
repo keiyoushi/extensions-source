@@ -11,6 +11,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
@@ -46,7 +49,7 @@ open class EternalMangas(
         return GET("$baseUrl/comics", headers)
     }
 
-    private val tokenRegex = """self\.__next_f\.push\(.*token\\":\\"(.*?)\\"\}""".toRegex()
+    private val dataUrl = "https://raw.githubusercontent.com/bapeey/extensions-tools/refs/heads/main/keiyoushi/eternalmangas/values.txt"
 
     override fun searchMangaParse(
         response: Response,
@@ -54,14 +57,22 @@ open class EternalMangas(
         query: String,
         filters: FilterList,
     ): MangasPage {
-        val token = tokenRegex.find(response.body.string())?.groupValues?.get(1)
-            ?: throw Exception("Token not found")
-
+        val body = response.body.string()
+        val data = client.newCall(GET(dataUrl)).execute().body.string().split("\n")
+        val headersJson = json.parseToJsonElement(data[1]).jsonObject
         val apiHeaders = headersBuilder()
-            .add("X-Eternal-Key", token)
-            .build()
+        headersJson.forEach { (key, jsonElement) ->
+            var value = jsonElement.jsonPrimitive.contentOrNull.orEmpty()
+            if (value.startsWith("1-")) {
+                val match = value.substringAfter("-").toRegex().find(body)
+                value = match?.groupValues?.get(1).orEmpty()
+            } else {
+                value = value.substringAfter("-")
+            }
+            apiHeaders.add(key, value)
+        }
 
-        val apiResponse = client.newCall(GET("$apiBaseUrl$apiPath/comics-actu", apiHeaders)).execute()
+        val apiResponse = client.newCall(GET(data[0], apiHeaders.build())).execute()
         return super.searchMangaParse(apiResponse, page, query, filters)
     }
 
