@@ -255,8 +255,8 @@ With the example used above, the version would be `1.4.1`.
 #### Extension API
 
 Extensions rely on [extensions-lib](https://github.com/tachiyomiorg/extensions-lib), which provides
-some interfaces and stubs from the [app](https://github.com/tachiyomiorg/tachiyomi) for compilation
-purposes. The actual implementations can be found [here](https://github.com/tachiyomiorg/tachiyomi/tree/master/app/src/main/java/eu/kanade/tachiyomi/source).
+some interfaces and stubs from the [app](https://git.mihon.tech/tachiyomi/tachiyomi) for compilation
+purposes. The actual implementations can be found [here](https://git.mihon.tech/tachiyomi/tachiyomi/src/branch/master/app/src/main/java/eu/kanade/tachiyomi/source).
 Referencing the actual implementation will help with understanding extensions' call flow.
 
 #### DataImage library
@@ -286,7 +286,7 @@ dependencies {
 #### Additional dependencies
 
 If you find yourself needing additional functionality, you can add more dependencies to your `build.gradle`
-file. Many of [the dependencies](https://github.com/tachiyomiorg/tachiyomi/blob/master/app/build.gradle.kts)
+file. Many of [the dependencies](https://git.mihon.tech/tachiyomi/tachiyomi/src/branch/master/app/build.gradle.kts)
 from the main Tachiyomi app are exposed to extensions by default.
 
 > [!NOTE]
@@ -299,7 +299,7 @@ the main app has at the expense of app size.
 
 > [!IMPORTANT]
 > Using `compileOnly` restricts you to versions that must be compatible with those used in
-> [the latest stable version of Tachiyomi](https://github.com/tachiyomiorg/tachiyomi/releases/latest).
+> [the latest stable version of Tachiyomi](https://git.mihon.tech/tachiyomi/tachiyomi/releases/latest).
 
 ### Extension main class
 
@@ -357,7 +357,7 @@ is similar to what happens with `fetchPopularManga`.
 The search flow have support to filters that can be added to a `FilterList` inside the `getFilterList`
 method. When the user changes the filters' state, they will be passed to the `searchRequest`, and they
 can be iterated to create the request (by getting the `filter.state` value, where the type varies
-depending on the `Filter` used). You can check the filter types available [here](https://github.com/tachiyomiorg/tachiyomi/blob/master/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/model/Filter.kt)
+depending on the `Filter` used). You can check the filter types available [here](https://git.mihon.tech/tachiyomi/tachiyomi/src/branch/master/source-api/src/commonMain/kotlin/eu/kanade/tachiyomi/source/model/Filter.kt)
 and in the table below.
 
 | Filter             | State type  | Description                                                                                                                                                              |
@@ -436,7 +436,7 @@ will be cached.
     - If the parsing have any problem, make sure to return `0L` so the app will use the default date
     instead.
     - The app will overwrite dates of existing old chapters **UNLESS** `0L` is returned.
-    - The default date has [changed](https://github.com/tachiyomiorg/tachiyomi/pull/7197) in
+    - The default date has [changed](https://git.mihon.tech/tachiyomi/tachiyomi/pulls/7197) in
     preview ≥ r4442 or stable > 0.13.4.
       - In older versions, the default date is always the fetch date.
       - In newer versions, this is the same if every (new) chapter has `0L` returned.
