@@ -1,0 +1,10 @@
+ext {
+    extName = 'Rüya Manga.net'
+    extClass = '.RuyaMangaNet'
+    themePkg = 'madara'
+    baseUrl = 'https://ruyamanga.net'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
