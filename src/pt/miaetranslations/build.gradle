@@ -1,0 +1,10 @@
+ext {
+    extName = 'Miae Translations'
+    extClass = '.MiaeTranslations'
+    themePkg = 'madara'
+    baseUrl = 'https://miaetranslations.site'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
