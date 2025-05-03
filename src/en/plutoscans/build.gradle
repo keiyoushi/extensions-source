@@ -1,0 +1,10 @@
+ext {
+    extName = 'Pluto Scans'
+    extClass = '.PlutoScans'
+    themePkg = 'madara'
+    baseUrl = 'https://plutoscans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
