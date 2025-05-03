@@ -1,22 +1,16 @@
-package eu.kanade.tachiyomi.extension.es.darknebulus
+package eu.kanade.tachiyomi.extension.es.darknebulusmanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DarkNebulus : Madara(
-    "Dark Nebulus",
-    "https://www.darknebulus.com",
+class DarkNebulusManga : Madara(
+    "Dark Nebulus Manga",
+    "https://darknebulusmanga.com",
     "es",
     dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(3)
-        .build()
-
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
