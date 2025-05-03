@@ -134,7 +134,12 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             else -> "series"
         }
 
-        val url = "$baseUrl/api/v1/$type?search=$query&page=${page - 1}&deleted=false".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/v1".toHttpUrl().newBuilder()
+            .addPathSegments(type)
+            .addQueryParameter("search", query)
+            .addQueryParameter("page", (page - 1).toString())
+            .addQueryParameter("deleted", "false")
+
         val filterList = filters.ifEmpty { getFilterList() }
         val defaultLibraries = defaultLibraries
 
@@ -183,7 +188,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun getMangaUrl(manga: SManga) = manga.url.replace("/api/v1", "")
 
-    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url)
+    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         return if (response.isFromReadList()) {
@@ -254,7 +259,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             .sortedByDescending { it.chapter_number }
     }
 
-    override fun pageListRequest(chapter: SChapter) = GET("${chapter.url}/pages")
+    override fun pageListRequest(chapter: SChapter) = GET("${chapter.url}/pages", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val pages = response.parseAs<List<PageDto>>()
@@ -467,17 +472,17 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
         scope.launch {
             try {
-                libraries = client.newCall(GET("$baseUrl/api/v1/libraries")).await().parseAs()
+                libraries = client.newCall(GET("$baseUrl/api/v1/libraries", headers)).await().parseAs()
                 collections = client
-                    .newCall(GET("$baseUrl/api/v1/collections?unpaged=true"))
+                    .newCall(GET("$baseUrl/api/v1/collections?unpaged=true", headers))
                     .await()
                     .parseAs<PageWrapperDto<CollectionDto>>()
                     .content
-                genres = client.newCall(GET("$baseUrl/api/v1/genres")).await().parseAs()
-                tags = client.newCall(GET("$baseUrl/api/v1/tags")).await().parseAs()
-                publishers = client.newCall(GET("$baseUrl/api/v1/publishers")).await().parseAs()
+                genres = client.newCall(GET("$baseUrl/api/v1/genres", headers)).await().parseAs()
+                tags = client.newCall(GET("$baseUrl/api/v1/tags", headers)).await().parseAs()
+                publishers = client.newCall(GET("$baseUrl/api/v1/publishers", headers)).await().parseAs()
                 authors = client
-                    .newCall(GET("$baseUrl/api/v1/authors"))
+                    .newCall(GET("$baseUrl/api/v1/authors", headers))
                     .await()
                     .parseAs<List<AuthorDto>>()
                     .groupBy { it.role }
