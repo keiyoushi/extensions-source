@@ -29,7 +29,7 @@ class NetTruyenCO : WPComics(
         val slug = slugAndId.substringBeforeLast("-") // "ta-co-the-don-ngo-vo-han"
         val jsonUrl = "$baseUrl/Comic/Services/ComicService.asmx/ChapterList" +
             "?slug=$slug&comicId=$comicId"
-        return GET(jsonUrl)
+        return GET(jsonUrl, headers)
     }
 
     // Parse the JSON response into a List<SChapter>
