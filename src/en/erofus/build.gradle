@@ -3,7 +3,7 @@ ext {
     extClass = '.Erofus'
     themePkg = 'eromuse'
     baseUrl = 'https://www.erofus.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
