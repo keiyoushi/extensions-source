@@ -4,12 +4,22 @@ import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
+
 
 class NetTruyenCO : WPComics(
     "NetTruyenCO (unoriginal)",
@@ -22,52 +32,60 @@ class NetTruyenCO : WPComics(
 
     // Override chapters
 
-    // Fetch all chapters via the JSON endpoint (avoids the “View more” flow)
+    @Serializable
+    private data class ChapterDto(
+        @SerialName("chapter_id") val chapterId: Int,
+        @SerialName("chapter_name") val chapterName: String,
+        @SerialName("chapter_slug") val chapterSlug: String,
+        @SerialName("updated_at") val updatedAt: String,
+        @SerialName("chapter_num") val chapterNum: Float,
+    )
+
+    private val jsonParser = Json { ignoreUnknownKeys = true }
+    private val chapterDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+
     override fun chapterListRequest(manga: SManga): Request {
-        val slugAndId = manga.url.substringAfterLast("/") // e.g. "ta-co-the-don-ngo-vo-han-13396"
-        val comicId = slugAndId.substringAfterLast("-").toInt() // 13396
-        val slug = slugAndId.substringBeforeLast("-") // "ta-co-the-don-ngo-vo-han"
-        val jsonUrl = "$baseUrl/Comic/Services/ComicService.asmx/ChapterList" +
-            "?slug=$slug&comicId=$comicId"
-        return GET(jsonUrl)
+        val slugAndId = manga.url.substringAfterLast("/") // e.g. "slug-12345"
+        val comicId = slugAndId.substringAfterLast("-").toInt() // 12345
+        val slug = slugAndId.substringBeforeLast("-") // "slug"
+        val url = baseUrl.toHttpUrlOrNull()!!
+            .newBuilder()
+            .addPathSegments("Comic/Services/ComicService.asmx/ChapterList")
+            .addQueryParameter("slug", slug)
+            .addQueryParameter("comicId", comicId.toString())
+            .build()
+        return GET(url.toString(), headers)
     }
 
-    // Parse the JSON response into a List<SChapter>
     override fun chapterListParse(response: Response): List<SChapter> {
         val bodyString = response.body?.string() ?: return emptyList()
-        val root = JSONObject(bodyString)
-        val dataArray = when {
-            root.has("d") -> {
-                val d = root.get("d")
-                if (d is String) {
-                    JSONObject(d).getJSONArray("data")
-                } else {
-                    (d as JSONObject).getJSONArray("data")
+        val rootElem = jsonParser.parseToJsonElement(bodyString).jsonObject
+
+        val dataElem: JsonElement = when {
+            "d" in rootElem -> {
+                when (val d = rootElem["d"]!!) {
+                    is JsonPrimitive -> jsonParser.parseToJsonElement(d.content).jsonObject["data"]!!
+                    is JsonObject -> d["data"]!!
+                    else -> return emptyList()
                 }
             }
-            root.has("data") -> root.getJSONArray("data")
+            "data" in rootElem -> rootElem["data"]!!
             else -> return emptyList()
         }
 
         val slug = response.request.url.queryParameter("slug") ?: ""
-        val dateFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+        val chaptersDto: List<ChapterDto> = jsonParser.decodeFromString(dataElem.toString())
 
-        return List(dataArray.length()) { i ->
-            val obj = dataArray.getJSONObject(i)
+        return chaptersDto.map { dto ->
             SChapter.create().apply {
-                name = obj.optString("chapter_name", "Chapter")
-                setUrlWithoutDomain(
-                    "/truyen-tranh/$slug/" +
-                        "${obj.optString("chapter_slug")}/" +
-                        "${obj.optInt("chapter_id")}",
-                )
-                date_upload = dateFmt.parse(obj.optString("updated_at"))?.time ?: 0L
-                chapter_number = obj.optDouble("chapter_num", 0.0).toFloat()
+                name = dto.chapterName
+                setUrlWithoutDomain("/truyen-tranh/$slug/${dto.chapterSlug}/${dto.chapterId}")
+                date_upload = chapterDateFormat.tryParse(dto.updatedAt) ?: 0L
+                chapter_number = dto.chapterNum
             }
         }
     }
 
-    // Disable the old HTML‐based selector
     override fun chapterListSelector(): String = throw UnsupportedOperationException()
 
     // Details
