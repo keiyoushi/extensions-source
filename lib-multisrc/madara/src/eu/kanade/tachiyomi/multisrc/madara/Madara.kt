@@ -996,11 +996,11 @@ abstract class Madara(
             ?.let { Base64.decode(it, Base64.DEFAULT).toString(Charsets.UTF_8) }
             ?: chapterProtector.html()
         val password = chapterProtectorHtml
-            .substringAfter("wpmangaprotectornonce='")
+            .substringAfter(chapterProtectorPasswordPrefix)
             .substringBefore("';")
         val chapterData = json.parseToJsonElement(
             chapterProtectorHtml
-                .substringAfter("chapter_data='")
+                .substringAfter(chapterProtectorDataPrefix)
                 .substringBefore("';")
                 .replace("\\/", "/"),
         ).jsonObject
