@@ -56,10 +56,12 @@ fun String.toImageUrl() =
 class ChapterDto(
     private val id: Int,
     private val title: String,
+    private val create_time: String,
 ) {
     fun toSChapter() = SChapter.create().apply {
         url = "/home/book/capter/id/$id"
         name = title.trim()
+        date_upload = dateFormat.parse(create_time)!!.time
     }
 }
 
