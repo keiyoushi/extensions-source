@@ -979,6 +979,8 @@ abstract class Madara(
     open val pageListParseSelector = "div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item)) img"
 
     open val chapterProtectorSelector = "#chapter-protector-data"
+    open val chapterProtectorPasswordPrefix = "wpmangaprotectornonce='"
+    open val chapterProtectorDataPrefix = "chapter_data='"
 
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
