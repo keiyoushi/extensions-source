@@ -25,6 +25,33 @@ object ApiSearch {
         return MangasPage(data.map { it.toSManga() }, false)
     }
 
+    fun searchUrlV1(page: Int, query: String) =
+        "https://manhua.idmzj.com/api/v1/comic2/search".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("size", "30")
+            .addQueryParameter("keyword", query)
+            .toString()
+
+    fun parsePageV1(response: Response): MangasPage {
+        if (!response.isSuccessful) {
+            response.close()
+            return MangasPage(emptyList(), false)
+        }
+        val result = response.parseAs<ResponseDto<SearchResultDto?>>()
+        if (result.errmsg.isNotBlank()) {
+            throw Exception(result.errmsg)
+        } else {
+            val url = response.request.url
+            val page = url.queryParameter("page")?.toInt()
+            val size = url.queryParameter("size")?.toInt()
+            return if (result.data != null) {
+                MangasPage(result.data.comicList.map { it.toSManga() }, page!! * size!! < result.data.totalNum)
+            } else {
+                MangasPage(emptyList(), false)
+            }
+        }
+    }
+
     @Serializable
     class MangaDto(
         private val id: Int,
@@ -39,4 +66,31 @@ object ApiSearch {
             thumbnail_url = comic_cover
         }
     }
+
+    @Serializable
+    class MangaDtoV1(
+        private val id: Int,
+        private val name: String,
+        private val authors: String,
+        private val cover: String,
+    ) {
+        fun toSManga() = SManga.create().apply {
+            url = getMangaUrl(id.toString())
+            title = name
+            author = authors
+            thumbnail_url = cover
+        }
+    }
+
+    @Serializable
+    class SearchResultDto(
+        val comicList: List<MangaDtoV1>,
+        val totalNum: Int,
+    )
+
+    @Serializable
+    class ResponseDto<T>(
+        val errmsg: String = "",
+        val data: T,
+    )
 }
