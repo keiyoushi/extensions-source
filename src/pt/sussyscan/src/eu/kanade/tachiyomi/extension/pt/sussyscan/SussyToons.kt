@@ -10,4 +10,8 @@ class SussyToons : GreenShit(
     override val id = 6963507464339951166
 
     override val versionId = 2
+
+    override val supportsLatest = false
+
+    override fun fetchPopularManga(page: Int) = fetchLatestUpdates(page)
 }

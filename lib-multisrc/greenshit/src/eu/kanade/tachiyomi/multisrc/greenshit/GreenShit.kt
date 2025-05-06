@@ -48,7 +48,7 @@ abstract class GreenShit(
 
     private val preferences: SharedPreferences = getPreferences()
 
-    private var apiUrl: String
+    protected var apiUrl: String
         get() = preferences.getString(API_BASE_URL_PREF, defaultApiUrl)!!
         set(value) = preferences.edit().putString(API_BASE_URL_PREF, value).apply()
 
