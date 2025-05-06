@@ -6,7 +6,6 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,21 +14,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
-import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -43,7 +36,6 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     override val id = 6963507464339951166
 
-    // Moved from Madara
     override val versionId = 2
 
     private val json: Json by injectLazy()
@@ -98,35 +90,37 @@ class SussyToons : HttpSource(), ConfigurableSource {
     }
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("scan-id", "1") // Required header for requests
+        .set("scan-id", "1") // Default scan-id; overridden in pageListRequest
 
     // ============================= Popular ==================================
 
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
+            .addQueryParameter("outro", "lancamentos")
+            .addQueryParameter("limite", "18")
+            .addQueryParameter("pagina", page.toString())
+            .build()
+        return GET(url, headers)
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val json = response.parseScriptToJson()
-            ?: return MangasPage(emptyList(), false)
-        val mangas = json.parseAs<WrapperDto>().popular?.toSMangaList()
-            ?: emptyList()
-        return MangasPage(mangas, false)
+        val dto = response.parseAs<ResultDto<List<MangaDto>>>()
+        return MangasPage(dto.toSMangaList(), dto.hasNextPage())
     }
 
     // ============================= Latest ===================================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/atualizacoes".toHttpUrl().newBuilder()
+        val url = "$apiUrl/obras/novos-capitulos".toHttpUrl().newBuilder()
+            .addQueryParameter("limite", "18")
             .addQueryParameter("pagina", page.toString())
             .build()
         return GET(url, headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val json = response.parseScriptToJson()
-            ?: return MangasPage(emptyList(), false)
-        val dto = json.parseAs<WrapperDto>()
-        val mangas = dto.latest.toSMangaList()
-        return MangasPage(mangas, dto.latest.hasNextPage())
+        val dto = response.parseAs<ResultDto<List<MangaDto>>>()
+        return MangasPage(dto.toSMangaList(), dto.hasNextPage())
     }
 
     // ============================= Search ===================================
@@ -134,7 +128,7 @@ class SussyToons : HttpSource(), ConfigurableSource {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/obras".toHttpUrl().newBuilder()
             .addQueryParameter("obr_nome", query)
-            .addQueryParameter("limite", "8")
+            .addQueryParameter("limite", "15")
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("todos_generos", "true")
             .build()
@@ -148,21 +142,37 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     // ============================= Details ==================================
 
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val mangaId = manga.url.split("/")[2] // Extrai obr_id de /obra/[id]/[slug]
+        val url = "$apiUrl/obras/$mangaId".toHttpUrl()
+        return GET(url, headers)
+    }
+
     override fun mangaDetailsParse(response: Response): SManga {
-        val json = response.parseScriptToJson()
-            ?: throw IOException("Details do mangá não foi encontrado")
-        return json.parseAs<ResultDto<MangaDto>>().results.toSManga()
+        val dto = response.parseAs<ResultDto<MangaDto>>()
+        return dto.results.toSManga()
     }
 
     // ============================= Chapters =================================
 
+    override fun chapterListRequest(manga: SManga): Request {
+        return mangaDetailsRequest(manga) // Reutiliza a requisição de detalhes
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
-        val json = response.parseScriptToJson() ?: return emptyList()
-        return json.parseAs<ResultDto<WrapperChapterDto>>().results.chapters.map {
+        val dto = response.parseAs<ResultDto<MangaDto>>()
+        val chapters = dto.results.chapters
+        if (chapters.isNullOrEmpty()) {
+            println("Nenhum capítulo encontrado para a obra ${dto.results.name}")
+            return emptyList()
+        }
+        return chapters.map {
             SChapter.create().apply {
                 name = it.name
-                it.chapterNumber?.let {
-                    chapter_number = it
+                chapter_number = it.chapterNumber ?: try {
+                    it.name.replace("Capítulo ", "").toFloat()
+                } catch (e: NumberFormatException) {
+                    -1f // Fallback para capítulos inválidos
                 }
                 setUrlWithoutDomain("$baseUrl/capitulo/${it.id}")
                 date_upload = dateFormat.tryParse(it.updateAt)
@@ -172,56 +182,33 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     // ============================= Pages ====================================
 
-    private val pageUrlSelector = "img.chakra-image"
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterId = chapter.url.split("/").last() // Extrai cap_id de /capitulo/[id]
+        val url = "$apiUrl/capitulo-app/$chapterId".toHttpUrl()
+        // Ajustar scan-id dinamicamente será feito em pageListParse
+        return GET(url, headers)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val dto = response.parseAs<ResultDto<ChapterPageDto>>()
+        val pages = dto.results.pages
+        val manga = dto.results.manga
+        val chapterNumber = dto.results.chapterNumber
 
-        pageListParse(document).takeIf(List<Page>::isNotEmpty)?.let { return it }
+        if (pages.isEmpty()) {
+            println("Nenhuma página encontrada para o capítulo ${dto.results.cap_id}")
+            return emptyList()
+        }
 
-        val dto = extractScriptData(document)
-            .let(::extractJsonContent)
-            .let(::parseJsonToChapterPageDto)
-
-        return dto.pages.mapIndexed { index, image ->
-            val imageUrl = when {
-                image.isWordPressContent() -> {
-                    CDN_URL.toHttpUrl().newBuilder()
-                        .addPathSegments("wp-content/uploads/WP-manga/data")
-                        .addPathSegments(image.src.toPathSegment())
-                        .build()
-                }
-                else -> {
-                    "$CDN_URL/scans/${dto.manga.scanId}/obras/${dto.manga.id}/capitulos/${dto.chapterNumber}/${image.src}"
-                        .toHttpUrl()
-                }
+        return pages.mapIndexed { index, page ->
+            // Sanitizar src para lidar com espaços e caracteres especiais
+            val sanitizedSrc = page.src.replace(" ", "%20").toPathSegment()
+            val imageUrl = if (page.isWordPressContent()) {
+                "$CDN_URL/wp-content/uploads/WP-manga/data/$sanitizedSrc"
+            } else {
+                "$CDN_URL/scans/${manga.scanId}/obras/${manga.id}/capitulos/$chapterNumber/$sanitizedSrc"
             }
-            Page(index, imageUrl = imageUrl.toString())
-        }
-    }
-    private fun pageListParse(document: Document): List<Page> {
-        return document.select(pageUrlSelector).mapIndexed { index, element ->
-            Page(index, document.location(), element.absUrl("src"))
-        }
-    }
-    private fun extractScriptData(document: Document): String {
-        return document.select("script").map(Element::data)
-            .firstOrNull(pageRegex::containsMatchIn)
-            ?: throw Exception("Failed to load pages: Script data not found")
-    }
-
-    private fun extractJsonContent(scriptData: String): String {
-        return pageRegex.find(scriptData)
-            ?.groups?.get(1)?.value
-            ?.let { json.decodeFromString<String>("\"$it\"") }
-            ?: throw Exception("Failed to extract JSON from script")
-    }
-
-    private fun parseJsonToChapterPageDto(jsonContent: String): ChapterPageDto {
-        return try {
-            jsonContent.parseAs<ResultDto<ChapterPageDto>>().results
-        } catch (e: Exception) {
-            throw Exception("Failed to load pages: ${e.message}")
+            Page(index, imageUrl = imageUrl)
         }
     }
 
@@ -279,17 +266,16 @@ class SussyToons : HttpSource(), ConfigurableSource {
                     append("\n⚠ A fonte não oferece suporte para essa extensão.")
                 }
 
-                dialogTitle = BASE_URL_PREF_TITLE
+                dialogTitle = API_BASE_URL_PREF_TITLE
                 dialogMessage = "URL da API padrão:\n$defaultApiUrl"
 
                 setDefaultValue(defaultApiUrl)
             },
-
             SwitchPreferenceCompat(screen.context).apply {
                 key = DEFAULT_PREF
                 title = "Redefinir configurações"
                 summary = buildString {
-                    append("Habilite para redefinir as configurações padrões no próximo reinicialização da aplicação.")
+                    append("Habilite para redefinir as configurações padrões na próxima reinicialização da aplicação.")
                     appendLine("Você pode limpar os dados da extensão em Configurações > Avançado:")
                     appendLine("\t - Limpar os cookies")
                     appendLine("\t - Limpar os dados da WebView")
@@ -308,50 +294,12 @@ class SussyToons : HttpSource(), ConfigurableSource {
 
     // ============================= Utilities ====================================
 
-    private fun Response.parseScriptToJson(): String? {
-        val document = asJsoup()
-        val script = document.select("script")
-            .map(Element::data)
-            .filter(String::isNotEmpty)
-            .joinToString("\n")
-
-        val content = QuickJs.create().use {
-            it.evaluate(
-                """
-                globalThis.self = globalThis;
-                $script
-                self.__next_f.map(it => it[it.length - 1]).join('')
-                """.trimIndent(),
-            ) as String
-        }
-
-        return PAGE_JSON_REGEX.find(content)?.groups?.get(0)?.value
-    }
-
-    private fun HttpUrl.Builder.dropPathSegment(count: Int): HttpUrl.Builder {
-        repeat(count) {
-            removePathSegment(0)
-        }
-        return this
-    }
-
-    /**
-     * Normalizes path segments:
-     * Ex: [ "/a/b/", "/a/b", "a/b/", "a/b" ]
-     * Result: "a/b"
-     */
     private fun String.toPathSegment() = this.trim().split("/")
         .filter(String::isNotEmpty)
         .joinToString("/")
 
     companion object {
         const val CDN_URL = "https://cdn.sussytoons.site"
-
-        val pageRegex = """capituloInicial.{3}(.*?)(\}\]\})""".toRegex()
-        val POPULAR_JSON_REGEX = """\{\"dataFeatured.+totalPaginas":\d+\}{2}""".toRegex()
-        val LATEST_JSON_REGEX = """\{\"atualizacoesInicial.+\}\}""".toRegex()
-        val DETAILS_CHAPTER_REGEX = """\{\"resultado.+"\}{3}""".toRegex()
-        val PAGE_JSON_REGEX = """$POPULAR_JSON_REGEX|$LATEST_JSON_REGEX|$DETAILS_CHAPTER_REGEX""".toRegex()
 
         private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
 
@@ -367,6 +315,6 @@ class SussyToons : HttpSource(), ConfigurableSource {
         private const val DEFAULT_PREF = "defaultPref"
 
         @SuppressLint("SimpleDateFormat")
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT)
     }
 }

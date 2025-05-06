@@ -13,7 +13,7 @@ class ResultDto<T>(
     val currentPage: Int = 0,
     @SerialName("totalPaginas")
     val lastPage: Int = 0,
-    @JsonNames("resultado")
+    @JsonNames("resultado", "resultados")
     private val resultados: T,
 ) {
     val results: T get() = resultados
@@ -22,17 +22,6 @@ class ResultDto<T>(
 
     fun toSMangaList() = (results as List<MangaDto>)
         .filterNot { it.slug.isNullOrBlank() }.map { it.toSManga() }
-}
-
-@Serializable
-class WrapperDto(
-    @SerialName("dataTop")
-    val popular: ResultDto<List<MangaDto>>?,
-    @JsonNames("atualizacoesInicial")
-    private val dataLatest: ResultDto<List<MangaDto>>?,
-
-) {
-    val latest: ResultDto<List<MangaDto>> get() = dataLatest!!
 }
 
 @Serializable
@@ -52,7 +41,13 @@ class MangaDto(
     @SerialName("scan_id")
     val scanId: Int,
     @SerialName("tags")
+    val genres: List<Genre
+      @SerialName("tags")
     val genres: List<Genre>,
+    @SerialName("capitulos")
+    val chapters: List<ChapterDto>? = null,
+    @SerialName("ultimos_capitulos")
+    val ultimosCapitulos: List<ChapterDto>? = null,
 ) {
 
     fun toSManga(): SManga {
@@ -60,12 +55,13 @@ class MangaDto(
             title = name
             thumbnail_url = thumbnail?.let {
                 when {
-                    it.startsWith("http") -> thumbnail
-                    else -> "$CDN_URL/scans/$scanId/obras/${this@MangaDto.id}/$thumbnail"
+                    it.startsWith("http") -> it
+                    it.startsWith("wp-content") -> "$CDN_URL/$it"
+                    else -> "$CDN_URL/scans/$scanId/obras/$id/$it"
                 }
             }
             initialized = true
-            url = "/obra/${this@MangaDto.id}/${this@MangaDto.slug}"
+            url = "/obra/$id${if (slug.isNullOrBlank()) "" else "/$slug"}"
             genre = genres.joinToString()
         }
 
@@ -112,12 +108,6 @@ class ChapterDto(
 )
 
 @Serializable
-class WrapperChapterDto(
-    @SerialName("capitulos")
-    val chapters: List<ChapterDto>,
-)
-
-@Serializable
 class ChapterPageDto(
     @SerialName("cap_paginas")
     val pages: List<PageDto>,
@@ -125,6 +115,8 @@ class ChapterPageDto(
     val manga: MangaReferenceDto,
     @SerialName("cap_numero")
     val chapterNumber: Int,
+    @SerialName("cap_id")
+    val capId: Int? = null, // Adicionado para suportar cap_id, se necessário
 ) {
     @Serializable
     class MangaReferenceDto(
