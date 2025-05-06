@@ -4,22 +4,16 @@ import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
-
 
 class NetTruyenCO : WPComics(
     "NetTruyenCO (unoriginal)",
@@ -32,8 +26,9 @@ class NetTruyenCO : WPComics(
 
     // Override chapters
 
+    // Data class mapping for a single chapter entry from the JSON endpoint
     @Serializable
-    private data class ChapterDto(
+    private class ChapterDto(
         @SerialName("chapter_id") val chapterId: Int,
         @SerialName("chapter_name") val chapterName: String,
         @SerialName("chapter_slug") val chapterSlug: String,
@@ -41,14 +36,18 @@ class NetTruyenCO : WPComics(
         @SerialName("chapter_num") val chapterNum: Float,
     )
 
-    private val jsonParser = Json { ignoreUnknownKeys = true }
-    private val chapterDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+    // Wrapper for the JSON response, containing a list of chapters
+    @Serializable
+    private class ChaptersData(
+        val data: List<ChapterDto>,
+    )
 
+    // Build and return the request to fetch all chapters in JSON form
     override fun chapterListRequest(manga: SManga): Request {
         val slugAndId = manga.url.substringAfterLast("/") // e.g. "slug-12345"
         val comicId = slugAndId.substringAfterLast("-").toInt() // 12345
         val slug = slugAndId.substringBeforeLast("-") // "slug"
-        val url = baseUrl.toHttpUrlOrNull()!!
+        val url = baseUrl.toHttpUrl()
             .newBuilder()
             .addPathSegments("Comic/Services/ComicService.asmx/ChapterList")
             .addQueryParameter("slug", slug)
@@ -57,30 +56,17 @@ class NetTruyenCO : WPComics(
         return GET(url.toString(), headers)
     }
 
+    // Parse the JSON response into a list of SChapter objects
     override fun chapterListParse(response: Response): List<SChapter> {
-        val bodyString = response.body?.string() ?: return emptyList()
-        val rootElem = jsonParser.parseToJsonElement(bodyString).jsonObject
+        val chaptersDto = response.parseAs<ChaptersData>().data
+        val slug = response.request.url.queryParameter("slug")!!
 
-        val dataElem: JsonElement = when {
-            "d" in rootElem -> {
-                when (val d = rootElem["d"]!!) {
-                    is JsonPrimitive -> jsonParser.parseToJsonElement(d.content).jsonObject["data"]!!
-                    is JsonObject -> d["data"]!!
-                    else -> return emptyList()
-                }
-            }
-            "data" in rootElem -> rootElem["data"]!!
-            else -> return emptyList()
-        }
-
-        val slug = response.request.url.queryParameter("slug") ?: ""
-        val chaptersDto: List<ChapterDto> = jsonParser.decodeFromString(dataElem.toString())
-
+        val dateFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
         return chaptersDto.map { dto ->
             SChapter.create().apply {
                 name = dto.chapterName
                 setUrlWithoutDomain("/truyen-tranh/$slug/${dto.chapterSlug}/${dto.chapterId}")
-                date_upload = chapterDateFormat.tryParse(dto.updatedAt) ?: 0L
+                date_upload = dateFmt.tryParse(dto.updatedAt)
                 chapter_number = dto.chapterNum
             }
         }
