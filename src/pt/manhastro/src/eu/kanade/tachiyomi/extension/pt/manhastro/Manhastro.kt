@@ -182,7 +182,7 @@ class Manhastro :
         password = preferences.getString(PASSWORD_PREF, "") as String,
     )
 
-    private val defaultClient = OkHttpClient()
+    private val defaultClient = network.cloudflareClient
 
     var attempts: Int
         get() = preferences.getInt(COOKIE_ATTEMPT, 0)
