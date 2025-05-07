@@ -3,7 +3,7 @@ ext {
     extClass = '.CatharsisWorld'
     themePkg = 'madara'
     baseUrl = 'https://catharsisworld.dig-it.info'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 
