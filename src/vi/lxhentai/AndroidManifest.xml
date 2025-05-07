@@ -14,7 +14,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data
-                    android:host="lxmanga.sbs"
+                    android:host="lxmanga.help"
                     android:pathPattern="/truyen/..*"
                     android:scheme="https" />
             </intent-filter>
