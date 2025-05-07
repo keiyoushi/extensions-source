@@ -19,7 +19,7 @@ class NetTruyenCO : WPComics(
     "NetTruyenCO (unoriginal)",
     "https://nettruyener.com",
     "vi",
-    dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
+    dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
     gmtOffset = null,
 ) {
     override val popularPath = "truyen-tranh-hot"
@@ -53,7 +53,7 @@ class NetTruyenCO : WPComics(
             .addQueryParameter("slug", slug)
             .addQueryParameter("comicId", comicId.toString())
             .build()
-        return GET(url.toString(), headers)
+        return GET(url, headers)
     }
 
     // Parse the JSON response into a list of SChapter objects
@@ -61,12 +61,11 @@ class NetTruyenCO : WPComics(
         val chaptersDto = response.parseAs<ChaptersData>().data
         val slug = response.request.url.queryParameter("slug")!!
 
-        val dateFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
         return chaptersDto.map { dto ->
             SChapter.create().apply {
                 name = dto.chapterName
                 setUrlWithoutDomain("/truyen-tranh/$slug/${dto.chapterSlug}/${dto.chapterId}")
-                date_upload = dateFmt.tryParse(dto.updatedAt)
+                date_upload = dateFormat.tryParse(dto.updatedAt)
                 chapter_number = dto.chapterNum
             }
         }
