@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.yugenmangas
 
+import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_RANDOM_UA
 import eu.kanade.tachiyomi.lib.randomua.RANDOM_UA_VALUES
@@ -41,7 +43,14 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     override val name = "Yugen Mangás"
 
-    override val baseUrl = "https://yugenmangasbr.readmis.com"
+    private val isCi = System.getenv("CI") == "true"
+
+    override val baseUrl: String get() = when {
+        isCi -> defaultBaseUrl
+        else -> preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+    }
+
+    private val defaultBaseUrl: String = "https://yugenmangasbr.nssec.xyz"
 
     override val lang = "pt-BR"
 
@@ -65,6 +74,17 @@ class YugenMangas : HttpSource(), ConfigurableSource {
     override val versionId = 2
 
     private val json: Json by injectLazy()
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
+            if (domain != defaultBaseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
 
     // ================================ Popular =======================================
 
@@ -198,6 +218,21 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
+        EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = URL_PREF_SUMMARY
+
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "URL padrão:\n$defaultBaseUrl"
+
+            setDefaultValue(defaultBaseUrl)
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also(screen::addPreference)
     }
 
     // ================================ Utils =======================================
@@ -241,6 +276,11 @@ class YugenMangas : HttpSource(), ConfigurableSource {
     }
 
     companion object {
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_TITLE = "Editar URL da fonte"
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val RESTART_APP_MESSAGE = "Reinicie o aplicativo para aplicar as alterações"
+        private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
         private const val BASE_MEDIA = "https://media.yugenweb.com"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
         private val POPULAR_MANGA_REGEX = """\d+\\",(\{\\"href\\":\\"\/series\/.*?\]\]\})""".toRegex()
