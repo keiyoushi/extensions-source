@@ -75,7 +75,7 @@ class Bakai : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/$popularPathSegment/page/$page/")
 
-    override fun popularMangaSelector() = "[id*=elCmsPageWrap] ul > li > article"
+    override fun popularMangaSelector() = "[id*=elCms] ul > li > article"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         thumbnail_url = element.selectFirst("img")?.imgAttr()
