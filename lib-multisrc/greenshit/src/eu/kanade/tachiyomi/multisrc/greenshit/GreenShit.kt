@@ -19,8 +19,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -28,7 +26,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -41,8 +38,6 @@ abstract class GreenShit(
 ) : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
 
     private val isCi = System.getenv("CI") == "true"
 
@@ -212,7 +207,7 @@ abstract class GreenShit(
     private fun extractJsonContent(scriptData: String): String {
         return pageRegex.find(scriptData)
             ?.groups?.get(1)?.value
-            ?.let { json.decodeFromString<String>("\"$it\"") }
+            ?.let { "\"$it\"".parseAs<String>() }
             ?: throw Exception("Failed to extract JSON from script")
     }
 
