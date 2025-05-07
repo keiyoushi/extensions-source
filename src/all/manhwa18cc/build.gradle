@@ -3,7 +3,7 @@ ext {
     extClass = '.Manhwa18CcFactory'
     themePkg = 'madara'
     baseUrl = 'https://manhwa18.cc'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = true
 }
 
