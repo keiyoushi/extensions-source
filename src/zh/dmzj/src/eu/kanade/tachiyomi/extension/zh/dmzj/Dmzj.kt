@@ -107,11 +107,11 @@ class Dmzj : ConfigurableSource, HttpSource() {
             val id = query.removePrefix(PREFIX_ID_SEARCH).removeSuffix(".html")
             Observable.fromCallable { searchMangaById(id) }
         } else {
-            val request = GET(ApiSearch.textSearchUrl(query), headers)
+            val request = GET(ApiSearch.searchUrlV1(page, query), headers)
             Observable.fromCallable {
                 // this API fails randomly, and might return empty list
                 repeat(5) {
-                    val result = ApiSearch.parsePage(client.newCall(request).execute())
+                    val result = ApiSearch.parsePageV1(client.newCall(request).execute())
                     if (result.mangas.isNotEmpty()) return@fromCallable result
                 }
                 throw Exception("搜索出错或无结果")
