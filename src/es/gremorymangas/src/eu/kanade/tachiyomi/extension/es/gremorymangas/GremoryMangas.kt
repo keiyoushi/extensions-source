@@ -6,7 +6,7 @@ import java.util.Locale
 
 class GremoryMangas : MangaThemesia(
     "Gremory Mangas",
-    "https://gremorymangas.com",
+    "https://gremoryhistorias.org/",
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 )
