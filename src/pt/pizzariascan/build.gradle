@@ -3,7 +3,7 @@ ext {
     extClass = '.Pizzariascan'
     themePkg = 'madara'
     baseUrl = 'https://pizzariascan.site'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
