@@ -50,7 +50,7 @@ open class EternalMangas(
         return GET("$baseUrl/comics", headers)
     }
 
-    private val dataUrl = "https://raw.githubusercontent.com/bapeey/extensions-tools/refs/heads/main/keiyoushi/eternalmangas/test.txt"
+    private val dataUrl = "https://raw.githubusercontent.com/bapeey/extensions-tools/refs/heads/main/keiyoushi/eternalmangas/values.txt"
 
     override fun searchMangaParse(
         response: Response,
