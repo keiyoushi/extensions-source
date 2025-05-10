@@ -31,6 +31,8 @@ class SussyToons : GreenShit(
         return MangasPage(mangas, hasNextPage = false)
     }
 
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
+
     override fun chapterListRequest(manga: SManga): Request {
         val pathSegment = manga.url.substringBeforeLast("/").replace("obra", "obras")
         return GET("$apiUrl$pathSegment", headers)
