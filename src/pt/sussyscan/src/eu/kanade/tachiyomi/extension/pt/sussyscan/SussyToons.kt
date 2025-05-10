@@ -31,12 +31,19 @@ class SussyToons : GreenShit(
         return MangasPage(mangas, hasNextPage = false)
     }
 
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
-    override fun chapterListRequest(manga: SManga): Request {
+    override fun mangaDetailsRequest(manga: SManga): Request {
         val pathSegment = manga.url.substringBeforeLast("/").replace("obra", "obras")
         return GET("$apiUrl$pathSegment", headers)
     }
+
+    override fun mangaDetailsParse(response: Response) =
+        response.parseAs<ResultDto<MangaDto>>().results.toSManga()
+
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
+
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> =
         response.parseAs<ResultDto<WrapperChapterDto>>().toSChapterList()
