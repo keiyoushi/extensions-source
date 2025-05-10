@@ -346,11 +346,11 @@ abstract class MangaBox(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val element = document.select("head > script").lastOrNull()
+        val content = document.selectFirst("script:containsData(cdns =)")?.data()
             ?: return emptyList()
         val cdns =
-            extractArray(element.html(), "cdns") + extractArray(element.html(), "backupImage")
-        val chapterImages = extractArray(element.html(), "chapterImages")
+            extractArray(content, "cdns") + extractArray(content, "backupImage")
+        val chapterImages = extractArray(content, "chapterImages")
 
         // Add all parsed cdns to set
         cdnSet.addAll(cdns)
