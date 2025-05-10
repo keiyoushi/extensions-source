@@ -13,6 +13,7 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -76,46 +77,37 @@ class MissKon() : SimpleParsedHttpSource() {
         return SManga.create().apply {
             title = postInnerEl.select(".post-title").text()
             genre = postInnerEl.select(".post-tag > a").joinToString { it.text() }
+            status = SManga.COMPLETED
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 
-    override fun chapterListSelector() = "html"
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val dateStr = element.selectFirst(".entry img")?.absUrl("data-src")
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val doc = response.asJsoup()
+        val dateUploadStr = doc.selectFirst(".entry img")?.absUrl("data-src")
             ?.let { url ->
                 FULL_DATE_REGEX.find(url)?.groupValues?.get(1)
                     ?: YEAR_MONTH_REGEX.find(url)?.groupValues?.get(1)?.let { "$it/01" }
             }
-
-        return SChapter.create().apply {
-            chapter_number = 0F
-            setUrlWithoutDomain(element.selectFirst("link[rel=canonical]")!!.absUrl("href"))
-            name = "Gallery"
-            date_upload = FULL_DATE_FORMAT.tryParse(dateStr)
+        val dateUpload = FULL_DATE_FORMAT.tryParse(dateUploadStr)
+        val maxPage = doc.select("div.page-link:first-of-type a.post-page-numbers").last()?.text()?.toInt() ?: 1
+        val basePageUrl = response.request.url.toString()
+        return (maxPage downTo 1).map { page ->
+            SChapter.create().apply {
+                chapter_number = 0F
+                setUrlWithoutDomain("$basePageUrl/$page")
+                name = "Page $page"
+                date_upload = dateUpload
+            }
         }
     }
     // endregion
 
     // region Pages
     override fun pageListParse(document: Document): List<Page> {
-        val basePageUrl = document.selectFirst("link[rel=canonical]")!!.absUrl("href")
-
-        val pages = mutableListOf<Page>()
-        document.select("div.post-inner div.page-link:nth-child(1) .post-page-numbers")
-            .forEachIndexed { index, pageEl ->
-                val doc = when (index) {
-                    0 -> document
-                    else -> {
-                        val url = "$basePageUrl${pageEl.text()}/"
-                        client.newCall(GET(url, headers)).execute().asJsoup()
-                    }
-                }
-                doc.select("div.post-inner > div.entry > p > img")
-                    .map { it.absUrl("data-src") }
-                    .forEach { pages.add(Page(pages.size, imageUrl = it)) }
-            }
-        return pages
+        return document.select("div.post-inner > div.entry > p > img")
+            .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("data-src")) }
     }
     // endregion
 
