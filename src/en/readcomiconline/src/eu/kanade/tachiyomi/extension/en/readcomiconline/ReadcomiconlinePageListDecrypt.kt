@@ -15,16 +15,11 @@ private fun step2(param: String): String {
 
 fun decryptLink(
     firstStringFormat: String,
-    partialDecryptKeys: List<Pair<String, String>>,
     formatter: String = "",
 ): String {
+    // The replace for this can be handled via pref but for the sake of matching it with the site's
+    // decryption logic, we'll leave it as it is
     var processedString = firstStringFormat
-
-    partialDecryptKeys.forEach {
-        processedString = processedString.replace(it.first.toRegex(), it.second)
-    }
-
-    processedString = processedString
         .replace("pw_.g28x", "b")
         .replace("d2pr.x_27", "h")
 
