@@ -58,27 +58,26 @@ open class EternalMangas(
         query: String,
         filters: FilterList,
     ): MangasPage {
-        val data = client.newCall(GET(dataUrl)).execute().body.string().split("\n")
-        val apiSearch = data[2] == "1"
+        val (apiComicsUrl, jsonHeaders, useApi, scriptSelector, comicsRegex) = client.newCall(GET(dataUrl)).execute().body.string().split("\n")
+        val apiSearch = useApi == "1"
         comicsList = if (apiSearch) {
-            val body = response.body.string()
-            val headersJson = json.parseToJsonElement(data[1]).jsonObject
+            val headersJson = json.parseToJsonElement(jsonHeaders).jsonObject
             val apiHeaders = headersBuilder()
             headersJson.forEach { (key, jsonElement) ->
                 var value = jsonElement.jsonPrimitive.contentOrNull.orEmpty()
                 if (value.startsWith("1-")) {
-                    val match = value.substringAfter("-").toRegex().find(body)
+                    val match = value.substringAfter("-").toRegex().find(response.body.string())
                     value = match?.groupValues?.get(1).orEmpty()
                 } else {
                     value = value.substringAfter("-")
                 }
                 apiHeaders.add(key, value)
             }
-            val apiResponse = client.newCall(GET(data[0], apiHeaders.build())).execute()
+            val apiResponse = client.newCall(GET(apiComicsUrl, apiHeaders.build())).execute()
             json.decodeFromString<List<SeriesDto>>(apiResponse.body.string()).toMutableList()
         } else {
-            val script = response.asJsoup().select(data[3]).joinToString { it.data() }
-            val jsonString = data[4].toRegex().find(script)?.groupValues?.get(1)
+            val script = response.asJsoup().select(scriptSelector).joinToString { it.data() }
+            val jsonString = comicsRegex.toRegex().find(script)?.groupValues?.get(1)
                 ?: throw Exception(intl["comics_list_error"])
             val unescapedJson = jsonString.unescape()
             json.decodeFromString<List<SeriesDto>>(unescapedJson).toMutableList()
