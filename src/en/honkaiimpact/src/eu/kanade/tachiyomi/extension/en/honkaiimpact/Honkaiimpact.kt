@@ -2,10 +2,12 @@ package eu.kanade.tachiyomi.extension.en.honkaiimpact
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.float
@@ -13,13 +15,9 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
@@ -37,40 +35,8 @@ class Honkaiimpact : ParsedHttpSource() {
     private var searchQuery = ""
     private val json: Json by injectLazy()
 
-    // Interceptor para filtrar o HTML
-    private val filteringInterceptor = Interceptor { chain ->
-        val request = chain.request()
-        val searchQuery = request.tag(String::class.java) ?: ""
-        val response = chain.proceed(request)
-        val contentType = response.header("Content-Type")
-        if (contentType?.contains("text/html") == true && searchQuery.isNotEmpty()) {
-            val originalBody = response.body
-            if (originalBody != null) {
-                val html = originalBody.string()
-                val filteredHtml = filterHtml(html, searchQuery)
-                val newBody = ResponseBody.create(contentType.toMediaTypeOrNull(), filteredHtml)
-                return@Interceptor response.newBuilder()
-                    .body(newBody)
-                    .build()
-            }
-        }
-        response
-    }
-
-    // Função para filtrar o HTML
-    private fun filterHtml(html: String, searchQuery: String): String {
-        val document = Jsoup.parse(html)
-        document.select("a[href*=book]").forEach { aTag ->
-            val title = aTag.selectFirst(".container-title")?.text()?.trim() ?: ""
-            if (!title.contains(searchQuery, ignoreCase = true)) {
-                aTag.remove()
-            }
-        }
-        return document.outerHtml()
-    }
-
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor(filteringInterceptor)
+        // .addInterceptor(filteringInterceptor)
         .connectTimeout(1, TimeUnit.MINUTES)
         .readTimeout(1, TimeUnit.MINUTES)
         .retryOnConnectionFailure(true)
@@ -81,25 +47,40 @@ class Honkaiimpact : ParsedHttpSource() {
     override fun popularMangaSelector() = "a[href*=book]"
     override fun popularMangaNextPageSelector(): String? = null
     override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/book", headers).newBuilder().tag(String::class.java, searchQuery).build()
+        GET("$baseUrl/book", headers) // .newBuilder().tag(String::class.java, searchQuery).build()
     override fun popularMangaFromElement(element: Element) = mangaFromElement(element)
 
     // Latest
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Latest updates not supported")
+    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
     override fun latestUpdatesNextPageSelector(): String? = null
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException("Latest updates not supported")
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException("Latest updates not supported")
-    }
+    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Search
     override fun searchMangaSelector() = "a[href*=book]"
     override fun searchMangaNextPageSelector(): String? = null
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        searchQuery = query.trim()
-        return GET("$baseUrl/book", headers).newBuilder().tag(String::class.java, searchQuery).build()
+        searchQuery = query
+        return GET("$baseUrl/book", headers) // .newBuilder().tag(String::class.java, searchQuery).build()
     }
     override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val mangas = document.select(searchMangaSelector()).map { element ->
+            searchMangaFromElement(element)
+        }.filter { manga ->
+            println("Manga title: ${manga.title}")
+            manga.title.contains(searchQuery, ignoreCase = true) || searchQuery.isBlank()
+        }
+
+        val hasNextPage = searchMangaNextPageSelector()?.let { selector ->
+            document.select(selector).first()
+        } != null
+
+        return MangasPage(mangas, hasNextPage)
+    }
 
     private fun mangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -109,7 +90,7 @@ class Honkaiimpact : ParsedHttpSource() {
         return manga
     }
 
-    // Outros métodos
+    // Another methods
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.thumbnail_url = document.select("img.cover").attr("abs:src")
