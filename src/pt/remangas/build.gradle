@@ -3,7 +3,7 @@ ext {
     extClass = '.Remangas'
     themePkg = 'madara'
     baseUrl = 'https://remangas.net'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
