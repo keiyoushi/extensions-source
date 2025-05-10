@@ -1,12 +1,19 @@
 package eu.kanade.tachiyomi.multisrc.greenshit
 
+import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.greenshit.GreenShit.Companion.CDN_URL
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 import java.text.Normalizer
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Serializable
 class ResultDto<T>(
@@ -25,6 +32,38 @@ class ResultDto<T>(
         .map { it.apply { slug = it.slug ?: name.createSlug() } }
         .map(MangaDto::toSManga)
 
+    fun toSChapterList(): List<SChapter> = (results as WrapperChapterDto)
+        .chapters.map {
+            SChapter.create().apply {
+                name = it.name
+                it.chapterNumber?.let {
+                    chapter_number = it
+                }
+                url = "/capitulo/${it.id}"
+                date_upload = dateFormat.tryParse(it.updateAt)
+            }
+        }.sortedByDescending(SChapter::chapter_number)
+
+    fun toPageList(): List<Page> {
+        val dto = (results as ChapterPageDto)
+
+        return dto.pages.mapIndexed { index, image ->
+            val imageUrl = when {
+                image.isWordPressContent() -> {
+                    CDN_URL.toHttpUrl().newBuilder()
+                        .addPathSegments("wp-content/uploads/WP-manga/data")
+                        .addPathSegments(image.src.toPathSegment())
+                        .build()
+                }
+                else -> {
+                    "$CDN_URL/scans/${dto.manga.scanId}/obras/${dto.manga.id}/capitulos/${dto.chapterNumber}/${image.src}"
+                        .toHttpUrl()
+                }
+            }
+            Page(index, imageUrl = imageUrl.toString())
+        }
+    }
+
     private fun String.createSlug(): String {
         return Normalizer.normalize(this, Normalizer.Form.NFD)
             .trim()
@@ -33,17 +72,11 @@ class ResultDto<T>(
             .replace("\\s+".toRegex(), "-")
             .lowercase()
     }
-}
 
-@Serializable
-class WrapperDto(
-    @SerialName("dataTop")
-    val popular: ResultDto<List<MangaDto>>?,
-    @JsonNames("atualizacoesInicial")
-    private val dataLatest: ResultDto<List<MangaDto>>?,
-
-) {
-    val latest: ResultDto<List<MangaDto>> get() = dataLatest!!
+    companion object {
+        @SuppressLint("SimpleDateFormat")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+    }
 }
 
 @Serializable
@@ -154,3 +187,12 @@ class PageDto(
 ) {
     fun isWordPressContent(): Boolean = number == null
 }
+
+/**
+ * Normalizes path segments:
+ * Ex: [ "/a/b/", "/a/b", "a/b/", "a/b" ]
+ * Result: "a/b"
+ */
+private fun String.toPathSegment() = this.trim().split("/")
+    .filter(String::isNotEmpty)
+    .joinToString("/")

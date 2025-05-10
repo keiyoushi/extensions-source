@@ -3,7 +3,7 @@ ext {
     extClass = '.SussyToons'
     themePkg = 'greenshit'
     baseUrl = 'https://www.sussytoons.wtf'
-    overrideVersionCode = 54
+    overrideVersionCode = 55
     isNsfw = true
 }
 
