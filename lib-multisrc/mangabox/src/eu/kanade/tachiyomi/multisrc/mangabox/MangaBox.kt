@@ -346,8 +346,7 @@ abstract class MangaBox(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val content = document.selectFirst("script:containsData(cdns =)")?.data()
-            ?: return emptyList()
+        val content = document.select("script:containsData(cdns =)").joinToString("\n") { it.data() }
         val cdns =
             extractArray(content, "cdns") + extractArray(content, "backupImage")
         val chapterImages = extractArray(content, "chapterImages")
