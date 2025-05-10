@@ -193,7 +193,6 @@ class PageDto(
  * Ex: [ "/a/b/", "/a/b", "a/b/", "a/b" ]
  * Result: "a/b"
  */
-
 private fun String.toPathSegment() = this.trim().split("/")
     .filter(String::isNotEmpty)
     .joinToString("/")
