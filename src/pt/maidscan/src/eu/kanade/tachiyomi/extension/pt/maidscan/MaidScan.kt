@@ -1,22 +1,16 @@
 package eu.kanade.tachiyomi.extension.pt.maidscan
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.greenshit.GreenShit
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
-import java.util.Locale
 
-class MaidScan : Madara(
+class MaidScan : GreenShit(
     "Maid Scan",
-    "https://empreguetes.site",
+    "https://novo.empreguetes.site",
     "pt-BR",
-    SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
+    scanId = 3,
 ) {
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2)
         .build()
-
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
-
-    override val useNewChapterEndpoint = true
 }

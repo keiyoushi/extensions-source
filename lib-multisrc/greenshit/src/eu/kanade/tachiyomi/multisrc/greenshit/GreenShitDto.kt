@@ -1,11 +1,12 @@
-package eu.kanade.tachiyomi.extension.pt.sussyscan
+package eu.kanade.tachiyomi.multisrc.greenshit
 
-import eu.kanade.tachiyomi.extension.pt.sussyscan.SussyToons.Companion.CDN_URL
+import eu.kanade.tachiyomi.multisrc.greenshit.GreenShit.Companion.CDN_URL
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import org.jsoup.Jsoup
+import java.text.Normalizer
 
 @Serializable
 class ResultDto<T>(
@@ -20,8 +21,18 @@ class ResultDto<T>(
 
     fun hasNextPage() = currentPage < lastPage
 
-    fun toSMangaList() = (results as List<MangaDto>)
-        .filterNot { it.slug.isNullOrBlank() }.map { it.toSManga() }
+    fun toSMangaList(): List<SManga> = (results as List<MangaDto>)
+        .map { it.apply { slug = it.slug ?: name.createSlug() } }
+        .map(MangaDto::toSManga)
+
+    private fun String.createSlug(): String {
+        return Normalizer.normalize(this, Normalizer.Form.NFD)
+            .trim()
+            .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+            .replace("\\p{Punct}".toRegex(), "")
+            .replace("\\s+".toRegex(), "-")
+            .lowercase()
+    }
 }
 
 @Serializable
@@ -46,7 +57,7 @@ class MangaDto(
     @SerialName("obr_nome")
     val name: String,
     @SerialName("obr_slug")
-    val slug: String?,
+    var slug: String?,
     @SerialName("status")
     val status: MangaStatus,
     @SerialName("scan_id")
