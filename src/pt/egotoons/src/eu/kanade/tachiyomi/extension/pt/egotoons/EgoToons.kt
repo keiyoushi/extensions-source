@@ -9,6 +9,9 @@ class EgoToons : YuYu(
     "pt-BR",
 ) {
 
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Accept-Encoding", "")
+
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()

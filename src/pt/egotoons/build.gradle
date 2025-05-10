@@ -3,7 +3,7 @@ ext {
     extClass = '.EgoToons'
     themePkg = 'yuyu'
     baseUrl = 'https://egotoons.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
