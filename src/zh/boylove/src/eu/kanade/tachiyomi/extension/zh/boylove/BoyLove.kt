@@ -92,10 +92,11 @@ class BoyLove : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga): Request =
-        GET("$baseUrl/home/api/chapter_list/tp/${manga.url}-0-0-10", headers)
+        GET("$baseUrl/home/api/chapter_list/tp/${manga.url}", headers)
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<ListPageDto<ChapterDto>>().list.map { it.toSChapter() }
+    override fun chapterListParse(response: Response): List<SChapter> {
+        return response.parseAs<ListPageDto<ChapterDto>>().list.map { it.toSChapter() }.reversed()
+    }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val chapterUrl = chapter.url
