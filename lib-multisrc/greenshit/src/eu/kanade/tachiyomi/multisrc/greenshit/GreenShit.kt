@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.greenshit
 
-import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -18,7 +17,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -27,8 +25,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 abstract class GreenShit(
     override val name: String,
@@ -43,9 +39,9 @@ abstract class GreenShit(
 
     private val preferences: SharedPreferences = getPreferences()
 
-    private var apiUrl: String
+    protected var apiUrl: String
         get() = preferences.getString(API_BASE_URL_PREF, defaultApiUrl)!!
-        set(value) = preferences.edit().putString(API_BASE_URL_PREF, value).apply()
+        private set(value) = preferences.edit().putString(API_BASE_URL_PREF, value).apply()
 
     private var restoreDefaultEnable: Boolean
         get() = preferences.getBoolean(DEFAULT_PREF, false)
@@ -152,16 +148,7 @@ abstract class GreenShit(
         val json = response.parseScriptToJson().let(DETAILS_CHAPTER_REGEX::find)
             ?.groups?.get(0)?.value
             ?: return emptyList()
-        return json.parseAs<ResultDto<WrapperChapterDto>>().results.chapters.map {
-            SChapter.create().apply {
-                name = it.name
-                it.chapterNumber?.let {
-                    chapter_number = it
-                }
-                setUrlWithoutDomain("$baseUrl/capitulo/${it.id}")
-                date_upload = dateFormat.tryParse(it.updateAt)
-            }
-        }.sortedByDescending(SChapter::chapter_number)
+        return json.parseAs<ResultDto<WrapperChapterDto>>().toSChapterList()
     }
 
     // ============================= Pages ====================================
@@ -176,22 +163,7 @@ abstract class GreenShit(
         val dto = extractScriptData(document)
             .let(::extractJsonContent)
             .let(::parseJsonToChapterPageDto)
-
-        return dto.pages.mapIndexed { index, image ->
-            val imageUrl = when {
-                image.isWordPressContent() -> {
-                    CDN_URL.toHttpUrl().newBuilder()
-                        .addPathSegments("wp-content/uploads/WP-manga/data")
-                        .addPathSegments(image.src.toPathSegment())
-                        .build()
-                }
-                else -> {
-                    "$CDN_URL/scans/${dto.manga.scanId}/obras/${dto.manga.id}/capitulos/${dto.chapterNumber}/${image.src}"
-                        .toHttpUrl()
-                }
-            }
-            Page(index, imageUrl = imageUrl.toString())
-        }
+        return dto.toPageList()
     }
     private fun pageListParse(document: Document): List<Page> {
         return document.select(pageUrlSelector).mapIndexed { index, element ->
@@ -211,9 +183,9 @@ abstract class GreenShit(
             ?: throw Exception("Failed to extract JSON from script")
     }
 
-    private fun parseJsonToChapterPageDto(jsonContent: String): ChapterPageDto {
+    private fun parseJsonToChapterPageDto(jsonContent: String): ResultDto<ChapterPageDto> {
         return try {
-            jsonContent.parseAs<ResultDto<ChapterPageDto>>().results
+            jsonContent.parseAs<ResultDto<ChapterPageDto>>()
         } catch (e: Exception) {
             throw Exception("Failed to load pages: ${e.message}")
         }
@@ -327,15 +299,6 @@ abstract class GreenShit(
         return this
     }
 
-    /**
-     * Normalizes path segments:
-     * Ex: [ "/a/b/", "/a/b", "a/b/", "a/b" ]
-     * Result: "a/b"
-     */
-    private fun String.toPathSegment() = this.trim().split("/")
-        .filter(String::isNotEmpty)
-        .joinToString("/")
-
     companion object {
         const val CDN_URL = "https://cdn.sussytoons.site"
 
@@ -355,8 +318,5 @@ abstract class GreenShit(
         private const val API_DEFAULT_BASE_URL_PREF = "defaultApiUrl"
 
         private const val DEFAULT_PREF = "defaultPref"
-
-        @SuppressLint("SimpleDateFormat")
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
     }
 }
