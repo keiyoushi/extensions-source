@@ -368,6 +368,10 @@ abstract class MangaBox(
             }
 
             Page(i, document.location(), parsedUrl)
+        }.ifEmpty {
+            document.select("div.container-chapter-reader > img").mapIndexed { i, img ->
+                Page(i, imageUrl = img.absUrl("src"))
+            }
         }
     }
 
