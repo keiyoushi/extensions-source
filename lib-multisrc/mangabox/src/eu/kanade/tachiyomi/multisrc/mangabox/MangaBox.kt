@@ -85,11 +85,14 @@ abstract class MangaBox(
 
     private fun useAltCdnInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        if (cdnSet.isEmpty()) {
+            return chain.proceed(request)
+        }
         val requestTag = request.tag(MangaBoxFallBackTag::class.java)
         val originalResponse: Response? = try {
             chain.proceed(request)
         } catch (e: IOException) {
-            if (requestTag == null || cdnSet.isEmpty()) {
+            if (requestTag == null) {
                 throw e
             } else {
                 null
