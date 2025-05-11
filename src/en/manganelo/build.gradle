@@ -3,7 +3,7 @@ ext {
     extClass = '.Manganato'
     themePkg = 'mangabox'
     baseUrl = 'https://www.natomanga.com'
-    overrideVersionCode = 6
+    overrideVersionCode = 5
     isNsfw = true
 }
 
