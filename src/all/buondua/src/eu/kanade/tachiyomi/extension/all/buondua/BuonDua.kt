@@ -97,7 +97,6 @@ class BuonDua() : ParsedHttpSource() {
         val basePageUrl = response.request.url
         return (maxPage downTo 1).map { page ->
             SChapter.create().apply {
-                chapter_number = 0F
                 setUrlWithoutDomain("$basePageUrl?page=$page")
                 name = "Page $page"
                 date_upload = dateUpload
