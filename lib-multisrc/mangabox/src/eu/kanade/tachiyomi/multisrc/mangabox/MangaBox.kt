@@ -89,7 +89,7 @@ abstract class MangaBox(
         val originalResponse: Response? = try {
             chain.proceed(request)
         } catch (e: IOException) {
-            if (requestTag == null) {
+            if (requestTag == null || cdnSet.isEmpty()) {
                 throw e
             } else {
                 null
