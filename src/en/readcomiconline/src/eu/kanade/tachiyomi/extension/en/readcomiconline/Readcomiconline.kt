@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.readcomiconline
 
 import android.content.SharedPreferences
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.lib.randomua.UserAgentType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
@@ -16,6 +17,8 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -26,6 +29,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
@@ -38,16 +42,12 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder().set("Referer", "$baseUrl/")
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(
-            userAgentType = UserAgentType.DESKTOP,
-            filterInclude = listOf("chrome"),
-        )
-        .addNetworkInterceptor(::captchaInterceptor)
-        .build()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder().setRandomUserAgent(
+        userAgentType = UserAgentType.DESKTOP,
+        filterInclude = listOf("chrome"),
+    ).addNetworkInterceptor(::captchaInterceptor).build()
 
     private fun captchaInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -94,8 +94,14 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request { // publisher > writer > artist + sorting for both if else
-        if (query.isEmpty() && (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<GenreList>().all { it.included.isEmpty() && it.excluded.isEmpty() }) {
+    override fun searchMangaRequest(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Request { // publisher > writer > artist + sorting for both if else
+        if (query.isEmpty() && (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<GenreList>()
+            .all { it.included.isEmpty() && it.excluded.isEmpty() }
+        ) {
             val url = baseUrl.toHttpUrl().newBuilder().apply {
                 var pathSegmentAdded = false
 
@@ -107,18 +113,21 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                                 pathSegmentAdded = true
                             }
                         }
+
                         is WriterFilter -> {
                             if (filter.state.isNotEmpty()) {
                                 addPathSegments("Writer/${filter.state.replace(" ", "-")}")
                                 pathSegmentAdded = true
                             }
                         }
+
                         is ArtistFilter -> {
                             if (filter.state.isNotEmpty()) {
                                 addPathSegments("Artist/${filter.state.replace(" ", "-")}")
                                 pathSegmentAdded = true
                             }
                         }
+
                         else -> {}
                     }
 
@@ -126,7 +135,10 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                         break
                     }
                 }
-                addPathSegment((if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<SortFilter>().first().selected.toString())
+                addPathSegment(
+                    (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<SortFilter>()
+                        .first().selected.toString(),
+                )
                 addQueryParameter("page", page.toString())
             }.build()
             return GET(url, headers)
@@ -136,11 +148,16 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                 addQueryParameter("page", page.toString())
                 for (filter in if (filters.isEmpty()) getFilterList() else filters) {
                     when (filter) {
-                        is Status -> addQueryParameter("status", arrayOf("", "Completed", "Ongoing")[filter.state])
+                        is Status -> addQueryParameter(
+                            "status",
+                            arrayOf("", "Completed", "Ongoing")[filter.state],
+                        )
+
                         is GenreList -> {
                             addQueryParameter("ig", filter.included.joinToString(","))
                             addQueryParameter("eg", filter.excluded.joinToString(","))
                         }
+
                         else -> {}
                     }
                 }
@@ -166,21 +183,20 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         manga.author = infoElement.select("p:has(span:contains(Writer:)) > a").first()?.text()
         manga.genre = infoElement.select("p:has(span:contains(Genres:)) > *:gt(0)").text()
         manga.description = infoElement.select("p:has(span:contains(Summary:)) ~ p").text()
-        manga.status = infoElement.select("p:has(span:contains(Status:))").first()?.text().orEmpty().let { parseStatus(it) }
+        manga.status = infoElement.select("p:has(span:contains(Status:))").first()?.text().orEmpty()
+            .let { parseStatus(it) }
         manga.thumbnail_url = document.select(".rightBox:eq(0) img").first()?.absUrl("src")
         return manga
     }
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(realMangaDetailsRequest(manga))
-            .asObservableSuccess()
+        return client.newCall(realMangaDetailsRequest(manga)).asObservableSuccess()
             .map { response ->
                 mangaDetailsParse(response).apply { initialized = true }
             }
     }
 
-    private fun realMangaDetailsRequest(manga: SManga): Request =
-        super.mangaDetailsRequest(manga)
+    private fun realMangaDetailsRequest(manga: SManga): Request = super.mangaDetailsRequest(manga)
 
     override fun mangaDetailsRequest(manga: SManga): Request =
         captchaUrl?.let { GET(it, headers) }.also { captchaUrl = null }
@@ -207,11 +223,12 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     private val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val qualitySuffix = if ((qualityPref() != "lq" && serverPref() != "s2") || (qualityPref() == "lq" && serverPref() == "s2")) {
-            "&s=${serverPref()}&quality=${qualityPref()}&readType=1"
-        } else {
-            "&s=${serverPref()}&readType=1"
-        }
+        val qualitySuffix =
+            if ((qualityPref() != "lq" && serverPref() != "s2") || (qualityPref() == "lq" && serverPref() == "s2")) {
+                "&s=${serverPref()}&quality=${qualityPref()}&readType=1"
+            } else {
+                "&s=${serverPref()}&readType=1"
+            }
 
         return GET(baseUrl + chapter.url + qualitySuffix, headers)
     }
@@ -221,83 +238,48 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         var encryptedLinks = mutableListOf<String>()
 
         // Get script elements
-        val scripts = document.select("script[type=text/javascript]")
+        val scripts = document.select("script")
 
-        // We'll get a bunch of results on the selector but we only need the script that contains the encrypted links
-        val imageRegex = imageRegexPref() // Avoid being instantiated multiple times
+        // We'll evaluate every script that exists in the HTML
+        if (remoteConfigItem == null) {
+            throw IOException("Failed to retrieve configuration")
+        }
+
         for (script in scripts) {
-            val scriptContent = script.data().let {
-                if (remoteConfigItem?.onSinglePreParse != null) {
-                    // Evaluate javascript here (scriptContent)
-                    // Return String
-                }
+            QuickJs.create().use {
+                val eval =
+                    "let _encryptedString = `${script.data()}`;${remoteConfigItem!!.imageDecryptEval}"
+                val evalResult =
+                    (it.evaluate(eval) as String).parseAs<List<String>>() // Doing `List<String>` shows a warning
 
-                it
-            }
-
-            if (scriptContent.isNotEmpty()) {
-                val encryptedValues = imageRegex.findAll(scriptContent)
-
-                if (encryptedValues.count() < 1) continue
-
-                // We found the encrypted links
-                encryptedValues.forEach {
-                    val url = it.groupValues[1]
-
-                    if (url.isNotBlank()) {
-                        encryptedLinks.add(url)
-                    }
-                }
-
-                break
+                // Add results to 'encryptedLinks'
+                encryptedLinks.addAll(evalResult)
             }
         }
 
-        encryptedLinks = encryptedLinks.let {
-            if (remoteConfigItem?.onPostParse != null) {
-                // Evaluate javascript here (encryptedLinks as Array)
-                // Return List JSON
+        encryptedLinks = encryptedLinks.let { links ->
+            if (remoteConfigItem!!.postDecryptEval != null) {
+                QuickJs.create().use {
+                    val eval = "let _decryptedLinks = ${Json.encodeToString(links)}"
+                    (it.evaluate(eval) as String).parseAs<MutableList<String>>()
+                }
+            } else {
+                links
             }
-
-            it
         }
 
-        try {
-            return encryptedLinks.mapIndexedNotNull { idx, rawUrl ->
-                var semiParsedUrl = rawUrl.let {
-                    if (remoteConfigItem?.onPreDecrypt != null) {
-                        // Evaluate javascript here (semiParsedUrl)
-                        // Return String
+        return encryptedLinks.mapIndexedNotNull { idx, url ->
+            if (!remoteConfigItem!!.shouldVerifyLinks) {
+                Page(idx, imageUrl = url)
+            } else {
+                client.newCall(GET(url)).execute().use {
+                    if (it.isSuccessful) {
+                        Page(idx, imageUrl = url)
+                    } else {
+                        null // Remove from list
                     }
-
-                    it
                 }
-
-                decryptionList.forEach {
-                    semiParsedUrl = semiParsedUrl.replace(it.first.toRegex(), it.second)
-                }
-
-                val decryptedLink = decryptLink(semiParsedUrl, "").let {
-                    if (remoteConfigItem?.onPostDecrypt != null) {
-                        // Evaluate javascript here (semiParsedUrl)
-                        // Return String
-                    }
-
-                    it
-                }
-
-                // Test all links if valid, remove if not
-                if (remoteConfigItem?.parseAndVerifyAllLinks == true) {
-                    val headResponse = client.newCall(GET(decryptedLink)).execute()
-
-                    if (!headResponse.isSuccessful) Page(idx, imageUrl = decryptedLink) else null
-                } else {
-                    Page(idx, imageUrl = decryptedLink)
-                }
-
             }
-        } catch (_: Exception) { // We'll catch a generic exception since it can throw several types depending on the returned encrypted URL
-            throw IOException("Parse failed, check Keiyoushi discord for configuration updates")
         }
     }
 
@@ -312,10 +294,12 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         val excluded: List<String>
             get() = state.filter { it.isExcluded() }.map { it.gid }
     }
-    open class SelectFilter(displayName: String, private val options: Array<Pair<String, String>>) : Filter.Select<String>(
-        displayName,
-        options.map { it.first }.toTypedArray(),
-    ) {
+
+    open class SelectFilter(displayName: String, private val options: Array<Pair<String, String>>) :
+        Filter.Select<String>(
+            displayName,
+            options.map { it.first }.toTypedArray(),
+        ) {
         open val selected get() = options[state].second.takeUnless { it.isEmpty() }
     }
 
@@ -399,75 +383,25 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     // Preferences Code
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val shouldShowPref = shouldUseRemoteConfigPref()
-        val imageRegexPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = IMAGE_REGEX_PREF
-            title = IMAGE_REGEX_TITLE
-            summary = IMAGE_REGEX_SUMMARY
-
-            setVisible(!shouldShowPref)
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit().putString(IMAGE_REGEX_PREF, newValue as String).commit()
-            }
-        }
-
-        val imageDecryptionPref = androidx.preference.EditTextPreference(screen.context).apply {
-            key = IMAGE_DECRYPTION_PREF
-            title = IMAGE_DECRYPTION_TITLE
-            summary = IMAGE_DECRYPTION_SUMMARY
-            dialogMessage = IMAGE_DECRYPTION_DIALOG_MESSAGE
-
-            setVisible(!shouldShowPref)
-            setOnPreferenceChangeListener { _, newValue ->
-                val commitResult = preferences.edit().putString(IMAGE_DECRYPTION_PREF, newValue as String).commit()
-
-                if (commitResult) {
-                    decryptionList = imageDecryptionPref()
-                }
-
-                commitResult
-            }
-        }
-
         val remoteConfigPref = androidx.preference.EditTextPreference(screen.context).apply {
             key = IMAGE_REMOTE_CONFIG_PREF
             title = IMAGE_REMOTE_CONFIG_TITLE
             summary = IMAGE_REMOTE_CONFIG_SUMMARY
+            setDefaultValue(IMAGE_REMOTE_CONFIG_DEFAULT)
 
-            setVisible(shouldShowPref)
             setOnPreferenceChangeListener { _, newValue ->
-                val commitResult = preferences.edit().putString(IMAGE_REMOTE_CONFIG_PREF, newValue as String).commit()
+                val commitResult =
+                    preferences.edit().putString(IMAGE_REMOTE_CONFIG_PREF, newValue as String)
+                        .commit()
 
                 if (commitResult) {
+                    // Make it null so remoteConfigItem would request for a link again
                     remoteConfigItem = null
                 }
 
                 commitResult
             }
         }
-
-        val shouldUseRemoteConfigPref = androidx.preference.SwitchPreferenceCompat(screen.context).apply {
-            key = IMAGE_USE_REMOTE_CONFIG_PREF
-            title = IMAGE_USE_REMOTE_CONFIG_TITLE
-            summary = IMAGE_USE_REMOTE_CONFIG_SUMMARY
-
-            setDefaultValue(false)
-            setOnPreferenceChangeListener { _, newValue ->
-                val value = newValue as Boolean
-
-                imageRegexPref.setVisible(!value)
-                imageDecryptionPref.setVisible(!value)
-                remoteConfigPref.setVisible(value)
-
-                true
-            }
-        }
-
-        // Image Parsing
-        screen.addPreference(shouldUseRemoteConfigPref)
-        screen.addPreference(imageRegexPref)
-        screen.addPreference(imageDecryptionPref)
-        screen.addPreference(remoteConfigPref)
 
         val qualityPref = androidx.preference.ListPreference(screen.context).apply {
             key = QUALITY_PREF
@@ -499,7 +433,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             }
         }
 
-        // Image quality and server preference
+        screen.addPreference(remoteConfigPref)
         screen.addPreference(qualityPref)
         screen.addPreference(serverPref)
     }
@@ -508,48 +442,16 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
 
     private fun serverPref() = preferences.getString(SERVER_PREF, "")
 
-    private fun shouldUseRemoteConfigPref() = preferences.getBoolean(IMAGE_USE_REMOTE_CONFIG_PREF, false)
-
-    private fun imageRegexPref(): Regex {
-        return if (shouldUseRemoteConfigPref() && remoteConfigItem != null) {
-            remoteConfigItem!!.imageRegex.toRegex()
-        } else {
-            (preferences.getString(IMAGE_REGEX_PREF, IMAGE_REGEX_DEFAULT)!!.takeUnless { it.isEmpty() } ?: IMAGE_REGEX_DEFAULT).toRegex()
-        }
-    }
-
-    // This would get called a lot of times so better to save the value and conditionally update it (like useMemo in react)
-    private var decryptionList: List<Pair<String, String>> = emptyList()
-        get() {
-            if (field.isNotEmpty()) {
-                return imageDecryptionPref()
-            }
-
-            field = imageDecryptionPref()
-            return field
-        }
-
-    private fun imageDecryptionPref(): List<Pair<String, String>> {
-        val prefEntries: List<String> = if (shouldUseRemoteConfigPref() && remoteConfigItem != null) {
-            remoteConfigItem!!.decryptionSteps
-        } else {
-            (preferences.getString(IMAGE_DECRYPTION_PREF, IMAGE_DECRYPTION_DEFAULT)!!.takeUnless { it.isEmpty() } ?: IMAGE_DECRYPTION_DEFAULT).split("\n")
-        }
-
-        return prefEntries.map {
-            val entrySplit = it.split(IMAGE_DECRYPTION_DELIMITER)
-
-            Pair(entrySplit[0], entrySplit[1])
-        }
-    }
-
     private var remoteConfigItem: RemoteConfigDTO? = null
         get() {
             if (field != null) {
                 return field
             }
 
-            val configLink = preferences.getString(IMAGE_REMOTE_CONFIG_PREF, null) ?: return null
+            val configLink = preferences.getString(
+                IMAGE_REMOTE_CONFIG_PREF.addBustQuery(),
+                IMAGE_REMOTE_CONFIG_DEFAULT.addBustQuery(),
+            ) ?: return null
 
             try {
                 val configResponse = client.newCall(GET(configLink)).execute()
@@ -557,21 +459,20 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                 field = configResponse.parseAs<RemoteConfigDTO>()
                 configResponse.close()
                 return field
-            }
-            catch (_: IOException) {
+            } catch (_: IOException) {
                 return null
             }
         }
 
+    private fun String.addBustQuery(): String {
+        return "$this?bust=${Calendar.getInstance().time.time}"
+    }
+
     @Serializable
     private class RemoteConfigDTO(
-        val imageRegex: String,
-        val decryptionSteps: List<String>,
-        val parseAndVerifyAllLinks: Boolean,
-        val onSinglePreParse: String?,
-        val onPostParse: String?,
-        val onPreDecrypt: String?,
-        val onPostDecrypt: String?
+        val imageDecryptEval: String,
+        val postDecryptEval: String?,
+        val shouldVerifyLinks: Boolean,
     )
 
     companion object {
@@ -579,29 +480,10 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val QUALITY_PREF = "qualitypref"
         private const val SERVER_PREF_TITLE = "Server Preference"
         private const val SERVER_PREF = "serverpref"
-        private const val IMAGE_USE_REMOTE_CONFIG_TITLE = "Use Remote Configuration"
-        private const val IMAGE_USE_REMOTE_CONFIG_SUMMARY = "Use a remote-hosted configuration to automatically configure image parsing"
-        private const val IMAGE_USE_REMOTE_CONFIG_PREF = "imageuseremotepref"
         private const val IMAGE_REMOTE_CONFIG_TITLE = "Remote Config"
         private const val IMAGE_REMOTE_CONFIG_SUMMARY = "Remote Config Link"
         private const val IMAGE_REMOTE_CONFIG_PREF = "imageuseremotelinkpref"
-        private const val IMAGE_REGEX_TITLE = "Override Image Regex"
-        private const val IMAGE_REGEX_SUMMARY = "Override regex to use in getting entry images"
-        private const val IMAGE_REGEX_PREF = "imageregexpref"
-        private const val IMAGE_REGEX_DEFAULT = """(?s)cdk\s*=\s*['"](.*?)['"]\s*;?"""
-        private const val IMAGE_DECRYPTION_TITLE = "Image Decryption Steps"
-        private const val IMAGE_DECRYPTION_SUMMARY = "Configure the first stage of image decryption"
-        private val IMAGE_DECRYPTION_DIALOG_MESSAGE = """
-            Format: 'RegexString|ReplacementString'
-            Note: Each step is separated by a new line, leaving it blank will use the default value(s) instead
-        """.trimIndent()
-        private const val IMAGE_DECRYPTION_PREF = "imagedecryptionstep"
-        private val IMAGE_DECRYPTION_DEFAULT = """
-            \w{5}__\w{3}__|g
-            \w{2}__\w{6}_|a
-            b|pw_.g28x
-            h|d2pr.x_27
-        """.trimIndent()
-        private const val IMAGE_DECRYPTION_DELIMITER = "|"
+        private const val IMAGE_REMOTE_CONFIG_DEFAULT =
+            "https://gist.githubusercontent.com/JakeeLuwi/0de9e48100047d3db21f94ce2529c177/raw"
     }
 }
