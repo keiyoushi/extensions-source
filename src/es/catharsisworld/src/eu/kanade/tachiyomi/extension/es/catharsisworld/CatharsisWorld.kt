@@ -51,6 +51,9 @@ class CatharsisWorld : Madara(
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
 
+    override val chapterProtectorPasswordPrefix = "protectornonce='"
+    override val chapterProtectorDataPrefix = "_data='"
+
     private fun Element.imageFromStyle(): String {
         return this.attr("style").substringAfter("url(").substringBefore(")")
     }

@@ -10,7 +10,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
@@ -46,7 +50,7 @@ open class EternalMangas(
         return GET("$baseUrl/comics", headers)
     }
 
-    private val tokenRegex = """self\.__next_f\.push\(.*token\\":\\"(.*?)\\"\}""".toRegex()
+    private val dataUrl = "https://raw.githubusercontent.com/bapeey/extensions-tools/refs/heads/main/keiyoushi/eternalmangas/values.txt"
 
     override fun searchMangaParse(
         response: Response,
@@ -54,15 +58,32 @@ open class EternalMangas(
         query: String,
         filters: FilterList,
     ): MangasPage {
-        val token = tokenRegex.find(response.body.string())?.groupValues?.get(1)
-            ?: throw Exception("Token not found")
+        val (apiComicsUrl, jsonHeaders, useApi, scriptSelector, comicsRegex) = client.newCall(GET(dataUrl)).execute().body.string().split("\n")
+        val apiSearch = useApi == "1"
+        comicsList = if (apiSearch) {
+            val headersJson = json.parseToJsonElement(jsonHeaders).jsonObject
+            val apiHeaders = headersBuilder()
+            headersJson.forEach { (key, jsonElement) ->
+                var value = jsonElement.jsonPrimitive.contentOrNull.orEmpty()
+                if (value.startsWith("1-")) {
+                    val match = value.substringAfter("-").toRegex().find(response.body.string())
+                    value = match?.groupValues?.get(1).orEmpty()
+                } else {
+                    value = value.substringAfter("-")
+                }
+                apiHeaders.add(key, value)
+            }
+            val apiResponse = client.newCall(GET(apiComicsUrl, apiHeaders.build())).execute()
+            json.decodeFromString<List<SeriesDto>>(apiResponse.body.string()).toMutableList()
+        } else {
+            val script = response.asJsoup().select(scriptSelector).joinToString { it.data() }
+            val jsonString = comicsRegex.toRegex().find(script)?.groupValues?.get(1)
+                ?: throw Exception(intl["comics_list_error"])
+            val unescapedJson = jsonString.unescape()
+            json.decodeFromString<List<SeriesDto>>(unescapedJson).toMutableList()
+        }
 
-        val apiHeaders = headersBuilder()
-            .add("X-Eternal-Key", token)
-            .build()
-
-        val apiResponse = client.newCall(GET("$apiBaseUrl$apiPath/comics-actu", apiHeaders)).execute()
-        return super.searchMangaParse(apiResponse, page, query, filters)
+        return parseComicsList(page, query, filters)
     }
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
