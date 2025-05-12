@@ -95,7 +95,6 @@ class MissKon() : SimpleParsedHttpSource() {
         val basePageUrl = response.request.url.toString()
         return (maxPage downTo 1).map { page ->
             SChapter.create().apply {
-                chapter_number = 0F
                 setUrlWithoutDomain("$basePageUrl/$page")
                 name = "Page $page"
                 date_upload = dateUpload
