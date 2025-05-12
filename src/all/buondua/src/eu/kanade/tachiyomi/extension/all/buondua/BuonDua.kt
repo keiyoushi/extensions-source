@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -60,7 +61,6 @@ class BuonDua() : ParsedHttpSource() {
     override fun popularMangaSelector() = latestUpdatesSelector()
 
     // Search
-
     override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -87,34 +87,27 @@ class BuonDua() : ParsedHttpSource() {
         return manga
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(element.select(".is-current").first()!!.attr("abs:href"))
-        chapter.chapter_number = 0F
-        chapter.name = element.select(".article-header").text()
-        chapter.date_upload = DATE_FORMAT.tryParse(element.selectFirst(".article-info > small")?.text())
-        return chapter
-    }
-
-    override fun chapterListSelector() = "html"
-
-    // Pages
-
-    override fun pageListParse(document: Document): List<Page> {
-        val numpages = document.selectFirst(".pagination-list")!!.select(".pagination-link")
-        val pages = mutableListOf<Page>()
-
-        numpages.forEachIndexed { index, page ->
-            val doc = when (index) {
-                0 -> document
-                else -> client.newCall(GET(page.attr("abs:href"))).execute().asJsoup()
-            }
-            doc.select(".article-fulltext img").forEach {
-                val itUrl = it.attr("abs:src")
-                pages.add(Page(pages.size, "", itUrl))
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val doc = response.asJsoup()
+        val dateUploadStr = doc.selectFirst(".article-info > small")?.text()
+        val dateUpload = DATE_FORMAT.tryParse(dateUploadStr)
+        val maxPage = doc.select("nav.pagination:first-of-type a.pagination-link").last()?.text()?.toInt() ?: 1
+        val basePageUrl = response.request.url
+        return (maxPage downTo 1).map { page ->
+            SChapter.create().apply {
+                setUrlWithoutDomain("$basePageUrl?page=$page")
+                name = "Page $page"
+                date_upload = dateUpload
             }
         }
-        return pages
+    }
+
+    // Pages
+    override fun pageListParse(document: Document): List<Page> {
+        return document.select(".article-fulltext img")
+            .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("src")) }
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
