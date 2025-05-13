@@ -100,7 +100,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         filters: FilterList,
     ): Request { // publisher > writer > artist + sorting for both if else
         if (query.isEmpty() && (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<GenreList>()
-                .all { it.included.isEmpty() && it.excluded.isEmpty() }
+            .all { it.included.isEmpty() && it.excluded.isEmpty() }
         ) {
             val url = baseUrl.toHttpUrl().newBuilder().apply {
                 var pathSegmentAdded = false
