@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class TercoScans : MangaThemesia(
     "Terco Scans",
-    "https://tecno-arts.xyz/",
+    "https://tecnocomic1.xyz",
     "en",
 ) {
     override val client = network.cloudflareClient.newBuilder()
