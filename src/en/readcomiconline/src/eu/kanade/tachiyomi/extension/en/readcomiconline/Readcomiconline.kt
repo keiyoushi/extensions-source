@@ -100,7 +100,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         filters: FilterList,
     ): Request { // publisher > writer > artist + sorting for both if else
         if (query.isEmpty() && (if (filters.isEmpty()) getFilterList() else filters).filterIsInstance<GenreList>()
-            .all { it.included.isEmpty() && it.excluded.isEmpty() }
+                .all { it.included.isEmpty() && it.excluded.isEmpty() }
         ) {
             val url = baseUrl.toHttpUrl().newBuilder().apply {
                 var pathSegmentAdded = false
@@ -250,7 +250,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
                 val eval =
                     "let _encryptedString = `${script.data()}`;${remoteConfigItem!!.imageDecryptEval}"
                 val evalResult =
-                    (it.evaluate(eval) as String).parseAs<List<String>>() // Doing `List<String>` shows a warning
+                    (it.evaluate(eval) as String).parseAs<List<String>>()
 
                 // Add results to 'encryptedLinks'
                 encryptedLinks.addAll(evalResult)
@@ -454,7 +454,12 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             ) ?: return null
 
             try {
-                val configResponse = client.newCall(GET(configLink)).execute()
+                val request = Request.Builder()
+                    .url(configLink)
+                    .head()
+                    .build()
+
+                val configResponse = client.newCall(request).execute()
 
                 field = configResponse.parseAs<RemoteConfigDTO>()
                 configResponse.close()
@@ -484,6 +489,6 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         private const val IMAGE_REMOTE_CONFIG_SUMMARY = "Remote Config Link"
         private const val IMAGE_REMOTE_CONFIG_PREF = "imageuseremotelinkpref"
         private const val IMAGE_REMOTE_CONFIG_DEFAULT =
-            "https://gist.githubusercontent.com/JakeeLuwi/0de9e48100047d3db21f94ce2529c177/raw"
+            "https://raw.githubusercontent.com/keiyoushi/extensions-source/refs/heads/main/src/en/readcomiconline/config.json"
     }
 }
