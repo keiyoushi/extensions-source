@@ -249,8 +249,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             QuickJs.create().use {
                 val eval =
                     "let _encryptedString = `${script.data()}`;${remoteConfigItem!!.imageDecryptEval}"
-                val evalResult =
-                    (it.evaluate(eval) as String).parseAs<List<String>>()
+                val evalResult = (it.evaluate(eval) as String).parseAs<List<String>>()
 
                 // Add results to 'encryptedLinks'
                 encryptedLinks.addAll(evalResult)
@@ -272,7 +271,12 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             if (!remoteConfigItem!!.shouldVerifyLinks) {
                 Page(idx, imageUrl = url)
             } else {
-                client.newCall(GET(url)).execute().use {
+                val request = Request.Builder()
+                    .url(url)
+                    .head()
+                    .build()
+
+                client.newCall(request).execute().use {
                     if (it.isSuccessful) {
                         Page(idx, imageUrl = url)
                     } else {
@@ -454,12 +458,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             ) ?: return null
 
             try {
-                val request = Request.Builder()
-                    .url(configLink)
-                    .head()
-                    .build()
-
-                val configResponse = client.newCall(request).execute()
+                val configResponse = client.newCall(GET(configLink)).execute()
 
                 field = configResponse.parseAs<RemoteConfigDTO>()
                 configResponse.close()
