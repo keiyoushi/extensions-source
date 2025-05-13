@@ -2,7 +2,7 @@ ext {
     extName = 'Temple Scan'
     extClass = '.TempleScanEsp'
     themePkg = 'madara'
-    baseUrl = 'https://templescanesp.kawi.lat'
+    baseUrl = 'https://templescanesp.vxviral.xyz'
     overrideVersionCode = 2
     isNsfw = true
 }
