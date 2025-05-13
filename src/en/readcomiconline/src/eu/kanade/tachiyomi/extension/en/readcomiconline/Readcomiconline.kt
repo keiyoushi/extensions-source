@@ -271,10 +271,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             if (!remoteConfigItem!!.shouldVerifyLinks) {
                 Page(idx, imageUrl = url)
             } else {
-                val request = Request.Builder()
-                    .url(url)
-                    .head()
-                    .build()
+                val request = Request.Builder().url(url).head().build()
 
                 client.newCall(request).execute().use {
                     if (it.isSuccessful) {
