@@ -234,7 +234,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         url = element.select("a").attr("href")
-        name = element.select("a li").first()!!.ownText()
+        name = element.select("a li h3").first()!!.ownText()
         date_upload = dateFormat.tryParse(element.select("a li span.hidden-xs").text().trim())
     }
 
