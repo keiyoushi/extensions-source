@@ -47,7 +47,7 @@ class ResultDto<T>(
     fun toPageList(): List<Page> {
         val dto = (results as ChapterPageDto)
         val chapter = dto.chapterNumber.let { number ->
-            number.takeIf { it.hasTenths() } ?: number.toInt()
+            number.takeIf { it.isNotInteger() } ?: number.toInt()
         }
         return dto.pages.mapIndexed { index, image ->
             val imageUrl = when {
@@ -66,7 +66,7 @@ class ResultDto<T>(
         }
     }
 
-    private fun Float.hasTenths(): Boolean = toInt() < this
+    private fun Float.isNotInteger(): Boolean = toInt() < this
 
     private fun String.createSlug(): String {
         return Normalizer.normalize(this, Normalizer.Form.NFD)
