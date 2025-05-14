@@ -195,7 +195,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         val date = parseDate(document.select(".entry-time").text())
         val mangaUrl = document.baseUri()
         // create first chapter since its on main manga page
-        chapters.add(createChapter("1", document.baseUri(), date, "Ch. 1"))
+        chapters.add(createChapter("1", document.baseUri(), date, "Part 1"))
         // see if there are multiple chapters or not
         val lastChapterNumber = document.select(chapterListSelector()).last()?.text()
         if (lastChapterNumber != null) {
@@ -203,7 +203,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
             // so we take the last one and loop it to get all hidden ones.
             // Example: 1 2 3 4 .. 7 8 9 Next
             for (i in 2..lastChapterNumber.toInt()) {
-                chapters.add(createChapter(i.toString(), document.baseUri(), date, "Ch. $i"))
+                chapters.add(createChapter(i.toString(), document.baseUri(), date, "Part $i"))
             }
         }
         chapters.reverse()
