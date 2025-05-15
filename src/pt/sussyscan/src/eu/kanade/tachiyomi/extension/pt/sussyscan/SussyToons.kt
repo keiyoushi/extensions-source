@@ -6,11 +6,13 @@ import eu.kanade.tachiyomi.multisrc.greenshit.MangaDto
 import eu.kanade.tachiyomi.multisrc.greenshit.ResultDto
 import eu.kanade.tachiyomi.multisrc.greenshit.WrapperChapterDto
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
@@ -22,6 +24,10 @@ class SussyToons : GreenShit(
     override val id = 6963507464339951166
 
     override val versionId = 2
+
+    override val client: OkHttpClient = super.client.newBuilder()
+        .rateLimit(2)
+        .build()
 
     override fun popularMangaRequest(page: Int): Request =
         GET("$apiUrl/obras/top5", headers)

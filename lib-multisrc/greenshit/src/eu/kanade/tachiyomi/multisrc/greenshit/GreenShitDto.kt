@@ -36,8 +36,8 @@ class ResultDto<T>(
         .chapters.map {
             SChapter.create().apply {
                 name = it.name
-                it.chapterNumber?.let {
-                    chapter_number = it
+                CHAPTER_NUMBER_REGEX.find(it.name)?.groups?.get(0)?.value?.let {
+                    chapter_number = it.toFloat()
                 }
                 url = "/capitulo/${it.id}"
                 date_upload = dateFormat.tryParse(it.updateAt)
@@ -46,7 +46,9 @@ class ResultDto<T>(
 
     fun toPageList(): List<Page> {
         val dto = (results as ChapterPageDto)
-
+        val chapter = dto.chapterNumber.let { number ->
+            number.takeIf { it.isNotInteger() } ?: number.toInt()
+        }
         return dto.pages.mapIndexed { index, image ->
             val imageUrl = when {
                 image.isWordPressContent() -> {
@@ -56,13 +58,15 @@ class ResultDto<T>(
                         .build()
                 }
                 else -> {
-                    "$CDN_URL/scans/${dto.manga.scanId}/obras/${dto.manga.id}/capitulos/${dto.chapterNumber}/${image.src}"
+                    "$CDN_URL/scans/${dto.manga.scanId}/obras/${dto.manga.id}/capitulos/$chapter/${image.src}"
                         .toHttpUrl()
                 }
             }
             Page(index, imageUrl = imageUrl.toString())
         }
     }
+
+    private fun Float.isNotInteger(): Boolean = toInt() < this
 
     private fun String.createSlug(): String {
         return Normalizer.normalize(this, Normalizer.Form.NFD)
@@ -76,6 +80,7 @@ class ResultDto<T>(
     companion object {
         @SuppressLint("SimpleDateFormat")
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        val CHAPTER_NUMBER_REGEX = """\d+(\.\d+)?""".toRegex()
     }
 }
 
@@ -149,8 +154,6 @@ class ChapterDto(
     val id: Int,
     @SerialName("cap_nome")
     val name: String,
-    @SerialName("cap_numero")
-    val chapterNumber: Float?,
     @SerialName("cap_lancado_em")
     val updateAt: String,
 )
@@ -168,7 +171,7 @@ class ChapterPageDto(
     @SerialName("obra")
     val manga: MangaReferenceDto,
     @SerialName("cap_numero")
-    val chapterNumber: Int,
+    val chapterNumber: Float,
 ) {
     @Serializable
     class MangaReferenceDto(
@@ -183,7 +186,7 @@ class ChapterPageDto(
 class PageDto(
     val src: String,
     @SerialName("numero")
-    val number: Int? = null,
+    val number: Float? = null,
 ) {
     fun isWordPressContent(): Boolean = number == null
 }
