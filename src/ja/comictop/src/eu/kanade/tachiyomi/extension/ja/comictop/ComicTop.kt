@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.comictop
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -14,59 +12,38 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.io.PrintWriter
-import java.io.StringWriter
 
 class ComicTop : ParsedHttpSource() {
 
     override val name = "ComicTop"
 
-    override val baseUrl = "https://comic-top.com/"
+    override val baseUrl = "https://comic-top.com"
 
     override val lang = "ja"
 
     override val supportsLatest = true
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/popular/page/$page", headers)
 
-    override fun popularMangaSelector() = ".ホットマンガ a"
+    override fun popularMangaSelector() = ".animposx > a"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        Log.i("ComicTop", element.html())
         val img = element.selectFirst("img")!!
-        thumbnail_url = img.absUrl("data-src").substringBefore("?")
+        thumbnail_url = (if (element.hasAttr("data-src")) element.absUrl("data-src") else img.absUrl("src")).substringBefore("?")
         title = img.attr("title")
         setUrlWithoutDomain(element.absUrl("href"))
     }
 
-    override fun popularMangaNextPageSelector() = null
+    override fun popularMangaNextPageSelector() = "#nextpagination"
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/latest-chapter/page/$page/", headers)
 
-    override fun latestUpdatesSelector() = ".animepost a"
+    override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-    override fun latestUpdatesNextPageSelector() = "#nextpagination"
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        try {
-            val res = super.latestUpdatesParse(response)
-            Log.i("ComicTop", res.toString())
-            return res
-        } catch (e: Exception) {
-            Log.e("ComicTop", getStackTraceAsString(e))
-            throw e
-        }
-    }
-
-    private fun getStackTraceAsString(e: Throwable): String {
-        val sw = StringWriter()
-        val pw = PrintWriter(sw)
-        e.printStackTrace(pw)
-        return sw.toString()
-    }
+    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // =============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
