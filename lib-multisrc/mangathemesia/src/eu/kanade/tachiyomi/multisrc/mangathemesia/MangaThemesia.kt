@@ -639,6 +639,6 @@ abstract class MangaThemesia(
         private val MANGA_PAGE_ID_REGEX = "post_id\\s*:\\s*(\\d+)\\}".toRegex()
         private val CHAPTER_PAGE_ID_REGEX = "chapter_id\\s*=\\s*(\\d+);".toRegex()
 
-        val JSON_IMAGE_LIST_REGEX = "\"images\"\\s*:\\s*(\\[.*?])".toRegex()
+        val JSON_IMAGE_LIST_REGEX = "[\"']images[\"']\\s*:\\s*(\\[.*?])".toRegex()
     }
 }

@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.mangatv
 
+import android.util.Base64
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.source.model.Page
 import kotlinx.serialization.json.jsonArray
@@ -19,14 +21,23 @@ class MangaTV : MangaThemesia(
     override val seriesDescriptionSelector = "b:contains(Sinopsis) + span"
 
     override fun pageListParse(document: Document): List<Page> {
-        val imageListJson = JSON_IMAGE_LIST_REGEX.find(document.toString())?.destructured?.toList()?.get(0).orEmpty()
+        // Bypass packer obfuscation
+        val script = document.selectFirst(".readingnav")?.nextElementSibling()!!.html().toString()
+        val decoded = QuickJs.create().use { quickJs -> quickJs.evaluate(script.removePrefix("eval")) }.toString()
+
+        val imageListJson = JSON_IMAGE_LIST_REGEX.find(decoded)?.destructured?.toList()?.get(0).orEmpty()
         val imageList = try {
             json.parseToJsonElement(imageListJson.replace(TRAILING_COMMA_REGEX, "]")).jsonArray
         } catch (_: IllegalArgumentException) {
             emptyList()
         }
+
+        fun ByteArray.asUrlString(): String {
+            return "https:" + String(this, Charsets.UTF_8)
+        }
+
         return imageList.mapIndexed { i, jsonEl ->
-            Page(i, imageUrl = "https:${jsonEl.jsonPrimitive.content}")
+            Page(i, imageUrl = Base64.decode(jsonEl.jsonPrimitive.content, 0).asUrlString())
         }
     }
 
