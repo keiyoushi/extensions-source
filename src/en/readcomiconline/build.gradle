@@ -1,7 +1,7 @@
 ext {
     extName = 'ReadComicOnline'
     extClass = '.Readcomiconline'
-    extVersionCode = 35
+    extVersionCode = 36
 }
 
 apply from: "$rootDir/common.gradle"
