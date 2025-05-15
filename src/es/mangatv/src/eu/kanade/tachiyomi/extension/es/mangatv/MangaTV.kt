@@ -11,12 +11,15 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class MangaTV : MangaThemesia(
-    "Manga  TV",
+    "Manga TV",
     "https://www.mangatv.net",
     "es",
     mangaUrlDirectory = "/lista",
     dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT),
 ) {
+
+    override val id = 7214040353404261084
+    // {"name": "Manga  TV", "lang": "es"}
 
     override val seriesDescriptionSelector = "b:contains(Sinopsis) + span"
 
