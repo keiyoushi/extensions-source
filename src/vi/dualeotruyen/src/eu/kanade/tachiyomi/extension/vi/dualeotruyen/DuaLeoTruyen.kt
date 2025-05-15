@@ -22,7 +22,7 @@ class DuaLeoTruyen : ParsedHttpSource() {
 
     override val name = "Dưa Leo Truyện"
 
-    override val baseUrl = "https://dualeotruyenbotz.com"
+    override val baseUrl = "https://dualeotruyenm.com"
 
     override val lang = "vi"
 
@@ -30,6 +30,23 @@ class DuaLeoTruyen : ParsedHttpSource() {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .addInterceptor { chain ->
+            val originalRequest = chain.request()
+            val newRequest = originalRequest.newBuilder()
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+                .header("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
+                .header("Sec-Ch-Ua", "\"Not A(Brand\";v=\"99\", \"Google Chrome\";v=\"121\", \"Chromium\";v=\"121\"")
+                .header("Sec-Ch-Ua-Mobile", "?0")
+                .header("Sec-Ch-Ua-Platform", "\"Windows\"")
+                .header("Sec-Fetch-Dest", "document")
+                .header("Sec-Fetch-Mode", "navigate")
+                .header("Sec-Fetch-Site", "none")
+                .header("Sec-Fetch-User", "?1")
+                .header("Upgrade-Insecure-Requests", "1")
+                .build()
+            chain.proceed(newRequest)
+        }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -111,7 +128,17 @@ class DuaLeoTruyen : ParsedHttpSource() {
         countView(document)
 
         return document.select(".content_view_chap img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.absUrl("data-original"))
+            // Thử lấy từ data-original trước, nếu không có thì lấy từ src
+            val imgUrl = it.absUrl("data-original").takeIf { url -> url.isNotEmpty() } ?: it.absUrl("src")
+
+            // Thêm Referer header cho URL ảnh nếu cần
+            val fixedImgUrl = if (imgUrl.contains("?")) {
+                "$imgUrl&referer=$baseUrl"
+            } else {
+                "$imgUrl?referer=$baseUrl"
+            }
+
+            Page(i, imageUrl = fixedImgUrl)
         }
     }
 
@@ -168,8 +195,7 @@ class DuaLeoTruyen : ParsedHttpSource() {
         genre.map { it.name }.toTypedArray(),
     )
 
-    // copy([...document.querySelectorAll(".sub_menu .li_sub a")].map((e) => `Genre("${e.textContent.trim()}", "${new URL(e).pathname.replace("/", "")}"),`).join("\n"))
-    // "Tất cả" and "Truyện full" are custom genres that are lumped in to make my life easier.
+    // Danh sách thể loại có thể cần cập nhật nếu trang web thay đổi
     private fun getGenreList() = listOf(
         Genre("Top Ngày", "top-ngay.html"),
         Genre("Top Tuần", "top-tuan.html"),
