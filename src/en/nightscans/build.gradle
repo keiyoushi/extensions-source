@@ -3,7 +3,7 @@ ext {
     extClass = '.NightScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://nightsup.net'
-    overrideVersionCode = 11
+    overrideVersionCode = 12
     isNsfw = true
 }
 
