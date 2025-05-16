@@ -2,7 +2,7 @@ ext {
     extName = 'BirdToon'
     extClass = '.BirdToon'
     themePkg = 'madara'
-    baseUrl = 'https://birdtoon.org'
+    baseUrl = 'https://birdtoon.shop'
     overrideVersionCode = 2
     isNsfw = true
 }
