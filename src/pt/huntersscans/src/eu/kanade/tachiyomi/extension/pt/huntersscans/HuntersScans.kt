@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 
 class HuntersScans : Madara(
     "Hunters Scan",
-    "https://hunterscomics.com",
+    "https://readhunters.xyz",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
 ) {
@@ -17,9 +17,9 @@ class HuntersScans : Madara(
         .readTimeout(3, TimeUnit.MINUTES)
         .build()
 
-    override val mangaSubString = "series"
+    override val mangaSubString = "comics"
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val useNewChapterEndpoint = true
 }
