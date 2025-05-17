@@ -4,6 +4,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -36,33 +46,55 @@ data class YomuMangasSeriesDto(
     val status: String,
     val authors: List<String>? = emptyList(),
     val artists: List<String>? = emptyList(),
+    @Serializable(with = YomuMangasGenreDtoSerializer::class)
     val genres: List<YomuMangasGenreDto>? = emptyList(),
     val description: String? = null,
 ) {
+
+    val genre: String?
+        get() = genres
+            ?.filter { it.name.equals("unknown").not() }
+            ?.joinToString { it.name }
 
     fun toSManga(): SManga = SManga.create().apply {
         title = this@YomuMangasSeriesDto.title
         author = authors.orEmpty().joinToString { it.trim() }
         artist = artists.orEmpty().joinToString { it.trim() }
-        genre = genres.orEmpty()
-            .sortedBy { it.name }
-            .joinToString { it.name.trim() }
+        genre = this@YomuMangasSeriesDto.genre
         description = this@YomuMangasSeriesDto.description?.trim()
         status = when (this@YomuMangasSeriesDto.status) {
-            "RELEASING" -> SManga.ONGOING
-            "FINISHED" -> SManga.COMPLETED
+            "ONGOING" -> SManga.ONGOING
+            "COMPLETE" -> SManga.COMPLETED
             "HIATUS" -> SManga.ON_HIATUS
             "CANCELLED" -> SManga.CANCELLED
-            "TRANSLATING" -> SManga.PUBLISHING_FINISHED
+            "PLANNED" -> SManga.PUBLISHING_FINISHED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = cover?.let { "${YomuMangas.CDN_URL}/$it" }
-        url = "/manga/$id/$slug"
+        thumbnail_url = cover?.let { "${YomuMangas.CDN_URL}/images/${it.substringAfter("//")}" }
+        url = "/mangas/$id/$slug"
     }
 }
 
 @Serializable
 data class YomuMangasGenreDto(val name: String)
+
+private object YomuMangasGenreDtoSerializer : JsonTransformingSerializer<List<YomuMangasGenreDto>>(
+    ListSerializer(YomuMangasGenreDto.serializer()),
+) {
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        return JsonArray(
+            element.jsonArray.map { jsonElement ->
+                jsonElement.takeIf { it.isObject } ?: buildJsonObject {
+                    genresList.firstOrNull { it.id.equals(jsonElement.jsonPrimitive.intOrNull) }?.let {
+                        put("name", JsonPrimitive(it.name))
+                    } ?: put("name", JsonPrimitive("unknown"))
+                }
+            },
+        )
+    }
+
+    private val JsonElement.isObject get() = this is JsonObject
+}
 
 @Serializable
 data class YomuMangasChaptersDto(val chapters: List<YomuMangasChapterDto> = emptyList())
@@ -79,7 +111,7 @@ data class YomuMangasChapterDto(
         name = "Capítulo ${chapter.toString().removeSuffix(".0")}"
         date_upload = runCatching { DATE_FORMATTER.parse(uploadedAt)?.time }
             .getOrNull() ?: 0L
-        url = "/manga/${series.id}/${series.slug}/chapter/$id#$chapter"
+        url = "/mangas/${series.id}/${series.slug}/$chapter"
     }
 
     companion object {
@@ -88,9 +120,6 @@ data class YomuMangasChapterDto(
         }
     }
 }
-
-@Serializable
-data class YomuMangasChapterDetailsDto(val chapter: YomuMangasChapterDto)
 
 @Serializable
 data class YomuMangasImageDto(val uri: String)
