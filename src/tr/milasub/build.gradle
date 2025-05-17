@@ -2,7 +2,7 @@ ext {
     extName = 'MilaSub'
     extClass = '.MilaSub'
     themePkg = 'madara'
-    baseUrl = 'https://milascan.com'
+    baseUrl = 'https://www.milascan.com'
     overrideVersionCode = 2
     isNsfw = true
 }
