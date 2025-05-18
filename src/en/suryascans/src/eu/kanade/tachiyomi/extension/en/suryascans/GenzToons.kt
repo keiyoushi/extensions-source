@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.suryascans
 
 import eu.kanade.tachiyomi.multisrc.keyoapp.Keyoapp
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.FilterList
 import java.util.concurrent.TimeUnit
 
 class GenzToons : Keyoapp(
@@ -16,4 +17,6 @@ class GenzToons : Keyoapp(
         .writeTimeout(90, TimeUnit.SECONDS)
         .readTimeout(90, TimeUnit.SECONDS)
         .build()
+
+    override fun fetchPopularManga(page: Int) = fetchSearchManga(page, "", FilterList())
 }
