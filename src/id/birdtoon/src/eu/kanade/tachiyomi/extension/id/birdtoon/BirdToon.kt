@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class BirdToon : Madara(
     "BirdToon",
-    "https://birdtoon.org",
+    "https://birdtoon.shop",
     "id",
 ) {
     override val mangaSubString = "komik"
