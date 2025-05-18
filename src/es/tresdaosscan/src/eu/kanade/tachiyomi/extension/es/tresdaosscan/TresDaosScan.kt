@@ -7,7 +7,7 @@ import java.util.Locale
 
 class TresDaosScan : MangaThemesia(
     "Tres Daos Scan",
-    "https://tresdaos.com",
+    "https://3daos.mewingzone.com",
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
