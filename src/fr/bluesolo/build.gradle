@@ -1,0 +1,10 @@
+ext {
+    extName = 'Blue Solo'
+    extClass = '.BlueSolo'
+    themePkg = 'pizzareader'
+    baseUrl = 'https://bluesolo.org/'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
