@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.yomumangas
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -109,8 +110,7 @@ data class YomuMangasChapterDto(
 
     fun toSChapter(series: YomuMangasSeriesDto): SChapter = SChapter.create().apply {
         name = "Capítulo ${chapter.toString().removeSuffix(".0")}"
-        date_upload = runCatching { DATE_FORMATTER.parse(uploadedAt)?.time }
-            .getOrNull() ?: 0L
+        date_upload = DATE_FORMATTER.tryParse(uploadedAt)
         url = "/mangas/${series.id}/${series.slug}/$chapter"
     }
 
