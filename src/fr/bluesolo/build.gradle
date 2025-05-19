@@ -2,8 +2,8 @@ ext {
     extName = 'Blue Solo'
     extClass = '.BlueSolo'
     themePkg = 'pizzareader'
-    baseUrl = 'https://bluesolo.org/'
-    overrideVersionCode = 1
+    baseUrl = 'https://bluesolo.org'
+    overrideVersionCode = 0
     isNsfw = false
 }
 
