@@ -180,15 +180,15 @@ abstract class Comick(
         }.also(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
-            key = SCORE_FILTERING_PREF
+            key = CHAPTER_SCORE_FILTERING_PREF
             title = intl["chapter_score_filtering_title"]
             summaryOff = intl["chapter_score_filtering_off"]
             summaryOn = intl["chapter_score_filtering_on"]
-            setDefaultValue(SCORE_FILTERING_DEFAULT)
+            setDefaultValue(CHAPTER_SCORE_FILTERING_DEFAULT)
 
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit()
-                    .putBoolean(SCORE_FILTERING_PREF, newValue as Boolean)
+                    .putBoolean(CHAPTER_SCORE_FILTERING_PREF, newValue as Boolean)
                     .commit()
             }
         }.also(screen::addPreference)
@@ -238,8 +238,8 @@ abstract class Comick(
     private val SharedPreferences.scorePosition: String
         get() = getString(SCORE_POSITION_PREF, SCORE_POSITION_DEFAULT) ?: SCORE_POSITION_DEFAULT
 
-    private val SharedPreferences.scoreFiltering: Boolean
-        get() = getBoolean(SCORE_FILTERING_PREF, SCORE_FILTERING_DEFAULT)
+    private val SharedPreferences.chapterScoreFiltering: Boolean
+        get() = getBoolean(CHAPTER_SCORE_FILTERING_PREF, CHAPTER_SCORE_FILTERING_DEFAULT)
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", "$baseUrl/")
@@ -564,7 +564,7 @@ abstract class Comick(
                 publishedChapter && noGroupBlock
             }
 
-        if (preferences.scoreFiltering) {
+        if (preferences.chapterScoreFiltering) {
             val chapterScores = chapters.fold(mutableMapOf<String, Pair<Int, Chapter>>()) { map, chapter ->
                 val score = chapter.upCount - chapter.downCount
                 val existing = map[chapter.chap]
@@ -657,8 +657,8 @@ abstract class Comick(
         const val SCORE_POSITION_DEFAULT = "top"
         private const val LOCAL_TITLE_PREF = "LocalTitle"
         private const val LOCAL_TITLE_DEFAULT = false
-        private const val SCORE_FILTERING_PREF = "ScoreAutoFiltering"
-        private const val SCORE_FILTERING_DEFAULT = false
+        private const val CHAPTER_SCORE_FILTERING_PREF = "ScoreAutoFiltering"
+        private const val CHAPTER_SCORE_FILTERING_DEFAULT = false
         private const val LIMIT = 20
         private const val CHAPTERS_LIMIT = 99999
     }
