@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.territoriolealtad
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
@@ -16,6 +16,6 @@ class TerritorioLealtad : Madara(
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(baseUrl.toHttpUrl(), 2)
         .build()
 }

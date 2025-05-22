@@ -6,12 +6,12 @@ import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.multisrc.mmrcms.MMRCMS
 import eu.kanade.tachiyomi.multisrc.mmrcms.SuggestionDto
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -29,7 +29,7 @@ class MangasIn : MMRCMS(
     dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
 ) {
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
+        .rateLimit(baseUrl.toHttpUrl(), 1)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

@@ -2,20 +2,20 @@ package eu.kanade.tachiyomi.extension.id.pojokmanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class PojokManga : Madara("Pojok Manga", "https://pojokmanga.info", "id", SimpleDateFormat("MMM dd, yyyy", Locale.US)) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(10, 2, TimeUnit.SECONDS)
+        .rateLimit(10, 2.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

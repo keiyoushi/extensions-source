@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.darthsdroids
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,13 +9,13 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 // Dear Darths & Droids creators:
 // I’m sorry if this extension causes too much traffic for your site.
@@ -28,7 +27,7 @@ class DarthsDroids : HttpSource() {
     override val lang = "en"
     override val supportsLatest = false
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
+        .rateLimit(baseUrl.toHttpUrl(), 10)
         .build()
 
     // Picks a thumbnail from the profile pictures of the »cast« pages:

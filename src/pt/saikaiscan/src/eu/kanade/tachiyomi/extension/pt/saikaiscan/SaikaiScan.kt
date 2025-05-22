@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.pt.saikaiscan
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -17,6 +17,7 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import kotlin.time.Duration.Companion.seconds
 
 class SaikaiScan : HttpSource() {
 
@@ -29,8 +30,8 @@ class SaikaiScan : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(API_URL.toHttpUrl(), 1, 2)
-        .rateLimitHost(IMAGE_SERVER_URL.toHttpUrl(), 1, 1)
+        .rateLimit(API_URL.toHttpUrl(), 1, 2.seconds)
+        .rateLimit(IMAGE_SERVER_URL.toHttpUrl(), 1)
         .build()
 
     private val json: Json by injectLazy()

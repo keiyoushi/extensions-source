@@ -5,10 +5,10 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
@@ -39,7 +39,7 @@ class TempleScanEsp :
 
     override val client by lazy {
         super.client.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+            .rateLimit(baseUrl.toHttpUrl(), 3)
             .build()
     }
 

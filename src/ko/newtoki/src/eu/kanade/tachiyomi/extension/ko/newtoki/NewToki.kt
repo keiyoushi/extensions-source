@@ -4,7 +4,6 @@ import android.content.SharedPreferences
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -23,6 +23,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * NewToki Source
@@ -43,7 +44,7 @@ abstract class NewToki(
 
     private fun buildClient(withRateLimit: Boolean) =
         network.cloudflareClient.newBuilder()
-            .apply { if (withRateLimit) rateLimit(1, preferences.rateLimitPeriod.toLong()) }
+            .apply { if (withRateLimit) rateLimit(1, preferences.rateLimitPeriod.toLong().seconds) }
             .addInterceptor(DomainInterceptor) // not rate-limited
             .connectTimeout(10, TimeUnit.SECONDS) // fail fast
             .build()

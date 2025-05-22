@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.all.mangaup
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -34,8 +34,8 @@ class MangaUp(override val lang: String) : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::thumbnailIntercept)
-        .rateLimitHost(API_URL.toHttpUrl(), 1)
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(API_URL.toHttpUrl(), 1)
+        .rateLimit(baseUrl.toHttpUrl(), 2)
         .build()
 
     private val json: Json by injectLazy()

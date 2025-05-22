@@ -1,11 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.drakescans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import java.util.concurrent.TimeUnit
 
 class DrakeScans : MangaThemesia(
     "Drake Scans",
@@ -16,7 +15,7 @@ class DrakeScans : MangaThemesia(
     override val versionId = 2
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1, TimeUnit.SECONDS)
+        .rateLimit(baseUrl.toHttpUrl(), 3)
         .build()
 
     override fun imageRequest(page: Page): Request {

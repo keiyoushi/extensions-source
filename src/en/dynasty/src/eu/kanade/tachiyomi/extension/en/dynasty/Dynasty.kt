@@ -7,7 +7,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -18,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -31,6 +31,7 @@ import okhttp3.Response
 import okio.use
 import org.jsoup.Jsoup
 import rx.Observable
+import kotlin.time.Duration.Companion.seconds
 
 open class Dynasty : HttpSource(), ConfigurableSource {
 
@@ -50,7 +51,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::fetchCoverUrlInterceptor)
         .addInterceptor(::coverInterceptor)
-        .rateLimit(1, 2)
+        .rateLimit(1, 2.seconds)
         .build()
 
     private val coverClient = network.cloudflareClient

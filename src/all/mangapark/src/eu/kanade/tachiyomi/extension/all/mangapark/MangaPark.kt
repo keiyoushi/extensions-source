@@ -7,7 +7,6 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
@@ -58,7 +58,7 @@ class MangaPark(
             addInterceptor(::siteSettingsInterceptor)
             addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
         }
-        rateLimitHost(apiUrl.toHttpUrl(), 1)
+        rateLimit(apiUrl.toHttpUrl(), 1)
         // intentionally after rate limit interceptor so thumbnails are not rate limited
         addInterceptor(::thumbnailDomainInterceptor)
     }.build()

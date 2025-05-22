@@ -1,15 +1,15 @@
 package eu.kanade.tachiyomi.extension.pt.universohentai
 
 import eu.kanade.tachiyomi.multisrc.gattsu.Gattsu
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class UniversoHentai : Gattsu(
     "Universo Hentai",
@@ -18,7 +18,7 @@ class UniversoHentai : Gattsu(
 ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 
     override fun latestUpdatesSelector() = "div.meio div.videos div.video a[href^=$baseUrl]:not(:has(span.selo-hd))"

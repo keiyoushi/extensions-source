@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.es.manhwalatino
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -22,7 +22,7 @@ class ManhwaLatino : Madara(
 ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
+        .rateLimit(baseUrl.toHttpUrl(), 1)
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder()

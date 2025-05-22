@@ -2,13 +2,13 @@ package eu.kanade.tachiyomi.extension.en.mangafox
 
 import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -39,7 +39,7 @@ class MangaFox : ParsedHttpSource() {
     private val json by injectLazy<Json>()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 1)
+        .rateLimit(1)
         // Force readway=2 cookie to get all page URLs at once
         .cookieJar(
             object : CookieJar {

@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.mymangacms
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -45,7 +45,7 @@ abstract class MyMangaCMS(
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder().apply {
-        rateLimit(3, 1)
+        rateLimit(3)
         connectTimeout(1, TimeUnit.MINUTES)
         readTimeout(1, TimeUnit.MINUTES)
         writeTimeout(1, TimeUnit.MINUTES)

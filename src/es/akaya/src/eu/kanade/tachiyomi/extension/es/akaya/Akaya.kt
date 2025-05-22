@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.es.akaya
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -35,7 +35,7 @@ class Akaya : ParsedHttpSource() {
     override val supportsLatest: Boolean = true
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 1)
+        .rateLimit(baseUrl.toHttpUrl(), 1)
         .addInterceptor { chain ->
             val request = chain.request()
             if (!request.url.toString().startsWith("$baseUrl/serie")) return@addInterceptor chain.proceed(request)

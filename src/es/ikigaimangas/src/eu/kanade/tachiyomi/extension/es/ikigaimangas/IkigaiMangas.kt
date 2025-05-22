@@ -7,7 +7,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -28,6 +28,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.concurrent.thread
+import kotlin.time.Duration.Companion.seconds
 
 class IkigaiMangas : HttpSource(), ConfigurableSource {
 
@@ -77,8 +78,8 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()
-            .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
-            .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
+            .rateLimit(fetchedDomainUrl.toHttpUrl(), 1, 2.seconds)
+            .rateLimit(apiBaseUrl.toHttpUrl(), 2)
             .addNetworkInterceptor(cookieInterceptor)
             .build()
     }

@@ -2,13 +2,13 @@ package eu.kanade.tachiyomi.extension.en.voyceme
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -20,7 +20,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
-import java.util.concurrent.TimeUnit
 
 class VoyceMe : HttpSource() {
 
@@ -36,8 +35,8 @@ class VoyceMe : HttpSource() {
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(GRAPHQL_URL.toHttpUrl(), 1, 1, TimeUnit.SECONDS)
-        .rateLimitHost(STATIC_URL.toHttpUrl(), 2, 1, TimeUnit.SECONDS)
+        .rateLimit(GRAPHQL_URL.toHttpUrl(), 1)
+        .rateLimit(STATIC_URL.toHttpUrl(), 2)
         .build()
 
     private val json: Json by injectLazy()

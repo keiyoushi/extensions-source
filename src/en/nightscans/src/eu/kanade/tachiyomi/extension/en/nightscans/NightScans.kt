@@ -3,11 +3,11 @@ package eu.kanade.tachiyomi.extension.en.nightscans
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaAlt
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesiaPaidChapterHelper
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class NightScans : MangaThemesiaAlt("NIGHT SCANS", "https://nightsup.net", "en", "/series") {
 
@@ -15,7 +15,7 @@ class NightScans : MangaThemesiaAlt("NIGHT SCANS", "https://nightsup.net", "en",
     override val slugRegex = Regex("""^(\d+(st)?-)""")
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(20, 4, TimeUnit.SECONDS)
+        .rateLimit(20, 4.seconds)
         .build()
 
     private val paidChapterHelper = MangaThemesiaPaidChapterHelper()

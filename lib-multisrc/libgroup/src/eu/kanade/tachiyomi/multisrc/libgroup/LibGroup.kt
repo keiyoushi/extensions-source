@@ -13,8 +13,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -23,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -76,8 +75,8 @@ abstract class LibGroup(
     override val client by lazy {
         network.cloudflareClient.newBuilder()
             .rateLimit(3)
-            .rateLimitHost(apiDomain.toHttpUrl(), 1)
-            .rateLimitHost(baseUrl.toHttpUrl(), 1)
+            .rateLimit(apiDomain.toHttpUrl(), 1)
+            .rateLimit(baseUrl.toHttpUrl(), 1)
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(::checkForToken)

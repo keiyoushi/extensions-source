@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -22,6 +21,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
@@ -34,7 +34,6 @@ import org.jsoup.nodes.Document
 import rx.Observable
 import java.net.URI
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
@@ -214,7 +213,7 @@ class ProjectSuki : HttpSource(), ConfigurableSource {
             userAgentType = preferences.shared.getPrefUAType(),
             customUA = preferences.shared.getPrefCustomUA(),
         )
-        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .rateLimit(2)
         .build()
 
     /**

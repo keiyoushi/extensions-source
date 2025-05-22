@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.plumacomics
 
 import eu.kanade.tachiyomi.multisrc.yuyu.YuYu
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class PlumaComics : YuYu(
     "Pluma Comics",

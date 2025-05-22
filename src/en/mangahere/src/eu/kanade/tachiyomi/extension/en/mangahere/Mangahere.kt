@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.mangahere
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -21,6 +21,7 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class Mangahere : ParsedHttpSource() {
 
@@ -49,7 +50,7 @@ class Mangahere : ParsedHttpSource() {
         .build()
 
     override val client: OkHttpClient = notRateLimitClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
+        .rateLimit(baseUrl.toHttpUrl(), 1, 2.seconds)
         .build()
 
     override fun popularMangaSelector() = ".manga-list-1-list li"

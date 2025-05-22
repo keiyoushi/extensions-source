@@ -22,6 +22,7 @@ import rx.Single
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class PepperCarrot : HttpSource(), ConfigurableSource {
     override val name = TITLE

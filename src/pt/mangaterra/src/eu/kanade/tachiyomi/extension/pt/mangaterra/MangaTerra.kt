@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.pt.mangaterra
 
 import eu.kanade.tachiyomi.multisrc.terrascan.TerraScan
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import java.util.concurrent.TimeUnit
+import keiyoushi.network.rateLimit
+import kotlin.time.Duration.Companion.seconds
 
 class MangaTerra : TerraScan(
     "Manga Terra",
@@ -10,6 +10,6 @@ class MangaTerra : TerraScan(
     "pt-BR",
 ) {
     override val client = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 }

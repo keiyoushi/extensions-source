@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.yurimoonsub
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import org.jsoup.nodes.Document
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets

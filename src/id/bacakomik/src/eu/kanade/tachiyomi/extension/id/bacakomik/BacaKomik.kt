@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.id.bacakomik
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -17,6 +17,7 @@ import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class BacaKomik : ParsedHttpSource() {
     override val name = "BacaKomik"
@@ -31,7 +32,7 @@ class BacaKomik : ParsedHttpSource() {
     override val id = 4383360263234319058
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(12, 3)
+        .rateLimit(12, 3.seconds)
         .build()
 
     override fun popularMangaRequest(page: Int): Request {

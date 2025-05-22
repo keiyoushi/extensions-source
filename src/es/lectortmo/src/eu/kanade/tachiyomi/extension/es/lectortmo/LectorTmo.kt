@@ -7,7 +7,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -17,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -30,10 +30,10 @@ import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
+import kotlin.time.Duration.Companion.seconds
 
 class LectorTmo : ParsedHttpSource(), ConfigurableSource {
 
@@ -75,7 +75,7 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
     override val client: OkHttpClient by lazy {
         network.cloudflareClient.newBuilder()
             .ignoreAllSSLErrors()
-            .rateLimit(3, 1, TimeUnit.SECONDS)
+            .rateLimit(3)
             .build()
     }
 
@@ -93,7 +93,7 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
                 }
                 response
             }
-            .rateLimit(1, 3, TimeUnit.SECONDS)
+            .rateLimit(1, 3.seconds)
             .build()
     }
 

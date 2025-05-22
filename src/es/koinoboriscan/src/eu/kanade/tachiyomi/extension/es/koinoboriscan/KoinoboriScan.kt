@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.es.koinoboriscan
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Request
@@ -43,7 +43,7 @@ class KoinoboriScan : HttpSource() {
     }
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2, 1)
+        .rateLimit(2)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()

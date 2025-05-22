@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.argoscomics
 
 import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody

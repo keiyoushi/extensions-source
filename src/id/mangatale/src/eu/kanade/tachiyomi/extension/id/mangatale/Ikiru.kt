@@ -1,18 +1,19 @@
 package eu.kanade.tachiyomi.extension.id.mangatale
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
+import kotlin.time.Duration.Companion.seconds
 
 class Ikiru : MangaThemesia("Ikiru", "https://ikiru.world", "id") {
 
     override val id = 1532456597012176985
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(12, 3)
+        .rateLimit(12, 3.seconds)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
             val mime = response.headers["Content-Type"]

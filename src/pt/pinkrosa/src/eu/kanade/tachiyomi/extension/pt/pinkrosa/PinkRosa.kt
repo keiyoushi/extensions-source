@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.pinkrosa
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class PinkRosa : ZeistManga(
     "Pink Rosa",

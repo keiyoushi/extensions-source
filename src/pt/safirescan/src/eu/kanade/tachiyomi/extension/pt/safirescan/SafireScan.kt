@@ -1,11 +1,10 @@
 package eu.kanade.tachiyomi.extension.pt.safirescan
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.Response
-import java.util.concurrent.TimeUnit
 
 class SafireScan : ZeistManga(
     "Safire Scan",
@@ -13,7 +12,7 @@ class SafireScan : ZeistManga(
     "pt-BR",
 ) {
     override val client = super.client.newBuilder()
-        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .rateLimit(2)
         .build()
 
     override val popularMangaSelector = "div.PopularPosts.mt-4 div.grid > article"

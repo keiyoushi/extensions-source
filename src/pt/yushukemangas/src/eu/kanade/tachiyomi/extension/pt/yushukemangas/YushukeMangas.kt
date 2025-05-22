@@ -1,7 +1,8 @@
 package eu.kanade.tachiyomi.extension.pt.yushukemangas
 
 import eu.kanade.tachiyomi.multisrc.yuyu.YuYu
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
+import kotlin.time.Duration.Companion.seconds
 
 class YushukeMangas : YuYu(
     "Yushuke Mangas",
@@ -10,7 +11,7 @@ class YushukeMangas : YuYu(
 ) {
 
     override val client = super.client.newBuilder()
-        .rateLimit(1, 2)
+        .rateLimit(1, 2.seconds)
         .build()
 
     override val versionId = 2

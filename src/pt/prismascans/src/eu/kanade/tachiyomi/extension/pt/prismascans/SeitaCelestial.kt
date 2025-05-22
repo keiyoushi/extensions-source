@@ -2,14 +2,14 @@ package eu.kanade.tachiyomi.extension.pt.prismascans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class SeitaCelestial : MangaThemesia(
     "Seita Celestial",
@@ -23,7 +23,7 @@ class SeitaCelestial : MangaThemesia(
     override val id: Long = 8168108118738519332
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {

@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.id.otascans
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
+import keiyoushi.network.rateLimit
 import org.jsoup.nodes.Document
 
 class OtaScans : MangaThemesia(

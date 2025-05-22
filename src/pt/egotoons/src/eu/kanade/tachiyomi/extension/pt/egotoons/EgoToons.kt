@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.egotoons
 
 import eu.kanade.tachiyomi.multisrc.yuyu.YuYu
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class EgoToons : YuYu(
     "Ego Toons",

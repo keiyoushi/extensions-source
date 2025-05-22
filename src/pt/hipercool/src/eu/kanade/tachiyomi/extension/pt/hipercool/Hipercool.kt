@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.pt.hipercool
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class Hipercool : Madara("HipercooL", "https://hiper.cool", "pt-BR") {
 
@@ -11,6 +11,6 @@ class Hipercool : Madara("HipercooL", "https://hiper.cool", "pt-BR") {
     override val versionId = 2
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 }

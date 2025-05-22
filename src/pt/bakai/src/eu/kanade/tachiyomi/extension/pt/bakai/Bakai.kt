@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.bakai
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import okhttp3.Cookie
 import okhttp3.CookieJar
@@ -24,7 +24,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.io.IOException
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class Bakai : ParsedHttpSource() {
 
@@ -38,7 +38,7 @@ class Bakai : ParsedHttpSource() {
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
+            .rateLimit(baseUrl.toHttpUrl(), 1, 2.seconds)
             .addInterceptor(::resolvePathSegment)
             .cookieJar(
                 object : CookieJar {
