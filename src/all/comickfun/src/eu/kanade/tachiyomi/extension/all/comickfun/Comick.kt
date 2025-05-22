@@ -547,7 +547,7 @@ abstract class Comick(
 
         val currentTimestamp = System.currentTimeMillis()
 
-        var chapters = chapterListResponse.chapters
+        return chapterListResponse.chapters
             .filter {
                 val publishTime = try {
                     publishedDateFormat.parse(it.publishedAt)!!.time
@@ -563,16 +563,18 @@ abstract class Comick(
 
                 publishedChapter && noGroupBlock
             }
+            .filterOnScore(preferences.chapterScoreFiltering)
+            .map { it.toSChapter(mangaUrl) }
+    }
 
-        if (preferences.chapterScoreFiltering) {
-            chapters = chapters.groupBy { it.chap }
+    private fun List<Chapter>.filterOnScore(shouldFilter: Boolean): Collection<Chapter> {
+        if (shouldFilter) {
+            return groupBy { it.chap }
                 .mapValues { (_, chapters) -> chapters.maxBy { it.score } }
                 .values
-                .toList()
+        } else {
+            return this
         }
-
-        return chapters
-            .map { it.toSChapter(mangaUrl) }
     }
 
     private val publishedDateFormat =
