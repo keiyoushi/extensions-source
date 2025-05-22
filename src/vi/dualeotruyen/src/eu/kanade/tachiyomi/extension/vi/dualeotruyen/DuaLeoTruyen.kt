@@ -28,19 +28,27 @@ class DuaLeoTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Dưa Leo Truyện"
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
     private val isCi = System.getenv("CI") == "true"
 
     override val baseUrl: String get() = when {
         isCi -> defaultBaseUrl
-        else -> {
-            preferences.getString(BASE_URL_PREF, null)?.takeIf { it.isNotBlank() }
-                ?: defaultBaseUrl.also {
-                    preferences.edit()
-                        .putString(BASE_URL_PREF, defaultBaseUrl)
-                        .apply()
-                }
+        else -> preferences.prefBaseUrl
+    }
+
+    private var cachedBaseUrl: String = ""
+    private val SharedPreferences.prefBaseUrl: String get() {
+        return cachedBaseUrl.takeIf(String::isNotBlank)
+            ?: getString(BASE_URL_PREF, defaultBaseUrl)!!.also { cachedBaseUrl = it }
+    }
+
+    private val preferences: SharedPreferences by getPreferencesLazy {
+        getString(DEFAULT_BASE_URL_PREF, "").let { domain ->
+            if (domain != defaultBaseUrl) {
+                edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
         }
     }
 
@@ -248,6 +256,7 @@ class DuaLeoTruyen : ParsedHttpSource(), ConfigurableSource {
 
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val BASE_URL_PREF_TITLE = "Edit URL"
         private const val URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting. Leave blank to use the default URL"
         private const val RESTART_APP_MESSAGE = "Restart app to apply new setting."
