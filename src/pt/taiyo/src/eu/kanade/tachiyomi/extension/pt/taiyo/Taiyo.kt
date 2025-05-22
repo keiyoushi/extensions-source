@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.extension.pt.taiyo.dto.SearchResultDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -58,8 +58,8 @@ class Taiyo : ParsedHttpSource() {
     private var bearerToken: String = preferences.getString(BEARER_TOKEN_PREF, "").toString()
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
-        .rateLimitHost(IMG_CDN.toHttpUrl(), 2)
+        .rateLimit(baseUrl.toHttpUrl(), 2)
+        .rateLimit(IMG_CDN.toHttpUrl(), 2)
         .addInterceptor(::authorizationInterceptor)
         .build()
 

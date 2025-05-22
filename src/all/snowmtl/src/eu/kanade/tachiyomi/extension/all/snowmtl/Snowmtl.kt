@@ -11,9 +11,9 @@ import eu.kanade.tachiyomi.extension.all.snowmtl.translator.bing.BingTranslator
 import eu.kanade.tachiyomi.extension.all.snowmtl.translator.google.GoogleTranslator
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations
 import eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors.ComposedImageInterceptor
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 @RequiresApi(Build.VERSION_CODES.O)
 class Snowmtl(
@@ -39,7 +39,7 @@ class Snowmtl(
         preferences.getString(TRANSLATOR_PROVIDER_PREF, translators.first())!!
 
     private val clientUtils = network.cloudflareClient.newBuilder()
-        .rateLimit(3, 2, TimeUnit.SECONDS)
+        .rateLimit(3, 2.seconds)
         .build()
 
     override val useDefaultComposedImageInterceptor = false

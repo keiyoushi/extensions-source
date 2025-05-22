@@ -1,10 +1,9 @@
 package eu.kanade.tachiyomi.extension.es.esmi2manga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class EsMi2Manga : Madara(
     "Es.Mi2Manga",
@@ -13,7 +12,7 @@ class EsMi2Manga : Madara(
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
     override val client = super.client.newBuilder()
-        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .rateLimit(2)
         .build()
 
     override fun popularMangaSelector() = "div.site-content div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector"

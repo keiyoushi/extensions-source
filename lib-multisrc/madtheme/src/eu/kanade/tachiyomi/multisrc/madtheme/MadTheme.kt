@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.multisrc.madtheme
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -26,7 +26,7 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 abstract class MadTheme(
     override val name: String,
@@ -38,7 +38,7 @@ abstract class MadTheme(
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 1, TimeUnit.SECONDS)
+        .rateLimit(1)
         .build()
 
     protected open val useLegacyApi = false
@@ -48,7 +48,7 @@ abstract class MadTheme(
     // TODO: better cookie sharing
     // TODO: don't count cached responses against rate limit
     private val chapterClient: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 12, TimeUnit.SECONDS)
+        .rateLimit(1, 12.seconds)
         .build()
 
     override fun headersBuilder() = Headers.Builder().apply {

@@ -1,10 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.lilymanga
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 class LilyManga : Madara(
     "Lily Manga",
@@ -13,7 +14,7 @@ class LilyManga : Madara(
     dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US),
 ) {
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
+        .rateLimit(baseUrl.toHttpUrl(), 1, 2.seconds)
         .build()
 
     override val mangaSubString = "ys"

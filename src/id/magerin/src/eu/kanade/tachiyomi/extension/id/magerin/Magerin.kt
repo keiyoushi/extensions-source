@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.magerin
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class Magerin : ZeistManga("Magerin", "https://www.magerin.com", "id") {
     override val client = super.client.newBuilder()

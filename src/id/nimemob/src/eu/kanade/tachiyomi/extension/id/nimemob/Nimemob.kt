@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.nimemob
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class Nimemob : ZeistManga("Nimemob", "https://www.nimemob.my.id", "id") {
     override val client = super.client.newBuilder()

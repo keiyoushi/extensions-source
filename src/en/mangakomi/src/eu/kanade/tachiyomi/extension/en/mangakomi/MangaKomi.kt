@@ -1,9 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.mangakomi
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
 
 class MangaKomi : Madara(
     "MangaKomi",
@@ -12,6 +11,6 @@ class MangaKomi : Madara(
 ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 1, TimeUnit.SECONDS)
+        .rateLimit(1)
         .build()
 }

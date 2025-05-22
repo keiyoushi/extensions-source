@@ -63,8 +63,9 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
+            minifyEnabled true
             vcsInfo.include false
+            proguardFiles rootProject.file("core/proguard-rules.pro")
         }
     }
 

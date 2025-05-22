@@ -1,8 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.quantumscans
 
 import eu.kanade.tachiyomi.multisrc.heancms.HeanCms
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import java.util.concurrent.TimeUnit
+import keiyoushi.network.rateLimit
 
 class QuantumScans : HeanCms(
     "Quantum Scans",
@@ -13,7 +12,7 @@ class QuantumScans : HeanCms(
     override val versionId = 3
 
     override val client = super.client.newBuilder()
-        .rateLimit(3, 1, TimeUnit.SECONDS)
+        .rateLimit(3)
         .build()
 
     override val useNewChapterEndpoint = true

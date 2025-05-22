@@ -1,13 +1,13 @@
 package eu.kanade.tachiyomi.extension.pt.nocturnesummer
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class NocturneSummer : Madara(
     "Nocturne Summer",
@@ -17,7 +17,7 @@ class NocturneSummer : Madara(
 ) {
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

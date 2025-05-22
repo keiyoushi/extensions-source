@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.lmtoonline
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -16,7 +16,7 @@ class Jobsibe : Madara(
     override val id = 3752522006902890093
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+        .rateLimit(baseUrl.toHttpUrl(), 3)
         .build()
 
     override val useNewChapterEndpoint = true

@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ar.arabsdoujin
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class ArabsDoujin : ZeistManga("Arabs Doujin", "https://www.arabsdoujin.online", "ar") {
     override val client = super.client.newBuilder()

@@ -39,7 +39,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.TimeUnit.MINUTES
+import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import kotlin.random.Random
 import kotlin.random.nextUBytes
@@ -305,7 +305,7 @@ class Manhuaren : HttpSource(), ConfigurableSource {
         val authorization = token
         return myRequest(url, "GET", null).newBuilder()
             .addHeader("Authorization", authorization)
-            .cacheControl(CacheControl.Builder().maxAge(10, MINUTES).build())
+            .cacheControl(CacheControl.Builder().maxAge(10, TimeUnit.MINUTES).build())
             .build()
     }
 

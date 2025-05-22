@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.es.leercapitulo
 import android.util.Base64
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -21,6 +21,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 import java.nio.charset.Charset
+import kotlin.time.Duration.Companion.seconds
 
 class LeerCapitulo : ParsedHttpSource() {
     override val name = "LeerCapitulo"
@@ -34,7 +35,7 @@ class LeerCapitulo : ParsedHttpSource() {
     override val baseUrl = "https://www.leercapitulo.co"
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 1, 3)
+        .rateLimit(baseUrl.toHttpUrl(), 1, 3.seconds)
         .build()
 
     private val notRateLimitClient = network.cloudflareClient

@@ -7,13 +7,14 @@ import android.view.View
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
+import kotlin.time.Duration.Companion.seconds
 
 class BokugenTranslation : Madara(
     "BokugenTranslation",
@@ -54,7 +55,7 @@ class BokugenTranslation : Madara(
             }
             chain.proceed(request)
         }
-        .rateLimit(1, 1)
+        .rateLimit(1, 1.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

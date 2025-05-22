@@ -4,13 +4,13 @@ import eu.kanade.tachiyomi.extension.uk.zenko.dtos.ChapterResponseItem
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.MangaDetailsResponse
 import eu.kanade.tachiyomi.extension.uk.zenko.dtos.ZenkoMangaListResponse
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -29,7 +29,7 @@ class Zenko : HttpSource() {
         .add("Referer", "$baseUrl/")
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimitHost(API_URL.toHttpUrl(), 10)
+        .rateLimit(API_URL.toHttpUrl(), 10)
         .build()
 
     override fun getMangaUrl(manga: SManga): String {

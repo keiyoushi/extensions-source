@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.it.hastateam
 
 import eu.kanade.tachiyomi.multisrc.pizzareader.PizzaReader
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.json.Json
 
 class HastaTeam : PizzaReader(

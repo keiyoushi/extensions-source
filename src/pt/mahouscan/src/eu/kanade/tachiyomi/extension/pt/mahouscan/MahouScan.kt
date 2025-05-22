@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.mahouscan
 
 import eu.kanade.tachiyomi.multisrc.slimereadtheme.SlimeReadTheme
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class MahouScan : SlimeReadTheme(
     "MahouScan",

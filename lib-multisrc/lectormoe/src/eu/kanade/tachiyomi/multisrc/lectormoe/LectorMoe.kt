@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.lectormoe
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -31,8 +31,8 @@ abstract class LectorMoe(
     private val json: Json by injectLazy()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 3)
-        .rateLimitHost(apiBaseUrl.toHttpUrl(), 3)
+        .rateLimit(baseUrl.toHttpUrl(), 3)
+        .rateLimit(apiBaseUrl.toHttpUrl(), 3)
         .build()
 
     final override fun headersBuilder(): Headers.Builder = super.headersBuilder()

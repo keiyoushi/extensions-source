@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.spiderscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class SpiderScans : Madara(
     "Spider Scans",

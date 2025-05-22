@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.royalmanga
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class RoyalManga : ZeistManga("Royal Manga", "https://www.royalmanga.com", "fr") {
     override val client = super.client.newBuilder()

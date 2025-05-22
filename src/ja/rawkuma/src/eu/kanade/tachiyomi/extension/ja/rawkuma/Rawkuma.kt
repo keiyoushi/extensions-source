@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.rawkuma
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 
 class Rawkuma : MangaThemesia("Rawkuma", "https://rawkuma.com", "ja") {

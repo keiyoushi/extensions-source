@@ -1,11 +1,10 @@
 package eu.kanade.tachiyomi.extension.es.legendsnofansub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import keiyoushi.network.rateLimit
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class LegnMangas : Madara(
     "LegnMangas",
@@ -16,7 +15,7 @@ class LegnMangas : Madara(
     override val id = 9078720153732517844
 
     override val client = super.client.newBuilder()
-        .rateLimitHost(baseUrl.toHttpUrl(), 2, 1, TimeUnit.SECONDS)
+        .rateLimit(baseUrl.toHttpUrl(), 2)
         .build()
 
     override val useNewChapterEndpoint = true

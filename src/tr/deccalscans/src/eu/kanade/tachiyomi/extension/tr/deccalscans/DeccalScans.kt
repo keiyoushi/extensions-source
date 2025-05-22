@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.tr.deccalscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
 

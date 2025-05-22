@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.maidscan
 
 import eu.kanade.tachiyomi.multisrc.greenshit.GreenShit
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 
 class MaidScan : GreenShit(

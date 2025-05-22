@@ -5,7 +5,6 @@ import android.util.Base64
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -50,10 +50,10 @@ abstract class Bilibili(
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::expiredImageTokenIntercept)
         .addInterceptor(::decryptImageIntercept)
-        .rateLimitHost(baseUrl.toHttpUrl(), 1)
-        .rateLimitHost(CDN_URL.toHttpUrl(), 2)
-        .rateLimitHost(MODIFIED_CDN_URL.toHttpUrl(), 2)
-        .rateLimitHost(COVER_CDN_URL.toHttpUrl(), 2)
+        .rateLimit(baseUrl.toHttpUrl(), 1)
+        .rateLimit(CDN_URL.toHttpUrl(), 2)
+        .rateLimit(MODIFIED_CDN_URL.toHttpUrl(), 2)
+        .rateLimit(COVER_CDN_URL.toHttpUrl(), 2)
         .build()
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()

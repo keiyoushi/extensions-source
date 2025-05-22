@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.windscan
 
 import eu.kanade.tachiyomi.multisrc.greenshit.GreenShit
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 
 class WindScan : GreenShit(
     "Wind Scan",

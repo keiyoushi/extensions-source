@@ -2,9 +2,9 @@ package eu.kanade.tachiyomi.extension.en.sectscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document

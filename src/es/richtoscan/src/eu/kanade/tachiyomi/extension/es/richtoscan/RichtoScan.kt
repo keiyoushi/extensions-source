@@ -1,10 +1,9 @@
 package eu.kanade.tachiyomi.extension.es.richtoscan
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class RichtoScan : Madara(
     "RichtoScan",
@@ -13,7 +12,7 @@ class RichtoScan : Madara(
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.ROOT),
 ) {
     override val client = super.client.newBuilder()
-        .rateLimit(2, 1, TimeUnit.SECONDS)
+        .rateLimit(2)
         .build()
 
     override val useNewChapterEndpoint = true

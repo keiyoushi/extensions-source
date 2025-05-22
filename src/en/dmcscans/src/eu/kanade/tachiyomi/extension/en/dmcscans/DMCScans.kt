@@ -2,17 +2,17 @@ package eu.kanade.tachiyomi.extension.en.dmcscans
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.Genre
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.network.rateLimit
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class DMCScans : ZeistManga("DMC Scans", "https://didascans.blogspot.com", "en") {
     override val client = super.client.newBuilder()
-        .rateLimit(1, 3, TimeUnit.SECONDS)
+        .rateLimit(1, 3.seconds)
         .build()
 
     // ============================== Popular ===============================

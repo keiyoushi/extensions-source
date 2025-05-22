@@ -1,10 +1,10 @@
 package eu.kanade.tachiyomi.extension.pt.maidsecret
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class MaidSecret : Madara(
     "Maid Secret",
@@ -15,6 +15,6 @@ class MaidSecret : Madara(
     override val useNewChapterEndpoint = true
 
     override val client = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 2.seconds)
         .build()
 }

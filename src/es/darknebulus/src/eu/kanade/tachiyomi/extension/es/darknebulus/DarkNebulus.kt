@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.darknebulus
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat

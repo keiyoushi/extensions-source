@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.manhwaz
 
 import eu.kanade.tachiyomi.multisrc.manhwaz.ManhwaZ
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import keiyoushi.network.rateLimit
 import okhttp3.OkHttpClient
 
 class ManhwaZCom : ManhwaZ(
