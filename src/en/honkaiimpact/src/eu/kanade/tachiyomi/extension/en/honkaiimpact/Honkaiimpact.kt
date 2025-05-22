@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.honkaiimpact
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -20,6 +21,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -60,26 +62,25 @@ class Honkaiimpact : ParsedHttpSource() {
     override fun searchMangaSelector() = "a[href*=book]"
     override fun searchMangaNextPageSelector(): String? = null
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        searchQuery = query
-        return GET("$baseUrl/book", headers) // .newBuilder().tag(String::class.java, searchQuery).build()
+        return GET("$baseUrl/book", headers)
     }
     override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-
-        val mangas = document.select(searchMangaSelector()).map { element ->
-            searchMangaFromElement(element)
-        }.filter { manga ->
-            println("Manga title: ${manga.title}")
-            manga.title.contains(searchQuery, ignoreCase = true) || searchQuery.isBlank()
-        }
-
-        val hasNextPage = searchMangaNextPageSelector()?.let { selector ->
-            document.select(selector).first()
-        } != null
-
-        return MangasPage(mangas, hasNextPage)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response ->
+                val document = response.asJsoup()
+                val mangas = document.select(searchMangaSelector()).map { element ->
+                    searchMangaFromElement(element)
+                }.filter { manga ->
+                    query.isEmpty() || manga.title.contains(query.trim(), ignoreCase = true)
+                }
+                val hasNextPage = searchMangaNextPageSelector()?.let { selector ->
+                    document.select(selector).first()
+                } != null
+                MangasPage(mangas, hasNextPage)
+            }
     }
 
     private fun mangaFromElement(element: Element): SManga {
