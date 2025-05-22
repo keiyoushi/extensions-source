@@ -565,15 +565,10 @@ abstract class Comick(
             }
 
         if (preferences.chapterScoreFiltering) {
-            val chapterScores = chapters.fold(mutableMapOf<String, Pair<Int, Chapter>>()) { map, chapter ->
-                val score = chapter.upCount - chapter.downCount
-                val existing = map[chapter.chap]
-                if (existing == null || score > existing.first) {
-                    map[chapter.chap] = Pair(score, chapter)
-                }
-                map
-            }
-            chapters = chapterScores.values.map { it.second }
+            chapters = chapters.groupBy { it.chap }
+                .mapValues { (_, chapters) -> chapters.maxBy { it.score } }
+                .values
+                .toList()
         }
 
         return chapters
