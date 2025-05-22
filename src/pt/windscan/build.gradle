@@ -1,9 +1,9 @@
 ext {
     extName = 'Wind Scan'
     extClass = '.WindScan'
-    themePkg = 'madara'
+    themePkg = 'greenshit'
     baseUrl = 'https://windscan.xyz'
-    overrideVersionCode = 0
+    overrideVersionCode = 41
     isNsfw = true
 }
 
