@@ -236,6 +236,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         // Declare some important values first
         var encryptedLinks = mutableListOf<String>()
+        val useSecondServer = serverPref() == "s2"
 
         // Get script elements
         val scripts = document.select("script")
@@ -248,7 +249,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         for (script in scripts) {
             QuickJs.create().use {
                 val eval =
-                    "let _encryptedString = `${script.data()}`;${remoteConfigItem!!.imageDecryptEval}"
+                    "let _encryptedString = `${script.data()}`;let _useServer2 = $useSecondServer;${remoteConfigItem!!.imageDecryptEval}"
                 val evalResult = (it.evaluate(eval) as String).parseAs<List<String>>()
 
                 // Add results to 'encryptedLinks'
@@ -259,7 +260,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         encryptedLinks = encryptedLinks.let { links ->
             if (remoteConfigItem!!.postDecryptEval != null) {
                 QuickJs.create().use {
-                    val eval = "let _decryptedLinks = ${Json.encodeToString(links)}"
+                    val eval = "let _decryptedLinks = ${Json.encodeToString(links)};let _useServer2 = $useSecondServer"
                     (it.evaluate(eval) as String).parseAs<MutableList<String>>()
                 }
             } else {
@@ -450,9 +451,9 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
             }
 
             val configLink = preferences.getString(
-                IMAGE_REMOTE_CONFIG_PREF.addBustQuery(),
-                IMAGE_REMOTE_CONFIG_DEFAULT.addBustQuery(),
-            ) ?: return null
+                IMAGE_REMOTE_CONFIG_PREF,
+                IMAGE_REMOTE_CONFIG_DEFAULT,
+            )?.addBustQuery() ?: return null
 
             try {
                 val configResponse = client.newCall(GET(configLink)).execute()
