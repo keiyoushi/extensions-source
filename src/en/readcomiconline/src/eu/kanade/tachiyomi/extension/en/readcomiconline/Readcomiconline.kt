@@ -260,7 +260,7 @@ class Readcomiconline : ConfigurableSource, ParsedHttpSource() {
         encryptedLinks = encryptedLinks.let { links ->
             if (remoteConfigItem!!.postDecryptEval != null) {
                 QuickJs.create().use {
-                    val eval = "let _decryptedLinks = ${Json.encodeToString(links)};let _useServer2 = $useSecondServer"
+                    val eval = "let _decryptedLinks = ${Json.encodeToString(links)};let _useServer2 = $useSecondServer;${remoteConfigItem!!.postDecryptEval}"
                     (it.evaluate(eval) as String).parseAs<MutableList<String>>()
                 }
             } else {
