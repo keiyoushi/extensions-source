@@ -1,7 +1,7 @@
 ext {
     extName = 'Multporn'
     extClass = '.Multporn'
-    extVersionCode = 4
+    extVersionCode = 5
     isNsfw = true
 }
 
