@@ -1,38 +1,39 @@
 package eu.kanade.tachiyomi.extension.fr.poseidonscans
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
-import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class PoseidonScans : ParsedHttpSource() {
+class PoseidonScans : HttpSource() {
 
     override val name = "Poseidon Scans"
     override val baseUrl = "https://poseidonscans.fr"
     override val lang = "fr"
     override val supportsLatest = true
+    override val versionId = 1
+    private val nextFPushRegex = Regex("""self\.__next_f\.push\(\s*\[\s*1\s*,\s*"(.*)"\s*\]\s*\)""", RegexOption.DOT_MATCHES_ALL)
 
     override val client = network.cloudflareClient
-    private val json: Json by injectLazy()
 
     private fun String.toAbsoluteUrl(): String {
         return if (this.startsWith("http")) this else baseUrl + this
@@ -46,52 +47,6 @@ class PoseidonScans : ParsedHttpSource() {
         return "$baseUrl/api/covers/$this"
     }
 
-    @kotlinx.serialization.Serializable
-    data class LatestApiManga(
-        val title: String,
-        val slug: String,
-        val coverImage: String?,
-    )
-
-    @kotlinx.serialization.Serializable
-    data class LatestApiResponse(
-        val success: Boolean,
-        val data: List<LatestApiManga> = emptyList(),
-        val total: Int? = null,
-    )
-
-    @kotlinx.serialization.Serializable
-    data class MangaDetailsData(
-        val title: String,
-        val slug: String,
-        val description: String?,
-        val coverImage: String?,
-        val type: String?,
-        val status: String?,
-        val artist: String?,
-        val author: String?,
-        val alternativeNames: String?,
-        val categories: List<CategoryData>? = emptyList(),
-        val chapters: List<ChapterData>? = emptyList(),
-    )
-
-    @kotlinx.serialization.Serializable
-    data class CategoryData(val name: String)
-
-    @kotlinx.serialization.Serializable
-    data class ChapterData(
-        val number: Float,
-        val title: String? = null,
-        val createdAt: String,
-        val isPremium: Boolean? = false,
-    )
-
-    @kotlinx.serialization.Serializable
-    data class PageImageUrlData(
-        val originalUrl: String,
-        val order: Int,
-    )
-
     private val isoDateFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
@@ -101,9 +56,8 @@ class PoseidonScans : ParsedHttpSource() {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val responseBody = response.body.string()
         val apiResponse = try {
-            json.decodeFromString<LatestApiResponse>(responseBody)
+            response.parseAs<LatestApiResponse>()
         } catch (e: Exception) {
             return MangasPage(emptyList(), false)
         }
@@ -126,29 +80,32 @@ class PoseidonScans : ParsedHttpSource() {
         return GET(baseUrl, headers)
     }
 
-    override fun popularMangaSelector(): String =
-        "main > section:nth-of-type(3) div.flex.gap-4 > div.group"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            val anchor = element.selectFirst("a.block")
-                ?: throw Exception("Popular: Anchor not found")
-            url = anchor.attr("href").takeIf { it.isNotBlank() }
-                ?: throw Exception("Popular: Empty href")
+        val mangas = document.select("main > section:nth-of-type(3) div.flex.gap-4 > div.group")
+            .map { element ->
+                SManga.create().apply {
+                    val anchor = element.selectFirst("a.block")
+                        ?: throw Exception("Popular: Anchor not found")
 
-            val img = element.selectFirst("img")
-                ?: throw Exception("Popular: Image not found")
+                    val href = anchor.attr("href").takeIf { it.isNotBlank() }
+                        ?: throw Exception("Popular: Empty href")
+                    setUrlWithoutDomain(href)
 
-            title = element.selectFirst("h3.text-sm.sm\\:text-base")?.text()
-                ?.takeIf { it.isNotBlank() }
-                ?: img.attr("alt").takeIf { it.isNotBlank() }
-                ?: "Titre Inconnu" // Unknown Title
+                    val img = element.selectFirst("img")
 
-            thumbnail_url = img.attr("src").takeIf { it.isNotBlank() }?.toApiCoverUrl()
-        }
+                    title = element.selectFirst("h3.text-sm.sm\\:text-base")?.text()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: img?.attr("alt")?.takeIf { it.isNotBlank() }
+                        ?: throw Exception("Popular: Could not find title for manga from element: ${element.outerHtml().take(200)}")
+
+                    thumbnail_url = img?.attr("src")?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
+                }
+            }
+
+        return MangasPage(mangas, false)
     }
-
-    override fun popularMangaNextPageSelector(): String? = null
 
     // Extracts Next.js page data, trying __NEXT_DATA__ script first, then self.__next_f.push.
     private fun extractNextJsPageData(document: Document): JsonObject? {
@@ -158,7 +115,7 @@ class PoseidonScans : ParsedHttpSource() {
         try {
             document.selectFirst("script#__NEXT_DATA__")?.data()?.also { scriptData ->
                 try {
-                    val rootJson = json.decodeFromString<JsonObject>(scriptData)
+                    val rootJson = scriptData.parseAs<JsonObject>()
                     val pageProps = rootJson["props"]?.jsonObject?.get("pageProps")?.jsonObject
                     if (pageProps != null) {
                         if (isSeriesPage) {
@@ -185,12 +142,22 @@ class PoseidonScans : ParsedHttpSource() {
                         }
                     }
                 } catch (e: Exception) {
-                    // silently ignore
+                    Log.e("PoseidonScans", "Error parsing __NEXT_DATA__: ${e.message}")
                 }
             }
 
-            val nextFPushRegex = Regex("""self\.__next_f\.push\(\s*\[\s*1\s*,\s*"(.*)"\s*\]\s*\)""", RegexOption.DOT_MATCHES_ALL)
-            val mangaSlugForDetails = if (!isSeriesPage) currentUrl.substringAfterLast("/serie/", "").substringBefore('/', "").substringBefore('?', "") else ""
+            val mangaSlugForDetails = if (!isSeriesPage) {
+                currentUrl.toHttpUrlOrNull()?.pathSegments?.let { segments ->
+                    val serieIndex = segments.indexOf("serie")
+                    if (serieIndex != -1 && serieIndex + 1 < segments.size) {
+                        segments[serieIndex + 1]
+                    } else {
+                        ""
+                    }
+                } ?: ""
+            } else {
+                ""
+            }
             var foundRelevantObject: JsonObject? = null
 
             scriptLoop@ for (script in document.select("script")) {
@@ -224,7 +191,7 @@ class PoseidonScans : ParsedHttpSource() {
                                     val potentialJson = extractJsonObjectString(cleanedDataString, objectStartIndex)
                                     if (potentialJson != null) {
                                         try {
-                                            val parsedContainer = json.decodeFromString<JsonObject>(potentialJson)
+                                            val parsedContainer = potentialJson.parseAs<JsonObject>()
                                             if (parsedContainer.containsKey(marker.substringBefore(':').trim('"')) ||
                                                 parsedContainer.containsKey("initialData")
                                             ) {
@@ -232,7 +199,9 @@ class PoseidonScans : ParsedHttpSource() {
                                                 objectFoundInThisScript = true
                                                 return@nextFPushMatch
                                             }
-                                        } catch (e: Exception) { /* silently ignore */ }
+                                        } catch (e: Exception) {
+                                            Log.e("PoseidonScans", "Error parsing nested JSON data: ${e.message}")
+                                        }
                                     }
                                 }
                             }
@@ -247,7 +216,7 @@ class PoseidonScans : ParsedHttpSource() {
                                 val objectStartIndex = searchIndex + marker.length - 1
                                 val potentialJson = extractJsonObjectString(data, objectStartIndex) ?: continue
                                 try {
-                                    val parsedObject = json.decodeFromString<JsonObject>(potentialJson)
+                                    val parsedObject = potentialJson.parseAs<JsonObject>()
                                     val isSane = when (marker) {
                                         "\"initialData\":{" -> parsedObject.containsKey("manga") || parsedObject.containsKey("chapter") || parsedObject.containsKey("images")
                                         "\"manga\":{" -> parsedObject["slug"]?.jsonPrimitive?.content?.contains(mangaSlugForDetails) == true
@@ -255,7 +224,9 @@ class PoseidonScans : ParsedHttpSource() {
                                         else -> true
                                     }
                                     if (isSane) return parsedObject
-                                } catch (e: Exception) { /* silently ignore */ }
+                                } catch (e: Exception) {
+                                    Log.e("PoseidonScans", "Error parsing validation JSON data: ${e.message}")
+                                }
                             }
                             return null
                         }
@@ -272,7 +243,10 @@ class PoseidonScans : ParsedHttpSource() {
                 if (objectFoundInThisScript || foundRelevantObject != null) break@scriptLoop
             }
             if (foundRelevantObject != null) return foundRelevantObject
-        } catch (e: Exception) { /* silently ignore general errors */ }
+        } catch (e: Exception) {
+            Log.e("PoseidonScans", "General error in extractNextJsPageData: ${e.message}")
+            return null
+        }
         return null
     }
 
@@ -317,7 +291,8 @@ class PoseidonScans : ParsedHttpSource() {
         return if (endIndex != -1) data.substring(startIndex, endIndex + 1) else null
     }
 
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val pageData = extractNextJsPageData(document)
             ?: throw Exception("Could not extract Next.js data. URL: ${document.location()}")
 
@@ -327,7 +302,7 @@ class PoseidonScans : ParsedHttpSource() {
             ?: throw Exception("JSON 'manga' structure not found. JSON: ${pageData.toString().take(500)}")
 
         val mangaDto = try {
-            json.decodeFromString<MangaDetailsData>(mangaDetailsJson.toString())
+            mangaDetailsJson.toString().parseAs<MangaDetailsData>()
         } catch (e: Exception) {
             throw Exception("Error parsing manga details: ${e.message}. JSON: $mangaDetailsJson")
         }
@@ -358,7 +333,9 @@ class PoseidonScans : ParsedHttpSource() {
                             .trim()
                     }
                 }
-            } catch (e: Exception) { /* Silently ignore error fetching HTML description */ }
+            } catch (e: Exception) {
+                Log.e("PoseidonScans", "Error fetching HTML description: ${e.message}")
+            }
 
             if (potentialDescription.isNullOrBlank()) {
                 val jsonDescription = mangaDto.description?.trim()
@@ -378,7 +355,7 @@ class PoseidonScans : ParsedHttpSource() {
                 }
             }
             description = finalDesc
-            url = "/serie/${mangaDto.slug}"
+            setUrlWithoutDomain("/serie/${mangaDto.slug}")
         }
     }
 
@@ -403,7 +380,7 @@ class PoseidonScans : ParsedHttpSource() {
             ?: throw Exception("JSON 'manga' structure not found for chapters. JSON: ${pageData.toString().take(500)}")
 
         val mangaDto = try {
-            Json { ignoreUnknownKeys = true }.decodeFromString<MangaDetailsData>(mangaDetailsJson.toString())
+            mangaDetailsJson.toString().parseAs<MangaDetailsData>()
         } catch (e: Exception) {
             throw Exception("Error parsing chapters: ${e.message}. JSON: $mangaDetailsJson")
         }
@@ -414,7 +391,7 @@ class PoseidonScans : ParsedHttpSource() {
                 val chapterNumberString = ch.number.toString().removeSuffix(".0")
                 SChapter.create().apply {
                     name = ch.title?.takeIf { it.isNotBlank() } ?: "Chapitre $chapterNumberString"
-                    url = "/serie/${mangaDto.slug}/chapter/$chapterNumberString"
+                    setUrlWithoutDomain("/serie/${mangaDto.slug}/chapter/$chapterNumberString")
                     date_upload = parseIsoDate(ch.createdAt)
                     chapter_number = ch.number
                 }
@@ -424,26 +401,22 @@ class PoseidonScans : ParsedHttpSource() {
     }
 
     private fun parseIsoDate(dateString: String?): Long {
-        return try {
-            if (dateString.isNullOrBlank()) return 0L
-            val cleanedDateString = if (dateString.startsWith("\"\$D")) {
-                dateString.removePrefix("\"\$D").removeSuffix("\"")
-            } else if (dateString.startsWith("\$D")) {
-                dateString.removePrefix("\$D")
-            } else if (dateString.startsWith("\"") && dateString.endsWith("\"") && dateString.length > 2) {
-                dateString.substring(1, dateString.length - 1)
-            } else {
-                dateString
-            }
-            isoDateFormatter.parse(cleanedDateString)?.time ?: 0L
-        } catch (e: Exception) {
-            0L
+        if (dateString.isNullOrBlank()) return 0L
+        val cleanedDateString = if (dateString.startsWith("\"\$D")) {
+            dateString.removePrefix("\"\$D").removeSuffix("\"")
+        } else if (dateString.startsWith("\$D")) {
+            dateString.removePrefix("\$D")
+        } else if (dateString.startsWith("\"") && dateString.endsWith("\"") && dateString.length > 2) {
+            dateString.substring(1, dateString.length - 1)
+        } else {
+            dateString
         }
+        return isoDateFormatter.tryParse(cleanedDateString)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val pageData = extractNextJsPageData(document)
-            ?: throw Exception("Could not extract Next.js data for page list.")
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val pageData = extractNextJsPageData(document) ?: throw Exception("Could not extract Next.js data for page list.")
 
         val chapterPageUrl = document.location()
 
@@ -454,7 +427,7 @@ class PoseidonScans : ParsedHttpSource() {
             ?: throw Exception("JSON 'images' structure not found. Data: ${pageData.toString().take(500)}")
 
         val imagesDataList = try {
-            Json { ignoreUnknownKeys = true }.decodeFromString<List<PageImageUrlData>>(imagesListJson.toString())
+            imagesListJson.toString().parseAs<List<PageImageUrlData>>()
         } catch (e: Exception) {
             throw Exception("Error parsing image list: ${e.message}. JSON: $imagesListJson")
         }
@@ -477,41 +450,25 @@ class PoseidonScans : ParsedHttpSource() {
         return GET(page.imageUrl!!, imageHeaders)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url, headers)
-    }
-
-    override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga) // Data is on the same page
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + chapter.url, headers)
-    }
-
     /**
      * Tachiyomi's `page` parameter is not directly used as /series does not paginate via URL params.
      * We fetch all series and filter client-side based on the query.
      * The query is passed as `app_query` URL parameter for retrieval in `searchMangaParse`.
      */
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = if (query.isNotBlank()) {
-            val encodedQuery = try {
-                URLEncoder.encode(query, "UTF-8")
-            } catch (e: Exception) {
-                query // Fallback if encoding fails (highly unlikely)
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("series")
+            if (query.isNotBlank()) {
+                fragment(query)
             }
-            "$baseUrl/series?app_query=$encodedQuery"
-        } else {
-            "$baseUrl/series"
-        }
+        }.build()
+
         return GET(url, headers)
     }
-
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val requestUrl = response.request.url
-        val searchQuery = requestUrl.queryParameter("app_query")?.takeIf { it.isNotBlank() } ?: ""
+        val searchQuery = requestUrl.fragment?.takeIf { it.isNotBlank() } ?: ""
 
         val pageDataJson = extractNextJsPageData(document)
             ?: return MangasPage(emptyList(), false)
@@ -531,7 +488,7 @@ class PoseidonScans : ParsedHttpSource() {
 
                 SManga.create().apply {
                     this.title = title
-                    this.url = "/serie/$slug"
+                    setUrlWithoutDomain("/serie/$slug")
                     this.thumbnail_url = cover?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
                 }
             } catch (e: Exception) {
@@ -552,18 +509,6 @@ class PoseidonScans : ParsedHttpSource() {
         return MangasPage(filteredMangas, hasNextPage)
     }
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException("Uses JSON API")
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException("Uses JSON API")
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException("Uses JSON API")
-
-    override fun chapterListSelector() = throw UnsupportedOperationException("Uses JSON")
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Uses JSON")
-
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Uses pageListParse")
-
-    override fun searchMangaSelector(): String = throw UnsupportedOperationException("Uses JSON")
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException("Uses JSON")
-    override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException("No URL pagination for search")
-
+    override fun imageUrlParse(response: Response): String { throw UnsupportedOperationException("Not used.") }
     override fun getFilterList(): FilterList = FilterList()
 }
