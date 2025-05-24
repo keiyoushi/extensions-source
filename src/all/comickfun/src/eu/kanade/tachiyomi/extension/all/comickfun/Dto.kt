@@ -199,10 +199,14 @@ class Chapter(
     private val title: String = "",
     @SerialName("created_at") private val createdAt: String = "",
     @SerialName("publish_at") val publishedAt: String = "",
-    private val chap: String = "",
+    val chap: String = "",
     private val vol: String = "",
     @SerialName("group_name") val groups: List<String> = emptyList(),
+    @SerialName("up_count") private val upCount: Int,
+    @SerialName("down_count") private val downCount: Int,
 ) {
+    val score get() = upCount - downCount
+
     fun toSChapter(mangaUrl: String) = SChapter.create().apply {
         url = "$mangaUrl/$hid-chapter-$chap-$lang"
         name = beautifyChapterName(vol, chap, title)
