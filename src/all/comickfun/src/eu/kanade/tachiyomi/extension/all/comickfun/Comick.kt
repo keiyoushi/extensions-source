@@ -570,8 +570,7 @@ abstract class Comick(
     private fun List<Chapter>.filterOnScore(shouldFilter: Boolean): Collection<Chapter> {
         if (shouldFilter) {
             return groupBy { it.chap }
-                .mapValues { (_, chapters) -> chapters.maxBy { it.score } }
-                .values
+                .map { (_, chapters) -> chapters.maxBy { it.score } }
         } else {
             return this
         }
