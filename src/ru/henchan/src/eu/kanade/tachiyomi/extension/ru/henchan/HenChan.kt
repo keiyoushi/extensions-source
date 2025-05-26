@@ -37,7 +37,7 @@ class HenChan : MultiChan("HenChan", "https://xxl.hentaichan.live", "ru"), Confi
 
     override val baseUrl = domain
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/newest?offset=${20 * (page - 1)}")
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manga/newest?offset=${20 * (page - 1)}", headers)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = if (query.isNotEmpty()) {
