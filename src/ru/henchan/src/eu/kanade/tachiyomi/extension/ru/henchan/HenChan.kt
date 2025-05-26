@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -40,7 +41,13 @@ class HenChan : MultiChan("HenChan", "https://xxl.hentaichan.live", "ru"), Confi
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = if (query.isNotEmpty()) {
-            "$baseUrl/?do=search&subaction=search&story=$query&search_start=$page"
+            baseUrl.toHttpUrl().newBuilder()
+                .addQueryParameter("do", "search")
+                .addQueryParameter("subaction", "search")
+                .addQueryParameter("story", query)
+                .addQueryParameter("search_start", page.toString())
+                .build()
+                .toString()
         } else {
             var genres = ""
             var order = ""
