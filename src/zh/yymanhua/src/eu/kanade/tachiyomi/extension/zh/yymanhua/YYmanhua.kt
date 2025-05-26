@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -56,8 +57,18 @@ class YYmanhua : ParsedHttpSource() {
 
     // Search Page
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/search?title=$query&page=$page")
+    override fun getFilterList() = buildFilterList()
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        return GET(
+            baseUrl +
+                if (query.isNotBlank()) {
+                    "/search?title=$query&page=$page"
+                } else {
+                    "/manga-list-${filters[1]}-${filters[2]}-${filters[3]}-p$page/"
+                },
+        )
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -101,7 +112,10 @@ class YYmanhua : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val cid = Regex("\\d+").find(document.location())?.groups?.get(0)?.value
-        return List(document.select(".reader-bottom-page-list a").size.takeIf { it > 0 } ?: 1) { i ->
+        return List(
+            document.select(".reader-bottom-page-list a").size.takeIf { it > 0 }
+                ?: 1,
+        ) { i ->
             Page(i, "${document.location()}chapterimage.ashx?cid=$cid&page=${i + 1}")
         }
     }
@@ -134,6 +148,4 @@ class YYmanhua : ParsedHttpSource() {
         }
         return Regex("\\b\\w+\\b").replace(groups[1]) { result -> d[result.value] ?: result.value }
     }
-
-    override fun getFilterList() = FilterList()
 }
