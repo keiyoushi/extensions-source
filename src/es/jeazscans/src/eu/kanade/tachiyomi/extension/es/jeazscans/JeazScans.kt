@@ -1,19 +1,18 @@
 package eu.kanade.tachiyomi.extension.es.jeazscans
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class JeazScans : Madara(
-    "JeazScans",
-    "https://marcialhub.xyz",
+class JeazScans : MangaThemesia(
+    "Jeaz Scans",
+    "https://lectorhub.j5z.xyz",
     "es",
-    SimpleDateFormat("d MMMM, yyyy", Locale("es")),
+    dateFormat = SimpleDateFormat("MMM d, yyyy", Locale("es")),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val useNewChapterEndpoint = true
+    override val id = 5292079548510508306
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2)
