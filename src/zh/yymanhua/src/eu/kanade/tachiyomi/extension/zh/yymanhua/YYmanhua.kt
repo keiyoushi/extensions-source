@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.Headers
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -16,10 +15,10 @@ class YYmanhua : ParsedHttpSource() {
 
     override val baseUrl = "https://www.yymanhua.com"
     override val lang = "zh"
-    override val name = "YYmanhua"
+    override val name = "YY漫画"
     override val supportsLatest = true
 
-    override fun headersBuilder() = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
         .add("Cookie", "yymanhua_lang=2")
 
@@ -95,14 +94,14 @@ class YYmanhua : ParsedHttpSource() {
         url = element.attr("href")
         val regex = Regex("第(\\d+(?:\\.\\d+)?)[话話]")
         name = element.text()
-        chapter_number = regex.find(name)?.groups?.get(1)?.value?.toFloat() ?: 0.0F
+        chapter_number = regex.find(name)?.groups?.get(1)?.value?.toFloat() ?: -0F
     }
 
     // Manga View Page
 
     override fun pageListParse(document: Document): List<Page> {
         val cid = Regex("\\d+").find(document.location())?.groups?.get(0)?.value
-        return List(document.select(".reader-bottom-page-list a").size) { i ->
+        return List(document.select(".reader-bottom-page-list a").size.takeIf { it > 0 } ?: 1) { i ->
             Page(i, "${document.location()}chapterimage.ashx?cid=$cid&page=${i + 1}")
         }
     }
@@ -136,5 +135,5 @@ class YYmanhua : ParsedHttpSource() {
         return Regex("\\b\\w+\\b").replace(groups[1]) { result -> d[result.value] ?: result.value }
     }
 
-    // override fun getFilterList() = FilterList()
+    override fun getFilterList() = FilterList()
 }
