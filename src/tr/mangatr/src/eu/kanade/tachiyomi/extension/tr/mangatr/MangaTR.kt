@@ -10,6 +10,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -34,8 +36,12 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     // TODO: genre search possible but a bit of a pain
     override fun getFilterList() = FilterList()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/arama.html?icerik=$query", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/arama.html".toHttpUrl().newBuilder()
+            .addQueryParameter("icerik", query)
+            .build()
+        return GET(url, headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val mangas = response.use { it.asJsoup() }
