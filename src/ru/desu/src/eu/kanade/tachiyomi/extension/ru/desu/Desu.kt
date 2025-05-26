@@ -139,12 +139,12 @@ class Desu : ConfigurableSource, HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl$API_URL/?limit=50&order=popular&page=$page")
+        GET("$baseUrl$API_URL/?limit=50&order=popular&page=$page", headers)
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl$API_URL/?limit=50&order=updated&page=$page")
+        GET("$baseUrl$API_URL/?limit=50&order=updated&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
@@ -173,7 +173,7 @@ class Desu : ConfigurableSource, HttpSource() {
         if (query.isNotEmpty()) {
             url.addQueryParameter("search", query)
         }
-        return GET(url.build())
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
