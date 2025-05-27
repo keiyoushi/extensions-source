@@ -25,9 +25,7 @@ abstract class Etoshore(
 
     override val supportsLatest = true
 
-    override val client = super.client.newBuilder()
-        .rateLimit(2)
-        .build()
+    override val client = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
