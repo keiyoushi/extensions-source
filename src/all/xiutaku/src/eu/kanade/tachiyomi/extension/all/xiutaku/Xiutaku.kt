@@ -36,7 +36,7 @@ class Xiutaku() : ParsedHttpSource() {
 
     // Latest
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
         title = element.selectFirst(".item-content .item-link")!!.text()
         setUrlWithoutDomain(element.selectFirst(".item-content .item-link")!!.attr("abs:href"))
     }
@@ -53,7 +53,7 @@ class Xiutaku() : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element) = latestUpdatesFromElement(element)
     override fun popularMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/hot?start=${20 * (page - 1)}")
+        return GET("$baseUrl/hot?start=${20 * (page - 1)}", headers)
     }
 
     override fun popularMangaSelector() = latestUpdatesSelector()
@@ -75,20 +75,20 @@ class Xiutaku() : ParsedHttpSource() {
 
     // Details
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select(".article-header").text()
-        description = document.select(".article-info").last()?.text()
+        title = document.selectFirst(".article-header")!!.text()
+        description = document.selectFirst(".article-info:not(:has(small))")?.text()
         genre = document.selectFirst(".article-tags")
-            ?.select(".tags > .tag")?.joinToString { it.text().substringAfter("#") }
+            ?.select(".tags > .tag")?.joinToString { it.text().removePrefix("#") }
     }
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
     override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = response.asJsoup()
-        val dateUploadStr = doc.selectFirst(".article-info > small")?.text()
+        val document = response.asJsoup()
+        val dateUploadStr = document.selectFirst(".article-info > small")?.text()
         val dateUpload = DATE_FORMAT.tryParse(dateUploadStr)
         val maxPage =
-            doc.select("nav.pagination:first-of-type a.pagination-link").last()?.text()?.toInt()
+            document.selectFirst("nav.pagination:first-of-type a.pagination-link")?.text()?.toInt()
                 ?: 1
         val basePageUrl = response.request.url
         return (maxPage downTo 1).map { page ->
