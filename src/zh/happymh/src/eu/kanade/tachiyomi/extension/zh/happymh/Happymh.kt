@@ -190,18 +190,11 @@ class Happymh : HttpSource(), ConfigurableSource {
                         name = data.chapterName
                         // create a dummy chapter url : /comic_id/dummy_mark/chapter_id#expect_page
                         url = "/$comicId/$DUMMY_CHAPTER_MARK/${data.id}#${it.first}"
-                        chapter_number = data.order.toFloat()
                     }
                 }
             }
             .toList()
-            .map { it.flatten().sortedByDescending { chapter -> chapter.chapter_number } }
-            .map {
-                // remove order mark
-                it.onEach { chapter ->
-                    chapter.chapter_number = -1f
-                }
-            }
+            .map { it.flatten().reversed() }
     }
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
