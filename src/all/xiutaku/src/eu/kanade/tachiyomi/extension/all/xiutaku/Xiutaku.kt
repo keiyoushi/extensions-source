@@ -88,7 +88,7 @@ class Xiutaku() : ParsedHttpSource() {
         val dateUploadStr = document.selectFirst(".article-info > small")?.text()
         val dateUpload = DATE_FORMAT.tryParse(dateUploadStr)
         val maxPage =
-            document.selectFirst("nav.pagination:first-of-type a.pagination-link")?.text()?.toInt()
+            document.selectFirst(".pagination-list > span:last-child > a")?.text()?.toInt()
                 ?: 1
         val basePageUrl = response.request.url
         return (maxPage downTo 1).map { page ->
