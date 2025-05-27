@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -18,6 +19,15 @@ class YYmanhua : ParsedHttpSource() {
     override val lang = "zh"
     override val name = "YY漫画"
     override val supportsLatest = true
+
+    companion object {
+        val DESC_REGEX = Regex("\\[\\+展开]|\\[-折叠]")
+        val CHAPTER_REGEX = Regex("第(\\d+(?:\\.\\d+)?)[话話]")
+        val NUM_REGIX = Regex("\\d+")
+        val IMG_REGEX = Regex("var pix=\"(.*?)\".*?var pvalue=\\[\"(.*?)\"")
+        val DECODE_REGEX1 = Regex("return p;\\}\\('(.*?)',(\\d+),(\\d+),'(.*?)'")
+        val DECODE_REGEX2 = Regex("\\b\\w+\\b")
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", baseUrl)
@@ -60,14 +70,15 @@ class YYmanhua : ParsedHttpSource() {
     override fun getFilterList() = buildFilterList()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET(
+        val url = (
             baseUrl +
                 if (query.isNotBlank()) {
                     "/search?title=$query&page=$page"
                 } else {
                     "/manga-list-${filters[1]}-${filters[2]}-${filters[3]}-p$page/"
-                },
-        )
+                }
+            ).toHttpUrl()
+        return GET(url, headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -80,7 +91,7 @@ class YYmanhua : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         description = document.select(".detail-info-content").text()
-            .replace(Regex("\\[\\+展开]|\\[-折叠]"), "").trim()
+            .replace(DESC_REGEX, "").trim()
         val els = document.select(".detail-info-tip > span")
         els[0].select("a").let {
             author = it[0].text()
@@ -103,15 +114,14 @@ class YYmanhua : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         url = element.attr("href")
-        val regex = Regex("第(\\d+(?:\\.\\d+)?)[话話]")
         name = element.text()
-        chapter_number = regex.find(name)?.groups?.get(1)?.value?.toFloat() ?: -0F
+        chapter_number = CHAPTER_REGEX.find(name)?.groups?.get(1)?.value?.toFloat() ?: -0F
     }
 
     // Manga View Page
 
     override fun pageListParse(document: Document): List<Page> {
-        val cid = Regex("\\d+").find(document.location())?.groups?.get(0)?.value
+        val cid = NUM_REGIX.find(document.location())?.groups?.get(0)?.value
         return List(
             document.select(".reader-bottom-page-list a").size.takeIf { it > 0 }
                 ?: 1,
@@ -125,16 +135,14 @@ class YYmanhua : ParsedHttpSource() {
     // override fun imageRequest(page: Page) = GET(page.url, headers)
 
     override fun imageUrlParse(response: Response): String {
-        val (_, pix, pvalue) = Regex("var pix=\"(.*?)\".*?var pvalue=\\[\"(.*?)\"")
-            .find(decode(response.body.string()))?.groupValues!!
+        val (_, pix, pvalue) = IMG_REGEX.find(decode(response.body.string()))?.groupValues!!
         return pix + pvalue
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private fun decode(ciphertext: String): String {
-        val groups = Regex("return p;\\}\\('(.*?)',(\\d+),(\\d+),'(.*?)'")
-            .find(ciphertext)?.groupValues!!
+        val groups = DECODE_REGEX1.find(ciphertext)?.groupValues!!
         val d = mutableMapOf<String, String>()
         val parts = groups[4].split("|")
         val e = { c: Int ->
@@ -146,6 +154,6 @@ class YYmanhua : ParsedHttpSource() {
             val i = e(counter)
             d[i] = parts.getOrNull(counter)?.takeIf(String::isNotEmpty) ?: i
         }
-        return Regex("\\b\\w+\\b").replace(groups[1]) { result -> d[result.value] ?: result.value }
+        return DECODE_REGEX2.replace(groups[1]) { result -> d[result.value] ?: result.value }
     }
 }
