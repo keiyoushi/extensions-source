@@ -122,15 +122,22 @@ abstract class Etoshore(
             .joinToString { it.text() }
 
         author = document.selectFirst("div.meta-item span.meta-title:contains(Author) + span a")
-
             ?.text()
 
-        document.selectFirst(".status")?.text()?.let {
-            status = it.toMangaStatus()
+        with(document) {
+            status = when {
+                containsClass(".finished") -> SManga.COMPLETED
+                containsClass(".publishing") -> SManga.ONGOING
+                containsClass(".on-hiatus") -> SManga.ON_HIATUS
+                containsClass(".discontinued") -> SManga.CANCELLED
+                else -> SManga.UNKNOWN
+            }
         }
 
         setUrlWithoutDomain(document.location())
     }
+
+    private fun Element.containsClass(cssSelector: String) = select(cssSelector).isNotEmpty()
 
     protected open fun imageFromElement(element: Element): String? {
         val attributes = listOf(
@@ -149,35 +156,6 @@ abstract class Etoshore(
         return this.split(" ")
             .filter(URL_REGEX::matches)
             .maxOfOrNull(String::toString)
-    }
-
-    protected val completedStatusList: Array<String> = arrayOf(
-        "Finished",
-        "Completo",
-    )
-
-    protected open val ongoingStatusList: Array<String> = arrayOf(
-        "Publishing",
-        "Ativo",
-    )
-
-    protected val hiatusStatusList: Array<String> = arrayOf(
-        "on hiatus",
-    )
-
-    protected val canceledStatusList: Array<String> = arrayOf(
-        "Canceled",
-        "Discontinued",
-    )
-
-    open fun String.toMangaStatus(): Int {
-        return when {
-            containsIn(completedStatusList) -> SManga.COMPLETED
-            containsIn(ongoingStatusList) -> SManga.ONGOING
-            containsIn(hiatusStatusList) -> SManga.ON_HIATUS
-            containsIn(canceledStatusList) -> SManga.CANCELLED
-            else -> SManga.UNKNOWN
-        }
     }
 
     // ============================== Chapters ============================
