@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 
 class Jiangzaitoon : Madara(
     "Jiangzaitoon",
-    "https://jiangzaitoon.kim",
+    "https://jiangzaitoon.wtf",
     "tr",
     SimpleDateFormat("d MMM yyy", Locale("tr")),
 ) {

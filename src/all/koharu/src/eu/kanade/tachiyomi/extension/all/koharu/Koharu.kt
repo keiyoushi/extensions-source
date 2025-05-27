@@ -1,10 +1,24 @@
 package eu.kanade.tachiyomi.extension.all.koharu
 
 import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.artistList
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.circleList
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.femaleList
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.genreList
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.getFilters
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.maleList
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.mixedList
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.otherList
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.parodyList
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.tagsFetchAttempts
+import eu.kanade.tachiyomi.extension.all.koharu.KoharuFilters.tagsFetched
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,9 +26,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -42,11 +58,9 @@ class Koharu(
 
     private val apiBooksUrl = "$apiUrl/books"
 
-    override val supportsLatest = true
+    private val authUrl = "${baseUrl.replace("://", "://auth.")}/clearance"
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
-        .build()
+    override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
@@ -58,6 +72,18 @@ class Koharu(
     private fun quality() = preferences.getString(PREF_IMAGERES, "1280")!!
 
     private fun remadd() = preferences.getBoolean(PREF_REM_ADD, false)
+
+    private fun alwaysExcludeTags() = preferences.getString(PREF_EXCLUDE_TAGS, "")
+
+    private var _domainUrl: String? = null
+    internal val domainUrl: String
+        get() {
+            return _domainUrl ?: run {
+                val domain = getDomain()
+                _domainUrl = domain
+                domain
+            }
+        }
 
     private fun getDomain(): String {
         try {
@@ -72,20 +98,29 @@ class Koharu(
     }
 
     private val lazyHeaders by lazy {
-        val domain = getDomain()
         headersBuilder()
-            .set("Referer", "$domain/")
-            .set("Origin", domain)
+            .set("Referer", "$domainUrl/")
+            .set("Origin", domainUrl)
             .build()
     }
 
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(3)
+        .build()
+
+    private val interceptedClient: OkHttpClient
+        get() = network.cloudflareClient.newBuilder()
+            .addInterceptor(TurnstileInterceptor(client, domainUrl, authUrl, lazyHeaders["User-Agent"]))
+            .rateLimit(3)
+            .build()
+
     private fun getManga(book: Entry) = SManga.create().apply {
-        setUrlWithoutDomain("${book.id}/${book.public_key}")
+        setUrlWithoutDomain("${book.id}/${book.key}")
         title = if (remadd()) book.title.shortenTitle() else book.title
         thumbnail_url = book.thumbnail.path
     }
 
-    private fun getImagesByMangaEntry(entry: MangaEntry): Pair<ImagesInfo, String> {
+    private fun getImagesByMangaData(entry: MangaData, entryId: String, entryKey: String): Pair<ImagesInfo, String> {
         val data = entry.data
         fun getIPK(
             ori: DataKey?,
@@ -96,7 +131,7 @@ class Koharu(
         ): Pair<Int?, String?> {
             return Pair(
                 ori?.id ?: alt1?.id ?: alt2?.id ?: alt3?.id ?: alt4?.id,
-                ori?.public_key ?: alt1?.public_key ?: alt2?.public_key ?: alt3?.public_key ?: alt4?.public_key,
+                ori?.key ?: alt1?.key ?: alt2?.key ?: alt3?.key ?: alt4?.key,
             )
         }
         val (id, public_key) = when (quality()) {
@@ -119,35 +154,65 @@ class Koharu(
             else -> "0"
         }
 
-        val imagesResponse = client.newCall(GET("$apiBooksUrl/data/${entry.id}/${entry.public_key}/$id/$public_key?v=${entry.updated_at ?: entry.created_at}&w=$realQuality", lazyHeaders)).execute()
+        val imagesResponse = interceptedClient.newCall(GET("$apiBooksUrl/data/$entryId/$entryKey/$id/$public_key/$realQuality?crt=$token", lazyHeaders)).execute()
         val images = imagesResponse.parseAs<ImagesInfo>() to realQuality
         return images
     }
 
     // Latest
 
-    override fun latestUpdatesRequest(page: Int) = GET("$apiBooksUrl?page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "", lazyHeaders)
+    override fun latestUpdatesRequest(page: Int) = GET(
+        apiBooksUrl.toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+
+            val terms: MutableList<String> = mutableListOf()
+            if (lang != "all") terms += "language:\"^$searchLang$\""
+            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
+                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
+            if (alwaysExcludeTags.isNotEmpty()) {
+                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
+            }
+            if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
+        }.build(),
+        lazyHeaders,
+    )
+
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Popular
 
-    override fun popularMangaRequest(page: Int) = GET("$apiBooksUrl?sort=8&page=$page" + if (searchLang.isNotBlank()) "&s=language!:\"$searchLang\"" else "", lazyHeaders)
+    override fun popularMangaRequest(page: Int) = GET(
+        apiBooksUrl.toHttpUrl().newBuilder().apply {
+            addQueryParameter("sort", "8")
+            addQueryParameter("page", page.toString())
+
+            val terms: MutableList<String> = mutableListOf()
+            if (lang != "all") terms += "language:\"^$searchLang$\""
+            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
+                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
+            if (alwaysExcludeTags.isNotEmpty()) {
+                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
+            }
+            if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
+        }.build(),
+        lazyHeaders,
+    )
+
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<Books>()
-
         return MangasPage(data.entries.map(::getManga), data.page * data.limit < data.total)
     }
 
     // Search
-
-    override fun getFilterList(): FilterList = getFilters()
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return when {
             query.startsWith(PREFIX_ID_KEY_SEARCH) -> {
                 val ipk = query.removePrefix(PREFIX_ID_KEY_SEARCH)
                 val response = client.newCall(GET("$apiBooksUrl/detail/$ipk", lazyHeaders)).execute()
-                Observable.just(searchMangaParse2(response))
+                Observable.just(
+                    MangasPage(listOf(mangaDetailsParse(response)), false),
+                )
             }
             else -> super.fetchSearchManga(page, query, filters)
         }
@@ -156,30 +221,61 @@ class Koharu(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiBooksUrl.toHttpUrl().newBuilder().apply {
             val terms: MutableList<String> = mutableListOf()
+            val includedTags: MutableList<Int> = mutableListOf()
+            val excludedTags: MutableList<Int> = mutableListOf()
 
-            if (lang != "all") terms += "language!:\"$searchLang\""
+            if (lang != "all") terms += "language:\"^$searchLang$\""
+            val alwaysExcludeTags = alwaysExcludeTags()?.split(",")
+                ?.map { it.trim() }?.filter(String::isNotBlank) ?: emptyList()
+            if (alwaysExcludeTags.isNotEmpty()) {
+                terms += "tag:\"${alwaysExcludeTags.joinToString(",") { "-$it" }}\""
+            }
+
             filters.forEach { filter ->
                 when (filter) {
-                    is SortFilter -> addQueryParameter("sort", filter.getValue())
+                    is KoharuFilters.SortFilter -> addQueryParameter("sort", filter.getValue())
 
-                    is CategoryFilter -> {
+                    is KoharuFilters.CategoryFilter -> {
                         val activeFilter = filter.state.filter { it.state }
                         if (activeFilter.isNotEmpty()) {
                             addQueryParameter("cat", activeFilter.sumOf { it.value }.toString())
                         }
                     }
 
-                    is TextFilter -> {
+                    is KoharuFilters.TagFilter -> {
+                        includedTags += filter.state
+                            .filter { it.isIncluded() }
+                            .map { it.id }
+                        excludedTags += filter.state
+                            .filter { it.isExcluded() }
+                            .map { it.id }
+                    }
+
+                    is KoharuFilters.GenreConditionFilter -> {
+                        if (filter.state > 0) {
+                            addQueryParameter(filter.param, filter.toUriPart())
+                        }
+                    }
+
+                    is KoharuFilters.TextFilter -> {
                         if (filter.state.isNotEmpty()) {
                             val tags = filter.state.split(",").filter(String::isNotBlank).joinToString(",")
                             if (tags.isNotBlank()) {
-                                terms += "${filter.type}!:" + if (filter.type == "pages") tags else '"' + tags + '"'
+                                terms += "${filter.type}:" + if (filter.type == "pages") tags else "\"$tags\""
                             }
                         }
                     }
                     else -> {}
                 }
             }
+
+            if (includedTags.isNotEmpty()) {
+                addQueryParameter("include", includedTags.joinToString(","))
+            }
+            if (excludedTags.isNotEmpty()) {
+                addQueryParameter("exclude", excludedTags.joinToString(","))
+            }
+
             if (query.isNotEmpty()) terms.add("title:\"$query\"")
             if (terms.isNotEmpty()) addQueryParameter("s", terms.joinToString(" "))
             addQueryParameter("page", page.toString())
@@ -190,20 +286,48 @@ class Koharu(
 
     override fun searchMangaParse(response: Response) = popularMangaParse(response)
 
-    private fun searchMangaParse2(response: Response): MangasPage {
-        val entry = response.parseAs<MangaEntry>()
+    override fun getFilterList(): FilterList {
+        launchIO { fetchTags() }
 
-        return MangasPage(
-            listOf(
-                SManga.create().apply {
-                    setUrlWithoutDomain("${entry.id}/${entry.public_key}")
-                    title = if (remadd()) entry.title.shortenTitle() else entry.title
-                    thumbnail_url = entry.thumbnails.base + entry.thumbnails.main.path
-                },
-            ),
-            false,
-        )
+        return getFilters()
     }
+
+    private val scope = CoroutineScope(Dispatchers.IO)
+
+    private fun launchIO(block: () -> Unit) = scope.launch { block() }
+
+    /**
+     * Fetch the genres from the source to be used in the filters.
+     */
+    private fun fetchTags() {
+        if (tagsFetchAttempts < 3 && !tagsFetched) {
+            try {
+                client.newCall(
+                    GET("$apiBooksUrl/tags/filters", lazyHeaders),
+                ).execute()
+                    .use { it.parseAs<List<Filter>>() }
+                    .also {
+                        tagsFetched = true
+                    }
+                    .takeIf { it.isNotEmpty() }
+                    ?.map { it.toTag() }
+                    ?.also { tags ->
+                        genreList = tags.filterIsInstance<KoharuFilters.Genre>()
+                        femaleList = tags.filterIsInstance<KoharuFilters.Female>()
+                        maleList = tags.filterIsInstance<KoharuFilters.Male>()
+                        artistList = tags.filterIsInstance<KoharuFilters.Artist>()
+                        circleList = tags.filterIsInstance<KoharuFilters.Circle>()
+                        parodyList = tags.filterIsInstance<KoharuFilters.Parody>()
+                        mixedList = tags.filterIsInstance<KoharuFilters.Mixed>()
+                        otherList = tags.filterIsInstance<KoharuFilters.Other>()
+                    }
+            } catch (_: Exception) {
+            } finally {
+                tagsFetchAttempts++
+            }
+        }
+    }
+
     // Details
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -211,96 +335,11 @@ class Koharu(
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<MangaEntry>().toSManga()
-    }
-
-    private val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
-    private fun MangaEntry.toSManga() = SManga.create().apply {
-        val artists = mutableListOf<String>()
-        val circles = mutableListOf<String>()
-        val parodies = mutableListOf<String>()
-        val magazines = mutableListOf<String>()
-        val characters = mutableListOf<String>()
-        val cosplayers = mutableListOf<String>()
-        val females = mutableListOf<String>()
-        val males = mutableListOf<String>()
-        val mixed = mutableListOf<String>()
-        val other = mutableListOf<String>()
-        val uploaders = mutableListOf<String>()
-        val tags = mutableListOf<String>()
-        for (tag in this@toSManga.tags) {
-            when (tag.namespace) {
-                1 -> artists.add(tag.name)
-                2 -> circles.add(tag.name)
-                3 -> parodies.add(tag.name)
-                4 -> magazines.add(tag.name)
-                5 -> characters.add(tag.name)
-                6 -> cosplayers.add(tag.name)
-                7 -> tag.name.takeIf { it != "anonymous" }?.let { uploaders.add(it) }
-                8 -> males.add(tag.name + " ♂")
-                9 -> females.add(tag.name + " ♀")
-                10 -> mixed.add(tag.name)
-                12 -> other.add(tag.name)
-                else -> tags.add(tag.name)
-            }
+        val mangaDetail = response.parseAs<MangaDetail>()
+        return mangaDetail.toSManga().apply {
+            setUrlWithoutDomain("${mangaDetail.id}/${mangaDetail.key}")
+            title = if (remadd()) mangaDetail.title.shortenTitle() else mangaDetail.title
         }
-
-        var appended = false
-        fun List<String>.joinAndCapitalizeEach(): String? = this.emptyToNull()?.joinToString { it.capitalizeEach() }?.apply { appended = true }
-        title = if (remadd()) this@toSManga.title.shortenTitle() else this@toSManga.title
-
-        author = (circles.emptyToNull() ?: artists).joinToString { it.capitalizeEach() }
-        artist = artists.joinToString { it.capitalizeEach() }
-        genre = (tags + males + females + mixed + other).joinToString { it.capitalizeEach() }
-        description = buildString {
-            circles.joinAndCapitalizeEach()?.let {
-                append("Circles: ", it, "\n")
-            }
-            uploaders.joinAndCapitalizeEach()?.let {
-                append("Uploaders: ", it, "\n")
-            }
-            magazines.joinAndCapitalizeEach()?.let {
-                append("Magazines: ", it, "\n")
-            }
-            cosplayers.joinAndCapitalizeEach()?.let {
-                append("Cosplayers: ", it, "\n")
-            }
-            parodies.joinAndCapitalizeEach()?.let {
-                append("Parodies: ", it, "\n")
-            }
-            characters.joinAndCapitalizeEach()?.let {
-                append("Characters: ", it, "\n")
-            }
-
-            if (appended) append("\n")
-
-            try {
-                append("Posted: ", dateReformat.format(created_at), "\n")
-            } catch (_: Exception) {}
-
-            val dataKey = when (quality()) {
-                "1600" -> data.`1600` ?: data.`1280` ?: data.`0`
-                "1280" -> data.`1280` ?: data.`1600` ?: data.`0`
-                "980" -> data.`980` ?: data.`1280` ?: data.`0`
-                "780" -> data.`780` ?: data.`980` ?: data.`0`
-                else -> data.`0`
-            }
-            append("Size: ", dataKey.readableSize(), "\n\n")
-            append("Pages: ", thumbnails.entries.size, "\n\n")
-        }
-        status = SManga.COMPLETED
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        initialized = true
-    }
-
-    private fun String.capitalizeEach() = this.split(" ").joinToString(" ") { s ->
-        s.replaceFirstChar { sr ->
-            if (sr.isLowerCase()) sr.titlecase(Locale.getDefault()) else sr.toString()
-        }
-    }
-
-    private fun <T> Collection<T>.emptyToNull(): Collection<T>? {
-        return this.ifEmpty { null }
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/g/${manga.url}"
@@ -312,11 +351,11 @@ class Koharu(
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val manga = response.parseAs<MangaEntry>()
+        val manga = response.parseAs<MangaDetail>()
         return listOf(
             SChapter.create().apply {
                 name = "Chapter"
-                url = "${manga.id}/${manga.public_key}"
+                url = "${manga.id}/${manga.key}"
                 date_upload = (manga.updated_at ?: manga.created_at)
             },
         )
@@ -326,13 +365,24 @@ class Koharu(
 
     // Page List
 
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        return interceptedClient.newCall(pageListRequest(chapter))
+            .asObservableSuccess()
+            .map { response ->
+                pageListParse(response)
+            }
+    }
+
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$apiBooksUrl/detail/${chapter.url}", lazyHeaders)
+        return POST("$apiBooksUrl/detail/${chapter.url}?crt=$token", lazyHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val mangaEntry = response.parseAs<MangaEntry>()
-        val imagesInfo = getImagesByMangaEntry(mangaEntry)
+        val mangaData = response.parseAs<MangaData>()
+        val url = response.request.url.toString()
+        val matches = Regex("""/detail/(\d+)/([a-z\d]+)""").find(url)
+        if (matches == null || matches.groupValues.size < 3) return emptyList()
+        val imagesInfo = getImagesByMangaData(mangaData, matches.groupValues[1], matches.groupValues[2])
 
         return imagesInfo.first.entries.mapIndexed { index, image ->
             Page(index, imageUrl = "${imagesInfo.first.base}/${image.path}?w=${imagesInfo.second}")
@@ -364,6 +414,13 @@ class Koharu(
                 "Reload manga to apply changes to loaded manga."
             setDefaultValue(false)
         }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = PREF_EXCLUDE_TAGS
+            title = "Tags to exclude from browse/search"
+            summary = "Separate tags with commas (,).\n" +
+                "Excluding: ${alwaysExcludeTags()}"
+        }.also(screen::addPreference)
     }
 
     private inline fun <reified T> Response.parseAs(): T {
@@ -374,5 +431,11 @@ class Koharu(
         const val PREFIX_ID_KEY_SEARCH = "id:"
         private const val PREF_IMAGERES = "pref_image_quality"
         private const val PREF_REM_ADD = "pref_remove_additional"
+        private const val PREF_EXCLUDE_TAGS = "pref_exclude_tags"
+
+        internal var token: String? = null
+        internal var authorization: String? = null
+
+        internal val dateReformat = SimpleDateFormat("EEEE, d MMM yyyy HH:mm (z)", Locale.ENGLISH)
     }
 }

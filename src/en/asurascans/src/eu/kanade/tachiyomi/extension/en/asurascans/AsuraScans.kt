@@ -230,7 +230,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("span.text-xl.font-bold")!!.ownText()
+        title = document.selectFirst("span.text-xl.font-bold, h3.truncate")!!.ownText()
         thumbnail_url = document.selectFirst("img[alt=poster]")?.attr("abs:src")
         description = document.selectFirst("span.font-medium.text-sm")?.text()
         author = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Author)) > h3:eq(1)")?.ownText()

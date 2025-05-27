@@ -61,7 +61,7 @@ class Manhuaren : HttpSource(), ConfigurableSource {
     private var userId: String = preferences.getString(USER_ID_PREF, null) ?: "-1"
     private val lastUsedTime: String by lazy { generateLastUsedTime() }
 
-    override val client: OkHttpClient = network.client
+    override val client: OkHttpClient = network.cloudflareClient
         .newBuilder()
         .apply { interceptors().removeAll { it.javaClass.simpleName == "BrotliInterceptor" } }
         .addInterceptor(ErrorResponseInterceptor(baseUrl, preferences))

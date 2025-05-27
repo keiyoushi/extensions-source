@@ -27,7 +27,7 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
     override val supportsLatest = true
     override val name = "动漫屋"
     override val baseUrl = "https://www.dm5.cn"
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(CommentsInterceptor)
         .build()
 

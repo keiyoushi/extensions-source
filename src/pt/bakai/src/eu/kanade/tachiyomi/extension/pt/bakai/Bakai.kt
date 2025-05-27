@@ -46,7 +46,7 @@ class Bakai : ParsedHttpSource() {
                         it.name.startsWith("ips4_") || it.path == searchPathSegment
                     }
 
-                    private val cookieJar = network.client.cookieJar
+                    private val cookieJar = network.cloudflareClient.cookieJar
 
                     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) =
                         cookieJar.saveFromResponse(url, cookies.removeLimit())
@@ -75,7 +75,7 @@ class Bakai : ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/$popularPathSegment/page/$page/")
 
-    override fun popularMangaSelector() = "[id*=elCmsPageWrap] ul > li > article"
+    override fun popularMangaSelector() = "[id*=elCms] ul > li > article"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         thumbnail_url = element.selectFirst("img")?.imgAttr()

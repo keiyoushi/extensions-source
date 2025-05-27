@@ -9,7 +9,7 @@ import org.jsoup.nodes.Element
 
 class CatharsisWorld : Madara(
     "Catharsis World",
-    "https://catharsisworld.akan01.com",
+    "https://catharsisworld.dig-it.info",
     "es",
 ) {
     override val versionId = 2
@@ -50,6 +50,9 @@ class CatharsisWorld : Madara(
         date_upload = element.selectFirst("div.grid > div")?.text()?.let { parseChapterDate(it) } ?: 0
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
+
+    override val chapterProtectorPasswordPrefix = "protectornonce='"
+    override val chapterProtectorDataPrefix = "_data='"
 
     private fun Element.imageFromStyle(): String {
         return this.attr("style").substringAfter("url(").substringBefore(")")

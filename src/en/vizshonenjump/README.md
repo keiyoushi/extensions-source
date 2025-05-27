@@ -18,7 +18,7 @@ over at [Extension FAQ] or [Getting Started].
 
 **VIZ Shonen Jump** and **VIZ Manga** are paid subscription-based services and you need an active monthly subscription to
 be able to read most of the chapters available in their service. These locked chapters will be
-filtered out from the chapter list by default if you're not signed in. To sign in with 
+filtered out from the chapter list by default if you're not signed in. To sign in with
 your existing account, follow the guide available below.
 
 ## Guides
@@ -47,7 +47,7 @@ Follow the following steps to be able to sign in and get access to the locked ch
 
 - You may sometime face the *"Your session has expired"* error. To fix it,
   you just need to open the WebView, await for the website to completely load and
-  sign in again if you're not logged anymore. After that, you can close the 
+  sign in again if you're not logged anymore. After that, you can close the
   WebView and try again.
 - The extension **will not** bypass any payment requirement. You still do need
   to have an active paid subscription to be able to read the locked chapters.

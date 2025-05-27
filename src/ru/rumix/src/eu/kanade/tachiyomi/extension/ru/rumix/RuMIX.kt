@@ -3,11 +3,8 @@ package eu.kanade.tachiyomi.extension.ru.rumix
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.utils.getPreferences
-import okhttp3.Request
 
 class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
 
@@ -15,34 +12,88 @@ class RuMIX : GroupLe("RuMIX", "https://rumix.me", "ru") {
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = super.searchMangaRequest(page, query, filters).url.newBuilder()
-        (if (filters.isEmpty()) getFilterList().reversed() else filters.reversed()).forEach { filter ->
-            when (filter) {
-                is OrderBy -> {
-                    if (url.toString().contains("&") && filter.state < 6) {
-                        url.addQueryParameter("sortType", arrayOf("RATING", "POPULARITY", "YEAR", "NAME", "DATE_CREATE", "DATE_UPDATE")[filter.state])
-                    } else {
-                        val ord = arrayOf("rate", "popularity", "year", "name", "created", "updated", "votes")[filter.state]
-                        return GET("$baseUrl/list?sortType=$ord&offset=${70 * (page - 1)}", headers)
-                    }
-                }
-                else -> return@forEach
-            }
-        }
-        return if (url.toString().contains("&")) {
-            GET(url.toString().replace("=%3D", "="), headers)
-        } else {
-            popularMangaRequest(page)
-        }
-    }
-    private class OrderBy : Filter.Select<String>(
-        "Сортировка",
-        arrayOf("По популярности", "Популярно сейчас", "По году", "По имени", "Новинки", "По дате обновления", "По рейтингу"),
-    )
-
     override fun getFilterList() = FilterList(
         OrderBy(),
+        CategoryList(getCategoryList()),
+        GenreList(getGenreList()),
+        AgeList(getAgeList()),
+        AdditionalFilterList(getAdditionalFilterList()),
+    )
+
+    private fun getAdditionalFilterList() = listOf(
+        Genre("Высокий рейтинг", "s_high_rate"),
+        Genre("Сингл", "s_single"),
+        Genre("Для взрослых", "s_mature"),
+        Genre("Завершенная", "s_completed"),
+        Genre("Переведено", "s_translated"),
+        Genre("Заброшен перевод", "s_abandoned_popular"),
+        Genre("Длинная", "s_many_chapters"),
+        Genre("Ожидает загрузки", "s_wait_upload"),
+        Genre("Онгоинг", "s_ongoing"),
+    )
+
+    private fun getAgeList() = listOf(
+        Genre("0+", "el_9154"),
+        Genre("6+", "el_9155"),
+        Genre("12+", "el_9156"),
+        Genre("16+", "el_9139"),
+        Genre("18+", "el_9145"),
+        Genre("G", "el_6180"),
+        Genre("PG", "el_6179"),
+        Genre("PG-13", "el_6181"),
+    )
+
+    private fun getCategoryList() = listOf(
+        Genre("BD", "el_9142"),
+        Genre("В цвете", "el_7290"),
+        Genre("Веб", "el_2160"),
+        Genre("Ёнкома", "el_2161"),
+        Genre("Комикс", "el_3515"),
+        Genre("Манхва", "el_3001"),
+        Genre("Маньхуа", "el_3002"),
+        Genre("Ранобэ", "el_8575"),
+        Genre("Сборник", "el_2157"),
+    )
+
+    private fun getGenreList() = listOf(
+        Genre("арт", "el_5685"),
+        Genre("боевик", "el_2155"),
+        Genre("боевые искусства", "el_2143"),
+        Genre("вампиры", "el_2148"),
+        Genre("вестерн", "el_9150"),
+        Genre("гарем", "el_2142"),
+        Genre("гендерная интрига", "el_2156"),
+        Genre("героическое фэнтези", "el_2146"),
+        Genre("детектив", "el_2152"),
+        Genre("дзёсэй", "el_2158"),
+        Genre("драма", "el_2118"),
+        Genre("игра", "el_2154"),
+        Genre("история", "el_2119"),
+        Genre("киберпанк", "el_8032"),
+        Genre("кодомо", "el_2137"),
+        Genre("комедия", "el_2136"),
+        Genre("махо-сёдзё", "el_2147"),
+        Genre("меха", "el_2126"),
+        Genre("мистика", "el_9151"),
+        Genre("научная фантастика", "el_2133"),
+        Genre("повседневность", "el_2135"),
+        Genre("постапокалиптика", "el_2151"),
+        Genre("приключения", "el_2130"),
+        Genre("психология", "el_2144"),
+        Genre("романтика", "el_2121"),
+        Genre("самурайский боевик", "el_2124"),
+        Genre("сверхъестественное", "el_2159"),
+        Genre("сёдзё", "el_2122"),
+        Genre("сёнэн", "el_2134"),
+        Genre("спорт", "el_2129"),
+        Genre("сэйнэн", "el_2138"),
+        Genre("трагедия", "el_2153"),
+        Genre("триллер", "el_2150"),
+        Genre("ужасы", "el_2125"),
+        Genre("фантастика", "el_9153"),
+        Genre("фэнтези", "el_2131"),
+        Genre("школа", "el_2127"),
+        Genre("этти", "el_2149"),
     )
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {

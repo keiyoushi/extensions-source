@@ -39,7 +39,7 @@ abstract class FansubsCat(
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("User-Agent", "Tachiyomi/${AppInfo.getVersionName()}")
 
-    override val client: OkHttpClient = network.client
+    override val client: OkHttpClient = network.cloudflareClient
 
     private val json: Json by injectLazy()
 

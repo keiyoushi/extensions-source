@@ -28,8 +28,11 @@ class Dmzj : ConfigurableSource, HttpSource() {
     override val baseUrl = "https://m.idmzj.com"
 
     private val preferences: SharedPreferences = getPreferences()
+    init {
+        ApiV3.preferences = preferences
+    }
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageUrlInterceptor)
         .addInterceptor(CommentsInterceptor)
         .rateLimit(4)
@@ -43,7 +46,7 @@ class Dmzj : ConfigurableSource, HttpSource() {
         .build()
 
     // API v4 randomly fails
-    private val retryClient = network.client.newBuilder()
+    private val retryClient = network.cloudflareClient.newBuilder()
         .addInterceptor(RetryInterceptor)
         .rateLimit(2)
         .build()
@@ -104,11 +107,11 @@ class Dmzj : ConfigurableSource, HttpSource() {
             val id = query.removePrefix(PREFIX_ID_SEARCH).removeSuffix(".html")
             Observable.fromCallable { searchMangaById(id) }
         } else {
-            val request = GET(ApiSearch.textSearchUrl(query), headers)
+            val request = GET(ApiSearch.searchUrlV1(page, query), headers)
             Observable.fromCallable {
                 // this API fails randomly, and might return empty list
                 repeat(5) {
-                    val result = ApiSearch.parsePage(client.newCall(request).execute())
+                    val result = ApiSearch.parsePageV1(client.newCall(request).execute())
                     if (result.mangas.isNotEmpty()) return@fromCallable result
                 }
                 throw Exception("搜索出错或无结果")

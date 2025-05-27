@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.buondua
 
+import eu.kanade.tachiyomi.lib.randomua.UserAgentType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -8,17 +11,28 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class BuonDua() : ParsedHttpSource() {
     override val baseUrl = "https://buondua.com"
     override val lang = "all"
     override val name = "Buon Dua"
     override val supportsLatest = true
+
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimitHost(baseUrl.toHttpUrl(), 10, 1, TimeUnit.SECONDS)
+        .setRandomUserAgent(UserAgentType.MOBILE)
+        .build()
+
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     // Latest
     override fun latestUpdatesFromElement(element: Element): SManga {
@@ -43,10 +57,10 @@ class BuonDua() : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/hot?start=${20 * (page - 1)}")
     }
+
     override fun popularMangaSelector() = latestUpdatesSelector()
 
     // Search
-
     override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -57,6 +71,7 @@ class BuonDua() : ParsedHttpSource() {
             else -> popularMangaRequest(page)
         }
     }
+
     override fun searchMangaSelector() = latestUpdatesSelector()
 
     // Details
@@ -72,34 +87,27 @@ class BuonDua() : ParsedHttpSource() {
         return manga
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(element.select(".is-current").first()!!.attr("abs:href"))
-        chapter.chapter_number = 0F
-        chapter.name = element.select(".article-header").text()
-        chapter.date_upload = SimpleDateFormat("H:m DD-MM-yyyy", Locale.US).parse(element.select(".article-info > small").text())?.time ?: 0L
-        return chapter
-    }
-
-    override fun chapterListSelector() = "html"
-
-    // Pages
-
-    override fun pageListParse(document: Document): List<Page> {
-        val numpages = document.selectFirst(".pagination-list")!!.select(".pagination-link")
-        val pages = mutableListOf<Page>()
-
-        numpages.forEachIndexed { index, page ->
-            val doc = when (index) {
-                0 -> document
-                else -> client.newCall(GET(page.attr("abs:href"))).execute().asJsoup()
-            }
-            doc.select(".article-fulltext img").forEach {
-                val itUrl = it.attr("abs:src")
-                pages.add(Page(pages.size, "", itUrl))
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val doc = response.asJsoup()
+        val dateUploadStr = doc.selectFirst(".article-info > small")?.text()
+        val dateUpload = DATE_FORMAT.tryParse(dateUploadStr)
+        val maxPage = doc.select("nav.pagination:first-of-type a.pagination-link").last()?.text()?.toInt() ?: 1
+        val basePageUrl = response.request.url
+        return (maxPage downTo 1).map { page ->
+            SChapter.create().apply {
+                setUrlWithoutDomain("$basePageUrl?page=$page")
+                name = "Page $page"
+                date_upload = dateUpload
             }
         }
-        return pages
+    }
+
+    // Pages
+    override fun pageListParse(document: Document): List<Page> {
+        return document.select(".article-fulltext img")
+            .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("src")) }
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
@@ -114,4 +122,8 @@ class BuonDua() : ParsedHttpSource() {
     class TagFilter : Filter.Text("Tag ID")
 
     private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
+
+    companion object {
+        private val DATE_FORMAT = SimpleDateFormat("H:m DD-MM-yyyy", Locale.US)
+    }
 }

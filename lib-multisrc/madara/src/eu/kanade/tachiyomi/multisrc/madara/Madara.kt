@@ -245,11 +245,13 @@ abstract class Madara(
             val mangaUrl = baseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegment(mangaSubString)
                 addPathSegment(query.substringAfter(URL_SEARCH_PREFIX))
+                addPathSegment("") // add trailing slash
             }.build()
             return client.newCall(GET(mangaUrl, headers))
                 .asObservableSuccess().map { response ->
                     val manga = mangaDetailsParse(response).apply {
                         setUrlWithoutDomain(mangaUrl.toString())
+                        initialized = true
                     }
 
                     MangasPage(listOf(manga), false)
@@ -977,6 +979,8 @@ abstract class Madara(
     open val pageListParseSelector = "div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item)) img"
 
     open val chapterProtectorSelector = "#chapter-protector-data"
+    open val chapterProtectorPasswordPrefix = "wpmangaprotectornonce='"
+    open val chapterProtectorDataPrefix = "chapter_data='"
 
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
@@ -992,11 +996,11 @@ abstract class Madara(
             ?.let { Base64.decode(it, Base64.DEFAULT).toString(Charsets.UTF_8) }
             ?: chapterProtector.html()
         val password = chapterProtectorHtml
-            .substringAfter("wpmangaprotectornonce='")
+            .substringAfter(chapterProtectorPasswordPrefix)
             .substringBefore("';")
         val chapterData = json.parseToJsonElement(
             chapterProtectorHtml
-                .substringAfter("chapter_data='")
+                .substringAfter(chapterProtectorDataPrefix)
                 .substringBefore("';")
                 .replace("\\/", "/"),
         ).jsonObject

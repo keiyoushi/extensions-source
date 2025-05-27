@@ -62,7 +62,7 @@ open class Comico(
             this["Origin"] = baseUrl
         }.build()
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .cookieJar(
             object : CookieJar {
                 override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) =

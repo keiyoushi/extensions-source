@@ -59,7 +59,16 @@ abstract class Keyoapp(
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun popularMangaSelector(): String = "div.flex-col div.grid > div.group.border"
+    open val popularMangaTitleSelector = listOf(
+        "Popular",
+        "Popularie",
+        "Trending",
+    )
+
+    override fun popularMangaSelector(): String = selector(
+        "div:contains(%s) + div .group.overflow-hidden.grid",
+        popularMangaTitleSelector,
+    )
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         thumbnail_url = element.getImageUrl("*[style*=background-image]")
@@ -242,7 +251,7 @@ abstract class Keyoapp(
 
     override fun chapterListSelector(): String {
         if (!preferences.showPaidChapters) {
-            return "#chapters > a:not(:has(.text-sm span:matches(Upcoming))):not(:has(img[src*=Coin.svg]))"
+            return "#chapters > a:not(:has(.text-sm span:matches(Upcoming))):not(:has(img[alt~=Coin]))"
         }
         return "#chapters > a:not(:has(.text-sm span:matches(Upcoming)))"
     }
@@ -354,6 +363,10 @@ abstract class Keyoapp(
             "year" in this -> now.add(Calendar.YEAR, -relativeDate) // parse: "2 years ago"
         }
         return now.timeInMillis
+    }
+
+    private fun selector(selector: String, contains: List<String>): String {
+        return contains.joinToString { selector.replace("%s", it) }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

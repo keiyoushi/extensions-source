@@ -134,12 +134,11 @@ class DeviantArt : HttpSource(), ConfigurableSource {
             nextUrl = newDocument.selectFirst("[rel=next]")?.absUrl("href")
         }
 
-        return chapterList.toList().also(::indexChapterList)
+        return chapterList.also(::orderChapterList).toList()
     }
 
     private fun parseToChapterList(document: Document): List<SChapter> {
-        val items = document.select("item")
-        return items.map {
+        return document.select("item").map {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.selectFirst("link")!!.text())
                 name = it.selectFirst("title")!!.text()
@@ -149,17 +148,15 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         }
     }
 
-    private fun indexChapterList(chapterList: List<SChapter>) {
-        // DeviantArt allows users to arrange galleries arbitrarily so we will
-        // primitively index the list by checking the first and last dates
-        if (chapterList.first().date_upload > chapterList.last().date_upload) {
-            chapterList.forEachIndexed { i, chapter ->
-                chapter.chapter_number = chapterList.size - i.toFloat()
-            }
-        } else {
-            chapterList.forEachIndexed { i, chapter ->
-                chapter.chapter_number = i.toFloat() + 1
-            }
+    private fun orderChapterList(chapterList: MutableList<SChapter>) {
+        // In Mihon's updates tab, chapters are ordered by source instead
+        // of chapter number, so to avoid updates being shown in reverse,
+        // disregard source order and order chronologically instead
+        if (chapterList.first().date_upload < chapterList.last().date_upload) {
+            chapterList.reverse()
+        }
+        chapterList.forEachIndexed { i, chapter ->
+            chapter.chapter_number = chapterList.size - i.toFloat()
         }
     }
 

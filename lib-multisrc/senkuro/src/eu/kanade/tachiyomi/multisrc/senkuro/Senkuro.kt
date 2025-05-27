@@ -40,7 +40,7 @@ abstract class Senkuro(
         .add("Content-Type", "application/json")
 
     override val client: OkHttpClient =
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .rateLimit(3)
             .build()
 

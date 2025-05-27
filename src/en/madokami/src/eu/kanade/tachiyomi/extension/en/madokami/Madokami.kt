@@ -47,7 +47,7 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
         return request.newBuilder().header("Authorization", credential).build()
     }
 
-    override val client: OkHttpClient = super.client.newBuilder().addInterceptor { chain ->
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor { chain ->
         val response = chain.proceed(chain.request())
         if (response.code == 401) throw IOException("You are currently logged out.\nGo to Extensions > Details to input your credentials.")
         response
@@ -74,7 +74,13 @@ class Madokami : ConfigurableSource, ParsedHttpSource() {
 
     override fun popularMangaRequest(page: Int): Request = authenticate(GET("$baseUrl/recent", headers))
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = authenticate(GET("$baseUrl/search?q=$query", headers))
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .build()
+
+        return authenticate(GET(url, headers))
+    }
 
     override fun searchMangaSelector() = "div.container table tbody tr td:nth-child(1) a:nth-child(1)"
 

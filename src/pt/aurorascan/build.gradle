@@ -1,10 +1,10 @@
 ext {
     extName = 'Aurora Scan'
     extClass = '.AuroraScan'
-    themePkg = 'peachscan'
+    themePkg = 'greenshit'
     baseUrl = 'https://aurorascan.net'
     overrideVersionCode = 0
-    isNsfw = true
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

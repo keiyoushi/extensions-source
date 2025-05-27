@@ -1,12 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.hitomi
 
-import android.content.SharedPreferences
 import android.util.Log
-import androidx.preference.ListPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,33 +10,28 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.CacheControl
 import okhttp3.Call
+import okhttp3.HttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.internal.http2.StreamResetException
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.LinkedList
 import java.util.Locale
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 
@@ -48,32 +39,24 @@ import kotlin.time.Duration.Companion.seconds
 class Hitomi(
     override val lang: String,
     private val nozomiLang: String,
-) : HttpSource(), ConfigurableSource {
+) : HttpSource() {
 
     override val name = "Hitomi"
 
-    private val domain = "hitomi.la"
+    private val cdnDomain = "gold-usergeneratedcontent.net"
 
-    override val baseUrl = "https://$domain"
+    override val baseUrl = "https://hitomi.la"
 
-    private val ltnUrl = "https://ltn.$domain"
+    private val ltnUrl = "https://ltn.$cdnDomain"
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
-
-    private val REGEX_IMAGE_URL = """https://.*?a\.$domain/(jxl|avif|webp)/\d+?/\d+/([0-9a-f]{64})\.\1""".toRegex()
-
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::jxlContentTypeInterceptor)
-        .addInterceptor(::updateImageUrlInterceptor)
+        .addInterceptor(::imageUrlInterceptor)
         .apply {
             interceptors().add(0, ::streamResetRetry)
         }
         .build()
-
-    private val preferences: SharedPreferences by getPreferencesLazy()
-    private fun imageType() = preferences.getString(PREF_IMAGETYPE, "webp")!!
 
     override fun headersBuilder() = super.headersBuilder()
         .set("referer", "$baseUrl/")
@@ -508,18 +491,20 @@ class Hitomi(
         }.awaitAll().filterNotNull()
     }
 
-    private suspend fun Gallery.toSManga() = SManga.create().apply {
+    private fun Gallery.toSManga() = SManga.create().apply {
         title = this@toSManga.title
         url = galleryurl
         author = groups?.joinToString { it.formatted } ?: artists?.joinToString { it.formatted }
         artist = artists?.joinToString { it.formatted }
         genre = tags?.joinToString { it.formatted }
         thumbnail_url = files.first().let {
-            val hash = it.hash
-            val imageId = imageIdFromHash(hash)
-            val subDomain = 'a' + subdomainOffset(imageId)
-
-            "https://${subDomain}tn.$domain/webpbigtn/${thumbPathFromHash(hash)}/$hash.webp"
+            HttpUrl.Builder().apply {
+                scheme("https")
+                host(IMAGE_LOOPBACK_HOST)
+                addQueryParameter(IMAGE_THUMBNAIL, "true")
+                addQueryParameter(IMAGE_GIF, it.isGif.toString())
+                fragment(it.hash)
+            }.toString()
         }
         description = buildString {
             japaneseTitle?.let {
@@ -564,11 +549,7 @@ class Hitomi(
                 name = "Chapter"
                 url = gallery.galleryurl
                 scanlator = gallery.type
-                date_upload = try {
-                    dateFormat.parse(gallery.date.substringBeforeLast("-"))!!.time
-                } catch (_: ParseException) {
-                    0L
-                }
+                date_upload = dateFormat.tryParse(gallery.date.substringBeforeLast("-"))
             },
         )
     }
@@ -585,28 +566,20 @@ class Hitomi(
         return GET("$ltnUrl/galleries/$id.js", headers)
     }
 
-    override fun pageListParse(response: Response) = runBlocking {
+    override fun pageListParse(response: Response): List<Page> {
         val gallery = response.parseScriptAs<Gallery>()
         val id = gallery.galleryurl
             .substringAfterLast("-")
             .substringBefore(".")
 
-        gallery.files.mapIndexed { idx, img ->
-            val hash = img.hash
-
-            val typePref = imageType()
-            val avif = img.hasavif == 1 && typePref == "avif"
-            val jxl = img.hasjxl == 1 && typePref == "jxl"
-
-            val commonId = commonImageId()
-            val imageId = imageIdFromHash(hash)
-            val subDomain = 'a' + subdomainOffset(imageId)
-
-            val imageUrl = when {
-                jxl -> "https://${subDomain}a.$domain/jxl/$commonId$imageId/$hash.jxl"
-                avif -> "https://${subDomain}a.$domain/avif/$commonId$imageId/$hash.avif"
-                else -> "https://${subDomain}a.$domain/webp/$commonId$imageId/$hash.webp"
-            }
+        return gallery.files.mapIndexed { idx, img ->
+            // actual logic in imageUrlInterceptor
+            val imageUrl = HttpUrl.Builder().apply {
+                scheme("https")
+                host(IMAGE_LOOPBACK_HOST)
+                addQueryParameter(IMAGE_GIF, img.isGif.toString())
+                fragment(img.hash)
+            }.toString()
 
             Page(
                 idx,
@@ -632,7 +605,7 @@ class Hitomi(
         val body = use { it.body.string() }
         val transformed = transform(body)
 
-        return json.decodeFromString(transformed)
+        return transformed.parseAs()
     }
 
     private suspend fun Call.awaitSuccess() =
@@ -694,45 +667,6 @@ class Hitomi(
         return hash.replace(Regex("""^.*(..)(.)$"""), "$2/$1")
     }
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
-            key = PREF_IMAGETYPE
-            title = "Images Type"
-            entries = arrayOf("webp", "avif", "jxl")
-            entryValues = arrayOf("webp", "avif", "jxl")
-            summary = "Clear chapter cache to apply changes"
-            setDefaultValue("webp")
-        }.also(screen::addPreference)
-    }
-
-    private fun List<Int>.toBytesList(): ByteArray = this.map { it.toByte() }.toByteArray()
-    private val signatureOne = listOf(0xFF, 0x0A).toBytesList()
-    private val signatureTwo = listOf(0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20, 0x0D, 0x0A, 0x87, 0x0A).toBytesList()
-    fun ByteArray.startsWith(byteArray: ByteArray): Boolean {
-        if (this.size < byteArray.size) return false
-        return this.sliceArray(byteArray.indices).contentEquals(byteArray)
-    }
-
-    private fun jxlContentTypeInterceptor(chain: Interceptor.Chain): Response {
-        val response = chain.proceed(chain.request())
-        if (response.headers["Content-Type"] != "application/octet-stream") {
-            return response
-        }
-
-        val bytesPeek = max(signatureOne.size, signatureTwo.size).toLong()
-        val bytesArray = response.peekBody(bytesPeek).bytes()
-        if (!(bytesArray.startsWith(signatureOne) || bytesArray.startsWith(signatureTwo))) {
-            return response
-        }
-
-        val type = "image/jxl"
-        val body = response.body.bytes().toResponseBody(type.toMediaType())
-        return response.newBuilder()
-            .body(body)
-            .header("Content-Type", type)
-            .build()
-    }
-
     private fun streamResetRetry(chain: Interceptor.Chain): Response {
         return try {
             chain.proceed(chain.request())
@@ -747,23 +681,44 @@ class Hitomi(
         }
     }
 
-    private fun updateImageUrlInterceptor(chain: Interceptor.Chain): Response {
+    private fun imageUrlInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-
-        val cleanUrl = request.url.run { "$scheme://$host$encodedPath" }
-        REGEX_IMAGE_URL.matchEntire(cleanUrl)?.let { match ->
-            val (ext, hash) = match.destructured
-
-            val commonId = runBlocking { commonImageId() }
-            val imageId = imageIdFromHash(hash)
-            val subDomain = 'a' + runBlocking { subdomainOffset(imageId) }
-
-            val newUrl = "https://${subDomain}a.$domain/$ext/$commonId$imageId/$hash.$ext"
-            val newRequest = request.newBuilder().url(newUrl).build()
-            return chain.proceed(newRequest)
+        if (request.url.host != IMAGE_LOOPBACK_HOST) {
+            return chain.proceed(request)
         }
 
-        return chain.proceed(request)
+        val hash = request.url.fragment!!
+        val isThumbnail = request.url.queryParameter(IMAGE_THUMBNAIL) == "true"
+        val isGif = request.url.queryParameter(IMAGE_GIF) == "true"
+
+        val type = if (isGif) {
+            "webp"
+        } else {
+            "avif"
+        }
+        val imageId = imageIdFromHash(hash)
+        val subDomainOffset = runBlocking { subdomainOffset(imageId) }
+
+        val imageUrl = if (isThumbnail) {
+            val subDomain = "${'a' + subDomainOffset}tn"
+
+            "https://$subDomain.$cdnDomain/${type}bigtn/${thumbPathFromHash(hash)}/$hash.$type"
+        } else {
+            val commonId = runBlocking { commonImageId() }
+            val subDomain = if (isGif) {
+                "w${subDomainOffset + 1}"
+            } else {
+                "a${subDomainOffset + 1}"
+            }
+
+            "https://$subDomain.$cdnDomain/$commonId$imageId/$hash.$type"
+        }
+
+        val newRequest = request.newBuilder()
+            .url(imageUrl)
+            .build()
+
+        return chain.proceed(newRequest)
     }
 
     override fun popularMangaParse(response: Response) = throw UnsupportedOperationException()
@@ -773,8 +728,8 @@ class Hitomi(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
-
-    companion object {
-        const val PREF_IMAGETYPE = "pref_image_type"
-    }
 }
+
+const val IMAGE_LOOPBACK_HOST = "127.0.0.1"
+const val IMAGE_THUMBNAIL = "is_thumbnail"
+const val IMAGE_GIF = "is_gif"
