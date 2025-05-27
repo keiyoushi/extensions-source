@@ -1,0 +1,10 @@
+ext {
+    extName = 'Little Tyrant'
+    extClass = '.LittleTyrant'
+    themePkg = 'madara'
+    baseUrl = 'https://www.tiraninha.baby'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

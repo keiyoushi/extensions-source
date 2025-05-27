@@ -13,6 +13,7 @@ import keiyoushi.utils.getPreferencesLazy
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class Remangas :
     Madara(
@@ -32,7 +33,9 @@ class Remangas :
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
         )
-        .rateLimit(4)
+        .rateLimit(2)
+        .readTimeout(1, TimeUnit.MINUTES)
+        .connectTimeout(1, TimeUnit.MINUTES)
         .build()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

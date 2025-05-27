@@ -3,11 +3,8 @@ package eu.kanade.tachiyomi.multisrc.mangahub
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.lib.randomua.UserAgentType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -30,12 +27,17 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import rx.Observable
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.brotli.dec.BrotliInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.locks.ReentrantLock
+import java.util.zip.GZIPInputStream
+import kotlin.random.Random
 
 abstract class MangaHub(
     override val name: String,
@@ -50,7 +52,9 @@ abstract class MangaHub(
     private val baseApiUrl = "https://api.mghcdn.com"
     private val baseCdnUrl = "https://imgx.mghcdn.com"
     private val baseThumbCdnUrl = "https://thumb.mghcdn.com"
-    private val regex = Regex("mhub_access=([^;]+)")
+    private val apiRegex = Regex("mhub_access=([^;]+)")
+    private val spaceRegex = Regex("\\s+")
+    private val apiErrorRegex = Regex("""rate\s*limit|api\s*key""")
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -60,13 +64,8 @@ abstract class MangaHub(
     )
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(
-            userAgentType = UserAgentType.DESKTOP,
-            filterInclude = listOf("chrome"),
-        )
         .addInterceptor(::apiAuthInterceptor)
-        .addInterceptor(::graphQLApiInterceptor)
-        .rateLimit(1)
+        .addNetworkInterceptor(::compatEncodingInterceptor)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -79,7 +78,7 @@ abstract class MangaHub(
         .add("Sec-Fetch-Site", "same-origin")
         .add("Upgrade-Insecure-Requests", "1")
 
-    private fun postRequestGraphQL(query: String): Request {
+    private fun postRequestGraphQL(query: String, refreshUrl: String? = null): Request {
         val requestHeaders = headersBuilder()
             .set("Accept", "application/json")
             .set("Content-Type", "application/json")
@@ -96,115 +95,142 @@ abstract class MangaHub(
 
         return POST("$baseApiUrl/graphql", requestHeaders, body.toString().toRequestBody())
             .newBuilder()
-            .tag(GraphQLTag())
+            .tag(GraphQLTag::class.java, GraphQLTag(refreshUrl))
+            .build()
+    }
+
+    // Normally this gets handled properly but in older forks such as TachiyomiJ2K, we have to manually intercept it
+    // as they have an outdated implementation of NetworkHelper.
+    private fun compatEncodingInterceptor(chain: Interceptor.Chain): Response {
+        var response = chain.proceed(chain.request())
+        val contentEncoding = response.header("Content-Encoding")
+
+        if (contentEncoding == "gzip") {
+            val parsedBody = response.body.byteStream().let { gzipInputStream ->
+                GZIPInputStream(gzipInputStream).use { inputStream ->
+                    val outputStream = ByteArrayOutputStream()
+                    inputStream.copyTo(outputStream)
+                    outputStream.toByteArray()
+                }
+            }
+
+            response = response.createNewWithCompatBody(parsedBody)
+        } else if (contentEncoding == "br") {
+            val parsedBody = response.body.byteStream().let { brotliInputStream ->
+                BrotliInputStream(brotliInputStream).use { inputStream ->
+                    val outputStream = ByteArrayOutputStream()
+                    inputStream.copyTo(outputStream)
+                    outputStream.toByteArray()
+                }
+            }
+
+            response = response.createNewWithCompatBody(parsedBody)
+        }
+
+        return response
+    }
+
+    private fun Response.createNewWithCompatBody(outputStream: ByteArray): Response {
+        return this.newBuilder()
+            .body(outputStream.toResponseBody(this.body.contentType()))
+            .removeHeader("Content-Encoding")
             .build()
     }
 
     private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
-        val originalRequest = chain.request()
+        val request = chain.request()
+        val tag = request.tag(GraphQLTag::class.java)
+            ?: return chain.proceed(request) // We won't intercept non-graphql requests (like image retrieval)
 
+        return try {
+            tryApiRequest(chain, request)
+        } catch (e: Throwable) {
+            val noCookie = e is MangaHubCookieNotFound
+            val apiError = e is ApiErrorException &&
+                apiErrorRegex.containsMatchIn(e.message ?: "")
+
+            if (noCookie || apiError) {
+                refreshApiKey(tag.refreshUrl)
+                tryApiRequest(chain, request)
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private fun tryApiRequest(chain: Interceptor.Chain, request: Request): Response {
         val cookie = client.cookieJar
             .loadForRequest(baseUrl.toHttpUrl())
             .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }
+            ?: throw MangaHubCookieNotFound()
 
-        val request =
-            if (originalRequest.url.toString() == "$baseApiUrl/graphql" && cookie != null) {
-                originalRequest.newBuilder()
-                    .header("x-mhub-access", cookie.value)
-                    .build()
-            } else {
-                originalRequest
-            }
+        val apiRequest = request.newBuilder()
+            .header("x-mhub-access", cookie.value)
+            .build()
 
-        return chain.proceed(request)
-    }
+        val response = chain.proceed(apiRequest)
 
-    private fun graphQLApiInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
+        val apiResponse = response.peekBody(Long.MAX_VALUE).string()
+            .parseAs<ApiResponseError>()
 
-        // We won't intercept non-graphql requests (like image retrieval)
-        if (!request.hasGraphQLTag()) {
-            return chain.proceed(request)
-        }
-
-        val response = chain.proceed(request)
-
-        // We don't care about the data, only the possible error associated with it
-        // If we encounter an error, we'll intercept it and throw an error for app to catch
-        val apiResponse = response.peekBody(Long.MAX_VALUE).string().parseAs<ApiResponseError>()
         if (apiResponse.errors != null) {
             response.close() // Avoid leaks
             val errors = apiResponse.errors.joinToString("\n") { it.message }
-            throw IOException(errors)
+            throw ApiErrorException(errors)
         }
 
-        // Everything works fine
         return response
     }
 
-    private fun Request.hasGraphQLTag(): Boolean {
-        return this.tag() is GraphQLTag
-    }
+    private class MangaHubCookieNotFound : IOException("mhub_access cookie not found")
+    private class ApiErrorException(errorMessage: String) : IOException(errorMessage)
 
-    private fun refreshApiKey(chapter: SChapter) {
-        val now = Calendar.getInstance().time.time
+    private val lock = ReentrantLock()
+    private var refreshed = 0L
 
-        val url = "$baseUrl/chapter${chapter.url}".toHttpUrl()
-        val oldKey = client.cookieJar
-            .loadForRequest(baseUrl.toHttpUrl())
-            .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }?.value
+    private fun refreshApiKey(refreshUrl: String? = null) {
+        if (refreshed + 10000 < System.currentTimeMillis() && lock.tryLock()) {
+            val url = when {
+                refreshUrl != null -> refreshUrl
+                else -> "$baseUrl/chapter/martial-peak/chapter-${Random.nextInt(1000, 3000)}"
+            }.toHttpUrl()
 
-        // With the recent changes on how refresh API token works, we are now apparently required to have
-        // a cookie for recently when requesting for a new one. Not having this will result in a hit or miss.
-        val recently = buildJsonObject {
-            putJsonObject((now - (0..3600).random()).toString()) {
-                put("mangaID", (1..42_000).random())
-                put("number", (1..20).random())
+            val oldKey = client.cookieJar
+                .loadForRequest(baseUrl.toHttpUrl())
+                .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }?.value
+
+            for (i in 1..2) {
+                // Clear key cookie
+                val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
+                client.cookieJar.saveFromResponse(url, listOf(cookie))
+
+                try {
+                    // We try requesting again with param if the first one fails
+                    val query = if (i == 2) "?reloadKey=1" else ""
+                    val response = client.newCall(
+                        GET(
+                            "$url$query",
+                            headers.newBuilder()
+                                .set("Referer", "$baseUrl/manga/${url.pathSegments[1]}")
+                                .build(),
+                        ),
+                    ).execute()
+                    val returnedKey =
+                        response.headers["set-cookie"]?.let { apiRegex.find(it)?.groupValues?.get(1) }
+                    response.close() // Avoid potential resource leaks
+
+                    if (returnedKey != oldKey) break // Break out of loop since we got an allegedly valid API key
+                } catch (_: Throwable) {
+                    lock.unlock()
+                    throw Exception("An error occurred while obtaining a new API key") // Show error
+                }
             }
-        }.toString()
-
-        val recentlyCookie = Cookie.Builder()
-            .domain(url.host)
-            .name("recently")
-            .value(URLEncoder.encode(recently, "utf-8"))
-            .expiresAt(now + 2 * 60 * 60 * 24 * 31) // +2 months
-            .build()
-
-        for (i in 1..2) {
-            // Clear key cookie
-            val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
-            client.cookieJar.saveFromResponse(url, listOf(cookie, recentlyCookie))
-
-            // We try requesting again with param if the first one fails
-            val query = if (i == 2) "?reloadKey=1" else ""
-
-            try {
-                val response = client.newCall(
-                    GET(
-                        "$url$query",
-                        headers.newBuilder()
-                            .set("Referer", "$baseUrl/manga/${url.pathSegments[1]}")
-                            .build(),
-                    ),
-                ).execute()
-                val returnedKey = response.headers["set-cookie"]?.let { regex.find(it)?.groupValues?.get(1) }
-                response.close() // Avoid potential resource leaks
-
-                if (returnedKey != oldKey) break // Break out of loop since we got an allegedly valid API key
-            } catch (_: IOException) {
-                throw IOException("An error occurred while obtaining a new API key") // Show error
-            }
+            refreshed = System.currentTimeMillis()
+            lock.unlock()
+        } else {
+            lock.lock() // wait here until lock is released
+            lock.unlock()
         }
-
-        // Sometimes, the new API key is still invalid. To ensure that the token will be fresh and available to use,
-        // we have to mimic how the browser site works. To put it simply, we will send a GET request that indicates what
-        // manga and chapter were browsing. If this succeeded, the API key that we use will be revalidated (assuming that we got an expired one.)
-        // We first need to obtain our public IP first since it is required as a query.
-        val ipRequest = client.newCall(GET("https://api.ipify.org?format=json")).execute()
-        val ip = ipRequest.parseAs<PublicIPResponse>().ip
-
-        // We'll log our action to the site to revalidate the API key in case we got an expired one
-        client.newCall(GET("$baseUrl/action/logHistory2/${url.pathSegments[1]}/${chapter.chapter_number}?browserID=$ip")).execute()
     }
 
     data class SMangaDTO(
@@ -292,7 +318,10 @@ abstract class MangaHub(
 
     // manga details
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return postRequestGraphQL(mangaDetailsQuery(mangaSource, manga.url.removePrefix("/manga/")))
+        return postRequestGraphQL(
+            mangaDetailsQuery(mangaSource, manga.url.removePrefix("/manga/")),
+            refreshUrl = "$baseUrl${manga.url}",
+        )
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -327,7 +356,10 @@ abstract class MangaHub(
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        return postRequestGraphQL(mangaChapterListQuery(mangaSource, manga.url.removePrefix("/manga/")))
+        return postRequestGraphQL(
+            mangaChapterListQuery(mangaSource, manga.url.removePrefix("/manga/")),
+            refreshUrl = "$baseUrl${manga.url}",
+        )
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -339,7 +371,7 @@ abstract class MangaHub(
                 val numberString = "${if (it.number % 1 == 0f) it.number.toInt() else it.number}"
 
                 name = if (!useGenericTitle) {
-                    generateChapterName(it.title.trim().replace("\n", " "), numberString)
+                    generateChapterName(it.title.trim().replace(spaceRegex, " "), numberString)
                 } else {
                     generateGenericChapterName(numberString)
                 }
@@ -371,17 +403,43 @@ abstract class MangaHub(
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterUrl = chapter.url.split("/")
 
-        return postRequestGraphQL(pagesQuery(mangaSource, chapterUrl[1], chapterUrl[2].substringAfter("-").toFloat()))
+        return postRequestGraphQL(
+            pagesQuery(mangaSource, chapterUrl[1], chapterUrl[2].substringAfter("-").toFloat()),
+            refreshUrl = "$baseUrl/chapter${chapter.url}",
+        )
     }
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        super.fetchPageList(chapter)
-            .doOnError { refreshApiKey(chapter) }
-            .retry(1)
 
     override fun pageListParse(response: Response): List<Page> {
         val chapterObject = response.parseAs<ApiChapterPagesResponse>()
         val pages = chapterObject.data.chapter.pages.parseAs<ApiChapterPages>()
+
+        // We'll update the cookie here to match the browser's "recently" opened chapter.
+        // This mimics how the browser works and gives us more chance to receive a valid API key upon refresh
+        val now = Calendar.getInstance().time.time
+        val baseHttpUrl = baseUrl.toHttpUrl()
+        val recently = buildJsonObject {
+            putJsonObject((now).toString()) {
+                put("mangaID", chapterObject.data.chapter.mangaID)
+                put("number", chapterObject.data.chapter.chapterNumber)
+            }
+        }.toString()
+
+        val recentlyCookie = Cookie.Builder()
+            .domain(baseHttpUrl.host)
+            .name("recently")
+            .value(URLEncoder.encode(recently, "utf-8"))
+            .expiresAt(now + 2 * 60 * 60 * 24 * 31) // +2 months
+            .build()
+
+        // Add/update the cookie
+        client.cookieJar.saveFromResponse(baseHttpUrl, listOf(recentlyCookie))
+
+        // We'll log our action to the site to further increase the chance of valid API key
+        val ipRequest = client.newCall(GET("https://api.ipify.org?format=json")).execute()
+        val ip = ipRequest.parseAs<PublicIPResponse>().ip
+
+        client.newCall(GET("$baseUrl/action/logHistory2/${chapterObject.data.chapter.manga.slug}/${chapterObject.data.chapter.chapterNumber}?browserID=$ip")).execute().close()
+        ipRequest.close()
 
         return pages.images.mapIndexed { i, page ->
             Page(i, "", "$baseCdnUrl/${pages.page}$page")
@@ -517,7 +575,7 @@ abstract class MangaHub(
         Genre("Video Games", "video-games"),
         Genre("Monsters", "monsters"),
         Genre("Office Workers", "office-workers"),
-        Genre("system", "system"),
+        Genre("System", "system"),
         Genre("Villainess", "villainess"),
         Genre("Zombies", "zombies"),
         Genre("Vampires", "vampires"),
@@ -540,7 +598,7 @@ abstract class MangaHub(
         Genre("Cheat Systems", "cheat-systems"),
         Genre("Dungeons", "dungeons"),
         Genre("Overpowered", "overpowered"),
-    )
+    ).sortedBy { it.toString() }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
