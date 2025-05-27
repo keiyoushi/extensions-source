@@ -2,8 +2,8 @@ ext {
     extName = 'Moodtoon'
     extClass = '.Moodtoon'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://moodtoon.net'
-    overrideVersionCode = 0
+    baseUrl = 'https://moon-toon.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
