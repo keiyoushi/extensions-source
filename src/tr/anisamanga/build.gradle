@@ -3,7 +3,7 @@ ext {
     extClass = '.AnisaManga'
     themePkg = 'etoshore'
     baseUrl = 'https://anisamanga.net'
-    overrideVersionCode = 42
+    overrideVersionCode = 43
     isNsfw = true
 }
 
