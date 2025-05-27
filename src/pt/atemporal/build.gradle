@@ -1,9 +1,9 @@
 ext {
     extName = 'Atemporal'
     extClass = '.Atemporal'
-    themePkg = 'madara'
+    themePkg = 'mangathemesia'
     baseUrl = 'https://atemporal.cloud'
-    overrideVersionCode = 1
+    overrideVersionCode = 14
     isNsfw = false
 }
 

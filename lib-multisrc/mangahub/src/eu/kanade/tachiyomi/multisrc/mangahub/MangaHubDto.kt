@@ -37,6 +37,9 @@ class ApiChapterData(
 @Serializable
 class ApiChapter(
     val pages: String,
+    val mangaID: Int,
+    @SerialName("number") val chapterNumber: Float,
+    val manga: ApiMangaData,
 )
 
 @Serializable

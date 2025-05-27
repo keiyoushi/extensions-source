@@ -79,6 +79,12 @@ abstract class Comick(
             }
         }.also(screen::addPreference)
 
+        EditTextPreference(screen.context).apply {
+            key = IGNORED_TAGS_PREF
+            title = intl["ignored_tags_title"]
+            summary = intl["ignored_tags_summary"]
+        }.also(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_ALTERNATIVE_TITLES_PREF
             title = intl["show_alternative_titles_title"]
@@ -172,6 +178,20 @@ abstract class Comick(
                     .commit()
             }
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = CHAPTER_SCORE_FILTERING_PREF
+            title = intl["chapter_score_filtering_title"]
+            summaryOff = intl["chapter_score_filtering_off"]
+            summaryOn = intl["chapter_score_filtering_on"]
+            setDefaultValue(CHAPTER_SCORE_FILTERING_DEFAULT)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putBoolean(CHAPTER_SCORE_FILTERING_PREF, newValue as Boolean)
+                    .commit()
+            }
+        }.also(screen::addPreference)
     }
 
     private val SharedPreferences.ignoredGroups: Set<String>
@@ -183,6 +203,14 @@ abstract class Comick(
             ?.sorted()
             .orEmpty()
             .toSet()
+
+    private val SharedPreferences.ignoredTags: String
+        get() = getString(IGNORED_TAGS_PREF, "")
+            ?.split("\n")
+            ?.map(String::trim)
+            ?.filter(String::isNotEmpty)
+            .orEmpty()
+            .joinToString(",")
 
     private val SharedPreferences.showAlternativeTitles: Boolean
         get() = getBoolean(SHOW_ALTERNATIVE_TITLES_PREF, SHOW_ALTERNATIVE_TITLES_DEFAULT)
@@ -209,6 +237,9 @@ abstract class Comick(
 
     private val SharedPreferences.scorePosition: String
         get() = getString(SCORE_POSITION_PREF, SCORE_POSITION_DEFAULT) ?: SCORE_POSITION_DEFAULT
+
+    private val SharedPreferences.chapterScoreFiltering: Boolean
+        get() = getBoolean(CHAPTER_SCORE_FILTERING_PREF, CHAPTER_SCORE_FILTERING_DEFAULT)
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", "$baseUrl/")
@@ -243,8 +274,13 @@ abstract class Comick(
 
     /** Popular Manga **/
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/v1.0/search?sort=follow&limit=$LIMIT&page=$page&tachiyomi=true"
-        return GET(url, headers)
+        return searchMangaRequest(
+            page = page,
+            query = "",
+            filters = FilterList(
+                SortFilter("follow"),
+            ),
+        )
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -257,8 +293,13 @@ abstract class Comick(
 
     /** Latest Manga **/
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/v1.0/search?sort=uploaded&limit=$LIMIT&page=$page&tachiyomi=true"
-        return GET(url, headers)
+        return searchMangaRequest(
+            page = page,
+            query = "",
+            filters = FilterList(
+                SortFilter("uploaded"),
+            ),
+        )
     }
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
@@ -316,7 +357,7 @@ abstract class Comick(
     }
 
     private fun addTagQueryParameters(builder: Builder, tags: String, parameterName: String) {
-        tags.split(",").forEach {
+        tags.split(",").filter(String::isNotEmpty).forEach {
             builder.addQueryParameter(
                 parameterName,
                 it.trim().lowercase().replace(SPACE_AND_SLASH_REGEX, "-")
@@ -412,6 +453,7 @@ abstract class Comick(
                     else -> {}
                 }
             }
+            addTagQueryParameters(this, preferences.ignoredTags, "excluded-tags")
             addQueryParameter("tachiyomi", "true")
             addQueryParameter("limit", "$LIMIT")
             addQueryParameter("page", "$page")
@@ -521,7 +563,17 @@ abstract class Comick(
 
                 publishedChapter && noGroupBlock
             }
+            .filterOnScore(preferences.chapterScoreFiltering)
             .map { it.toSChapter(mangaUrl) }
+    }
+
+    private fun List<Chapter>.filterOnScore(shouldFilter: Boolean): Collection<Chapter> {
+        if (shouldFilter) {
+            return groupBy { it.chap }
+                .map { (_, chapters) -> chapters.maxBy { it.score } }
+        } else {
+            return this
+        }
     }
 
     private val publishedDateFormat =
@@ -587,6 +639,7 @@ abstract class Comick(
         const val SLUG_SEARCH_PREFIX = "id:"
         private val SPACE_AND_SLASH_REGEX = Regex("[ /]")
         private const val IGNORED_GROUPS_PREF = "IgnoredGroups"
+        private const val IGNORED_TAGS_PREF = "IgnoredTags"
         private const val SHOW_ALTERNATIVE_TITLES_PREF = "ShowAlternativeTitles"
         const val SHOW_ALTERNATIVE_TITLES_DEFAULT = false
         private const val INCLUDE_MU_TAGS_PREF = "IncludeMangaUpdatesTags"
@@ -600,6 +653,8 @@ abstract class Comick(
         const val SCORE_POSITION_DEFAULT = "top"
         private const val LOCAL_TITLE_PREF = "LocalTitle"
         private const val LOCAL_TITLE_DEFAULT = false
+        private const val CHAPTER_SCORE_FILTERING_PREF = "ScoreAutoFiltering"
+        private const val CHAPTER_SCORE_FILTERING_DEFAULT = false
         private const val LIMIT = 20
         private const val CHAPTERS_LIMIT = 99999
     }

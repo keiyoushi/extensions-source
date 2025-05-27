@@ -9,7 +9,7 @@ fun getFilters(): FilterList {
         GenreFilter("Genre", getGenresList),
         DemographicFilter("Demographic", getDemographicList),
         TypeFilter("Type", getTypeList),
-        SortFilter("Sort", getSortsList),
+        SortFilter(),
         StatusFilter("Status", getStatusList),
         ContentRatingFilter("Content Rating", getContentRatingList),
         CompletedFilter("Completely Scanlated?"),
@@ -50,8 +50,8 @@ internal class FromYearFilter(name: String) : TextFilter(name)
 
 internal class ToYearFilter(name: String) : TextFilter(name)
 
-internal class SortFilter(name: String, sortList: List<Pair<String, String>>, state: Int = 0) :
-    SelectFilter(name, sortList, state)
+internal class SortFilter(defaultValue: String? = null, state: Int = 0) :
+    SelectFilter("Sort", getSortsList, state, defaultValue)
 
 internal class StatusFilter(name: String, statusList: List<Pair<String, String>>, state: Int = 0) :
     SelectFilter(name, statusList, state)
@@ -66,8 +66,8 @@ internal open class TextFilter(name: String) : Filter.Text(name)
 
 internal open class CheckBoxFilter(name: String, val value: String = "") : Filter.CheckBox(name)
 
-internal open class SelectFilter(name: String, private val vals: List<Pair<String, String>>, state: Int = 0) :
-    Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+internal open class SelectFilter(name: String, private val vals: List<Pair<String, String>>, state: Int = 0, defaultValue: String? = null) :
+    Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), vals.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: state) {
     fun getValue() = vals[state].second
 }
 

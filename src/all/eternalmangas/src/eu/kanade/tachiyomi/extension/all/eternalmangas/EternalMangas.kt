@@ -2,16 +2,24 @@ package eu.kanade.tachiyomi.extension.all.eternalmangas
 
 import eu.kanade.tachiyomi.multisrc.mangaesp.MangaEsp
 import eu.kanade.tachiyomi.multisrc.mangaesp.SeriesDto
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.serialization.Serializable
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
+import rx.Observable
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -26,14 +34,56 @@ open class EternalMangas(
 ) {
     override val useApiSearch = true
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val responseData = json.decodeFromString<LatestUpdatesDto>(response.body.string())
-        val mangas = responseData.updates[internalLang]?.flatten()?.map { it.toSManga(seriesPath) } ?: emptyList()
-        return MangasPage(mangas, false)
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return super.fetchSearchManga(page, "", createSortFilter("views", false))
+    }
+
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        return super.fetchSearchManga(page, "", createSortFilter("updated_at", false))
     }
 
     override fun List<SeriesDto>.additionalParse(): List<SeriesDto> {
         return this.filter { it.language == internalLang }.toMutableList()
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        return GET("$baseUrl/comics", headers)
+    }
+
+    private val dataUrl = "https://raw.githubusercontent.com/bapeey/extensions-tools/refs/heads/main/keiyoushi/eternalmangas/values.txt"
+
+    override fun searchMangaParse(
+        response: Response,
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): MangasPage {
+        val (apiComicsUrl, jsonHeaders, useApi, scriptSelector, comicsRegex) = client.newCall(GET(dataUrl)).execute().body.string().split("\n")
+        val apiSearch = useApi == "1"
+        comicsList = if (apiSearch) {
+            val headersJson = json.parseToJsonElement(jsonHeaders).jsonObject
+            val apiHeaders = headersBuilder()
+            headersJson.forEach { (key, jsonElement) ->
+                var value = jsonElement.jsonPrimitive.contentOrNull.orEmpty()
+                if (value.startsWith("1-")) {
+                    val match = value.substringAfter("-").toRegex().find(response.body.string())
+                    value = match?.groupValues?.get(1).orEmpty()
+                } else {
+                    value = value.substringAfter("-")
+                }
+                apiHeaders.add(key, value)
+            }
+            val apiResponse = client.newCall(GET(apiComicsUrl, apiHeaders.build())).execute()
+            json.decodeFromString<List<SeriesDto>>(apiResponse.body.string()).toMutableList()
+        } else {
+            val script = response.asJsoup().select(scriptSelector).joinToString { it.data() }
+            val jsonString = comicsRegex.toRegex().find(script)?.groupValues?.get(1)
+                ?: throw Exception(intl["comics_list_error"])
+            val unescapedJson = jsonString.unescape()
+            json.decodeFromString<List<SeriesDto>>(unescapedJson).toMutableList()
+        }
+
+        return parseComicsList(page, query, filters)
     }
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
@@ -92,7 +142,7 @@ open class EternalMangas(
     private fun jsRedirect(response: Response): String {
         var body = response.body.string()
         val document = Jsoup.parse(body)
-        document.selectFirst("body > form[method=post]")?.let {
+        document.selectFirst("body > form[method=post], body > div[hidden] > form[method=post]")?.let {
             val action = it.attr("action")
             val inputs = it.select("input")
 
@@ -106,8 +156,13 @@ open class EternalMangas(
         return body
     }
 
-    @Serializable
-    class LatestUpdatesDto(
-        val updates: Map<String, List<List<SeriesDto>>>,
-    )
+    private fun createSortFilter(value: String, ascending: Boolean = false): FilterList {
+        val sortProperties = getSortProperties()
+        val index = sortProperties.indexOfFirst { it.value == value }.takeIf { it >= 0 } ?: 0
+        return FilterList(
+            SortByFilter("", sortProperties).apply {
+                state = Filter.Sort.Selection(index, ascending)
+            },
+        )
+    }
 }
