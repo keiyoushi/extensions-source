@@ -185,11 +185,11 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
     override fun getFilterList(): FilterList {
         return FilterList(
             SortFilter(0),
-            RegionFilter,
-            TagFilter,
-            AudienceFilter,
-            YearFilter,
-            StatusFilter,
+            RegionFilter(),
+            TagFilter(),
+            AudienceFilter(),
+            YearFilter(),
+            StatusFilter(),
         )
     }
 

@@ -32,7 +32,7 @@ class SortFilter(state: Int) : UriPartFilter(
     }
 }
 
-object RegionFilter : UriPartFilter(
+class RegionFilter : UriPartFilter(
     "filter[country]",
     "作品地区",
     listOf(
@@ -46,7 +46,7 @@ object RegionFilter : UriPartFilter(
     ),
 )
 
-object TagFilter : UriPartFilter(
+class TagFilter : UriPartFilter(
     "filter[tag]",
     "作品类型",
     listOf(
@@ -92,7 +92,7 @@ object TagFilter : UriPartFilter(
     ),
 )
 
-object AudienceFilter : UriPartFilter(
+class AudienceFilter : UriPartFilter(
     "filter[audience]",
     "适合受众",
     listOf(
@@ -105,7 +105,7 @@ object AudienceFilter : UriPartFilter(
     ),
 )
 
-object YearFilter : UriPartFilter(
+class YearFilter : UriPartFilter(
     "filter[year]",
     "出品年份",
     listOf(
@@ -133,7 +133,7 @@ object YearFilter : UriPartFilter(
     ),
 )
 
-object StatusFilter : UriPartFilter(
+class StatusFilter : UriPartFilter(
     "filter[end]",
     "目前进度",
     listOf(
