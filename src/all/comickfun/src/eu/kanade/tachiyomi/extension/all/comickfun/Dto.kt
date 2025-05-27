@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.comickfun
 import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.GROUP_TAGS_DEFAULT
 import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.INCLUDE_MU_TAGS_DEFAULT
 import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.SCORE_POSITION_DEFAULT
+import eu.kanade.tachiyomi.extension.all.comickfun.Comick.Companion.SHOW_ALTERNATIVE_TITLES_DEFAULT
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
@@ -36,13 +37,20 @@ class Manga(
     fun toSManga(
         includeMuTags: Boolean = INCLUDE_MU_TAGS_DEFAULT,
         scorePosition: String = SCORE_POSITION_DEFAULT,
+        showAlternativeTitles: Boolean = SHOW_ALTERNATIVE_TITLES_DEFAULT,
         covers: List<MDcovers>? = null,
         groupTags: Boolean = GROUP_TAGS_DEFAULT,
-    ) =
-        SManga.create().apply {
+        titleLang: String,
+    ): SManga {
+        val entryTitle = comic.altTitles.firstOrNull {
+            titleLang != "all" && !it.lang.isNullOrBlank() && titleLang.startsWith(it.lang)
+        }?.title ?: comic.title
+        val titles = listOf(Title(title = comic.title)) + comic.altTitles
+
+        return SManga.create().apply {
             // appennding # at end as part of migration from slug to hid
             url = "/comic/${comic.hid}#"
-            title = comic.title
+            title = entryTitle
             description = buildString {
                 if (scorePosition == "top") append(comic.fancyScore)
                 val desc = comic.desc?.beautifyDescription()
@@ -54,13 +62,14 @@ class Manga(
                     if (this.isNotEmpty()) append("\n\n")
                     append(comic.fancyScore)
                 }
-                if (comic.altTitles.isNotEmpty()) {
+                if (showAlternativeTitles && comic.altTitles.isNotEmpty()) {
                     if (this.isNotEmpty()) append("\n\n")
                     append("Alternative Titles:\n")
                     append(
-                        comic.altTitles.mapNotNull { title ->
-                            title.title?.let { "• $it" }
-                        }.joinToString("\n"),
+                        titles.distinctBy { it.title }.filter { it.title != entryTitle }
+                            .mapNotNull { title ->
+                                title.title?.let { "• $it" }
+                            }.joinToString("\n"),
                     )
                 }
                 if (scorePosition == "bottom") {
@@ -95,6 +104,7 @@ class Manga(
                 .filterNot { it.name.isNullOrBlank() || it.group.isNullOrBlank() }
                 .joinToString { if (groupTags) "${it.group}:${it.name?.trim()}" else "${it.name?.trim()}" }
         }
+    }
 }
 
 @Serializable
@@ -169,6 +179,7 @@ class MDcovers(
 @Serializable
 class Title(
     val title: String?,
+    val lang: String? = null,
 )
 
 @Serializable
@@ -188,10 +199,14 @@ class Chapter(
     private val title: String = "",
     @SerialName("created_at") private val createdAt: String = "",
     @SerialName("publish_at") val publishedAt: String = "",
-    private val chap: String = "",
+    val chap: String = "",
     private val vol: String = "",
     @SerialName("group_name") val groups: List<String> = emptyList(),
+    @SerialName("up_count") private val upCount: Int,
+    @SerialName("down_count") private val downCount: Int,
 ) {
+    val score get() = upCount - downCount
+
     fun toSChapter(mangaUrl: String) = SChapter.create().apply {
         url = "$mangaUrl/$hid-chapter-$chap-$lang"
         name = beautifyChapterName(vol, chap, title)

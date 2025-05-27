@@ -37,7 +37,6 @@ class ManhwaWeb : HttpSource() {
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
         .add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
 
     override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/manhwa/nuevos", headers)
@@ -133,7 +132,9 @@ class ManhwaWeb : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = json.decodeFromString<PayloadChapterDto>(response.body.string())
-        val chapters = result.chapters.filterNot { it.espUrl == null && it.rawUrl == null }.map { it.toSChapter() }
+        val chapters = result.chapters.filterNot {
+            it.createdAt == null || (it.espUrl == null && it.rawUrl == null)
+        }.map { it.toSChapter() }
 
         return chapters.sortedByDescending { it.chapter_number }
     }
@@ -153,7 +154,7 @@ class ManhwaWeb : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val result = json.decodeFromString<PayloadPageDto>(response.body.string())
-        return result.data.images.filter { it.isNotBlank() }
+        return result.data.images.filter { it.startsWith("http") }
             .mapIndexed { i, img -> Page(i, imageUrl = img) }
     }
 

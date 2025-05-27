@@ -1,9 +1,9 @@
 ext {
-    extName = 'Visor Inari'
-    extClass = '.VisorInari'
+    extName = 'Inari Manga'
+    extClass = '.InariManga'
     themePkg = 'madara'
-    baseUrl = 'https://inarimanga.yevadu.com'
-    overrideVersionCode = 10
+    baseUrl = 'https://clubinari.org'
+    overrideVersionCode = 11
     isNsfw = true
 }
 

@@ -26,7 +26,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class HenChan : MultiChan("HenChan", "https://xxxxx.hentaichan.live", "ru"), ConfigurableSource {
+class HenChan : MultiChan("HenChan", "https://xxl.hentaichan.live", "ru"), ConfigurableSource {
 
     override val id = 5504588601186153612
 
@@ -497,6 +497,6 @@ class HenChan : MultiChan("HenChan", "https://xxxxx.hentaichan.live", "ru"), Con
 
     companion object {
         private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://xxxxx.hentaichan.live"
+        private const val DOMAIN_DEFAULT = "https://xxl.hentaichan.live"
     }
 }

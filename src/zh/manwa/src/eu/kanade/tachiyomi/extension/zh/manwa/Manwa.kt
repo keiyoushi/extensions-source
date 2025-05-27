@@ -63,7 +63,7 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(rewriteOctetStream)
         .build()
 

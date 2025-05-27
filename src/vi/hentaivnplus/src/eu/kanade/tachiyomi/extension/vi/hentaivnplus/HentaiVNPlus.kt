@@ -12,7 +12,7 @@ import java.util.Locale
 class HentaiVNPlus :
     Madara(
         "HentaiVN.plus",
-        "https://hentaivn.art",
+        "https://hentaivn.cash",
         "vi",
         dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
     ),
@@ -21,6 +21,8 @@ class HentaiVNPlus :
     override val useNewChapterEndpoint = false
 
     override val mangaSubString = "truyen-hentai"
+
+    override val pageListParseSelector = ".reading-content img"
 
     private val preferences: SharedPreferences = getPreferences()
 

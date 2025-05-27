@@ -1,14 +1,20 @@
 package eu.kanade.tachiyomi.extension.vi.dualeotruyen
 
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -18,11 +24,35 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class DuaLeoTruyen : ParsedHttpSource() {
+class DuaLeoTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Dưa Leo Truyện"
 
-    override val baseUrl = "https://dualeotruyenbeta.com"
+    private val isCi = System.getenv("CI") == "true"
+
+    override val baseUrl: String get() = when {
+        isCi -> defaultBaseUrl
+        else -> preferences.prefBaseUrl
+    }
+
+    private var cachedBaseUrl: String = ""
+    private val SharedPreferences.prefBaseUrl: String get() {
+        return cachedBaseUrl.takeIf(String::isNotBlank)
+            ?: getString(BASE_URL_PREF, defaultBaseUrl)!!.also { cachedBaseUrl = it }
+    }
+
+    private val preferences: SharedPreferences by getPreferencesLazy {
+        getString(DEFAULT_BASE_URL_PREF, "").let { domain ->
+            if (domain != defaultBaseUrl) {
+                edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
+    private val defaultBaseUrl: String = "https://dualeotruyeno.com"
 
     override val lang = "vi"
 
@@ -205,6 +235,31 @@ class DuaLeoTruyen : ParsedHttpSource() {
         Genre("Doujinshi", "the-loai/doujinshi.html"),
         Genre("ABO", "the-loai/abo.html"),
     )
-}
 
-private val DATE_FORMAT = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = URL_PREF_SUMMARY
+
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $defaultBaseUrl"
+
+            setDefaultValue(defaultBaseUrl)
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val BASE_URL_PREF_TITLE = "Edit URL"
+        private const val URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting. Leave blank to use the default URL"
+        private const val RESTART_APP_MESSAGE = "Restart app to apply new setting."
+        private val DATE_FORMAT = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+    }
+}

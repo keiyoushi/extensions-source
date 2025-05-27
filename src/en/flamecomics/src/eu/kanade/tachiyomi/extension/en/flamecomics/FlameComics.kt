@@ -22,6 +22,7 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
@@ -42,7 +43,7 @@ class FlameComics : HttpSource() {
         .addInterceptor(::composedImageIntercept)
         .build()
 
-    private val removeSpecialCharsregex = Regex("[^A-Za-z0-9 ]")
+    private val removeSpecialCharsRegex = Regex("[^A-Za-z0-9 ]")
 
     private fun dataApiReqBuilder() = baseUrl.toHttpUrl().newBuilder().apply {
         addPathSegment("_next")
@@ -55,11 +56,22 @@ class FlameComics : HttpSource() {
         addPathSegment("image")
     }.build().toString() + "?url=$dataUrl"
 
+    private fun thumbnailUrl(seriesData: Series) = imageApiUrlBuilder(
+        cdn.toHttpUrl().newBuilder().apply {
+            addPathSegment("series")
+            addPathSegment(seriesData.series_id.toString())
+            addPathSegment(seriesData.cover)
+            addQueryParameter(seriesData.last_edit, null)
+            addQueryParameter("w", "384")
+            addQueryParameter("q", "75")
+        }.build().toString(),
+    )
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         GET(
             dataApiReqBuilder().apply {
                 addPathSegment("browse.json")
-                fragment("$page&${removeSpecialCharsregex.replace(query.lowercase(), "")}")
+                fragment("$page&${removeSpecialCharsRegex.replace(query.lowercase(), "")}")
             }.build(),
             headers,
         )
@@ -89,10 +101,10 @@ class FlameComics : HttpSource() {
                     titles += json.decodeFromString<List<String>>(series.altTitles)
                 }
                 titles.any { title ->
-                    removeSpecialCharsregex.replace(
+                    removeSpecialCharsRegex.replace(
                         query.lowercase(),
                         "",
-                    ) in removeSpecialCharsregex.replace(
+                    ) in removeSpecialCharsRegex.replace(
                         title.lowercase(),
                         "",
                     )
@@ -112,14 +124,7 @@ class FlameComics : HttpSource() {
                             addPathSegment(seriesData.series_id.toString())
                         }.build().toString(),
                     )
-                    thumbnail_url = imageApiUrlBuilder(
-                        cdn.toHttpUrl().newBuilder().apply {
-                            addPathSegment("series")
-                            addPathSegment(seriesData.series_id.toString())
-                            addPathSegment(seriesData.cover)
-                        }.build()
-                            .toString() + "&w=640&q=75", // for some reason they don`t include the ?
-                    )
+                    thumbnail_url = thumbnailUrl(seriesData)
                 }
             },
             false,
@@ -151,14 +156,7 @@ class FlameComics : HttpSource() {
                         addPathSegment(seriesData.series_id.toString())
                     }.build().toString(),
                 )
-                thumbnail_url = imageApiUrlBuilder(
-                    cdn.toHttpUrl().newBuilder().apply {
-                        addPathSegment("series")
-                        addPathSegment(seriesData.series_id.toString())
-                        addPathSegment(seriesData.cover)
-                    }.build()
-                        .toString() + "&w=640&q=75", // for some reason they don`t include the ?
-                )
+                thumbnail_url = thumbnailUrl(seriesData)
             }
         }
 
@@ -187,20 +185,15 @@ class FlameComics : HttpSource() {
         val seriesData =
             json.decodeFromString<MangaPageData>(response.body.string()).pageProps.series
         title = seriesData.title
-        thumbnail_url = imageApiUrlBuilder(
-            cdn.toHttpUrl().newBuilder().apply {
-                addPathSegment("series")
-                addPathSegment(seriesData.series_id.toString())
-                addPathSegment(seriesData.cover)
-            }.build().toString() + "&w=640&q=75",
-        )
-        description = seriesData.description
+        thumbnail_url = thumbnailUrl(seriesData)
+        description = Jsoup.parseBodyFragment(seriesData.description).wholeText()
 
         genre = seriesData.tags?.let { tags ->
             (listOf(seriesData.type) + tags).joinToString()
         } ?: seriesData.type
 
-        author = seriesData.author
+        author = seriesData.author?.joinToString()
+        artist = seriesData.artist?.joinToString()
         status = when (seriesData.status.lowercase()) {
             "ongoing" -> SManga.ONGOING
             "dropped" -> SManga.CANCELLED

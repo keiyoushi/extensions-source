@@ -110,15 +110,32 @@ class RizzComic : MangaThemesiaAlt(
         @SerialName("genre_id") val genres: String? = null,
     ) {
         val slug get() = title.trim().lowercase()
+            .replace("'", "")
             .replace(slugRegex, "-")
             .replace("-s-", "s-")
             .replace("-ll-", "ll-")
+            .trim('-')
 
         val genreIds get() = genres?.split(",")?.map(String::trim)
 
         companion object {
             private val slugRegex = Regex("""[^a-z0-9]+""")
         }
+    }
+
+    override fun String?.parseStatus(): Int = when {
+        this == null -> SManga.UNKNOWN
+
+        listOf("ongoing", "new season", "mass released")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
+        listOf("completed")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.COMPLETED
+        listOf("dropped")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
+        listOf("hiatus", "season end")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
+
+        else -> SManga.UNKNOWN
     }
 
     override fun searchMangaParse(response: Response): MangasPage {

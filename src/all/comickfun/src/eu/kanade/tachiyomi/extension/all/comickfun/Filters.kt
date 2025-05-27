@@ -9,8 +9,9 @@ fun getFilters(): FilterList {
         GenreFilter("Genre", getGenresList),
         DemographicFilter("Demographic", getDemographicList),
         TypeFilter("Type", getTypeList),
-        SortFilter("Sort", getSortsList),
+        SortFilter(),
         StatusFilter("Status", getStatusList),
+        ContentRatingFilter("Content Rating", getContentRatingList),
         CompletedFilter("Completely Scanlated?"),
         CreatedAtFilter("Created at", getCreatedAtList),
         MinimumFilter("Minimum Chapters"),
@@ -20,6 +21,7 @@ fun getFilters(): FilterList {
         ToYearFilter("To"),
         Filter.Header("Separate tags with commas"),
         TagFilter("Tags"),
+        ExcludedTagFilter("Excluded Tags"),
     )
 }
 
@@ -29,8 +31,10 @@ internal class GenreFilter(name: String, genreList: List<Pair<String, String>>) 
 
 internal class TagFilter(name: String) : TextFilter(name)
 
+internal class ExcludedTagFilter(name: String) : TextFilter(name)
+
 internal class DemographicFilter(name: String, demographicList: List<Pair<String, String>>) :
-    Filter.Group<TriFilter>(name, demographicList.map { TriFilter(it.first, it.second) })
+    Filter.Group<CheckBoxFilter>(name, demographicList.map { CheckBoxFilter(it.first, it.second) })
 
 internal class TypeFilter(name: String, typeList: List<Pair<String, String>>) :
     Filter.Group<CheckBoxFilter>(name, typeList.map { CheckBoxFilter(it.first, it.second) })
@@ -46,10 +50,13 @@ internal class FromYearFilter(name: String) : TextFilter(name)
 
 internal class ToYearFilter(name: String) : TextFilter(name)
 
-internal class SortFilter(name: String, sortList: List<Pair<String, String>>, state: Int = 0) :
-    SelectFilter(name, sortList, state)
+internal class SortFilter(defaultValue: String? = null, state: Int = 0) :
+    SelectFilter("Sort", getSortsList, state, defaultValue)
 
 internal class StatusFilter(name: String, statusList: List<Pair<String, String>>, state: Int = 0) :
+    SelectFilter(name, statusList, state)
+
+internal class ContentRatingFilter(name: String, statusList: List<Pair<String, String>>, state: Int = 0) :
     SelectFilter(name, statusList, state)
 
 /** Generics **/
@@ -59,8 +66,8 @@ internal open class TextFilter(name: String) : Filter.Text(name)
 
 internal open class CheckBoxFilter(name: String, val value: String = "") : Filter.CheckBox(name)
 
-internal open class SelectFilter(name: String, private val vals: List<Pair<String, String>>, state: Int = 0) :
-    Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
+internal open class SelectFilter(name: String, private val vals: List<Pair<String, String>>, state: Int = 0, defaultValue: String? = null) :
+    Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), vals.indexOfFirst { it.second == defaultValue }.takeIf { it != -1 } ?: state) {
     fun getValue() = vals[state].second
 }
 
@@ -156,12 +163,14 @@ private val getDemographicList: List<Pair<String, String>> = listOf(
     Pair("Shoujo", "2"),
     Pair("Seinen", "3"),
     Pair("Josei", "4"),
+    Pair("None", "5"),
 )
 
 private val getTypeList: List<Pair<String, String>> = listOf(
     Pair("Manga", "jp"),
     Pair("Manhwa", "kr"),
     Pair("Manhua", "cn"),
+    Pair("Others", "others"),
 )
 
 private val getCreatedAtList: List<Pair<String, String>> = listOf(
@@ -189,4 +198,11 @@ private val getStatusList: List<Pair<String, String>> = listOf(
     Pair("Completed", "2"),
     Pair("Cancelled", "3"),
     Pair("Hiatus", "4"),
+)
+
+private val getContentRatingList: List<Pair<String, String>> = listOf(
+    Pair("All", ""),
+    Pair("Safe", "safe"),
+    Pair("Suggestive", "suggestive"),
+    Pair("Erotica", "erotica"),
 )

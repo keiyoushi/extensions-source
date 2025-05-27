@@ -1,62 +1,71 @@
 package eu.kanade.tachiyomi.multisrc.mangahub
 
-import eu.kanade.tachiyomi.lib.randomua.UserAgentType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.Cookie
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
-import rx.Observable
-import uy.kohesive.injekt.injectLazy
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.brotli.dec.BrotliInputStream
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.net.URLEncoder
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.locks.ReentrantLock
+import java.util.zip.GZIPInputStream
+import kotlin.random.Random
 
 abstract class MangaHub(
     override val name: String,
     final override val baseUrl: String,
     override val lang: String,
     private val mangaSource: String,
-    private val dateFormat: SimpleDateFormat = SimpleDateFormat("MM-dd-yyyy", Locale.US),
-) : ParsedHttpSource() {
+    private val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ENGLISH),
+) : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    private var baseApiUrl = "https://api.mghcdn.com"
-    private var baseCdnUrl = "https://imgx.mghcdn.com"
+    private val baseApiUrl = "https://api.mghcdn.com"
+    private val baseCdnUrl = "https://imgx.mghcdn.com"
+    private val baseThumbCdnUrl = "https://thumb.mghcdn.com"
+    private val apiRegex = Regex("mhub_access=([^;]+)")
+    private val spaceRegex = Regex("\\s+")
+    private val apiErrorRegex = Regex("""rate\s*limit|api\s*key""")
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
+    private fun SharedPreferences.getUseGenericTitlePref(): Boolean = getBoolean(
+        PREF_USE_GENERIC_TITLE,
+        false,
+    )
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .setRandomUserAgent(
-            userAgentType = UserAgentType.DESKTOP,
-            filterInclude = listOf("chrome"),
-        )
         .addInterceptor(::apiAuthInterceptor)
-        .rateLimit(1)
+        .addNetworkInterceptor(::compatEncodingInterceptor)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -69,295 +78,8 @@ abstract class MangaHub(
         .add("Sec-Fetch-Site", "same-origin")
         .add("Upgrade-Insecure-Requests", "1")
 
-    open val json: Json by injectLazy()
-
-    private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
-        val originalRequest = chain.request()
-
-        val cookie = client.cookieJar
-            .loadForRequest(baseUrl.toHttpUrl())
-            .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }
-
-        val request =
-            if (originalRequest.url.toString() == "$baseApiUrl/graphql" && cookie != null) {
-                originalRequest.newBuilder()
-                    .header("x-mhub-access", cookie.value)
-                    .build()
-            } else {
-                originalRequest
-            }
-
-        return chain.proceed(request)
-    }
-
-    private fun refreshApiKey(chapter: SChapter) {
-        val now = Calendar.getInstance().time.time
-
-        val slug = "$baseUrl${chapter.url}"
-            .toHttpUrlOrNull()
-            ?.pathSegments
-            ?.get(1)
-
-        val url = if (slug != null) {
-            "$baseUrl/manga/$slug".toHttpUrl()
-        } else {
-            baseUrl.toHttpUrl()
-        }
-
-        // Clear key cookie
-        val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
-        client.cookieJar.saveFromResponse(url, listOf(cookie))
-
-        // Set required cookie (for cache busting?)
-        val recently = buildJsonObject {
-            putJsonObject((now - (0..3600).random()).toString()) {
-                put("mangaID", (1..42_000).random())
-                put("number", (1..20).random())
-            }
-        }.toString()
-
-        client.cookieJar.saveFromResponse(
-            url,
-            listOf(
-                Cookie.Builder()
-                    .domain(url.host)
-                    .name("recently")
-                    .value(URLEncoder.encode(recently, "utf-8"))
-                    .expiresAt(now + 2 * 60 * 60 * 24 * 31) // +2 months
-                    .build(),
-            ),
-        )
-
-        val request = GET("$url?reloadKey=1", headers)
-        client.newCall(request).execute()
-    }
-
-    data class SMangaDTO(
-        val url: String,
-        val title: String,
-        val thumbnailUrl: String,
-        val signature: String,
-    )
-
-    private fun Element.toSignature(): String {
-        val author = this.select("small").text()
-        val chNum = this.select(".col-sm-6 a:contains(#)").text()
-        val genres = this.select(".genre-label").joinToString { it.text() }
-
-        return author + chNum + genres
-    }
-
-    // popular
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/popular/page/$page", headers)
-    }
-
-    // often enough there will be nearly identical entries with slightly different
-    // titles, URLs, and image names. in order to cut these "duplicates" down,
-    // assign a "signature" based on author name, chapter number, and genres
-    // if all of those are the same, then it it's the same manga
-    override fun popularMangaParse(response: Response): MangasPage {
-        val doc = response.asJsoup()
-
-        val mangas = doc.select(popularMangaSelector())
-            .map {
-                SMangaDTO(
-                    it.select("h4 a").attr("abs:href"),
-                    it.select("h4 a").text(),
-                    it.select("img").attr("abs:src"),
-                    it.toSignature(),
-                )
-            }
-            .distinctBy { it.signature }
-            .map {
-                SManga.create().apply {
-                    setUrlWithoutDomain(it.url)
-                    title = it.title
-                    thumbnail_url = it.thumbnailUrl
-                }
-            }
-        return MangasPage(mangas, doc.select(popularMangaNextPageSelector()).isNotEmpty())
-    }
-
-    override fun popularMangaSelector() = ".col-sm-6:not(:has(a:contains(Yaoi)))"
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun popularMangaNextPageSelector() = "ul.pager li.next > a"
-
-    // latest
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/updates/page/$page", headers)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
-
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-
-    // search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search/page/$page".toHttpUrl().newBuilder()
-        url.addQueryParameter("q", query)
-        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-            when (filter) {
-                is OrderBy -> {
-                    val order = filter.values[filter.state]
-                    url.addQueryParameter("order", order.key)
-                }
-                is GenreList -> {
-                    val genre = filter.values[filter.state]
-                    url.addQueryParameter("genre", genre.key)
-                }
-                else -> {}
-            }
-        }
-        return GET(url.build(), headers)
-    }
-
-    override fun searchMangaSelector() = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
-
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-
-    // manga details
-    override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
-        manga.title = document.select(".breadcrumb .active span").text()
-        manga.author = document.select("div:has(h1) span:contains(Author) + span").first()?.text()
-        manga.artist = document.select("div:has(h1) span:contains(Artist) + span").first()?.text()
-        manga.genre = document.select(".row p a").joinToString { it.text() }
-        manga.description = document.select(".tab-content p").first()?.text()
-        manga.thumbnail_url = document.select("img.img-responsive").first()
-            ?.attr("src")
-
-        document.select("div:has(h1) span:contains(Status) + span").first()?.text()?.also { statusText ->
-            when {
-                statusText.contains("ongoing", true) -> manga.status = SManga.ONGOING
-                statusText.contains("completed", true) -> manga.status = SManga.COMPLETED
-                else -> manga.status = SManga.UNKNOWN
-            }
-        }
-
-        // add alternative name to manga description
-        document.select("h1 small").firstOrNull()?.ownText()?.let { alternativeName ->
-            if (alternativeName.isNotBlank()) {
-                manga.description = manga.description.orEmpty().let {
-                    if (it.isBlank()) {
-                        "Alternative Name: $alternativeName"
-                    } else {
-                        "$it\n\nAlternative Name: $alternativeName"
-                    }
-                }
-            }
-        }
-
-        return manga
-    }
-
-    // chapters
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val head = document.head()
-        return document.select(chapterListSelector()).map { chapterFromElement(it, head) }
-    }
-
-    override fun chapterListSelector() = ".tab-content ul li"
-
-    private fun chapterFromElement(element: Element, head: Element): SChapter {
-        val chapter = SChapter.create()
-        val potentialLinks = element.select("a[href*='$baseUrl/chapter/']:not([rel*=nofollow]):not([rel*=noreferrer])")
-        var visibleLink = ""
-        potentialLinks.forEach { a ->
-            val className = a.className()
-            val styles = head.select("style").html()
-            if (!styles.contains(".$className { display:none; }")) {
-                visibleLink = a.attr("href")
-                return@forEach
-            }
-        }
-        chapter.setUrlWithoutDomain(visibleLink)
-        chapter.name = chapter.url.trimEnd('/').substringAfterLast('/').replace('-', ' ')
-        chapter.date_upload = element.select("small.UovLc").first()?.text()?.let { parseChapterDate(it) } ?: 0
-        return chapter
-    }
-
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
-
-    private fun parseChapterDate(date: String): Long {
-        val now = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        var parsedDate = 0L
-        when {
-            "just now" in date || "less than an hour" in date -> {
-                parsedDate = now.timeInMillis
-            }
-            // parses: "1 hour ago" and "2 hours ago"
-            "hour" in date -> {
-                val hours = date.replaceAfter(" ", "").trim().toInt()
-                parsedDate = now.apply { add(Calendar.HOUR, -hours) }.timeInMillis
-            }
-            // parses: "Yesterday" and "2 days ago"
-            "day" in date -> {
-                val days = date.replace("days ago", "").trim().toIntOrNull() ?: 1
-                parsedDate = now.apply { add(Calendar.DAY_OF_YEAR, -days) }.timeInMillis
-            }
-            // parses: "2 weeks ago"
-            "weeks" in date -> {
-                val weeks = date.replace("weeks ago", "").trim().toInt()
-                parsedDate = now.apply { add(Calendar.WEEK_OF_YEAR, -weeks) }.timeInMillis
-            }
-            // parses: "12-20-2019" and defaults everything that wasn't taken into account to 0
-            else -> {
-                try {
-                    parsedDate = dateFormat.parse(date)?.time ?: 0L
-                } catch (e: ParseException) { /*nothing to do, parsedDate is initialized with 0L*/ }
-            }
-        }
-        return parsedDate
-    }
-
-    // pages
-    override fun pageListRequest(chapter: SChapter): Request {
-        val body = buildJsonObject {
-            put("query", PAGES_QUERY)
-            put(
-                "variables",
-                buildJsonObject {
-                    val chapterUrl = chapter.url.split("/")
-
-                    put("mangaSource", mangaSource)
-                    put("slug", chapterUrl[2])
-                    put("number", chapterUrl[3].substringAfter("-").toFloat())
-                },
-            )
-        }
-            .toString()
-            .toRequestBody()
-
-        val newHeaders = headersBuilder()
+    private fun postRequestGraphQL(query: String, refreshUrl: String? = null): Request {
+        val requestHeaders = headersBuilder()
             .set("Accept", "application/json")
             .set("Content-Type", "application/json")
             .set("Origin", baseUrl)
@@ -367,30 +89,360 @@ abstract class MangaHub(
             .removeAll("Upgrade-Insecure-Requests")
             .build()
 
-        return POST("$baseApiUrl/graphql", newHeaders, body)
-    }
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        super.fetchPageList(chapter)
-            .doOnError { refreshApiKey(chapter) }
-            .retry(1)
-
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterObject = json.decodeFromString<ApiChapterPagesResponse>(response.body.string())
-
-        if (chapterObject.data?.chapter == null) {
-            if (chapterObject.errors != null) {
-                val errors = chapterObject.errors.joinToString("\n") { it.message }
-                throw Exception(errors)
-            }
-            throw Exception("Unknown error while processing pages")
+        val body = buildJsonObject {
+            put("query", query)
         }
 
-        val pages = json.decodeFromString<ApiChapterPages>(chapterObject.data.chapter.pages)
+        return POST("$baseApiUrl/graphql", requestHeaders, body.toString().toRequestBody())
+            .newBuilder()
+            .tag(GraphQLTag::class.java, GraphQLTag(refreshUrl))
+            .build()
+    }
 
-        return pages.i.mapIndexed { i, page ->
-            Page(i, "", "$baseCdnUrl/${pages.p}$page")
+    // Normally this gets handled properly but in older forks such as TachiyomiJ2K, we have to manually intercept it
+    // as they have an outdated implementation of NetworkHelper.
+    private fun compatEncodingInterceptor(chain: Interceptor.Chain): Response {
+        var response = chain.proceed(chain.request())
+        val contentEncoding = response.header("Content-Encoding")
+
+        if (contentEncoding == "gzip") {
+            val parsedBody = response.body.byteStream().let { gzipInputStream ->
+                GZIPInputStream(gzipInputStream).use { inputStream ->
+                    val outputStream = ByteArrayOutputStream()
+                    inputStream.copyTo(outputStream)
+                    outputStream.toByteArray()
+                }
+            }
+
+            response = response.createNewWithCompatBody(parsedBody)
+        } else if (contentEncoding == "br") {
+            val parsedBody = response.body.byteStream().let { brotliInputStream ->
+                BrotliInputStream(brotliInputStream).use { inputStream ->
+                    val outputStream = ByteArrayOutputStream()
+                    inputStream.copyTo(outputStream)
+                    outputStream.toByteArray()
+                }
+            }
+
+            response = response.createNewWithCompatBody(parsedBody)
+        }
+
+        return response
+    }
+
+    private fun Response.createNewWithCompatBody(outputStream: ByteArray): Response {
+        return this.newBuilder()
+            .body(outputStream.toResponseBody(this.body.contentType()))
+            .removeHeader("Content-Encoding")
+            .build()
+    }
+
+    private fun apiAuthInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val tag = request.tag(GraphQLTag::class.java)
+            ?: return chain.proceed(request) // We won't intercept non-graphql requests (like image retrieval)
+
+        return try {
+            tryApiRequest(chain, request)
+        } catch (e: Throwable) {
+            val noCookie = e is MangaHubCookieNotFound
+            val apiError = e is ApiErrorException &&
+                apiErrorRegex.containsMatchIn(e.message ?: "")
+
+            if (noCookie || apiError) {
+                refreshApiKey(tag.refreshUrl)
+                tryApiRequest(chain, request)
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private fun tryApiRequest(chain: Interceptor.Chain, request: Request): Response {
+        val cookie = client.cookieJar
+            .loadForRequest(baseUrl.toHttpUrl())
+            .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }
+            ?: throw MangaHubCookieNotFound()
+
+        val apiRequest = request.newBuilder()
+            .header("x-mhub-access", cookie.value)
+            .build()
+
+        val response = chain.proceed(apiRequest)
+
+        val apiResponse = response.peekBody(Long.MAX_VALUE).string()
+            .parseAs<ApiResponseError>()
+
+        if (apiResponse.errors != null) {
+            response.close() // Avoid leaks
+            val errors = apiResponse.errors.joinToString("\n") { it.message }
+            throw ApiErrorException(errors)
+        }
+
+        return response
+    }
+
+    private class MangaHubCookieNotFound : IOException("mhub_access cookie not found")
+    private class ApiErrorException(errorMessage: String) : IOException(errorMessage)
+
+    private val lock = ReentrantLock()
+    private var refreshed = 0L
+
+    private fun refreshApiKey(refreshUrl: String? = null) {
+        if (refreshed + 10000 < System.currentTimeMillis() && lock.tryLock()) {
+            val url = when {
+                refreshUrl != null -> refreshUrl
+                else -> "$baseUrl/chapter/martial-peak/chapter-${Random.nextInt(1000, 3000)}"
+            }.toHttpUrl()
+
+            val oldKey = client.cookieJar
+                .loadForRequest(baseUrl.toHttpUrl())
+                .firstOrNull { it.name == "mhub_access" && it.value.isNotEmpty() }?.value
+
+            for (i in 1..2) {
+                // Clear key cookie
+                val cookie = Cookie.parse(url, "mhub_access=; Max-Age=0; Path=/")!!
+                client.cookieJar.saveFromResponse(url, listOf(cookie))
+
+                try {
+                    // We try requesting again with param if the first one fails
+                    val query = if (i == 2) "?reloadKey=1" else ""
+                    val response = client.newCall(
+                        GET(
+                            "$url$query",
+                            headers.newBuilder()
+                                .set("Referer", "$baseUrl/manga/${url.pathSegments[1]}")
+                                .build(),
+                        ),
+                    ).execute()
+                    val returnedKey =
+                        response.headers["set-cookie"]?.let { apiRegex.find(it)?.groupValues?.get(1) }
+                    response.close() // Avoid potential resource leaks
+
+                    if (returnedKey != oldKey) break // Break out of loop since we got an allegedly valid API key
+                } catch (_: Throwable) {
+                    lock.unlock()
+                    throw Exception("An error occurred while obtaining a new API key") // Show error
+                }
+            }
+            refreshed = System.currentTimeMillis()
+            lock.unlock()
+        } else {
+            lock.lock() // wait here until lock is released
+            lock.unlock()
+        }
+    }
+
+    data class SMangaDTO(
+        val url: String,
+        val title: String,
+        val thumbnailUrl: String,
+        val signature: String,
+    )
+
+    private fun ApiMangaSearchItem.toSignature(): String {
+        val author = this.author
+        val chNum = this.latestChapter
+        val genres = this.genres
+
+        return author + chNum + genres
+    }
+
+    private fun mangaRequest(page: Int, order: String): Request {
+        return postRequestGraphQL(searchQuery(mangaSource, "", "all", order, page))
+    }
+
+    // popular
+    override fun popularMangaRequest(page: Int): Request = mangaRequest(page, "POPULAR")
+
+    // often enough there will be nearly identical entries with slightly different
+    // titles, URLs, and image names. in order to cut these "duplicates" down,
+    // assign a "signature" based on author name, chapter number, and genres
+    // if all of those are the same, then it it's the same manga
+    override fun popularMangaParse(response: Response): MangasPage {
+        val mangaList = response.parseAs<ApiSearchResponse>()
+
+        val mangas = mangaList.data.search.rows.map {
+            SMangaDTO(
+                "$baseUrl/manga/${it.slug}",
+                it.title,
+                "$baseThumbCdnUrl/${it.image}",
+                it.toSignature(),
+            )
+        }
+            .distinctBy { it.signature }
+            .map {
+                SManga.create().apply {
+                    setUrlWithoutDomain(it.url)
+                    title = it.title
+                    thumbnail_url = it.thumbnailUrl
+                }
+            }
+
+        // Entries have a max of 30 per request
+        return MangasPage(mangas, mangaList.data.search.rows.count() == 30)
+    }
+
+    // latest
+    override fun latestUpdatesRequest(page: Int): Request {
+        return mangaRequest(page, "LATEST")
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        return popularMangaParse(response)
+    }
+
+    // search
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        var order = "POPULAR"
+        var genres = "all"
+
+        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            when (filter) {
+                is OrderBy -> {
+                    order = filter.values[filter.state].key
+                }
+                is GenreList -> {
+                    genres = filter.included.joinToString(",").takeIf { it.isNotBlank() } ?: "all"
+                }
+                else -> {}
+            }
+        }
+
+        return postRequestGraphQL(searchQuery(mangaSource, query, genres, order, page))
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        return popularMangaParse(response)
+    }
+
+    // manga details
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return postRequestGraphQL(
+            mangaDetailsQuery(mangaSource, manga.url.removePrefix("/manga/")),
+            refreshUrl = "$baseUrl${manga.url}",
+        )
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val rawManga = response.parseAs<ApiMangaDetailsResponse>()
+
+        return SManga.create().apply {
+            title = rawManga.data.manga.title!!
+            author = rawManga.data.manga.author
+            artist = rawManga.data.manga.artist
+            genre = rawManga.data.manga.genres
+            thumbnail_url = "$baseThumbCdnUrl/${rawManga.data.manga.image}"
+            status = when (rawManga.data.manga.status) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+
+            description = buildString {
+                rawManga.data.manga.description?.let(::append)
+
+                // Add alternative title
+                val altTitle = rawManga.data.manga.alternativeTitle
+                if (!altTitle.isNullOrBlank()) {
+                    if (isNotBlank()) append("\n\n")
+                    append("Alternative Name: $altTitle")
+                }
+            }
+        }
+    }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
+    // Chapters
+    override fun chapterListRequest(manga: SManga): Request {
+        return postRequestGraphQL(
+            mangaChapterListQuery(mangaSource, manga.url.removePrefix("/manga/")),
+            refreshUrl = "$baseUrl${manga.url}",
+        )
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val chapterList = response.parseAs<ApiMangaDetailsResponse>()
+        val useGenericTitle = preferences.getUseGenericTitlePref()
+
+        return chapterList.data.manga.chapters!!.map {
+            SChapter.create().apply {
+                val numberString = "${if (it.number % 1 == 0f) it.number.toInt() else it.number}"
+
+                name = if (!useGenericTitle) {
+                    generateChapterName(it.title.trim().replace(spaceRegex, " "), numberString)
+                } else {
+                    generateGenericChapterName(numberString)
+                }
+
+                url = "/${chapterList.data.manga.slug}/chapter-${it.number}"
+                chapter_number = it.number
+                date_upload = dateFormat.tryParse(it.date)
+            }
+        }.reversed() // The response is sorted in ASC format so we need to reverse it
+    }
+
+    private fun generateChapterName(title: String, number: String): String {
+        return if (title.contains(number)) {
+            title
+        } else if (title.isNotBlank()) {
+            "Chapter $number - $title"
+        } else {
+            generateGenericChapterName(number)
+        }
+    }
+
+    private fun generateGenericChapterName(number: String): String {
+        return "Chapter $number"
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl/chapter${chapter.url}"
+
+    // Pages
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterUrl = chapter.url.split("/")
+
+        return postRequestGraphQL(
+            pagesQuery(mangaSource, chapterUrl[1], chapterUrl[2].substringAfter("-").toFloat()),
+            refreshUrl = "$baseUrl/chapter${chapter.url}",
+        )
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val chapterObject = response.parseAs<ApiChapterPagesResponse>()
+        val pages = chapterObject.data.chapter.pages.parseAs<ApiChapterPages>()
+
+        // We'll update the cookie here to match the browser's "recently" opened chapter.
+        // This mimics how the browser works and gives us more chance to receive a valid API key upon refresh
+        val now = Calendar.getInstance().time.time
+        val baseHttpUrl = baseUrl.toHttpUrl()
+        val recently = buildJsonObject {
+            putJsonObject((now).toString()) {
+                put("mangaID", chapterObject.data.chapter.mangaID)
+                put("number", chapterObject.data.chapter.chapterNumber)
+            }
+        }.toString()
+
+        val recentlyCookie = Cookie.Builder()
+            .domain(baseHttpUrl.host)
+            .name("recently")
+            .value(URLEncoder.encode(recently, "utf-8"))
+            .expiresAt(now + 2 * 60 * 60 * 24 * 31) // +2 months
+            .build()
+
+        // Add/update the cookie
+        client.cookieJar.saveFromResponse(baseHttpUrl, listOf(recentlyCookie))
+
+        // We'll log our action to the site to further increase the chance of valid API key
+        val ipRequest = client.newCall(GET("https://api.ipify.org?format=json")).execute()
+        val ip = ipRequest.parseAs<PublicIPResponse>().ip
+
+        client.newCall(GET("$baseUrl/action/logHistory2/${chapterObject.data.chapter.manga.slug}/${chapterObject.data.chapter.chapterNumber}?browserID=$ip")).execute().close()
+        ipRequest.close()
+
+        return pages.images.mapIndexed { i, page ->
+            Page(i, "", "$baseCdnUrl/${pages.page}$page")
         }
     }
 
@@ -407,10 +459,14 @@ abstract class MangaHub(
         return GET(page.url, newHeaders)
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // filters
-    private class Genre(title: String, val key: String) : Filter.TriState(title) {
+    private class Genre(title: String, val key: String) : Filter.CheckBox(title) {
+        fun getGenreKey(): String {
+            return key
+        }
+
         override fun toString(): String {
             return name
         }
@@ -423,11 +479,14 @@ abstract class MangaHub(
     }
 
     private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Order", orders, 0)
-    private class GenreList(genres: Array<Genre>) : Filter.Select<Genre>("Genres", genres, 0)
+    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genres", genres) {
+        val included: List<String>
+            get() = state.filter { it.state }.map { it.getGenreKey() }
+    }
 
     override fun getFilterList() = FilterList(
-        OrderBy(orderBy),
         GenreList(genres),
+        OrderBy(orderBy),
     )
 
     private val orderBy = arrayOf(
@@ -438,70 +497,119 @@ abstract class MangaHub(
         Order("Completed", "COMPLETED"),
     )
 
-    private val genres = arrayOf(
-        Genre("All Genres", "all"),
-        Genre("[no chapters]", "no-chapters"),
-        Genre("4-Koma", "4-koma"),
+    private val genres = listOf(
         Genre("Action", "action"),
         Genre("Adventure", "adventure"),
-        Genre("Award Winning", "award-winning"),
         Genre("Comedy", "comedy"),
-        Genre("Cooking", "cooking"),
-        Genre("Crime", "crime"),
-        Genre("Demons", "demons"),
-        Genre("Doujinshi", "doujinshi"),
+        Genre("Adult", "adult"),
         Genre("Drama", "drama"),
-        Genre("Ecchi", "ecchi"),
-        Genre("Fantasy", "fantasy"),
-        Genre("Food", "food"),
-        Genre("Game", "game"),
-        Genre("Gender bender", "gender-bender"),
-        Genre("Harem", "harem"),
         Genre("Historical", "historical"),
-        Genre("Horror", "horror"),
-        Genre("Isekai", "isekai"),
-        Genre("Josei", "josei"),
-        Genre("Kids", "kids"),
-        Genre("Magic", "magic"),
-        Genre("Magical Girls", "magical-girls"),
-        Genre("Manhua", "manhua"),
+        Genre("Martial Arts", "martial-arts"),
+        Genre("Romance", "romance"),
+        Genre("Ecchi", "ecchi"),
+        Genre("Supernatural", "supernatural"),
+        Genre("Webtoons", "webtoons"),
         Genre("Manhwa", "manhwa"),
-        Genre("Martial arts", "martial-arts"),
+        Genre("Fantasy", "fantasy"),
+        Genre("Harem", "harem"),
+        Genre("Shounen", "shounen"),
+        Genre("Manhua", "manhua"),
         Genre("Mature", "mature"),
+        Genre("Seinen", "seinen"),
+        Genre("Sports", "sports"),
+        Genre("School Life", "school-life"),
+        Genre("Smut", "smut"),
+        Genre("Mystery", "mystery"),
+        Genre("Psychological", "psychological"),
+        Genre("Shounen ai", "shounen-ai"),
+        Genre("Slice of life", "slice-of-life"),
+        Genre("Shoujo ai", "shoujo-ai"),
+        Genre("Cooking", "cooking"),
+        Genre("Horror", "horror"),
+        Genre("Tragedy", "tragedy"),
+        Genre("Doujinshi", "doujinshi"),
+        Genre("Sci-Fi", "sci-fi"),
+        Genre("Yuri", "yuri"),
+        Genre("Yaoi", "yaoi"),
+        Genre("Shoujo", "shoujo"),
+        Genre("Gender bender", "gender-bender"),
+        Genre("Josei", "josei"),
         Genre("Mecha", "mecha"),
         Genre("Medical", "medical"),
-        Genre("Military", "military"),
+        Genre("Magic", "magic"),
+        Genre("4-Koma", "4-koma"),
         Genre("Music", "music"),
-        Genre("Mystery", "mystery"),
-        Genre("One shot", "one-shot"),
-        Genre("Oneshot", "oneshot"),
-        Genre("Parody", "parody"),
-        Genre("Police", "police"),
-        Genre("Psychological", "psychological"),
-        Genre("Romance", "romance"),
-        Genre("School life", "school-life"),
-        Genre("Sci fi", "sci-fi"),
-        Genre("Seinen", "seinen"),
-        Genre("Shotacon", "shotacon"),
-        Genre("Shoujo", "shoujo"),
-        Genre("Shoujo ai", "shoujo-ai"),
-        Genre("Shoujoai", "shoujoai"),
-        Genre("Shounen", "shounen"),
-        Genre("Shounen ai", "shounen-ai"),
-        Genre("Shounenai", "shounenai"),
-        Genre("Slice of life", "slice-of-life"),
-        Genre("Smut", "smut"),
-        Genre("Space", "space"),
-        Genre("Sports", "sports"),
-        Genre("Super Power", "super-power"),
-        Genre("Superhero", "superhero"),
-        Genre("Supernatural", "supernatural"),
-        Genre("Thriller", "thriller"),
-        Genre("Tragedy", "tragedy"),
-        Genre("Vampire", "vampire"),
         Genre("Webtoon", "webtoon"),
-        Genre("Webtoons", "webtoons"),
+        Genre("Isekai", "isekai"),
+        Genre("Game", "game"),
+        Genre("Award Winning", "award-winning"),
+        Genre("Oneshot", "oneshot"),
+        Genre("Demons", "demons"),
+        Genre("Military", "military"),
+        Genre("Police", "police"),
+        Genre("Super Power", "super-power"),
+        Genre("Food", "food"),
+        Genre("Kids", "kids"),
+        Genre("Magical Girls", "magical-girls"),
         Genre("Wuxia", "wuxia"),
-        Genre("Yuri", "yuri"),
-    )
+        Genre("Superhero", "superhero"),
+        Genre("Thriller", "thriller"),
+        Genre("Crime", "crime"),
+        Genre("Philosophical", "philosophical"),
+        Genre("Adaptation", "adaptation"),
+        Genre("Full Color", "full-color"),
+        Genre("Crossdressing", "crossdressing"),
+        Genre("Reincarnation", "reincarnation"),
+        Genre("Manga", "manga"),
+        Genre("Cartoon", "cartoon"),
+        Genre("Survival", "survival"),
+        Genre("Comic", "comic"),
+        Genre("English", "english"),
+        Genre("Harlequin", "harlequin"),
+        Genre("Time Travel", "time-travel"),
+        Genre("Traditional Games", "traditional-games"),
+        Genre("Reverse Harem", "reverse-harem"),
+        Genre("Animals", "animals"),
+        Genre("Aliens", "aliens"),
+        Genre("Loli", "loli"),
+        Genre("Video Games", "video-games"),
+        Genre("Monsters", "monsters"),
+        Genre("Office Workers", "office-workers"),
+        Genre("System", "system"),
+        Genre("Villainess", "villainess"),
+        Genre("Zombies", "zombies"),
+        Genre("Vampires", "vampires"),
+        Genre("Violence", "violence"),
+        Genre("Monster Girls", "monster-girls"),
+        Genre("Anthology", "anthology"),
+        Genre("Ghosts", "ghosts"),
+        Genre("Delinquents", "delinquents"),
+        Genre("Post-Apocalyptic", "post-apocalyptic"),
+        Genre("Xianxia", "xianxia"),
+        Genre("Xuanhuan", "xuanhuan"),
+        Genre("R-18", "r-18"),
+        Genre("Cultivation", "cultivation"),
+        Genre("Rebirth", "rebirth"),
+        Genre("Gore", "gore"),
+        Genre("Russian", "russian"),
+        Genre("Samurai", "samurai"),
+        Genre("Ninja", "ninja"),
+        Genre("Revenge", "revenge"),
+        Genre("Cheat Systems", "cheat-systems"),
+        Genre("Dungeons", "dungeons"),
+        Genre("Overpowered", "overpowered"),
+    ).sortedBy { it.toString() }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_USE_GENERIC_TITLE
+            title = "Use generic title"
+            summary = "Use generic chapter title (\"Chapter 'x'\") instead of the given one.\nNote: May require manga entry to be refreshed."
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private const val PREF_USE_GENERIC_TITLE = "pref_use_generic_title"
+    }
 }

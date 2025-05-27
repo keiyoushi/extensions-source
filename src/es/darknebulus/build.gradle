@@ -3,7 +3,7 @@ ext {
     extClass = '.DarkNebulus'
     themePkg = 'madara'
     baseUrl = 'https://www.darknebulus.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

@@ -48,7 +48,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
         set("Origin", baseUrl)
     }
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .addNetworkInterceptor { chain ->
             val response = chain.proceed(chain.request())

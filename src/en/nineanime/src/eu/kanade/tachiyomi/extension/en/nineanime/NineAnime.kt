@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -77,7 +78,12 @@ class NineAnime : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank()) {
-            GET("$baseUrl/search/?name=$query&page=$page.html", headers)
+            val url = "$baseUrl/search/".toHttpUrl().newBuilder()
+                .addQueryParameter("name", query)
+                .addQueryParameter("page", "$page.html")
+                .build()
+
+            GET(url, headers)
         } else {
             var url = "$baseUrl/category/"
             for (filter in if (filters.isEmpty()) getFilterList() else filters) {

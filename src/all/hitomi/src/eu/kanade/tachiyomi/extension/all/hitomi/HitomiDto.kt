@@ -22,10 +22,10 @@ class Gallery(
 @Serializable
 class ImageFile(
     val hash: String,
-    val haswebp: Int?,
-    val hasavif: Int?,
-    val hasjxl: Int?,
-)
+    private val name: String,
+) {
+    val isGif get() = name.endsWith(".gif")
+}
 
 @Serializable
 class Tag(

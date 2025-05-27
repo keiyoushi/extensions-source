@@ -1,9 +1,0 @@
-ext {
-    extName = 'Eleven Scanlator'
-    extClass = '.ElevenScanlator'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://elevenscanlator.blogspot.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

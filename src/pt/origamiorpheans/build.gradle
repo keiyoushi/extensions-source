@@ -5,7 +5,7 @@ ext {
     baseUrl = 'https://origami-orpheans.com'
     overrideVersionCode = 10
     isNsfw = true
-    
+
 }
 
 apply from: "$rootDir/common.gradle"

@@ -160,7 +160,7 @@ abstract class Madara(
     }
 
     // exclude/filter bilibili manga from list
-    override fun popularMangaSelector() = "div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector"
+    override fun popularMangaSelector() = "div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector , .manga__item"
 
     open val popularMangaUrlSelector = "div.post-title a"
 
@@ -245,11 +245,13 @@ abstract class Madara(
             val mangaUrl = baseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegment(mangaSubString)
                 addPathSegment(query.substringAfter(URL_SEARCH_PREFIX))
+                addPathSegment("") // add trailing slash
             }.build()
             return client.newCall(GET(mangaUrl, headers))
                 .asObservableSuccess().map { response ->
                     val manga = mangaDetailsParse(response).apply {
                         setUrlWithoutDomain(mangaUrl.toString())
+                        initialized = true
                     }
 
                     MangasPage(listOf(manga), false)
@@ -584,7 +586,7 @@ abstract class Madara(
         return MangasPage(entries, hasNextPage)
     }
 
-    override fun searchMangaSelector() = "div.c-tabs-item__content"
+    override fun searchMangaSelector() = "div.c-tabs-item__content , .manga__item"
 
     protected open val searchMangaUrlSelector = "div.post-title a"
 
@@ -754,7 +756,7 @@ abstract class Madara(
     open val mangaDetailsSelectorTitle = "div.post-title h3, div.post-title h1, #manga-title > h1"
     open val mangaDetailsSelectorAuthor = "div.author-content > a, div.manga-authors > a"
     open val mangaDetailsSelectorArtist = "div.artist-content > a"
-    open val mangaDetailsSelectorStatus = "div.summary-content"
+    open val mangaDetailsSelectorStatus = "div.summary-content, div.summary-heading:contains(Status) + div"
     open val mangaDetailsSelectorDescription = "div.description-summary div.summary__content, div.summary_content div.post-content_item > h5 + div, div.summary_content div.manga-excerpt"
     open val mangaDetailsSelectorThumbnail = "div.summary_image img"
     open val mangaDetailsSelectorGenre = "div.genres-content a"
@@ -977,6 +979,8 @@ abstract class Madara(
     open val pageListParseSelector = "div.page-break, li.blocks-gallery-item, .reading-content .text-left:not(:has(.blocks-gallery-item)) img"
 
     open val chapterProtectorSelector = "#chapter-protector-data"
+    open val chapterProtectorPasswordPrefix = "wpmangaprotectornonce='"
+    open val chapterProtectorDataPrefix = "chapter_data='"
 
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
@@ -992,11 +996,11 @@ abstract class Madara(
             ?.let { Base64.decode(it, Base64.DEFAULT).toString(Charsets.UTF_8) }
             ?: chapterProtector.html()
         val password = chapterProtectorHtml
-            .substringAfter("wpmangaprotectornonce='")
+            .substringAfter(chapterProtectorPasswordPrefix)
             .substringBefore("';")
         val chapterData = json.parseToJsonElement(
             chapterProtectorHtml
-                .substringAfter("chapter_data='")
+                .substringAfter(chapterProtectorDataPrefix)
                 .substringBefore("';")
                 .replace("\\/", "/"),
         ).jsonObject

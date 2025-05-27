@@ -24,7 +24,7 @@ class KomikIndoID : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
-    // similar/modified theme of "https://bacakomik.co"
+    // similar/modified theme of "https://bacakomik.one"
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/daftar-manga/page/$page/?order=popular", headers)
     }

@@ -1,7 +1,10 @@
 ext {
     extName = 'Crystal Comics'
     extClass = '.CrystalComics'
-    extVersionCode = 39
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://atemporal.cloud'
+    overrideVersionCode = 10
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

@@ -2,8 +2,9 @@ plugins {
     id("lib-multisrc")
 }
 
-baseVersionCode = 29
+baseVersionCode = 34
 
 dependencies {
-    api(project(":lib:randomua"))
+    //noinspection UseTomlInstead
+    implementation("org.brotli:dec:0.1.2")
 }

@@ -3,7 +3,7 @@ ext {
     extClass = '.ArvenComics'
     themePkg = 'keyoapp'
     baseUrl = 'https://arvencomics.com'
-    overrideVersionCode = 24
+    overrideVersionCode = 26
     isNsfw = false
 }
 

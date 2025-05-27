@@ -7,7 +7,7 @@ import okhttp3.OkHttpClient
 
 class Nartag : Madara(
     "Traducciones Amistosas",
-    "https://traduccionesamistosas.cookni.net",
+    "https://traduccionesamistosas.topmanhuas.org",
     "es",
 ) {
     override val versionId = 2
@@ -17,4 +17,6 @@ class Nartag : Madara(
         .build()
 
     override val useNewChapterEndpoint = true
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
 }

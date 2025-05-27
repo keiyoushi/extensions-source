@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -73,10 +74,10 @@ abstract class GroupLe(
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/list?sortType=rate&offset=${70 * (page - 1)}", headers)
+        GET("$baseUrl/list?sortType=rate&offset=${50 * (page - 1)}", headers)
 
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/list?sortType=updated&offset=${70 * (page - 1)}", headers)
+        GET("$baseUrl/list?sortType=updated&offset=${50 * (page - 1)}", headers)
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -103,14 +104,72 @@ abstract class GroupLe(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url =
-            "$baseUrl/search/advancedResults?offset=${50 * (page - 1)}".toHttpUrl()
-                .newBuilder()
+        val url = "$baseUrl/search/advancedResults?offset=${50 * (page - 1)}"
+            .toHttpUrl()
+            .newBuilder()
+
         if (query.isNotEmpty()) {
             url.addQueryParameter("q", query)
         }
+
+        (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            when (filter) {
+                is GenreList -> filter.state.forEach { genre ->
+                    if (genre.state != Filter.TriState.STATE_IGNORE) {
+                        url.addQueryParameter(genre.id, arrayOf("=", "=in", "=ex")[genre.state])
+                    }
+                }
+
+                is CategoryList -> filter.state.forEach { category ->
+                    if (category.state != Filter.TriState.STATE_IGNORE) {
+                        url.addQueryParameter(category.id, arrayOf("=", "=in", "=ex")[category.state])
+                    }
+                }
+
+                is AgeList -> filter.state.forEach { age ->
+                    if (age.state != Filter.TriState.STATE_IGNORE) {
+                        url.addQueryParameter(age.id, arrayOf("=", "=in", "=ex")[age.state])
+                    }
+                }
+
+                is MoreList -> filter.state.forEach { more ->
+                    if (more.state != Filter.TriState.STATE_IGNORE) {
+                        url.addQueryParameter(more.id, arrayOf("=", "=in", "=ex")[more.state])
+                    }
+                }
+
+                is AdditionalFilterList -> filter.state.forEach { fils ->
+                    if (fils.state != Filter.TriState.STATE_IGNORE) {
+                        url.addQueryParameter(fils.id, arrayOf("=", "=in", "=ex")[fils.state])
+                    }
+                }
+
+                is OrderBy -> {
+                    url.addQueryParameter(
+                        "sortType",
+                        arrayOf("RATING", "POPULARITY", "YEAR", "NAME", "DATE_CREATE", "DATE_UPDATE", "USER_RATING")[filter.state],
+                    )
+                }
+
+                else -> {}
+            }
+        }
+
         return GET(url.toString().replace("=%3D", "="), headers)
     }
+
+    protected class OrderBy : Filter.Select<String>(
+        "Сортировка",
+        arrayOf("По популярности", "Популярно сейчас", "По году", "По алфавиту", "Новинки", "По дате обновления", "По рейтингу"),
+    )
+
+    protected class Genre(name: String, val id: String) : Filter.TriState(name)
+
+    protected class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Жанры", genres)
+    protected class CategoryList(categories: List<Genre>) : Filter.Group<Genre>("Категории", categories)
+    protected class AgeList(ages: List<Genre>) : Filter.Group<Genre>("Возрастная рекомендация", ages)
+    protected class MoreList(moren: List<Genre>) : Filter.Group<Genre>("Прочее", moren)
+    protected class AdditionalFilterList(fils: List<Genre>) : Filter.Group<Genre>("Фильтры", fils)
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.select(".expandable").first()!!

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Moderate issues
-        uses: keiyoushi/issue-moderator-action@a017be83547db6e107431ce7575f53c1dfa3296a
+        uses: keiyoushi/issue-moderator-action@c1bae1cf6fd33c272b88505c8bfa0a97b7761eb3
         with:
           repo-token: ${{ secrets.ISSUE_MODERATOR_PAT }}
           duplicate-label: Duplicate
