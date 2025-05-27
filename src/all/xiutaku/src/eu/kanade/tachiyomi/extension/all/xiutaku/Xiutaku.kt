@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.lib.randomua.UserAgentType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -35,18 +34,16 @@ class Xiutaku() : ParsedHttpSource() {
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     // Latest
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        manga.thumbnail_url = element.select("img").attr("abs:src")
-        manga.title = element.select(".item-content .item-link").text()
-        manga.setUrlWithoutDomain(element.select(".item-content .item-link").attr("abs:href"))
-        return manga
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
+        title = element.selectFirst(".item-content .item-link")!!.text()
+        setUrlWithoutDomain(element.selectFirst(".item-content .item-link")!!.attr("abs:href"))
     }
 
     override fun latestUpdatesNextPageSelector() = ".pagination-next:not([disabled])"
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/?start=${20 * (page - 1)}")
+        return GET("$baseUrl/?start=${20 * (page - 1)}", headers)
     }
 
     override fun latestUpdatesSelector() = ".blog > div"
@@ -64,27 +61,23 @@ class Xiutaku() : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val tagFilter = filters.findInstance<TagFilter>()!!
-        return when {
-            query.isNotEmpty() -> GET("$baseUrl/?search=$query&start=${20 * (page - 1)}")
-            tagFilter.state.isNotEmpty() -> GET("$baseUrl/tag/${tagFilter.state}&start=${20 * (page - 1)}")
-            else -> popularMangaRequest(page)
-        }
+        return GET(
+            baseUrl.toHttpUrl().newBuilder().apply {
+                addQueryParameter("search", query)
+                addQueryParameter("page", (20 * (page - 1)).toString())
+            }.build(),
+            headers,
+        )
     }
 
     override fun searchMangaSelector() = latestUpdatesSelector()
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
-        manga.title = document.select(".article-header").text()
-        manga.description = document.select(".article-info > strong").text().trim()
-        val genres = mutableListOf<String>()
-        document.select(".article-tags").first()!!.select(".tags > .tag").forEach {
-            genres.add(it.text().substringAfter("#"))
-        }
-        manga.genre = genres.joinToString(", ")
-        return manga
+    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+        title = document.select(".article-header").text()
+        description = document.select(".article-info").last()?.text()
+        genre = document.selectFirst(".article-tags")
+            ?.select(".tags > .tag")?.joinToString { it.text().substringAfter("#") }
     }
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
@@ -93,7 +86,9 @@ class Xiutaku() : ParsedHttpSource() {
         val doc = response.asJsoup()
         val dateUploadStr = doc.selectFirst(".article-info > small")?.text()
         val dateUpload = DATE_FORMAT.tryParse(dateUploadStr)
-        val maxPage = doc.select("nav.pagination:first-of-type a.pagination-link").last()?.text()?.toInt() ?: 1
+        val maxPage =
+            doc.select("nav.pagination:first-of-type a.pagination-link").last()?.text()?.toInt()
+                ?: 1
         val basePageUrl = response.request.url
         return (maxPage downTo 1).map { page ->
             SChapter.create().apply {
@@ -107,21 +102,10 @@ class Xiutaku() : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         return document.select(".article-fulltext img")
-            .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.absUrl("src")) }
+            .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl.attr("abs:src")) }
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
-
-    // Filters
-    override fun getFilterList(): FilterList = FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
-        TagFilter(),
-    )
-
-    class TagFilter : Filter.Text("Tag ID")
-
-    private inline fun <reified T> Iterable<*>.findInstance() = find { it is T } as? T
 
     companion object {
         private val DATE_FORMAT = SimpleDateFormat("H:m DD-MM-yyyy", Locale.US)
