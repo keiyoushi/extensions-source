@@ -18,6 +18,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 class Xiutaku() : ParsedHttpSource() {
@@ -108,6 +109,8 @@ class Xiutaku() : ParsedHttpSource() {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("H:m DD-MM-yyyy", Locale.US)
+        private val DATE_FORMAT = SimpleDateFormat("H:m DD-MM-yyyy", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
     }
 }
