@@ -119,20 +119,44 @@ class Happymh : HttpSource(), ConfigurableSource {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val body = FormBody.Builder()
-            .addEncoded("searchkey", query)
-            .add("v", "v2.13")
-            .build()
+        if (query.isNotEmpty()) {
+            val body = FormBody.Builder()
+                .addEncoded("searchkey", query)
+                .add("v", "v2.13")
+                .build()
 
-        val header = headersBuilder()
-            .add("referer", "$baseUrl/sssearch")
-            .build()
+            val header = headersBuilder()
+                .add("referer", "$baseUrl/sssearch")
+                .build()
 
-        return POST("$baseUrl/v2.0/apis/manga/ssearch", header, body)
+            return POST("$baseUrl/v2.0/apis/manga/ssearch", header, body)
+        }
+        val url = "$baseUrl/apis/c/index".toHttpUrl().newBuilder()
+        filters.filterIsInstance<UriPartFilter>().forEach {
+            if (it.selected.isNotEmpty()) {
+                url.addQueryParameter(it.key, it.selected)
+            }
+        }
+        val header = headersBuilder().add("referer", "$baseUrl/latest/${url.build().query}").build()
+        url.addQueryParameter("pn", page.toString())
+        return GET(url.build(), header)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
+        if (response.request.url.toString().contains("/apis/c/index")) {
+            // for filter response
+            return popularMangaParse(response)
+        }
         return MangasPage(popularMangaParse(response).mangas, false)
+    }
+
+    override fun getFilterList(): FilterList {
+        return FilterList(
+            GenreFilter(),
+            AreaFilter(),
+            AudienceFilter(),
+            StatusFilter(),
+        )
     }
 
     // Details
@@ -173,7 +197,8 @@ class Happymh : HttpSource(), ConfigurableSource {
             if (it.isPageEnd()) {
                 Observable.just(page to it)
             } else {
-                Observable.just(page to it).concatWith(fetchChapterByPageAsObservable(manga, page + 1))
+                Observable.just(page to it)
+                    .concatWith(fetchChapterByPageAsObservable(manga, page + 1))
             }
         }
     }
