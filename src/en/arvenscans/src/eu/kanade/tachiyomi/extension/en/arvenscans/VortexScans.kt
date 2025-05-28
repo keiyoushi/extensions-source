@@ -13,8 +13,7 @@ class VortexScans : Iken(
 ) {
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
-    override fun latestUpdatesRequest(page: Int) = latestMangaRequest(page)
-    private fun latestMangaRequest(page: Int): Request {
+    override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("perPage", latestPerPage.toString())
