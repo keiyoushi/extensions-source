@@ -86,7 +86,7 @@ class Honkaiimpact : ParsedHttpSource() {
     private fun mangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         manga.setUrlWithoutDomain(element.attr("href"))
-        manga.title = element.select(".container-title").text().trim()
+        manga.title = element.select(".container-title").text()
         manga.thumbnail_url = element.select(".container-cover img").attr("abs:src")
         return manga
     }
