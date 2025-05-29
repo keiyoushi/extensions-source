@@ -30,7 +30,7 @@ class PoseidonScans : HttpSource() {
     override val baseUrl = "https://poseidonscans.fr"
     override val lang = "fr"
     override val supportsLatest = true
-    override val versionId = 1
+    override val versionId = 2
     private val nextFPushRegex = Regex("""self\.__next_f\.push\(\s*\[\s*1\s*,\s*"(.*)"\s*\]\s*\)""", RegexOption.DOT_MATCHES_ALL)
 
     override val client = network.cloudflareClient
@@ -84,23 +84,25 @@ class PoseidonScans : HttpSource() {
         val document = response.asJsoup()
 
         val mangas = document.select("main > section:nth-of-type(3) div.flex.gap-4 > div.group")
-            .map { element ->
-                SManga.create().apply {
-                    val anchor = element.selectFirst("a.block")
-                        ?: throw Exception("Popular: Anchor not found")
+            .mapNotNull { element ->
+                val anchor = element.selectFirst("a.block")
+                    ?: return@mapNotNull null
 
-                    val href = anchor.attr("href").takeIf { it.isNotBlank() }
-                        ?: throw Exception("Popular: Empty href")
+                val href = anchor.attr("href").takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+
+                val img = element.selectFirst("img")
+
+                val title = element.selectFirst("h3.text-sm.sm\\:text-base")?.text()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: img?.attr("alt")?.takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
+
+                SManga.create().apply {
                     setUrlWithoutDomain(href)
 
-                    val img = element.selectFirst("img")
-
-                    title = element.selectFirst("h3.text-sm.sm\\:text-base")?.text()
-                        ?.takeIf { it.isNotBlank() }
-                        ?: img?.attr("alt")?.takeIf { it.isNotBlank() }
-                        ?: throw Exception("Popular: Could not find title for manga from element: ${element.outerHtml().take(200)}")
-
-                    thumbnail_url = img?.attr("src")?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
+                    this.title = title
+                    this.thumbnail_url = img?.attr("src")?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
                 }
             }
 
@@ -109,8 +111,8 @@ class PoseidonScans : HttpSource() {
 
     // Extracts Next.js page data, trying __NEXT_DATA__ script first, then self.__next_f.push.
     private fun extractNextJsPageData(document: Document): JsonObject? {
-        val currentUrl = document.location()
-        val isSeriesPage = currentUrl.contains("/series")
+        val currentHttpUrl = document.location().toHttpUrlOrNull()
+        val isSeriesPage = currentHttpUrl?.pathSegments?.getOrNull(0) == "series"
 
         try {
             document.selectFirst("script#__NEXT_DATA__")?.data()?.also { scriptData ->
@@ -147,7 +149,7 @@ class PoseidonScans : HttpSource() {
             }
 
             val mangaSlugForDetails = if (!isSeriesPage) {
-                currentUrl.toHttpUrlOrNull()?.pathSegments?.let { segments ->
+                currentHttpUrl?.pathSegments?.let { segments ->
                     val serieIndex = segments.indexOf("serie")
                     if (serieIndex != -1 && serieIndex + 1 < segments.size) {
                         segments[serieIndex + 1]

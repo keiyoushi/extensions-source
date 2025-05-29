@@ -3,21 +3,21 @@ package eu.kanade.tachiyomi.extension.fr.poseidonscans
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class LatestApiManga(
+class LatestApiManga(
     val title: String,
     val slug: String,
     val coverImage: String?,
 )
 
 @Serializable
-data class LatestApiResponse(
+class LatestApiResponse(
     val success: Boolean,
     val data: List<LatestApiManga> = emptyList(),
     val total: Int? = null,
 )
 
 @Serializable
-data class MangaDetailsData(
+class MangaDetailsData(
     val title: String,
     val slug: String,
     val description: String?,
@@ -32,10 +32,10 @@ data class MangaDetailsData(
 )
 
 @Serializable
-data class CategoryData(val name: String)
+class CategoryData(val name: String)
 
 @Serializable
-data class ChapterData(
+class ChapterData(
     val number: Float,
     val title: String? = null,
     val createdAt: String,
@@ -43,7 +43,7 @@ data class ChapterData(
 )
 
 @Serializable
-data class PageImageUrlData(
+class PageImageUrlData(
     val originalUrl: String,
     val order: Int,
 )
