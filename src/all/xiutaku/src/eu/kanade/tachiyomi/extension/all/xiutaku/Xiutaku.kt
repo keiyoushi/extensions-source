@@ -62,13 +62,11 @@ class Xiutaku() : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = latestUpdatesFromElement(element)
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET(
-            baseUrl.toHttpUrl().newBuilder().apply {
-                addQueryParameter("search", query)
-                addQueryParameter("page", (20 * (page - 1)).toString())
-            }.build(),
-            headers,
-        )
+        val searchUrl = baseUrl.toHttpUrl().newBuilder().apply {
+            addQueryParameter("search", query)
+            addQueryParameter("page", (20 * (page - 1)).toString())
+        }.build()
+        return GET(searchUrl, headers)
     }
 
     override fun searchMangaSelector() = latestUpdatesSelector()
@@ -88,7 +86,7 @@ class Xiutaku() : ParsedHttpSource() {
         val dateUploadStr = document.selectFirst(".article-info > small")?.text()
         val dateUpload = DATE_FORMAT.tryParse(dateUploadStr)
         val maxPage =
-            document.selectFirst(".pagination-list > span:last-child > a")?.text()?.toInt()
+            document.selectFirst(".pagination-list > span:last-child > a")?.text()?.toIntOrNull()
                 ?: 1
         val basePageUrl = response.request.url
         return (maxPage downTo 1).map { page ->
