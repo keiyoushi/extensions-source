@@ -3,7 +3,7 @@ ext {
     extClass = '.TonizuToon'
     themePkg = 'madara'
     baseUrl = 'https://tonizu.xyz'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 
