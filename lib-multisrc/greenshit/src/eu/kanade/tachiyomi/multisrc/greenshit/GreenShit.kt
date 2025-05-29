@@ -86,14 +86,31 @@ abstract class GreenShit(
 
     open val targetAudience: TargetAudience = TargetAudience.All
 
+    open val contentOrigin: ContentOrigin = ContentOrigin.Web
+
     override fun headersBuilder() = super.headersBuilder()
         .set("scan-id", scanId.toString())
 
     // ============================= Popular ==================================
 
-    override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
+    override fun popularMangaRequest(page: Int) =
+        when (contentOrigin) {
+            ContentOrigin.Mobile -> GET("$apiUrl/obras/top5", headers)
+            else -> GET(baseUrl, headers)
+        }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    override fun popularMangaParse(response: Response): MangasPage =
+        when (contentOrigin) {
+            ContentOrigin.Mobile -> popularMangaParseMobile(response)
+            else -> popularMangaParseWeb(response)
+        }
+
+    private fun popularMangaParseMobile(response: Response): MangasPage {
+        val mangas = response.parseAs<ResultDto<List<MangaDto>>>().toSMangaList()
+        return MangasPage(mangas, hasNextPage = false)
+    }
+
+    private fun popularMangaParseWeb(response: Response): MangasPage {
         val json = response.parseScriptToJson().let(POPULAR_JSON_REGEX::find)
             ?.groups?.get(1)?.value
             ?: return MangasPage(emptyList(), false)
@@ -141,8 +158,29 @@ abstract class GreenShit(
     }
 
     // ============================= Details ==================================
+    override fun getMangaUrl(manga: SManga) = when (contentOrigin) {
+        ContentOrigin.Mobile -> "$baseUrl${manga.url}"
+        else -> super.getMangaUrl(manga)
+    }
 
-    override fun mangaDetailsParse(response: Response): SManga {
+    override fun mangaDetailsRequest(manga: SManga): Request =
+        when (contentOrigin) {
+            ContentOrigin.Mobile -> mangaDetailsRequestMobile(manga)
+            else -> super.mangaDetailsRequest(manga)
+        }
+
+    private fun mangaDetailsRequestMobile(manga: SManga): Request {
+        val pathSegment = manga.url.substringBeforeLast("/").replace("obra", "obras")
+        return GET("$apiUrl$pathSegment", headers)
+    }
+
+    override fun mangaDetailsParse(response: Response) =
+        when (contentOrigin) {
+            ContentOrigin.Mobile -> response.parseAs<ResultDto<MangaDto>>().results.toSManga()
+            else -> mangaDetailsParseWeb(response)
+        }
+
+    private fun mangaDetailsParseWeb(response: Response): SManga {
         val json = response.parseScriptToJson().let(DETAILS_CHAPTER_REGEX::find)
             ?.groups?.get(0)?.value
             ?: throw IOException("Details do mangá não foi encontrado")
@@ -150,8 +188,27 @@ abstract class GreenShit(
     }
 
     // ============================= Chapters =================================
+    override fun getChapterUrl(chapter: SChapter) = when (contentOrigin) {
+        ContentOrigin.Mobile -> "$baseUrl${chapter.url}"
+        else -> super.getChapterUrl(chapter)
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    override fun chapterListRequest(manga: SManga) =
+        when (contentOrigin) {
+            ContentOrigin.Mobile -> mangaDetailsRequest(manga)
+            else -> super.chapterListRequest(manga)
+        }
+
+    override fun chapterListParse(response: Response): List<SChapter> =
+        when (contentOrigin) {
+            ContentOrigin.Mobile -> chapterListParseMobile(response)
+            else -> chapterListParseWeb(response)
+        }
+
+    private fun chapterListParseMobile(response: Response): List<SChapter> =
+        response.parseAs<ResultDto<WrapperChapterDto>>().toSChapterList()
+
+    private fun chapterListParseWeb(response: Response): List<SChapter> {
         val json = response.parseScriptToJson().let(DETAILS_CHAPTER_REGEX::find)
             ?.groups?.get(0)?.value
             ?: return emptyList()
@@ -162,7 +219,27 @@ abstract class GreenShit(
 
     private val pageUrlSelector = "img.chakra-image"
 
-    override fun pageListParse(response: Response): List<Page> {
+    override fun pageListRequest(chapter: SChapter): Request =
+        when (contentOrigin) {
+            ContentOrigin.Mobile -> pageListRequestMobile(chapter)
+            else -> super.pageListRequest(chapter)
+        }
+
+    private fun pageListRequestMobile(chapter: SChapter): Request {
+        val pathSegment = chapter.url.replace("capitulo", "capitulo-app")
+        return GET("$apiUrl$pathSegment", headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> =
+        when (contentOrigin) {
+            ContentOrigin.Mobile -> pageListParseMobile(response)
+            else -> pageListParseWeb(response)
+        }
+
+    private fun pageListParseMobile(response: Response): List<Page> =
+        response.parseAs<ResultDto<ChapterPageDto>>().toPageList()
+
+    private fun pageListParseWeb(response: Response): List<Page> {
         val document = response.asJsoup()
 
         pageListParse(document).takeIf(List<Page>::isNotEmpty)?.let { return it }
@@ -313,6 +390,11 @@ abstract class GreenShit(
         ;
 
         override fun toString() = value.toString()
+    }
+
+    enum class ContentOrigin {
+        Mobile,
+        Web,
     }
 
     companion object {
