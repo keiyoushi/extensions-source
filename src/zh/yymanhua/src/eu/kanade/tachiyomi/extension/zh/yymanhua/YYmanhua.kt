@@ -23,7 +23,7 @@ class YYmanhua : ParsedHttpSource() {
     companion object {
         val DESC_REGEX = Regex("\\[\\+展开]|\\[-折叠]")
         val CHAPTER_REGEX = Regex("第(\\d+(?:\\.\\d+)?)[话話]")
-        val NUM_REGIX = Regex("\\d+")
+        val NUM_REGEX = Regex("\\d+")
         val IMG_REGEX = Regex("var pix=\"(.*?)\".*?var pvalue=\\[\"(.*?)\"")
         val DECODE_REGEX1 = Regex("return p;\\}\\('(.*?)',(\\d+),(\\d+),'(.*?)'")
         val DECODE_REGEX2 = Regex("\\b\\w+\\b")
