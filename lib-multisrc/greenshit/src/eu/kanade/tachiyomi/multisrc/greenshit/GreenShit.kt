@@ -107,17 +107,15 @@ abstract class GreenShit(
         val url = "$apiUrl/obras/novos-capitulos".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "24")
-            .addQueryParameterIf(targetAudience != TargetAudience.All, "gen_id", targetAudience.toString())
+            .applyIf(targetAudience != TargetAudience.All) {
+                addQueryParameter("gen_id", targetAudience.toString())
+            }
             .build()
         return GET(url, headers)
     }
 
-    private fun HttpUrl.Builder.addQueryParameterIf(condition: Boolean, name: String, value: String): HttpUrl.Builder {
-        if (condition) {
-            addQueryParameter(name, value)
-        }
-        return this
-    }
+    private fun <T> T.applyIf(predicate: Boolean, block: T.() -> Unit): T =
+        apply { takeIf { predicate }?.apply(block) }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<ResultDto<List<MangaDto>>>()
