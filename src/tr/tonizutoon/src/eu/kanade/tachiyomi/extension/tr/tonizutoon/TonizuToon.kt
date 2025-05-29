@@ -9,7 +9,7 @@ import java.util.Locale
 
 class TonizuToon : Madara(
     "TonizuToon",
-    "https://tonizu.xyz",
+    "https://tonizu.top",
     "tr",
     dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
