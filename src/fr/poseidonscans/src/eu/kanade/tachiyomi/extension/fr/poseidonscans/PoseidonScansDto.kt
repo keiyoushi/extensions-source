@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.poseidonscans
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 
 @Serializable
 class LatestApiManga(
@@ -46,4 +47,22 @@ class ChapterData(
 class PageImageUrlData(
     val originalUrl: String,
     val order: Int,
+)
+
+@Serializable
+class PageDataRoot(
+    val images: JsonArray? = null,
+    val chapter: PageDataChapter? = null,
+    val initialData: PageDataInitialData? = null,
+)
+
+@Serializable
+class PageDataChapter(
+    val images: JsonArray? = null,
+)
+
+@Serializable
+class PageDataInitialData(
+    val images: JsonArray? = null,
+    val chapter: PageDataChapter? = null,
 )

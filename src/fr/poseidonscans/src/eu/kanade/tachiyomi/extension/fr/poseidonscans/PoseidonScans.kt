@@ -418,14 +418,16 @@ class PoseidonScans : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val pageData = extractNextJsPageData(document) ?: throw Exception("Could not extract Next.js data for page list.")
+        val pageData = extractNextJsPageData(document)
+            ?: throw Exception("Could not extract Next.js data for page list.")
 
+        val pageDataDto = pageData.toString().parseAs<PageDataRoot>()
         val chapterPageUrl = document.location()
 
-        val imagesListJson = pageData["images"]?.jsonArray
-            ?: pageData["chapter"]?.jsonObject?.get("images")?.jsonArray
-            ?: pageData["initialData"]?.jsonObject?.get("images")?.jsonArray
-            ?: pageData["initialData"]?.jsonObject?.get("chapter")?.jsonObject?.get("images")?.jsonArray
+        val imagesListJson = pageDataDto.images
+            ?: pageDataDto.chapter?.images
+            ?: pageDataDto.initialData?.images
+            ?: pageDataDto.initialData?.chapter?.images
             ?: throw Exception("JSON 'images' structure not found. Data: ${pageData.toString().take(500)}")
 
         val imagesDataList = try {
