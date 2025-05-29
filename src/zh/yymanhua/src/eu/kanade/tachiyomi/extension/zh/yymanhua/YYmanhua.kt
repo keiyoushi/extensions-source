@@ -46,7 +46,7 @@ class YYmanhua : ParsedHttpSource() {
     override fun popularMangaSelector() = ".mh-item"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.select(".mh-item-detali .title a").text()
+        title = element.selectFirst(".mh-item-detali .title a").text()
         element.select("a:nth-child(1)").let {
             thumbnail_url = it.select("img").attr("src")
             url = it.attr("href")
