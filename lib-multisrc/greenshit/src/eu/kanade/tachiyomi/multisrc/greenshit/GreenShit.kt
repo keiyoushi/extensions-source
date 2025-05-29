@@ -84,6 +84,8 @@ abstract class GreenShit(
         }
     }
 
+    open val targetAudience: TargetAudience = TargetAudience.All
+
     override fun headersBuilder() = super.headersBuilder()
         .set("scan-id", scanId.toString())
 
@@ -105,9 +107,16 @@ abstract class GreenShit(
         val url = "$apiUrl/obras/novos-capitulos".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "24")
-            .addQueryParameter("gen_id", "4")
+            .addQueryParameterIf(targetAudience != TargetAudience.All, "gen_id", targetAudience.toString())
             .build()
         return GET(url, headers)
+    }
+
+    private fun HttpUrl.Builder.addQueryParameterIf(condition: Boolean, name: String, value: String): HttpUrl.Builder {
+        if (condition) {
+            addQueryParameter(name, value)
+        }
+        return this
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -297,6 +306,15 @@ abstract class GreenShit(
             removePathSegment(0)
         }
         return this
+    }
+
+    enum class TargetAudience(val value: Int) {
+        All(1),
+        Shoujo(4),
+        Yaoi(7),
+        ;
+
+        override fun toString() = value.toString()
     }
 
     companion object {
