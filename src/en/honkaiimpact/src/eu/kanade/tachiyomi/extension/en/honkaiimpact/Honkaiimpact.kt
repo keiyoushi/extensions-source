@@ -100,8 +100,8 @@ class Honkaiimpact : ParsedHttpSource() {
         return manga
     }
 
-    override fun chapterListSelector() = throw UnsupportedOperationException("Chapters not supported")
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException("Chapters not supported")
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url + "/get_chapter", headers)
     override fun chapterListParse(response: Response): List<SChapter> {
         val jsonResult = json.parseToJsonElement(response.body.string()).jsonArray
