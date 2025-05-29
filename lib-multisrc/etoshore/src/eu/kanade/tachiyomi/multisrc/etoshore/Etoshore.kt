@@ -242,6 +242,6 @@ abstract class Etoshore(
 
     companion object {
         const val PREFIX_SEARCH = "id:"
-        val URL_REGEX = """^(https?://[^\s/$.?#].[^\s]*)${'$'}""".toRegex()
+        val URL_REGEX = """^(https?://[^\s/$.?#].[^\s]*)$""".toRegex()
     }
 }
