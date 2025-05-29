@@ -19,7 +19,7 @@ class TonizuToon : Madara(
 
     override val mangaDetailsSelectorAuthor = ".summary-heading:contains(Yazar) ~ .summary-content"
 
-    override val mangaDetailsSelectorStatus = ".summary-heading:contains(Durumu) ~ .summary-content"
+    override val mangaDetailsSelectorStatus = ".summary-heading:contains(Durum) ~ .summary-content"
 
     override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(::loginCheckInterceptor)
