@@ -122,7 +122,7 @@ class YYmanhua : ParsedHttpSource() {
     // Manga View Page
 
     override fun pageListParse(document: Document): List<Page> {
-        val cid = NUM_REGIX.find(document.location())?.groups?.get(0)?.value
+        val cid = NUM_REGEX.find(document.location())?.groups?.get(0)?.value
         return List(
             document.select(".reader-bottom-page-list a").size.takeIf { it > 0 }
                 ?: 1,
