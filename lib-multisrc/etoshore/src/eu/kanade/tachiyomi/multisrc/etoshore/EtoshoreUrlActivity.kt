@@ -21,10 +21,10 @@ class EtoshoreUrlActivity : Activity() {
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("MadaraUrl", e.toString())
+                Log.e("EtoshoreUrl", e.toString())
             }
         } else {
-            Log.e("MadaraUrl", "could not parse uri from intent $intent")
+            Log.e("EtoshoreUrl", "could not parse uri from intent $intent")
         }
 
         finish()
