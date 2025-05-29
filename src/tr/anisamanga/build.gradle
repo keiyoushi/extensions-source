@@ -1,7 +1,9 @@
 ext {
     extName = 'Anisa Manga'
     extClass = '.AnisaManga'
-    extVersionCode = 43
+    themePkg = 'etoshore'
+    baseUrl = 'https://anisamanga.net'
+    overrideVersionCode = 43
     isNsfw = true
 }
 
