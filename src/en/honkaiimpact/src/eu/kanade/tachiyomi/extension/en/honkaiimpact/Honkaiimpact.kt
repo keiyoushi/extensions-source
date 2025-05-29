@@ -77,7 +77,7 @@ class Honkaiimpact : ParsedHttpSource() {
                     query.isEmpty() || manga.title.contains(query.trim(), ignoreCase = true)
                 }
                 val hasNextPage = searchMangaNextPageSelector()?.let { selector ->
-                    document.select(selector).first()
+                    document.selectFirst(selector)
                 } != null
                 MangasPage(mangas, hasNextPage)
             }
