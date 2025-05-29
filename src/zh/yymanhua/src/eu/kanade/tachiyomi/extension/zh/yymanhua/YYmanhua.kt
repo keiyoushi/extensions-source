@@ -46,10 +46,10 @@ class YYmanhua : ParsedHttpSource() {
     override fun popularMangaSelector() = ".mh-item"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.selectFirst(".mh-item-detali .title a").text()
-        element.select("a:nth-child(1)").let {
-            thumbnail_url = it.select("img").attr("src")
-            url = it.attr("href")
+        title = element.selectFirst(".mh-item-detali .title a")!!.text()
+        element.selectFirst("a:nth-child(1)")!!.let {
+            thumbnail_url = it.selectFirst("img")?.absUrl("src")
+            this.setUrlWithoutDomain(it.absUrl("href"))
         }
     }
 
@@ -71,15 +71,15 @@ class YYmanhua : ParsedHttpSource() {
     override fun getFilterList() = buildFilterList()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = (
-            baseUrl +
-                if (query.isNotBlank()) {
-                    "/search?title=$query&page=$page"
-                } else {
-                    "/manga-list-${filters[1]}-${filters[2]}-${filters[3]}-p$page/"
-                }
-            ).toHttpUrl()
-        return GET(url, headers)
+        val url = baseUrl.toHttpUrl().newBuilder()
+        if (query.isNotBlank()) {
+            url.addPathSegment("search")
+                .addQueryParameter("title", query)
+                .addQueryParameter("page", page.toString())
+        } else {
+            url.addPathSegment("manga-list-${filters[1]}-${filters[2]}-${filters[3]}-p$page")
+        }
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -91,14 +91,14 @@ class YYmanhua : ParsedHttpSource() {
     // Manga Detail Page
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        description = document.select(".detail-info-content").text()
-            .replace(DESC_REGEX, "").trim()
+        description = document.selectFirst(".detail-info-content")?.text()
+            ?.replace(DESC_REGEX, "")?.trim()
         val els = document.select(".detail-info-tip > span")
         els[0].select("a").let {
             author = it[0].text()
             artist = it.getOrNull(1)?.text()
         }
-        status = when (els[1].select("span")[1].text()) {
+        status = when (els[1].selectFirst("span > span")?.text()) {
             "连载中", "連載中" -> SManga.ONGOING
             "已完结", "已完結" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
@@ -109,24 +109,21 @@ class YYmanhua : ParsedHttpSource() {
 
     // Manga Detail Page / Chapters Page (Separate)
 
-    override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url, headers)
+    // override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url, headers)
 
     override fun chapterListSelector() = "#chapterlistload a"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        url = element.attr("href")
+        this.setUrlWithoutDomain(element.absUrl("href"))
         name = element.text()
-        chapter_number = CHAPTER_REGEX.find(name)?.groups?.get(1)?.value?.toFloat() ?: -0F
+        chapter_number = CHAPTER_REGEX.find(name)?.groups?.get(1)?.value?.toFloat() ?: -1F
     }
 
     // Manga View Page
 
     override fun pageListParse(document: Document): List<Page> {
         val cid = NUM_REGEX.find(document.location())?.groups?.get(0)?.value
-        return List(
-            document.select(".reader-bottom-page-list a").size.takeIf { it > 0 }
-                ?: 1,
-        ) { i ->
+        return List(document.select(".reader-bottom-page-list a").size.takeIf { it > 0 } ?: 1) { i ->
             Page(i, "${document.location()}chapterimage.ashx?cid=$cid&page=${i + 1}")
         }
     }
