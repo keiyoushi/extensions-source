@@ -9,6 +9,10 @@ class MediocreToons : GreenShit(
     "pt-BR",
     scanId = 2,
 ) {
+    override val targetAudience = TargetAudience.Shoujo
+
+    override val contentOrigin = ContentOrigin.Mobile
+
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()

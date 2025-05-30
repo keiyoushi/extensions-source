@@ -139,22 +139,25 @@ class Desu : ConfigurableSource, HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl$API_URL/?limit=50&order=popular&page=$page")
+        GET("$baseUrl$API_URL/?limit=50&order=popular&page=$page", headers)
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl$API_URL/?limit=50&order=updated&page=$page")
+        GET("$baseUrl$API_URL/?limit=50&order=updated&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var url = "$baseUrl$API_URL/?limit=20&page=$page"
+        val url = "$baseUrl$API_URL/".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", "20")
+            .addQueryParameter("page", page.toString())
+
         val types = mutableListOf<Type>()
         val genres = mutableListOf<Genre>()
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
-                is OrderBy -> url += "&order=" + arrayOf("popular", "updated", "name")[filter.state]
+                is OrderBy -> url.addQueryParameter("order", arrayOf("popular", "updated", "name")[filter.state])
                 is TypeList -> filter.state.forEach { type -> if (type.state) types.add(type) }
                 is GenreList -> filter.state.forEach { genre -> if (genre.state) genres.add(genre) }
                 else -> {}
@@ -162,15 +165,15 @@ class Desu : ConfigurableSource, HttpSource() {
         }
 
         if (types.isNotEmpty()) {
-            url += "&kinds=" + types.joinToString(",") { it.id }
+            url.addQueryParameter("kinds", types.joinToString(",") { it.id })
         }
         if (genres.isNotEmpty()) {
-            url += "&genres=" + genres.joinToString(",") { it.id }
+            url.addQueryParameter("genres", genres.joinToString(",") { it.id })
         }
         if (query.isNotEmpty()) {
-            url += "&search=$query"
+            url.addQueryParameter("search", query)
         }
-        return GET(url)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {

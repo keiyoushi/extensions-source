@@ -29,7 +29,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override val id = 6495630445796108150
 
-    private val defaultBaseUrl = "https://lxmanga.help"
+    private val defaultBaseUrl = "https://lxmanga.blog"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
