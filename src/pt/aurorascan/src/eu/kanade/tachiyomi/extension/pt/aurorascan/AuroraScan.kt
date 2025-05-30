@@ -9,6 +9,8 @@ class AuroraScan : GreenShit(
     "pt-BR",
     scanId = 4,
 ) {
+    override val targetAudience = TargetAudience.Shoujo
+
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
