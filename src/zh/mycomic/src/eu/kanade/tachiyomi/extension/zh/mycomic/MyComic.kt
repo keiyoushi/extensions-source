@@ -69,7 +69,7 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document): SManga {
         val detailElement = document.selectFirst("div[data-flux-card]")!!
         return SManga.create().apply {
-            title = detailElement.selectFirst("div[data-flux-heading]")?.text() ?: title
+            title = detailElement.selectFirst("div[data-flux-heading]")!!.text()
             thumbnail_url = detailElement.selectFirst("img.object-cover")?.imgAttr()
             status = detailElement.selectFirst("div[data-flux-badge]")?.text().let {
                 when (it) {
@@ -78,9 +78,9 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
                     else -> SManga.UNKNOWN
                 }
             }
-            detailElement.selectFirst("div[data-flux-badge] + div")?.let {
-                author = it.selectFirst(":first-child a")?.text()
-                genre = it.select(":nth-child(3) a").joinToString { e -> e.text() }
+            detailElement.selectFirst("div[data-flux-badge] + div")?.let { element ->
+                author = element.selectFirst(":first-child a")?.text()
+                genre = element.select(":nth-child(3) a").joinToString { it.text() }
             }
             description =
                 detailElement.selectFirst("div[data-flux-badge] + div + div div[x-show=show]")
