@@ -31,7 +31,7 @@ class CartoonMad : ParsedHttpSource() {
     fun handleCharsetInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        if (request.url.pathSegments.getOrNull(0) == "comic") {
+        if (request.url.pathSegments.joinToString("/").contains("/comic/")) {
             // Need an explicit definition of the charset format for the response
             return response.newBuilder()
                 .body(
@@ -53,24 +53,26 @@ class CartoonMad : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/m/?act=1")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/m/?act=1", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val content = document.select(content_selector)
+        val content = document.selectFirst(content_selector)
         return SManga.create().apply {
-            content.select("> table:nth-child(1) > tbody").let {
+            content?.selectFirst("> table:nth-child(1) > tbody")?.let {
                 author =
-                    it.select("> tr > td:contains(作者：)").text().substringAfter("作者：").trim()
+                    it.selectFirst("> tr > td:contains(作者：)")?.text()?.substringAfter("作者：")
+                        ?.trim()
                 genre =
-                    it.select("> tr > td:contains(分類：) td:has(img[src=/image/start.gif])").text()
-                        .substringAfter("分類：").trim()
+                    it.selectFirst("> tr > td:contains(分類：) td:has(img[src=/image/start.gif])")
+                        ?.text()
+                        ?.substringAfter("分類：")?.trim()
                 thumbnail_url =
-                    it.select("span.cover + img, span.covers + img").attr("abs:src")
-                        .ifEmpty { thumbnail_url }
+                    it.selectFirst("span.cover + img, span.covers + img")?.absUrl("src")
+                        ?: thumbnail_url
             }
-            description = content.select("> table:nth-child(2) legend + table").text()
+            description = content?.selectFirst("> table:nth-child(2) legend + table")?.text()
         }
     }
 
@@ -94,27 +96,23 @@ class CartoonMad : ParsedHttpSource() {
                 doc.selectFirst("body > table > tbody > tr:nth-child(3) img")!!.absUrl("src")
             ret.add(Page(ret.size, imageUrl = imageUrl))
             val nextPage =
-                doc.selectFirst("body > table > tbody > tr:nth-child(5) > td > a:last-child")
-                    ?.absUrl("href")
-                    ?: return ret
-            if (nextPage.contains("thendm.asp")) {
-                return ret
-            }
-            doc = client.newCall(GET(nextPage)).execute().asJsoup()
+                doc.selectFirst("body > table > tbody > tr:nth-child(5) > td > a:last-child:not([href*=thendm.asp])")
+                    ?.absUrl("href") ?: return ret
+            doc = client.newCall(GET(nextPage, headers)).execute().asJsoup()
         } while (true)
     }
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            url = element.selectFirst("a.a1")!!.attr("href")
+            setUrlWithoutDomain(element.selectFirst("a.a1")!!.absUrl("href"))
             title = element.selectFirst("a.a1")!!.text()
-            thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
     }
 
     override fun popularMangaNextPageSelector() = null
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/m/?act=2")
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/m/?act=2", headers)
 
     override fun popularMangaSelector(): String {
         //                                                            page   row  item
@@ -128,14 +126,12 @@ class CartoonMad : ParsedHttpSource() {
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return POST(
-            "$baseUrl/m/?act=7",
-            body = FormBody.Builder()
-                .add("keyword", query)
-                .add("x", "0")
-                .add("y", "0")
-                .build(),
-        )
+        val body = FormBody.Builder()
+            .add("keyword", query)
+            .add("x", "0")
+            .add("y", "0")
+            .build()
+        return POST("$baseUrl/m/?act=7", headers, body)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
