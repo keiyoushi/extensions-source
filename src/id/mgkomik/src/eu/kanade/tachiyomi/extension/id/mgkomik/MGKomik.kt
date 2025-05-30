@@ -12,7 +12,7 @@ import java.util.Locale
 
 class MGKomik : Madara(
     "MG Komik",
-    "https://mgkomik.org",
+    "https://id.mgkomik.cc",
     "id",
     SimpleDateFormat("dd MMM yy", Locale.US),
 ) {
