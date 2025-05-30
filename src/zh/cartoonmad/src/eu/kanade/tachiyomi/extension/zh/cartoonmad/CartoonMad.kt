@@ -20,12 +20,9 @@ import org.jsoup.nodes.Element
 
 class CartoonMad : ParsedHttpSource() {
     override val baseUrl = "https://www.cartoonmad.com"
-    override val lang: String
-        get() = "zh"
-    override val name: String
-        get() = "動漫狂"
-    override val supportsLatest: Boolean
-        get() = true
+    override val lang: String = "zh"
+    override val name: String = "動漫狂"
+    override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::handleCharsetInterceptor)
@@ -34,7 +31,7 @@ class CartoonMad : ParsedHttpSource() {
     fun handleCharsetInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        if (request.url.encodedPath.contains("/comic/")) {
+        if (request.url.pathSegments.getOrNull(0) == "comic") {
             // Need an explicit definition of the charset format for the response
             return response.newBuilder()
                 .body(
