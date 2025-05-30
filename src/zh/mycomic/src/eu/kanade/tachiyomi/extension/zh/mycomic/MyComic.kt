@@ -79,14 +79,12 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
                 }
             }
             detailElement.selectFirst("div[data-flux-badge] + div")?.let {
-                author = it.select(":first-child a").text()
+                author = it.selectFirst(":first-child a")?.text()
                 genre = it.select(":nth-child(3) a").joinToString { e -> e.text() }
             }
             description =
-                detailElement.select("div[data-flux-badge] + div + div div[x-show=show]").text()
-                    .ifEmpty {
-                        document.select("meta[name=description]").attr("content")
-                    }
+                detailElement.selectFirst("div[data-flux-badge] + div + div div[x-show=show]")
+                    ?.text() ?: document.selectFirst("meta[name=description]")?.attr("content")
         }
     }
 
