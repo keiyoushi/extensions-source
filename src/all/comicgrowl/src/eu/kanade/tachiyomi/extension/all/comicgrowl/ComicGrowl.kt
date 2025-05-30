@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.comicgrowl
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Rect
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -7,18 +11,22 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
-import java.text.ParseException
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -51,13 +59,13 @@ class ComicGrowl(
          * Parse date from string like "3月31日" to UNIX Epoch time.
          */
         private fun String.toDate(): Long {
-            return try {
-                DATE_PARSER.parse(this)?.time ?: 0L
-            } catch (_: ParseException) {
-                0L
-            }
+            return DATE_PARSER.tryParse(this)
         }
     }
+
+    override val client = super.client.newBuilder()
+        .addNetworkInterceptor(::imageDescrambler)
+        .build()
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/ranking/manga")
 
@@ -134,6 +142,7 @@ class ComicGrowl(
             if (initialResponse.code != 200) {
                 throw Exception("Failed to get page list")
             }
+            // FIXME: use util in core
             val totalPages =
                 json.parseToJsonElement(initialResponse.body.string()).jsonObject["totalPages"]!!.jsonPrimitive.content
             // Get all pages
@@ -146,10 +155,15 @@ class ComicGrowl(
                 val resultJson = result.jsonObject["result"]!!.jsonArray
                 resultJson.forEach { resultJsonElement ->
                     val jsonObject = resultJsonElement.jsonObject
+                    // Add fragment to let interceptor to descramble the image
+                    val scramble = jsonObject["scramble"]!!.jsonPrimitive.content.drop(1).dropLast(1).replace(", ", "-")
+                    val imageUrl =
+                        jsonObject["imageUrl"]!!.jsonPrimitive.content.toHttpUrl().newBuilder().fragment(scramble)
+                            .build()
                     pageList.add(
                         Page(
                             index = jsonObject["sort"]!!.jsonPrimitive.int,
-                            imageUrl = jsonObject["imageUrl"]!!.jsonPrimitive.content,
+                            imageUrl = imageUrl.toString(),
                         ),
                     )
                 }
@@ -164,6 +178,66 @@ class ComicGrowl(
             .build()
         return GET(page.imageUrl!!, newHeaders)
     }
+
+    private fun imageDescrambler(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val rawRequest = request.newBuilder().url(request.url.newBuilder().fragment(null).build()).build()
+        val response = chain.proceed(rawRequest)
+
+        if (request.url.fragment.isNullOrEmpty()) {
+            return response
+        }
+
+        val scramble = request.url.fragment!!
+        val tiles = buildList {
+            scramble.split("-").forEachIndexed { index, s ->
+                val scrambleInt = s.toInt()
+                add(index, TilePos(scrambleInt / 4, scrambleInt.mod(4)))
+            }
+        }
+
+        val scrambledImg = BitmapFactory.decodeStream(response.body.byteStream())
+        val descrambledImg = drawDescrambledImage(scrambledImg, scrambledImg.width, scrambledImg.height, tiles)
+
+        val output = ByteArrayOutputStream()
+        descrambledImg.compress(Bitmap.CompressFormat.JPEG, 90, output)
+
+        val image = output.toByteArray()
+        val body = image.toResponseBody("image/jpeg".toMediaType())
+
+        return response.newBuilder()
+            .body(body)
+            .build()
+    }
+
+    private fun drawDescrambledImage(rawImage: Bitmap, width: Int, height: Int, tiles: List<TilePos>): Bitmap {
+        // Prepare canvas
+        val descrambledImg = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(descrambledImg)
+
+        // Tile width and height(4x4)
+        val tileWidth = width / 4
+        val tileHeight = height / 4
+
+        // Draw rect
+        var count = 0
+        for (x in 0..3) {
+            for (y in 0..3) {
+                val desRect = Rect(x * tileWidth, y * tileHeight, (x + 1) * tileWidth, (y + 1) * tileHeight)
+                val srcRect = Rect(
+                    tiles[count].x * tileWidth,
+                    tiles[count].y * tileHeight,
+                    (tiles[count].x + 1) * tileWidth,
+                    (tiles[count].y + 1) * tileHeight,
+                )
+                canvas.drawBitmap(rawImage, srcRect, desRect, null)
+                count++
+            }
+        }
+        return descrambledImg
+    }
+
+    private data class TilePos(val x: Int, val y: Int) // Left-top corner position
 
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException()
