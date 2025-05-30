@@ -31,7 +31,7 @@ class CartoonMad : ParsedHttpSource() {
     fun handleCharsetInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        if (request.url.pathSegments.joinToString("/").contains("/comic/")) {
+        if (request.url.encodedPath.contains("/comic/")) {
             // Need an explicit definition of the charset format for the response
             return response.newBuilder()
                 .body(
