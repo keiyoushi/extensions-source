@@ -143,7 +143,7 @@ class Happymh : HttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().contains("/apis/c/index")) {
+        if (response.request.url.encodedPath.contains("/apis/c/index")) {
             // for filter response
             return popularMangaParse(response)
         }
