@@ -106,7 +106,7 @@ class SwordsComic : HttpSource() {
             builder.append("+")
         }
 
-        return listOf(Page(0, "", imageElement.attr("abs:src")), Page(1, "", "https://fakeimg.pl/1800x2252/978B65/000000/?text=$builder&font_size=60&font=comic+sans"))
+        return listOf(Page(0, "", imageElement.attr("abs:src")), Page(1, "", "https://fakeimg.ryd.tools/1800x2252/978B65/000000/?text=$builder&font_size=60&font=comic+sans"))
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
