@@ -13,18 +13,13 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 
 class MyComic : ParsedHttpSource(), ConfigurableSource {
     override val baseUrl = "https://mycomic.com"
@@ -33,7 +28,6 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
     override val supportsLatest: Boolean = true
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
-    private val json by injectLazy<Json>()
     private val preferences by getPreferencesLazy()
     private val requestUrl: String
         get() = if (preferences.getString(PREF_KEY_LANG, "") == "zh-hans") {
@@ -43,16 +37,16 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
         }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = response.asJsoup()
-        val data = doc.select("div[data-flux-card] + div div[x-data]").attr("x-data")
-        val chapters =
+        val document = response.asJsoup()
+        val data = document.select("div[data-flux-card] + div div[x-data]").attr("x-data")
+        val chaptersStr =
             data.substringAfter("chapters:").substringBefore("\n").trim().removeSuffix(",")
-        return json.decodeFromString<JsonArray>(chapters).map {
+        return chaptersStr.parseAs<List<Chapter>>().map {
             SChapter.create().apply {
-                name = it.jsonObject["title"]!!.jsonPrimitive.content
+                name = it.title
                 // Since the images included in the chapter do not distinguish between Traditional and Simplified Chinese, the default URL will be used uniformly here.
                 // Additionally, using different URLs would create more issues, so it's best to keep the URL consistent.
-                url = "/chapters/${it.jsonObject["id"]!!.jsonPrimitive.content}"
+                url = "/chapters/${it.id}"
             }
         }
     }
@@ -73,20 +67,20 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesSelector() = searchMangaSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val detailElement = document.select("div[data-flux-card]")
+        val detailElement = document.selectFirst("div[data-flux-card]")!!
         return SManga.create().apply {
-            title = detailElement.select("div[data-flux-heading]").text().ifEmpty { title }
-            thumbnail_url = detailElement.select("img.object-cover").attr("src")
-            status = detailElement.select("div[data-flux-badge]").text().let {
+            title = detailElement.selectFirst("div[data-flux-heading]")?.text() ?: title
+            thumbnail_url = detailElement.selectFirst("img.object-cover")?.imgAttr()
+            status = detailElement.selectFirst("div[data-flux-badge]")?.text().let {
                 when (it) {
                     "连载中", "連載中" -> SManga.ONGOING
                     "已完结", "已完結" -> SManga.COMPLETED
                     else -> SManga.UNKNOWN
                 }
             }
-            detailElement.select("div[data-flux-badge] + div").let {
+            detailElement.selectFirst("div[data-flux-badge] + div")?.let {
                 author = it.select(":first-child a").text()
-                genre = it.select(":nth-child(3) a").joinToString { it.text() }
+                genre = it.select(":nth-child(3) a").joinToString { e -> e.text() }
             }
             description =
                 detailElement.select("div[data-flux-badge] + div + div div[x-show=show]").text()
@@ -98,12 +92,7 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("img[x-ref]").mapIndexed { index, element ->
-            val url = if (element.hasAttr("data-src")) {
-                element.attr("data-src")
-            } else {
-                element.attr("src")
-            }
-            Page(index, imageUrl = url)
+            Page(index, imageUrl = element.imgAttr())
         }
     }
 
@@ -141,11 +130,7 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
             setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
             element.selectFirst("img")!!.let {
                 title = it.attr("alt")
-                thumbnail_url = if (it.hasAttr("data-src")) {
-                    it.attr("data-src")
-                } else {
-                    it.attr("src")
-                }
+                thumbnail_url = it.imgAttr()
             }
         }
     }
@@ -207,6 +192,11 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
         if (value.isNotEmpty()) {
             addQueryParameter(name, value)
         }
+    }
+
+    private fun Element.imgAttr() = when {
+        hasAttr("data-src") -> absUrl("data-src")
+        else -> absUrl("src")
     }
 
     companion object {
