@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaChan'
     themePkg = 'multichan'
     baseUrl = 'https://im.manga-chan.me'
-    overrideVersionCode = 15
+    overrideVersionCode = 16
     isNsfw = true
 }
 
