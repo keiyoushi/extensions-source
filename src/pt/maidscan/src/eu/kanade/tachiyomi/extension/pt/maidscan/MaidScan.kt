@@ -10,6 +10,8 @@ class MaidScan : GreenShit(
     "pt-BR",
     scanId = 3,
 ) {
+    override val targetAudience = TargetAudience.Shoujo
+
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(2)
         .build()
