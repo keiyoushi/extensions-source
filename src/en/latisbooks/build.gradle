@@ -1,7 +1,7 @@
 ext {
     extName = 'Latis Books'
     extClass = '.Latisbooks'
-    extVersionCode = 5
+    extVersionCode = 6
     isNsfw = true
 }
 

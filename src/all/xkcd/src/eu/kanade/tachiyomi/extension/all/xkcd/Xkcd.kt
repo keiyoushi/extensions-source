@@ -137,10 +137,10 @@ open class Xkcd(
 
     companion object {
         private const val THUMBNAIL_URL =
-            "https://fakeimg.pl/550x780/ffffff/6e7b91/?font=museo&text=xkcd"
+            "https://fakeimg.ryd.tools/550x780/ffffff/6e7b91/?font=museo&text=xkcd"
 
         const val LATIN_ALT_TEXT_URL =
-            "https://fakeimg.pl/1500x2126/ffffff/000000/?font=museo&font_size=42"
+            "https://fakeimg.ryd.tools/1500x2126/ffffff/000000/?font=museo&font_size=42"
 
         const val CJK_ALT_TEXT_URL =
             "https://placehold.jp/42/ffffff/000000/1500x2126.png?css=" +

@@ -28,7 +28,7 @@ class Latisbooks : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    private val textToImageURL = "https://fakeimg.pl/1500x2126/ffffff/000000/?font=museo&font_size=42"
+    private val textToImageURL = "https://fakeimg.ryd.tools/1500x2126/ffffff/000000/?font=museo&font_size=42"
 
     private fun String.image() = textToImageURL + "&text=" + encode(this)
 

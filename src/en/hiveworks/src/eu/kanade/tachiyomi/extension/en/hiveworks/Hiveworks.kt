@@ -506,7 +506,7 @@ class Hiveworks : ParsedHttpSource() {
             charCount += i.length + 1
         }
 
-        return "https://fakeimg.pl/1500x2126/ffffff/000000/?text=$builder&font_size=42&font=museo"
+        return "https://fakeimg.ryd.tools/1500x2126/ffffff/000000/?text=$builder&font_size=42&font=museo"
     }
 
     // Used to throw custom error codes for http codes
