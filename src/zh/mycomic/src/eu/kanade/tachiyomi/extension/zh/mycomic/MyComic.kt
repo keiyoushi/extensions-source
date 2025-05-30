@@ -28,14 +28,11 @@ import uy.kohesive.injekt.injectLazy
 
 class MyComic : ParsedHttpSource(), ConfigurableSource {
     override val baseUrl = "https://mycomic.com"
-    override val lang: String
-        get() = "zh"
-    override val name: String
-        get() = "MyComic"
-    override val supportsLatest: Boolean
-        get() = true
+    override val lang: String = "zh"
+    override val name: String = "MyComic"
+    override val supportsLatest: Boolean = true
 
-    override fun headersBuilder() = super.headersBuilder().add("referer", baseUrl)
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
     private val json by injectLazy<Json>()
     private val preferences by getPreferencesLazy()
     private val requestUrl: String
@@ -89,7 +86,7 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
             }
             detailElement.select("div[data-flux-badge] + div").let {
                 author = it.select(":first-child a").text()
-                genre = it.select(":nth-child(3) a").joinToString { e -> e.text() }
+                genre = it.select(":nth-child(3) a").joinToString { it.text() }
             }
             description =
                 detailElement.select("div[data-flux-badge] + div + div div[x-show=show]").text()
@@ -127,7 +124,7 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
             return MangasPage(
                 doc.select("table > tbody > tr > td:nth-child(2) a").map {
                     SManga.create().apply {
-                        setUrlWithoutDomain(it.attr("href"))
+                        setUrlWithoutDomain(it.absUrl("href"))
                         title = it.text()
                         // ranking page not support thumbnail
                     }
