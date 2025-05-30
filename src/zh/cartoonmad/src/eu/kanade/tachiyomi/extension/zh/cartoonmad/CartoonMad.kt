@@ -66,8 +66,7 @@ class CartoonMad : ParsedHttpSource() {
                         ?.trim()
                 genre =
                     it.selectFirst("> tr > td:contains(分類：) td:has(img[src=/image/start.gif])")
-                        ?.text()
-                        ?.substringAfter("分類：")?.trim()
+                        ?.text()?.substringAfter("分類：")?.trim()
                 thumbnail_url =
                     it.selectFirst("span.cover + img, span.covers + img")?.absUrl("src")
                         ?: thumbnail_url
@@ -83,7 +82,7 @@ class CartoonMad : ParsedHttpSource() {
         return chapters.map {
             SChapter.create().apply {
                 name = it.text()
-                url = it.attr("href")
+                setUrlWithoutDomain(it.absUrl("href"))
             }
         }.reversed()
     }
