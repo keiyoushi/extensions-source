@@ -3,7 +3,7 @@ ext {
     extClass = '.HenChan'
     themePkg = 'multichan'
     baseUrl = 'https://xxl.hentaichan.live'
-    overrideVersionCode = 40
+    overrideVersionCode = 41
     isNsfw = true
 }
 
