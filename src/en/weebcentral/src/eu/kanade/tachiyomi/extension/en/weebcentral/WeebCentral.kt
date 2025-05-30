@@ -84,7 +84,7 @@ class WeebCentral : ParsedHttpSource() {
     override fun searchMangaSelector(): String = "article > section > a"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        thumbnail_url = element.sourceImg()
         title = element.selectFirst("div:not([class]):last-child")!!.text()
         setUrlWithoutDomain(element.absUrl("href"))
     }
@@ -101,7 +101,7 @@ class WeebCentral : ParsedHttpSource() {
         val descBuilder = StringBuilder()
 
         with(document.select("section[x-data] > section")[0]) {
-            thumbnail_url = selectFirst("img")!!.attr("abs:src")
+            thumbnail_url = sourceImg()
             author = select("ul > li:has(strong:contains(Author)) > span > a").joinToString { it.text() }
             genre = select("ul > li:has(strong:contains(Tag),strong:contains(Type)) a").joinToString { it.text() }
             status = selectFirst("ul > li:has(strong:contains(Status)) > a").parseStatus()
@@ -214,6 +214,11 @@ class WeebCentral : ParsedHttpSource() {
     }
 
     // ============================= Utilities ==============================
+
+    private fun Element.sourceImg(): String? {
+        return selectFirst("source")?.attr("srcset")?.replace("small", "normal")
+            ?: selectFirst("img")?.absUrl("src")
+    }
 
     private fun defaultFilterList(sortFilter: SortFilter): FilterList = FilterList(
         sortFilter,
