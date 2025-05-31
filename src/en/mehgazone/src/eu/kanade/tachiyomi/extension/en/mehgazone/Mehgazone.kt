@@ -11,7 +11,6 @@ import android.util.Log
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.TextView
-import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -34,7 +33,6 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import okhttp3.Credentials
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -58,14 +56,26 @@ class Mehgazone : ConfigurableSource, HttpSource() {
 
     override val supportsLatest = false
 
+    // disables "related" in apps that support it
     @Suppress("VIRTUAL_MEMBER_HIDDEN", "unused")
     val supportsRelatedMangas = false
 
+    // authentication doesn't work with default client
     override val client: OkHttpClient by lazy {
-        network.client
-            .newBuilder()
-            .addInterceptor(authInterceptor)
-            .build()
+        val builder = OkHttpClient.Builder()
+
+        builder.addInterceptor(authInterceptor)
+
+        network.client.interceptors.forEach {
+            when (it::class.simpleName!!) {
+                "UncaughtExceptionInterceptor",
+                "UserAgentInterceptor",
+                -> builder.addInterceptor(it)
+                else -> {}
+            }
+        }
+
+        builder.build()
     }
 
     private val json = Json {
@@ -80,7 +90,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
         SimpleDateFormat("dd-MM-yyyy", Locale.US)
     }
 
-    private val textToImageURL = "https://fakeimg.pl/1500x2126/ffffff/000000/?font=museo&font_size=42"
+    private val textToImageURL = "https://fakeimg.ryd.tools/1500x2126/ffffff/000000/?font=museo&font_size=42"
 
     private fun String.image() = textToImageURL + "&text=" + encode(this)
 
@@ -162,20 +172,13 @@ class Mehgazone : ConfigurableSource, HttpSource() {
         }
 
         return apiResponse
-            .filter { showPatreon || !it.excerpt.rendered.contains("Unlock with Patreon") }
+            .filter { !it.excerpt.rendered.contains("Unlock with Patreon") }
             .distinctBy { it.id }
             .sortedBy { it.date }
             .mapIndexed { i, it ->
                 SChapter.create().apply {
-                    val premium =
-                        if (it.excerpt.rendered.contains("Unlock with Patreon")) {
-                            "🔒 "
-                        } else {
-                            ""
-                        }
-
                     url = "$mangaUrl/?p=${it.id}"
-                    name = premium + it.title.rendered.unescape()
+                    name = it.title.rendered.unescape()
                         .ifEmpty { fallbackTitleDateFormat.format(it.date.time) }
                     date_upload = it.date.time.time
                     chapter_number = i.toFloat()
@@ -207,10 +210,6 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val apiResponse: PageListDto = json.decodeFromString<List<PageListDto>>(response.body.string()).first()
 
-        if (showPatreon && apiResponse.excerpt.rendered.contains("Unlock with Patreon")) {
-            return pageListParsePatreon(response, apiResponse)
-        }
-
         val content = Jsoup.parse(apiResponse.content.rendered, apiResponse.link)
 
         val images = content.select("img")
@@ -223,67 +222,6 @@ class Mehgazone : ConfigurableSource, HttpSource() {
                     images.size,
                     "",
                     wordWrap(Jsoup.parse(apiResponse.excerpt.rendered.unescape()).text()).image(),
-                ),
-            )
-        }
-
-        return images.toList()
-    }
-
-    private fun pageListParsePatreon(response: Response, apiResponse: PageListDto): List<Page> {
-        val imageRegex = Regex("(-)[0-9]+(\\.png)\$", RegexOption.IGNORE_CASE)
-        val mediaUrl =
-            response.request.url.toString().substringBefore("/wp-json/") +
-                "/wp-json/wp/v2/media?per_page=25&_fields=source_url,media_details"
-
-        val mediaApiResponse = client.newCall(GET(mediaUrl, headers)).execute()
-        val mediaApi: MediaDto? = json.decodeFromString<List<MediaDto>>(mediaApiResponse.body.string()).firstOrNull {
-            it.details.width < it.details.height &&
-                it.details.height - it.details.width > 25 &&
-                it.source.matches(imageRegex)
-        }
-        val chapterNumber: String? =
-            "[0-9]+\$"
-                .toRegex(RegexOption.IGNORE_CASE)
-                .find(apiResponse.title.rendered)?.value
-
-        val images: MutableList<Page> = mutableListOf()
-
-        if (mediaApi != null && chapterNumber != null) {
-            val url = mediaApi.source.toHttpUrl()
-            val segments = url.pathSegments.size
-            val chapterImgUrl =
-                url.newBuilder()
-                    .setPathSegment(segments - 1, url.pathSegments[segments - 1].replace(imageRegex, "\$1$chapterNumber\$2"))
-                    .setPathSegment(segments - 2, (apiResponse.date.get(Calendar.MONTH) + 1).toString().padStart(2, '0'))
-                    .setPathSegment(segments - 3, apiResponse.date.get(Calendar.YEAR).toString())
-                    .build()
-
-            images.add(
-                Page(
-                    0,
-                    "",
-                    chapterImgUrl.toString(),
-                ),
-            )
-        }
-
-        if (apiResponse.excerpt.rendered.isNotBlank()) {
-            images.add(
-                Page(
-                    1,
-                    "",
-                    wordWrap(Jsoup.parse(apiResponse.excerpt.rendered.unescape()).text()).image(),
-                ),
-            )
-        }
-
-        if (images.size <= 1) {
-            images.add(
-                Page(
-                    0,
-                    "",
-                    wordWrap("Could not find Patreon Chapter").image(),
                 ),
             )
         }
@@ -356,20 +294,6 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     )
 
     @Serializable
-    private data class MediaDto(
-        @SerialName("source_url")
-        val source: String,
-        @SerialName("media_details")
-        val details: DimensionDto,
-    )
-
-    @Serializable
-    private data class DimensionDto(
-        val width: Int,
-        val height: Int,
-    )
-
-    @Serializable
     private data class RenderedDto(
         val rendered: String,
     )
@@ -394,11 +318,6 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     }
 
     companion object {
-        private const val SHOW_PATREON_PREF_KEY = "SHOW_PATREON"
-        private const val SHOW_PATREON_PREF_TITLE = "Show Patreon chapters"
-        private const val SHOW_PATREON_PREF_SUMMARY = "If checked, tries to show chapters that require you to be logged in through Patreon while not logged in"
-        private const val SHOW_PATREON_PREF_DEFAULT_VALUE = false
-
         private const val WORDPRESS_USERNAME_PREF_KEY = "WORDPRESS_USERNAME"
         private const val WORDPRESS_USERNAME_PREF_TITLE = "WordPress username"
         private const val WORDPRESS_USERNAME_PREF_SUMMARY = "The WordPress username"
@@ -414,8 +333,6 @@ class Mehgazone : ConfigurableSource, HttpSource() {
         private const val WORDPRESS_APP_PASSWORD_PREF_DEFAULT_VALUE = ""
     }
 
-    private var showPatreon = preferences.getBoolean(SHOW_PATREON_PREF_KEY, SHOW_PATREON_PREF_DEFAULT_VALUE)
-
     private val authInterceptor: BasicAuthInterceptor by lazy {
         BasicAuthInterceptor(
             preferences.getString(WORDPRESS_USERNAME_PREF_KEY, WORDPRESS_USERNAME_PREF_DEFAULT_VALUE),
@@ -424,18 +341,6 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        CheckBoxPreference(screen.context).apply {
-            key = SHOW_PATREON_PREF_KEY
-            title = SHOW_PATREON_PREF_TITLE
-            summary = SHOW_PATREON_PREF_SUMMARY
-            setDefaultValue(SHOW_PATREON_PREF_DEFAULT_VALUE)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                showPatreon = newValue as Boolean
-                true
-            }
-        }.also(screen::addPreference)
-
         EditTextPreference(screen.context).apply {
             val name = preferences.getString(WORDPRESS_USERNAME_PREF_KEY, WORDPRESS_USERNAME_PREF_DEFAULT_VALUE)!!
 
@@ -447,6 +352,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
 
             setOnBindEditTextListener {
                 getDialogMessageFromEditText(it).let {
+                    @Suppress("NestedLambdaShadowedImplicitParameter")
                     if (it == null) {
                         Log.e(name, "Could not find dialog TextView")
                     } else {
@@ -474,6 +380,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
             setOnBindEditTextListener {
                 it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 getDialogMessageFromEditText(it).let {
+                    @Suppress("NestedLambdaShadowedImplicitParameter")
                     if (it == null) {
                         Log.e(name, "Could not find dialog TextView")
                     } else {
