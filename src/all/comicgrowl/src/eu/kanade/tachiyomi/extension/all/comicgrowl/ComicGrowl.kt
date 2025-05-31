@@ -43,7 +43,7 @@ class ComicGrowl(
 
         private val imageUrlRegex by lazy { Regex("^.*?webp") }
 
-        private val DATE_PARSER by lazy { SimpleDateFormat("yyyy-MM-dd", Locale.ROOT) }
+        private val DATE_PARSER by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT) }
 
         private val json: Json by injectLazy()
     }
@@ -122,7 +122,7 @@ class ComicGrowl(
             if (!initialResponse.isSuccessful) {
                 throw Exception("Failed to get page list")
             }
-            // FIXME: use util in core
+            // FIXME: use util in core and DTO
             val totalPages =
                 json.parseToJsonElement(initialResponse.body.string()).jsonObject["totalPages"]!!.jsonPrimitive.content
             // Get all pages
