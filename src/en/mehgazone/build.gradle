@@ -1,0 +1,8 @@
+ext {
+    extName = 'Mehgazone'
+    extClass = '.Mehgazone'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
