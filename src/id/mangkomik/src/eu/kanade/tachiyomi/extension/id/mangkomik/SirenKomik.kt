@@ -1,11 +1,14 @@
 package eu.kanade.tachiyomi.extension.id.mangkomik
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import kotlinx.serialization.json.decodeFromStream
+import okhttp3.FormBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -25,27 +28,42 @@ class SirenKomik : MangaThemesia(
     override val seriesAuthorSelector = ".keterangan-komik:contains(author) span"
     override val seriesArtistSelector = ".keterangan-komik:contains(artist) span"
 
+    override fun chapterListSelector() = ".list-chapter a"
+
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        val urlElements = element.select("a")
-        setUrlWithoutDomain(urlElements.attr("href"))
-        name = element.select(".nomer-chapter").text().ifBlank { urlElements.first()!!.text() }
+        name = element.selectFirst(".nomer-chapter")!!.text()
         date_upload = element.selectFirst(".tgl-chapter")?.text().parseChapterDate()
+        setUrlWithoutDomain(element.absUrl("href"))
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        // Get external JS for image urls
-        val scriptEl = document.selectFirst("script[data-minify]")
-        val scriptUrl = scriptEl?.attr("src")
-        if (scriptUrl.isNullOrEmpty()) {
-            return super.pageListParse(document)
+        val postId = document.select("script").map(Element::data)
+            .firstOrNull(postIdRegex::containsMatchIn)
+            ?.let { postIdRegex.find(it)?.groups?.get(1)?.value }
+            ?: throw IOException("Post ID not found")
+
+        val payload = FormBody.Builder()
+            .add("action", "get_image_json")
+            .add("post_id", postId)
+            .build()
+
+        val response = client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", headers, payload))
+            .execute()
+
+        if (response.isSuccessful.not()) {
+            throw IOException("Pages not found")
         }
 
-        val scriptResponse = client.newCall(
-            GET(scriptUrl, headers),
-        ).execute()
+        val dto = response.use {
+            json.decodeFromStream<SirenKomikDto>(it.body.byteStream())
+        }
 
-        // Inject external JS
-        scriptEl.text(scriptResponse.body.string())
-        return super.pageListParse(document)
+        return dto.pages.mapIndexed { index, imageUrl ->
+            Page(index, document.location(), imageUrl)
+        }
+    }
+
+    companion object {
+        val postIdRegex = """postId.:(\d+)""".toRegex()
     }
 }

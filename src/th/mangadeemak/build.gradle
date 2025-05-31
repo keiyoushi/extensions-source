@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaDeemak'
-    extClass = '.MangaDeemak'
-    themePkg = 'madara'
-    baseUrl = 'https://mangadeemak.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

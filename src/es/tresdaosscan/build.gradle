@@ -2,8 +2,9 @@ ext {
     extName = 'Tres Daos Scan'
     extClass = '.TresDaosScan'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://tresdaos.com'
-    overrideVersionCode = 8
+    baseUrl = 'https://3daos.mewingzone.com'
+    overrideVersionCode = 9
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

@@ -1,9 +1,10 @@
 ext {
-    extName = 'Sussy Scan'
-    extClass = '.SussyScan'
-    themePkg = 'madara'
-    baseUrl = 'https://oldi.sussytoons.com'
-    overrideVersionCode = 4
+    extName = 'Sussy Toons'
+    extClass = '.SussyToons'
+    themePkg = 'greenshit'
+    baseUrl = 'https://www.sussytoons.wtf'
+    overrideVersionCode = 56
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

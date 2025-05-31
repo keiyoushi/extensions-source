@@ -26,7 +26,7 @@ class Mitaku : ParsedHttpSource() {
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/category/ero-cosplay/page/$page", headers)
 
-    override fun popularMangaSelector() = "div.article-container article"
+    override fun popularMangaSelector() = "div.cm-primary article"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Otsugami'
-    extClass = '.Otsugami'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://otsugami.id'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

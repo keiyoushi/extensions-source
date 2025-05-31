@@ -2,8 +2,9 @@ ext {
     extName = 'RichtoScan'
     extClass = '.RichtoScan'
     themePkg = 'madara'
-    baseUrl = 'https://richtoscan.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://r1.richtoon.top'
+    overrideVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

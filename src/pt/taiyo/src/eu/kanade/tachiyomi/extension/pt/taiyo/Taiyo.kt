@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.taiyo
 
+import android.content.SharedPreferences
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.AdditionalInfoDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.ChapterListDto
 import eu.kanade.tachiyomi.extension.pt.taiyo.dto.MediaChapterDto
@@ -15,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -25,12 +27,16 @@ import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.internal.http.HTTP_FORBIDDEN
+import okhttp3.internal.http.HTTP_UNAUTHORIZED
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
@@ -47,40 +53,26 @@ class Taiyo : ParsedHttpSource() {
     // The source doesn't show the title on the home page
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder()
+    private val preferences: SharedPreferences = getPreferences()
+
+    private var bearerToken: String = preferences.getString(BEARER_TOKEN_PREF, "").toString()
+
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .rateLimitHost(IMG_CDN.toHttpUrl(), 2)
+        .addInterceptor(::authorizationInterceptor)
         .build()
 
     private val json: Json by injectLazy()
 
     // ============================== Popular ===============================
-    var bearerToken = ""
 
-    override fun popularMangaRequest(page: Int): Request {
-        if (bearerToken.isBlank()) {
-            getBearerToken()
-        }
-        return searchMangaRequest(page, "", FilterList())
-    }
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList())
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
     override fun popularMangaSelector() = throw UnsupportedOperationException()
     override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
     override fun popularMangaNextPageSelector() = null
-
-    private fun getBearerToken() {
-        val scriptUrl = client.newCall(GET(baseUrl, headers))
-            .execute().asJsoup()
-            .selectFirst("script[src*=ee07d8437723d9f5]")
-            ?.attr("src") ?: throw Exception("Não foi possivel localizar o token")
-
-        val script = client.newCall(GET("$baseUrl$scriptUrl", headers))
-            .execute().body.string()
-
-        bearerToken = TOKEN_REGEX.find(script)?.groups?.get("token")?.value
-            ?: throw Exception("Não foi possivel extrair o token")
-    }
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
@@ -128,12 +120,12 @@ class Taiyo : ParsedHttpSource() {
 
         val requestBody = json.encodeToString(jsonObj).toRequestBody(MEDIA_TYPE)
 
-        val apiHeaders = headers.newBuilder()
-            .set("Authorization", "Bearer $bearerToken")
-            .build()
-
-        return POST("https://meilisearch.${baseUrl.substringAfterLast("/")}/multi-search", apiHeaders, requestBody)
+        return POST("https://meilisearch.${baseUrl.substringAfterLast("/")}/multi-search", getApiHeaders(), requestBody)
     }
+
+    private fun getApiHeaders() = headers.newBuilder()
+        .set("Authorization", "Bearer $bearerToken")
+        .build()
 
     override fun searchMangaParse(response: Response): MangasPage {
         val obj = response.parseAs<SearchResultDto>()
@@ -219,7 +211,7 @@ class Taiyo : ParsedHttpSource() {
                     .build()
 
                 val chapters = client.newCall(GET(pageUrl, headers)).execute().let {
-                    CHAPTER_REGEX.find(it.body.string())?.groups?.get("chapters")?.value
+                    CHAPTER_REGEX.find(it.body.string())?.groups?.get(1)?.value
                 }
 
                 val parsed = json.decodeFromString<ChapterListDto>(chapters!!)
@@ -290,10 +282,63 @@ class Taiyo : ParsedHttpSource() {
         }.onFailure { it.printStackTrace() }.getOrNull()
     }
 
+    // ============================= Authorization ========================
+
+    private fun authorizationInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        return when (response.code) {
+            in arrayOf(HTTP_UNAUTHORIZED, HTTP_FORBIDDEN) -> updateTokenAndContinueRequest(request, chain)
+            else -> response
+        }
+    }
+
+    private fun updateTokenAndContinueRequest(request: Request, chain: Interceptor.Chain): Response {
+        bearerToken = getToken()
+        val req = request.newBuilder()
+            .headers(getApiHeaders())
+            .build()
+        return chain.proceed(req)
+    }
+
+    private fun getToken(): String {
+        return fetchBearerToken().also {
+            preferences.edit()
+                .putString(BEARER_TOKEN_PREF, it)
+                .apply()
+        }
+    }
+
+    private fun fetchBearerToken(): String {
+        val scripts = client.newCall(GET(baseUrl, headers))
+            .execute().asJsoup()
+            .select("script[src*=next]:not([nomodule]):not([src*=app])")
+
+        val script = getScriptContainingToken(scripts)
+            ?: throw Exception("Não foi possivel localizar o token")
+
+        return TOKEN_REGEX.find(script)?.groups?.get(2)?.value
+            ?: throw Exception("Não foi possivel extrair o token")
+    }
+
+    private fun getScriptContainingToken(scripts: Elements): String? {
+        val elements = scripts.toList().reversed()
+        for (element in elements) {
+            val scriptUrl = element.attr("src")
+            val script = client.newCall(GET("$baseUrl$scriptUrl", headers))
+                .execute().body.string()
+            if (TOKEN_REGEX.containsMatchIn(script)) {
+                return script
+            }
+        }
+        return null
+    }
+
     companion object {
         const val PREFIX_SEARCH = "id:"
-        val CHAPTER_REGEX = """(?<chapters>\{"chapters".+"totalPages":\d+\})""".toRegex()
-        val TOKEN_REGEX = """NEXT_PUBLIC_MEILISEARCH_PUBLIC_KEY:(\s+)?"(?<token>[^"]+)""".toRegex()
+        val CHAPTER_REGEX = """(\{"chapters".+"totalPages":\d+\})""".toRegex()
+        val TOKEN_REGEX = """NEXT_PUBLIC_MEILISEARCH_PUBLIC_KEY:(\s+)?"([^"]+)""".toRegex()
+        const val BEARER_TOKEN_PREF = "TAIYO_BEARER_TOKEN"
 
         private const val IMG_CDN = "https://cdn.taiyo.moe/medias"
 

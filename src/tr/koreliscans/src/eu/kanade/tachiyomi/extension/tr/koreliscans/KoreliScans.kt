@@ -15,8 +15,6 @@ class KoreliScans : Madara(
     override val useLoadMoreRequest = LoadMoreStrategy.Never
     override val useNewChapterEndpoint = true
 
-    override val popularMangaUrlSelector = "div.chap-title a"
-
     override fun searchMangaParse(response: Response): MangasPage {
         val mangasPage = super.searchMangaParse(response)
         val filteredMangas = mangasPage.mangas.filterNot { it.title.endsWith(" Novel") }

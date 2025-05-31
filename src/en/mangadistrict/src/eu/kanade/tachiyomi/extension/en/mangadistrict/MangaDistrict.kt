@@ -1,24 +1,28 @@
 package eu.kanade.tachiyomi.extension.en.mangadistrict
 
 import android.annotation.SuppressLint
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -31,33 +35,29 @@ class MangaDistrict :
     ),
     ConfigurableSource {
 
-    override val mangaSubString = "read-scan"
+    override val mangaSubString = "title"
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences by getPreferencesLazy {
+        try {
+            val oldTagSet = getStringSet(TAG_LIST_PREF, emptySet())!!
+            edit()
+                .remove(TAG_LIST_PREF)
+                .putString(TAG_LIST_PREF, oldTagSet.joinToString("%"))
+                .apply()
+        } catch (_: Exception) {}
     }
 
     override fun popularMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
 
     private val titleVersion = Regex("\\(.*\\)")
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return super.popularMangaFromElement(element).apply {
-            if (isRemoveTitleVersion()) {
-                title = this.title.replace(titleVersion, "").trim()
-            }
-        }
-    }
-
-    override fun searchMangaFromElement(element: Element): SManga {
-        return super.searchMangaFromElement(element).apply {
-            if (isRemoveTitleVersion()) {
-                title = this.title.replace(titleVersion, "").trim()
-            }
-        }
-    }
-
     override fun mangaDetailsParse(document: Document): SManga {
+        val tags = document.select(mangaDetailsSelectorTag).mapNotNull { element ->
+            element.ownText() to element.attr("href")
+                .removeSuffix("/").substringAfterLast('/')
+        }
+        tagList = tagList.plus(tags)
+
         return super.mangaDetailsParse(document).apply {
             if (isRemoveTitleVersion()) {
                 title = this.title.replace(titleVersion, "").trim()
@@ -103,11 +103,163 @@ class MangaDistrict :
         return super.pageListParse(document)
     }
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val tagFilter = filters.filterIsInstance<TagList>().firstOrNull()
+        if (tagFilter != null && tagFilter.state > 0) {
+            val urlBuilder = baseUrl.toHttpUrl().newBuilder()
+            urlBuilder.addPathSegment("publication-tag")
+            urlBuilder.addPathSegment(tagFilter.toUriPart())
+            urlBuilder.addPathSegments("page/$page")
+            return client.newCall(GET(urlBuilder.build(), headers))
+                .asObservableSuccess().map { response ->
+                    popularMangaParse(response)
+                }
+        } else {
+            return super.fetchSearchManga(page, query, filters)
+        }
+    }
+
+    private fun loadTagListFromPreferences(): Set<Pair<String, String>> =
+        preferences.getString(TAG_LIST_PREF, "")
+            ?.let {
+                it.split('%').mapNotNull { tag ->
+                    tag.split('|')
+                        .let { splits ->
+                            if (splits.size == 2) splits[0] to splits[1] else null
+                        }
+                }
+            }
+            ?.toSet()
+            // Create at least 1 tag to avoid excessively reading preferences
+            .let { if (it.isNullOrEmpty()) setOf("Manhwa" to "manhwa") else it }
+
+    private var tagList: Set<Pair<String, String>> = loadTagListFromPreferences()
+        set(value) {
+            preferences.edit().putString(
+                TAG_LIST_PREF,
+                value.joinToString("%") { "${it.first}|${it.second}" },
+            ).apply()
+            field = value
+        }
+
+    override fun getFilterList(): FilterList {
+        val filters = super.getFilterList().list.toMutableList()
+        if (tagList.isNotEmpty()) {
+            filters += Filter.Separator()
+            filters += Filter.Header("Tag browse will ignore other filters")
+            filters += TagList("Tag browse", listOf(Pair("<Browse tag>", "")) + tagList.toList())
+        }
+        return FilterList(filters)
+    }
+
+    private class TagList(title: String, options: List<Pair<String, String>>, state: Int = 0) :
+        UriPartFilter(title, options.toTypedArray(), state)
+
     private fun String.urlKey(): String {
         return toHttpUrl().pathSegments.let { path ->
             "${path[1]}/${path[2]}"
         }
     }
+
+    // console.log([...document.querySelectorAll("div.checkbox-group .checkbox")].map((el) => `Genre("${el.querySelector("label").innerText.trim()}", "${el.querySelector("input").getAttribute('value')}"),`).join('\n'))
+    override var genresList = listOf(
+        Genre("3D", "3d"),
+        Genre("Action", "action"),
+        Genre("Adapted to Anime", "adapted-to-anime"),
+        Genre("Adventure", "adventure"),
+        Genre("Aliens", "aliens"),
+        Genre("Animal Characteristics", "animal-characteristics"),
+        Genre("Based on Another Work", "based-on-another-work"),
+        Genre("BL", "bl"),
+        Genre("BL Uncensored", "bl-uncensored"),
+        Genre("Borderline H", "borderline-h"),
+        Genre("Cohabitation", "cohabitation"),
+        Genre("Collection of Stories", "collection-of-stories"),
+        Genre("Comedy", "comedy"),
+        Genre("Comics", "comics"),
+        Genre("Cooking", "cooking"),
+        Genre("Coworkers", "coworkers"),
+        Genre("Crime", "crime"),
+        Genre("Crossdressing", "crossdressing"),
+        Genre("Delinquents", "delinquents"),
+        Genre("Demons", "demons"),
+        Genre("Detectives", "detectives"),
+        Genre("Doujinshi", "doujinshi"),
+        Genre("Drama", "drama"),
+        Genre("Ecchi", "ecchi"),
+        Genre("Explicit Sex", "explicit-sex"),
+        Genre("Fantasy", "fantasy"),
+        Genre("Fetish", "fetish"),
+        Genre("Full Color", "full-color"),
+        Genre("Gender Bender", "gender-bender"),
+        Genre("Ghosts", "ghosts"),
+        Genre("GL", "gl"),
+        Genre("Gyaru", "gyaru"),
+        Genre("Harem", "harem"),
+        Genre("Historical", "historical"),
+        Genre("Horror", "horror"),
+        Genre("Incest", "incest"),
+        Genre("Isekai", "isekai"),
+        Genre("Japanese Webtoons", "japanese-webtoons"),
+        Genre("Josei", "josei"),
+        Genre("Light Novels", "light-novels"),
+        Genre("Mafia", "mafia"),
+        Genre("Magic", "magic"),
+        Genre("Magical Girl", "magical-girl"),
+        Genre("Manhua", "manhua"),
+        Genre("Manhwa", "manhwa"),
+        Genre("Martial Arts", "martial-arts"),
+        Genre("Mature Romance", "mature-romance"),
+        Genre("Mecha", "mecha"),
+        Genre("Medical", "medical"),
+        Genre("Military", "military"),
+        Genre("Monster Girls", "monster-girls"),
+        Genre("Monsters", "monsters"),
+        Genre("Music", "music"),
+        Genre("Mystery", "mystery"),
+        Genre("Ninja", "ninja"),
+        Genre("Nudity", "nudity"),
+        Genre("One Shot", "one-shot"),
+        Genre("Person in a Strange World", "person-in-a-strange-world"),
+        Genre("Police", "police"),
+        Genre("Psychological", "psychological"),
+        Genre("Reincarnation", "reincarnation"),
+        Genre("Reverse Harem", "reverse-harem"),
+        Genre("Romance", "romance"),
+        Genre("Salaryman", "salaryman"),
+        Genre("Samurai", "samurai"),
+        Genre("School Life", "school-life"),
+        Genre("Sci Fi", "sci-fi"),
+        Genre("Seinen", "seinen"),
+        Genre("Sexual Abuse", "sexual-abuse"),
+        Genre("Sexual Content", "sexual-content"),
+        Genre("Shoujo", "shoujo"),
+        Genre("Shoujo-ai", "shoujo-ai"),
+        Genre("Shounen", "shounen"),
+        Genre("Shounen-ai", "shounen-ai"),
+        Genre("Siblings", "siblings"),
+        Genre("Slice of Life", "slice-of-life"),
+        Genre("Smut", "smut"),
+        Genre("Sports", "sports"),
+        Genre("Summoned Into Another World", "summoned-into-another-world"),
+        Genre("Superheroes", "superheroes"),
+        Genre("Supernatural", "supernatural"),
+        Genre("Survival", "survival"),
+        Genre("Thriller", "thriller"),
+        Genre("Time Travel", "time-travel"),
+        Genre("Transfer Students", "transfer-students"),
+        Genre("Uncensored", "uncensored"),
+        Genre("Vampires", "vampires"),
+        Genre("Violence", "violence"),
+        Genre("Virtual Reality", "virtual-reality"),
+        Genre("Web Novels", "web-novels"),
+        Genre("Webtoons", "webtoons"),
+        Genre("Western", "western"),
+        Genre("Work Life", "work-life"),
+        Genre("Yaoi", "yaoi"),
+        Genre("Yuri", "yuri"),
+        Genre("Zombies", "zombies"),
+    )
 
     private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
     private fun getImgRes() = preferences.getString(IMG_RES_PREF, IMG_RES_DEFAULT)!!
@@ -154,6 +306,7 @@ class MangaDistrict :
 
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
+        private const val TAG_LIST_PREF = "TAG_LIST"
 
         private const val IMG_RES_PREF = "IMG_RES"
         private const val IMG_RES_ALL = "all"

@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -33,7 +34,7 @@ class NineAnime : ParsedHttpSource() {
         .build()
 
     companion object {
-        private const val PAGES_URL = "https://www.glanceoflife.com"
+        private const val PAGES_URL = "https://www.gardenhomefuture.com"
     }
 
     // not necessary for normal usage but added in an attempt to fix usage with VPN (see #3476)
@@ -77,7 +78,12 @@ class NineAnime : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return if (query.isNotBlank()) {
-            GET("$baseUrl/search/?name=$query&page=$page.html", headers)
+            val url = "$baseUrl/search/".toHttpUrl().newBuilder()
+                .addQueryParameter("name", query)
+                .addQueryParameter("page", "$page.html")
+                .build()
+
+            GET(url, headers)
         } else {
             var url = "$baseUrl/category/"
             for (filter in if (filters.isEmpty()) getFilterList() else filters) {
@@ -160,10 +166,13 @@ class NineAnime : ParsedHttpSource() {
     // Pages
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val id: String = chapter.url.substring(chapter.url.lastIndexOf("/", chapter.url.length - 2))
+        val id: String = chapter.url
+            .substring(chapter.url.lastIndexOf("/", chapter.url.length - 2))
+            .trim('/')
 
-        val pageListHeaders = headersBuilder().add("Referer", "$baseUrl/manga/").build()
-        return GET("$PAGES_URL/c/nineanime$id", pageListHeaders)
+        val pageListHeaders = headersBuilder().add("Referer", "https://www.technologpython.com/")
+
+        return GET("$PAGES_URL/go/jump/?type=nineanime&cid=$id", pageListHeaders.build())
     }
 
     override fun pageListParse(document: Document): List<Page> {

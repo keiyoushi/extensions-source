@@ -1,8 +1,0 @@
-ext {
-    extName = 'SlimeRead'
-    extClass = '.SlimeRead'
-    extVersionCode = 13
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

@@ -3,7 +3,8 @@ ext {
     extClass = '.KdtScans'
     themePkg = 'madara'
     baseUrl = 'https://kdtscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 2
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

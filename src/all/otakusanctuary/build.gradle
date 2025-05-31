@@ -2,8 +2,8 @@ ext {
     extName = 'Otaku Sanctuary'
     extClass = '.OtakuSanctuaryFactory'
     themePkg = 'otakusanctuary'
-    baseUrl = 'https://otakusan1.net'
-    overrideVersionCode = 1
+    baseUrl = 'https://otakusan.me'
+    overrideVersionCode = 2
     isNsfw = true
 }
 

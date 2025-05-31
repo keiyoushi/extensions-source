@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.izneo
 
-import android.app.Application
 import android.text.InputType.TYPE_CLASS_TEXT
 import android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
 import android.util.Base64
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.int
@@ -36,16 +36,14 @@ class Izneo(override val lang: String) : ConfigurableSource, HttpSource() {
 
     override val versionId = 2
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor).build()
 
     private val apiUrl = "$ORIGIN/$lang/api/catalog/detail/webtoon"
 
     private val json by lazy { Injekt.get<Json>() }
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
+    private val preferences by getPreferencesLazy()
 
     private inline val username: String
         get() = preferences.getString("username", "")!!

@@ -27,7 +27,7 @@ class MangaDemon : ParsedHttpSource() {
     override val lang = "en"
     override val supportsLatest = true
     override val name = "Manga Demon"
-    override val baseUrl = "https://ciorti.online"
+    override val baseUrl = "https://demonicscans.org"
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1)
@@ -156,7 +156,7 @@ class MangaDemon : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.imgholder").mapIndexed { i, element ->
+        return document.select("div > img.imgholder").mapIndexed { i, element ->
             Page(i, "", element.attr("abs:src"))
         }
     }

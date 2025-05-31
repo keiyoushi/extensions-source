@@ -1,9 +1,7 @@
 ext {
     extName = 'DragonTranslation.net'
     extClass = '.DragonTranslationNet'
-    themePkg = 'madara'
-    baseUrl = 'https://dragontranslation.net'
-    overrideVersionCode = 0
+    extVersionCode = 40
     isNsfw = true
 }
 

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Philia Scans'
+    extClass = '.PhiliaScans'
+    themePkg = 'madara'
+    baseUrl = "https://philiascans.org"
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

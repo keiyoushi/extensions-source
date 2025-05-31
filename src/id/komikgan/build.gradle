@@ -1,9 +1,0 @@
-ext {
-    extName = 'KomikGan'
-    extClass = '.KomikGan'
-    themePkg = 'zmanga'
-    baseUrl = 'https://komikgan.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

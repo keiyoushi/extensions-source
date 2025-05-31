@@ -1,8 +1,0 @@
-ext {
-    extName = 'Bento Manga'
-    extClass = '.BentoManga'
-    extVersionCode = 15
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

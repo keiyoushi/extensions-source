@@ -1,17 +1,23 @@
 package eu.kanade.tachiyomi.extension.en.mangabat
 
 import eu.kanade.tachiyomi.multisrc.mangabox.MangaBox
-import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
-import java.text.SimpleDateFormat
-import java.util.Locale
 
-class Mangabat : MangaBox("Mangabat", "https://h.mangabat.com", "en", SimpleDateFormat("MMM dd,yy", Locale.ENGLISH)) {
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/manga-list-all/$page?type=topview", headers)
-    override fun popularMangaSelector() = "div.list-story-item"
-    override val latestUrlPath = "manga-list-all/"
-    override fun searchMangaSelector() = "div.list-story-item"
-    override fun getAdvancedGenreFilters(): List<AdvGenre> = getGenreFilters()
-        .drop(1)
-        .map { AdvGenre(it.first, it.second) }
+class Mangabat : MangaBox(
+    "Mangabat",
+    arrayOf(
+        "www.mangabats.com",
+    ),
+    "en",
+) {
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        if (manga.url.contains("mangabat.com/")) {
+            throw Exception(MIGRATE_MESSAGE)
+        }
+        return super.mangaDetailsRequest(manga)
+    }
+    companion object {
+        private const val MIGRATE_MESSAGE = "Migrate this entry from \"Mangabat\" to \"Mangabat\" to continue reading"
+    }
 }

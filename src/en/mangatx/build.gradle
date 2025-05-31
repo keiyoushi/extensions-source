@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaTX'
+    extClass = '.MangaTX'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://mangatx.cc'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

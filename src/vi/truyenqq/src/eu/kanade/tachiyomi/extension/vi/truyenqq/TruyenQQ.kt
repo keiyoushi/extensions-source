@@ -1,12 +1,19 @@
 package eu.kanade.tachiyomi.extension.vi.truyenqq
 
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferences
 import okhttp3.CacheControl
 import okhttp3.Headers
 import okhttp3.HttpUrl
@@ -20,21 +27,22 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class TruyenQQ : ParsedHttpSource() {
+class TruyenQQ : ParsedHttpSource(), ConfigurableSource {
 
     override val name: String = "TruyenQQ"
 
     override val lang: String = "vi"
 
-    override val baseUrl: String = "https://truyenqqto.com"
+    private val defaultBaseUrl = "https://truyenqqgo.com"
+
+    private val preferences: SharedPreferences = getPreferences()
+
+    override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
-        .followRedirects(true)
+        .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)
         .build()
 
     override fun headersBuilder(): Headers.Builder =
@@ -53,7 +61,7 @@ class TruyenQQ : ParsedHttpSource() {
         val anchor = element.selectFirst(".book_info .qtip a")!!
         setUrlWithoutDomain(anchor.attr("href"))
         title = anchor.text()
-        thumbnail_url = element.select(".book_avatar img").attr("abs:src")
+        thumbnail_url = element.selectFirst(".book_avatar img")?.attr("abs:src")
     }
 
     // Selector của nút trang kế tiếp
@@ -101,7 +109,7 @@ class TruyenQQ : ParsedHttpSource() {
         author = info.select(".org").joinToString { it.text() }
         genre = document.select(".list01 li").joinToString { it.text() }
         description = document.select(".story-detail-info").textWithLinebreaks()
-        thumbnail_url = document.select("img[itemprop=image]").attr("abs:src")
+        thumbnail_url = document.selectFirst("img[itemprop=image]")?.attr("abs:src")
         status = when (info.select(".status > p:last-child").text()) {
             "Đang Cập Nhật" -> SManga.ONGOING
             "Hoàn Thành" -> SManga.COMPLETED
@@ -119,7 +127,7 @@ class TruyenQQ : ParsedHttpSource() {
     override fun chapterListSelector(): String = "div.works-chapter-list div.works-chapter-item"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.select("a").attr("href"))
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
         name = element.select("a").text().trim()
         date_upload = parseDate(element.select(".time-chap").text())
     }
@@ -135,7 +143,7 @@ class TruyenQQ : ParsedHttpSource() {
 
     // Pages
     override fun pageListParse(document: Document): List<Page> =
-        document.select(".page-chapter img")
+        document.select(".page-chapter img:not([src*='stress.gif'])")
             .mapIndexed { idx, it ->
                 Page(idx, imageUrl = it.attr("abs:src"))
             }
@@ -282,4 +290,41 @@ class TruyenQQ : ParsedHttpSource() {
         Genre("Webtoon", "55"),
         Genre("Xuyên Không", "88"),
     )
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $defaultBaseUrl"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+
+    companion object {
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
+        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_SUMMARY =
+            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
+    }
 }

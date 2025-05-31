@@ -1,9 +1,9 @@
 ext {
     extName = 'PhenixScans'
     extClass = '.PhenixScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://phenixscans.fr'
-    overrideVersionCode = 1
+    baseUrl = 'https://phenix-scans.com'
+    extVersionCode = 33
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

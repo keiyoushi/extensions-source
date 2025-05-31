@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.extension.pt.imperiodabritannia
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
+import okhttp3.internal.http.HTTP_FORBIDDEN
+import okhttp3.internal.http.HTTP_OK
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -16,6 +18,16 @@ class ImperioDaBritannia : Madara(
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
+        .readTimeout(1, TimeUnit.MINUTES)
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            if (response.code == HTTP_FORBIDDEN) {
+                return@addInterceptor response.newBuilder()
+                    .code(HTTP_OK)
+                    .build()
+            }
+            response
+        }
         .build()
 
     override val useNewChapterEndpoint = true
@@ -23,4 +35,11 @@ class ImperioDaBritannia : Madara(
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val mangaDetailsSelectorTag = ""
+
+    override val mangaDetailsSelectorAuthor =
+        ".summary-heading:has(h5:contains(Autor)) + div > ${super.mangaDetailsSelectorAuthor}"
+    override val mangaDetailsSelectorArtist =
+        ".summary-heading:has(h5:contains(Artista)) + div > ${super.mangaDetailsSelectorArtist}"
+    override val mangaDetailsSelectorStatus =
+        ".summary-heading:has(h5:contains(Status)) + ${super.mangaDetailsSelectorStatus}"
 }

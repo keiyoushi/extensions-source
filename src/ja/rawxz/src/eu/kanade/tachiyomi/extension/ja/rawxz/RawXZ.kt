@@ -6,7 +6,7 @@ import java.util.Locale
 
 class RawXZ : Madara(
     "RawXZ",
-    "https://rawxz.si",
+    "https://rawxz.to",
     "ja",
     dateFormat = SimpleDateFormat("M月 d, yyyy", Locale.ROOT),
 ) {

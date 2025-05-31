@@ -38,7 +38,7 @@ open class Viz(
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::headersIntercept)
         .addInterceptor(::authCheckIntercept)
         .addInterceptor(::authChapterCheckIntercept)

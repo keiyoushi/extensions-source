@@ -1,9 +1,0 @@
-ext {
-    extName = 'Nekomik'
-    extClass = '.Nekomik'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://nekomik.me'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

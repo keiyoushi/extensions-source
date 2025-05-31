@@ -1,9 +1,9 @@
 ext {
-    extName = 'Lua Scans (Unoriginal)'
-    extClass = '.LuaScans'
+    extName = 'Kai Scans'
+    extClass = '.KaiScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://ponvi.online'
-    overrideVersionCode = 6
+    baseUrl = 'https://kaiscans.org'
+    overrideVersionCode = 7
     isNsfw = true
 }
 

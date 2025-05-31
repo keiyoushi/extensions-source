@@ -1,9 +1,0 @@
-ext {
-    extName = 'BirdManga'
-    extClass = '.BirdManga'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://birdmanga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

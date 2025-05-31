@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.lxhentai
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
@@ -13,24 +12,24 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferences
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.select.Evaluator
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
-    override val name = "LXHentai"
+    override val name = "LXManga"
 
-    private val defaultBaseUrl = "https://lxmanga.site"
+    override val id = 6495630445796108150
+
+    private val defaultBaseUrl = "https://lxmanga.blog"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -124,20 +123,14 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaNextPageSelector() = "li:contains(Cuối)"
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select("span.text-lg.ml-1.font-semibold").first()!!.text()
-        author = document.select("div.grow div.mt-2:contains(Tác giả) span a")
+        title = document.select("div.mb-4 span").first()!!.text()
+        author = document.selectFirst("div.grow div.mt-2 > span:contains(Tác giả:) + span a")?.text()
+        genre = document.selectFirst("div.grow div.mt-2 > span:contains(Thể loại:) + span")!!
+            .select("a")
             .joinToString { it.text().trim(',', ' ') }
-        genre = document.select("div.grow div.mt-2:contains(Thể loại) span a")
-            .joinToString { it.text().trim(',', ' ') }
-        description = document.select("p:contains(Tóm tắt) ~ p").joinToString("\n") {
-            it.run {
-                select(Evaluator.Tag("br")).prepend("\\n")
-                this.text().replace("\\n", "\n").replace("\n ", "\n")
-            }
-        }.trim()
-
+        description = document.select("p:contains(Tóm tắt) ~ p").joinToString("\n") { it.wholeText() }.trim()
         thumbnail_url = document.selectFirst(".cover")?.attr("style")?.let {
-            IMAGE_REGEX.find(it)?.groups?.get("img")?.value
+            IMAGE_REGEX.find(it)?.groups?.get(1)?.value
         }
 
         val statusString = document.select("div.grow div.mt-2:contains(Tình trạng) a").first()!!.text()
@@ -286,8 +279,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
         Genre("LXHENTAI", 66),
     )
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
@@ -323,7 +315,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
         const val PREFIX_ID_SEARCH = "id:"
 
         val CHAPTER_NUMBER_REGEX = Regex("""[+\-]?([0-9]*[.])?[0-9]+""", RegexOption.IGNORE_CASE)
-        val IMAGE_REGEX = """url\('(?<img>[^']+)""".toRegex()
+        val IMAGE_REGEX = """url\('([^']+)""".toRegex()
 
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."

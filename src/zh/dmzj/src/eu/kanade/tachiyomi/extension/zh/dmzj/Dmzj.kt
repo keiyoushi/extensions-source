@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.dmzj
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -12,12 +11,11 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferences
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 /**
  * Dmzj source
@@ -29,10 +27,12 @@ class Dmzj : ConfigurableSource, HttpSource() {
     override val name = "动漫之家"
     override val baseUrl = "https://m.idmzj.com"
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
+    init {
+        ApiV3.preferences = preferences
+    }
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageUrlInterceptor)
         .addInterceptor(CommentsInterceptor)
         .rateLimit(4)
@@ -46,7 +46,7 @@ class Dmzj : ConfigurableSource, HttpSource() {
         .build()
 
     // API v4 randomly fails
-    private val retryClient = network.client.newBuilder()
+    private val retryClient = network.cloudflareClient.newBuilder()
         .addInterceptor(RetryInterceptor)
         .rateLimit(2)
         .build()
@@ -107,11 +107,11 @@ class Dmzj : ConfigurableSource, HttpSource() {
             val id = query.removePrefix(PREFIX_ID_SEARCH).removeSuffix(".html")
             Observable.fromCallable { searchMangaById(id) }
         } else {
-            val request = GET(ApiSearch.textSearchUrl(query), headers)
+            val request = GET(ApiSearch.searchUrlV1(page, query), headers)
             Observable.fromCallable {
                 // this API fails randomly, and might return empty list
                 repeat(5) {
-                    val result = ApiSearch.parsePage(client.newCall(request).execute())
+                    val result = ApiSearch.parsePageV1(client.newCall(request).execute())
                     if (result.mangas.isNotEmpty()) return@fromCallable result
                 }
                 throw Exception("搜索出错或无结果")

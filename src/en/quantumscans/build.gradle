@@ -1,9 +1,10 @@
 ext {
     extName = 'Quantum Scans'
     extClass = '.QuantumScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://qscomics.org'
-    overrideVersionCode = 1
+    themePkg = 'heancms'
+    baseUrl = 'https://quantumscans.org'
+    overrideVersionCode = 9
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

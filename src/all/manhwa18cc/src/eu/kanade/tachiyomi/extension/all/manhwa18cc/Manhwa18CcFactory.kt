@@ -5,9 +5,8 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.Page
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -28,7 +27,7 @@ class Manhwa18CcEN : Manhwa18Cc("Manhwa18.cc", "https://manhwa18.cc", "en") {
 
 class Manhwa18CcKO : Manhwa18Cc("Manhwa18.cc", "https://manhwa18.cc", "ko") {
     override fun popularMangaSelector() = "div.manga-item:has(h3 a[title$='Raw'])"
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/raw/$page")
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/raw/$page", headers)
 }
 
 abstract class Manhwa18Cc(
@@ -45,9 +44,9 @@ abstract class Manhwa18Cc(
 
     override fun popularMangaNextPageSelector() = "ul.pagination li.next a"
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/webtoons/$page?orderby=trending")
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/webtoons/$page?orderby=trending", headers)
 
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/webtoons/$page")
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/webtoons/$page", headers)
 
     override fun searchMangaSelector() = popularMangaSelector()
 
@@ -60,7 +59,12 @@ abstract class Manhwa18Cc(
         // "No results found" message. So this fix redirect to popular page.
         if (query.isBlank()) return popularMangaRequest(page)
 
-        return GET("$baseUrl/search?q=$query&page=$page")
+        val url = "$baseUrl/search".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        return GET(url, headers)
     }
 
     override val mangaSubString = "webtoon"
@@ -72,16 +76,4 @@ abstract class Manhwa18Cc(
     override fun chapterDateSelector() = "span.chapter-time"
 
     override val pageListParseSelector = "div.read-content img"
-
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select(pageListParseSelector).mapIndexed { index, element ->
-            Page(
-                index,
-                document.location(),
-                element?.let {
-                    it.absUrl(if (it.hasAttr("data-src")) "data-src" else "src")
-                },
-            )
-        }
-    }
 }

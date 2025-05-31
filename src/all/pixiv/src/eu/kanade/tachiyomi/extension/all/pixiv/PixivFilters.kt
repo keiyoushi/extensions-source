@@ -1,4 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.pixiv
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 private val TYPE_VALUES = arrayOf("All", "Illustrations", "Manga")

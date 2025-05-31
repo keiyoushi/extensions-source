@@ -156,7 +156,7 @@ class MangaDexHelper(lang: String) {
      */
     private fun String.removeEntitiesAndMarkdown(): String {
         return removeEntities()
-            .substringBefore("---")
+            .substringBefore("\n---")
             .replace(markdownLinksRegex, "$1")
             .replace(markdownItalicBoldRegex, "$1")
             .replace(markdownItalicRegex, "$1")
@@ -275,6 +275,9 @@ class MangaDexHelper(lang: String) {
         return GET(tokenRequestUrl, headers, cacheControl)
     }
 
+    private fun List<Map<String, String>>.findTitleByLang(lang: String): String? =
+        firstOrNull { it[lang] != null }?.values?.singleOrNull()
+
     /**
      * Create a [SManga] from the JSON element with only basic attributes filled.
      */
@@ -283,15 +286,24 @@ class MangaDexHelper(lang: String) {
         coverFileName: String?,
         coverSuffix: String?,
         lang: String,
+        preferExtensionLangTitle: Boolean,
     ): SManga = SManga.create().apply {
         url = "/manga/${mangaDataDto.id}"
+
         val titleMap = mangaDataDto.attributes!!.title
-        val dirtyTitle =
-            titleMap.values.firstOrNull() // use literally anything from title as first resort
-                ?: mangaDataDto.attributes.altTitles
-                    .find { (it[lang] ?: it["en"]) !== null }
-                    ?.values?.singleOrNull() // find something else from alt titles
-        title = dirtyTitle?.removeEntities().orEmpty()
+        title = with(mangaDataDto.attributes) {
+            titleMap[lang] ?: altTitles.run {
+                val mainTitle = titleMap.values.firstOrNull()
+                val langTitle = findTitleByLang(lang)
+                val enTitle = findTitleByLang("en")
+
+                if (preferExtensionLangTitle) {
+                    listOf(langTitle, mainTitle, enTitle)
+                } else {
+                    listOf(mainTitle, langTitle, enTitle)
+                }.firstNotNullOfOrNull { it }
+            }
+        }?.removeEntities().orEmpty()
 
         coverFileName?.let {
             thumbnail_url = when (!coverSuffix.isNullOrEmpty()) {
@@ -311,6 +323,8 @@ class MangaDexHelper(lang: String) {
         lang: String,
         coverSuffix: String?,
         altTitlesInDesc: Boolean,
+        preferExtensionLangTitle: Boolean,
+        finalChapterInDesc: Boolean,
     ): SManga {
         val attr = mangaDataDto.attributes!!
 
@@ -352,9 +366,12 @@ class MangaDexHelper(lang: String) {
 
         val genreList = MDConstants.tagGroupsOrder.flatMap { genresMap[it].orEmpty() } + nonGenres
 
-        var desc = (attr.description[lang] ?: attr.description["en"])
+        // Build description
+        val desc = mutableListOf<String>()
+
+        (attr.description[lang] ?: attr.description["en"])
             ?.removeEntitiesAndMarkdown()
-            .orEmpty()
+            ?.let { desc.add(it) }
 
         if (altTitlesInDesc) {
             val romanizedOriginalLang = MDConstants.romanizedLangCodes[attr.originalLanguage].orEmpty()
@@ -366,12 +383,24 @@ class MangaDexHelper(lang: String) {
             if (altTitles.isNotEmpty()) {
                 val altTitlesDesc = altTitles
                     .joinToString("\n", "${intl["alternative_titles"]}\n") { "• $it" }
-                desc += (if (desc.isBlank()) "" else "\n\n") + altTitlesDesc.removeEntities()
+                desc.add(altTitlesDesc.removeEntities())
             }
         }
 
-        return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang).apply {
-            description = desc
+        if (finalChapterInDesc) {
+            val finalChapter = mutableListOf<String>()
+            attr.lastVolume?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Vol.$it") }
+            attr.lastChapter?.takeIf { it.isNotEmpty() }?.let { finalChapter.add("Ch.$it") }
+
+            if (finalChapter.isNotEmpty()) {
+                val finalChapterDesc = finalChapter
+                    .joinToString(" ", "${intl["final_chapter"]}\n")
+                desc.add(finalChapterDesc.removeEntities())
+            }
+        }
+
+        return createBasicManga(mangaDataDto, coverFileName, coverSuffix, lang, preferExtensionLangTitle).apply {
+            description = desc.joinToString("\n\n")
             author = authors.joinToString()
             artist = artists.joinToString()
             status = getPublicationStatus(attr, chapters)

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.teamx
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
@@ -14,13 +13,12 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -29,7 +27,7 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
     override val name = "Team X"
 
-    private val defaultBaseUrl = "https://teamoney.site"
+    private val defaultBaseUrl = "https://olympustaff.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -43,9 +41,7 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
         .rateLimit(10, 1, TimeUnit.SECONDS)
         .build()
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     // Popular
 
@@ -219,9 +215,14 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
     // Pages
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.image_list img[src]").mapIndexed { i, img ->
-            Page(i, "", img.absUrl("src"))
-        }
+        return document.select("div.image_list canvas[data-src], div.image_list img[src]")
+            .mapIndexed { i, element ->
+                val url = when {
+                    element.hasAttr("src") -> element.absUrl("src")
+                    else -> element.absUrl("data-src")
+                }
+                Page(i, "", url)
+            }
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()

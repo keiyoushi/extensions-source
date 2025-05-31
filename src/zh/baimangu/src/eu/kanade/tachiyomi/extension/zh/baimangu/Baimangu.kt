@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.baimangu
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import eu.kanade.tachiyomi.network.GET
@@ -12,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -19,10 +19,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.util.concurrent.TimeUnit
-import java.util.regex.Pattern
 
 class Baimangu : ConfigurableSource, ParsedHttpSource() {
     override val lang = "zh"
@@ -30,9 +27,7 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
     override val name = "百漫谷"
 
     // Preference setting
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val baseUrl = preferences.getString(MAINSITE_URL_PREF, MAINSITE_URL_PREF_DEFAULT)!!
 
@@ -71,7 +66,13 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
     }
 
     // Popular Manga
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/vodshow/4--hits------$page---.html", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        return if (page <= 1) {
+            GET("$baseUrl/fenlei/4.html", headers)
+        } else {
+            GET("$baseUrl/fenlei/4-$page.html", headers)
+        }
+    }
     override fun popularMangaNextPageSelector() = commonNextPageSelector
     override fun popularMangaSelector() = commonSelector
     override fun popularMangaFromElement(element: Element) = commonMangaFromElement(element)
@@ -205,14 +206,12 @@ class Baimangu : ConfigurableSource, ParsedHttpSource() {
         val theScriptData = document.selectFirst("script:containsData(oScript.src)")?.data()
             ?: throw Exception("Unable to find OScript")
 
-        val pattern = Pattern.compile("src(\\s*)=(\\s*)\"(.+)\";")
-        val matcher = pattern.matcher(theScriptData)
-
-        if (matcher.find()) {
-            return matcher.group(3) ?: throw Exception("Unable to extract OScript")
+        val scriptUrl = theScriptData.substringAfter("txt_url=\"").substringBefore("\"")
+        if (scriptUrl.isEmpty()) {
+            throw Error("Unable to match for OScript")
         }
-
-        throw Error("Unable to match for OScript")
+        return scriptUrl.replace("img.manga8.xyz", "img3.manga8.xyz")
+            .replace("img2.manga8.xyz", "img4.manga8.xyz")
     }
 
     private fun extractPagesFromOScript(content: String): List<Page> {

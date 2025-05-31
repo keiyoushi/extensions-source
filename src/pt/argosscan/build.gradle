@@ -1,7 +1,7 @@
 ext {
     extName = 'Argos Scan'
     extClass = '.ArgosScan'
-    extVersionCode = 23
+    extVersionCode = 24
 }
 
 apply from: "$rootDir/common.gradle"

@@ -1,7 +1,8 @@
 ext {
     extName = 'VIZ'
     extClass = '.VizFactory'
-    extVersionCode = 20
+    extVersionCode = 21
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

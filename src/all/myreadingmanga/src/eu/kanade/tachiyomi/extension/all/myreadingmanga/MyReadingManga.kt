@@ -14,7 +14,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Headers
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -29,10 +28,21 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     // Basic Info
     override val name = "MyReadingManga"
     final override val baseUrl = "https://myreadingmanga.info"
-    override val client: OkHttpClient = network.cloudflareClient
     override fun headersBuilder(): Headers.Builder =
         super.headersBuilder()
             .set("User-Agent", USER_AGENT)
+            .add("X-Requested-With", randomString((1..20).random()))
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val headers = request.headers.newBuilder().apply {
+                removeAll("X-Requested-With")
+            }.build()
+
+            chain.proceed(request.newBuilder().headers(headers).build())
+        }
+        .build()
+
     override val supportsLatest = true
 
     // Popular - Random
@@ -111,6 +121,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     private fun getImage(element: Element): String? {
         val url = when {
             element.attr("data-src").contains(extensionRegex) -> element.attr("abs:data-src")
+            element.attr("data-cfsrc").contains(extensionRegex) -> element.attr("abs:data-cfsrc")
             element.attr("src").contains(extensionRegex) -> element.attr("abs:src")
             else -> element.attr("abs:data-lazy-src")
         }
@@ -174,7 +185,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     override fun mangaDetailsParse(document: Document) = throw UnsupportedOperationException()
 
     // Start Chapter Get
-    override fun chapterListSelector() = ".entry-pagination a"
+    override fun chapterListSelector() = "a[class=page-numbers]"
 
     @SuppressLint("DefaultLocale")
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -183,19 +194,16 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
 
         val date = parseDate(document.select(".entry-time").text())
         val mangaUrl = document.baseUri()
-        val chfirstname = document.select(".chapter-class a[href*=$mangaUrl]").first()?.text()?.ifEmpty { "Ch. 1" }?.replaceFirstChar { it.titlecase() }
-            ?: "Ch. 1"
         // create first chapter since its on main manga page
-        chapters.add(createChapter("1", document.baseUri(), date, chfirstname))
+        chapters.add(createChapter("1", document.baseUri(), date, "Part 1"))
         // see if there are multiple chapters or not
-        document.select(chapterListSelector()).let { it ->
-            it.forEach {
-                if (!it.text().contains("Next »", true)) {
-                    val pageNumber = it.text()
-                    val chname = document.select(".chapter-class a[href$=/$pageNumber/]").text().ifEmpty { "Ch. $pageNumber" }?.replaceFirstChar { it.titlecase() }
-                        ?: "Ch. $pageNumber"
-                    chapters.add(createChapter(it.text(), document.baseUri(), date, chname))
-                }
+        val lastChapterNumber = document.select(chapterListSelector()).last()?.text()
+        if (lastChapterNumber != null) {
+            // There are entries with more chapters but those never show up,
+            // so we take the last one and loop it to get all hidden ones.
+            // Example: 1 2 3 4 .. 7 8 9 Next
+            for (i in 2..lastChapterNumber.toInt()) {
+                chapters.add(createChapter(i.toString(), document.baseUri(), date, "Part $i"))
             }
         }
         chapters.reverse()
@@ -308,7 +316,16 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         Filter.Select<String>(displayName, vals.map { it }.toTypedArray(), defaultValue), UriFilter {
         override fun addToUri(uri: Uri.Builder, uriParam: String) {
             if (state != 0 || !firstIsUnspecified) {
-                uri.appendQueryParameter(uriParam, "$uriValuePrefix:${vals[state]}")
+                val splitFilter = vals[state].split(",")
+                when {
+                    splitFilter.size == 2 -> {
+                        val reversedFilter = splitFilter.reversed().joinToString(" | ").trim()
+                        uri.appendQueryParameter(uriParam, "$uriValuePrefix:$reversedFilter")
+                    }
+                    else -> {
+                        uri.appendQueryParameter(uriParam, "$uriValuePrefix:${vals[state]}")
+                    }
+                }
             }
         }
     }
@@ -321,6 +338,11 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     }
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.230 Mobile Safari/537.36"
+        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36"
+    }
+
+    private fun randomString(length: Int): String {
+        val charPool = ('a'..'z') + ('A'..'Z')
+        return List(length) { charPool.random() }.joinToString("")
     }
 }

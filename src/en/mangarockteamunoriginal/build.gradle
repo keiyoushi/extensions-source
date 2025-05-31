@@ -1,9 +1,0 @@
-ext {
-    extName = 'Manga Rock.team (unoriginal)'
-    extClass = '.MangaRockTeamUnoriginal'
-    themePkg = 'madara'
-    baseUrl = 'https://mangarock.team'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

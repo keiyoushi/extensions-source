@@ -38,6 +38,7 @@ kotlinter {
 
 dependencies {
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
+    implementation(project(":core"))
 }
 
 tasks {
@@ -49,5 +50,11 @@ tasks {
         lintKotlin {
             dependsOn(formatKotlin)
         }
+    }
+}
+
+tasks.register("printDependentExtensions") {
+    doLast {
+        project.printDependentExtensions()
     }
 }

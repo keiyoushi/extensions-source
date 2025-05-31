@@ -1,14 +1,18 @@
+# Keiyoushi Extensions
+
 ### Please give the repo a :star:
 
-| Build                                                                                                                                                                               | Support Server                                                                                                                                              |
+| Build                                                                                                                                                                               | Need Help?                                                                                                                                              |
 |-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [![CI](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml/badge.svg)](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml) | [![Discord](https://img.shields.io/discord/1193460528052453448.svg?label=discord&labelColor=7289da&color=2c2f33&style=flat)](https://discord.gg/3FbCpdKbdY) |
 
-# Usage
+## Usage
+**If you are new to repository/extensions, please read the [Keiyoushi Getting Started guide](https://keiyoushi.github.io/docs/guides/getting-started#adding-the-extension-repo) first.**
 
-[Getting started](https://keiyoushi.github.io/docs/guides/getting-started#adding-the-extension-repo)
+* You can add our repo by visiting the [Keiyoushi Website](https://keiyoushi.github.io/add-repo)
+* Otherwise, copy & paste the following URL: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json
 
-# Requests
+## Requests
 
 To request a new source or bug fix, [create an issue](https://github.com/keiyoushi/extensions-source/issues/new/choose).
 
@@ -19,7 +23,7 @@ difficult to maintain.
 If you would like to see a request fulfilled and have the necessary skills to do so, consider contributing!
 Issues are up-for-grabs for any developer if there is no assigned user already.
 
-# Contributing
+## Contributing
 
 Contributions are welcome!
 
@@ -47,4 +51,3 @@ This project does not have any affiliation with the content providers available.
 
 This project is not affiliated with Mihon/Tachiyomi. Don't ask for help about these extensions at the
 official support means of Mihon/Tachiyomi. All credits to the codebase goes to the original contributors.
-

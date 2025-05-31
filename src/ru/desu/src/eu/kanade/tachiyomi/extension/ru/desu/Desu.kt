@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.ru.desu
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -31,8 +32,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 class Desu : ConfigurableSource, HttpSource() {
@@ -40,17 +39,27 @@ class Desu : ConfigurableSource, HttpSource() {
 
     override val id: Long = 6684416167758830305
 
-    override val baseUrl = "https://desu.win"
+    private val preferences: SharedPreferences = getPreferences()
+
+    init {
+        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
+            if (prefDefaultDomain != DOMAIN_DEFAULT) {
+                preferences.edit()
+                    .putString(DOMAIN_TITLE, DOMAIN_DEFAULT)
+                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .apply()
+            }
+        }
+    }
+
+    private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
+    override val baseUrl: String = domain
 
     override val lang = "ru"
 
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
 
     override fun headersBuilder() = Headers.Builder().apply {
         add("User-Agent", "Tachiyomi")
@@ -62,7 +71,7 @@ class Desu : ConfigurableSource, HttpSource() {
             .rateLimitHost(baseUrl.toHttpUrl(), 3)
             .build()
 
-    private fun MangaDetDto.toSManga(genresStr: String? = ""): SManga {
+    private fun MangaDetDto.toSManga(genresStr: String? = "", authorsStr: String? = null): SManga {
         val ratingValue = score!!
         val ratingStar = when {
             ratingValue > 9.5 -> "★★★★★"
@@ -125,26 +134,30 @@ class Desu : ConfigurableSource, HttpSource() {
                     else -> SManga.UNKNOWN
                 }
             }
+            author = authorsStr
         }
     }
 
     override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl$API_URL/?limit=50&order=popular&page=$page")
+        GET("$baseUrl$API_URL/?limit=50&order=popular&page=$page", headers)
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl$API_URL/?limit=50&order=updated&page=$page")
+        GET("$baseUrl$API_URL/?limit=50&order=updated&page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var url = "$baseUrl$API_URL/?limit=20&page=$page"
+        val url = "$baseUrl$API_URL/".toHttpUrl().newBuilder()
+            .addQueryParameter("limit", "20")
+            .addQueryParameter("page", page.toString())
+
         val types = mutableListOf<Type>()
         val genres = mutableListOf<Genre>()
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
-                is OrderBy -> url += "&order=" + arrayOf("popular", "updated", "name")[filter.state]
+                is OrderBy -> url.addQueryParameter("order", arrayOf("popular", "updated", "name")[filter.state])
                 is TypeList -> filter.state.forEach { type -> if (type.state) types.add(type) }
                 is GenreList -> filter.state.forEach { genre -> if (genre.state) genres.add(genre) }
                 else -> {}
@@ -152,15 +165,15 @@ class Desu : ConfigurableSource, HttpSource() {
         }
 
         if (types.isNotEmpty()) {
-            url += "&kinds=" + types.joinToString(",") { it.id }
+            url.addQueryParameter("kinds", types.joinToString(",") { it.id })
         }
         if (genres.isNotEmpty()) {
-            url += "&genres=" + genres.joinToString(",") { it.id }
+            url.addQueryParameter("genres", genres.joinToString(",") { it.id })
         }
         if (query.isNotEmpty()) {
-            url += "&search=$query"
+            url.addQueryParameter("search", query)
         }
-        return GET(url)
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -188,11 +201,17 @@ class Desu : ConfigurableSource, HttpSource() {
     override fun mangaDetailsRequest(manga: SManga): Request {
         return GET(baseUrl + "/manga" + manga.url, headers)
     }
+
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val responseString = response.body.string()
         val series = json.decodeFromString<SeriesWrapperDto<MangaDetDto>>(responseString)
         val genresStr = json.decodeFromString<SeriesWrapperDto<MangaDetGenresDto>>(responseString).response.genres!!.joinToString { it.russian }
-        return series.response.toSManga(genresStr)
+        val authorsStr = if (responseString.contains("people_name")) {
+            json.decodeFromString<SeriesWrapperDto<MangaDetAuthorsDto>>(responseString).response.authors!!.joinToString { it.people_name }
+        } else {
+            null
+        }
+        return series.response.toSManga(genresStr, authorsStr)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -342,6 +361,7 @@ class Desu : ConfigurableSource, HttpSource() {
     )
 
     private var isEng: String? = preferences.getString(LANGUAGE_PREF, "eng")
+
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
         val titleLanguagePref = ListPreference(screen.context).apply {
             key = LANGUAGE_PREF
@@ -356,13 +376,31 @@ class Desu : ConfigurableSource, HttpSource() {
                 true
             }
         }
+        val domainDesuPref = EditTextPreference(screen.context).apply {
+            key = DOMAIN_TITLE
+            title = DOMAIN_TITLE
+            summary = domain
+            setDefaultValue(DOMAIN_DEFAULT)
+            dialogTitle = DOMAIN_TITLE
+            setOnPreferenceChangeListener { _, _ ->
+                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }
         screen.addPreference(titleLanguagePref)
+        screen.addPreference(domainDesuPref)
     }
+
     companion object {
         const val PREFIX_SLUG_SEARCH = "slug:"
 
         private const val LANGUAGE_PREF = "DesuTitleLanguage"
 
         private const val API_URL = "/manga/api"
+
+        private const val DOMAIN_TITLE = "Домен"
+        private const val DEFAULT_DOMAIN_PREF = "default_domain"
+        private const val DOMAIN_DEFAULT = "https://desu.store"
     }
 }

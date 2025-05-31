@@ -4,6 +4,7 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://yuri.live'
     overrideVersionCode = 3
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

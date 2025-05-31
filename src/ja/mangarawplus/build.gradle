@@ -2,8 +2,8 @@ ext {
     extName = 'MANGARAW+'
     extClass = '.MangaRawPlus'
     themePkg = 'madara'
-    baseUrl = 'https://mangafenxi.net'
-    overrideVersionCode = 5
+    baseUrl = 'https://mangarawx.net'
+    overrideVersionCode = 6
     isNsfw = true
 }
 

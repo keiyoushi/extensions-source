@@ -3,7 +3,7 @@ ext {
     extClass = '.ManyComic'
     themePkg = 'madara'
     baseUrl = 'https://manycomic.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 

@@ -4,6 +4,7 @@ ext {
     themePkg = 'makaru'
     baseUrl = 'https://www.re-yume.my.id'
     overrideVersionCode = 35
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

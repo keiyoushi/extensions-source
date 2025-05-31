@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
-import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
@@ -18,6 +17,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,8 +36,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     override val name: String = "禁漫天堂"
     override val supportsLatest: Boolean = true
 
-    private val preferences: SharedPreferences =
-        getSharedPreferences(id)
+    private val preferences = getPreferences { preferenceMigration() }
 
     override val baseUrl: String = "https://" + preferences.baseUrl
 
@@ -54,6 +54,10 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         .setRandomUserAgent(preferences.getPrefUAType(), preferences.getPrefCustomUA())
         .apply { interceptors().add(0, updateUrlInterceptor) }
         .addInterceptor(ScrambledImageInterceptor).build()
+
+    // 添加额外的header增加规避Cloudflare可能性
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     // 点击量排序(人气)
     override fun popularMangaRequest(page: Int): Request {
@@ -226,12 +230,12 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     // 漫画章节信息
     override fun chapterListSelector(): String = "div[id=episode-block] a[href^=/photo/]"
 
-    private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         url = element.select("a").attr("href")
-        name = element.select("a li").first()!!.ownText()
-        date_upload = sdf.parse(element.select("a li span.hidden-xs").text().trim())?.time ?: 0
+        name = element.select("a li h3").first()!!.ownText()
+        date_upload = dateFormat.tryParse(element.select("a li span.hidden-xs").text().trim())
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -240,8 +244,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
             val singleChapter = SChapter.create().apply {
                 name = "单章节"
                 url = document.select("a[class=col btn btn-primary dropdown-toggle reading]").attr("href")
-                date_upload = sdf.parse(document.select("[itemprop=datePublished]").last()!!.attr("content"))?.time
-                    ?: 0
+                date_upload = dateFormat.tryParse(document.select("[itemprop=datePublished]").last()!!.attr("content"))
             }
             return listOf(singleChapter)
         }
@@ -251,13 +254,15 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     // 漫画图片信息
     override fun pageListParse(document: Document): List<Page> {
         tailrec fun internalParse(document: Document, pages: MutableList<Page>): List<Page> {
-            val elements = document.select("div[class=center scramble-page][id*=0]")
+            val elements = document.select("div[class=center scramble-page spnotice_chk][id*=0]")
             for (element in elements) {
                 pages.apply {
-                    if (element.select("div[class=center scramble-page][id*=0] img").attr("src").indexOf("blank.jpg") >= 0) {
-                        add(Page(size, "", element.select("div[class=center scramble-page][id*=0] img").attr("data-original").split("\\?")[0]))
+                    if (element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("src").indexOf("blank.jpg") >= 0 ||
+                        element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("data-cfsrc").indexOf("blank.jpg") >= 0
+                    ) {
+                        add(Page(size, "", element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("data-original").split("\\?")[0]))
                     } else {
-                        add(Page(size, "", element.select("div[class=center scramble-page][id*=0] img").attr("src").split("\\?")[0]))
+                        add(Page(size, "", element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("src").split("\\?")[0]))
                     }
                 }
             }

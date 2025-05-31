@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.zaimanhua
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -15,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -29,8 +29,6 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.security.MessageDigest
@@ -48,10 +46,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     private val json by injectLazy<Json>()
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(5)
         .addInterceptor(::authIntercept)
         .addInterceptor(::imageRetryInterceptor)
@@ -106,7 +103,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
                 "$accountApiUrl/userInfo/get",
                 headersBuilder().setToken(token).build(),
             ),
-        ).execute().parseAs<ResponseDto<UserDto>>()
+        ).execute().parseAs<SimpleResponseDto>()
         return response.errno == 0
     }
 
@@ -130,7 +127,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     // Detail
     // path: "/comic/detail/mangaId"
     override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$apiUrl/comic/detail/${manga.url}", apiHeaders)
+        GET("$apiUrl/comic/detail/${manga.url}?channel=android", apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ResponseDto<DataWrapperDto<MangaDto>>>()
@@ -197,8 +194,8 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     // Popular
     private fun rankApiUrl(): HttpUrl.Builder =
-        "$apiUrl/comic/rank/list".toHttpUrl().newBuilder().addQueryParameter("by_time", "3")
-            .addQueryParameter("tag_id", "0").addQueryParameter("rank_type", "0")
+        "$apiUrl/comic/rank/list".toHttpUrl().newBuilder()
+            .addQueryParameter("tag_id", "0")
 
     override fun popularMangaRequest(page: Int): Request = GET(
         rankApiUrl().apply {
@@ -214,16 +211,30 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         "$apiUrl/search/index".toHttpUrl().newBuilder().addQueryParameter("source", "0")
             .addQueryParameter("size", "20")
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = GET(
-        searchApiUrl().apply {
-            addQueryParameter("keyword", query)
-            addQueryParameter("page", page.toString())
-        }.build(),
-        apiHeaders,
-    )
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val ranking = filters.filterIsInstance<RankingGroup>().firstOrNull()
+        val url = if (query.isEmpty() && ranking != null) {
+            rankApiUrl().apply {
+                ranking.state.filterIsInstance<QueryFilter>().forEach {
+                    it.addQuery(this)
+                }
+                addQueryParameter("page", page.toString())
+            }.build()
+        } else {
+            searchApiUrl().apply {
+                addQueryParameter("keyword", query)
+                addQueryParameter("page", page.toString())
+            }.build()
+        }
+        return GET(url, apiHeaders)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage =
-        response.parseAs<ResponseDto<PageDto>>().data.toMangasPage()
+        if (response.request.url.toString().startsWith("$apiUrl/comic/rank/list")) {
+            latestUpdatesParse(response)
+        } else {
+            response.parseAs<ResponseDto<PageDto>>().data.toMangasPage()
+        }
 
     // Latest
     // "$apiUrl/comic/update/list/1/$page" is same content
@@ -231,9 +242,16 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         GET("$apiUrl/comic/update/list/0/$page", apiHeaders)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangas = response.parseAs<ResponseDto<List<PageItemDto>>>().data
+        val mangas = response.parseAs<ResponseDto<List<PageItemDto>?>>().data
+        if (mangas.isNullOrEmpty()) {
+            throw Exception("没有更多结果了")
+        }
         return MangasPage(mangas.map { it.toSManga() }, true)
     }
+
+    override fun getFilterList() = FilterList(
+        RankingGroup(),
+    )
 
     companion object {
         val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()

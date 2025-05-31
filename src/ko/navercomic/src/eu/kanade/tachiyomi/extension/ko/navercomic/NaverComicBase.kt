@@ -29,7 +29,7 @@ abstract class NaverComicBase(protected val mType: String) : ParsedHttpSource() 
     override val baseUrl: String = "https://comic.naver.com"
     internal val mobileUrl = "https://m.comic.naver.com"
     override val supportsLatest = true
-    override val client: OkHttpClient = network.client
+    override val client: OkHttpClient = network.cloudflareClient
     internal val json: Json by injectLazy()
 
     private val mobileHeaders = super.headersBuilder()

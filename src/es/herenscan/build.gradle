@@ -1,9 +1,0 @@
-ext {
-    extName = 'HerenScan'
-    extClass = '.HerenScan'
-    themePkg = 'madara'
-    baseUrl = 'https://herenscan.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

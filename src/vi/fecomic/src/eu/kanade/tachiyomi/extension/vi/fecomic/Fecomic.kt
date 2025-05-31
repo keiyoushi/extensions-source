@@ -10,7 +10,7 @@ import java.util.Locale
 
 class Fecomic : Madara(
     "Fecomic",
-    "https://fecomicc.xyz",
+    "https://mangasup.net",
     "vi",
     dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
