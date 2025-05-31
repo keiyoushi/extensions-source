@@ -83,7 +83,7 @@ class ComicGrowl(
         }
     }
 
-//    override fun chapterListRequest(manga: SManga) = GET("$", headers) // TODO: get chapters from `/list`
+    override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url + "/list", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
