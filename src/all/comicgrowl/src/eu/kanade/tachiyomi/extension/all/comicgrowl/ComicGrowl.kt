@@ -12,11 +12,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -118,33 +115,27 @@ class ComicGrowl(
 
         // Initial request to get total pages
         val initialRequest = GET(requestUrl.addQueryParameter("page-to", "1").build(), headers)
-        client.newCall(initialRequest).execute().use { initialResponse ->
-            if (!initialResponse.isSuccessful) {
+        client.newCall(initialRequest).execute().use { initialResponseRaw ->
+            if (!initialResponseRaw.isSuccessful) {
                 throw Exception("Failed to get page list")
             }
-            // FIXME: use util in core and DTO
-            val totalPages =
-                json.parseToJsonElement(initialResponse.body.string()).jsonObject["totalPages"]!!.jsonPrimitive.content
+            // TODO: use util in core
+            val initialResponseData: PageResponse = json.decodeFromString(initialResponseRaw.body.string())
             // Get all pages
-            val getAllPagesRequest = GET(requestUrl.setQueryParameter("page-to", totalPages).build(), headers)
+            val getAllPagesRequest =
+                GET(requestUrl.setQueryParameter("page-to", initialResponseData.totalPages.toString()).build(), headers)
             client.newCall(getAllPagesRequest).execute().use {
                 if (!it.isSuccessful) {
                     throw Exception("Failed to get page list")
                 }
-                val result = json.parseToJsonElement(it.body.string())
-                val resultJson = result.jsonObject["result"]!!.jsonArray
-                resultJson.forEach { resultJsonElement ->
-                    val jsonObject = resultJsonElement.jsonObject
-                    // Add fragment to let interceptor to descramble the image
-                    val scramble = jsonObject["scramble"]!!.jsonPrimitive.content.drop(1).dropLast(1).replace(", ", "-")
-                    val imageUrl =
-                        jsonObject["imageUrl"]!!.jsonPrimitive.content.toHttpUrl().newBuilder().fragment(scramble)
-                            .build()
+                val resultData: PageResponse = json.decodeFromString(it.body.string())
+                resultData.result.forEach { resultItem ->
+                    // Origin scramble string is something like [6, 9, 14, 15, 8, 3, 4, 12, 1, 5, 0, 7, 13, 2, 11, 10]
+                    val scramble = resultItem.scramble.drop(1).dropLast(1).replace(", ", "-")
+                    // Add fragment to let interceptor descramble the image
+                    val imageUrl = resultItem.imageUrl.toHttpUrl().newBuilder().fragment(scramble).build()
                     pageList.add(
-                        Page(
-                            index = jsonObject["sort"]!!.jsonPrimitive.int,
-                            imageUrl = imageUrl.toString(),
-                        ),
+                        Page(index = resultItem.sort, imageUrl = imageUrl.toString()),
                     )
                 }
             }
