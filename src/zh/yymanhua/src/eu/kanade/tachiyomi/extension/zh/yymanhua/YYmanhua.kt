@@ -11,7 +11,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.util.concurrent.TimeUnit
 
 class YYmanhua : ParsedHttpSource() {
 
@@ -33,11 +32,6 @@ class YYmanhua : ParsedHttpSource() {
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0")
         .add("Referer", "$baseUrl/")
         .add("Cookie", "yymanhua_lang=2")
-
-    override val client = network.cloudflareClient.newBuilder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
 
     // Popular Page
 
