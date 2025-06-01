@@ -1,9 +1,9 @@
 ext {
-    extName = 'Jobsibe'
-    extClass = '.Jobsibe'
+    extName = 'Lmtos'
+    extClass = '.Lmtos'
     themePkg = 'madara'
-    baseUrl = 'https://lmtos.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://www.lmtos.com'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
