@@ -6,9 +6,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Jobsibe : Madara(
-    "Jobsibe",
-    "https://lmtos.com",
+class Lmtos : Madara(
+    "Lmtos",
+    "https://www.lmtos.com",
     "es",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
 ) {
