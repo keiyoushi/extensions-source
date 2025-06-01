@@ -7,8 +7,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -58,7 +58,7 @@ class ComicGrowl(
             author = infoElement.selectFirst(".series-h-credit-user-item > .article-text")?.text()
             description = infoElement.selectFirst(".series-h-credit-info-text-text p")?.wholeText()?.trim()
             setImageUrlFromElement(document.getElementsByClass("series-h-img").first())
-            status = if (updateDateElement != null) SManga.ONGOING else SManga.COMPLETED // TODO: need validate
+            status = if (updateDateElement != null) SManga.ONGOING else SManga.COMPLETED
         }
     }
 
@@ -91,6 +91,7 @@ class ComicGrowl(
     override fun pageListParse(document: Document): List<Page> {
         val pageList = mutableListOf<Page>()
 
+        // Get some essential info from document
         val viewer = document.selectFirst("#comici-viewer")!!
         val comiciViewerId = viewer.attr("comici-viewer-id")
         val memberJwt = viewer.attr("data-member-jwt")
@@ -105,21 +106,22 @@ class ComicGrowl(
             if (!initialResponseRaw.isSuccessful) {
                 throw Exception("Failed to get page list")
             }
-            // TODO: use util in core
-            val initialResponseData: PageResponse = json.decodeFromString(initialResponseRaw.body.string())
+
             // Get all pages
-            val getAllPagesRequest =
-                GET(requestUrl.setQueryParameter("page-to", initialResponseData.totalPages.toString()).build(), headers)
+            val pageTo = initialResponseRaw.parseAs<PageResponse>(json).totalPages.toString()
+            val getAllPagesUrl = requestUrl.setQueryParameter("page-to", pageTo).build()
+            val getAllPagesRequest = GET(getAllPagesUrl, headers)
             client.newCall(getAllPagesRequest).execute().use {
                 if (!it.isSuccessful) {
                     throw Exception("Failed to get page list")
                 }
-                val resultData: PageResponse = json.decodeFromString(it.body.string())
-                resultData.result.forEach { resultItem ->
+
+                it.parseAs<PageResponse>(json).result.forEach { resultItem ->
                     // Origin scramble string is something like [6, 9, 14, 15, 8, 3, 4, 12, 1, 5, 0, 7, 13, 2, 11, 10]
                     val scramble = resultItem.scramble.drop(1).dropLast(1).replace(", ", "-")
                     // Add fragment to let interceptor descramble the image
                     val imageUrl = resultItem.imageUrl.toHttpUrl().newBuilder().fragment(scramble).build()
+
                     pageList.add(
                         Page(index = resultItem.sort, imageUrl = imageUrl.toString()),
                     )
