@@ -39,7 +39,22 @@ abstract class MadTheme(
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 1, TimeUnit.SECONDS)
-        .build()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url
+            val response = chain.proceed(request)
+            if (!response.isSuccessful && url.fragment == "image-request") {
+                response.close()
+                val newUrl = url.newBuilder()
+                    .host("sb.mbcdn.xyz")
+                    .encodedPath(url.encodedPath.replaceFirst("/res/", "/"))
+                    .fragment(null)
+                    .build()
+
+                return@addInterceptor chain.proceed(request.newBuilder().url(newUrl).build())
+            }
+            response
+        }.build()
 
     protected open val useLegacyApi = false
 
@@ -327,6 +342,10 @@ abstract class MadTheme(
         } else {
             super.pageListRequest(chapter)
         }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        return GET("${page.imageUrl}#image-request", headers)
     }
 
     override fun imageUrlParse(document: Document): String =
