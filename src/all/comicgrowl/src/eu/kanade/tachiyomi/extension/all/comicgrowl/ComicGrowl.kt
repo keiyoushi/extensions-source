@@ -69,8 +69,8 @@ class ComicGrowl(
         return document.select(chapterListSelector()).mapIndexed { index, element ->
             chapterFromElement(element).apply {
                 chapter_number = index.toFloat()
-                if (url.isEmpty()) {
-                    url = "foobar" // TODO: dummy url
+                if (url.isEmpty()) { // need login, set a dummy url and append lock icon for chapter name
+                    url = "$DUMMY_URL_PREFIX-$name"
                     name = LOCK + name
                 }
             }
@@ -86,6 +86,13 @@ class ComicGrowl(
             setUploadDate(element.selectFirst(".series-ep-list-date-time"))
             scanlator = PUBLISHER
         }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        if (chapter.url.startsWith(DUMMY_URL_PREFIX)) {
+            throw Exception("Login required to see this chapter")
+        }
+        return super.pageListRequest(chapter)
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -177,6 +184,8 @@ class ComicGrowl(
         private val DATE_PARSER by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT) }
 
         private val json: Json by injectLazy()
+
+        private const val DUMMY_URL_PREFIX = "NeedLogin"
 
         private const val YEN_BANKNOTE = "💴 "
         private const val LOCK = "🔒 "
