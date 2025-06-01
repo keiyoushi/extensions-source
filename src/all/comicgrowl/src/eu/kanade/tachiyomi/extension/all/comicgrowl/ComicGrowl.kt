@@ -45,17 +45,17 @@ class ComicGrowl(
         return SManga.create().apply {
             setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
             title = element.selectFirst(".title-text")!!.text()
-            author = element.selectFirst(".author-link")?.text()
             setImageUrlFromElement(element)
         }
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst(".series-h-info")!!
+        val authorElements = infoElement.select(".series-h-credit-user-item .article-text")
         val updateDateElement = infoElement.selectFirst(".series-h-tag-label")
         return SManga.create().apply {
             title = infoElement.select("h1 > span")[1]!!.text()
-            author = infoElement.selectFirst(".series-h-credit-user-item > .article-text")?.text()
+            author = authorElements.joinToString { it.text() }
             description = infoElement.selectFirst(".series-h-credit-info-text-text p")?.wholeText()?.trim()
             setImageUrlFromElement(document.getElementsByClass("series-h-img").first())
             status = if (updateDateElement != null) SManga.ONGOING else SManga.COMPLETED
