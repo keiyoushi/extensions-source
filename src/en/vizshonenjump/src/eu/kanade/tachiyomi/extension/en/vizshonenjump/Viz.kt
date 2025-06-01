@@ -197,6 +197,7 @@ open class Viz(
                     url = url.substringAfter("'").substringBeforeLast("'") + "&locked=true"
                 }
             }
+                .sortedByDescending { it.chapter_number }
         }
 
         return allChapters.filter { !it.url.startsWith("javascript") }
