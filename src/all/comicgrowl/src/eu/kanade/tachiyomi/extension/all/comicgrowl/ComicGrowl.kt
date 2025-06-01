@@ -24,7 +24,7 @@ class ComicGrowl(
     override val lang: String = "all",
     override val baseUrl: String = "https://comic-growl.com",
     override val name: String = "コミックグロウル",
-    override val supportsLatest: Boolean = false,
+    override val supportsLatest: Boolean = true,
 ) : ParsedHttpSource() {
 
     override val client = super.client.newBuilder()
@@ -143,36 +143,34 @@ class ComicGrowl(
         throw UnsupportedOperationException()
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        TODO("Not yet implemented")
-    }
-
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        TODO("Not yet implemented")
-    }
-
-    override fun latestUpdatesNextPageSelector(): String? {
-        TODO("Not yet implemented")
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        TODO("Not yet implemented")
-    }
-
-    override fun latestUpdatesSelector(): String {
-        TODO("Not yet implemented")
-    }
-
-    override fun searchMangaNextPageSelector(): String? {
-        TODO("Not yet implemented")
-    }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        TODO("Not yet implemented")
+        val searchUrl = "$baseUrl/search".toHttpUrl().newBuilder()
+            .setQueryParameter("keyword", query)
+            .setQueryParameter("page", page.toString())
+            .build()
+        return GET(searchUrl, headers)
     }
 
-    override fun searchMangaSelector(): String {
-        TODO("Not yet implemented")
+    override fun searchMangaNextPageSelector() = null
+
+    override fun searchMangaSelector() = ".series-list a"
+
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.absUrl("href"))
+        title = element.selectFirst(".manga-title")!!.text()
+        setImageUrlFromElement(element)
+    }
+
+    override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
+
+    override fun latestUpdatesNextPageSelector() = null
+
+    override fun latestUpdatesSelector() = "div.feature-list:nth-child(2) > .feature-item"
+
+    override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        title = element.selectFirst("h3")!!.text()
+        setImageUrlFromElement(element)
     }
 
     // ========================================= Helper Functions =====================================
@@ -188,8 +186,8 @@ class ComicGrowl(
 
         private const val DUMMY_URL_PREFIX = "NeedLogin"
 
-        private const val YEN_BANKNOTE = "💴 "
-        private const val LOCK = "🔒 "
+        private const val PAY_ICON = "💴 "
+        private const val LOCK_ICON = "🔒 "
     }
 
     /**
