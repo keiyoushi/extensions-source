@@ -70,8 +70,9 @@ class ComicGrowl(
             chapterFromElement(element).apply {
                 chapter_number = index.toFloat()
                 if (url.isEmpty()) { // need login, set a dummy url and append lock icon for chapter name
+                    val isLock = element.selectFirst(".g-payment-article")?.hasClass("wait-free-enabled") ?: false
                     url = "$DUMMY_URL_PREFIX-$name"
-                    name = LOCK + name
+                    name = (if (isLock) LOCK_ICON else PAY_ICON) + name
                 }
             }
         }
