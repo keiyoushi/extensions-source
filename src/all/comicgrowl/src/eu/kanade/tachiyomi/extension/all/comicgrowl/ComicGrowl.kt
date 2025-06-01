@@ -1,9 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comicgrowl
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Rect
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,15 +12,11 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
-import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -35,18 +27,8 @@ class ComicGrowl(
     override val supportsLatest: Boolean = false,
 ) : ParsedHttpSource() {
 
-    companion object {
-        private const val PUBLISHER = "BUSHIROAD WORKS"
-
-        private val imageUrlRegex by lazy { Regex("^.*?webp") }
-
-        private val DATE_PARSER by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT) }
-
-        private val json: Json by injectLazy()
-    }
-
     override val client = super.client.newBuilder()
-        .addNetworkInterceptor(::imageDescrambler)
+        .addNetworkInterceptor(ImageDescrambler::interceptor)
         .build()
 
     override fun headersBuilder(): Headers.Builder {
@@ -87,8 +69,12 @@ class ComicGrowl(
         return document.select(chapterListSelector()).mapIndexed { index, element ->
             chapterFromElement(element).apply {
                 chapter_number = index.toFloat()
+                if (url.isEmpty()) {
+                    url = "foobar" // TODO: dummy url
+                    name = LOCK + name
+                }
             }
-        }.filter { it.url.isNotEmpty() }
+        }
     }
 
     override fun chapterListSelector() = ".article-ep-list-item-img-link"
@@ -181,6 +167,19 @@ class ComicGrowl(
 
     // ========================================= Helper Functions =====================================
 
+    companion object {
+        private const val PUBLISHER = "BUSHIROAD WORKS"
+
+        private val imageUrlRegex by lazy { Regex("^.*?webp") }
+
+        private val DATE_PARSER by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT) }
+
+        private val json: Json by injectLazy()
+
+        private const val YEN_BANKNOTE = "💴 "
+        private const val LOCK = "🔒 "
+    }
+
     /**
      * Set cover image url from [element] for [SManga]
      */
@@ -204,63 +203,4 @@ class ComicGrowl(
         }
         this.date_upload = DATE_PARSER.tryParse(element.attr("datetime"))
     }
-
-    /**
-     * Interceptor to descramble the image.
-     */
-    private fun imageDescrambler(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-
-        val scramble = request.url.fragment ?: return response // return if no scramble fragment
-        val tiles = buildList {
-            scramble.split("-").forEachIndexed { index, s ->
-                val scrambleInt = s.toInt()
-                add(index, TilePos(scrambleInt / 4, scrambleInt.mod(4)))
-            }
-        }
-
-        val scrambledImg = BitmapFactory.decodeStream(response.body.byteStream())
-        val descrambledImg = drawDescrambledImage(scrambledImg, scrambledImg.width, scrambledImg.height, tiles)
-
-        val output = ByteArrayOutputStream()
-        descrambledImg.compress(Bitmap.CompressFormat.JPEG, 90, output)
-
-        val image = output.toByteArray()
-        val body = image.toResponseBody("image/jpeg".toMediaType())
-
-        return response.newBuilder()
-            .body(body)
-            .build()
-    }
-
-    private fun drawDescrambledImage(rawImage: Bitmap, width: Int, height: Int, tiles: List<TilePos>): Bitmap {
-        // Prepare canvas
-        val descrambledImg = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(descrambledImg)
-
-        // Tile width and height(4x4)
-        val tileWidth = width / 4
-        val tileHeight = height / 4
-
-        // Draw rect
-        var count = 0
-        for (x in 0..3) {
-            for (y in 0..3) {
-                val desRect = Rect(x * tileWidth, y * tileHeight, (x + 1) * tileWidth, (y + 1) * tileHeight)
-                val srcRect = Rect(
-                    tiles[count].x * tileWidth,
-                    tiles[count].y * tileHeight,
-                    (tiles[count].x + 1) * tileWidth,
-                    (tiles[count].y + 1) * tileHeight,
-                )
-                canvas.drawBitmap(rawImage, srcRect, desRect, null)
-                count++
-            }
-        }
-        return descrambledImg
-    }
-
-    // Left-top corner position
-    private class TilePos(val x: Int, val y: Int)
 }
