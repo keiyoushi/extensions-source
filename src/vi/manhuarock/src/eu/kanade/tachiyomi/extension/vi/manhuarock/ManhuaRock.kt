@@ -40,7 +40,7 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://manhuarock1.site"
+    private val defaultBaseUrl = "https://manhuarock.site"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -54,7 +54,7 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
     private val json: Json by injectLazy()
 
     private val dateFormat by lazy {
-        SimpleDateFormat("dd MMM yyyy", Locale.US).apply {
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
         }
     }
@@ -117,7 +117,7 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
         status = when (document.selectFirst("div.summary-heading:contains(Tình Trạng) + div.summary-content")?.text()) {
             // I have zero idea what the strings for Ongoing and Completed are, these are educated guesses
             // All the metadata on this page is basically "Unknown".
-            "Đang Ra" -> SManga.ONGOING
+            "Đang Tiến Hành" -> SManga.ONGOING
             "Hoàn Thành" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
@@ -132,7 +132,7 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
         setUrlWithoutDomain(a.attr("abs:href"))
         name = a.text()
         date_upload = runCatching {
-            val date = element.selectFirst("span.chapter-time")!!.text()
+            val date = element.select("span.chapter-time").attr("data-last-update")
 
             dateFormat.parse(date)!!.time
         }.getOrDefault(0L)
