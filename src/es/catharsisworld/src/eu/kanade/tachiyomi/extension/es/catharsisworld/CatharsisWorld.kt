@@ -9,7 +9,7 @@ import org.jsoup.nodes.Element
 
 class CatharsisWorld : Madara(
     "Catharsis World",
-    "https://catharsisworld.dig-it.info",
+    "https://catharsisworld.justep.me",
     "es",
 ) {
     override val versionId = 2
