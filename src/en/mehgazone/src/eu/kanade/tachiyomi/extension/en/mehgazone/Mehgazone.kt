@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mehgazone
 
-import android.app.Application
 import android.content.SharedPreferences
-import android.net.Uri.encode
 import android.text.InputType
 import android.text.SpannableString
 import android.text.method.LinkMovementMethod
@@ -13,6 +11,9 @@ import android.widget.EditText
 import android.widget.TextView
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.extension.en.mehgazone.interceptors.BasicAuthInterceptor
+import eu.kanade.tachiyomi.extension.en.mehgazone.serialization.ChapterListDto
+import eu.kanade.tachiyomi.extension.en.mehgazone.serialization.PageListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -22,28 +23,22 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.Json
-import okhttp3.Credentials
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import okhttp3.Headers
-import okhttp3.Interceptor
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
+import org.jsoup.helper.Validate
+import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser.unescapeEntities
+import org.jsoup.select.Collector
+import org.jsoup.select.Elements
+import org.jsoup.select.QueryParser
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 
 class Mehgazone : ConfigurableSource, HttpSource() {
@@ -62,37 +57,19 @@ class Mehgazone : ConfigurableSource, HttpSource() {
 
     // authentication doesn't work with default client
     override val client: OkHttpClient by lazy {
-        val builder = OkHttpClient.Builder()
-
-        builder.addInterceptor(authInterceptor)
-
-        network.client.interceptors.forEach {
-            when (it::class.simpleName!!) {
-                "UncaughtExceptionInterceptor",
-                "UserAgentInterceptor",
-                -> builder.addInterceptor(it)
-                else -> {}
-            }
-        }
-
-        builder.build()
-    }
-
-    private val json = Json {
-        isLenient = true
-        ignoreUnknownKeys = true
-        allowSpecialFloatingPointValues = true
-        useArrayPolymorphism = true
-        prettyPrint = true
+        network.cloudflareClient
+            .newBuilder()
+            .addInterceptor(authInterceptor)
+            .build()
     }
 
     private val fallbackTitleDateFormat: SimpleDateFormat by lazy {
         SimpleDateFormat("dd-MM-yyyy", Locale.US)
     }
 
-    private val textToImageURL = "https://fakeimg.ryd.tools/1500x2126/ffffff/000000/?font=museo&font_size=42"
+    private val textToImageURL = "https://fakeimg.ryd.tools/1500x2126/ffffff/000000/?font=museo&font_size=42".toHttpUrl()
 
-    private fun String.image() = textToImageURL + "&text=" + encode(this)
+    private fun String.image() = textToImageURL.newBuilder().setQueryParameter("text", this).build().toString()
 
     private fun String.unescape() = unescapeEntities(this, false)
 
@@ -102,6 +79,22 @@ class Mehgazone : ConfigurableSource, HttpSource() {
 
     override fun getMangaUrl(manga: SManga) = manga.url
 
+    private fun Elements.selectFirstBackport(cssQuery: String) = selectFirst(cssQuery, this)
+
+    // backport from jsoup 1.19.1
+    private fun selectFirst(cssQuery: String, roots: Elements): Element? {
+        Validate.notEmpty(cssQuery)
+        Validate.notNull(roots)
+        val evaluator = QueryParser.parse(cssQuery)
+
+        for (root in roots) {
+            val first = Collector.findFirst(evaluator, root)
+            if (first != null) return first
+        }
+
+        return null
+    }
+
     override fun popularMangaParse(response: Response) = MangasPage(
         response.asJsoup()
             .selectFirst("#main aside.primary-sidebar .sidebar-group")!!
@@ -110,8 +103,8 @@ class Mehgazone : ConfigurableSource, HttpSource() {
             .map {
                 SManga.create().apply {
                     title = it.text().split('"')[1].unescape()
-                    url = it.nextElementSibling()!!.nextElementSibling()!!.selectFirst("a")!!.attr("href").substringBefore("/feed")
-                    thumbnail_url = it.nextElementSibling()!!.selectFirst("img")!!.attr("src")
+                    url = it.nextElementSiblings().selectFirstBackport("a[href*='/feed']")!!.attr("href").toHttpUrl().resolve("/").toString()
+                    thumbnail_url = it.nextElementSiblings().selectFirstBackport("img")!!.attr("src")
                 }
             },
         false,
@@ -129,8 +122,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
         author = "Patricia Barton"
         status = SManga.ONGOING
         thumbnail_url =
-            html.getElementById("content")!!
-                .select("img")
+            html.select("#content img[src*='.png']")
                 .firstOrNull { it.attr("src").matches(thumbnailRegex) }
                 ?.attr("src")
                 ?.replace(thumbnailRegex, "/\$1")
@@ -153,8 +145,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val apiResponse: MutableList<ChapterListDto> =
-            json.decodeFromString<List<ChapterListDto>>(response.body.string()).toMutableList()
+        val apiResponse = response.body.string().parseAs<List<ChapterListDto>>().toMutableList()
         val mangaUrl = response.request.url.toString().substringBefore("/wp-json/")
 
         if (hasNextPage(response.headers, apiResponse.size, 1)) {
@@ -163,8 +154,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
                 page++
                 val tempResponse = client.newCall(chapterListRequest(mangaUrl, page)).execute()
                 val headers = tempResponse.headers
-                val tempApiResponse: List<ChapterListDto> =
-                    json.decodeFromString(tempResponse.body.string())
+                val tempApiResponse = tempResponse.body.string().parseAs<List<ChapterListDto>>()
 
                 apiResponse.addAll(tempApiResponse)
                 tempResponse.close()
@@ -199,18 +189,19 @@ class Mehgazone : ConfigurableSource, HttpSource() {
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request =
-        GET(
-            chapter.url.substringBefore("/?") +
-                "/wp-json/wp/v2/posts?per_page=1&_fields=link,content,excerpt,date,title" +
-                "&include=" + chapter.url.substringAfter("p="),
-            headers,
-        )
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterUrl = chapter.url.toHttpUrl()
+        val pageListUrl = chapterUrl
+            .newBuilder("/wp-json/wp/v2/posts?per_page=1&_fields=link,content,excerpt,date,title")!!
+            .setQueryParameter("include", chapterUrl.queryParameter("p"))
+            .build()
+        return GET(pageListUrl.toString(), headers)
+    }
 
     override fun pageListParse(response: Response): List<Page> {
-        val apiResponse: PageListDto = json.decodeFromString<List<PageListDto>>(response.body.string()).first()
+        val apiResponse: PageListDto = response.body.string().parseAs<List<PageListDto>>().first()
 
-        val content = Jsoup.parse(apiResponse.content.rendered, apiResponse.link)
+        val content = Jsoup.parseBodyFragment(apiResponse.content.rendered, apiResponse.link)
 
         val images = content.select("img")
             .mapIndexed { i, it -> Page(i, "", it.attr("src")) }
@@ -221,7 +212,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
                 Page(
                     images.size,
                     "",
-                    wordWrap(Jsoup.parse(apiResponse.excerpt.rendered.unescape()).text()).image(),
+                    wordWrap(Jsoup.parseBodyFragment(apiResponse.excerpt.rendered.unescape()).text()).image(),
                 ),
             )
         }
@@ -229,93 +220,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
         return images.toList()
     }
 
-    private class BasicAuthInterceptor(private var user: String?, private var password: String?) : Interceptor {
-        fun setUser(user: String?) {
-            setAuth(user, password)
-        }
-
-        fun setPassword(password: String?) {
-            setAuth(user, password)
-        }
-
-        fun setAuth(user: String?, password: String?) {
-            this.user = user
-            this.password = password
-            credentials = getCredentials()
-        }
-
-        private fun getCredentials(): String? =
-            if (!user.isNullOrBlank() && !password.isNullOrBlank()) {
-                Credentials.basic(user!!, password!!)
-            } else {
-                null
-            }
-
-        private var credentials: String? = getCredentials()
-
-        override fun intercept(chain: Interceptor.Chain): Response {
-            val request = chain.request()
-
-            if (
-                !request.url.encodedPath.contains("/wp-json/wp/v2/") ||
-                user.isNullOrBlank() ||
-                password.isNullOrBlank() ||
-                credentials.isNullOrBlank()
-            ) {
-                return chain.proceed(request)
-            }
-
-            val authenticatedRequest = request.newBuilder()
-                .header("Authorization", credentials!!)
-                .build()
-
-            return chain.proceed(authenticatedRequest)
-        }
-    }
-
-    @Serializable
-    private data class ChapterListDto(
-        val id: Int,
-        @Serializable(DateTimeSerializer::class)
-        @SerialName("date_gmt")
-        val date: Calendar,
-        val title: RenderedDto,
-        val excerpt: RenderedDto,
-    )
-
-    @Serializable
-    private data class PageListDto(
-        @Serializable(DateTimeSerializer::class)
-        val date: Calendar,
-        val title: RenderedDto,
-        val link: String,
-        val content: RenderedDto,
-        val excerpt: RenderedDto,
-    )
-
-    @Serializable
-    private data class RenderedDto(
-        val rendered: String,
-    )
-
-    private object DateTimeSerializer : KSerializer<Calendar> {
-        private val sdf by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US) }
-
-        override val descriptor = PrimitiveSerialDescriptor("DateTime", PrimitiveKind.STRING)
-        override fun serialize(encoder: Encoder, value: Calendar) = encoder.encodeString(sdf.format(value.time))
-        override fun deserialize(decoder: Decoder): Calendar {
-            val cal = Calendar.getInstance()
-            val date = sdf.parse(decoder.decodeString())
-            if (date != null) {
-                cal.time = date
-            }
-            return cal
-        }
-    }
-
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     companion object {
         private const val WORDPRESS_USERNAME_PREF_KEY = "WORDPRESS_USERNAME"
