@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -131,11 +132,7 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
 
         setUrlWithoutDomain(a.attr("abs:href"))
         name = a.text()
-        date_upload = runCatching {
-            val date = element.select("span.chapter-time").attr("data-last-update")
-
-            dateFormat.parse(date)!!.time
-        }.getOrDefault(0L)
+        date_upload = dateFormat.tryParse(element.select("span.chapter-time").attr("data-last-update"))
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
