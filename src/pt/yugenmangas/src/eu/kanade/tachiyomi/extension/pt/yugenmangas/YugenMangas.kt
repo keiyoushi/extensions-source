@@ -91,7 +91,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
             ?: throw Exception("Não foi possivel encontrar a lista de mangás/manhwas")
 
         val json = POPULAR_MANGA_REGEX.find(script)?.groups?.get(1)?.value
-            ?.replace("""\\"""".toRegex(), "\"")
+            ?.replace(ESCAPE_QUOTATION_MARK_REGEX, "\"")
             ?: throw Exception("Erro ao analisar lista de mangás/manhwas")
         val dto = json.parseAs<LibraryWrapper>()
         return MangasPage(dto.mangas.map(MangaDetailsDto::toSManga), dto.hasNextPage())
@@ -123,7 +123,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         title = document.selectFirst("h1")!!.text()
         description = document.selectFirst("[property='og:description']")?.attr("content")
         thumbnail_url = document.selectFirst("img")?.attr("srcset")
-            ?.split("""\d+w,?""".toRegex())
+            ?.split(SRCSET_DELIMITER_REGEX)
             ?.map(String::trim)?.last(String::isNotBlank)
             ?.let { "$baseUrl$it" }
         author = document.selectFirst("p:contains(Autor) ~ div")?.text()
@@ -212,5 +212,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
         private val POPULAR_MANGA_REGEX = """(\{\\"initialSeries.+\"\})\]""".toRegex()
+        private val ESCAPE_QUOTATION_MARK_REGEX = """\\"""".toRegex()
+        private val SRCSET_DELIMITER_REGEX = """\d+w,?""".toRegex()
     }
 }
