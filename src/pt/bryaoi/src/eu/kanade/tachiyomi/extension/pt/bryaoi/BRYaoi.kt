@@ -34,7 +34,7 @@ class BRYaoi : HttpSource() {
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
-    // ====================== Popular ===============================
+    // ====================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
 
