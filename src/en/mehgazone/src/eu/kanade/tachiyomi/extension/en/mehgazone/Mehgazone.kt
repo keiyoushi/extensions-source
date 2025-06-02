@@ -25,6 +25,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -51,11 +52,6 @@ class Mehgazone : ConfigurableSource, HttpSource() {
 
     override val supportsLatest = false
 
-    // disables "related" in apps that support it
-    @Suppress("VIRTUAL_MEMBER_HIDDEN", "unused")
-    val supportsRelatedMangas = false
-
-    // authentication doesn't work with default client
     override val client: OkHttpClient by lazy {
         network.cloudflareClient
             .newBuilder()
@@ -63,8 +59,8 @@ class Mehgazone : ConfigurableSource, HttpSource() {
             .build()
     }
 
-    private val fallbackTitleDateFormat: SimpleDateFormat by lazy {
-        SimpleDateFormat("dd-MM-yyyy", Locale.US)
+    private val uploadDateFormat: SimpleDateFormat by lazy {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
     }
 
     private val textToImageURL = "https://fakeimg.ryd.tools/1500x2126/ffffff/000000/?font=museo&font_size=42".toHttpUrl()
@@ -145,7 +141,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     override fun getChapterUrl(chapter: SChapter): String = chapter.url
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val apiResponse = response.body.string().parseAs<List<ChapterListDto>>().toMutableList()
+        val apiResponse = response.parseAs<List<ChapterListDto>>().toMutableList()
         val mangaUrl = response.request.url.toString().substringBefore("/wp-json/")
 
         if (hasNextPage(response.headers, apiResponse.size, 1)) {
@@ -154,7 +150,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
                 page++
                 val tempResponse = client.newCall(chapterListRequest(mangaUrl, page)).execute()
                 val headers = tempResponse.headers
-                val tempApiResponse = tempResponse.body.string().parseAs<List<ChapterListDto>>()
+                val tempApiResponse = tempResponse.parseAs<List<ChapterListDto>>()
 
                 apiResponse.addAll(tempApiResponse)
                 tempResponse.close()
@@ -169,8 +165,8 @@ class Mehgazone : ConfigurableSource, HttpSource() {
                 SChapter.create().apply {
                     url = "$mangaUrl/?p=${it.id}"
                     name = it.title.rendered.unescape()
-                        .ifEmpty { fallbackTitleDateFormat.format(it.date.time) }
-                    date_upload = it.date.time.time
+                        .ifEmpty { it.date.substringBefore('T') }
+                    date_upload = uploadDateFormat.tryParse(it.date)
                     chapter_number = i.toFloat()
                 }
             }.reversed()
@@ -199,7 +195,7 @@ class Mehgazone : ConfigurableSource, HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val apiResponse: PageListDto = response.body.string().parseAs<List<PageListDto>>().first()
+        val apiResponse: PageListDto = response.parseAs<List<PageListDto>>().first()
 
         val content = Jsoup.parseBodyFragment(apiResponse.content.rendered, apiResponse.link)
 
