@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 
 class CosmicScansID : MangaThemesia(
     "CosmicScans.id",
-    "https://cosmic345.co",
+    "https://kmvs03.com",
     "id",
 ) {
 
