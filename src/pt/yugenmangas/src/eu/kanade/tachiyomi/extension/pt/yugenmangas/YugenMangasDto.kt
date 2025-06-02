@@ -1,10 +1,18 @@
 package eu.kanade.tachiyomi.extension.pt.yugenmangas
 
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.util.Calendar
+
+@Serializable
+class LibraryWrapper(
+    @SerialName("initialSeries")
+    val mangas: List<MangaDetailsDto>,
+    val currentPage: Int = 0,
+    val totalPages: Int = 0,
+) {
+    fun hasNextPage() = currentPage < totalPages
+}
 
 @Serializable
 class MangaDetailsDto(
@@ -33,50 +41,6 @@ class MangaDetailsDto(
         genre = genres.joinToString()
         thumbnail_url = cover
         url = "/series/$code"
-    }
-}
-
-@Serializable
-class ContainerDto(
-    val chapters: List<ChapterDto>,
-    val currentPage: Int,
-    val series: MangaDetailsDto,
-    val totalPages: Int,
-) {
-    fun hasNext() = currentPage < totalPages
-
-    fun toSChapterList() = chapters.map { it.toSChapter(series.code) }
-}
-
-@Serializable
-class ChapterDto(
-    val code: String,
-    val name: String,
-    @SerialName("upload_date")
-    val date: String,
-) {
-    fun toSChapter(mangaCode: String): SChapter = SChapter.create().apply {
-        name = this@ChapterDto.name
-        date_upload = parseDate()
-        url = "/series/$mangaCode/$code"
-    }
-
-    private fun parseDate(): Long {
-        return try {
-            val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0L
-            Calendar.getInstance().let {
-                when {
-                    date.contains("dia") -> it.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
-                    date.contains("mês", "meses") -> it.apply { add(Calendar.MONTH, -number) }.timeInMillis
-                    date.contains("ano") -> it.apply { add(Calendar.YEAR, -number) }.timeInMillis
-                    else -> 0L
-                }
-            }
-        } catch (_: Exception) { 0L }
-    }
-
-    private fun String.contains(vararg elements: String): Boolean {
-        return elements.any { this.contains(it, true) }
     }
 }
 
