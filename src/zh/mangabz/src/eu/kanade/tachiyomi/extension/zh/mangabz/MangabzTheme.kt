@@ -44,7 +44,7 @@ abstract class MangabzTheme(
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup().also(::parseFilters)
-        val mangas = document.selectFirst(Evaluator.Class("mh-list"))?.children()?.map { element ->
+        val mangas = document.selectFirst(Evaluator.Class("mh-list"))?.children().orEmpty().map { element ->
             SManga.create().apply {
                 title = element.selectFirst(Evaluator.Tag("h2"))!!.text()
                 url = element.selectFirst(Evaluator.Tag("a"))!!.attr("href")
@@ -55,7 +55,7 @@ abstract class MangabzTheme(
             val pagination = selectFirst(Evaluator.Class("page-pagination"))
             pagination != null && pagination.select(Evaluator.Tag("a")).last()?.text() == ">"
         }
-        return MangasPage(mangas ?: emptyList(), hasNextPage)
+        return MangasPage(mangas, hasNextPage)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
