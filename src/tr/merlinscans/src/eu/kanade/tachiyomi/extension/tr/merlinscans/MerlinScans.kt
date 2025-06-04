@@ -284,7 +284,7 @@ class MerlinScans : ParsedHttpSource(), ConfigurableSource {
                     SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).parse(dateStr)?.time ?: 0L
                 }
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             0L
         }
     }
