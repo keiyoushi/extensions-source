@@ -363,7 +363,7 @@ class MerlinScans : ParsedHttpSource(), ConfigurableSource {
                 val imageUrl = element.attr("data-src").ifEmpty {
                     element.attr("src").ifEmpty { element.attr("data-original") }
                 }
-                Page(index, "", imageUrl)
+                Page(index, imageUrl = imageUrl)
             }
     }
 
