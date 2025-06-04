@@ -1,10 +1,6 @@
 package eu.kanade.tachiyomi.extension.tr.merlinscans
 
-import android.app.Application
-import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,25 +9,44 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MerlinScans : ParsedHttpSource(), ConfigurableSource {
+@Serializable
+data class SearchResponse(
+    val success: Boolean,
+    val results: List<SearchResult>,
+)
+
+@Serializable
+data class SearchResult(
+    val title: String,
+    val cover_image: String,
+    val url: String,
+    val categories: String = "",
+)
+
+class MerlinScans : ParsedHttpSource() {
 
     override val name = "MerlinScans"
     override val baseUrl = "https://merlinscans.com"
     override val lang = "tr"
     override val supportsLatest = true
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences by lazy { getPreferences() }
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
     }
 
     private fun normalizeUrl(url: String): String {
@@ -67,10 +82,6 @@ class MerlinScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun popularMangaNextPageSelector() = "li:not(.disabled) a i.fa-chevron-right"
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        // Do nothing since we don't have any preferences
-    }
-
     override fun latestUpdatesRequest(page: Int): Request {
         return GET(baseUrl, headers)
     }
@@ -84,13 +95,6 @@ class MerlinScans : ParsedHttpSource(), ConfigurableSource {
             setUrlWithoutDomain(normalizeUrl(seriesLink))
             title = element.select("h3.series-title a").text()
             thumbnail_url = element.select("div.series-cover-thumbnail img").attr("src")
-
-            val latestChapter = element.select("div.chapter-item").first()
-            if (latestChapter != null) {
-                val chapterNumber = latestChapter.select("span.chapter-number").text()
-                val chapterTime = latestChapter.select("span.chapter-time").text()
-                description = "Son bölüm: $chapterNumber ($chapterTime)"
-            }
         }
     }
 
@@ -159,37 +163,27 @@ class MerlinScans : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private fun parseSearchJson(json: String): MangasPage {
-        val mangas = mutableListOf<SManga>()
+    private fun parseSearchJson(jsonString: String): MangasPage {
+        val searchResponse = json.decodeFromString<SearchResponse>(jsonString)
 
-        try {
-            val jsonObject = org.json.JSONObject(json)
-            if (jsonObject.getBoolean("success")) {
-                val results = jsonObject.getJSONArray("results")
+        val mangas = if (searchResponse.success) {
+            searchResponse.results.map { result ->
+                SManga.create().apply {
+                    title = result.title
+                    thumbnail_url = result.cover_image
+                    setUrlWithoutDomain(normalizeUrl(result.url))
 
-                for (i in 0 until results.length()) {
-                    val manga = results.getJSONObject(i)
-                    mangas.add(
-                        SManga.create().apply {
-                            title = manga.getString("title")
-                            thumbnail_url = manga.getString("cover_image")
-                            val originalUrl = manga.getString("url")
-                            setUrlWithoutDomain(normalizeUrl(originalUrl))
-
-                            // Kategorileri temizle (çok fazla tekrar var)
-                            val categories = manga.optString("categories", "")
-                            if (categories.isNotEmpty()) {
-                                val cleanCategories = categories.split(", ")
-                                    .distinct()
-                                    .take(10) // İlk 10 kategoriyi al
-                                    .joinToString(", ")
-                                description = cleanCategories
-                            }
-                        },
-                    )
+                    if (result.categories.isNotEmpty()) {
+                        val cleanCategories = result.categories.split(", ")
+                            .distinct()
+                            .take(10)
+                            .joinToString(", ")
+                        description = cleanCategories
+                    }
                 }
             }
-        } catch (e: Exception) {
+        } else {
+            emptyList()
         }
 
         return MangasPage(mangas, false)
@@ -284,7 +278,7 @@ class MerlinScans : ParsedHttpSource(), ConfigurableSource {
                     SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).parse(dateStr)?.time ?: 0L
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             0L
         }
     }
@@ -363,7 +357,7 @@ class MerlinScans : ParsedHttpSource(), ConfigurableSource {
                 val imageUrl = element.attr("data-src").ifEmpty {
                     element.attr("src").ifEmpty { element.attr("data-original") }
                 }
-                Page(index, imageUrl = imageUrl)
+                Page(index, "", imageUrl)
             }
     }
 
