@@ -30,6 +30,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
@@ -100,9 +101,19 @@ class YugenMangas : HttpSource(), ConfigurableSource {
     // ================================ Latest =======================================
 
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/series?page=$page&order=desc&sort=date", headers)
+        GET("$baseUrl/chapters?page=$page", headers)
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("div.bg-card a[href*=series]").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst("h3")!!.text()
+                thumbnail_url = element.selectFirst("img")?.attrImageSet()
+                setUrlWithoutDomain(element.absUrl("href").substringBeforeLast("/"))
+            }
+        }
+        return MangasPage(mangas, document.selectFirst("a[aria-label='Próxima página']:not([aria-disabled='true'])") != null)
+    }
 
     // ================================ Search =======================================
 
@@ -122,10 +133,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         val document = response.asJsoup()
         title = document.selectFirst("h1")!!.text()
         description = document.selectFirst("[property='og:description']")?.attr("content")
-        thumbnail_url = document.selectFirst("img")?.attr("srcset")
-            ?.split(SRCSET_DELIMITER_REGEX)
-            ?.map(String::trim)?.last(String::isNotBlank)
-            ?.let { "$baseUrl$it" }
+        thumbnail_url = document.selectFirst("img")?.attrImageSet()
         author = document.selectFirst("p:contains(Autor) ~ div")?.text()
         artist = document.selectFirst("p:contains(Artista) ~ div")?.text()
         genre = document.select("p:contains(Gêneros) ~ div div.inline-flex").joinToString { it.text() }
@@ -203,6 +211,12 @@ class YugenMangas : HttpSource(), ConfigurableSource {
     }
 
     // ================================ Utils =======================================
+
+    private fun Element?.attrImageSet(): String? {
+        return this?.attr("srcset")?.split(SRCSET_DELIMITER_REGEX)
+            ?.map(String::trim)?.last(String::isNotBlank)
+            ?.let { "$baseUrl$it" }
+    }
 
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
