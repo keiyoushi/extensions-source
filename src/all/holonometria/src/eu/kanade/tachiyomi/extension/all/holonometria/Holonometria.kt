@@ -22,7 +22,7 @@ class Holonometria(
 
     override val name = "HOLONOMETRIA"
 
-    override val baseUrl = "https://alt.hololive.tv"
+    override val baseUrl = "https://holoearth.com/"
 
     override val supportsLatest = false
 
@@ -34,19 +34,19 @@ class Holonometria(
         .add("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/holonometria/$langPath", headers)
+        GET("$baseUrl/${langPath}holonometria/manga", headers)
 
-    override fun popularMangaSelector() = "#Story article:has(a[href*=/manga/])"
+    override fun popularMangaSelector() = ".manga__item"
     override fun popularMangaNextPageSelector() = null
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        title = element.select(".ttl").text()
+        title = element.select(".manga__title").text()
         thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/holonometria/$langPath#${query.trim()}", headers)
+        GET("$baseUrl/${langPath}holonometria/manga", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -64,10 +64,10 @@ class Holonometria(
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.select(".md-ttl__pages").text()
-        thumbnail_url = document.select(".mangainfo img").attr("abs:src")
-        description = document.select(".mangainfo aside").text()
-        val info = document.select(".mangainfo footer").html().split("<br>")
+        title = document.select(".alt-nav__met-sub-link.is-current").text()
+        thumbnail_url = document.select(".manga-detail__thumb img").attr("abs:src")
+        description = document.select(".manga-detail__caption").text()
+        val info = document.select(".manga-detail__person").html().split("<br>")
         author = info.firstOrNull { desc -> manga.any { desc.contains(it, true) } }
             ?.substringAfter("：")
             ?.substringAfter(":")
@@ -112,13 +112,16 @@ class Holonometria(
         return chapters
     }
 
-    override fun chapterListSelector() = "#Archive article"
+    override fun chapterListSelector() = ".manga-detail__list-item"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
-        name = element.select(".ttl").text()
-        date_upload = element.selectFirst(".data--date")?.text().parseDate()
-        scanlator = element.selectFirst(".data--category")?.text()
+        val nameText = element.select(".manga-detail__list-title").text()
+        name = nameText.split("【", "】")[1]
+        date_upload = element.selectFirst(".manga-detail__list-date")?.text().parseDate()
+        scanlator = "COVER Corporation"
+        val number = name.replace("-", ".").split(" ")[1].toFloatOrNull()
+        chapter_number = number ?: 0f
     }
 
     private fun String?.parseDate(): Long {
@@ -128,9 +131,9 @@ class Holonometria(
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("#js-mangaviewer img").mapIndexed { idx, img ->
+        return document.select(".manga-detail__swiper-slide.swiper-slide img").mapIndexed { idx, img ->
             Page(idx, "", img.attr("abs:src"))
-        }
+        }.reversed()
     }
 
     companion object {
@@ -138,7 +141,7 @@ class Holonometria(
         private val script = listOf("script", "naskah", "脚本")
 
         private val dateFormat by lazy {
-            SimpleDateFormat("yy.MM.dd", Locale.ENGLISH)
+            SimpleDateFormat("yyyy.MM.dd", Locale.ENGLISH)
         }
     }
 
