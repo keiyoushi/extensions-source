@@ -131,8 +131,8 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         var url: String = if (query != "" && !query.contains("-")) {
-            baseUrl.toHttpUrl().newBuilder().encodedPath("/search").query("keyword=$query").build()
-                .toString()
+            baseUrl.toHttpUrl().newBuilder().encodedPath("/search")
+                .addQueryParameter("keyword", query).build().toString()
         } else {
             val lis = ArrayList<String>()
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
@@ -161,36 +161,36 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val doc = response.asJsoup()
+        val document = response.asJsoup()
         val mangas = ArrayList<SManga>()
         if (response.request.url.encodedPath == "/booklist") {
             if (!isUpdateTag) {
-                updateTagList(doc)
+                updateTagList(document)
             }
 
-            val lis = doc.select("ul.manga-list-2 > li")
+            val lis = document.select("ul.manga-list-2 > li")
             lis.forEach { li ->
                 mangas.add(
                     SManga.create().apply {
                         title = li.selectFirst("p.manga-list-2-title")!!.text()
-                        setUrlWithoutDomain(li.selectFirst("a")!!.attr("abs:href"))
-                        thumbnail_url = li.selectFirst("img")!!.attr("src")
+                        setUrlWithoutDomain(li.selectFirst("a")!!.absUrl("href"))
+                        thumbnail_url = li.selectFirst("img")?.attr("src")
                     },
                 )
             }
         } else {
-            val lis = doc.select("ul.book-list > li")
+            val lis = document.select("ul.book-list > li")
             lis.forEach { li ->
                 mangas.add(
                     SManga.create().apply {
                         title = li.selectFirst("p.book-list-info-title")!!.text()
-                        setUrlWithoutDomain(li.selectFirst("a")!!.attr("abs:href"))
-                        thumbnail_url = li.selectFirst("img")!!.attr("data-original")
+                        setUrlWithoutDomain(li.selectFirst("a")!!.absUrl("href"))
+                        thumbnail_url = li.selectFirst("img")?.attr("data-original")
                     },
                 )
             }
         }
-        val next = doc.select("ul.pagination2 > li").lastOrNull()?.text() == "下一页"
+        val next = document.select("ul.pagination2 > li").lastOrNull()?.text() == "下一页"
 
         return MangasPage(mangas, next)
     }
@@ -214,7 +214,7 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         lis.forEach { li ->
             tags[li.text()] = li.attr("data-val")
         }
-        if (tags.size == 0) {
+        if (tags.isEmpty()) {
             tags["全部"] = ""
         }
 
@@ -380,8 +380,8 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
             title = "使用镜像网址"
 
             val list: Array<String> = try {
-                val urlList = preferences.getString(APP_URL_LIST_PREF_KEY, "")!!
-                    .parseAs<ArrayList<String>>()
+                val urlList =
+                    preferences.getString(APP_URL_LIST_PREF_KEY, "")!!.parseAs<ArrayList<String>>()
                 urlList.add(0, MIRROR_ENTRIES[0])
                 urlList.toTypedArray()
             } catch (e: Exception) {
