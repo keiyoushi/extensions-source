@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -133,8 +134,22 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
             baseUrl.toHttpUrl().newBuilder().encodedPath("/search").query("keyword=$query").build()
                 .toString()
         } else {
-            val params =
-                filters.filterIsInstance<UriPartFilter>().joinToString("&") { it.toUriPart() }
+            val lis = ArrayList<String>()
+            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+                when (filter) {
+                    is UriPartFilter -> {
+                        lis.add(filter.toUriPart())
+                    }
+
+                    is TagCheckBoxFilterGroup -> {
+                        lis.add(filter.buildParams())
+                    }
+
+                    else -> {}
+                }
+            }
+
+            val params = lis.joinToString("&")
             baseUrl.toHttpUrl().newBuilder().encodedPath("/booklist").query(params).build()
                 .toString()
         }
@@ -149,6 +164,10 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         val doc = response.asJsoup()
         val mangas = ArrayList<SManga>()
         if (response.request.url.encodedPath == "/booklist") {
+            if (!isUpdateTag) {
+                updateTagList(doc)
+            }
+
             val lis = doc.select("ul.manga-list-2 > li")
             lis.forEach { li ->
                 mangas.add(
@@ -179,6 +198,32 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaNextPageSelector(): String? = null
     override fun searchMangaSelector(): String = ""
     override fun searchMangaFromElement(element: Element): SManga = SManga.create()
+
+    @Volatile
+    private var isUpdateTag = false
+
+    @Synchronized
+    private fun updateTagList(doc: Document) {
+        if (isUpdateTag) {
+            return
+        }
+
+        val tags = LinkedHashMap<String, String>()
+
+        val lis = doc.select("div.manga-filter-row.tags > a")
+        lis.forEach { li ->
+            tags[li.text()] = li.attr("data-val")
+        }
+        if (tags.size == 0) {
+            tags["全部"] = ""
+        }
+
+        val tagsJ = tags.toJsonString()
+        isUpdateTag = true
+        if (tagsJ != preferences.getString(APP_TAG_LIST_KEY, "")!!) {
+            preferences.edit().putString(APP_TAG_LIST_KEY, tagsJ).apply()
+        }
+    }
 
     // Details
 
@@ -233,6 +278,10 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         CGenderFilter(),
         AreaFilter(),
         SortFilter(),
+        TagCheckBoxFilterGroup(
+            "标签(懒更新)",
+            getFilterTags(),
+        ),
     )
 
     private class EndFilter : UriPartFilter(
@@ -284,6 +333,45 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         defaultValue: Int = 0,
     ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), defaultValue) {
         open fun toUriPart() = vals[state].second
+    }
+
+    private fun getFilterTags(): LinkedHashMap<String, String> {
+        val lhm: LinkedHashMap<String, String> = try {
+            preferences.getString(APP_TAG_LIST_KEY, "")!!.parseAs<LinkedHashMap<String, String>>()
+        } catch (_: Exception) {
+            linkedMapOf(Pair("全部", ""))
+        }
+        return lhm
+    }
+
+    private class TagCheckBoxFilter(name: String, val key: String) : Filter.CheckBox(name) {
+        override fun toString(): String {
+            return key
+        }
+    }
+
+    private class TagCheckBoxFilterGroup(
+        name: String,
+        data: LinkedHashMap<String, String>,
+    ) : Filter.Group<TagCheckBoxFilter>(
+        name,
+        data.map { (k, v) ->
+            TagCheckBoxFilter(k, v)
+        },
+    ) {
+        fun buildParams(): String {
+            if (state[0].state) {
+                clearAll()
+                return "tag="
+            }
+            return "tag=${
+            state.filter { it.state }.joinToString(", ") { it.toString() }
+            }"
+        }
+
+        private fun clearAll() {
+            state.forEach { it.state = false }
+        }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -360,3 +448,4 @@ const val APP_IMAGE_SOURCE_LIST_KEY = "APP_IMAGE_SOURCE_LIST_KEY"
 const val APP_REDIRECT_URL_KEY = "APP_REDIRECT_URL_KEY"
 const val APP_URL_LIST_PREF_KEY = "APP_URL_LIST_PREF_KEY"
 const val APP_CUSTOMIZATION_URL_KEY = "APP_CUSTOMIZATION_URL_KEY"
+const val APP_TAG_LIST_KEY = "APP_TAG_LIST_KEY"
