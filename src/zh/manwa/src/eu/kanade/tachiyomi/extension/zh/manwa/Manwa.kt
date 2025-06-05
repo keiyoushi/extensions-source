@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.extension.zh.manwa
 
 import android.content.SharedPreferences
-import android.net.Uri
-import androidx.preference.CheckBoxPreference
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,12 +15,13 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Cookie
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -42,7 +43,15 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     override val supportsLatest: Boolean = true
     private val json: Json by injectLazy()
     private val preferences: SharedPreferences = getPreferences()
-    override val baseUrl = "https://" + MIRROR_ENTRIES.run { this[preferences.getString(MIRROR_KEY, "0")!!.toInt().coerceAtMost(size)] }
+    override val baseUrl: String = getTargetUrl()
+
+    private fun getTargetUrl(): String {
+        val url = preferences.getString(APP_CUSTOMIZATION_URL_KEY, "")!!
+        if (url.isNotBlank()) {
+            return url
+        }
+        return preferences.getString(MIRROR_KEY, MIRROR_ENTRIES[0])!!
+    }
 
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->
         val originalResponse: Response = chain.proceed(chain.request())
@@ -63,9 +72,16 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addNetworkInterceptor(rewriteOctetStream)
-        .build()
+    private val updateMirror: Interceptor = UpdateMirror(baseUrl, preferences)
+
+    private val imageSource: Interceptor = ImageSource(baseUrl, preferences)
+
+    override val client: OkHttpClient =
+        network.cloudflareClient.newBuilder()
+            .addNetworkInterceptor(rewriteOctetStream)
+            .addInterceptor(imageSource)
+            .addInterceptor(updateMirror)
+            .build()
 
     private val baseHttpUrl = baseUrl.toHttpUrlOrNull()
 
@@ -83,7 +99,11 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/getUpdate?page=${page * 15 - 15}&date=", headers)
     override fun latestUpdatesParse(response: Response): MangasPage {
         // Get image host
-        val resp = client.newCall(GET("$baseUrl/update?img_host=${preferences.getString(IMAGE_HOST_KEY, IMAGE_HOST_ENTRY_VALUES[0])}")).execute()
+        val resp = client.newCall(
+            GET(
+                "$baseUrl/update${preferences.getString(IMAGE_HOST_KEY, "")}",
+            ),
+        ).execute()
         val document = resp.asJsoup()
         val imgHost = document.selectFirst(".manga-list-2-cover-img")!!.attr(":src").drop(1).substringBefore("'")
 
@@ -109,19 +129,56 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val uri = Uri.parse(baseUrl).buildUpon()
-        uri.appendPath("search")
-            .appendQueryParameter("keyword", query)
-        return GET(uri.toString(), headers)
+        var url: String = if (query != "" && !query.contains("-")) {
+            baseUrl.toHttpUrl().newBuilder().encodedPath("/search").query("keyword=$query").build()
+                .toString()
+        } else {
+            val params =
+                filters.filterIsInstance<UriPartFilter>().joinToString("&") { it.toUriPart() }
+            baseUrl.toHttpUrl().newBuilder().encodedPath("/booklist").query(params).build()
+                .toString()
+        }
+        if (page > 1) {
+            url = "$url&page=$page"
+        }
+
+        return GET(url, headers)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val doc = response.asJsoup()
+        val mangas = ArrayList<SManga>()
+        if (response.request.url.encodedPath == "/booklist") {
+            val lis = doc.select("ul.manga-list-2 > li")
+            lis.forEach { li ->
+                mangas.add(
+                    SManga.create().apply {
+                        title = li.selectFirst("p.manga-list-2-title")!!.text()
+                        setUrlWithoutDomain(li.selectFirst("a")!!.attr("abs:href"))
+                        thumbnail_url = li.selectFirst("img")!!.attr("src")
+                    },
+                )
+            }
+        } else {
+            val lis = doc.select("ul.book-list > li")
+            lis.forEach { li ->
+                mangas.add(
+                    SManga.create().apply {
+                        title = li.selectFirst("p.book-list-info-title")!!.text()
+                        setUrlWithoutDomain(li.selectFirst("a")!!.attr("abs:href"))
+                        thumbnail_url = li.selectFirst("img")!!.attr("data-original")
+                    },
+                )
+            }
+        }
+        val next = doc.select("ul.pagination2 > li").lastOrNull()?.text() == "下一页"
+
+        return MangasPage(mangas, next)
     }
 
     override fun searchMangaNextPageSelector(): String? = null
-    override fun searchMangaSelector(): String = "ul.book-list > li"
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("p.book-list-info-title")!!.text()
-        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-        thumbnail_url = element.selectFirst("img")!!.attr("data-original")
-    }
+    override fun searchMangaSelector(): String = ""
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create()
 
     // Details
 
@@ -153,21 +210,15 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$baseUrl${chapter.url}?img_host=${preferences.getString(IMAGE_HOST_KEY, IMAGE_HOST_ENTRY_VALUES[0])}", headers)
+        return GET(
+            "$baseUrl${chapter.url}${preferences.getString(IMAGE_HOST_KEY, "")}",
+            headers,
+        )
     }
 
     override fun pageListParse(document: Document): List<Page> = mutableListOf<Page>().apply {
         val cssQuery = "#cp_img > div.img-content > img[data-r-src]"
         val elements = document.select(cssQuery)
-        if (elements.size == 3) {
-            val darkReader = document.selectFirst("#cp_img p")
-            if (darkReader != null) {
-                if (preferences.getBoolean(AUTO_CLEAR_COOKIE_KEY, false)) {
-                    clearCookies()
-                }
-                throw Exception(darkReader.text())
-            }
-        }
         elements.forEachIndexed { index, it ->
             add(Page(index, "", it.attr("data-r-src")))
         }
@@ -175,50 +226,137 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
+    // Filters
+
+    override fun getFilterList() = FilterList(
+        EndFilter(),
+        CGenderFilter(),
+        AreaFilter(),
+        SortFilter(),
+    )
+
+    private class EndFilter : UriPartFilter(
+        "状态",
+        arrayOf(
+            Pair("全部", "end="),
+            Pair("连载中", "end=2"),
+            Pair("完结", "end=1"),
+        ),
+    )
+
+    private class CGenderFilter : UriPartFilter(
+        "类型",
+        arrayOf(
+            Pair("全部", "gender=-1"),
+            Pair("一般向", "gender=2"),
+            Pair("BL向", "gender=0"),
+            Pair("禁漫", "gender=1"),
+            Pair("TL向", "gender=3"),
+        ),
+    )
+
+    private class AreaFilter : UriPartFilter(
+        "地区",
+        arrayOf(
+            Pair("全部", "area="),
+            Pair("韩国", "area=2"),
+            Pair("日漫", "area=3"),
+            Pair("国漫", "area=4"),
+            Pair("台漫", "area=5"),
+            Pair("其他", "area=6"),
+            Pair("未分类", "area=1"),
+        ),
+    )
+
+    private class SortFilter : UriPartFilter(
+        "排序",
+        arrayOf(
+            Pair("最新", "sort=-1"),
+            Pair("最旧", "sort=0"),
+            Pair("收藏", "sort=1"),
+            Pair("新漫", "sort=2"),
+        ),
+    )
+
+    private open class UriPartFilter(
+        displayName: String,
+        val vals: Array<Pair<String, String>>,
+        defaultValue: Int = 0,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), defaultValue) {
+        open fun toUriPart() = vals[state].second
+    }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             key = MIRROR_KEY
             title = "使用镜像网址"
-            entries = MIRROR_ENTRIES
-            entryValues = Array(entries.size, Int::toString)
-            setDefaultValue("0")
+
+            val list: Array<String> = try {
+                val urlList = preferences.getString(APP_URL_LIST_PREF_KEY, "")!!
+                    .parseAs<ArrayList<String>>()
+                urlList.add(0, MIRROR_ENTRIES[0])
+                urlList.toTypedArray()
+            } catch (e: Exception) {
+                MIRROR_ENTRIES
+            }
+
+            entries = list
+            entryValues = list
+            setDefaultValue(list[0])
+        }.let { screen.addPreference(it) }
+
+        EditTextPreference(screen.context).apply {
+            key = APP_CUSTOMIZATION_URL_KEY
+            title = "自定义URL"
+            summary = "指定访问的目标URL，优先级高于选择的镜像URL"
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putString(APP_CUSTOMIZATION_URL_KEY, newValue as String).commit()
+            }
         }.let { screen.addPreference(it) }
 
         ListPreference(screen.context).apply {
             key = IMAGE_HOST_KEY
             title = "图源"
-            entries = IMAGE_HOST_ENTRIES
-            entryValues = IMAGE_HOST_ENTRY_VALUES
-            setDefaultValue(IMAGE_HOST_ENTRY_VALUES[0])
+            summary =
+                "切换图源能使一些无法加载的图片进行优化加载，但对于已经缓存了章节图片信息的章节只是修改图源是不会重新加载的，你需要手动在应用设置里<清除章节缓存>"
+
+            val list: Array<ImageSourceInfo> = try {
+                preferences.getString(APP_IMAGE_SOURCE_LIST_KEY, "")!!
+                    .parseAs<Array<ImageSourceInfo>>()
+            } catch (_: Exception) {
+                arrayOf(ImageSourceInfo("None", ""))
+            }
+
+            entries = list.map { it.name }.toTypedArray()
+            entryValues = list.map { it.param }.toTypedArray()
+            setDefaultValue(list[0].param)
         }.let { screen.addPreference(it) }
 
-        CheckBoxPreference(screen.context).apply {
-            key = AUTO_CLEAR_COOKIE_KEY
-            title = "自动删除 Cookie"
-
-            setDefaultValue(false)
+        EditTextPreference(screen.context).apply {
+            key = APP_REDIRECT_URL_KEY
+            title = "重定向URL"
+            summary = "该URL期望能够获取动态的目标URL列表"
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit().putString(APP_REDIRECT_URL_KEY, newValue as String).commit()
+            }
         }.let { screen.addPreference(it) }
-    }
-
-    private fun clearCookies() {
-        if (baseHttpUrl == null) {
-            return
-        }
-        val cookies = client.cookieJar.loadForRequest(baseHttpUrl)
-        val obsoletedCookies = cookies.map {
-            val cookie = Cookie.parse(baseHttpUrl, "${it.name}=; Max-Age=-1")!!
-            cookie
-        }
-        client.cookieJar.saveFromResponse(baseHttpUrl, obsoletedCookies)
     }
 
     companion object {
         private const val MIRROR_KEY = "MIRROR"
-        private val MIRROR_ENTRIES get() = arrayOf("manwa.fun", "manwa.me", "manwav3.xyz", "manwasa.cc", "manwadf.cc")
+        private val MIRROR_ENTRIES
+            get() = arrayOf(
+                "https://manwa.me/",
+                "https://manwass.cc/",
+                "https://manwatg.cc/",
+                "https://manwast.cc/",
+                "https://manwasy.cc/",
+            )
         private const val IMAGE_HOST_KEY = "IMG_HOST"
-        private val IMAGE_HOST_ENTRIES = arrayOf("图源1", "图源2", "图源3")
-        private val IMAGE_HOST_ENTRY_VALUES = arrayOf("1", "2", "3")
-
-        private const val AUTO_CLEAR_COOKIE_KEY = "CLEAR_COOKIE"
     }
 }
+
+const val APP_IMAGE_SOURCE_LIST_KEY = "APP_IMAGE_SOURCE_LIST_KEY"
+const val APP_REDIRECT_URL_KEY = "APP_REDIRECT_URL_KEY"
+const val APP_URL_LIST_PREF_KEY = "APP_URL_LIST_PREF_KEY"
+const val APP_CUSTOMIZATION_URL_KEY = "APP_CUSTOMIZATION_URL_KEY"
