@@ -63,13 +63,14 @@ class MomonGA : HttpSource() {
         var dartist: String? = null
         var dgenre: String? = null
         doc.select("#post-tag > div.post-tag-table").forEach { div ->
+
             when (div.selectFirst("div.post-tag-title")!!.text()) {
                 "サークル" -> {
-                    dartist = div.select("div.post-tags > a").joinToString(",") { it.text() }
+                    dartist = div.select("div.post-tags > a").joinToString(", ") { it.text() }
                 }
 
                 "作者" -> {
-                    dauthor = div.select("div.post-tags > a").joinToString(",") { it.text() }
+                    dauthor = div.select("div.post-tags > a").joinToString(", ") { it.text() }
                 }
 
                 "内容" -> {
