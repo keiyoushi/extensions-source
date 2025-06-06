@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class Pagination(
-    val has_next: Boolean = false,
+    @SerialName("has_next")
+    val hasNext: Boolean = false,
 )
 
 @Serializable
@@ -17,7 +18,7 @@ class PopularDto(
     val mangas: List<MangaDto> = emptyList(),
     val pagination: Pagination = Pagination(),
 ) {
-    fun hasNextPage() = pagination.has_next
+    fun hasNextPage() = pagination.hasNext
 }
 
 @Serializable
@@ -54,7 +55,7 @@ class SimpleMangaDto(
     fun toSManga() = SManga.create().apply {
         title = this@SimpleMangaDto.title
         thumbnail_url = this@SimpleMangaDto.thumbnail_url
-        url = "/manga/${this@SimpleMangaDto.id}"
+        url = this@SimpleMangaDto.id.toString()
     }
 }
 
@@ -84,7 +85,7 @@ class MangaDto(
         artist = this@MangaDto.artist
         author = this@MangaDto.author
         genre = genres.joinToString { it.name }
-        url = "/manga/${this@MangaDto.id}"
+        url = this@MangaDto.id.toString()
         status = when (this@MangaDto.status) {
             "EM ANDAMENTO" -> SManga.ONGOING
             "COMPLETO" -> SManga.COMPLETED

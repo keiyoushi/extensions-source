@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.geasscomics
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -77,10 +76,10 @@ class GeassComics : HttpSource() {
 
     // ========================= Details ====================================
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/${manga.url}"
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/manga/${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga) =
-        GET("$apiUrl/obras/${manga.url.substringAfterLast("/")}/info", headers)
+        GET("$apiUrl/obras/${manga.url}/info", headers)
 
     override fun mangaDetailsParse(response: Response): SManga =
         response.parseAs<DetailsDto>().manga.toSManga()
@@ -106,14 +105,9 @@ class GeassComics : HttpSource() {
 
     // ========================= Filters ====================================
 
-    private class GenreList(title: String, genres: List<Genre>) : Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id.toString()) })
-    private class GenreCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
-    private class Genre(val id: Int, val name: String)
-
     override fun getFilterList(): FilterList {
         return FilterList(
             listOf(
-                Filter.Separator(),
                 GenreList(
                     title = "Gêneros",
                     genres = genresList.sortedBy(Genre::name),
@@ -121,40 +115,4 @@ class GeassComics : HttpSource() {
             ),
         )
     }
-
-    private val genresList = listOf(
-        Genre(10, "Isekai"),
-        Genre(11, "Sistema"),
-        Genre(12, "Shonen"),
-        Genre(13, "Shojo"),
-        Genre(14, "Seinen"),
-        Genre(15, "Josei"),
-        Genre(16, "Slice of Life"),
-        Genre(17, "Horror"),
-        Genre(18, "Fantasy"),
-        Genre(19, "Romance"),
-        Genre(20, "Comedia"),
-        Genre(21, "Sports"),
-        Genre(22, "Supernatural"),
-        Genre(23, "Mystery"),
-        Genre(24, "Psychological"),
-        Genre(25, "Aventura"),
-        Genre(26, "Adulto"),
-        Genre(27, "Hentai"),
-        Genre(29, "Harém"),
-        Genre(30, "Ação"),
-        Genre(31, "Drama"),
-        Genre(32, "Escolar"),
-        Genre(35, "Monstros"),
-        Genre(36, "Ecchi"),
-        Genre(37, "Magia"),
-        Genre(38, "Demônios"),
-        Genre(40, "Dungeons"),
-        Genre(41, "Manga"),
-        Genre(42, "Apocalipse"),
-        Genre(43, "Manhwa"),
-        Genre(44, "Ficção Científica"),
-        Genre(45, "Sugestivo"),
-        Genre(46, "Loli"),
-    )
 }
