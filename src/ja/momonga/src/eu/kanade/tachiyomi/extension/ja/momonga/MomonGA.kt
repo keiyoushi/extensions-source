@@ -116,19 +116,21 @@ class MomonGA : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlBuilder = baseUrl.toHttpUrl().newBuilder()
+        val urlBuilder = baseUrl.toHttpUrl().newBuilder().apply {
+            if (query != "" && !query.contains("-")) {
+                addQueryParameter("s", query)
+            } else {
+                val path =
+                    filters.filterIsInstance<UriPartFilter>().joinToString("") { it.toUriPart() }
+                addEncodedPathSegments(path)
+            }
+        }
 
         if (page > 1) {
-            urlBuilder.encodedPath("/page/$page")
+            urlBuilder.addPathSegments("page/$page")
         }
 
-        val url: String = if (query != "" && !query.contains("-")) {
-            urlBuilder.addQueryParameter("s", query).build().toString()
-        } else {
-            val path = filters.filterIsInstance<UriPartFilter>().joinToString("") { it.toUriPart() }
-            urlBuilder.encodedPath(path).build().toString()
-        }
-        return GET(url, headers)
+        return GET(urlBuilder.build().toString(), headers)
     }
 
     // Filters
@@ -140,11 +142,11 @@ class MomonGA : HttpSource() {
     private class CategoryGroupFiler : UriPartFilter(
         "カテゴリーグループ",
         arrayOf(
-            Pair("同人誌", "/fanzine"),
-            Pair("商業誌", "/magazine"),
-            Pair("急上昇", "/trend"),
-            Pair("人気", "/popularity"),
-            Pair("高評価", "/rated"),
+            Pair("同人誌", "fanzine"),
+            Pair("商業誌", "magazine"),
+            Pair("急上昇", "trend"),
+            Pair("人気", "popularity"),
+            Pair("高評価", "rated"),
         ),
     )
 
