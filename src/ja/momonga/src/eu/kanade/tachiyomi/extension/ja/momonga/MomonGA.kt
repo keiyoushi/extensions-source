@@ -29,8 +29,6 @@ class MomonGA : HttpSource() {
 
     // Chapters
 
-    override fun chapterListRequest(manga: SManga): Request = GET(manga.url, headers)
-
     private val dateFormat = SimpleDateFormat("yyyy年M月d日H時", Locale.ENGLISH)
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -38,7 +36,7 @@ class MomonGA : HttpSource() {
         return listOf(
             SChapter.create().apply {
                 name = "単一章"
-                url = response.request.url.toString()
+                url = response.request.url.encodedPath
                 date_upload = dateFormat.tryParse(doc.select("#post-time").text())
             },
         )
@@ -57,8 +55,6 @@ class MomonGA : HttpSource() {
     }
 
     // Details
-
-    override fun mangaDetailsRequest(manga: SManga): Request = GET(manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val doc = response.asJsoup()
@@ -96,8 +92,6 @@ class MomonGA : HttpSource() {
 
     // Pages
 
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers)
-
     override fun pageListParse(response: Response): List<Page> = mutableListOf<Page>().apply {
         val doc = response.asJsoup()
 
@@ -116,7 +110,7 @@ class MomonGA : HttpSource() {
             lis.add(
                 SManga.create().apply {
                     title = element.select("span").text()
-                    url = element.attr("href")
+                    url = element.attr("href").toHttpUrl().encodedPath
                     thumbnail_url = element.selectFirst("div.post-list-image > img")?.attr("src")
                 },
             )
