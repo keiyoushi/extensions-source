@@ -31,12 +31,7 @@ abstract class MayoTune(
     override val lang: String,
 ) : ParsedHttpSource() {
     open val sourceList = listOf(SManga.create())
-
     private val json: Json by injectLazy()
-
-    // Info
-
-    override val supportsLatest: Boolean = false
 
     // Popular
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
@@ -49,6 +44,11 @@ abstract class MayoTune(
     override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Latest
+    override val supportsLatest: Boolean = true
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        return Observable.just(MangasPage(sourceList, false))
+    }
+
     override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
     override fun latestUpdatesNextPageSelector(): String? = throw UnsupportedOperationException()
     override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
@@ -56,7 +56,6 @@ abstract class MayoTune(
         throw UnsupportedOperationException()
 
     // Search
-
     override fun fetchSearchManga(
         page: Int,
         query: String,
@@ -82,9 +81,11 @@ abstract class MayoTune(
     override fun mangaDetailsRequest(manga: SManga): Request {
         return GET(manga.url, headers)
     }
+
     override fun chapterListRequest(manga: SManga): Request {
         return GET(manga.url + "api/chapters", headers)
     }
+
     override fun pageListRequest(chapter: SChapter): Request {
         return GET(chapter.url, headers)
     }
@@ -92,13 +93,17 @@ abstract class MayoTune(
     // Details
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+        val statusTxt = document.select("div.text-center").find {
+            it.text().contains("Status")
+        }?.text()?.substringBefore("Status")?.trim()
+
         url = sourceList.first().url
         title = sourceList.first().title
         artist = sourceList.first().artist
         author = sourceList.first().author
         description = document.select(".text-lg").text()
         genre = document.select("span.text-sm:nth-child(2)").text().replace("•", ",")
-        status = when (document.select(".text-green-400").text()) {
+        status = when (statusTxt) {
             "Ongoing" -> SManga.ONGOING
             "Completed" -> SManga.COMPLETED
             "Cancelled" -> SManga.CANCELLED
@@ -106,7 +111,11 @@ abstract class MayoTune(
             "Finished" -> SManga.PUBLISHING_FINISHED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = baseUrl + document.select(".object-contain").attr("src")
+        thumbnail_url = if (document.select(".object-contain").attr("src").isNotEmpty()) {
+            baseUrl + document.select(".object-contain").attr("src")
+        } else {
+            sourceList.first().thumbnail_url
+        }
     }
     // Chapters
 
