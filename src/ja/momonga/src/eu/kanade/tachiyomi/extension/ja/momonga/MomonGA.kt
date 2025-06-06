@@ -32,61 +32,50 @@ class MomonGA : HttpSource() {
     private val dateFormat = SimpleDateFormat("yyyy年M月d日H時", Locale.ENGLISH)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val doc = response.asJsoup()
+        val document = response.asJsoup()
         return listOf(
             SChapter.create().apply {
                 name = "単一章"
                 url = response.request.url.encodedPath
-                date_upload = dateFormat.tryParse(doc.select("#post-time").text())
+                date_upload = dateFormat.tryParse(document.select("#post-time").text())
             },
         )
     }
 
-    override fun imageUrlParse(response: Response): String = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // LatestUpdate (Not supported)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return MangasPage(emptyList(), false)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        throw UnsupportedOperationException()
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return Request.Builder().build()
-    }
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
 
     // Details
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val doc = response.asJsoup()
-
-        var dauthor: String? = null
-        var dartist: String? = null
-        var dgenre: String? = null
-        doc.select("#post-tag > div.post-tag-table").forEach { div ->
-
-            when (div.selectFirst("div.post-tag-title")!!.text()) {
-                "サークル" -> {
-                    dartist = div.select("div.post-tags > a").joinToString(", ") { it.text() }
-                }
-
-                "作者" -> {
-                    dauthor = div.select("div.post-tags > a").joinToString(", ") { it.text() }
-                }
-
-                "内容" -> {
-                    dgenre = div.select("div.post-tags > a").joinToString(", ") { it.text() }
-                }
-
-                else -> {}
-            }
-        }
+        val document = response.asJsoup()
 
         return SManga.create().apply {
-            title = doc.selectFirst("#post-data > h1")!!.text()
-            author = dauthor
-            artist = dartist
-            genre = dgenre
-            thumbnail_url = doc.selectFirst("#post-hentai > img")!!.attr("src")
+            document.select("#post-tag > div.post-tag-table").forEach { div ->
+                when (div.selectFirst("div.post-tag-title")!!.text()) {
+                    "サークル" -> {
+                        artist = div.select("div.post-tags > a").joinToString { it.text() }
+                    }
+
+                    "作者" -> {
+                        author = div.select("div.post-tags > a").joinToString { it.text() }
+                    }
+
+                    "内容" -> {
+                        genre = div.select("div.post-tags > a").joinToString { it.text() }
+                    }
+
+                    else -> {}
+                }
+            }
+            title = document.selectFirst("#post-data > h1")!!.text()
+            thumbnail_url = document.selectFirst("#post-hentai > img")?.absUrl("src")
             status = COMPLETED
         }
     }
@@ -94,30 +83,30 @@ class MomonGA : HttpSource() {
     // Pages
 
     override fun pageListParse(response: Response): List<Page> = mutableListOf<Page>().apply {
-        val doc = response.asJsoup()
+        val document = response.asJsoup()
 
-        doc.select("#post-hentai > img").forEachIndexed { index, element ->
-            add(Page(index, "", element.attr("src")))
+        document.select("#post-hentai > img").forEachIndexed { index, element ->
+            add(Page(index, imageUrl = element.attr("src")))
         }
     }
 
     // Popular
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val doc = response.asJsoup()
+        val document = response.asJsoup()
 
         val lis = mutableListOf<SManga>()
-        doc.select("div.post-list > a").forEach { element ->
+        document.select("div.post-list > a").forEach { element ->
             lis.add(
                 SManga.create().apply {
-                    title = element.select("span").text()
-                    url = element.attr("href").toHttpUrl().encodedPath
-                    thumbnail_url = element.selectFirst("div.post-list-image > img")?.attr("src")
+                    setUrlWithoutDomain(element.absUrl("href"))
+                    title = element.selectFirst("span")!!.text()
+                    thumbnail_url = element.selectFirst("div.post-list-image > img")?.absUrl("src")
                 },
             )
         }
 
-        return MangasPage(lis, doc.selectFirst("div.wp-pagenavi > a.nextpostslink") != null)
+        return MangasPage(lis, document.selectFirst("div.wp-pagenavi > a.nextpostslink") != null)
     }
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/popularity/", headers)
@@ -134,7 +123,7 @@ class MomonGA : HttpSource() {
         }
 
         val url: String = if (query != "" && !query.contains("-")) {
-            urlBuilder.encodedQuery("s=$query").build().toString()
+            urlBuilder.addQueryParameter("s", query).build().toString()
         } else {
             val path = filters.filterIsInstance<UriPartFilter>().joinToString("") { it.toUriPart() }
             urlBuilder.encodedPath(path).build().toString()
