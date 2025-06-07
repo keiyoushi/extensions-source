@@ -1,0 +1,32 @@
+package eu.kanade.tachiyomi.multisrc.mayotune
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class ChapterDto(
+    val id: String,
+    val title: String,
+    val number: Float,
+    val pageCount: Int,
+    val date: String,
+) {
+    fun getChapterURL(baseUrl: String): String {
+        return "$baseUrl/chapter/${this.id}"
+    }
+
+    fun getNumberStr(): String {
+        return if (this.number % 1 == 0f) {
+            this.number.toInt().toString()
+        } else {
+            this.number.toString()
+        }
+    }
+
+    fun getChapterTitle(): String {
+        return if (!this.title.isEmpty()) {
+            "Chapter ${this.getNumberStr()}: ${this.title}"
+        } else {
+            "Chapter ${this.getNumberStr()}"
+        }
+    }
+}
