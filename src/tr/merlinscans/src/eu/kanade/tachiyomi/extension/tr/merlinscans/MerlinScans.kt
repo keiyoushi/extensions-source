@@ -42,7 +42,7 @@ class MerlinScans : ParsedHttpSource() {
     override val lang = "tr"
     override val supportsLatest = true
 
-    private val preferences by lazy { getPreferences() }
+    private val preferences by getPreferencesLazy()
 
     private val json = Json {
         ignoreUnknownKeys = true
