@@ -155,8 +155,7 @@ class MerlinScans : ParsedHttpSource() {
         val requestUrl = response.request.url.toString()
 
         if (requestUrl.contains("search-preview.php")) {
-            val body = response.body.string()
-            return parseSearchJson(body)
+            return parseSearchJson(response)
         } else {
             val document = response.asJsoup()
             return parseSearchPage(document, response)
