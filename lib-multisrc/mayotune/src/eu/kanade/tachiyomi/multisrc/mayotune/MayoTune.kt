@@ -9,11 +9,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.float
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -22,7 +17,6 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
 import kotlin.getValue
 
 abstract class MayoTune(
@@ -30,8 +24,10 @@ abstract class MayoTune(
     override val baseUrl: String,
     override val lang: String,
 ) : ParsedHttpSource() {
-    open val sourceList = listOf(SManga.create())
     private val json: Json by injectLazy()
+    private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+    open val sourceList = listOf(SManga.create())
 
     // Popular
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
@@ -83,7 +79,7 @@ abstract class MayoTune(
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        return GET(manga.url + "api/chapters", headers)
+        return GET(manga.url + "/api/chapters", headers)
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -93,17 +89,17 @@ abstract class MayoTune(
     // Details
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val statusTxt = document.select("div.text-center").find {
-            it.text().contains("Status")
-        }?.text()?.substringBefore("Status")?.trim()
+        val statusText =
+            document.select("div.text-center:contains(Status)").text().substringBefore("Status")
+                .trim()
 
         url = sourceList.first().url
         title = sourceList.first().title
         artist = sourceList.first().artist
         author = sourceList.first().author
-        description = document.select(".text-lg").text()
-        genre = document.select("span.text-sm:nth-child(2)").text().replace("•", ",")
-        status = when (statusTxt) {
+        description = document.selectFirst(".text-lg")?.text()
+        genre = document.selectFirst("span.text-sm:nth-child(2)")?.text()?.replace("•", ",")
+        status = when (statusText) {
             "Ongoing" -> SManga.ONGOING
             "Completed" -> SManga.COMPLETED
             "Cancelled" -> SManga.CANCELLED
@@ -111,11 +107,8 @@ abstract class MayoTune(
             "Finished" -> SManga.PUBLISHING_FINISHED
             else -> SManga.UNKNOWN
         }
-        thumbnail_url = if (document.select(".object-contain").attr("src").isNotEmpty()) {
-            baseUrl + document.select(".object-contain").attr("src")
-        } else {
-            sourceList.first().thumbnail_url
-        }
+        thumbnail_url = document.selectFirst("img.object-contain")?.absUrl("src")
+            ?.ifEmpty { sourceList.first().thumbnail_url }
     }
     // Chapters
 
@@ -124,38 +117,21 @@ abstract class MayoTune(
         throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val jsonObj = json.decodeFromString<JsonArray>(response.body.string())
-        return jsonObj.sortedByDescending {
-            it.jsonObject["number"]?.jsonPrimitive?.float
-        }.map { json ->
+        val chapters = json.decodeFromString<List<ChapterDto>>(response.body.string())
+        return chapters.sortedByDescending { it.number }.map { chapter ->
             SChapter.create().apply {
-                url = "${baseUrl}chapter/${json.jsonObject["id"]?.jsonPrimitive?.contentOrNull}"
-                name =
-                    if (!json.jsonObject["title"]?.jsonPrimitive?.contentOrNull.isNullOrEmpty()) {
-                        "Chapter ${json.jsonObject["number"]?.jsonPrimitive?.contentOrNull}: " + json.jsonObject["title"]?.jsonPrimitive?.contentOrNull
-                    } else {
-                        "Chapter ${json.jsonObject["number"]?.jsonPrimitive?.contentOrNull}"
-                    }
-                chapter_number = json.jsonObject["number"]?.jsonPrimitive?.float ?: 0f
-                date_upload = json.jsonObject["date"]?.jsonPrimitive?.contentOrNull?.let {
-                    var sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                    sdf.timeZone = TimeZone.getDefault()
-                    val date = sdf.parse(it)
-                    date?.time
-                } ?: 0L
+                url = chapter.getChapterURL(baseUrl)
+                name = chapter.getChapterTitle()
+                chapter_number = chapter.number
+                date_upload = chapter.date.let { sdf.parse(it)?.time } ?: 0L
             }
         }
     }
-
     // Pages
 
     override fun pageListParse(document: Document): List<Page> =
         document.select("div.w-full > img").mapIndexed { index, img ->
-            Page(
-                index,
-                "",
-                baseUrl + img.attr("src"),
-            )
+            Page(index, imageUrl = img.absUrl("src"))
         }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
