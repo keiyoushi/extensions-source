@@ -8,15 +8,15 @@ class PageDecrypt {
     private val SCRIPT_PATTERN = "eval(function(p,a,c,k,e,d)"
     private val CONTENT_MARKER = "var __c0rst96=\""
 
-    fun toDecrypt(doc: Document): String {
-        doc.head().select("script").forEach { script ->
+    fun toDecrypt(document: Document): String {
+        document.head().select("script").forEach { script ->
             val scriptStr = script.data().trim()
             if (scriptStr.startsWith(SCRIPT_PATTERN)) {
                 val obf = obfuscate(extractPackerParams(scriptStr)).substringAfter(CONTENT_MARKER)
                     .trimEnd('"')
 
                 val selectedIndex =
-                    doc.selectFirst("div.readerContainer")?.attr("data-id")?.toIntOrNull()
+                    document.selectFirst("div.readerContainer")?.attr("data-id")?.toIntOrNull()
                         ?: throw IllegalArgumentException("Invalid container index")
 
                 return decryptToString(obf, selectedIndex)

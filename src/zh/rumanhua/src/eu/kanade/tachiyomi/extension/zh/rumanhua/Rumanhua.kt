@@ -65,8 +65,8 @@ class Rumanhua : HttpSource(), ConfigurableSource {
 
         // get more chapter ...
         val bid = response.request.url.encodedPath.trim('/')
-        val moreRequest =
-            POST("$baseUrl/morechapter", headers, FormBody.Builder().add("id", bid).build())
+        val body = FormBody.Builder().add("id", bid).build()
+        val moreRequest = POST("$baseUrl/morechapter", headers, body)
         val moreResponse = client.newCall(moreRequest).execute()
         if (!moreResponse.isSuccessful) {
             throw IOException("Request failed: ${moreRequest.url}")
@@ -215,7 +215,8 @@ class Rumanhua : HttpSource(), ConfigurableSource {
                 SManga.create().apply {
                     title = element.selectFirst("a > p.e-title")!!.text()
                     setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-                    thumbnail_url = element.selectFirst("a > div.edit-top > img")?.attr("data-src")
+                    thumbnail_url =
+                        element.selectFirst("a > div.edit-top > img")?.absUrl("data-src")
                 },
             )
         }
@@ -227,12 +228,14 @@ class Rumanhua : HttpSource(), ConfigurableSource {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
 
         if (query != "" && !query.contains("-")) {
+            val body = FormBody.Builder().add("k", query).build()
             return POST(
                 urlBuilder.encodedPath("/s").build().toString(),
                 headers,
-                FormBody.Builder().add("k", query).build(),
+                body,
             )
         } else {
+            // RankGroup or UriPartFilter take one and reset the other
             var url: String? = null
             for (filter in filters.filterIsInstance<UriPartFilter>()) {
                 if (url != null) {
