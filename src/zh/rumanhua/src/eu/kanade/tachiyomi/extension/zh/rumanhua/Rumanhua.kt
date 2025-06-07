@@ -15,9 +15,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.FormBody
@@ -74,7 +74,7 @@ class Rumanhua : HttpSource(), ConfigurableSource {
 
         val moreChapter = moreResponse.parseAs<MoreChapter>()
         if (moreChapter.code == "200") {
-            Json.decodeFromJsonElement<List<MoreChapterInfo>>(moreChapter.data).forEach {
+            jsonInstance.decodeFromJsonElement<List<MoreChapterInfo>>(moreChapter.data).forEach {
                 lis.add(
                     SChapter.create().apply {
                         name = it.chaptername
