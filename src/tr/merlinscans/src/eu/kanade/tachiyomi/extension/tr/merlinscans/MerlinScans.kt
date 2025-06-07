@@ -9,8 +9,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -21,20 +19,6 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-@Serializable
-data class SearchResponse(
-    val success: Boolean,
-    val results: List<SearchResult>,
-)
-
-@Serializable
-data class SearchResult(
-    val title: String,
-    val cover_image: String,
-    val url: String,
-    val categories: String = "",
-)
-
 class MerlinScans : ParsedHttpSource() {
 
     override val name = "MerlinScans"
@@ -42,20 +26,34 @@ class MerlinScans : ParsedHttpSource() {
     override val lang = "tr"
     override val supportsLatest = true
 
-    private val preferences by getPreferencesLazy()
+    private val json = Json { ignoreUnknownKeys = true }
+    private val dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("tr"))
+    private val alternativeDateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
+    // Extension fonksiyonları eklendi
+    private inline fun <reified T> Response.parseAs(): T {
+        return json.decodeFromString(body.string())
+    }
+
+    private fun SimpleDateFormat.tryParse(dateStr: String): Long? {
+        return try {
+            parse(dateStr)?.time
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun normalizeUrl(url: String): String {
         return when {
             url.contains("/series.php?slug=") -> {
-                val slug = url.substringAfter("slug=").substringBefore("&")
-                "/series/$slug"
+                val httpUrl = url.toHttpUrl()
+                val slug = httpUrl.queryParameter("slug") ?: return url
+                httpUrl.newBuilder()
+                    .encodedPath("/series/$slug")
+                    .query(null)
+                    .build()
+                    .encodedPath
             }
-
             url.startsWith("/series/") -> url
             else -> url
         }
@@ -154,29 +152,28 @@ class MerlinScans : ParsedHttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         val requestUrl = response.request.url.toString()
 
-        if (requestUrl.contains("search-preview.php")) {
-            return parseSearchJson(response)
+        return if (requestUrl.contains("search-preview.php")) {
+            parseSearchJson(response)
         } else {
-            return super.searchMangaParse(response)
+            super.searchMangaParse(response)
         }
     }
 
     private fun parseSearchJson(response: Response): MangasPage {
-        val searchResponse = response.parseAs<SearchResponse>()
+        val searchResponse: SearchResponse = response.parseAs()
 
         val mangas = if (searchResponse.success) {
             searchResponse.results.map { result ->
                 SManga.create().apply {
                     title = result.title
-                    thumbnail_url = result.cover_image
+                    thumbnail_url = result.coverImage
                     setUrlWithoutDomain(normalizeUrl(result.url))
 
                     if (result.categories.isNotEmpty()) {
-                        val cleanCategories = result.categories.split(", ")
+                        genre = result.categories.split(", ")
                             .distinct()
                             .take(10)
                             .joinToString(", ")
-                        description = cleanCategories
                     }
                 }
             }
@@ -187,20 +184,12 @@ class MerlinScans : ParsedHttpSource() {
         return MangasPage(mangas, false)
     }
 
-    private fun parseSearchPage(document: Document, response: Response): MangasPage {
-        val mangas = document.select(searchMangaSelector()).map { searchMangaFromElement(it) }
-        val hasNextPage =
-            searchMangaNextPageSelector()?.let { document.select(it).isNotEmpty() } ?: false
-        return MangasPage(mangas, hasNextPage)
-    }
-
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val normalizedUrl = normalizeUrl(manga.url)
-        return GET(baseUrl + normalizedUrl, headers)
+        return GET(baseUrl + manga.url, headers)
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
@@ -209,13 +198,9 @@ class MerlinScans : ParsedHttpSource() {
             thumbnail_url = document.select(".cover-image").attr("src")
             description = document.select(".description-text").text()
 
-            author = document.select(".metadata-item")
-                .find { it.select(".metadata-icon-label").text().contains("Yazar") }
-                ?.select(".metadata-value")?.text()
+            author = document.select(".metadata-item .metadata-icon-label:contains(Yazar) + .metadata-value").text()
 
-            val statusText = document.select(".metadata-item")
-                .find { it.select(".metadata-icon-label").text().contains("Durum") }
-                ?.select(".metadata-value")?.text() ?: ""
+            val statusText = document.select(".metadata-item .metadata-icon-label:contains(Durum) + .metadata-value").text()
 
             status = when {
                 statusText.contains("Devam Ediyor", true) -> SManga.ONGOING
@@ -226,13 +211,12 @@ class MerlinScans : ParsedHttpSource() {
             }
 
             genre = document.select(".category-badge")
-                .joinToString { it.text() }
+                .joinToString(", ") { it.text() }
         }
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val normalizedUrl = normalizeUrl(manga.url)
-        return GET(baseUrl + normalizedUrl, headers)
+        return GET(baseUrl + manga.url, headers)
     }
 
     override fun chapterListSelector() = ".chapters-grid .chapter-item"
@@ -248,36 +232,32 @@ class MerlinScans : ParsedHttpSource() {
     }
 
     private fun parseDate(dateStr: String): Long {
-        return try {
-            when {
-                dateStr.contains("önce") -> {
-                    val now = System.currentTimeMillis()
-                    when {
-                        dateStr.contains("dakika") -> {
-                            val minutes = dateStr.filter { it.isDigit() }.toLongOrNull() ?: 0
-                            now - (minutes * 60 * 1000)
-                        }
-
-                        dateStr.contains("saat") -> {
-                            val hours = dateStr.filter { it.isDigit() }.toLongOrNull() ?: 0
-                            now - (hours * 60 * 60 * 1000)
-                        }
-
-                        dateStr.contains("gün") -> {
-                            val days = dateStr.filter { it.isDigit() }.toLongOrNull() ?: 0
-                            now - (days * 24 * 60 * 60 * 1000)
-                        }
-
-                        else -> now
+        return when {
+            dateStr.contains("önce") -> {
+                val now = System.currentTimeMillis()
+                when {
+                    dateStr.contains("dakika") -> {
+                        val minutes = dateStr.filter { it.isDigit() }.toLongOrNull() ?: 0
+                        now - (minutes * 60 * 1000)
                     }
-                }
 
-                else -> {
-                    SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).parse(dateStr)?.time ?: 0L
+                    dateStr.contains("saat") -> {
+                        val hours = dateStr.filter { it.isDigit() }.toLongOrNull() ?: 0
+                        now - (hours * 60 * 60 * 1000)
+                    }
+
+                    dateStr.contains("gün") -> {
+                        val days = dateStr.filter { it.isDigit() }.toLongOrNull() ?: 0
+                        now - (days * 24 * 60 * 60 * 1000)
+                    }
+
+                    else -> now
                 }
             }
-        } catch (e: Exception) {
-            0L
+
+            else -> {
+                dateFormat.tryParse(dateStr) ?: alternativeDateFormat.tryParse(dateStr) ?: 0L
+            }
         }
     }
 
@@ -285,18 +265,16 @@ class MerlinScans : ParsedHttpSource() {
         val document = response.asJsoup()
         val allChapters = mutableListOf<SChapter>()
         val originalUrl = response.request.url.toString()
-        val baseUrl = when {
-            originalUrl.contains("/series.php?slug=") -> {
-                val slug = originalUrl.substringAfter("slug=").substringBefore("&")
-                "$baseUrl/series/$slug"
-            }
 
-            originalUrl.contains("/series/") -> {
-                originalUrl.substringBefore("?")
-            }
+        val httpUrl = originalUrl.toHttpUrl()
+        val baseUrlBuilder = httpUrl.newBuilder()
 
-            else -> originalUrl.substringBefore("?")
+        // Tüm query parametrelerini kaldır
+        httpUrl.queryParameterNames.forEach { paramName ->
+            baseUrlBuilder.removeAllQueryParameters(paramName)
         }
+
+        val cleanBaseUrl = baseUrlBuilder.build().toString()
 
         val firstPageChapters =
             document.select(chapterListSelector()).map { chapterFromElement(it) }
@@ -306,7 +284,11 @@ class MerlinScans : ParsedHttpSource() {
 
         for (page in 2..lastPageNumber) {
             try {
-                val pageUrl = "$baseUrl?page=$page&sort=desc"
+                val pageUrl = cleanBaseUrl.toHttpUrl().newBuilder()
+                    .addQueryParameter("page", page.toString())
+                    .addQueryParameter("sort", "desc")
+                    .build()
+
                 val pageResponse = client.newCall(GET(pageUrl, headers)).execute()
                 val pageDocument = pageResponse.asJsoup()
 
