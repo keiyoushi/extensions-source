@@ -90,8 +90,9 @@ abstract class MayoTune(
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val statusText =
-            document.select("div.text-center:contains(Status)").text().substringBefore("Status")
-                .trim()
+            document.selectFirst("div.text-center:contains(Status)")?.text()
+                ?.substringBefore("Status")
+                ?.trim()
 
         url = sourceList.first().url
         title = sourceList.first().title
