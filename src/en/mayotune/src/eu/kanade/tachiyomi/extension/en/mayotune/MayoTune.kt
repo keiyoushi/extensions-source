@@ -8,7 +8,7 @@ class MayoTune : MayoTune("MayoTune", "https://mayotune.xyz", "en") {
         SManga.create().apply {
             title = "Mayonaka Heart Tune"
             url = baseUrl
-            thumbnail_url = "${baseUrl}img/cover.jpg"
+            thumbnail_url = "${baseUrl}/img/cover.jpg"
             author = "Masakuni Igarashi"
         },
     )
