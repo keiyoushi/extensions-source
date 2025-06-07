@@ -162,8 +162,8 @@ class MerlinScans : ParsedHttpSource() {
         }
     }
 
-    private fun parseSearchJson(jsonString: String): MangasPage {
-        val searchResponse = json.decodeFromString<SearchResponse>(jsonString)
+    private fun parseSearchJson(response: Response): MangasPage {
+        val searchResponse = response.parseAs<SearchResponse>()
 
         val mangas = if (searchResponse.success) {
             searchResponse.results.map { result ->
