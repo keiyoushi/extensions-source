@@ -71,13 +71,13 @@ class WeebCentral : ParsedHttpSource() {
     // =============================== Search ===============================
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (query.startsWith(URL_SEARCH_PREFIX)) {
-            val pathSegment = query.removePrefix(URL_SEARCH_PREFIX)
-            return client.newCall(mangaDetailsRequest(SManga.create().apply { url = "/series/$pathSegment" }))
-                .asObservableSuccess()
-                .map { MangasPage(listOf(mangaDetailsParse(it)), false) }
-        }
-        return super.fetchSearchManga(page, query, filters)
+        val pathSegment = query.takeIf { it.startsWith(URL_SEARCH_PREFIX) }
+            ?.removePrefix(URL_SEARCH_PREFIX)
+            ?: return super.fetchSearchManga(page, query, filters)
+
+        return client.newCall(mangaDetailsRequest(SManga.create().apply { url = "/series/$pathSegment" }))
+            .asObservableSuccess()
+            .map { MangasPage(listOf(mangaDetailsParse(it)), false) }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
