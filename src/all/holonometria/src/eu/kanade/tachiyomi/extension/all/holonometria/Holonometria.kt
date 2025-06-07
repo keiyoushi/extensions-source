@@ -22,7 +22,7 @@ class Holonometria(
 
     override val name = "HOLONOMETRIA"
 
-    override val baseUrl = "https://holoearth.com/"
+    override val baseUrl = "https://holoearth.com"
 
     override val supportsLatest = false
 
@@ -120,8 +120,6 @@ class Holonometria(
         name = nameText.split("【", "】")[1]
         date_upload = element.selectFirst(".manga-detail__list-date")?.text().parseDate()
         scanlator = "COVER Corporation"
-        val number = name.replace("-", ".").split(" ")[1].toFloatOrNull()
-        chapter_number = number ?: 0f
     }
 
     private fun String?.parseDate(): Long {
