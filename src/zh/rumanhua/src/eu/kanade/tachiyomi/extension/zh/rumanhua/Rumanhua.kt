@@ -36,7 +36,7 @@ class Rumanhua : HttpSource(), ConfigurableSource {
 
     override val baseUrl: String = getTargetUrl()
 
-    override val client: OkHttpClient = network.client
+    override val client: OkHttpClient = network.cloudflareClient
 
     private fun getTargetUrl(): String {
         val defaultUrl = "http://www.rumanhua1.com"
@@ -64,7 +64,7 @@ class Rumanhua : HttpSource(), ConfigurableSource {
             }
 
         // get more chapter ...
-        val bid = response.request.url.encodedPath.trim('/')
+        val bid = response.request.url.pathSegments[0]
         val body = FormBody.Builder().add("id", bid).build()
         val moreRequest = POST("$baseUrl/morechapter", headers, body)
         val moreResponse = client.newCall(moreRequest).execute()
@@ -88,14 +88,14 @@ class Rumanhua : HttpSource(), ConfigurableSource {
     }
 
     @Serializable
-    private data class MoreChapter(
+    private class MoreChapter(
         val code: String,
         val msg: String,
         val data: JsonElement,
     )
 
     @Serializable
-    private data class MoreChapterInfo(
+    private class MoreChapterInfo(
         val chapterid: String,
         val chaptername: String,
     )
@@ -235,7 +235,7 @@ class Rumanhua : HttpSource(), ConfigurableSource {
                 body,
             )
         } else {
-            // RankGroup or UriPartFilter take one and reset the other
+            // RankGroup or CategoryGroup take one and reset the other
             var url: String? = null
             for (filter in filters.filterIsInstance<UriPartFilter>()) {
                 if (url != null) {

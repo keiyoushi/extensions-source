@@ -97,7 +97,7 @@ class PageDecrypt {
         return result
     }
 
-    private data class PackerPayload(val p: String, val a: Int, val c: Int, val k: List<String>)
+    private class PackerPayload(val p: String, val a: Int, val c: Int, val k: List<String>)
 
     private fun extractPackerParams(source: String): PackerPayload {
         val args = source.substringAfter("}(").substringBefore(".split('|')").split(",")
