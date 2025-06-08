@@ -21,7 +21,7 @@ class MayoTune() : HttpSource() {
 
     private val source = SManga.create().apply {
         title = "Mayonaka Heart Tune"
-        url = baseUrl
+        url = "/"
         thumbnail_url = "$baseUrl/img/cover.jpg"
         author = "Masakuni Igarashi"
     }
@@ -78,7 +78,6 @@ class MayoTune() : HttpSource() {
     }
 
     // Details
-
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
         val statusText =
