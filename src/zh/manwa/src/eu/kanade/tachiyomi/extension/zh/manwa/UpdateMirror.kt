@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -64,11 +65,12 @@ class UpdateMirror(
                 }
 
                 val extractLksBase64 = extractLksBase64(response.body.string()) ?: return false
-                val extractLks = String(Base64.decode(extractLksBase64, Base64.DEFAULT))
-                extractLks.parseAs<Array<String>>()
+                val extractLks =
+                    String(Base64.decode(extractLksBase64, Base64.DEFAULT)).parseAs<List<String>>()
+                val extractLksJson = extractLks.map { it.trimEnd('/') }.toJsonString()
 
-                if (extractLks != preferences.getString(APP_URL_LIST_PREF_KEY, "")!!) {
-                    preferences.edit().putString(APP_URL_LIST_PREF_KEY, extractLks).apply()
+                if (extractLksJson != preferences.getString(APP_URL_LIST_PREF_KEY, "")!!) {
+                    preferences.edit().putString(APP_URL_LIST_PREF_KEY, extractLksJson).apply()
                 }
 
                 isUpdated = true

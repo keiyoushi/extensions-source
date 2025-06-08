@@ -6,7 +6,6 @@ import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -130,32 +129,30 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        var url: String = if (query != "" && !query.contains("-")) {
-            baseUrl.toHttpUrl().newBuilder().encodedPath("/search")
-                .addQueryParameter("keyword", query).build().toString()
-        } else {
-            val lis = ArrayList<String>()
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
-                when (filter) {
-                    is UriPartFilter -> {
-                        lis.add(filter.toUriPart())
-                    }
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (query != "" && !query.contains("-")) {
+                encodedPath("/search")
+                addQueryParameter("keyword", query)
+            } else {
+                encodedPath("/booklist")
+                (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+                    when (filter) {
+                        is UriPartFilter -> {
+                            filter.setParamPair(this)
+                        }
 
-                    is TagCheckBoxFilterGroup -> {
-                        lis.add(filter.buildParams())
-                    }
+                        is TagCheckBoxFilterGroup -> {
+                            filter.setParamPair(this)
+                        }
 
-                    else -> {}
+                        else -> {}
+                    }
                 }
             }
-
-            val params = lis.joinToString("&")
-            baseUrl.toHttpUrl().newBuilder().encodedPath("/booklist").query(params).build()
-                .toString()
-        }
-        if (page > 1) {
-            url = "$url&page=$page"
-        }
+            if (page > 1) {
+                addQueryParameter("page", page.toString())
+            }
+        }.build().toString()
 
         return GET(url, headers)
     }
@@ -195,9 +192,10 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         return MangasPage(mangas, next)
     }
 
-    override fun searchMangaNextPageSelector(): String? = null
-    override fun searchMangaSelector(): String = ""
-    override fun searchMangaFromElement(element: Element): SManga = SManga.create()
+    override fun searchMangaNextPageSelector(): String? = throw UnsupportedOperationException()
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element): SManga =
+        throw UnsupportedOperationException()
 
     @Volatile
     private var isUpdateTag = false
@@ -220,9 +218,7 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
 
         val tagsJ = tags.toJsonString()
         isUpdateTag = true
-        if (tagsJ != preferences.getString(APP_TAG_LIST_KEY, "")!!) {
-            preferences.edit().putString(APP_TAG_LIST_KEY, tagsJ).apply()
-        }
+        preferences.edit().putString(APP_TAG_LIST_KEY, tagsJ).apply()
     }
 
     // Details
@@ -284,57 +280,6 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         ),
     )
 
-    private class EndFilter : UriPartFilter(
-        "状态",
-        arrayOf(
-            Pair("全部", "end="),
-            Pair("连载中", "end=2"),
-            Pair("完结", "end=1"),
-        ),
-    )
-
-    private class CGenderFilter : UriPartFilter(
-        "类型",
-        arrayOf(
-            Pair("全部", "gender=-1"),
-            Pair("一般向", "gender=2"),
-            Pair("BL向", "gender=0"),
-            Pair("禁漫", "gender=1"),
-            Pair("TL向", "gender=3"),
-        ),
-    )
-
-    private class AreaFilter : UriPartFilter(
-        "地区",
-        arrayOf(
-            Pair("全部", "area="),
-            Pair("韩国", "area=2"),
-            Pair("日漫", "area=3"),
-            Pair("国漫", "area=4"),
-            Pair("台漫", "area=5"),
-            Pair("其他", "area=6"),
-            Pair("未分类", "area=1"),
-        ),
-    )
-
-    private class SortFilter : UriPartFilter(
-        "排序",
-        arrayOf(
-            Pair("最新", "sort=-1"),
-            Pair("最旧", "sort=0"),
-            Pair("收藏", "sort=1"),
-            Pair("新漫", "sort=2"),
-        ),
-    )
-
-    private open class UriPartFilter(
-        displayName: String,
-        val vals: Array<Pair<String, String>>,
-        defaultValue: Int = 0,
-    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), defaultValue) {
-        open fun toUriPart() = vals[state].second
-    }
-
     private fun getFilterTags(): LinkedHashMap<String, String> {
         val lhm: LinkedHashMap<String, String> = try {
             preferences.getString(APP_TAG_LIST_KEY, "")!!.parseAs<LinkedHashMap<String, String>>()
@@ -342,36 +287,6 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
             linkedMapOf(Pair("全部", ""))
         }
         return lhm
-    }
-
-    private class TagCheckBoxFilter(name: String, val key: String) : Filter.CheckBox(name) {
-        override fun toString(): String {
-            return key
-        }
-    }
-
-    private class TagCheckBoxFilterGroup(
-        name: String,
-        data: LinkedHashMap<String, String>,
-    ) : Filter.Group<TagCheckBoxFilter>(
-        name,
-        data.map { (k, v) ->
-            TagCheckBoxFilter(k, v)
-        },
-    ) {
-        fun buildParams(): String {
-            if (state[0].state) {
-                clearAll()
-                return "tag="
-            }
-            return "tag=${
-            state.filter { it.state }.joinToString(", ") { it.toString() }
-            }"
-        }
-
-        private fun clearAll() {
-            state.forEach { it.state = false }
-        }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -434,11 +349,11 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         private const val MIRROR_KEY = "MIRROR"
         private val MIRROR_ENTRIES
             get() = arrayOf(
-                "https://manwa.me/",
-                "https://manwass.cc/",
-                "https://manwatg.cc/",
-                "https://manwast.cc/",
-                "https://manwasy.cc/",
+                "https://manwa.me",
+                "https://manwass.cc",
+                "https://manwatg.cc",
+                "https://manwast.cc",
+                "https://manwasy.cc",
             )
         private const val IMAGE_HOST_KEY = "IMG_HOST"
     }

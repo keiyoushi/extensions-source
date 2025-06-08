@@ -2,12 +2,12 @@ package eu.kanade.tachiyomi.extension.zh.manwa
 
 import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.Serializable
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Response
-import org.jsoup.Jsoup
 
 class ImageSource(
     private val baseUrl: String,
@@ -48,10 +48,8 @@ class ImageSource(
                     throw Exception("Unexpected ${request.url} to update image source")
                 }
 
-                val responseBody = response.body.string()
-
-                val doc = Jsoup.parse(responseBody)
-                val modalBody = doc.select("#img-host-modal > div.modal-body").first()
+                val document = response.asJsoup()
+                val modalBody = document.selectFirst("#img-host-modal > div.modal-body")
                 val links = modalBody?.select("a") ?: emptyList()
 
                 val infoList = arrayListOf(ImageSourceInfo("None", ""))
