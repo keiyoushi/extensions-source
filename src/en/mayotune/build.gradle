@@ -1,9 +1,8 @@
 ext {
     extName = 'MayoTune'
     extClass = '.MayoTune'
-    themePkg = 'mayotune'
-    baseUrl = 'https://mayotune.xyz/'
-    overrideVersionCode = 1
+    extVersionCode = 1
+    baseUrl = 'https://mayotune.xyz'
     isNsfw = false
 }
 

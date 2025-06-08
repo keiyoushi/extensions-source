@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.mayotune
+package eu.kanade.tachiyomi.extension.en.mayotune
 
 import kotlinx.serialization.Serializable
 
@@ -10,7 +10,7 @@ data class ChapterDto(
     val pageCount: Int,
     val date: String,
 ) {
-    fun getChapterURL(baseUrl: String): String = "$baseUrl/chapter/${this.id}"
+    fun getChapterURL(): String = "/chapter/${this.id}"
 
     fun getNumberStr(): String = if (this.number % 1 == 0f) {
         this.number.toInt().toString()
