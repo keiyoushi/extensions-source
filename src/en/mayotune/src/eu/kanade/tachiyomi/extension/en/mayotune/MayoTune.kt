@@ -9,12 +9,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class MayoTune() : HttpSource() {
     override val name: String = "MayoTune"
@@ -22,7 +19,6 @@ class MayoTune() : HttpSource() {
     override val lang: String = "en"
     override val versionId: Int = 1
 
-    private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val source = SManga.create().apply {
         title = "Mayonaka Heart Tune"
         url = baseUrl
@@ -116,7 +112,7 @@ class MayoTune() : HttpSource() {
                 url = chapter.getChapterURL()
                 name = chapter.getChapterTitle()
                 chapter_number = chapter.number
-                date_upload = sdf.tryParse(chapter.date)
+                date_upload = chapter.getDateTimestamp()
             }
         }
     }

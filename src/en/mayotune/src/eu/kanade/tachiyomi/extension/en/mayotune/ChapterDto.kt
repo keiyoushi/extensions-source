@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.mayotune
 
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Serializable
 data class ChapterDto(
@@ -10,6 +14,9 @@ data class ChapterDto(
     val pageCount: Int,
     val date: String,
 ) {
+    @Contextual
+    private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
     fun getChapterURL(): String = "/chapter/${this.id}"
 
     fun getNumberStr(): String = if (this.number % 1 == 0f) {
@@ -23,4 +30,6 @@ data class ChapterDto(
     } else {
         "Chapter ${this.getNumberStr()}"
     }
+
+    fun getDateTimestamp(): Long = this.sdf.tryParse(this.date)
 }
