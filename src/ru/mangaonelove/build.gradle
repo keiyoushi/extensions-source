@@ -2,7 +2,7 @@ ext {
     extName = 'Manga One Love'
     extClass = '.MangaOneLove'
     themePkg = 'madara'
-    baseUrl = 'https://mangaonelove.site'
+    baseUrl = 'https://mangaonelove.ru'
     overrideVersionCode = 2
     isNsfw = true
 }
