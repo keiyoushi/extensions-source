@@ -54,10 +54,10 @@ class ComicGrowl(
         val authorElements = infoElement.select(".series-h-credit-user-item .article-text")
         val updateDateElement = infoElement.selectFirst(".series-h-tag-label")
         return SManga.create().apply {
-            title = infoElement.select("h1 > span")[1]!!.text()
+            title = infoElement.selectFirst("h1 > span:not(.g-hidden)")!!.text()
             author = authorElements.joinToString { it.text() }
             description = infoElement.selectFirst(".series-h-credit-info-text-text p")?.wholeText()?.trim()
-            setImageUrlFromElement(document.getElementsByClass("series-h-img").first())
+            setImageUrlFromElement(document.selectFirst(".series-h-img"))
             status = if (updateDateElement != null) SManga.ONGOING else SManga.COMPLETED
         }
     }
@@ -70,9 +70,10 @@ class ComicGrowl(
             chapterFromElement(element).apply {
                 chapter_number = index.toFloat()
                 if (url.isEmpty()) { // need login, set a dummy url and append lock icon for chapter name
-                    val isLock = element.selectFirst(".g-payment-article")?.hasClass("wait-free-enabled") ?: false
-                    url = "$DUMMY_URL_PREFIX-$name"
-                    name = (if (isLock) LOCK_ICON else PAY_ICON) + name
+                    val hasLockElement = element.selectFirst(".g-payment-article.wait-free-enabled")
+                    url = response.request.url.newBuilder().fragment("$index-$DUMMY_URL_SUFFIX").build().toString()
+                    println(url)
+                    name = (if (hasLockElement != null) LOCK_ICON else PAY_ICON) + name
                 }
             }
         }
@@ -90,7 +91,8 @@ class ComicGrowl(
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        if (chapter.url.startsWith(DUMMY_URL_PREFIX)) {
+//        if (chapter.url.startsWith(DUMMY_URL_PREFIX)) {
+        if (chapter.url.toHttpUrl().fragment?.endsWith(DUMMY_URL_SUFFIX) == true) {
             throw Exception("Login required to see this chapter")
         }
         return super.pageListRequest(chapter)
@@ -165,7 +167,7 @@ class ComicGrowl(
 
     override fun latestUpdatesNextPageSelector() = null
 
-    override fun latestUpdatesSelector() = "div.feature-list:nth-child(2) > .feature-item"
+    override fun latestUpdatesSelector() = "h2:contains(新連載) + .feature-list > .feature-item"
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
@@ -184,7 +186,7 @@ class ComicGrowl(
 
         private val json: Json by injectLazy()
 
-        private const val DUMMY_URL_PREFIX = "NeedLogin"
+        private const val DUMMY_URL_SUFFIX = "NeedLogin"
 
         private const val PAY_ICON = "💴 "
         private const val LOCK_ICON = "🔒 "

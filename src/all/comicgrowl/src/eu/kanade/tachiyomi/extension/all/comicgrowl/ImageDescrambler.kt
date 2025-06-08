@@ -26,7 +26,7 @@ object ImageDescrambler {
         val tiles = buildList {
             scramble.split("-").forEachIndexed { index, s ->
                 val scrambleInt = s.toInt()
-                add(index, TilePos(scrambleInt / 4, scrambleInt.mod(4)))
+                add(index, TilePos(scrambleInt / 4, scrambleInt % 4))
             }
         }
 
