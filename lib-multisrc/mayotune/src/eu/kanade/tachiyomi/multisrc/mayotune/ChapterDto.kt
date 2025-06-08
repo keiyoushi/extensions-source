@@ -10,23 +10,17 @@ data class ChapterDto(
     val pageCount: Int,
     val date: String,
 ) {
-    fun getChapterURL(baseUrl: String): String {
-        return "$baseUrl/chapter/${this.id}"
+    fun getChapterURL(baseUrl: String): String = "$baseUrl/chapter/${this.id}"
+
+    fun getNumberStr(): String = if (this.number % 1 == 0f) {
+        this.number.toInt().toString()
+    } else {
+        this.number.toString()
     }
 
-    fun getNumberStr(): String {
-        return if (this.number % 1 == 0f) {
-            this.number.toInt().toString()
-        } else {
-            this.number.toString()
-        }
-    }
-
-    fun getChapterTitle(): String {
-        return if (!this.title.isEmpty()) {
-            "Chapter ${this.getNumberStr()}: ${this.title}"
-        } else {
-            "Chapter ${this.getNumberStr()}"
-        }
+    fun getChapterTitle(): String = if (!this.title.isEmpty()) {
+        "Chapter ${this.getNumberStr()}: ${this.title}"
+    } else {
+        "Chapter ${this.getNumberStr()}"
     }
 }
