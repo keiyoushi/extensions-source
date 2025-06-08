@@ -15,10 +15,10 @@ class WeebCentralUrlActivity : Activity() {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
 
-        if (pathSegments != null && pathSegments.size >= 2) {
+        if (pathSegments != null && pathSegments.size >= 3) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", getSLUG(pathSegments))
+                putExtra("query", getEntry(pathSegments))
                 putExtra("filter", packageName)
             }
             try {
@@ -34,13 +34,9 @@ class WeebCentralUrlActivity : Activity() {
         exitProcess(0)
     }
 
-    private fun getSLUG(pathSegments: MutableList<String>): String? {
-        return if (pathSegments.size >= 3) {
-            val id = pathSegments[1]
-            val slug = pathSegments[2]
-            "${WeebCentral.URL_SEARCH_PREFIX}$id/$slug"
-        } else {
-            null
-        }
+    private fun getEntry(pathSegments: MutableList<String>): String? {
+        val id = pathSegments[1]
+        val slug = pathSegments[2]
+        return "${WeebCentral.URL_SEARCH_PREFIX}$id/$slug"
     }
 }
