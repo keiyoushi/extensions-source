@@ -77,7 +77,7 @@ class WeebCentral : ParsedHttpSource() {
 
         return client.newCall(mangaDetailsRequest(SManga.create().apply { url = "/series/$pathSegment" }))
             .asObservableSuccess()
-            .map { MangasPage(listOf(mangaDetailsParse(it)), false) }
+            .map { MangasPage(listOf(mangaDetailsParse(it).apply { initialized = true }), false) }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
