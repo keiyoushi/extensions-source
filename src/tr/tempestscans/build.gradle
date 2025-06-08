@@ -2,8 +2,8 @@ ext {
     extName = 'Tempest Scans'
     extClass = '.TempestScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://tempestscans.net'
-    overrideVersionCode = 0
+    baseUrl = 'https://tempestmangas.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
