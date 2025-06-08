@@ -19,7 +19,7 @@ class MangaDto(
         genre = details.genres.joinToString()
         thumbnail_url = "$baseUrl/$thumbnailUrl"
         status = details.status.toStatus()
-        url = this@MangaDto.id
+        url = "/projetos/${this@MangaDto.id}"
         initialized = true
     }
 }

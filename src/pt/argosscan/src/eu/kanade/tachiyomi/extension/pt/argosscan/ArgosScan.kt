@@ -90,10 +90,6 @@ class ArgosScan : ParsedHttpSource() {
 
     // ============================ Details =====================================
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/projetos/${manga.url}"
-
-    override fun mangaDetailsRequest(manga: SManga) = GET(getMangaUrl(manga), headers)
-
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         with(document) {
             title = selectFirst(".content h2")!!.text()
@@ -108,8 +104,6 @@ class ArgosScan : ParsedHttpSource() {
     }
 
     // ============================ Chapter =====================================
-
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListSelector() = ".manga-chapter"
 
