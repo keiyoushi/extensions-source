@@ -203,7 +203,7 @@ abstract class GreenShit(
         when (contentOrigin) {
             ContentOrigin.Mobile -> chapterListParseMobile(response)
             else -> chapterListParseWeb(response)
-        }
+        }.distinctBy(SChapter::url)
 
     private fun chapterListParseMobile(response: Response): List<SChapter> =
         response.parseAs<ResultDto<WrapperChapterDto>>().toSChapterList()
