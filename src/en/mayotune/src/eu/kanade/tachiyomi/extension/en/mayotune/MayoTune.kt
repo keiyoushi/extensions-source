@@ -69,12 +69,8 @@ class MayoTune() : HttpSource() {
         throw UnsupportedOperationException()
 
     // Get Override
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
-    }
-
     override fun chapterListRequest(manga: SManga): Request {
-        return GET(manga.url + "/api/chapters", headers)
+        return GET("$baseUrl/api/chapters", headers)
     }
 
     // Details
