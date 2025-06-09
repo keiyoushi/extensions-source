@@ -392,7 +392,10 @@ class PoseidonScans : HttpSource() {
             ?.mapNotNull { ch ->
                 val chapterNumberString = ch.number.toString().removeSuffix(".0")
                 SChapter.create().apply {
-                    name = ch.title?.takeIf { it.isNotBlank() } ?: "Chapitre $chapterNumberString"
+                    val baseName = "Chapitre $chapterNumberString"
+                    name = ch.title?.trim()?.takeIf { it.isNotBlank() }
+                        ?.let { title -> "$baseName - $title" }
+                        ?: baseName
                     setUrlWithoutDomain("/serie/${mangaDto.slug}/chapter/$chapterNumberString")
                     date_upload = parseIsoDate(ch.createdAt)
                     chapter_number = ch.number
