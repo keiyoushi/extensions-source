@@ -26,12 +26,4 @@ data class ChapterDto(
     }
 
     fun getDateTimestamp(): Long = this.sdf.tryParse(this.date)
-
-    companion object {
-        fun Float.asString(): String = if (this % 1 == 0f) {
-            this.toInt().toString()
-        } else {
-            this.toString()
-        }
-    }
 }

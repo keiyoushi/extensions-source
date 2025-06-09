@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.mayotune
 
-import eu.kanade.tachiyomi.extension.en.mayotune.ChapterDto.Companion.asString
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
