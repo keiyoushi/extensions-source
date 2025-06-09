@@ -86,9 +86,9 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         return SManga.create().apply {
             setUrlWithoutDomain(response.request.url.toString())
             author = document.title().substringBefore(" ")
-            title = when (artistInTitle) {
-                true -> "$author - $galleryName"
-                false -> galleryName
+            title = when {
+                artistInTitle -> "$author - $galleryName"
+                else -> galleryName
             }
             description = gallery?.selectFirst(".legacy-journal")?.wholeText()
             thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
