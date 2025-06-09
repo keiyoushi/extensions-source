@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -20,7 +21,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -41,14 +41,6 @@ class DeviantArt : HttpSource(), ConfigurableSource {
 
     private val dateFormat by lazy {
         SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH)
-    }
-
-    private fun parseDate(dateStr: String?): Long {
-        return try {
-            dateFormat.parse(dateStr ?: "")!!.time
-        } catch (_: ParseException) {
-            0L
-        }
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -142,7 +134,7 @@ class DeviantArt : HttpSource(), ConfigurableSource {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.selectFirst("link")!!.text())
                 name = it.selectFirst("title")!!.text()
-                date_upload = parseDate(it.selectFirst("pubDate")?.text())
+                date_upload = dateFormat.tryParse(it.selectFirst("pubDate")?.text())
                 scanlator = it.selectFirst("media|credit")?.text()
             }
         }
