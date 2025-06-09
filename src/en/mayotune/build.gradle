@@ -1,0 +1,9 @@
+ext {
+    extName = 'MayoTune'
+    extClass = '.MayoTune'
+    extVersionCode = 1
+    baseUrl = 'https://mayotune.xyz'
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
