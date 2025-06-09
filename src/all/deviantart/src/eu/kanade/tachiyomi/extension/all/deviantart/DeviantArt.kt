@@ -167,11 +167,10 @@ class DeviantArt : HttpSource(), ConfigurableSource {
             null -> listOf(Page(0, imageUrl = firstImageUrl))
             else -> buttons.mapIndexed { i, button ->
                 // Remove everything past "/v1/" to get original instead of thumbnail
-                val imageUrl = button.selectFirst("img")?.absUrl("src")?.substringBefore("/v1/")
+                // But need to preserve the query parameter where the token is
+                val thumbnailUrl = button.selectFirst("img")?.absUrl("src")
+                val imageUrl = thumbnailUrl?.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
                 Page(i, imageUrl = imageUrl)
-            }.also {
-                // First image needs token to get original, which is included in firstImageUrl
-                it[0].imageUrl = firstImageUrl
             }
         }
     }
