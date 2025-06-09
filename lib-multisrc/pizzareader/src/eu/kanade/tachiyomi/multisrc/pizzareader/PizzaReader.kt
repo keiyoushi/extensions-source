@@ -95,7 +95,7 @@ abstract class PizzaReader(
         artist = comic.artist
         description = comic.description
         genre = comic.genres.joinToString(", ") { it.name }
-        status = comic.status.toStatus()
+        status = comic.status?.toStatus() ?: SManga.UNKNOWN
         thumbnail_url = comic.thumbnail
     }
 
