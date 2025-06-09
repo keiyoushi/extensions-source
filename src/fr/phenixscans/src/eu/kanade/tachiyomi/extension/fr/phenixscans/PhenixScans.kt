@@ -18,7 +18,7 @@ import java.util.Locale
 
 class PhenixScans : HttpSource() {
     override val baseUrl = "https://phenix-scans.com"
-    private val apiBaseUrl = "https://api.phenix-scans.com"
+    private val apiBaseUrl = "https://phenix-scans.com/api"
     override val lang = "fr"
     override val name = "Phenix Scans"
     override val supportsLatest = true
