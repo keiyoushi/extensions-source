@@ -19,17 +19,19 @@ data class ChapterDto(
 
     fun getChapterURL(): String = "/chapter/${this.id}"
 
-    fun getNumberStr(): String = if (this.number % 1 == 0f) {
-        this.number.toInt().toString()
-    } else {
-        this.number.toString()
-    }
-
     fun getChapterTitle(): String = if (!this.title.isEmpty()) {
-        "Chapter ${this.getNumberStr()}: ${this.title}"
+        "Chapter ${this.number.asString()}: ${this.title}"
     } else {
-        "Chapter ${this.getNumberStr()}"
+        "Chapter ${this.number.asString()}"
     }
 
     fun getDateTimestamp(): Long = this.sdf.tryParse(this.date)
+
+    companion object {
+        fun Float.asString(): String = if (this % 1 == 0f) {
+            this.toInt().toString()
+        } else {
+            this.toString()
+        }
+    }
 }

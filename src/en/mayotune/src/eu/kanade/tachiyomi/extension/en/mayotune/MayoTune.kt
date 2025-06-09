@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mayotune
 
+import eu.kanade.tachiyomi.extension.en.mayotune.ChapterDto.Companion.asString
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -73,6 +75,15 @@ class MayoTune() : HttpSource() {
         return GET("$baseUrl/api/chapters", headers)
     }
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        val url = "$baseUrl/api/chapters".toHttpUrl().newBuilder().apply {
+            addQueryParameter("number", chapter.chapter_number.asString())
+        }
+        return GET(url.toString(), headers)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
+
     // Details
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
@@ -114,9 +125,9 @@ class MayoTune() : HttpSource() {
     // Pages
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("div.w-full > img").mapIndexed { index, img ->
-            Page(index, imageUrl = img.absUrl("src"))
+        val chapter = response.parseAs<ChapterDto>()
+        return List(chapter.pageCount) { index ->
+            Page(index, imageUrl = "$baseUrl/api/manga/${chapter.id}/${index + 1}")
         }
     }
 
