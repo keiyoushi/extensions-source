@@ -27,7 +27,7 @@ data class PizzaComicDto(
     val description: String = "",
     val genres: List<PizzaGenreDto> = emptyList(),
     @SerialName("last_chapter") val lastChapter: PizzaChapterDto? = null,
-    val status: String = "",
+    val status: String? = null,
     val title: String = "",
     val thumbnail: String = "",
     val url: String = "",
