@@ -49,8 +49,7 @@ class GekkouScans : HttpSource() {
 
     // ========================= Latest =====================================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$apiUrl/manga/recent-updates", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$apiUrl/manga/recent-updates", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val mangas = response.parseAs<List<LatestMangaDto>>().map {
@@ -84,8 +83,7 @@ class GekkouScans : HttpSource() {
         return GET("$apiUrl/manga/$slug", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<MangaDto>().let(MangaDto::toSManga)
+    override fun mangaDetailsParse(response: Response): SManga = response.parseAs<MangaDto>().let(MangaDto::toSManga)
 
     // ========================= Chapters ===================================
 
@@ -93,8 +91,7 @@ class GekkouScans : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<MangaDto>().toListSChapter().sortedByDescending(SChapter::chapter_number)
+    override fun chapterListParse(response: Response): List<SChapter> = response.parseAs<MangaDto>().toListSChapter().sortedByDescending(SChapter::chapter_number)
 
     // ========================= Pages ======================================
 
@@ -104,16 +101,12 @@ class GekkouScans : HttpSource() {
         return addRequestRequireSettings("$apiUrl/chapter/$pathSegment".toHttpUrl())
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        return response.parseAs<PagesDto>().pages.sortedBy(PagesDto.ImageUrl::index).map {
-            val imageUrl = "$apiUrl${it.url}"
-            Page(it.index, imageUrl = imageUrl)
-        }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PagesDto>().pages.sortedBy(PagesDto.ImageUrl::index).map {
+        val imageUrl = "$apiUrl${it.url}"
+        Page(it.index, imageUrl = imageUrl)
     }
 
-    override fun imageRequest(page: Page): Request {
-        return addRequestRequireSettings(super.imageRequest(page).url)
-    }
+    override fun imageRequest(page: Page): Request = addRequestRequireSettings(super.imageRequest(page).url)
 
     override fun imageUrlParse(response: Response): String = ""
 
@@ -132,8 +125,7 @@ class GekkouScans : HttpSource() {
         return GET(newUrl, newHeaders)
     }
 
-    private fun verifyLogin(chain: Interceptor.Chain): Response =
-        chain.proceed(chain.request()).takeIf { it.code != 403 } ?: throw IOException("Faça o login na WebView")
+    private fun verifyLogin(chain: Interceptor.Chain): Response = chain.proceed(chain.request()).takeIf { it.code != 403 } ?: throw IOException("Faça o login na WebView")
 
     private fun unixTime(): Int {
         val timestampMillis = System.currentTimeMillis()
