@@ -2,26 +2,35 @@ package eu.kanade.tachiyomi.extension.vi.nhattruyen
 
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import rx.Observable
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class NhatTruyen : WPComics(
     "NhatTruyen",
-    "https://nhattruyenv.com",
+    "https://nhattruyenqq.com",
     "vi",
     dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
     gmtOffset = null,
 ) {
     override val searchPath = "tim-truyen"
 
+    private val json: Json by injectLazy()
     /**
      * NetTruyen/NhatTruyen redirect back to catalog page if searching query is not found.
      * That makes both sites always return un-relevant results when searching should return empty.
@@ -177,4 +186,32 @@ class NhatTruyen : WPComics(
             OrderFilter(),
         )
     }
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val url = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()
+        if (checkChapterLists(url).isNotEmpty()) {
+            val slug = manga.url.removePrefix("/truyen-tranh/")
+            return client.newCall(GET("$baseUrl/Comic/Services/ComicService.asmx/ChapterList?slug=$slug", headers))
+                .asObservableSuccess()
+                .map { response -> chapterListParse(response) }
+        }
+        return super.fetchChapterList(manga)
+    }
+
+    private fun checkChapterLists(document: Document) = document.selectFirst("a.view-more.hidden")!!.text()
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val json = json.decodeFromString<ChapterDTO>(response.body.string())
+        val slug = response.request.url.toString().removePrefix("$baseUrl/Comic/Services/ComicService.asmx/ChapterList?slug=")
+        val chapter = json.data.map {
+            SChapter.create().apply {
+                setUrlWithoutDomain("$baseUrl/truyen-tranh/$slug/${it.chapter_slug}")
+                name = it.chapter_name
+                date_upload = dateFormatChapter.tryParse(it.updated_at)
+            }
+        }
+        return chapter
+    }
+
+    private val dateFormatChapter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 }
