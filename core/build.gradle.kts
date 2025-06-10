@@ -22,6 +22,10 @@ android {
     }
 }
 
+kotlin {
+    jvmToolchain(17)
+}
+
 dependencies {
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
 }

@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlinx-serialization'
-apply plugin: 'org.jmailen.kotlinter'
+apply plugin: 'keiyoushi.lint'
 
 assert !ext.has("pkgNameSuffix")
 assert !ext.has("libVersion")
@@ -18,6 +18,17 @@ android {
     sourceSets {
         main {
             manifest.srcFile "AndroidManifest.xml"
+            if (!manifest.srcFile.exists()) {
+                def buildDir = layout.buildDirectory.get().getAsFile().path
+                mkdir(buildDir)
+                File tempFile = new File(buildDir, "tempAndroidManifest.xml")
+                if (!tempFile.exists()) {
+                    tempFile.withWriter {
+                        it.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
+                    }
+                }
+                manifest.srcFile(tempFile.path)
+            }
             java.srcDirs = ['src']
             res.srcDirs = ['res']
             assets.srcDirs = ['assets']
@@ -80,47 +91,17 @@ android {
         resources.excludes.add("kotlin-tooling-metadata.json")
     }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
-
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8.toString()
         freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
     }
+}
 
-    kotlinter {
-        experimentalRules = true
-        disabledRules = [
-            "experimental:argument-list-wrapping", // Doesn't play well with Android Studio
-            "experimental:comment-wrapping",
-        ]
-    }
+kotlin {
+    jvmToolchain(17)
 }
 
 dependencies {
     if (theme != null) implementation(theme) // Overrides core launcher icons
     implementation(project(":core"))
     compileOnly(libs.bundles.common)
-}
-
-tasks.register("writeManifestFile") {
-    doLast {
-        def manifest = android.sourceSets.getByName("main").manifest
-        if (!manifest.srcFile.exists()) {
-            File tempFile = layout.buildDirectory.get().file("tempAndroidManifest.xml").getAsFile()
-            if (!tempFile.exists()) {
-                tempFile.withWriter {
-                    it.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
-                }
-            }
-            manifest.srcFile(tempFile.path)
-        }
-    }
-}
-
-preBuild.dependsOn(writeManifestFile, lintKotlin)
-if (System.getenv("CI") != "true") {
-    lintKotlin.dependsOn(formatKotlin)
 }

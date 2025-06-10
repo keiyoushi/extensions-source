@@ -2,6 +2,7 @@ plugins {
     id("com.android.library")
     kotlin("android")
     id("kotlinx-serialization")
+    id("keiyoushi.lint")
 }
 
 android {
@@ -16,6 +17,14 @@ android {
     buildFeatures {
         androidResources = false
     }
+
+    kotlinOptions {
+        freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
+    }
+}
+
+kotlin {
+    jvmToolchain(17)
 }
 
 dependencies {
