@@ -74,14 +74,10 @@ class MayoTune() : HttpSource() {
         return GET("$baseUrl/api/chapters", headers)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$baseUrl/api/chapters".toHttpUrl().newBuilder().apply {
-            addQueryParameter("number", chapter.chapter_number.asString())
-        }
-        return GET(url.toString(), headers)
+    override fun getChapterUrl(chapter: SChapter): String {
+        val id = (baseUrl + chapter.url).toHttpUrl().queryParameter("id")
+        return "$baseUrl/chapter/$id"
     }
-
-    override fun getChapterUrl(chapter: SChapter): String = baseUrl + chapter.url
 
     // Details
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
@@ -121,8 +117,8 @@ class MayoTune() : HttpSource() {
             }
         }
     }
-    // Pages
 
+    // Pages
     override fun pageListParse(response: Response): List<Page> {
         val chapter = response.parseAs<ChapterDto>()
         return List(chapter.pageCount) { index ->

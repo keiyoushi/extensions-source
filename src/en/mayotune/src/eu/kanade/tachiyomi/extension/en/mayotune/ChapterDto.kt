@@ -17,12 +17,18 @@ data class ChapterDto(
     @Contextual
     private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
-    fun getChapterURL(): String = "/chapter/${this.id}"
+    fun getChapterURL(): String = "/api/chapters?id=${this.id}"
+
+    fun getNumberStr(): String = if (this.number % 1 == 0f) {
+        this.number.toInt().toString()
+    } else {
+        this.number.toString()
+    }
 
     fun getChapterTitle(): String = if (!this.title.isEmpty()) {
-        "Chapter ${this.number.asString()}: ${this.title}"
+        "Chapter ${this.getNumberStr()}: ${this.title}"
     } else {
-        "Chapter ${this.number.asString()}"
+        "Chapter ${this.getNumberStr()}"
     }
 
     fun getDateTimestamp(): Long = this.sdf.tryParse(this.date)
