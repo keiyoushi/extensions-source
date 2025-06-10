@@ -162,11 +162,10 @@ class RaijinScans : HttpSource() {
 
     private fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         val link = element.selectFirst("a")!!
-        setUrlWithoutDomain(link.attr("href"))
+        setUrlWithoutDomain(link.attr("abs:href"))
         name = link.attr("title").trim()
 
-        val spans = link.select("> span")
-        date_upload = parseRelativeDateString(spans.getOrNull(1)?.text())
+        date_upload = parseRelativeDateString(link.selectFirst("> span:nth-of-type(2)")?.text())
     }
 
     private fun parseRelativeDateString(date: String?): Long {
