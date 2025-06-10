@@ -14,7 +14,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.internal.http.HTTP_FORBIDDEN
 import java.io.IOException
 
 class GekkouScans : HttpSource() {
@@ -134,7 +133,7 @@ class GekkouScans : HttpSource() {
     }
 
     private fun verifyLogin(chain: Interceptor.Chain): Response =
-        chain.proceed(chain.request()).takeIf { it.code != HTTP_FORBIDDEN } ?: throw IOException("Faça o login na WebView")
+        chain.proceed(chain.request()).takeIf { it.code != 403 } ?: throw IOException("Faça o login na WebView")
 
     private fun unixTime(): Int {
         val timestampMillis = System.currentTimeMillis()
