@@ -31,6 +31,7 @@ class NhatTruyen : WPComics(
     override val searchPath = "tim-truyen"
 
     private val json: Json by injectLazy()
+
     /**
      * NetTruyen/NhatTruyen redirect back to catalog page if searching query is not found.
      * That makes both sites always return un-relevant results when searching should return empty.
