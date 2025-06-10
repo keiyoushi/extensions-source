@@ -154,12 +154,12 @@ class DeviantArt : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return when (val buttons = document.selectFirst("[draggable=false]")?.children()) {
-            null -> {
-                val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
-                listOf(Page(0, imageUrl = imageUrl))
-            }
-            else -> buttons.mapIndexed { i, button ->
+        val buttons = document.selectFirst("[draggable=false]")?.children()
+        return if (buttons == null) {
+            val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
+            listOf(Page(0, imageUrl = imageUrl))
+        } else {
+            buttons.mapIndexed { i, button ->
                 // Remove everything past "/v1/" to get original instead of thumbnail
                 // But need to preserve the query parameter where the token is
                 val imageUrl = button.selectFirst("img")?.absUrl("src")
