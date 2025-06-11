@@ -52,6 +52,7 @@ open class Wolf(
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::domainNumberInterceptor)
+        .addNetworkInterceptor(::refererInterceptor)
         .build()
 
     private val json: Json by injectLazy()
@@ -388,6 +389,14 @@ open class Wolf(
     }
 
     private val domainRegex = Regex("""^https?://wfwf(\d+)\.com""")
+
+    private fun refererInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request().newBuilder()
+            .header("Referer", "$baseUrl/")
+            .build()
+
+        return chain.proceed(request)
+    }
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()

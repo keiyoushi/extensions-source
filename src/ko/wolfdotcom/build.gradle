@@ -1,7 +1,7 @@
 ext {
     extName = 'Wolf.com'
     extClass = '.WolfFactory'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = true
 }
 
