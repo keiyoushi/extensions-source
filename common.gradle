@@ -1,6 +1,5 @@
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply plugin: 'kotlinx-serialization'
+apply plugin: 'keiyoushi.android.application'
+apply plugin: 'keiyoushi.kotlin'
 apply plugin: 'keiyoushi.lint'
 
 assert !ext.has("pkgNameSuffix")
@@ -12,8 +11,6 @@ Project theme = ext.has("themePkg") ? project(":lib-multisrc:$themePkg") : null
 if (theme != null) evaluationDependsOn(theme.path)
 
 android {
-    compileSdk AndroidConfig.compileSdk
-
     namespace "eu.kanade.tachiyomi.extension"
     sourceSets {
         main {
@@ -36,8 +33,6 @@ android {
     }
 
     defaultConfig {
-        minSdk AndroidConfig.minSdk
-        targetSdk AndroidConfig.targetSdk
         applicationIdSuffix project.parent.name + "." + project.name
         versionCode theme == null ? extVersionCode : theme.baseVersionCode + overrideVersionCode
         versionName "1.4.$versionCode"
@@ -90,14 +85,6 @@ android {
     packaging {
         resources.excludes.add("kotlin-tooling-metadata.json")
     }
-
-    kotlinOptions {
-        freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
-    }
-}
-
-kotlin {
-    jvmToolchain(17)
 }
 
 dependencies {

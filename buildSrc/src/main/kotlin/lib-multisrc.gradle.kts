@@ -1,17 +1,10 @@
 plugins {
-    id("com.android.library")
-    kotlin("android")
-    id("kotlinx-serialization")
+    id("keiyoushi.android.library")
+    id("keiyoushi.kotlin")
     id("keiyoushi.lint")
 }
 
 android {
-    compileSdk = AndroidConfig.compileSdk
-
-    defaultConfig {
-        minSdk = AndroidConfig.minSdk
-    }
-
     namespace = "eu.kanade.tachiyomi.multisrc.${project.name}"
 
     sourceSets {
@@ -22,14 +15,6 @@ android {
             assets.setSrcDirs(listOf("assets"))
         }
     }
-
-    kotlinOptions {
-        freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
-    }
-}
-
-kotlin {
-    jvmToolchain(17)
 }
 
 dependencies {

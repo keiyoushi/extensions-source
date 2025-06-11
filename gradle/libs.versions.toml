@@ -1,7 +1,7 @@
 [versions]
 kotlin_version = "2.1.0"
 coroutines_version = "1.10.1"
-serialization_version = "1.8.0"
+serialization_version = "1.7.3"
 
 [libraries]
 gradle-agp = { module = "com.android.tools.build:gradle", version = "8.10.1" }

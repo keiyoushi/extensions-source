@@ -1,29 +1,15 @@
 plugins {
-    id("com.android.library")
-    kotlin("android")
+    id("keiyoushi.android.library")
+    id("keiyoushi.kotlin")
+    id("keiyoushi.lint")
 }
 
 android {
-    compileSdk = AndroidConfig.compileSdk
-
-    defaultConfig {
-        minSdk = AndroidConfig.minSdk
-    }
-
     namespace = "keiyoushi.core"
 
     buildFeatures {
         resValues = false
-        shaders = false
     }
-
-    kotlinOptions {
-        freeCompilerArgs += "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
-    }
-}
-
-kotlin {
-    jvmToolchain(17)
 }
 
 dependencies {
