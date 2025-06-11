@@ -39,6 +39,29 @@ class Hiveworks : ParsedHttpSource() {
         .readTimeout(1, TimeUnit.MINUTES)
         .retryOnConnectionFailure(true)
         .followRedirects(true)
+        .addNetworkInterceptor { chain ->
+            val request = chain.request()
+            if (!request.url.toString().contains("smbc-comics")) {
+                return@addNetworkInterceptor chain.proceed(request)
+            }
+
+            val response = chain.proceed(request)
+            // As of March 2025, SMBC chapter list page returns status code 500 even
+            // though it still has correct data. Do not throw an error in this case.
+            //
+            // I reported this error to SMBC on 2025-05-28 and it was not fixed by
+            // 2025-06-11, but even if it is fixed eventually, the same problem might
+            // occur again in the future.
+            if (response.code == 500) {
+                val newResponse = response.newBuilder()
+                    .code(200)
+                    .body(response.body)
+                    .build()
+                newResponse
+            } else {
+                response
+            }
+        }
         .build()
 
     // Popular
@@ -180,25 +203,7 @@ class Hiveworks : ParsedHttpSource() {
         return if (manga.status != SManga.LICENSED) {
             val uri = Uri.parse(manga.url).buildUpon()
             client.newCall(chapterListRequest(manga))
-                .asObservable()
-                .doOnNext { response ->
-                    if (!response.isSuccessful) {
-                        if ("smbc-comics" in uri.toString() && response.code == 500) {
-                            // As of March 2025, SMBC chapter list page returns
-                            // status code 500 even though it still has correct data.
-                            // Do not throw an error in this case.
-                            //
-                            // I reported this error to SMBC on 2025-05-28, but even if
-                            // it is fixed, the same problem might occur again in the future.
-                            return@doOnNext
-                        }
-                        // Otherwise, an unsuccessful response status indicates that
-                        // there is an error. Apparently, HttpException isn't able to
-                        // be imported from extensions-lib, so we have to copy and paste.
-                        response.close()
-                        throw Exception("HTTP error ${response.code}")
-                    }
-                }
+                .asObservableSuccess()
                 .map { response ->
                     chapterListParse(response)
                 }
