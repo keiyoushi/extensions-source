@@ -90,7 +90,7 @@ class ArgosScan : ParsedHttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         // Migrate old entries
-        if (manga.url.contains("projetos")) {
+        if (manga.url.contains("projeto")) {
             manga.url = manga.url.replace("/", "").substringAfter(ENTRY_URL_REGEX)
         }
         return GET(getMangaUrl(manga), headers)
