@@ -27,8 +27,6 @@ class RaijinScans : HttpSource() {
     override val baseUrl = "https://raijinscan.fr"
     override val lang = "fr"
     override val supportsLatest = true
-    override val versionId = 2
-    override val id: Long = 8373267671495516033
 
     override val client = network.cloudflareClient
 
