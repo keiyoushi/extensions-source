@@ -55,7 +55,6 @@ class Hiveworks : ParsedHttpSource() {
             if (response.code == 500) {
                 val newResponse = response.newBuilder()
                     .code(200)
-                    .body(response.body)
                     .build()
                 newResponse
             } else {
@@ -201,7 +200,6 @@ class Hiveworks : ParsedHttpSource() {
     // Included to call custom error codes
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return if (manga.status != SManga.LICENSED) {
-            val uri = Uri.parse(manga.url).buildUpon()
             client.newCall(chapterListRequest(manga))
                 .asObservableSuccess()
                 .map { response ->
