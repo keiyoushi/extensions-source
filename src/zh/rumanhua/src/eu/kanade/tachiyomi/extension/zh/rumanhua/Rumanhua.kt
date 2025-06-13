@@ -228,7 +228,7 @@ class Rumanhua : HttpSource(), ConfigurableSource {
         val urlBuilder = baseUrl.toHttpUrl().newBuilder()
 
         if (query != "" && !query.contains("-")) {
-            val body = FormBody.Builder().add("k", query).build()
+            val body = FormBody.Builder().add("k", query.take(12)).build()
             return POST(
                 urlBuilder.encodedPath("/s").build().toString(),
                 headers,
