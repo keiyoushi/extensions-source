@@ -94,7 +94,7 @@ class NhatTruyen : WPComics(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val json = response.parseAs<ChapterDTO>()
-        val slug = response.request.url.toString().removePrefix("$baseUrl/Comic/Services/ComicService.asmx/ChapterList?slug=")
+        val slug = response.request.url.queryParameter("slug")!!
         val chapter = json.data.map {
             SChapter.create().apply {
                 setUrlWithoutDomain("$baseUrl/truyen-tranh/$slug/${it.chapter_slug}")
