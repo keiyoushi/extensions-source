@@ -3,7 +3,7 @@ ext {
     extClass = '.IgnisComic'
     themePkg = 'mangathemesia'
     baseUrl = 'https://manhuaga.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = false
 }
 

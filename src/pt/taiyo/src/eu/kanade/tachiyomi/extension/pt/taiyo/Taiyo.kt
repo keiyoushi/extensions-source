@@ -32,13 +32,13 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okhttp3.internal.http.HTTP_FORBIDDEN
-import okhttp3.internal.http.HTTP_UNAUTHORIZED
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.net.HttpURLConnection.HTTP_FORBIDDEN
+import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
 import java.text.SimpleDateFormat
 import java.util.Locale
 

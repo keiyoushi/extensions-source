@@ -3,7 +3,7 @@ ext {
     extClass = '.ImperioDaBritannia'
     themePkg = 'madara'
     baseUrl = 'https://imperiodabritannia.com'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 

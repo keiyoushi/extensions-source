@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.pt.imperiodabritannia
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
-import okhttp3.internal.http.HTTP_FORBIDDEN
-import okhttp3.internal.http.HTTP_OK
+import java.net.HttpURLConnection.HTTP_FORBIDDEN
+import java.net.HttpURLConnection.HTTP_OK
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
