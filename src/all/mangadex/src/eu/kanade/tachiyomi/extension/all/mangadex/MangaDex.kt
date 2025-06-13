@@ -510,6 +510,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             .addQueryParameter("contentRating[]", MDConstants.allContentRatings)
             .addQueryParameter("excludedGroups[]", preferences.blockedGroups)
             .addQueryParameter("excludedUploaders[]", preferences.blockedUploaders)
+            .addQueryParameter("includeUnavailable", if (preferences.includeUnavailable) "1" else "0")
             .build()
 
         return GET(url, headers, CacheControl.FORCE_NETWORK)
@@ -546,6 +547,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
 
         return chapterListResults
             .filterNot { it.attributes!!.isInvalid }
+            .filter { it.attributes!!.isUnavailable != true || preferences.includeUnavailable }
             .map(helper::createChapter)
     }
 
@@ -784,6 +786,21 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
             }
         }
 
+        val includeUnavailablePref = SwitchPreferenceCompat(screen.context).apply {
+            key = MDConstants.getIncludeUnavailablePrefKey(dexLang)
+            title = helper.intl["include_unavailable"]
+            summary = helper.intl["include_unavailable_summary"]
+            setDefaultValue(false)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val checkValue = newValue as Boolean
+
+                preferences.edit()
+                    .putBoolean(MDConstants.getIncludeUnavailablePrefKey(dexLang), checkValue)
+                    .commit()
+            }
+        }
+
         screen.addPreference(coverQualityPref)
         screen.addPreference(tryUsingFirstVolumeCoverPref)
         screen.addPreference(dataSaverPref)
@@ -791,6 +808,7 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
         screen.addPreference(altTitlesInDescPref)
         screen.addPreference(preferExtensionLangTitlePref)
         screen.addPreference(finalChapterInDescPref)
+        screen.addPreference(includeUnavailablePref)
         screen.addPreference(contentRatingPref)
         screen.addPreference(originalLanguagePref)
         screen.addPreference(blockedGroupsPref)
@@ -874,6 +892,9 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
 
     private val SharedPreferences.finalChapterInDesc
         get() = getBoolean(MDConstants.getFinalChapterInDescPrefKey(dexLang), true)
+
+    private val SharedPreferences.includeUnavailable
+        get() = getBoolean(MDConstants.getIncludeUnavailablePrefKey(dexLang), false)
 
     /**
      * Previous versions of the extension allowed invalid UUID values to be stored in the

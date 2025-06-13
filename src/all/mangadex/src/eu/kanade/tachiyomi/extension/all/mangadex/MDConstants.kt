@@ -148,6 +148,11 @@ object MDConstants {
         return "${finalChapterInDescPref}_$dexLang"
     }
 
+    private const val includeUnavailablePref = "includeUnavailable"
+    fun getIncludeUnavailablePrefKey(dexLang: String): String {
+        return "${includeUnavailablePref}_$dexLang"
+    }
+
     private const val tagGroupContent = "content"
     private const val tagGroupFormat = "format"
     private const val tagGroupGenre = "genre"
