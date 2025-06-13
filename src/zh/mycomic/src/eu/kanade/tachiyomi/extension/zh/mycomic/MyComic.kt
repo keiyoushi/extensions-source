@@ -38,17 +38,23 @@ class MyComic : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val data = document.select("div[data-flux-card] + div div[x-data]").attr("x-data")
-        val chaptersStr =
-            data.substringAfter("chapters:").substringBefore("\n").trim().removeSuffix(",")
-        return chaptersStr.parseAs<List<Chapter>>().map {
-            SChapter.create().apply {
-                name = it.title
-                // Since the images included in the chapter do not distinguish between Traditional and Simplified Chinese, the default URL will be used uniformly here.
-                // Additionally, using different URLs would create more issues, so it's best to keep the URL consistent.
-                url = "/chapters/${it.id}"
+        return document.select("div[data-flux-card] + div div[x-data]")
+            .eachAttr("x-data")
+            .map {
+                it.substringAfter("chapters:").substringBefore("\n").trim().removeSuffix(",")
             }
-        }
+            .map {
+                it.parseAs<List<Chapter>>()
+            }
+            .flatten()
+            .map {
+                SChapter.create().apply {
+                    name = it.title
+                    // Since the images included in the chapter do not distinguish between Traditional and Simplified Chinese, the default URL will be used uniformly here.
+                    // Additionally, using different URLs would create more issues, so it's best to keep the URL consistent.
+                    url = "/chapters/${it.id}"
+                }
+            }
     }
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
