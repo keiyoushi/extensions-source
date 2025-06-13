@@ -2,8 +2,8 @@ package eu.kanade.tachiyomi.extension.en.igniscomic
 
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import okhttp3.OkHttpClient
-import java.net.HttpURLConnection.HTTP_OK
 import java.net.HttpURLConnection.HTTP_INTERNAL_ERROR
+import java.net.HttpURLConnection.HTTP_OK
 
 class IgnisComic : MangaThemesia(
     "Ignis Comic",
