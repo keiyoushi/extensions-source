@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class ManhwaToon : Madara(
     "Manhwa Toon",
-    "https://www.manhwatoon.com",
+    "https://www.manhwatoon.me",
     "en",
 ) {
     override val useNewChapterEndpoint = true
