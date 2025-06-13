@@ -9,15 +9,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -29,8 +27,6 @@ class NhatTruyen : WPComics(
     gmtOffset = null,
 ) {
     override val searchPath = "tim-truyen"
-
-    private val json: Json by injectLazy()
 
     /**
      * NetTruyen/NhatTruyen redirect back to catalog page if searching query is not found.
@@ -202,7 +198,7 @@ class NhatTruyen : WPComics(
     private fun checkChapterLists(document: Document) = document.selectFirst("a.view-more.hidden")!!.text()
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val json = json.decodeFromString<ChapterDTO>(response.body.string())
+        val json = response.parseAs<ChapterDTO>()
         val slug = response.request.url.toString().removePrefix("$baseUrl/Comic/Services/ComicService.asmx/ChapterList?slug=")
         val chapter = json.data.map {
             SChapter.create().apply {
