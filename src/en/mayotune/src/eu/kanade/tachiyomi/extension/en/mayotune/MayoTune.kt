@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -73,6 +74,11 @@ class MayoTune() : HttpSource() {
         return GET("$baseUrl/api/chapters", headers)
     }
 
+    override fun getChapterUrl(chapter: SChapter): String {
+        val id = (baseUrl + chapter.url).toHttpUrl().queryParameter("id")
+        return "$baseUrl/chapter/$id"
+    }
+
     // Details
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
@@ -111,12 +117,12 @@ class MayoTune() : HttpSource() {
             }
         }
     }
-    // Pages
 
+    // Pages
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("div.w-full > img").mapIndexed { index, img ->
-            Page(index, imageUrl = img.absUrl("src"))
+        val chapter = response.parseAs<ChapterDto>()
+        return List(chapter.pageCount) { index ->
+            Page(index, imageUrl = "$baseUrl/api/manga/${chapter.id}/${index + 1}")
         }
     }
 

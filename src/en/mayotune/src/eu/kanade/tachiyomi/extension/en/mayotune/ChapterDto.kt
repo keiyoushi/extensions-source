@@ -17,7 +17,8 @@ data class ChapterDto(
     @Contextual
     private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
-    fun getChapterURL(): String = "/chapter/${this.id}"
+    fun getChapterURL(): String =
+        "/api/chapters?id=$id&number=${this.getNumberStr()}"
 
     fun getNumberStr(): String = if (this.number % 1 == 0f) {
         this.number.toInt().toString()
@@ -25,7 +26,7 @@ data class ChapterDto(
         this.number.toString()
     }
 
-    fun getChapterTitle(): String = if (!this.title.isEmpty()) {
+    fun getChapterTitle(): String = if (this.title.isNotBlank()) {
         "Chapter ${this.getNumberStr()}: ${this.title}"
     } else {
         "Chapter ${this.getNumberStr()}"
