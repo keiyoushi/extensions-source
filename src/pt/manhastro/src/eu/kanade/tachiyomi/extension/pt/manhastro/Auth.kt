@@ -23,7 +23,7 @@ class Cookie {
         }
         expired = Calendar.getInstance().apply {
             time = Date()
-            add(Calendar.DATE, EXPIRED_DAY_AT)
+            add(Calendar.DATE, EXPIRE_AT)
         }.let { dateFormat.format(it.time) }
     }
 
@@ -35,7 +35,7 @@ class Cookie {
     companion object {
         fun empty() = Cookie()
         private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
-        private val EXPIRED_DAY_AT = 2
+        private val EXPIRE_AT = 2
     }
 }
 
