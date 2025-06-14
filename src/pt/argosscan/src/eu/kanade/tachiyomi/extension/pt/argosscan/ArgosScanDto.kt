@@ -11,15 +11,16 @@ class MangaDto(
     @SerialName("cover_image_url")
     val thumbnailUrl: String,
     val id: String,
-    val type: String,
 ) {
+    val type get() = details.type
+
     fun toSManga(baseUrl: String) = SManga.create().apply {
         title = details.title.values.first()
-        description = details.description.values.first()
-        genre = details.genres.joinToString()
+        description = details.description.values.firstOrNull()
+        genre = details.genres.get("genre")?.let(List<String>::joinToString)
         thumbnail_url = "$baseUrl/$thumbnailUrl"
         status = details.status.toStatus()
-        url = "/projetos/${this@MangaDto.id}"
+        url = this@MangaDto.id
         initialized = true
     }
 }
@@ -38,5 +39,6 @@ class DetailsDto(
     val description: Map<String, String> = emptyMap(),
     val status: String,
     @SerialName("tags")
-    val genres: List<String> = emptyList(),
+    val genres: Map<String, List<String>> = emptyMap(),
+    val type: String,
 )
