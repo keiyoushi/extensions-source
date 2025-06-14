@@ -19,6 +19,7 @@ import org.jsoup.nodes.Element
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class ArgosScan : ParsedHttpSource() {
 
@@ -30,7 +31,10 @@ class ArgosScan : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .connectTimeout(1, TimeUnit.MINUTES)
+        .readTimeout(1, TimeUnit.MINUTES)
+        .build()
 
     // Website changed custom CMS.
     override val versionId = 3
@@ -86,15 +90,11 @@ class ArgosScan : ParsedHttpSource() {
 
     // ============================ Details =====================================
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/projeto/${manga.url}"
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/projeto/${manga.getProjectId()}"
 
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        // Migrate old entries
-        if (manga.url.contains("projeto")) {
-            manga.url = manga.url.replace("/", "").substringAfter(ENTRY_URL_REGEX)
-        }
-        return GET(getMangaUrl(manga), headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
+
+    private fun SManga.getProjectId() = url.replace("/", "").substringAfter(ENTRY_URL_REGEX)
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         with(document) {
@@ -140,6 +140,7 @@ class ArgosScan : ParsedHttpSource() {
     override fun imageUrlParse(document: Document) = ""
 
     // ============================== Utilities ==================================
+
     private fun String.substringAfter(regex: Regex): String =
         regex.find(this)?.value?.let(::substringAfter) ?: this
 
