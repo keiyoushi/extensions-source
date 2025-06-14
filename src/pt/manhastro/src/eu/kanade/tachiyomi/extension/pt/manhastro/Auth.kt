@@ -35,7 +35,7 @@ class Cookie {
     companion object {
         fun empty() = Cookie()
         private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
-        private val EXPIRE_AT = 2
+        private const val EXPIRE_AT = 2
     }
 }
 
