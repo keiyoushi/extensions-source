@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.webtoons
+package eu.kanade.tachiyomi.extension.all.webtoons
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -18,24 +18,26 @@ import kotlin.system.exitProcess
  */
 class WebtoonsUrlActivity : Activity() {
 
+    private val name = javaClass.simpleName
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pathSegments = intent?.data?.pathSegments
-        val title_no = intent?.data?.getQueryParameter("title_no")
-        if (pathSegments != null && pathSegments.size >= 3 && title_no != null) {
+        val titleNo = intent?.data?.getQueryParameter("title_no")
+        val lang = intent?.data?.pathSegments?.get(0)
+        if (titleNo != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Webtoons.URL_SEARCH_PREFIX}${intent?.data?.toString()}")
+                putExtra("query", "$ID_SEARCH_PREFIX$lang:$titleNo")
                 putExtra("filter", packageName)
             }
 
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e("WebtoonsUrlActivity", e.toString())
+                Log.e(name, e.toString())
             }
         } else {
-            Log.e("WebtoonsUrlActivity", "could not parse uri from intent $intent")
+            Log.e(name, "could not parse uri from intent $intent")
         }
 
         finish()
