@@ -201,18 +201,9 @@ open class Webtoons(
                     else -> SManga.UNKNOWN
                 }
             }
-            thumbnail_url = oldManga.thumbnail_url ?: run {
-                val picElement = document.selectFirst("#content > div.cont_box > div.detail_body")
-                val discoverPic = document.selectFirst("#content > div.cont_box > div.detail_header > span.thmb")
-                picElement?.attr("style")
-                    ?.substringAfter("url(")
-                    ?.substringBeforeLast(")")
-                    ?.removeSurrounding("\"")
-                    ?.removeSurrounding("'")
-                    ?.takeUnless { it.isBlank() }
-                    ?: discoverPic?.selectFirst("img:not([alt='Representative image'])")
-                        ?.attr("src")
-            }
+            thumbnail_url = oldManga.thumbnail_url
+                ?: document.selectFirst("head meta[property=\"og:image\"]")
+                    ?.attr("content")
         }
     }
 
