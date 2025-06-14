@@ -23,10 +23,11 @@ class WebtoonsUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val titleNo = intent?.data?.getQueryParameter("title_no")
+        val lang = intent?.data?.pathSegments?.get(0)
         if (titleNo != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "$ID_SEARCH_PREFIX$titleNo")
+                putExtra("query", "$ID_SEARCH_PREFIX$lang:$titleNo")
                 putExtra("filter", packageName)
             }
 
