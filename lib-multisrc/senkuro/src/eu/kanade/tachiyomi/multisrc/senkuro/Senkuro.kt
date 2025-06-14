@@ -431,7 +431,7 @@ abstract class Senkuro(
 
     companion object {
         private const val offsetCount = 20
-        private const val API_URL = "https://api.senkuro.com/graphql"
+        private const val API_URL = "https://api.senkuro.me/graphql"
         private val senkuroExcludeGenres = listOf("hentai", "yaoi", "yuri", "shoujo_ai", "shounen_ai")
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
     }
