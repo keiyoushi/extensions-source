@@ -18,7 +18,7 @@ import kotlin.system.exitProcess
  */
 class WebtoonsUrlActivity : Activity() {
 
-    private val name = this::class.simpleName
+    private val name = javaClass.simpleName
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

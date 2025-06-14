@@ -203,9 +203,27 @@ open class Webtoons(
                     else -> SManga.UNKNOWN
                 }
             }
-            thumbnail_url = oldManga.thumbnail_url
-                ?: document.selectFirst("head meta[property=\"og:image\"]")
+
+            thumbnail_url = run {
+                val bannerFile = document.selectFirst(".detail_header .thmb img")
+                    ?.absUrl("src")
+                    ?.toHttpUrl()
+                    ?.pathSegments
+                    ?.lastOrNull()
+                val oldThumbFile = oldManga.thumbnail_url
+                    ?.toHttpUrl()
+                    ?.pathSegments
+                    ?.lastOrNull()
+                val thumbnail = document.selectFirst("head meta[property=\"og:image\"]")
                     ?.attr("content")
+
+                // replace banner image for toons in library
+                if (oldThumbFile != null && oldThumbFile != bannerFile) {
+                    oldManga.thumbnail_url
+                } else {
+                    thumbnail
+                }
+            }
         }
     }
 
