@@ -7,28 +7,18 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Data<T>(val data: T)
 
-interface ComicListResult {
-    val comics: List<Comic>
-}
+interface ComicListResult { val comics: List<Comic> }
 
 @Serializable
-data class HotComicsResponse(
-    @SerialName("hotComics") override val comics: List<Comic>,
-) : ComicListResult
+data class HotComicsResponse(@SerialName("hotComics") override val comics: List<Comic>) : ComicListResult
 
 @Serializable
-data class RecentUpdateResponse(
-    @SerialName("recentUpdate") override val comics: List<Comic>,
-) : ComicListResult
+data class RecentUpdateResponse(@SerialName("recentUpdate") override val comics: List<Comic>) : ComicListResult
 
-interface SearchResult {
-    val action: ComicsAndAuthors
-}
+interface SearchResult { val action: ComicsAndAuthors }
 
 @Serializable
-data class SearchResponse(
-    @SerialName("searchComicsAndAuthors") override val action: ComicsAndAuthors,
-) : SearchResult
+data class SearchResponse(@SerialName("searchComicsAndAuthors") override val action: ComicsAndAuthors) : SearchResult
 
 @Serializable
 data class ComicsAndAuthors(
@@ -37,19 +27,16 @@ data class ComicsAndAuthors(
     @SerialName("__typename") val typeName: String,
 )
 
-interface ComicResult {
-    val comic: Comic
-}
+interface ComicResult { val comic: Comic }
 
 @Serializable
-data class ComicByIDResponse(
-    @SerialName("comicById") override val comic: Comic,
-) : ComicResult
+data class ComicByIDResponse(@SerialName("comicById") override val comic: Comic) : ComicResult
 
 @Serializable
 data class Comic(
     val id: String,
     val title: String,
+    val description: String,
     val status: String,
     val year: Int,
     val imageUrl: String,
@@ -57,9 +44,6 @@ data class Comic(
     val categories: List<ComicCategory>,
     val dateCreated: String = "",
     val dateUpdated: String,
-    val monthViews: Int = 0,
-    val views: Int,
-    val favoriteCount: Int,
     val lastBookUpdate: String,
     val lastChapterUpdate: String,
     @SerialName("__typename") val typeName: String,
@@ -76,11 +60,7 @@ data class Comic(
         thumbnail_url = this@Comic.imageUrl
         author = this@Comic.authors.joinToString { it.name }
         genre = this@Comic.categories.joinToString { it.name }
-        description = buildString {
-            append("年份: $year | ")
-            append("點閱: ${simplifyNumber(views)} | ")
-            append("喜愛: ${simplifyNumber(favoriteCount)}\n")
-        }
+        description = this@Comic.description
         status = parseStatus
         initialized = true
     }
@@ -112,14 +92,10 @@ data class Author(
     @SerialName("__typename") val typeName: String,
 )
 
-interface ChaptersResult {
-    val chapters: List<Chapter>
-}
+interface ChaptersResult { val chapters: List<Chapter> }
 
 @Serializable
-data class ChaptersResponse(
-    @SerialName("chaptersByComicId") override val chapters: List<Chapter>,
-) : ChaptersResult
+data class ChaptersResponse(@SerialName("chaptersByComicId") override val chapters: List<Chapter>) : ChaptersResult
 
 @Serializable
 data class Chapter(
@@ -133,9 +109,7 @@ data class Chapter(
 )
 
 @Serializable
-data class ImagesResponse(
-    @SerialName("imagesByChapterId") val images: List<Image>,
-)
+data class ImagesResponse(@SerialName("imagesByChapterId") val images: List<Image>)
 
 @Serializable
 data class Image(
@@ -147,9 +121,7 @@ data class Image(
 )
 
 @Serializable
-data class APILimitData(
-    @SerialName("getImageLimit") val getImageLimit: APILimit,
-)
+data class APILimitData(@SerialName("getImageLimit") val getImageLimit: APILimit)
 
 @Serializable
 data class APILimit(

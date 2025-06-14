@@ -12,6 +12,7 @@ val QUERY_HOT_COMICS: String = buildQuery {
           hotComics(pagination: %pagination) {
             id
             title
+            description
             status
             year
             imageUrl
@@ -26,9 +27,6 @@ val QUERY_HOT_COMICS: String = buildQuery {
               __typename
             }
             dateUpdated
-            monthViews
-            views
-            favoriteCount
             lastBookUpdate
             lastChapterUpdate
             __typename
@@ -43,6 +41,7 @@ val QUERY_RECENT_UPDATE: String = buildQuery {
           recentUpdate(pagination: %pagination) {
             id
             title
+            description
             status
             year
             imageUrl
@@ -57,9 +56,6 @@ val QUERY_RECENT_UPDATE: String = buildQuery {
               __typename
             }
             dateUpdated
-            monthViews
-            views
-            favoriteCount
             lastBookUpdate
             lastChapterUpdate
             __typename
@@ -75,6 +71,7 @@ val QUERY_SEARCH: String = buildQuery {
             comics {
               id
               title
+              description
               status
               year
               imageUrl
@@ -89,9 +86,6 @@ val QUERY_SEARCH: String = buildQuery {
                 __typename
               }
               dateUpdated
-              monthViews
-              views
-              favoriteCount
               lastBookUpdate
               lastChapterUpdate
               __typename
@@ -134,6 +128,7 @@ val QUERY_COMIC_BY_ID = buildQuery {
           comicById(comicId: %comicId) {
             id
             title
+            description
             status
             year
             imageUrl
@@ -149,8 +144,6 @@ val QUERY_COMIC_BY_ID = buildQuery {
             }
             dateCreated
             dateUpdated
-            views
-            favoriteCount
             lastBookUpdate
             lastChapterUpdate
             __typename
