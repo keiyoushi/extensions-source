@@ -2,19 +2,15 @@ package eu.kanade.tachiyomi.extension.vi.nhattruyen
 
 import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -79,18 +75,15 @@ class NhatTruyen : WPComics(
             },
         )
     }
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val url = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()
-        if (checkChapterLists(url).isNotEmpty()) {
-            val slug = manga.url.removePrefix("/truyen-tranh/")
-            return client.newCall(GET("$baseUrl/Comic/Services/ComicService.asmx/ChapterList?slug=$slug", headers))
-                .asObservableSuccess()
-                .map { response -> chapterListParse(response) }
-        }
-        return super.fetchChapterList(manga)
-    }
 
-    private fun checkChapterLists(document: Document) = document.selectFirst("a.view-more.hidden")!!.text()
+    override fun chapterListRequest(manga: SManga): Request {
+        val slug = manga.url.substringAfterLast("/") // slug
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("Comic/Services/ComicService.asmx/ChapterList")
+            .addQueryParameter("slug", slug)
+            .build()
+        return GET(url, headers)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val json = response.parseAs<ChapterDTO>()
