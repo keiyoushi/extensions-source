@@ -228,6 +228,11 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         thumbnail_url = document.selectFirst("div.detail-main-cover > img")!!.attr("data-original")
         author = document.select("p.detail-main-info-author > span.detail-main-info-value > a").text()
         artist = author
+        status = when (document.select("p.detail-main-info-author:contains(更新状态) > span.detail-main-info-value")!!.text()) {
+            "连载中" -> SManga.ONGOING
+            "已完结" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
         genre = document.select("div.detail-main-info-class > a.info-tag").eachText().joinToString(", ")
         description = document.selectFirst("#detail > p.detail-desc")!!.text()
     }
