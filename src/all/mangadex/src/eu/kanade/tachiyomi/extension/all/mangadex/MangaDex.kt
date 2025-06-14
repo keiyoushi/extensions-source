@@ -547,7 +547,6 @@ abstract class MangaDex(final override val lang: String, private val dexLang: St
 
         return chapterListResults
             .filterNot { it.attributes!!.isInvalid }
-            .filter { it.attributes!!.isUnavailable != true || preferences.includeUnavailable }
             .map(helper::createChapter)
     }
 
