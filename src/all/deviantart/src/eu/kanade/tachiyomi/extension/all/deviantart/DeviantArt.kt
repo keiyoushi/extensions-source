@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -20,7 +21,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -41,14 +41,6 @@ class DeviantArt : HttpSource(), ConfigurableSource {
 
     private val dateFormat by lazy {
         SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH)
-    }
-
-    private fun parseDate(dateStr: String?): Long {
-        return try {
-            dateFormat.parse(dateStr ?: "")!!.time
-        } catch (_: ParseException) {
-            0L
-        }
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -94,9 +86,9 @@ class DeviantArt : HttpSource(), ConfigurableSource {
         return SManga.create().apply {
             setUrlWithoutDomain(response.request.url.toString())
             author = document.title().substringBefore(" ")
-            title = when (artistInTitle) {
-                true -> "$author - $galleryName"
-                false -> galleryName
+            title = when {
+                artistInTitle -> "$author - $galleryName"
+                else -> galleryName
             }
             description = gallery?.selectFirst(".legacy-journal")?.wholeText()
             thumbnail_url = gallery?.selectFirst("img[property=contentUrl]")?.absUrl("src")
@@ -142,7 +134,7 @@ class DeviantArt : HttpSource(), ConfigurableSource {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.selectFirst("link")!!.text())
                 name = it.selectFirst("title")!!.text()
-                date_upload = parseDate(it.selectFirst("pubDate")?.text())
+                date_upload = dateFormat.tryParse(it.selectFirst("pubDate")?.text())
                 scanlator = it.selectFirst("media|credit")?.text()
             }
         }
@@ -162,16 +154,17 @@ class DeviantArt : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val firstImageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
-        return when (val buttons = document.selectFirst("[draggable=false]")?.children()) {
-            null -> listOf(Page(0, imageUrl = firstImageUrl))
-            else -> buttons.mapIndexed { i, button ->
+        val buttons = document.selectFirst("[draggable=false]")?.children()
+        return if (buttons == null) {
+            val imageUrl = document.selectFirst("img[fetchpriority=high]")?.absUrl("src")
+            listOf(Page(0, imageUrl = imageUrl))
+        } else {
+            buttons.mapIndexed { i, button ->
                 // Remove everything past "/v1/" to get original instead of thumbnail
-                val imageUrl = button.selectFirst("img")?.absUrl("src")?.substringBefore("/v1/")
+                // But need to preserve the query parameter where the token is
+                val imageUrl = button.selectFirst("img")?.absUrl("src")
+                    ?.replaceFirst(Regex("""/v1(/.*)?(?=\?)"""), "")
                 Page(i, imageUrl = imageUrl)
-            }.also {
-                // First image needs token to get original, which is included in firstImageUrl
-                it[0].imageUrl = firstImageUrl
             }
         }
     }
