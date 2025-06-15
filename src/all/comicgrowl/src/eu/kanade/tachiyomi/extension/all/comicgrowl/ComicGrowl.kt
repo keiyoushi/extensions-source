@@ -88,7 +88,7 @@ class ComicGrowl(
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        if (chapter.url.toHttpUrl().fragment?.endsWith(DUMMY_URL_SUFFIX) == true) {
+        if (chapter.url.endsWith(DUMMY_URL_SUFFIX)) {
             throw Exception("Login required to see this chapter")
         }
         return super.pageListRequest(chapter)
