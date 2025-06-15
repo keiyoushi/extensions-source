@@ -9,14 +9,12 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -72,7 +70,6 @@ class ComicGrowl(
                 if (url.isEmpty()) { // need login, set a dummy url and append lock icon for chapter name
                     val hasLockElement = element.selectFirst(".g-payment-article.wait-free-enabled")
                     url = response.request.url.newBuilder().fragment("$index-$DUMMY_URL_SUFFIX").build().toString()
-                    println(url)
                     name = (if (hasLockElement != null) LOCK_ICON else PAY_ICON) + name
                 }
             }
@@ -91,7 +88,6 @@ class ComicGrowl(
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-//        if (chapter.url.startsWith(DUMMY_URL_PREFIX)) {
         if (chapter.url.toHttpUrl().fragment?.endsWith(DUMMY_URL_SUFFIX) == true) {
             throw Exception("Login required to see this chapter")
         }
@@ -118,7 +114,7 @@ class ComicGrowl(
             }
 
             // Get all pages
-            val pageTo = initialResponseRaw.parseAs<PageResponse>(json).totalPages.toString()
+            val pageTo = initialResponseRaw.parseAs<PageResponse>().totalPages.toString()
             val getAllPagesUrl = requestUrl.setQueryParameter("page-to", pageTo).build()
             val getAllPagesRequest = GET(getAllPagesUrl, headers)
             client.newCall(getAllPagesRequest).execute().use {
@@ -126,7 +122,7 @@ class ComicGrowl(
                     throw Exception("Failed to get page list")
                 }
 
-                it.parseAs<PageResponse>(json).result.forEach { resultItem ->
+                it.parseAs<PageResponse>().result.forEach { resultItem ->
                     // Origin scramble string is something like [6, 9, 14, 15, 8, 3, 4, 12, 1, 5, 0, 7, 13, 2, 11, 10]
                     val scramble = resultItem.scramble.drop(1).dropLast(1).replace(", ", "-")
                     // Add fragment to let interceptor descramble the image
@@ -183,8 +179,6 @@ class ComicGrowl(
         private val imageUrlRegex by lazy { Regex("^.*?webp") }
 
         private val DATE_PARSER by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT) }
-
-        private val json: Json by injectLazy()
 
         private const val DUMMY_URL_SUFFIX = "NeedLogin"
 
