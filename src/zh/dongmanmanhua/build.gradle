@@ -1,9 +1,7 @@
 ext {
     extName = 'Dongman Manhua'
     extClass = '.DongmanManhua'
-    themePkg = 'webtoons'
-    baseUrl = 'https://www.dongmanmanhua.cn'
-    overrideVersionCode = 0
+    extVersionCode = 5
     isNsfw = false
 }
 
