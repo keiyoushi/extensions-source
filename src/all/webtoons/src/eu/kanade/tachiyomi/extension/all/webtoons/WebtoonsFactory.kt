@@ -7,7 +7,10 @@ import java.util.Locale
 class WebtoonsFactory : SourceFactory {
     override fun createSources() = listOf(
         Webtoons("en", dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH)),
-        Webtoons("id", dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("id"))),
+        object : Webtoons("id", dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("id"))) {
+            // Override ID as part of the name was removed to be more consiten with other enteries
+            override val id: Long = 8749627068478740298
+        },
         Webtoons("th", dateFormat = SimpleDateFormat("d MMM yyyy", Locale("th"))),
         Webtoons("es", dateFormat = SimpleDateFormat("d MMMM. yyyy", Locale("es"))),
         Webtoons("fr", dateFormat = SimpleDateFormat("d MMM yyyy", Locale.FRENCH)),
