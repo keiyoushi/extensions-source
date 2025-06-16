@@ -129,19 +129,22 @@ abstract class YuYu(
         genre = details.select(".genre-tag").joinToString { it.text() }
         description = details.selectFirst(".sinopse p")?.text()
         details.selectFirst(".manga-meta > div")?.ownText()?.let {
-            status = when (it.lowercase()) {
-                "em andamento" -> SManga.ONGOING
-                "completo" -> SManga.COMPLETED
-                "cancelado" -> SManga.CANCELLED
-                "hiato" -> SManga.ON_HIATUS
-                else -> SManga.UNKNOWN
-            }
+            status = it.toStatus()
         }
-        setUrlWithoutDomain(document.location())
     }
 
-    private fun SManga.fetchMangaId(): String {
-        val document = client.newCall(mangaDetailsRequest(this)).execute().asJsoup()
+    protected fun String.toStatus(): Int {
+        return when (lowercase()) {
+            "em andamento" -> SManga.ONGOING
+            "completo" -> SManga.COMPLETED
+            "cancelado" -> SManga.CANCELLED
+            "hiato" -> SManga.ON_HIATUS
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    protected open fun getMangaId(manga: SManga): String {
+        val document = client.newCall(mangaDetailsRequest(manga)).execute().asJsoup()
         return document.select("script")
             .map(Element::data)
             .firstOrNull(MANGA_ID_REGEX::containsMatchIn)
@@ -159,11 +162,11 @@ abstract class YuYu(
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val mangaId = manga.fetchMangaId()
+        val mangaId = getMangaId(manga)
         val chapters = mutableListOf<SChapter>()
         var page = 1
         do {
-            val dto = fetchChapterListPage(mangaId, page++).parseAs<ChaptersDto>()
+            val dto = fetchChapterListPage(mangaId, page++).parseAs<ChaptersDto<String>>()
             val document = Jsoup.parseBodyFragment(dto.chapters, baseUrl)
             chapters += document.select(chapterListSelector()).map(::chapterFromElement)
         } while (dto.hasNext())
@@ -194,7 +197,7 @@ abstract class YuYu(
     // ============================== Utilities ===========================
 
     @Serializable
-    class ChaptersDto(val chapters: String, private val remaining: Int) {
+    class ChaptersDto<T>(val chapters: T, private val remaining: Int) {
         fun hasNext() = remaining > 0
     }
 
