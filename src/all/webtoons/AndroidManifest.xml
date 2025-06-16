@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name="eu.kanade.tachiyomi.multisrc.webtoons.WebtoonsUrlActivity"
+            android:name="eu.kanade.tachiyomi.extension.all.webtoons.WebtoonsUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
