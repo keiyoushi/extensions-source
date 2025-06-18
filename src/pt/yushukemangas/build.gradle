@@ -3,7 +3,7 @@ ext {
     extClass = '.YushukeMangas'
     themePkg = 'yuyu'
     baseUrl = 'https://new.yushukemangas.com'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
     isNsfw = false
 }
 
