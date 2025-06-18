@@ -3,7 +3,7 @@ ext {
     extClass = '.CosmicScansID'
     themePkg = 'mangathemesia'
     baseUrl = 'https://lc.cosmicscans.asia'
-    overrideVersionCode = 8
+    overrideVersionCode = 9
     isNsfw = true
 }
 
