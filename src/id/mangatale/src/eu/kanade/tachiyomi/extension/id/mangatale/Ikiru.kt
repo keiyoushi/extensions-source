@@ -7,7 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 
-class Ikiru : MangaThemesia("Ikiru", "https://ikiru.world", "id") {
+class Ikiru : MangaThemesia("Ikiru", "https://id.ikiru.wtf", "id") {
 
     override val id = 1532456597012176985
 
