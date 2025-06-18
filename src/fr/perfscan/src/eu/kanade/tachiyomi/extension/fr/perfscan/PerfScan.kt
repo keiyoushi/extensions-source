@@ -8,7 +8,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -29,7 +31,7 @@ class PerfScan : HttpSource() {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
     private val chapterNumberFormat = DecimalFormat("#.##")
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Origin", baseUrl)
 
@@ -60,7 +62,13 @@ class PerfScan : HttpSource() {
 
     // =============================== Search ===============================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$apiUrl/series?type=COMIC&title=$query&page=$page&take=24", headers)
+        val url = "$apiUrl/series".toHttpUrl().newBuilder()
+            .addQueryParameter("type", "COMIC")
+            .addQueryParameter("title", query)
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("take", "24")
+            .build()
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
@@ -114,7 +122,7 @@ class PerfScan : HttpSource() {
                     val chapterIndex = chapterNumberFormat.format(chapter.index)
                     url = "/series/$seriesSlug/chapter/$chapterIndex"
                     name = "Chapitre $chapterIndex" + if (!chapter.title.isNullOrEmpty() && chapter.title != "-") " - ${chapter.title}" else ""
-                    date_upload = runCatching { dateFormat.parse(chapter.createdAt)?.time }.getOrNull() ?: 0L
+                    date_upload = dateFormat.tryParse(chapter.createdAt)
                     scanlator = chapter.season.name
                 }
             }
