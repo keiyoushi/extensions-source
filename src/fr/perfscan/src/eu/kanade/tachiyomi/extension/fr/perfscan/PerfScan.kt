@@ -37,7 +37,14 @@ class PerfScan : HttpSource() {
 
     // ============================== Popular ===============================
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/series?ranking=POPULAR&rankingType=YEARLY&type=COMIC&page=$page&take=24", headers)
+        val url = "$apiUrl/series".toHttpUrl().newBuilder()
+            .addQueryParameter("ranking", "POPULAR")
+            .addQueryParameter("rankingType", "YEARLY")
+            .addQueryParameter("type", "COMIC")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("take", "24")
+            .build()
+        return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -55,7 +62,13 @@ class PerfScan : HttpSource() {
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/series?type=COMIC&page=$page&take=24&latestUpdate=true", headers)
+        val url = "$apiUrl/series".toHttpUrl().newBuilder()
+            .addQueryParameter("type", "COMIC")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("take", "24")
+            .addQueryParameter("latestUpdate", "true")
+            .build()
+        return GET(url, headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
