@@ -243,7 +243,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         if (document.select("div[id=episode-block] a li").size == 0) {
             val singleChapter = SChapter.create().apply {
                 name = "单章节"
-                url = document.select("a[class=col btn btn-primary dropdown-toggle reading]").attr("href")
+                url = document.select("#album_photo_cover > div.thumb-overlay > a").attr("href")
                 date_upload = dateFormat.tryParse(document.select("[itemprop=datePublished]").last()!!.attr("content"))
             }
             return listOf(singleChapter)
