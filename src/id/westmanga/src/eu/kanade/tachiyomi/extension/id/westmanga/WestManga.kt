@@ -187,15 +187,13 @@ class WestManga : HttpSource() {
 
     private fun apiRequest(url: HttpUrl): Request {
         val timestamp = (System.currentTimeMillis() / 1000).toString()
-        val signature = run {
-            val message = "wm-api-request"
-            val key = timestamp + "GET" + url.encodedPath + accessKey + secretKey
-            val mac = Mac.getInstance("HmacSHA256")
-            val secretKeySpec = SecretKeySpec(key.toByteArray(Charsets.UTF_8), "HmacSHA256")
-            mac.init(secretKeySpec)
-            val hash = mac.doFinal(message.toByteArray(Charsets.UTF_8))
-            hash.joinToString("") { "%02x".format(it) }
-        }
+        val message = "wm-api-request"
+        val key = timestamp + "GET" + url.encodedPath + accessKey + secretKey
+        val mac = Mac.getInstance("HmacSHA256")
+        val secretKeySpec = SecretKeySpec(key.toByteArray(Charsets.UTF_8), "HmacSHA256")
+        mac.init(secretKeySpec)
+        val hash = mac.doFinal(message.toByteArray(Charsets.UTF_8))
+        val signature = hash.joinToString("") { "%02x".format(it) }
 
         val apiHeaders = headersBuilder()
             .set("x-wm-request-time", timestamp)
