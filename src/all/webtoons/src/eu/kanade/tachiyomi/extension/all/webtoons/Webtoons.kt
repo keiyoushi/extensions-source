@@ -196,7 +196,7 @@ open class Webtoons(
             status = with(infoElement?.selectFirst("p.day_info")?.text().orEmpty()) {
                 when {
                     contains("UP") || contains("EVERY") || contains("NOUVEAU") -> SManga.ONGOING
-                    contains("END") || contains("TERMINÉ") -> SManga.COMPLETED
+                    contains("END") || contains("COMPLETED") || contains("TERMINÉ") -> SManga.COMPLETED
                     else -> SManga.UNKNOWN
                 }
             }
