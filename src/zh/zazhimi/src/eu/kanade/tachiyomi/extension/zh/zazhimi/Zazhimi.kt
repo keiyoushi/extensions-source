@@ -19,13 +19,16 @@ class Zazhimi : HttpSource() {
     override val name = "杂志迷"
     override val supportsLatest = false
 
+    override fun headersBuilder() = super.headersBuilder()
+        .set("User-Agent", "ZaZhiMi_5.3.0")
+
     // Popular
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/index.php?p=$page&s=20")
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/index.php?p=$page&s=20", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<IndexResponse>()
-        return MangasPage(result.focus.map(IndexItem::toSManga), true)
+        return MangasPage(result.new.map(NewItem::toSManga), true)
     }
 
     // Latest
@@ -42,7 +45,7 @@ class Zazhimi : HttpSource() {
             .addQueryParameter("k", query)
             .addQueryParameter("p", page.toString())
             .addQueryParameter("s", "20")
-        return GET(url.build())
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -52,42 +55,39 @@ class Zazhimi : HttpSource() {
 
     // Manga Detail Page
 
-    // override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url)
+    override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ShowResponse>()
         if (result.content.isEmpty()) return SManga.create()
+        val item = result.content[0]
         return SManga.create().apply {
-            result.content[0].let {
-                title = it.magName
-                author = it.magName.split(" ")[0]
-                thumbnail_url = it.magPic
-                url = "/show.php?a=${it.magId}"
-            }
+            title = item.magName
+            author = item.magName.split(" ")[0]
+            thumbnail_url = item.magPic
+            url = "/show.php?a=${item.magId}"
         }
     }
 
     // Manga Detail Page / Chapters Page (Separate)
 
-    // override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url)
+    override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url, headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ShowResponse>()
         if (result.content.isEmpty()) return emptyList()
-        return listOf(
-            SChapter.create().apply {
-                result.content[0].let {
-                    url = "/show.php?a=${it.magId}"
-                    name = it.magName
-                    chapter_number = 1F
-                }
-            },
-        )
+        val item = result.content[0]
+        val chapter = SChapter.create().apply {
+            url = "/show.php?a=${item.magId}"
+            name = item.magName
+            chapter_number = 1F
+        }
+        return listOf(chapter)
     }
 
     // Manga View Page
 
-    // override fun pageListRequest(chapter: SChapter) = GET(baseUrl + chapter.url)
+    override fun pageListRequest(chapter: SChapter) = GET(baseUrl + chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ShowResponse>()

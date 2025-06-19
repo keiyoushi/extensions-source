@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 data class IndexResponse(
     val status: String,
     val error: String,
-    val focus: List<IndexItem>,
+    val new: List<NewItem>,
 )
 
 @Serializable
@@ -26,18 +26,18 @@ data class SearchResponse(
 )
 
 @Serializable
-data class IndexItem(
+data class NewItem(
     val magId: String,
     val magName: String,
-    val magPic: String,
+    val magCover: String,
     val magDate: String,
-    val thumbPic: String,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
-        title = this@IndexItem.magName
-        author = this@IndexItem.magName.split(" ")[0]
-        thumbnail_url = this@IndexItem.magPic
-        url = "/show.php?a=${this@IndexItem.magId}"
+        title = this@NewItem.magName
+        author = this@NewItem.magName.split(" ")[0]
+        thumbnail_url = this@NewItem.magCover
+        url = "/show.php?a=${this@NewItem.magId}"
+        initialized = true
     }
 }
 
