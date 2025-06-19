@@ -1,12 +1,13 @@
 package eu.kanade.tachiyomi.multisrc.greenshit
 
 import android.content.SharedPreferences
+import android.util.Base64
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,74 +16,43 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
 import java.io.IOException
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 abstract class GreenShit(
     override val name: String,
-    val url: String,
+    override val baseUrl: String,
     override val lang: String,
     val scanId: Long = 1,
 ) : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    private val isCi = System.getenv("CI") == "true"
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
-    private val preferences: SharedPreferences = getPreferences()
+    protected open val json: Json by injectLazy()
 
-    protected var apiUrl: String
-        get() = preferences.getString(API_BASE_URL_PREF, defaultApiUrl)!!
-        private set(value) = preferences.edit().putString(API_BASE_URL_PREF, value).apply()
-
-    private var restoreDefaultEnable: Boolean
-        get() = preferences.getBoolean(DEFAULT_PREF, false)
-        set(value) = preferences.edit().putBoolean(DEFAULT_PREF, value).apply()
-
-    override val baseUrl: String get() = when {
-        isCi -> defaultBaseUrl
-        else -> preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
-    }
-
-    private val defaultBaseUrl: String = url
-    private val defaultApiUrl: String = "https://api.sussytoons.wtf"
+    protected open val apiUrl = "https://api.sussytoons.wtf"
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageLocation)
         .build()
-
-    init {
-        if (restoreDefaultEnable) {
-            restoreDefaultEnable = false
-            preferences.edit().putString(DEFAULT_BASE_URL_PREF, null).apply()
-            preferences.edit().putString(API_DEFAULT_BASE_URL_PREF, null).apply()
-        }
-
-        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
-            if (domain != defaultBaseUrl) {
-                preferences.edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
-                    .apply()
-            }
-        }
-        preferences.getString(API_DEFAULT_BASE_URL_PREF, null).let { domain ->
-            if (domain != defaultApiUrl) {
-                preferences.edit()
-                    .putString(API_BASE_URL_PREF, defaultApiUrl)
-                    .putString(API_DEFAULT_BASE_URL_PREF, defaultApiUrl)
-                    .apply()
-            }
-        }
-    }
 
     open val targetAudience: TargetAudience = TargetAudience.All
 
@@ -182,12 +152,13 @@ abstract class GreenShit(
 
     private fun mangaDetailsParseWeb(response: Response): SManga {
         val json = response.parseScriptToJson().let(DETAILS_CHAPTER_REGEX::find)
-            ?.groups?.get(0)?.value
+            ?.groups?.get(1)?.value
             ?: throw IOException("Details do mangá não foi encontrado")
         return json.parseAs<ResultDto<MangaDto>>().results.toSManga()
     }
 
     // ============================= Chapters =================================
+
     override fun getChapterUrl(chapter: SChapter) = when (contentOrigin) {
         ContentOrigin.Mobile -> "$baseUrl${chapter.url}"
         else -> super.getChapterUrl(chapter)
@@ -210,7 +181,7 @@ abstract class GreenShit(
 
     private fun chapterListParseWeb(response: Response): List<SChapter> {
         val json = response.parseScriptToJson().let(DETAILS_CHAPTER_REGEX::find)
-            ?.groups?.get(0)?.value
+            ?.groups?.get(1)?.value
             ?: return emptyList()
         return json.parseAs<ResultDto<WrapperChapterDto>>().toSChapterList()
     }
@@ -226,8 +197,27 @@ abstract class GreenShit(
         }
 
     private fun pageListRequestMobile(chapter: SChapter): Request {
-        val pathSegment = chapter.url.replace("capitulo", "capitulo-app")
-        return GET("$apiUrl$pathSegment", headers)
+        val pathSegment = chapter.url.replace("capitulo", "capitulo-app-token")
+        val newHeaders = headers.newBuilder()
+            .set("x-client-hash", generateToken(scanId, SECRET_KEY))
+            .set("authorization", "Bearer $token")
+            .build()
+        return GET("$apiUrl$pathSegment", newHeaders)
+    }
+
+    private fun generateToken(scanId: Long, secretKey: String): String {
+        val timestamp = System.currentTimeMillis() / 1000
+        val expiration = timestamp + 3600
+
+        val payload = """{"scan_id":$scanId,"timestamp":$timestamp,"exp":$expiration}"""
+
+        val hmac = Mac.getInstance("HmacSHA256")
+        val secretKeySpec = SecretKeySpec(secretKey.toByteArray(), "HmacSHA256")
+        hmac.init(secretKeySpec)
+        val signatureBytes = hmac.doFinal(payload.toByteArray())
+        val signature = signatureBytes.joinToString("") { "%02x".format(it) }
+
+        return Base64.encodeToString("$payload.$signature".toByteArray(), Base64.NO_WRAP)
     }
 
     override fun pageListParse(response: Response): List<Page> =
@@ -284,6 +274,54 @@ abstract class GreenShit(
         return GET(page.url, imageHeaders)
     }
 
+    // ============================= Login ========================================
+
+    private val credential: Credential by lazy {
+        Credential(
+            email = preferences.getString(USERNAME_PREF, "") as String,
+            password = preferences.getString(PASSWORD_PREF, "") as String,
+        )
+    }
+
+    private fun Token.save(): Token {
+        return this.also {
+            preferences.edit()
+                .putString(TOKEN_PREF, json.encodeToString(it))
+                .apply()
+        }
+    }
+
+    private var _cache: Token? = null
+    private val token: Token
+        get() {
+            if (_cache != null && _cache!!.isValid()) {
+                return _cache!!
+            }
+
+            val tokenValue = preferences.getString(TOKEN_PREF, json.encodeToString(Token()))?.parseAs<Token>()
+            if (tokenValue != null && tokenValue.isValid()) {
+                return tokenValue.also { _cache = it }
+            }
+
+            return credential.takeIf(Credential::isNotEmpty)?.let(::doLogin)?.let { response ->
+                if (response.isSuccessful.not()) {
+                    Token.empty().save()
+                    throw IOException("Falha ao realizar o login")
+                }
+                val tokenDto = response.parseAs<ResultDto<TokenDto>>().results
+                Token(tokenDto.value).also {
+                    _cache = it.save()
+                }
+            } ?: throw IOException("Adicione suas credenciais em Extensões > $name > Configurações")
+        }
+
+    val loginClient = network.cloudflareClient
+
+    fun doLogin(credential: Credential): Response {
+        val payload = """{"usr_email":"${credential.email}","usr_senha":"${credential.password}"}""".toRequestBody("application/json".toMediaType())
+        return loginClient.newCall(POST("$apiUrl/me/login", headers, payload)).execute()
+    }
+
     // ============================= Interceptors =================================
 
     private fun imageLocation(chain: Interceptor.Chain): Response {
@@ -308,52 +346,45 @@ abstract class GreenShit(
     // ============================= Settings ====================================
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val fields = listOf(
-            EditTextPreference(screen.context).apply {
-                key = BASE_URL_PREF
-                title = BASE_URL_PREF_TITLE
-                summary = URL_PREF_SUMMARY
+        if (contentOrigin != ContentOrigin.Mobile) {
+            return
+        }
 
-                dialogTitle = BASE_URL_PREF_TITLE
-                dialogMessage = "URL padrão:\n$defaultBaseUrl"
+        val warning = "⚠️ Os dados inseridos nessa seção serão usados somente para realizar o login na fonte"
+        val message = "Insira %s para prosseguir com o acesso aos recursos disponíveis na fonte"
 
-                setDefaultValue(defaultBaseUrl)
-            },
-            EditTextPreference(screen.context).apply {
-                key = API_BASE_URL_PREF
-                title = API_BASE_URL_PREF_TITLE
-                summary = buildString {
-                    append("Se não souber como verificar a URL da API, ")
-                    append("busque suporte no Discord do repositório de extensões.")
-                    appendLine(URL_PREF_SUMMARY)
-                    append("\n⚠ A fonte não oferece suporte para essa extensão.")
-                }
+        EditTextPreference(screen.context).apply {
+            key = USERNAME_PREF
+            title = "📧 Email"
+            summary = "Email de acesso"
+            dialogMessage = buildString {
+                appendLine(message.format("seu email"))
+                append("\n$warning")
+            }
 
-                dialogTitle = BASE_URL_PREF_TITLE
-                dialogMessage = "URL da API padrão:\n$defaultApiUrl"
+            setDefaultValue("")
 
-                setDefaultValue(defaultApiUrl)
-            },
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also(screen::addPreference)
 
-            SwitchPreferenceCompat(screen.context).apply {
-                key = DEFAULT_PREF
-                title = "Redefinir configurações"
-                summary = buildString {
-                    append("Habilite para redefinir as configurações padrões no próximo reinicialização da aplicação.")
-                    appendLine("Você pode limpar os dados da extensão em Configurações > Avançado:")
-                    appendLine("\t - Limpar os cookies")
-                    appendLine("\t - Limpar os dados da WebView")
-                    appendLine("\t - Limpar o banco de dados (Procure a '$name' e remova os dados)")
-                }
-                setDefaultValue(false)
-                setOnPreferenceChangeListener { _, _ ->
-                    Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
-                    true
-                }
-            },
-        )
+        EditTextPreference(screen.context).apply {
+            key = PASSWORD_PREF
+            title = "🔑 Senha"
+            summary = "Senha de acesso"
+            dialogMessage = buildString {
+                appendLine(message.format("sua senha"))
+                append("\n$warning")
+            }
+            setDefaultValue("")
 
-        fields.forEach(screen::addPreference)
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also(screen::addPreference)
     }
 
     // ============================= Utilities ====================================
@@ -402,19 +433,14 @@ abstract class GreenShit(
 
         val pageRegex = """capituloInicial.{3}(.*?)(\}\]\})""".toRegex()
         val POPULAR_JSON_REGEX = """(?:"dataTop":)(\{.+totalPaginas":\d+\})(?:.+"dataF)""".toRegex()
-        val DETAILS_CHAPTER_REGEX = """(\{\"resultado.+"\}{3})""".toRegex()
+        val DETAILS_CHAPTER_REGEX = """\{"obra":(\{.+"\}{3})""".toRegex()
 
-        private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
-
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_TITLE = "Editar URL da fonte"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val RESTART_APP_MESSAGE = "Reinicie o aplicativo para aplicar as alterações"
 
-        private const val API_BASE_URL_PREF = "overrideApiUrl"
-        private const val API_BASE_URL_PREF_TITLE = "Editar URL da API da fonte"
-        private const val API_DEFAULT_BASE_URL_PREF = "defaultApiUrl"
+        private const val TOKEN_PREF = "greenShitToken"
+        private const val USERNAME_PREF = "usernamePref"
+        private const val PASSWORD_PREF = "passwordPref"
 
-        private const val DEFAULT_PREF = "defaultPref"
+        private const val SECRET_KEY = "sua_chave_secreta_aqui_32_caracteres"
     }
 }
