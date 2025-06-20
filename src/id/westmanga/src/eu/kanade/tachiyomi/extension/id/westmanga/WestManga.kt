@@ -85,21 +85,21 @@ class WestManga : HttpSource() {
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("api")
-            addPathSegment("comic")
-            addPathSegment(slug)
-        }.build()
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("api")
+            .addPathSegment("comic")
+            .addPathSegment(slug)
+            .build()
 
         return apiRequest(url)
     }
 
     override fun getMangaUrl(manga: SManga): String {
         val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("comic")
-            addPathSegment(slug)
-        }.build()
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("comic")
+            .addPathSegment(slug)
+            .build()
 
         return url.toString()
     }
@@ -132,7 +132,7 @@ class WestManga : HttpSource() {
             }.joinToString()
             description = buildString {
                 append(
-                    Jsoup.parseBodyFragment(data.synopsis).wholeText(),
+                    Jsoup.parseBodyFragment(data.synopsis).wholeText().trim(),
                 )
                 append("\n\n")
                 append("Alternative Name: ")
@@ -158,21 +158,20 @@ class WestManga : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val slug = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("api")
-            addPathSegment("v")
-            addPathSegment(slug)
-        }.build()
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("api")
+            .addPathSegment("v")
+            .addPathSegment(slug)
+            .build()
 
         return apiRequest(url)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
         val slug = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegment("view")
-            addPathSegment(slug)
-        }.build()
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("view")
+            .addPathSegment(slug)
 
         return url.toString()
     }
