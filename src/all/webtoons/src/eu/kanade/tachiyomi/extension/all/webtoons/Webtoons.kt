@@ -123,19 +123,27 @@ open class Webtoons(
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(ID_SEARCH_PREFIX)) {
-            val (_, titleLang, titleNo) = query.split(":", limit = 3)
-            val tmpManga = SManga.create().apply {
+            fun Observable<SManga>.toMangasPage() = map {
+                if (it.url.contains("/$langCode/")) {
+                    MangasPage(listOf(it), false)
+                } else {
+                    MangasPage(emptyList(), false)
+                }
+            }
+
+            val (_, titleNo) = query.split(":", limit = 2)
+            val webtoonManga = SManga.create().apply {
                 url = "/episodeList?titleNo=$titleNo"
             }
-            return if (titleLang == langCode) {
-                fetchMangaDetails(tmpManga).map {
-                    MangasPage(listOf(it), false)
-                }
-            } else {
-                Observable.just(
-                    MangasPage(emptyList(), false),
-                )
+            val canvasManga = SManga.create().apply {
+                url = "/challenge/episodeList?titleNo=$titleNo"
             }
+            return fetchMangaDetails(webtoonManga)
+                .toMangasPage()
+                .onErrorResumeNext {
+                    fetchMangaDetails(canvasManga)
+                        .toMangasPage()
+                }
         }
 
         return super.fetchSearchManga(page, query, filters)
@@ -201,7 +209,7 @@ open class Webtoons(
                     else -> SManga.UNKNOWN
                 }
             }
-
+            initialized = true
             thumbnail_url = run {
                 val bannerFile = document.selectFirst(".detail_header .thmb img")
                     ?.absUrl("src")
