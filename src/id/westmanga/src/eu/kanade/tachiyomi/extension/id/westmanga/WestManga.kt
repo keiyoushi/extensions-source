@@ -74,7 +74,13 @@ class WestManga : HttpSource() {
         val entries = data.data.map {
             SManga.create().apply {
                 // old urls compatibility
-                url = "/manga/${it.slug}/"
+                setUrlWithoutDomain(
+                    baseUrl.toHttpUrl().newBuilder()
+                        .addPathSegment("manga")
+                        .addPathSegment(it.slug)
+                        .addPathSegment("")
+                        .toString(),
+                )
                 title = it.title
                 thumbnail_url = it.cover
             }
@@ -84,7 +90,10 @@ class WestManga : HttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
+        val path = "$baseUrl${manga.url}".toHttpUrl().pathSegments
+        assert(path.size == 3) { "Migrate from $name to $name" }
+        val slug = path[1]
+
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("api")
             .addPathSegment("comic")
@@ -109,7 +118,13 @@ class WestManga : HttpSource() {
 
         return SManga.create().apply {
             // old urls compatibility
-            url = "/manga/${data.slug}/"
+            setUrlWithoutDomain(
+                baseUrl.toHttpUrl().newBuilder()
+                    .addPathSegment("manga")
+                    .addPathSegment(data.slug)
+                    .addPathSegment("")
+                    .toString(),
+            )
             title = data.title
             thumbnail_url = data.cover
             author = data.author
@@ -153,7 +168,12 @@ class WestManga : HttpSource() {
 
         return data.chapters.map {
             SChapter.create().apply {
-                url = "/${it.slug}/"
+                setUrlWithoutDomain(
+                    baseUrl.toHttpUrl().newBuilder()
+                        .addPathSegment(it.slug)
+                        .addPathSegment("")
+                        .toString(),
+                )
                 name = "Chapter ${it.number}"
                 date_upload = it.updatedAt.time * 1000
             }
@@ -161,7 +181,10 @@ class WestManga : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val slug = "$baseUrl${chapter.url}".toHttpUrl().pathSegments[0]
+        val path = "$baseUrl${chapter.url}".toHttpUrl().pathSegments
+        assert(path.size == 2) { "Refresh Chapter List" }
+        val slug = path[0]
+
         val url = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("api")
             .addPathSegment("v")
