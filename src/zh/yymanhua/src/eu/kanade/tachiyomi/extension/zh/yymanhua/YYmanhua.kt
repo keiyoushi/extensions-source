@@ -6,11 +6,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 
 class YYmanhua : ParsedHttpSource() {
 
@@ -21,6 +26,10 @@ class YYmanhua : ParsedHttpSource() {
 
     companion object {
         val DESC_REGEX = Regex("\\[\\+展开]|\\[-折叠]")
+        val DATE_REGEX = Regex("(?:连载中|已完结).*?章,? (.*?) (?:最新|完结)")
+        val DATE_FORMAT_REGEX1 = Regex("\\d{1,2}/\\d{1,2}")
+        val DATE_FORMAT_REGEX2 = Regex("\\d{1,2}月\\d{1,2}号")
+        val DATE_FORMAT_REGEX3 = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
         val CHAPTER_REGEX = Regex("第(\\d+(?:\\.\\d+)?)[话話]")
         val NUM_REGEX = Regex("\\d+")
         val IMG_REGEX = Regex("var pix=\"(.*?)\".*?var pvalue=\\[\"(.*?)\"")
@@ -105,7 +114,21 @@ class YYmanhua : ParsedHttpSource() {
 
     // override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url, headers)
 
-    override fun chapterListSelector() = "#chapterlistload a"
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val info = document.selectFirst(".detail-list-form-title")!!.text()
+        val date = parseDate(DATE_REGEX.find(info)?.groups?.get(1)?.value)
+        return document.select("#chapterlistload a").map {
+            SChapter.create().apply {
+                this.setUrlWithoutDomain(it.absUrl("href"))
+                name = it.text()
+                chapter_number = CHAPTER_REGEX.find(name)?.groups?.get(1)?.value?.toFloat() ?: 0F
+                date_upload = date
+            }
+        }
+    }
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         this.setUrlWithoutDomain(element.absUrl("href"))
@@ -132,6 +155,41 @@ class YYmanhua : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    // date: 51分钟前 | 今天 00:00 | 昨天 19:06 | 前天 23:22 | 06/16 | 06月16号 | 2024-12-02
+    private fun parseDate(date: String?): Long {
+        val calendar = Calendar.getInstance()
+        val today = calendar.timeInMillis
+        if (date == null) return today
+        val str = date.trim()
+        return when {
+            str.contains("前天") -> {
+                calendar.add(Calendar.DAY_OF_YEAR, -2)
+                calendar.timeInMillis
+            }
+            str.contains("前") || str.contains("今天") -> today
+            str.contains("昨天") -> {
+                calendar.add(Calendar.DAY_OF_YEAR, -1)
+                calendar.timeInMillis
+            }
+            str.matches(DATE_FORMAT_REGEX1) -> formatter(str, "MM/dd")
+            str.matches(DATE_FORMAT_REGEX2) -> formatter(str, "MM月dd号")
+            str.matches(DATE_FORMAT_REGEX3) -> formatter(str, "yyyy-MM-dd")
+            else -> today
+        }
+    }
+
+    private fun formatter(dateStr: String, pattern: String): Long {
+        val sdf = SimpleDateFormat(pattern, Locale.getDefault())
+        sdf.timeZone = TimeZone.getDefault()
+        val cal = Calendar.getInstance()
+        cal.time = sdf.parse(dateStr)!!
+        if (!pattern.contains("yyyy")) {
+            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+            cal.set(Calendar.YEAR, currentYear)
+        }
+        return cal.timeInMillis
+    }
 
     private fun decode(ciphertext: String): String {
         val groups = DECODE_REGEX1.find(ciphertext)?.groupValues!!
