@@ -232,18 +232,33 @@ open class Webtoons(
         val webtoonUrl = getMangaUrl(manga).toHttpUrl()
         val titleId = webtoonUrl.queryParameter("title_no")
             ?: webtoonUrl.queryParameter("titleNo")
-            ?: throw Exception("id not found, Migrate from $name to $name")
+            ?: throw Exception("Migrate from $name to $name")
 
-        val isCanvas = webtoonUrl.pathSegments.getOrNull(1)?.equals("canvas")
-            ?: throw Exception("unknown type, Migrate from $name to $name")
+        val type = run {
+            val path = webtoonUrl.pathSegments.filter(String::isNotEmpty)
+
+            // older url pattern, people have in their library
+            if (webtoonUrl.encodedPath.contains("episodeList")) {
+                when (path[0]) {
+                    // "/episodeList?titleNo=1049"
+                    "episodeList" -> "webtoon"
+                    // "/challenge/episodeList?titleNo=304446"
+                    "challenge" -> "canvas"
+                    else -> throw Exception("Migrate from $name to $name")
+                }
+            } else {
+                // "/en/canvas/meme-girls/list?title_no=304446"
+                if (path[1] == "canvas") {
+                    "canvas"
+                } else {
+                    "webtoon"
+                }
+            }
+        }
 
         val url = mobileUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("api/v1")
-            if (isCanvas) {
-                addPathSegment("canvas")
-            } else {
-                addPathSegment("webtoon")
-            }
+            addPathSegment(type)
             addPathSegment(titleId)
             addPathSegment("episodes")
             addQueryParameter("pageSize", "99999")
