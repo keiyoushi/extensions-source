@@ -23,6 +23,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
 import rx.Observable
 import java.net.SocketException
 import java.util.Calendar
@@ -276,7 +277,7 @@ open class Webtoons(
         val chapters = result.result.episodeList.mapIndexed { index, episode ->
             SChapter.create().apply {
                 url = episode.viewerLink
-                name = episode.episodeTitle
+                name = Parser.unescapeEntities(episode.episodeTitle, false)
                 date_upload = episode.exposureDateMillis
                 chapter_number = episodeNoRegex
                     .find(episode.episodeTitle)
