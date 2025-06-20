@@ -346,7 +346,7 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
             throw Exception("Комикс 18+ (что-то сломалось)")
         }
 
-        val imageUrl = preferences.getString(FORCE_IMG_DOMAIN, null)?.ifBlank { null }
+        val imageUrl = preferences.getString(FORCE_IMG_DOMAIN_PREF, null)?.ifBlank { null }
             ?: IMG_DOMAIN_REGEX.find(html)?.groupValues?.get(1)?.let { "https://$it" }
 
         if (imageUrl.isNullOrBlank()) {
@@ -595,14 +595,14 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
-            key = FORCE_IMG_DOMAIN
+            key = FORCE_IMG_DOMAIN_PREF
             title = "Домен картинок"
             summary = "Переопределение домена картинок"
             setDefaultValue("")
             setOnPreferenceChangeListener { _, newValue ->
                 try {
                     val res =
-                        preferences.edit().putString(FORCE_IMG_DOMAIN, newValue as String).commit()
+                        preferences.edit().putString(FORCE_IMG_DOMAIN_PREF, newValue as String).commit()
                     Toast.makeText(
                         screen.context,
                         "Для смены домена необходимо перезапустить приложение с полной остановкой.",
@@ -617,14 +617,27 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
     }
 
+    init {
+        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
+            if (prefDefaultDomain != DOMAIN_DEFAULT) {
+                preferences.edit()
+                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .apply()
+            }
+        }
+    }
+
     companion object {
         private val simpleDateFormat by lazy { SimpleDateFormat("dd.MM.yyyy", Locale.US) }
 
         private const val DOMAIN_DEFAULT = "https://comxlife.com"
 
+        private const val DEFAULT_DOMAIN_PREF = "DEFAULT_DOMAIN_PREF"
+
         private const val DOMAIN_PREF = "DOMAIN_PREF"
 
-        private const val FORCE_IMG_DOMAIN = "FORCE_IMG_DOMAIN"
+        private const val FORCE_IMG_DOMAIN_PREF = "FORCE_IMG_DOMAIN_PREF"
 
         private val IMG_DOMAIN_REGEX = "\"host\":\"(.+?)\"".toRegex()
     }
