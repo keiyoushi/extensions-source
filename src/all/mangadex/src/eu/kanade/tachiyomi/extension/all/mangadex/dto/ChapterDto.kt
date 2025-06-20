@@ -20,7 +20,7 @@ data class ChapterAttributesDto(
     val pages: Int,
     val publishAt: String,
     val externalUrl: String?,
-    val isUnavailable: Boolean?,
+    val isUnavailable: Boolean = false,
 ) : AttributesDto() {
 
     /**
