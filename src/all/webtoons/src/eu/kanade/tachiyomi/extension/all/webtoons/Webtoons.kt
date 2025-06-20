@@ -229,12 +229,12 @@ open class Webtoons(
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val tooUrl = getMangaUrl(manga).toHttpUrl()
-        val titleId = tooUrl.queryParameter("title_no")
-            ?: tooUrl.queryParameter("titleNo")
+        val webtoonUrl = getMangaUrl(manga).toHttpUrl()
+        val titleId = webtoonUrl.queryParameter("title_no")
+            ?: webtoonUrl.queryParameter("titleNo")
             ?: throw Exception("id not found, Migrate from $name to $name")
 
-        val isCanvas = tooUrl.pathSegments.getOrNull(1)?.equals("canvas")
+        val isCanvas = webtoonUrl.pathSegments.getOrNull(1)?.equals("canvas")
             ?: throw Exception("unknown type, Migrate from $name to $name")
 
         val url = mobileUrl.toHttpUrl().newBuilder().apply {
