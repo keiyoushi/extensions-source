@@ -26,20 +26,20 @@ class Paginator(
 class BrowseManga(
     val title: String,
     val slug: String,
-    val cover: String,
+    val cover: String? = null,
 )
 
 @Serializable
 class Manga(
     val title: String,
     val slug: String,
-    @SerialName("alternative_name") val alternativeName: String,
-    @SerialName("sinopsis") val synopsis: String,
-    val cover: String,
-    val author: String,
-    @SerialName("country_id") val country: String,
-    val status: String,
-    val color: Boolean,
+    @SerialName("alternative_name") val alternativeName: String? = null,
+    @SerialName("sinopsis") val synopsis: String? = null,
+    val cover: String? = null,
+    val author: String? = null,
+    @SerialName("country_id") val country: String? = null,
+    val status: String? = null,
+    val color: Boolean? = null,
     val genres: List<Genre>,
     val chapters: List<Chapter>,
 )

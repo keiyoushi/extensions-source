@@ -125,18 +125,22 @@ class WestManga : HttpSource() {
                     "CN" -> add("Manhua")
                     "KR" -> add("Manhwa")
                 }
-                if (data.color) {
+                if (data.color == true) {
                     add("Colored")
                 }
                 data.genres.forEach { add(it.name) }
             }.joinToString()
             description = buildString {
-                append(
-                    Jsoup.parseBodyFragment(data.synopsis).wholeText().trim(),
-                )
-                append("\n\n")
-                append("Alternative Name: ")
-                append(data.alternativeName.trim())
+                data.synopsis?.let {
+                    append(
+                        Jsoup.parseBodyFragment(it).wholeText().trim(),
+                    )
+                }
+                data.alternativeName?.let {
+                    append("\n\n")
+                    append("Alternative Name: ")
+                    append(it.trim())
+                }
             }
         }
     }
