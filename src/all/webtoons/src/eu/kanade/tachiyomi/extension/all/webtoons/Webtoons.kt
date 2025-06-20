@@ -270,20 +270,51 @@ open class Webtoons(
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<EpisodeListResponse>()
 
-        return result.result.episodeList.mapIndexed { index, episode ->
+        val recognized: MutableList<Int> = mutableListOf()
+        val unrecognized: MutableList<Int> = mutableListOf()
+
+        val chapters = result.result.episodeList.mapIndexed { index, episode ->
             SChapter.create().apply {
                 url = episode.viewerLink
-                name = buildString {
-                    append(episode.episodeTitle)
-                    append(" Ch. ", index + 1)
-                    if (episode.hasBgm) {
-                        append(" ♫")
-                    }
-                }
+                name = episode.episodeTitle
                 date_upload = episode.exposureDateMillis
+                chapter_number = episodeNoRegex
+                    .find(episode.episodeTitle)
+                    ?.groupValues
+                    ?.get(4)
+                    ?.toFloat()
+                    ?: -1f
+                if (chapter_number == -1f) {
+                    unrecognized += index
+                } else {
+                    recognized += index
+                }
             }
-        }.asReversed()
+        }
+
+        if (unrecognized.size > recognized.size) {
+            chapters.onEachIndexed { index, chapter ->
+                chapter.chapter_number = index.toFloat()
+            }
+        } else {
+            unrecognized.forEach { uIdx ->
+                val chapter = chapters[uIdx]
+                val previous = chapters.getOrNull(uIdx - 1)
+                if (previous == null) {
+                    chapter.chapter_number = 0f
+                } else {
+                    chapter.chapter_number = previous.chapter_number + 0.01f
+                }
+            }
+        }
+
+        return chapters.asReversed()
     }
+
+    private val episodeNoRegex = Regex(
+        """(ep(isode)?|ch(apter)?)\s*\.?\s*(\d+(\.\d+)?)""",
+        RegexOption.IGNORE_CASE,
+    )
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
