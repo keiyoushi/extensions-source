@@ -18,7 +18,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -26,14 +25,12 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.net.SocketException
-import java.text.SimpleDateFormat
 import java.util.Calendar
 
 open class Webtoons(
     override val lang: String,
     private val langCode: String = lang,
     localeForCookie: String = lang,
-    private val dateFormat: SimpleDateFormat,
 ) : HttpSource(), ConfigurableSource {
     override val name = "Webtoons.com"
     override val baseUrl = "https://www.webtoons.com"
@@ -199,7 +196,7 @@ open class Webtoons(
             status = with(infoElement?.selectFirst("p.day_info")?.text().orEmpty()) {
                 when {
                     contains("UP") || contains("EVERY") || contains("NOUVEAU") -> SManga.ONGOING
-                    contains("END") || contains("TERMINÉ") -> SManga.COMPLETED
+                    contains("END") || contains("COMPLETED") || contains("TERMINÉ") -> SManga.COMPLETED
                     else -> SManga.UNKNOWN
                 }
             }
@@ -231,24 +228,44 @@ open class Webtoons(
         throw UnsupportedOperationException()
     }
 
-    override fun chapterListRequest(manga: SManga) = GET(mobileUrl + manga.url, mobileHeaders)
+    override fun chapterListRequest(manga: SManga): Request {
+        val webtoonUrl = getMangaUrl(manga).toHttpUrl()
+        val titleId = webtoonUrl.queryParameter("title_no")
+            ?: webtoonUrl.queryParameter("titleNo")
+            ?: throw Exception("id not found, Migrate from $name to $name")
+
+        val isCanvas = webtoonUrl.pathSegments.getOrNull(1)?.equals("canvas")
+            ?: throw Exception("unknown type, Migrate from $name to $name")
+
+        val url = mobileUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("api/v1")
+            if (isCanvas) {
+                addPathSegment("canvas")
+            } else {
+                addPathSegment("webtoon")
+            }
+            addPathSegment(titleId)
+            addPathSegment("episodes")
+            addQueryParameter("pageSize", "99999")
+        }.build()
+
+        return GET(url, mobileHeaders)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+        val result = response.parseAs<EpisodeListResponse>()
 
-        return document.select("ul#_episodeList li[id*=episode] a").map { element ->
+        return result.result.episodeList.map { episode ->
             SChapter.create().apply {
-                setUrlWithoutDomain(element.absUrl("href"))
-                name = element.selectFirst(".sub_title > span.ellipsis")!!.text()
-                element.selectFirst("a > div.row > div.num")?.let {
-                    name += " Ch. " + it.text().substringAfter("#")
-                }
-                element.selectFirst(".ico_bgm")?.also {
+                url = episode.viewerLink
+                name = episode.episodeTitle
+                if (episode.hasBgm) {
                     name += " ♫"
                 }
-                date_upload = dateFormat.tryParse(element.selectFirst(".sub_info .date")?.text())
+                date_upload = episode.exposureDateMillis
+                chapter_number = episode.episodeNo
             }
-        }
+        }.asReversed()
     }
 
     override fun pageListParse(response: Response): List<Page> {
