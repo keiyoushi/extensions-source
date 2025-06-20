@@ -16,7 +16,6 @@ class EpisodeList(
 
 @Serializable
 class Episode(
-    val episodeNo: Float,
     val episodeTitle: String,
     val viewerLink: String,
     val exposureDateMillis: Long,

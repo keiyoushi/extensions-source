@@ -270,15 +270,17 @@ open class Webtoons(
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<EpisodeListResponse>()
 
-        return result.result.episodeList.map { episode ->
+        return result.result.episodeList.mapIndexed { index, episode ->
             SChapter.create().apply {
                 url = episode.viewerLink
-                name = episode.episodeTitle
-                if (episode.hasBgm) {
-                    name += " ♫"
+                name = buildString {
+                    append(episode.episodeTitle)
+                    append(" Ch. ", index + 1)
+                    if (episode.hasBgm) {
+                        append(" ♫")
+                    }
                 }
                 date_upload = episode.exposureDateMillis
-                chapter_number = episode.episodeNo
             }
         }.asReversed()
     }
