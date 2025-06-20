@@ -1,9 +1,8 @@
 ext {
     extName = 'Perf Scan'
     extClass = '.PerfScan'
-    themePkg = 'heancms'
-    baseUrl = 'https://perf-scan.fr'
-    overrideVersionCode = 0
+    baseUrl = 'https://perf-scan.net'
+    extVersionCode = 30
     isNsfw = true
 }
 
