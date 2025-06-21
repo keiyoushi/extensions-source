@@ -16,18 +16,20 @@ import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TenkaiScan : ParsedHttpSource() {
+class FalcoScan : ParsedHttpSource() {
 
     // Site change theme from Madara to custom theme
     override val versionId = 3
 
-    override val name = "TenkaiScan"
+    override val name = "Falco Scan"
 
-    override val baseUrl = "https://tenkaiscan.net"
+    override val baseUrl = "https://falcoscan.net"
 
     override val lang = "es"
 
     override val supportsLatest = true
+
+    override val id = 5992780069311625546
 
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
 
