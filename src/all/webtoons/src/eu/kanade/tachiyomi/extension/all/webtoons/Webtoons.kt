@@ -303,7 +303,7 @@ open class Webtoons(
 
         if (unrecognized.size > recognized.size) {
             chapters.onEachIndexed { index, chapter ->
-                chapter.chapter_number = index.toFloat()
+                chapter.chapter_number = (index + 1).toFloat()
             }
         } else {
             unrecognized.forEach { uIdx ->
