@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.id.cosmicscansid
 
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
@@ -25,7 +28,25 @@ class CosmicScansID :
     ),
     ConfigurableSource {
 
-    private val preferences = getPreferences()
+    private val defaultBaseUrl: String = super.baseUrl
+
+    private val preferences = getPreferences {
+        getString(DEFAULT_BASE_URL_PREF, defaultBaseUrl).let { domain ->
+            if (domain != defaultBaseUrl) {
+                edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
+    private val isCi = System.getenv("CI") == "true"
+
+    override val baseUrl: String get() = when {
+        isCi -> defaultBaseUrl
+        else -> preferences.prefBaseUrl
+    }
 
     override val client: OkHttpClient = super.client.newBuilder()
         .setRandomUserAgent(
@@ -36,6 +57,19 @@ class CosmicScansID :
         .build()
 
     override val hasProjectPage = true
+
+    private var _cachedBaseUrl: String? = null
+    private var SharedPreferences.prefBaseUrl: String
+        get() {
+            if (_cachedBaseUrl == null) {
+                _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
+            }
+            return _cachedBaseUrl!!
+        }
+        set(value) {
+            _cachedBaseUrl = value
+            edit().putString(BASE_URL_PREF, value).apply()
+        }
 
     // search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -61,5 +95,23 @@ class CosmicScansID :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
+
+        EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = "Edit source URL"
+            summary = "For temporary use, if the extension is updated the change will be lost."
+            dialogTitle = title
+            dialogMessage = "Default URL:\n$defaultBaseUrl"
+            setDefaultValue(defaultBaseUrl)
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Restart the application to apply the changes", Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also { screen.addPreference(it) }
+    }
+
+    companion object {
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
     }
 }
