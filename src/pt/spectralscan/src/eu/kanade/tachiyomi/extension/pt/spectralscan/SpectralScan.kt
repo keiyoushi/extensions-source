@@ -20,7 +20,7 @@ class SpectralScan : ParsedHttpSource() {
 
     override val name = "Spectral Scan"
 
-    override val baseUrl = "https://spectralscan.xyz"
+    override val baseUrl = "https://www.spectral.wtf"
 
     override val supportsLatest = true
 
