@@ -18,8 +18,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.toJsonString
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -29,8 +28,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -45,8 +42,6 @@ abstract class GreenShit(
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
-
-    protected open val json: Json by injectLazy()
 
     protected open val apiUrl = "https://api.sussytoons.wtf"
 
@@ -286,7 +281,7 @@ abstract class GreenShit(
     private fun Token.save(): Token {
         return this.also {
             preferences.edit()
-                .putString(TOKEN_PREF, json.encodeToString(it))
+                .putString(TOKEN_PREF, it.toJsonString())
                 .apply()
         }
     }
@@ -298,7 +293,7 @@ abstract class GreenShit(
                 return _cache!!
             }
 
-            val tokenValue = preferences.getString(TOKEN_PREF, json.encodeToString(Token()))?.parseAs<Token>()
+            val tokenValue = preferences.getString(TOKEN_PREF, Token().toJsonString())?.parseAs<Token>()
             if (tokenValue != null && tokenValue.isValid()) {
                 return tokenValue.also { _cache = it }
             }
