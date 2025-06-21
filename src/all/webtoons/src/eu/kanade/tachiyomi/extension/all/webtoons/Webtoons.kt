@@ -286,6 +286,9 @@ open class Webtoons(
             SChapter.create().apply {
                 url = episode.viewerLink
                 name = Parser.unescapeEntities(episode.episodeTitle, false)
+                if (episode.hasBgm) {
+                    name += " ♫"
+                }
                 date_upload = episode.exposureDateMillis
                 chapter_number = episodeNoRegex
                     .find(episode.episodeTitle)
