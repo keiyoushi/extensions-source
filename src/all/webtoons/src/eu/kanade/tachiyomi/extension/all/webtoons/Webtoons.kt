@@ -123,27 +123,24 @@ open class Webtoons(
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(ID_SEARCH_PREFIX)) {
-            fun Observable<SManga>.toMangasPage() = map {
-                if (it.url.contains("/$langCode/")) {
-                    MangasPage(listOf(it), false)
-                } else {
-                    MangasPage(emptyList(), false)
+            val (_, type, lang, titleNo) = query.split(":", limit = 4)
+            val tmpManga = SManga.create().apply {
+                url = buildString {
+                    if (type == "canvas") {
+                        append("/challenge")
+                    }
+                    append("/episodeList?titleNo=")
+                    append(titleNo)
                 }
             }
 
-            val (_, titleNo) = query.split(":", limit = 2)
-            val webtoonManga = SManga.create().apply {
-                url = "/episodeList?titleNo=$titleNo"
-            }
-            val canvasManga = SManga.create().apply {
-                url = "/challenge/episodeList?titleNo=$titleNo"
-            }
-            return fetchMangaDetails(webtoonManga)
-                .toMangasPage()
-                .onErrorResumeNext {
-                    fetchMangaDetails(canvasManga)
-                        .toMangasPage()
+            return if (lang == langCode) {
+                fetchMangaDetails(tmpManga).map {
+                    MangasPage(listOf(it), false)
                 }
+            } else {
+                Observable.just(MangasPage(emptyList(), false))
+            }
         }
 
         return super.fetchSearchManga(page, query, filters)
