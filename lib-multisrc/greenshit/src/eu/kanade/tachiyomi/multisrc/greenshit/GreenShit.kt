@@ -19,6 +19,8 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -204,7 +206,11 @@ abstract class GreenShit(
         val timestamp = System.currentTimeMillis() / 1000
         val expiration = timestamp + 3600
 
-        val payload = """{"scan_id":$scanId,"timestamp":$timestamp,"exp":$expiration}"""
+        val payload = buildJsonObject {
+            put("scan_id", scanId)
+            put("timestamp", timestamp)
+            put("exp", expiration)
+        }.toJsonString()
 
         val hmac = Mac.getInstance("HmacSHA256")
         val secretKeySpec = SecretKeySpec(secretKey.toByteArray(), "HmacSHA256")
