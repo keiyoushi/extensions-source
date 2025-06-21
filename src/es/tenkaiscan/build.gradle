@@ -1,7 +1,7 @@
 ext {
-    extName = 'TenkaiScan'
-    extClass = '.TenkaiScan'
-    extVersionCode = 36
+    extName = 'Falco Scan'
+    extClass = '.FalcoScan'
+    extVersionCode = 37
     isNsfw = true
 }
 

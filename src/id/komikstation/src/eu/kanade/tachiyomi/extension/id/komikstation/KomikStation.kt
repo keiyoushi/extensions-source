@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 
-class KomikStation : MangaThemesia("Komik Station", "https://komikstation.co", "id") {
+class KomikStation : MangaThemesia("Komik Station", "https://komikstation.org", "id") {
     // Formerly "Komik Station (WP Manga Stream)"
     override val id = 6148605743576635261
 
