@@ -86,7 +86,7 @@ class Astratoons : ParsedHttpSource() {
         document.selectFirst(".status-tag")?.text()?.let {
             when (it.lowercase()) {
                 "em andamento" -> SManga.ONGOING
-
+                "hiato" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
         }
