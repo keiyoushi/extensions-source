@@ -2,8 +2,8 @@ ext {
     extName = 'Komik Station'
     extClass = '.KomikStation'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://komikstation.co'
-    overrideVersionCode = 5
+    baseUrl = 'https://komikstation.org'
+    overrideVersionCode = 6
     isNsfw = false
 }
 

@@ -1,22 +1,37 @@
 package eu.kanade.tachiyomi.extension.id.cosmicscansid
 
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.select.Elements
 import java.util.concurrent.TimeUnit
 
-class CosmicScansID : MangaThemesia(
-    "CosmicScans.id",
-    "https://lc.cosmicscans.asia",
-    "id",
-) {
+class CosmicScansID :
+    MangaThemesia(
+        "CosmicScans.id",
+        "https://lc2.cosmicscans.asia",
+        "id",
+    ),
+    ConfigurableSource {
+
+    private val preferences = getPreferences()
 
     override val client: OkHttpClient = super.client.newBuilder()
+        .setRandomUserAgent(
+            preferences.getPrefUAType(),
+            preferences.getPrefCustomUA(),
+        )
         .rateLimit(20, 4, TimeUnit.SECONDS)
         .build()
 
@@ -43,4 +58,8 @@ class CosmicScansID : MangaThemesia(
 
     // pages
     override val pageSelector = "div#readerarea img:not(noscript img):not([alt=''])"
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
+    }
 }

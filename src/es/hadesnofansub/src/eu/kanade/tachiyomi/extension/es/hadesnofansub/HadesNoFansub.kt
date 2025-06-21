@@ -6,7 +6,7 @@ import java.util.Locale
 
 class HadesNoFansub : Madara(
     "Hades no Fansub",
-    "https://mangareaderpro.com",
+    "https://hadesnofansub.com",
     "es",
     dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale("es")),
 ) {
