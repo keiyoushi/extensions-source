@@ -17,7 +17,7 @@ class TiaManhwa : Madara(
         .rateLimit(2)
         .build()
 
-    override val mangaSubString = "manhwa-em-portugues"
+    override val mangaSubString = "pornhwa-em-portugues"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
