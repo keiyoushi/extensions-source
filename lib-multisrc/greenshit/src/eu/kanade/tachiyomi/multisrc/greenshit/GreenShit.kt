@@ -319,7 +319,10 @@ abstract class GreenShit(
     val loginClient = network.cloudflareClient
 
     fun doLogin(credential: Credential): Response {
-        val payload = """{"usr_email":"${credential.email}","usr_senha":"${credential.password}"}""".toRequestBody("application/json".toMediaType())
+        val payload = buildJsonObject {
+            put("usr_email", credential.email)
+            put("usr_senha", credential.password)
+        }.toJsonString().toRequestBody("application/json".toMediaType())
         return loginClient.newCall(POST("$apiUrl/me/login", headers, payload)).execute()
     }
 
