@@ -13,7 +13,40 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 import java.text.Normalizer
 import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
+
+@Serializable
+class Token(
+    val value: String = "",
+    val updateAt: Long = Date().time,
+) {
+    fun isValid() = value.isNotEmpty() && isExpired().not()
+
+    fun isExpired(): Boolean {
+        val updateAtDate = Date(updateAt)
+        val expiration = Calendar.getInstance().apply {
+            time = updateAtDate
+            add(Calendar.HOUR, 1)
+        }
+        return Date().after(expiration.time)
+    }
+
+    override fun toString() = value
+
+    companion object {
+        fun empty() = Token()
+    }
+}
+
+class Credential(
+    val email: String = "",
+    val password: String = "",
+) {
+    fun isEmpty() = listOf(email, password).any(String::isBlank)
+    fun isNotEmpty() = isEmpty().not()
+}
 
 @Serializable
 class ResultDto<T>(
@@ -83,6 +116,12 @@ class ResultDto<T>(
         val CHAPTER_NUMBER_REGEX = """\d+(\.\d+)?""".toRegex()
     }
 }
+
+@Serializable
+class TokenDto(
+    @SerialName("token")
+    val value: String,
+)
 
 @Serializable
 class MangaDto(
