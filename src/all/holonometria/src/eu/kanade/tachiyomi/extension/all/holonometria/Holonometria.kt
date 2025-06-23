@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -25,7 +26,7 @@ class Holonometria(
 
     override val supportsLatest = false
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/${langPath}alt/holonometria/manga/")
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/${langPath}alt/holonometria/manga/", headers)
 
     override fun popularMangaSelector() = ".manga__item"
     override fun popularMangaNextPageSelector() = null
@@ -37,7 +38,7 @@ class Holonometria(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$baseUrl/${langPath}alt/holonometria/manga/#${query.trim()}")
+        GET("$baseUrl/${langPath}alt/holonometria/manga/#${query.trim()}", headers)
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -71,7 +72,7 @@ class Holonometria(
             ?.replace("&amp;", "&")
     }
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/${manga.url}")
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/${manga.url}", headers)
 
     override fun chapterListSelector() = ".manga-detail__list .manga-detail__list-item"
 
@@ -81,13 +82,7 @@ class Holonometria(
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
         name = element.select(".manga-detail__list-title").text()
-        date_upload = element.selectFirst(".manga-detail__list-date")?.text()?.trim().parseDate()
-    }
-
-    private fun String?.parseDate(): Long {
-        return runCatching {
-            dateFormat.parse(this!!)!!.time
-        }.getOrDefault(0L)
+        date_upload = dateFormat.tryParse(element.selectFirst(".manga-detail__list-date")?.text())
     }
 
     override fun pageListParse(document: Document): List<Page> {
