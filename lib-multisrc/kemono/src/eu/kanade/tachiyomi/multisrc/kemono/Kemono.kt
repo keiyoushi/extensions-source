@@ -43,6 +43,8 @@ open class Kemono(
 
     private val apiPath = "api/v1"
 
+    private val dataPath = "data"
+
     private val imgCdnUrl = baseUrl.replace("//", "//img.")
 
     private var mangasCache: List<KemonoCreatorDto> = emptyList()
@@ -231,7 +233,7 @@ open class Kemono(
 
     override fun pageListParse(response: Response): List<Page> {
         val postData: KemonoPostDtoWrapped = response.parseAs()
-        return postData.post.images.mapIndexed { i, path -> Page(i, imageUrl = baseUrl + path) }
+        return postData.post.images.mapIndexed { i, path -> Page(i, imageUrl = "$baseUrl/$dataPath$path") }
     }
 
     override fun imageRequest(page: Page): Request {
@@ -242,7 +244,7 @@ open class Kemono(
         val index = imageUrl.indexOf('/', 8)
         val url = buildString {
             append(imageUrl, 0, index)
-            append("/thumbnail/data")
+            append("/thumbnail")
             append(imageUrl.substring(index))
         }
         return GET(url, headers)
