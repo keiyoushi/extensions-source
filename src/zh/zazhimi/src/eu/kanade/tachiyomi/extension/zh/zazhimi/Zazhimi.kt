@@ -14,7 +14,9 @@ import okhttp3.Response
 
 class Zazhimi : HttpSource() {
 
-    override val baseUrl = "https://android2024.zazhimi.net/api"
+    private val apiUrl = "https://android2024.zazhimi.net/api"
+
+    override val baseUrl = "https://www.zazhimi.net"
     override val lang = "zh"
     override val name = "杂志迷"
     override val supportsLatest = false
@@ -24,11 +26,12 @@ class Zazhimi : HttpSource() {
 
     // Popular
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/index.php?p=$page&s=20", headers)
+    override fun popularMangaRequest(page: Int) = GET("$apiUrl/index.php?p=$page&s=20", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<IndexResponse>()
-        return MangasPage(result.new.map(NewItem::toSManga), true)
+        val mangas = result.new.map(NewItem::toSManga)
+        return MangasPage(mangas, mangas.isNotEmpty())
     }
 
     // Latest
@@ -40,7 +43,7 @@ class Zazhimi : HttpSource() {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
+        val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("search.php")
             .addQueryParameter("k", query)
             .addQueryParameter("p", page.toString())
@@ -55,7 +58,7 @@ class Zazhimi : HttpSource() {
 
     // Manga Detail Page
 
-    override fun mangaDetailsRequest(manga: SManga) = GET(baseUrl + manga.url, headers)
+    override fun mangaDetailsRequest(manga: SManga) = GET(apiUrl + manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ShowResponse>()
@@ -71,7 +74,7 @@ class Zazhimi : HttpSource() {
 
     // Manga Detail Page / Chapters Page (Separate)
 
-    override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url, headers)
+    override fun chapterListRequest(manga: SManga) = GET(apiUrl + manga.url, headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<ShowResponse>()
@@ -87,7 +90,7 @@ class Zazhimi : HttpSource() {
 
     // Manga View Page
 
-    override fun pageListRequest(chapter: SChapter) = GET(baseUrl + chapter.url, headers)
+    override fun pageListRequest(chapter: SChapter) = GET(apiUrl + chapter.url, headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<ShowResponse>()

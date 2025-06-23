@@ -52,7 +52,7 @@ data class ShowItem(
     val pageUrl: String,
     val pageThumbUrl: String,
 ) {
-    fun toPage(i: Int): Page = Page(i, this@ShowItem.magPic, this@ShowItem.magPic)
+    fun toPage(i: Int): Page = Page(i, imageUrl = this@ShowItem.magPic)
 }
 
 @Serializable
