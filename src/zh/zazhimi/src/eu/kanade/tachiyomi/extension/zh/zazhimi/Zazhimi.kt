@@ -6,11 +6,13 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import java.lang.IllegalStateException
 
 class Zazhimi : HttpSource() {
 
@@ -62,13 +64,14 @@ class Zazhimi : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ShowResponse>()
-        if (result.content.isEmpty()) return SManga.create()
+        if (result.content.isEmpty()) throw IllegalStateException("漫画内容解析为空！")
         val item = result.content[0]
         return SManga.create().apply {
             title = item.magName
             author = item.magName.split(" ")[0]
             thumbnail_url = item.magPic
             url = "/show.php?a=${item.magId}"
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         }
     }
 

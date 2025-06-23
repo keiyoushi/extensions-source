@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.zazhimi
 
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -37,6 +38,7 @@ data class NewItem(
         author = this@NewItem.magName.split(" ")[0]
         thumbnail_url = this@NewItem.magCover
         url = "/show.php?a=${this@NewItem.magId}"
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
         initialized = true
     }
 }
@@ -66,5 +68,6 @@ data class SearchItem(
         title = this@SearchItem.magName
         author = this@SearchItem.magName.split(" ")[0]
         url = "/show.php?a=${this@SearchItem.magId}"
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 }
