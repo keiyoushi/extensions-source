@@ -14,22 +14,15 @@ val QUERY_HOT_COMICS: String = buildQuery {
             title
             description
             status
-            year
             imageUrl
             authors {
               id
               name
-              __typename
             }
             categories {
               id
               name
-              __typename
             }
-            dateUpdated
-            lastBookUpdate
-            lastChapterUpdate
-            __typename
           }
         }
     """
@@ -43,22 +36,15 @@ val QUERY_RECENT_UPDATE: String = buildQuery {
             title
             description
             status
-            year
             imageUrl
             authors {
               id
               name
-              __typename
             }
             categories {
               id
               name
-              __typename
             }
-            dateUpdated
-            lastBookUpdate
-            lastChapterUpdate
-            __typename
           }
         }
     """
@@ -73,22 +59,15 @@ val QUERY_SEARCH: String = buildQuery {
               title
               description
               status
-              year
               imageUrl
               authors {
                 id
                 name
-                __typename
               }
               categories {
                 id
                 name
-                __typename
               }
-              dateUpdated
-              lastBookUpdate
-              lastChapterUpdate
-              __typename
             }
             authors {
               id
@@ -98,9 +77,7 @@ val QUERY_SEARCH: String = buildQuery {
               wikiLink
               comicCount
               views
-              __typename
             }
-            __typename
           }
         }
     """
@@ -113,10 +90,7 @@ val QUERY_CHAPTER: String = buildQuery {
             id
             serial
             type
-            dateCreated
             dateUpdated
-            size
-            __typename
           }
         }
     """
@@ -130,23 +104,15 @@ val QUERY_COMIC_BY_ID = buildQuery {
             title
             description
             status
-            year
             imageUrl
             authors {
               id
               name
-              __typename
             }
             categories {
               id
               name
-              __typename
             }
-            dateCreated
-            dateUpdated
-            lastBookUpdate
-            lastChapterUpdate
-            __typename
           }
         }
     """
@@ -160,7 +126,6 @@ val QUERY_PAGE_LIST = buildQuery {
             kid
             height
             width
-            __typename
           }
         }
     """
@@ -173,7 +138,6 @@ val QUERY_API_LIMIT = buildQuery {
             limit
             usage
             resetInSeconds
-            __typename
           }
         }
     """

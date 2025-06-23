@@ -24,7 +24,6 @@ data class SearchResponse(@SerialName("searchComicsAndAuthors") override val act
 data class ComicsAndAuthors(
     val comics: List<Comic>,
     val authors: List<Author>,
-    @SerialName("__typename") val typeName: String,
 )
 
 interface ComicResult { val comic: Comic }
@@ -38,15 +37,9 @@ data class Comic(
     val title: String,
     val description: String,
     val status: String,
-    val year: Int,
     val imageUrl: String,
     var authors: List<ComicAuthor>,
     val categories: List<ComicCategory>,
-    val dateCreated: String = "",
-    val dateUpdated: String,
-    val lastBookUpdate: String,
-    val lastChapterUpdate: String,
-    @SerialName("__typename") val typeName: String,
 ) {
     private val parseStatus = when (status) {
         "ONGOING" -> SManga.ONGOING
@@ -70,14 +63,12 @@ data class Comic(
 data class ComicCategory(
     val id: String,
     val name: String,
-    @SerialName("__typename") val typeName: String,
 )
 
 @Serializable
 data class ComicAuthor(
     val id: String,
     val name: String,
-    @SerialName("__typename") val typeName: String,
 )
 
 @Serializable
@@ -89,7 +80,6 @@ data class Author(
     val wikiLink: String,
     val comicCount: Int,
     val views: Int,
-    @SerialName("__typename") val typeName: String,
 )
 
 interface ChaptersResult { val chapters: List<Chapter> }
@@ -98,14 +88,11 @@ interface ChaptersResult { val chapters: List<Chapter> }
 data class ChaptersResponse(@SerialName("chaptersByComicId") override val chapters: List<Chapter>) : ChaptersResult
 
 @Serializable
-data class Chapter(
+class Chapter(
     val id: String,
     val serial: String,
     val type: String,
-    val dateCreated: String,
     val dateUpdated: String,
-    val size: Int,
-    @SerialName("__typename") val typeName: String,
 )
 
 @Serializable
@@ -117,7 +104,6 @@ data class Image(
     val kid: String,
     val height: Int,
     val width: Int,
-    @SerialName("__typename") val typeName: String,
 )
 
 @Serializable
@@ -128,5 +114,4 @@ data class APILimit(
     val limit: Int,
     val usage: Int,
     val resetInSeconds: String,
-    @SerialName("__typename") val typeName: String,
 )

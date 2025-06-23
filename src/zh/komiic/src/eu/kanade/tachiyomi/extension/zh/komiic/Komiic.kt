@@ -207,7 +207,7 @@ class Komiic : HttpSource() {
                     "book" -> "第 ${chapter.serial} 卷"
                     else -> chapter.serial
                 }
-                date_upload = parseDate(chapter.dateCreated)
+                date_upload = parseDate(chapter.dateUpdated)
                 chapter_number = chapter.serial.toFloatOrNull() ?: -1f
             }
         }.reversed()
