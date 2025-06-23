@@ -62,7 +62,7 @@ data class Comic(
         genre = this@Comic.categories.joinToString { it.name }
         description = this@Comic.description
         status = parseStatus
-        initialized = true
+        initialized = this@Comic.description.isNotEmpty()
     }
 }
 
