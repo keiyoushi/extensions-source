@@ -15,6 +15,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -24,6 +25,7 @@ import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.internal.http2.ErrorCode
 import okhttp3.internal.http2.StreamResetException
 import rx.Observable
 import java.nio.ByteBuffer
@@ -53,9 +55,6 @@ class Hitomi(
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageUrlInterceptor)
-        .apply {
-            interceptors().add(0, ::streamResetRetry)
-        }
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -118,7 +117,22 @@ class Hitomi(
             }
         }
 
-        return client.newCall(request).awaitSuccess().use { it.body.bytes() }
+        val tries = 5
+        repeat(tries) { attempt ->
+            try {
+                return client.newCall(request).awaitSuccess().use { it.body.bytes() }
+            } catch (e: StreamResetException) {
+                if (e.errorCode == ErrorCode.INTERNAL_ERROR) {
+                    if (attempt == tries - 1) throw e // last attempt, rethrow
+                    Log.e(name, "Stream reset attempt ${attempt + 1}", e)
+                    delay((attempt + 1).seconds)
+                } else {
+                    throw e
+                }
+            }
+        }
+
+        throw Exception("Unreachable code")
     }
 
     private suspend fun hitomiSearch(
@@ -665,20 +679,6 @@ class Hitomi(
     // real_full_path_from_hash <-- common.js
     private fun thumbPathFromHash(hash: String): String {
         return hash.replace(Regex("""^.*(..)(.)$"""), "$2/$1")
-    }
-
-    private fun streamResetRetry(chain: Interceptor.Chain): Response {
-        return try {
-            chain.proceed(chain.request())
-        } catch (e: StreamResetException) {
-            Log.e(name, "reset", e)
-            if (e.message.orEmpty().contains("INTERNAL_ERROR")) {
-                Thread.sleep(2.seconds.inWholeMilliseconds)
-                chain.proceed(chain.request())
-            } else {
-                throw e
-            }
-        }
     }
 
     private fun imageUrlInterceptor(chain: Interceptor.Chain): Response {
