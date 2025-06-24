@@ -17,7 +17,7 @@ import org.jsoup.nodes.Element
 import java.util.Calendar
 import java.util.Locale
 
-class KomikCast : MangaThemesia("Komik Cast", "https://komikcast02.com", "id", "/daftar-komik") {
+class KomikCast : MangaThemesia("Komik Cast", "https://komikcast.li", "id", "/daftar-komik") {
 
     // Formerly "Komik Cast (WP Manga Stream)"
     override val id = 972717448578983812
