@@ -117,14 +117,17 @@ class Hitomi(
             }
         }
 
-        repeat(5) { attempt ->
+        val tries = 5
+        repeat(tries) { attempt ->
             try {
                 return client.newCall(request).awaitSuccess().use { it.body.bytes() }
             } catch (e: StreamResetException) {
                 if (e.errorCode == ErrorCode.INTERNAL_ERROR) {
-                    if (attempt == 4) throw e // last attempt, rethrow
+                    if (attempt == tries - 1) throw e // last attempt, rethrow
                     Log.e(name, "Stream reset attempt ${attempt + 1}", e)
                     delay((attempt + 1).seconds)
+                } else {
+                    throw e
                 }
             }
         }
