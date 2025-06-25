@@ -1,0 +1,59 @@
+name: Build changed extension
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  build-extension:
+    name: Build changed extension in src
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository (latest)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: zulu
+
+      - name: Set permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Detect changed extension
+        id: detect
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD | grep '^src/' | awk -F'/' '{print $2 ":" $3}' | sort | uniq | head -n 1)
+          if [ -z "$CHANGED" ]; then
+            echo "No changes in src/*/* detected."
+            exit 1
+          fi
+          echo "changed=$CHANGED" >> $GITHUB_OUTPUT
+          echo "Will build: $CHANGED"
+
+      - name: Build changed extension
+        env:
+          CI: false
+        run: ./gradlew -p src ${{ steps.detect.outputs.changed }}:assembleDebug
+
+      - name: Detect APK
+        id: apk
+        run: |
+          LANG=$(echo "${{ steps.detect.outputs.changed }}" | cut -d':' -f1)
+          EXT=$(echo "${{ steps.detect.outputs.changed }}" | cut -d':' -f2)
+          APK_PATH=$(find src/$LANG/$EXT/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          APK_NAME=$(basename "$APK_PATH" .apk)
+          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.apk_name }}
+          path: ${{ steps.apk.outputs.apk_path }}
+          retention-days: 1
