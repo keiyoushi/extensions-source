@@ -264,7 +264,15 @@ abstract class MachineTranslations(
         val filters = mutableListOf<Filter<*>>(
             SelectionList("Sort", sortByList),
             Filter.Separator(),
+            SelectionList("Type", typeList),
+            Filter.Separator(),
+            SelectionList("Year", yearList),
+            Filter.Separator(),
+            SelectionList("Status", statusList),
+            Filter.Separator(),
             GenreList(title = "Genres", genres = genreList),
+            Filter.Separator(),
+            GenreList(title = "Tags", genres = tagList),
         )
 
         return FilterList(filters)
@@ -343,3 +351,5 @@ abstract class MachineTranslations(
         private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.US)
     }
 }
+
+
