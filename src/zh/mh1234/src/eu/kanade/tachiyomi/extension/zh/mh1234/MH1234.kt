@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.mh1234
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -36,7 +37,7 @@ class MH1234 : ParsedHttpSource() {
 
     // Popular Page
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/comic/one/page_waphit.html")
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/comic/one/page_hit.html")
 
     override fun popularMangaSelector() = ".itemBox"
 
@@ -62,20 +63,26 @@ class MH1234 : ParsedHttpSource() {
 
     // Search Page
 
-    // override fun getFilterList() = buildFilterList()
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET(
         baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("search/")
-            .addQueryParameter("keyword", query)
+            .addQueryParameter("keywords", query)
             .addQueryParameter("page", page.toString()).build(),
     )
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaParse(response: Response): MangasPage {
+        val doc = response.asJsoup()
+        val cur = response.request.url.queryParameter("page")?.toInt() ?: 1
+        val total = doc.selectFirst("#total-page")!!.attr("value").toInt()
+        val mangas = doc.select(popularMangaSelector()).map(::popularMangaFromElement)
+        return MangasPage(mangas, cur < total)
+    }
 
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = null
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
+
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     // Manga Detail Page
 
@@ -87,7 +94,8 @@ class MH1234 : ParsedHttpSource() {
             "已完结" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        description = document.selectFirst("meta[name='description']")?.text()
+        val desc = document.selectFirst("#full-des") ?: document.selectFirst("#simple-des")
+        description = desc?.text()?.substring(3)
     }
 
     // Manga Detail Page / Chapters Page (Separate)
@@ -99,9 +107,9 @@ class MH1234 : ParsedHttpSource() {
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val date = DATE_FORMAT.parse(document.selectFirst(".txtItme .date")!!.text())?.time
-        val list = document.select("#chapter-list-1 a").map {
+        val doc = response.asJsoup()
+        val date = DATE_FORMAT.parse(doc.selectFirst(".txtItme .date")!!.text())?.time
+        val list = doc.select("#chapter-list-1 a").map {
             SChapter.create().apply {
                 this.setUrlWithoutDomain(it.absUrl("href"))
                 name = it.text()
@@ -115,9 +123,9 @@ class MH1234 : ParsedHttpSource() {
     // Manga View Page
 
     override fun pageListParse(document: Document): List<Page> {
-        val html = document.body().html()
-        val prefix = "https://gmh1234.wszwhg.net/${IMG_REGEX2.find(html)!!.groups[0]!!.value}"
-        val list = Json.decodeFromString<List<String>>(IMG_REGEX1.find(html)!!.groups[0]!!.value)
+        val body = document.body().html()
+        val prefix = "https://gmh1234.wszwhg.net/${IMG_REGEX2.find(body)!!.groups[1]!!.value}"
+        val list = Json.decodeFromString<List<String>>(IMG_REGEX1.find(body)!!.groups[1]!!.value)
         return list.mapIndexed { i, s ->
             Page(i, "${document.location()}?p=${i + 1}", prefix + s)
         }
