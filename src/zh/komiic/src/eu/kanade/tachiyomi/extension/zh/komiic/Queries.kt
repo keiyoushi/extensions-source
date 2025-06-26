@@ -69,15 +69,6 @@ val QUERY_SEARCH: String = buildQuery {
                 name
               }
             }
-            authors {
-              id
-              name
-              chName
-              enName
-              wikiLink
-              comicCount
-              views
-            }
           }
         }
     """
@@ -131,14 +122,14 @@ val QUERY_PAGE_LIST = buildQuery {
     """
 }
 
-val QUERY_API_LIMIT = buildQuery {
-    """
-        query getImageLimit {
-          getImageLimit {
-            limit
-            usage
-            resetInSeconds
-          }
-        }
-    """
-}
+// val QUERY_API_LIMIT = buildQuery {
+//     """
+//         query getImageLimit {
+//           getImageLimit {
+//             limit
+//             usage
+//             resetInSeconds
+//           }
+//         }
+//     """
+// }

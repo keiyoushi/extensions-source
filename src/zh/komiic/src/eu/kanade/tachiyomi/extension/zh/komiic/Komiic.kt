@@ -25,7 +25,6 @@ import java.util.Locale
 import java.util.TimeZone
 
 class Komiic : HttpSource() {
-    // Override variables
     override var name = "Komiic"
     override val baseUrl = "https://komiic.com"
     override val lang = "zh"
@@ -33,9 +32,17 @@ class Komiic : HttpSource() {
 
     override val client: OkHttpClient = network.cloudflareClient
 
-    // Variables
     private val queryAPIUrl = "$baseUrl/api/query"
     private val json: Json by injectLazy()
+
+    companion object {
+        private const val PAGE_SIZE = 20
+        const val PREFIX_ID_SEARCH = "id:"
+        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+    }
 
     /**
      * 解析漫畫列表
@@ -44,13 +51,7 @@ class Komiic : HttpSource() {
     private inline fun <reified T : ComicListResult> parseComicList(response: Response): MangasPage {
         val res = response.parseAs<Data<T>>()
         val comics = res.data.comics
-
-        val entries = comics.map { comic ->
-            comic.toSManga()
-        }
-
-        val hasNextPage = comics.size == PAGE_SIZE
-        return MangasPage(entries, hasNextPage)
+        return MangasPage(comics.map(Comic::toSManga), comics.size == PAGE_SIZE)
     }
 
     // Hot Comic
@@ -112,11 +113,8 @@ class Komiic : HttpSource() {
      */
     private fun parseComicByID(response: Response): MangasPage {
         val res = response.parseAs<Data<ComicByIDResponse>>()
-        val entries = mutableListOf<SManga>()
-        val comic = res.data.comic.toSManga()
-        entries.add(comic)
-        val hasNextPage = entries.size == PAGE_SIZE
-        return MangasPage(entries, hasNextPage)
+        val entries = mutableListOf(res.data.comic.toSManga())
+        return MangasPage(entries, false)
     }
 
     // Search
@@ -144,25 +142,14 @@ class Komiic : HttpSource() {
         }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val res = response.parseAs<Data<SearchResponse>>()
-        val comics = res.data.action.comics
-
-        val entries = comics.map { comic ->
-            comic.toSManga()
-        }
-
-        val hasNextPage = comics.size == PAGE_SIZE
-        return MangasPage(entries, hasNextPage)
-    }
+    override fun searchMangaParse(response: Response) = parseComicList<SearchResponse>(response)
 
     // Comic details
     override fun mangaDetailsRequest(manga: SManga) = comicByIDRequest(manga.url.substringAfterLast("/"))
 
     override fun mangaDetailsParse(response: Response): SManga {
         val res = response.parseAs<Data<ComicByIDResponse>>()
-        val comic = res.data.comic.toSManga()
-        return comic
+        return res.data.comic.toSManga()
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
@@ -264,22 +251,9 @@ class Komiic : HttpSource() {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> String.parseAs(): T =
-        json.decodeFromString(this)
+    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
 
-    private inline fun <reified T> Response.parseAs(): T =
-        use { body.string() }.parseAs()
+    private inline fun <reified T> Response.parseAs(): T = use { body.string() }.parseAs()
 
-    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody =
-        json.encodeToString(this)
-            .toRequestBody(JSON_MEDIA_TYPE)
-
-    companion object {
-        private const val PAGE_SIZE = 20
-        const val PREFIX_ID_SEARCH = "id:"
-        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-    }
+    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody = json.encodeToString(this).toRequestBody(JSON_MEDIA_TYPE)
 }

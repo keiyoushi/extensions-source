@@ -15,21 +15,17 @@ data class HotComicsResponse(@SerialName("hotComics") override val comics: List<
 @Serializable
 data class RecentUpdateResponse(@SerialName("recentUpdate") override val comics: List<Comic>) : ComicListResult
 
-interface SearchResult { val action: ComicsAndAuthors }
+@Serializable
+data class ComicsAndAuthors(val comics: List<Comic>)
 
 @Serializable
-data class SearchResponse(@SerialName("searchComicsAndAuthors") override val action: ComicsAndAuthors) : SearchResult
+data class SearchResponse(@SerialName("searchComicsAndAuthors") val action: ComicsAndAuthors) : ComicListResult {
+    override val comics: List<Comic>
+        get() = action.comics
+}
 
 @Serializable
-data class ComicsAndAuthors(
-    val comics: List<Comic>,
-    val authors: List<Author>,
-)
-
-interface ComicResult { val comic: Comic }
-
-@Serializable
-data class ComicByIDResponse(@SerialName("comicById") override val comic: Comic) : ComicResult
+data class ComicByIDResponse(@SerialName("comicById") val comic: Comic)
 
 @Serializable
 data class Comic(
@@ -60,35 +56,16 @@ data class Comic(
 }
 
 @Serializable
-data class ComicCategory(
-    val id: String,
-    val name: String,
-)
+data class ComicCategory(val id: String, val name: String)
 
 @Serializable
-data class ComicAuthor(
-    val id: String,
-    val name: String,
-)
+data class ComicAuthor(val id: String, val name: String)
 
 @Serializable
-data class Author(
-    val id: String,
-    val name: String,
-    val chName: String,
-    val enName: String,
-    val wikiLink: String,
-    val comicCount: Int,
-    val views: Int,
-)
-
-interface ChaptersResult { val chapters: List<Chapter> }
+data class ChaptersResponse(@SerialName("chaptersByComicId") val chapters: List<Chapter>)
 
 @Serializable
-data class ChaptersResponse(@SerialName("chaptersByComicId") override val chapters: List<Chapter>) : ChaptersResult
-
-@Serializable
-class Chapter(
+data class Chapter(
     val id: String,
     val serial: String,
     val type: String,
@@ -106,12 +83,12 @@ data class Image(
     val width: Int,
 )
 
-@Serializable
-data class APILimitData(@SerialName("getImageLimit") val getImageLimit: APILimit)
-
-@Serializable
-data class APILimit(
-    val limit: Int,
-    val usage: Int,
-    val resetInSeconds: String,
-)
+// @Serializable
+// data class APILimitData(@SerialName("getImageLimit") val getImageLimit: APILimit)
+//
+// @Serializable
+// data class APILimit(
+//     val limit: Int,
+//     val usage: Int,
+//     val resetInSeconds: String,
+// )
