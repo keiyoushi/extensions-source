@@ -89,12 +89,16 @@ class Pixiv(override val lang: String) : HttpSource() {
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         // Deeplink selection of specific IDs: simply fetch the single object and return
-        if (query.startsWith(ID_ILLUST_PREFIX)) {
+        if (query.startsWith(ID_ILLUST_PREFIX) &&
+            query.removePrefix(ID_ILLUST_PREFIX).matches("\\d+".toRegex())
+        ) {
             val illustId = query.removePrefix(ID_ILLUST_PREFIX)
             val manga = getIllustCached(illustId).toSManga()
             return Observable.just(MangasPage(listOf(manga), hasNextPage = false))
         }
-        if (query.startsWith(ID_SERIES_PREFIX)) {
+        if (query.startsWith(ID_SERIES_PREFIX) &&
+            query.removePrefix(ID_SERIES_PREFIX).matches("\\d+".toRegex())
+        ) {
             val seriesId = query.removePrefix(ID_SERIES_PREFIX)
             // TODO: caching!
             val series = ApiCall("/touch/ajax/illust/series/$seriesId")
