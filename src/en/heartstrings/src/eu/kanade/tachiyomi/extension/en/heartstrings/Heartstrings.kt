@@ -15,73 +15,71 @@ import rx.Observable
 
 class Heartstrings : ParsedHttpSource() {
 
-    final override val baseUrl: String = "https://heartstringscomic.com"
-    final override val lang: String = "en"
-    final override val name = "Heartstrings"
-    final override val supportsLatest = false
+    override val baseUrl: String = "https://heartstringscomic.com"
+    override val lang: String = "en"
+    override val name = "Heartstrings"
+    override val supportsLatest = false
 
-    private val archive = "/archive"
 
-    private val creator = "spiceparfait"
+    private val synopsis = """
+        Isidora Velasco is a beloved pop star with two big secrets: she used to be in a punk band called Velvet Crowbar, and she's a lesbian.
+        "Heartstrings contains adult themes and is recommended for 18+ readers.""".trimIndent()
 
-    private val synopsis = "Isidora Velasco is a beloved pop star with two big secrets: she used to be in a punk band called Velvet Crowbar, and she's a lesbian.\n" +
-        "Heartstrings contains adult themes and is recommended for 18+ readers."
-
-    final override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl$archive", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        return GET("$baseUrl$ARCHIVE_PATH", headers)
     }
 
-    final override fun popularMangaSelector(): String {
+    override fun popularMangaSelector(): String {
         return "div.archive-chapters"
     }
 
-    final override fun popularMangaFromElement(element: Element): SManga {
+    override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            setUrlWithoutDomain(archive)
+            setUrlWithoutDomain(ARCHIVE_PATH)
             title = name
             thumbnail_url = element.select("img").first()?.attr("src")
-            artist = creator
-            author = creator
+            artist = CREATOR
+            author = CREATOR
             status = SManga.ONGOING
             description = synopsis
         }
     }
 
-    final override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(document: Document): SManga {
         return SManga.create().apply {
-            setUrlWithoutDomain(archive)
+            setUrlWithoutDomain(ARCHIVE_PATH)
             title = name
             thumbnail_url = document.select("div.archive-chapters img").first()?.attr("src")
-            artist = creator
-            author = creator
+            artist = CREATOR
+            author = CREATOR
             status = SManga.ONGOING
             description = synopsis
         }
     }
 
-    final override fun chapterListSelector(): String {
+    override fun chapterListSelector(): String {
         return "div.chapter"
     }
 
-    final override fun chapterFromElement(element: Element): SChapter {
+    override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
             setUrlWithoutDomain(element.select("div.chapter-more a").attr("href"))
             name = element.select("h3 a").text()
         }
     }
 
-    final override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(document: Document): List<Page> {
         return document.select("div.archivecomic a")
             .mapIndexed { index, element ->
                 Page(index, element.attr("abs:href"))
             }
     }
 
-    final override fun imageUrlParse(document: Document): String {
+    override fun imageUrlParse(document: Document): String {
         return document.select("img#comicimage").attr("abs:src")
     }
 
-    final override fun fetchSearchManga(
+    override fun fetchSearchManga(
         page: Int,
         query: String,
         filters: FilterList,
@@ -89,14 +87,19 @@ class Heartstrings : ParsedHttpSource() {
         return Observable.just(MangasPage(emptyList(), false))
     }
 
-    final override fun popularMangaNextPageSelector(): String? = null
-    final override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
-    final override fun latestUpdatesNextPageSelector(): String? = null
-    final override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
-    final override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    final override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    final override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-    final override fun searchMangaNextPageSelector(): String? = null
-    final override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    final override fun searchMangaSelector(): String = throw UnsupportedOperationException()
+    override fun popularMangaNextPageSelector(): String? = null
+    override fun latestUpdatesFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector(): String? = null
+    override fun latestUpdatesSelector(): String = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
+    override fun searchMangaNextPageSelector(): String? = null
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaSelector(): String = throw UnsupportedOperationException()
+
+    companion object {
+        private const val ARCHIVE_PATH = "/archive"
+        private const val CREATOR = "spiceparfait"
+    }
 }
