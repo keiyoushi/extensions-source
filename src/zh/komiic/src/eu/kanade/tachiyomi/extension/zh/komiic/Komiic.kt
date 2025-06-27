@@ -50,16 +50,6 @@ class Komiic : HttpSource(), ConfigurableSource {
         preferencesInternal(screen.context).forEach(screen::addPreference)
     }
 
-    /**
-     * 解析漫畫列表
-     * Parse comic list
-     */
-    private inline fun <reified T : ComicListResult> parseComicList(response: Response): MangasPage {
-        val res = response.parseAs<Data<T>>()
-        val comics = res.data.comics
-        return MangasPage(comics.map(Comic::toSManga), comics.size == PAGE_SIZE)
-    }
-
     // Hot Comic
     override fun popularMangaRequest(page: Int): Request {
         val variables = Variables().set(
@@ -70,7 +60,11 @@ class Komiic : HttpSource(), ConfigurableSource {
         return POST(queryAPIUrl, headers, payload.toJsonRequestBody())
     }
 
-    override fun popularMangaParse(response: Response) = parseComicList<HotComicsResponse>(response)
+    override fun popularMangaParse(response: Response): MangasPage {
+        val res = response.parseAs<Data<List<Comic>>>()
+        val comics = res.data.result
+        return MangasPage(comics.map(Comic::toSManga), comics.size == PAGE_SIZE)
+    }
 
     // Recent update
     override fun latestUpdatesRequest(page: Int): Request {
@@ -82,7 +76,7 @@ class Komiic : HttpSource(), ConfigurableSource {
         return POST(queryAPIUrl, headers, payload.toJsonRequestBody())
     }
 
-    override fun latestUpdatesParse(response: Response) = parseComicList<RecentUpdateResponse>(response)
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     /**
      * 根據 ID 搜索漫畫
@@ -99,8 +93,8 @@ class Komiic : HttpSource(), ConfigurableSource {
      * Parse the comic based on the ID.
      */
     private fun parseComicByID(response: Response): MangasPage {
-        val res = response.parseAs<Data<ComicByIDResponse>>()
-        val entries = listOf(res.data.comic.toSManga())
+        val res = response.parseAs<Data<Comic>>()
+        val entries = listOf(res.data.result.toSManga())
         return MangasPage(entries, false)
     }
 
@@ -125,14 +119,18 @@ class Komiic : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun searchMangaParse(response: Response) = parseComicList<SearchResponse>(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val res = response.parseAs<Data<Result<List<Comic>>>>()
+        val comics = res.data.result.result
+        return MangasPage(comics.map(Comic::toSManga), comics.size == PAGE_SIZE)
+    }
 
     // Comic details
     override fun mangaDetailsRequest(manga: SManga) = comicByIDRequest(manga.url.substringAfterLast("/"))
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val res = response.parseAs<Data<ComicByIDResponse>>()
-        return res.data.comic.toSManga()
+        val res = response.parseAs<Data<Comic>>()
+        return res.data.result.toSManga()
     }
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
@@ -158,8 +156,8 @@ class Komiic : HttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val res = response.parseAs<Data<ChaptersResponse>>()
-        val comics = res.data.chapters.sortedWith(
+        val res = response.parseAs<Data<List<Chapter>>>()
+        val comics = res.data.result.sortedWith(
             compareByDescending<Chapter> { it.type }
                 .thenByDescending { it.serial.toFloatOrNull() },
         )
@@ -220,11 +218,9 @@ class Komiic : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val res = response.parseAs<Data<ImagesResponse>>()
-        val pages = res.data.images
+        val res = response.parseAs<Data<List<Image>>>()
         val chapterUrl = response.request.url.toString().split("#")[1]
-
-        return pages.mapIndexed { index, image ->
+        return res.data.result.mapIndexed { index, image ->
             Page(
                 index,
                 "${chapterUrl.substringBeforeLast("/")}/$index",

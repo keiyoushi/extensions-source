@@ -9,7 +9,7 @@ private fun buildQuery(queryAction: () -> String): String {
 val QUERY_HOT_COMICS: String = buildQuery {
     """
         query hotComics(%pagination: Pagination!) {
-          hotComics(pagination: %pagination) {
+          result: hotComics(pagination: %pagination) {
             id
             title
             description
@@ -31,7 +31,7 @@ val QUERY_HOT_COMICS: String = buildQuery {
 val QUERY_RECENT_UPDATE: String = buildQuery {
     """
         query recentUpdate(%pagination: Pagination!) {
-          recentUpdate(pagination: %pagination) {
+          result: recentUpdate(pagination: %pagination) {
             id
             title
             description
@@ -53,8 +53,8 @@ val QUERY_RECENT_UPDATE: String = buildQuery {
 val QUERY_SEARCH: String = buildQuery {
     """
         query searchComicAndAuthorQuery(%keyword: String!) {
-          searchComicsAndAuthors(keyword: %keyword) {
-            comics {
+          result: searchComicsAndAuthors(keyword: %keyword) {
+            result: comics {
               id
               title
               description
@@ -77,7 +77,7 @@ val QUERY_SEARCH: String = buildQuery {
 val QUERY_CHAPTER: String = buildQuery {
     """
         query chapterByComicId(%comicId: ID!) {
-          chaptersByComicId(comicId: %comicId) {
+          result: chaptersByComicId(comicId: %comicId) {
             id
             serial
             type
@@ -91,7 +91,7 @@ val QUERY_CHAPTER: String = buildQuery {
 val QUERY_COMIC_BY_ID = buildQuery {
     """
         query comicById(%comicId: ID!) {
-          comicById(comicId: %comicId) {
+          result: comicById(comicId: %comicId) {
             id
             title
             description
@@ -113,7 +113,7 @@ val QUERY_COMIC_BY_ID = buildQuery {
 val QUERY_PAGE_LIST = buildQuery {
     """
         query imagesByChapterId(%chapterId: ID!) {
-          imagesByChapterId(chapterId: %chapterId) {
+          result: imagesByChapterId(chapterId: %chapterId) {
             id
             kid
             height

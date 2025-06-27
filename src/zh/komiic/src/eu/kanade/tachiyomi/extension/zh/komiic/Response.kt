@@ -1,31 +1,16 @@
 package eu.kanade.tachiyomi.extension.zh.komiic
 
 import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Data<T>(val data: T)
-
-interface ComicListResult { val comics: List<Comic> }
+class Data<T>(val data: Result<T>)
 
 @Serializable
-data class HotComicsResponse(@SerialName("hotComics") override val comics: List<Comic>) : ComicListResult
+class Result<T>(val result: T)
 
 @Serializable
-data class RecentUpdateResponse(@SerialName("recentUpdate") override val comics: List<Comic>) : ComicListResult
-
-@Serializable
-data class ComicsAndAuthors(val comics: List<Comic>)
-
-@Serializable
-data class SearchResponse(@SerialName("searchComicsAndAuthors") val action: ComicsAndAuthors) : ComicListResult {
-    override val comics: List<Comic>
-        get() = action.comics
-}
-
-@Serializable
-data class ComicByIDResponse(@SerialName("comicById") val comic: Comic)
+data class ComicItem(val id: String, val name: String)
 
 @Serializable
 data class Comic(
@@ -34,8 +19,8 @@ data class Comic(
     val description: String,
     val status: String,
     val imageUrl: String,
-    var authors: List<ComicAuthor>,
-    val categories: List<ComicCategory>,
+    var authors: List<ComicItem>,
+    val categories: List<ComicItem>,
 ) {
     private val parseStatus = when (status) {
         "ONGOING" -> SManga.ONGOING
@@ -56,15 +41,6 @@ data class Comic(
 }
 
 @Serializable
-data class ComicCategory(val id: String, val name: String)
-
-@Serializable
-data class ComicAuthor(val id: String, val name: String)
-
-@Serializable
-data class ChaptersResponse(@SerialName("chaptersByComicId") val chapters: List<Chapter>)
-
-@Serializable
 data class Chapter(
     val id: String,
     val serial: String,
@@ -72,9 +48,6 @@ data class Chapter(
     val size: Int,
     val dateUpdated: String,
 )
-
-@Serializable
-data class ImagesResponse(@SerialName("imagesByChapterId") val images: List<Image>)
 
 @Serializable
 data class Image(
@@ -85,4 +58,4 @@ data class Image(
 )
 
 // @Serializable
-// data class APILimitData(@SerialName("reachedImageLimit") val result: Boolean)
+// class APILimitData(@SerialName("reachedImageLimit") val result: Boolean)
