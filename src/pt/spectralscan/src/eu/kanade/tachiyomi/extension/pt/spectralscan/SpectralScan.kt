@@ -8,9 +8,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.ByteString.Companion.decodeBase64
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -28,6 +32,19 @@ class SpectralScan : ParsedHttpSource() {
 
     override val client = super.client.newBuilder()
         .rateLimit(2)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            val url = request.url
+            if (url.fragment.isNullOrBlank().not() && url.fragment!!.contains("page")) {
+                val dto = response.parseAs<ImageSrc>()
+                val byteString = dto.base64.decodeBase64()!!
+                return@addInterceptor response.newBuilder()
+                    .body(byteString.toResponseBody(dto.mimeType.toMediaType()))
+                    .build()
+            }
+            response
+        }
         .build()
 
     // ==================== Popular ==========================
@@ -121,8 +138,8 @@ class SpectralScan : ParsedHttpSource() {
     // ==================== Page ==========================
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("#chapterPagesContainer img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
+        return document.select(".manga-page-container canvas").mapIndexed { index, element ->
+            Page(index, imageUrl = "${element.absUrl("data-api-src")}#page")
         }
     }
 
