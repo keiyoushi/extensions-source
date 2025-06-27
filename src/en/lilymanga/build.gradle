@@ -2,8 +2,8 @@ ext {
     extName = 'Lily Manga'
     extClass = '.LilyManga'
     themePkg = 'madara'
-    baseUrl = 'https://lilymanga.net'
-    overrideVersionCode = 4
+    baseUrl = 'https://lilymanga.xyz'
+    overrideVersionCode = 5
     isNsfw = true
 }
 

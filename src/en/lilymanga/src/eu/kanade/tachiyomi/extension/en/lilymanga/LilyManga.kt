@@ -8,7 +8,7 @@ import java.util.Locale
 
 class LilyManga : Madara(
     "Lily Manga",
-    "https://lilymanga.net",
+    "https://lilymanga.xyz",
     "en",
     dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US),
 ) {
@@ -16,7 +16,7 @@ class LilyManga : Madara(
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2)
         .build()
 
-    override val mangaSubString = "ys"
+    override val mangaSubString = "gl"
 
     override val useNewChapterEndpoint = true
 
