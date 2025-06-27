@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.pixiv
 
+import eu.kanade.tachiyomi.extension.all.pixiv.PixivConstants.ID_ILLUST_PREFIX
+import eu.kanade.tachiyomi.extension.all.pixiv.PixivConstants.ID_SERIES_PREFIX
+import eu.kanade.tachiyomi.extension.all.pixiv.PixivConstants.ID_USER_PREFIX
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -85,6 +88,21 @@ class Pixiv(override val lang: String) : HttpSource() {
     private lateinit var searchIterator: Iterator<SManga>
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        // Deeplink selection of specific IDs: simply fetch the single object and return
+        if (query.startsWith(ID_ILLUST_PREFIX)) {
+            val illustId = query.removePrefix(ID_ILLUST_PREFIX)
+            val manga = getIllustCached(illustId).toSManga()
+            return Observable.just(MangasPage(listOf(manga), hasNextPage = false))
+        }
+        if (query.startsWith(ID_SERIES_PREFIX)) {
+            val seriesId = query.removePrefix(ID_SERIES_PREFIX)
+            // TODO: caching!
+            val series = ApiCall("/touch/ajax/illust/series/$seriesId")
+                .executeApi<PixivSeriesDetails>().series!!
+            val manga = series.toSManga()
+            return Observable.just(MangasPage(listOf(manga), hasNextPage = false))
+        }
+
         val filters = filters.list as PixivFilters
         val hash = Pair(query, filters.toList()).hashCode()
 
@@ -95,19 +113,35 @@ class Pixiv(override val lang: String) : HttpSource() {
             lateinit var predicates: List<(PixivIllust) -> Boolean>
 
             if (query.isNotBlank()) {
-                searchSequence = makeIllustSearchSequence(
-                    word = query,
-                    order = filters.order,
-                    mode = filters.rating,
-                    sMode = "s_tc",
-                    type = filters.type,
-                    dateBefore = filters.dateBefore.ifBlank { null },
-                    dateAfter = filters.dateAfter.ifBlank { null },
-                )
+                // TODO: it would be useful to allow multiple user: tags in the query
+                if (query.startsWith(ID_USER_PREFIX) &&
+                    query.removePrefix(ID_USER_PREFIX).matches("\\d+".toRegex())
+                ) {
+                    val userId = query.removePrefix(ID_USER_PREFIX)
+                    searchSequence = makeUserIdIllustSearchSequence(
+                        id = userId,
+                        type = filters.type,
+                    )
 
-                predicates = buildList {
-                    filters.makeTagsPredicate()?.let(::add)
-                    filters.makeUsersPredicate()?.let(::add)
+                    predicates = buildList {
+                        filters.makeTagsPredicate()?.let(::add)
+                        filters.makeRatingPredicate()?.let(::add)
+                    }
+                } else {
+                    searchSequence = makeIllustSearchSequence(
+                        word = query,
+                        order = filters.order,
+                        mode = filters.rating,
+                        sMode = "s_tc",
+                        type = filters.type,
+                        dateBefore = filters.dateBefore.ifBlank { null },
+                        dateAfter = filters.dateAfter.ifBlank { null },
+                    )
+
+                    predicates = buildList {
+                        filters.makeTagsPredicate()?.let(::add)
+                        filters.makeUsersPredicate()?.let(::add)
+                    }
                 }
             } else if (filters.users.isNotBlank()) {
                 searchSequence = makeUserIllustSearchSequence(
@@ -185,9 +219,6 @@ class Pixiv(override val lang: String) : HttpSource() {
         val searchUsers = HttpCall("/search_user.php?s_mode=s_usr")
             .apply { url.addQueryParameter("nick", nick) }
 
-        val fetchUserIllusts = ApiCall("/touch/ajax/user/illusts")
-            .apply { type?.let { url.setEncodedQueryParameter("type", it) } }
-
         for (p in countUp(start = 1)) {
             searchUsers.url.setEncodedQueryParameter("p", p.toString())
 
@@ -198,17 +229,24 @@ class Pixiv(override val lang: String) : HttpSource() {
             if (userIds.isEmpty()) break
 
             for (userId in userIds) {
-                fetchUserIllusts.url.setEncodedQueryParameter("id", userId)
-
-                for (p in countUp(start = 1)) {
-                    fetchUserIllusts.url.setEncodedQueryParameter("p", p.toString())
-
-                    val illusts = fetchUserIllusts.executeApi<PixivResults>().illusts!!
-                    if (illusts.isEmpty()) break
-
-                    yieldAll(illusts)
-                }
+                yieldAll(makeUserIdIllustSearchSequence(userId, type))
             }
+        }
+    }
+    private fun makeUserIdIllustSearchSequence(id: String, type: String?) = sequence<PixivIllust> {
+        val fetchUserIllusts = ApiCall("/touch/ajax/user/illusts")
+            .apply {
+                type?.let { url.setEncodedQueryParameter("type", it) }
+                url.setEncodedQueryParameter("id", id)
+            }
+
+        for (p in countUp(start = 1)) {
+            fetchUserIllusts.url.setEncodedQueryParameter("p", p.toString())
+
+            val illusts = fetchUserIllusts.executeApi<PixivResults>().illusts!!
+            if (illusts.isEmpty()) break
+
+            yieldAll(illusts)
         }
     }
 
@@ -218,22 +256,40 @@ class Pixiv(override val lang: String) : HttpSource() {
         val seriesIdsSeen = mutableSetOf<String>()
 
         forEach { illust ->
-            val series = illust.series
-
-            if (series == null) {
-                val manga = SManga.create()
-                manga.setUrlWithoutDomain("/artworks/${illust.id!!}")
-                manga.title = illust.title ?: "(null)"
-                manga.thumbnail_url = illust.url
-                yield(manga)
-            } else if (seriesIdsSeen.add(series.id!!)) {
-                val manga = SManga.create()
-                manga.setUrlWithoutDomain("/user/${series.userId!!}/series/${series.id}")
-                manga.title = series.title ?: "(null)"
-                manga.thumbnail_url = series.coverImage ?: illust.url
+            val manga = illust.toSManga()
+            if (seriesIdsSeen.add(manga.url)) {
                 yield(manga)
             }
         }
+    }
+
+    private fun PixivSeries.toSearchResult() = PixivSearchResultSeries(
+        id = id,
+        title = title,
+        userId = userId,
+        coverImage = coverImage?.let { if (it.isString) it.content else null },
+    )
+    private fun PixivIllust.toSManga(): SManga {
+        if (series == null) {
+            val manga = SManga.create()
+            manga.setUrlWithoutDomain("/artworks/${id!!}")
+            manga.title = title ?: "(null)"
+            manga.thumbnail_url = url
+            return manga
+        } else {
+            val manga = series.toSManga().apply {
+                thumbnail_url = thumbnail_url ?: this@toSManga.url
+            }
+            return manga
+        }
+    }
+    private fun PixivSeries.toSManga() = toSearchResult().toSManga()
+    private fun PixivSearchResultSeries.toSManga(): SManga {
+        val manga = SManga.create()
+        manga.setUrlWithoutDomain("/user/${userId!!}/series/$id")
+        manga.title = title ?: "(null)"
+        manga.thumbnail_url = coverImage
+        return manga
     }
 
     private var latestMangaNextPage = 1
