@@ -81,6 +81,7 @@ val QUERY_CHAPTER: String = buildQuery {
             id
             serial
             type
+            size
             dateUpdated
           }
         }
@@ -124,12 +125,8 @@ val QUERY_PAGE_LIST = buildQuery {
 
 // val QUERY_API_LIMIT = buildQuery {
 //     """
-//         query getImageLimit {
-//           getImageLimit {
-//             limit
-//             usage
-//             resetInSeconds
-//           }
+//         query reachedImageLimit {
+//           reachedImageLimit
 //         }
 //     """
 // }

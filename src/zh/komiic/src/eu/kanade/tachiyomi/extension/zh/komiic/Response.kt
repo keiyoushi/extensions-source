@@ -69,6 +69,7 @@ data class Chapter(
     val id: String,
     val serial: String,
     val type: String,
+    val size: Int,
     val dateUpdated: String,
 )
 
@@ -84,11 +85,4 @@ data class Image(
 )
 
 // @Serializable
-// data class APILimitData(@SerialName("getImageLimit") val getImageLimit: APILimit)
-//
-// @Serializable
-// data class APILimit(
-//     val limit: Int,
-//     val usage: Int,
-//     val resetInSeconds: String,
-// )
+// data class APILimitData(@SerialName("reachedImageLimit") val result: Boolean)
