@@ -277,6 +277,7 @@ class Pixiv(override val lang: String) : HttpSource() {
             manga.thumbnail_url = url
             return manga
         } else {
+            val series = series.copy(userId = series.userId ?: author_details?.user_name)
             val manga = series.toSManga().apply {
                 thumbnail_url = thumbnail_url ?: this@toSManga.url
             }

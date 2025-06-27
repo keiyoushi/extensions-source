@@ -58,6 +58,7 @@ internal data class PixivIllustPageUrls(
 
 @Serializable
 internal data class PixivAuthorDetails(
+    val user_id: String? = null,
     val user_name: String? = null,
 )
 
@@ -72,6 +73,9 @@ internal data class PixivSeries(
     val coverImage: JsonPrimitive? = null,
     val id: String? = null,
     val title: String? = null,
+    /**
+     * CAUTION: sometimes this isn't passed!
+     */
     val userId: String? = null,
 )
 
