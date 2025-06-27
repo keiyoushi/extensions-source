@@ -14,16 +14,15 @@ import org.jsoup.nodes.Element
 import rx.Observable
 
 class Heartstrings : ParsedHttpSource() {
-
     override val baseUrl: String = "https://heartstringscomic.com"
     override val lang: String = "en"
     override val name = "Heartstrings"
     override val supportsLatest = false
 
-
     private val synopsis = """
         Isidora Velasco is a beloved pop star with two big secrets: she used to be in a punk band called Velvet Crowbar, and she's a lesbian.
-        "Heartstrings contains adult themes and is recommended for 18+ readers.""".trimIndent()
+        "Heartstrings contains adult themes and is recommended for 18+ readers.
+    """.trimIndent()
 
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl$ARCHIVE_PATH", headers)
