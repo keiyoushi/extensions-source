@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.mayotune
+package eu.kanade.tachiyomi.extension.all.mayotune
 
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Contextual
@@ -15,10 +15,10 @@ data class ChapterDto(
     val date: String,
 ) {
     @Contextual
-    private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
-    fun getChapterURL(): String =
-        "/api/chapters?id=$id&number=${this.getNumberStr()}"
+    fun getChapterURL(chapterEndpoint: String): String =
+        "/api/$chapterEndpoint/chapters?id=$id&number=${this.getNumberStr()}"
 
     fun getNumberStr(): String = if (this.number % 1 == 0f) {
         this.number.toInt().toString()
