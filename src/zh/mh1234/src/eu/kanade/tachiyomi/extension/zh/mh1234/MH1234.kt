@@ -8,14 +8,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
@@ -29,7 +29,6 @@ class MH1234 : ParsedHttpSource() {
     companion object {
         val IMG_REGEX1 = Regex("var chapterImages = (\\[.*?])")
         val IMG_REGEX2 = Regex("var chapterPath = \"(.*?)\"")
-        val NUM_REGEX = Regex("\\d+")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).apply {
             timeZone = TimeZone.getDefault()
         }
@@ -37,7 +36,7 @@ class MH1234 : ParsedHttpSource() {
 
     // Popular Page
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/comic/one/page_hit.html")
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/comic/one/page_hit.html", headers)
 
     override fun popularMangaSelector() = ".itemBox"
 
@@ -53,7 +52,7 @@ class MH1234 : ParsedHttpSource() {
 
     // Latest Page
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic/one/page_recent.html")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/comic/one/page_recent.html", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -63,12 +62,13 @@ class MH1234 : ParsedHttpSource() {
 
     // Search Page
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET(
-        baseUrl.toHttpUrl().newBuilder()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val httpUrl = baseUrl.toHttpUrl().newBuilder()
             .addPathSegment("search/")
             .addQueryParameter("keywords", query)
-            .addQueryParameter("page", page.toString()).build(),
-    )
+            .addQueryParameter("page", page.toString())
+        return GET(httpUrl.build(), headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
@@ -108,13 +108,12 @@ class MH1234 : ParsedHttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val doc = response.asJsoup()
-        val date = DATE_FORMAT.parse(doc.selectFirst(".txtItme .date")!!.text())?.time
+        val date = DATE_FORMAT.tryParse(doc.selectFirst(".txtItme .date")?.text())
         val list = doc.select("#chapter-list-1 a").map {
             SChapter.create().apply {
                 this.setUrlWithoutDomain(it.absUrl("href"))
                 name = it.text()
-                date_upload = date ?: Date().time
-                chapter_number = NUM_REGEX.find(it.text())?.value?.toFloat() ?: -1F
+                date_upload = date
             }
         }
         return list.reversed()
@@ -125,7 +124,7 @@ class MH1234 : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val body = document.body().html()
         val prefix = "https://gmh1234.wszwhg.net/${IMG_REGEX2.find(body)!!.groups[1]!!.value}"
-        val list = Json.decodeFromString<List<String>>(IMG_REGEX1.find(body)!!.groups[1]!!.value)
+        val list = IMG_REGEX1.find(body)!!.groups[1]!!.value.parseAs<List<String>>()
         return list.mapIndexed { i, s ->
             Page(i, "${document.location()}?p=${i + 1}", prefix + s)
         }
