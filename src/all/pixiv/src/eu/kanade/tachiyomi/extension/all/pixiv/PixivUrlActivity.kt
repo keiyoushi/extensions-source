@@ -5,9 +5,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import eu.kanade.tachiyomi.extension.all.pixiv.PixivConstants.ID_ILLUST_PREFIX
-import eu.kanade.tachiyomi.extension.all.pixiv.PixivConstants.ID_SERIES_PREFIX
-import eu.kanade.tachiyomi.extension.all.pixiv.PixivConstants.ID_USER_PREFIX
 import kotlin.system.exitProcess
 
 /**
@@ -24,43 +21,19 @@ class PixivUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        var couldBuildIntent = false
-
-        do {
-            var pathSegments = intent?.data?.pathSegments ?: break
-
-            if ("en".equals(pathSegments[0])) {
-                pathSegments = pathSegments.subList(1, pathSegments.size)
-            }
-            if (pathSegments.size < 2) break
-
-            val query = with(pathSegments[0]) {
-                when {
-                    equals("artworks") -> "${ID_ILLUST_PREFIX}${pathSegments[1]}"
-                    equals("users") -> "${ID_USER_PREFIX}${pathSegments[1]}"
-                    equals("user") &&
-                        (pathSegments.size >= 4 && pathSegments[2].equals("series")) ->
-                        "${ID_SERIES_PREFIX}${pathSegments[3]}"
-                    else -> null
-                }
-            }
-            if (query == null) break
-
+        if (intent?.data != null) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", query)
+                putExtra("query", intent.data.toString())
                 putExtra("filter", packageName)
             }
-            couldBuildIntent = true
 
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
                 Log.e("PixivUrlActivity", e.toString())
             }
-        } while (false)
-
-        if (!couldBuildIntent) {
+        } else {
             Log.e("PixivUrlActivity", "Could not parse URI from intent $intent")
         }
 
