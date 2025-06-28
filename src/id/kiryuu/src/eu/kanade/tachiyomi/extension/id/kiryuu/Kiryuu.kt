@@ -9,7 +9,7 @@ import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Kiryuu : MangaThemesia("Kiryuu", "https://kiryuu01.com", "id", dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id"))) {
+class Kiryuu : MangaThemesia("Kiryuu", "https://kiryuu02.com", "id", dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id"))) {
     // Formerly "Kiryuu (WP Manga Stream)"
     override val id = 3639673976007021338
 

@@ -7,7 +7,7 @@ import okhttp3.Request
 
 class Siikomik : MangaThemesia(
     "Siikomik",
-    "https://siikomik.art",
+    "https://web.siikomik.org",
     "id",
 ) {
     override val versionId = 2
