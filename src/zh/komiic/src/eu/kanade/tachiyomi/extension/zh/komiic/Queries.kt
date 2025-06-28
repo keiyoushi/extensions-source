@@ -123,10 +123,10 @@ val QUERY_PAGE_LIST = buildQuery {
     """
 }
 
-// val QUERY_API_LIMIT = buildQuery {
-//     """
-//         query reachedImageLimit {
-//           reachedImageLimit
-//         }
-//     """
-// }
+val QUERY_API_LIMIT = buildQuery {
+    """
+        query reachedImageLimit {
+          result: reachedImageLimit
+        }
+    """
+}

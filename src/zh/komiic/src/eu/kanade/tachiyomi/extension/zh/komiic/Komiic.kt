@@ -11,16 +11,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -35,7 +32,6 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     private val queryAPIUrl = "$baseUrl/api/query"
     private val preferences = getPreferences()
-    private val json: Json by injectLazy()
 
     companion object {
         const val PAGE_SIZE = 20
@@ -168,7 +164,6 @@ class Komiic : HttpSource(), ConfigurableSource {
             else -> comics
         }
         val comicUrl = response.request.url.fragment
-        val format = preferences.getString(CHAPTER_SIZE_FORMAT_PREF, "%dP")!!
         return items.map {
             SChapter.create().apply {
                 url = "$comicUrl/chapter/${it.id}/page/1"
@@ -177,7 +172,7 @@ class Komiic : HttpSource(), ConfigurableSource {
                     "book" -> "第 ${it.serial} 卷"
                     else -> it.serial
                 }
-                scanlator = String.format(format, it.size)
+                scanlator = "${it.size}P"
                 date_upload = parseDate(it.dateUpdated)
                 chapter_number = if (it.type == "book") 0F else it.serial.toFloatOrNull() ?: -1f
             }
@@ -190,22 +185,24 @@ class Komiic : HttpSource(), ConfigurableSource {
      *
      * (Idk how to throw an exception in reading page)
      */
-    // private fun checkAPILimit(): Observable<Boolean> {
-    //     val payload = Payload("reachedImageLimit", null, QUERY_API_LIMIT).toJsonRequestBody()
-    //     val response = client.newCall(POST(queryAPIUrl, headers, payload)).asObservableSuccess()
-    //     val limit = response.map { it.parseAs<Data<APILimitData>>().data.result }
-    //     return limit
-    // }
+    private fun checkAPILimit(): Observable<Boolean> {
+        val payload = Payload("reachedImageLimit", Variables().build(), QUERY_API_LIMIT)
+        val response = client.newCall(POST(queryAPIUrl, headers, payload.toJsonRequestBody()))
+        val limit = response.asObservableSuccess().map { it.parseAs<Data<Boolean>>().data.result }
+        return limit
+    }
 
-    // override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-    //     val checkLimit = checkAPILimit()
-    //     val fetchData = client.newCall(pageListRequest(chapter)).asObservableSuccess()
-    //         .map(::pageListParse)
-    //     return Observable.zip(checkLimit, fetchData) { isLimitReached, pages ->
-    //         require(!isLimitReached) { "今日圖片讀取次數已達上限，請登录或明天再來！" }
-    //         pages
-    //     }
-    // }
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val fetchData = client.newCall(pageListRequest(chapter))
+            .asObservableSuccess().map(::pageListParse)
+        if (preferences.getBoolean(CHECK_API_LIMIT_PREF, false)) {
+            return Observable.zip(checkAPILimit(), fetchData) { isLimitReached, pages ->
+                require(!isLimitReached) { "今日圖片讀取次數已達上限，請登录或明天再來！" }
+                pages
+            }
+        }
+        return fetchData
+    }
 
     // Page list
     override fun pageListRequest(chapter: SChapter): Request {
@@ -238,9 +235,5 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> String.parseAs(): T = json.decodeFromString(this)
-
-    private inline fun <reified T> Response.parseAs(): T = use { body.string() }.parseAs()
-
-    private inline fun <reified T : Any> T.toJsonRequestBody(): RequestBody = json.encodeToString(this).toRequestBody(JSON_MEDIA_TYPE)
+    private inline fun <reified T> Payload<T>.toJsonRequestBody() = this.toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 }

@@ -56,6 +56,3 @@ data class Image(
     val height: Int,
     val width: Int,
 )
-
-// @Serializable
-// class APILimitData(@SerialName("reachedImageLimit") val result: Boolean)
