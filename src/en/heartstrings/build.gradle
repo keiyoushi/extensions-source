@@ -1,0 +1,9 @@
+ext {
+    extName = 'Heartstrings'
+    extClass = '.Heartstrings'
+    baseUrl = 'https://https://heartstringscomic.com'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
