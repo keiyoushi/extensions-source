@@ -1,8 +1,7 @@
 ext {
     extName = 'MayoTune'
-    extClass = '.MayoTune'
-    extVersionCode = 2
-    baseUrl = 'https://mayotune.xyz'
+    extClass = '.MayoTuneFactory'
+    extVersionCode = 1
     isNsfw = false
 }
 

@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.mayotune
+package eu.kanade.tachiyomi.extension.all.mayotune
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,14 +14,22 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class MayoTune() : HttpSource() {
+class MayoTune(
+    override val lang: String,
+    private val chapterEndpoint: String,
+) : HttpSource() {
     override val name: String = "MayoTune"
     override val baseUrl: String = "https://mayotune.xyz"
-    override val lang: String = "en"
     override val versionId: Int = 1
 
+    private val names = mapOf(
+        "en" to "Tune In to the Midnight Heart",
+        "ja" to "真夜中ハートチューン",
+        "all" to "Mayonaka Heart Tune",
+    )
+
     private val source = SManga.create().apply {
-        title = "Mayonaka Heart Tune"
+        title = names[lang] ?: names["all"]!!
         url = "/"
         thumbnail_url = "$baseUrl/img/cover.jpg"
         author = "Masakuni Igarashi"
@@ -54,7 +62,7 @@ class MayoTune() : HttpSource() {
     ): Observable<MangasPage> {
         val mangas = mutableListOf<SManga>()
 
-        if (source.title.lowercase().contains(query.lowercase()) ||
+        if (names.any { it.value.lowercase().contains(query.lowercase()) } ||
             source.author?.lowercase()?.contains(query.lowercase()) == true
         ) {
             mangas.add(source)
@@ -71,12 +79,12 @@ class MayoTune() : HttpSource() {
 
     // Get Override
     override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/chapters", headers)
+        return GET("$baseUrl/api/$chapterEndpoint/chapters", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
         val id = (baseUrl + chapter.url).toHttpUrl().queryParameter("id")
-        return "$baseUrl/chapter/$id"
+        return "$baseUrl/$chapterEndpoint/chapter/$id"
     }
 
     // Details
@@ -110,7 +118,7 @@ class MayoTune() : HttpSource() {
         val chapters = response.parseAs<List<ChapterDto>>()
         return chapters.sortedByDescending { it.number }.map { chapter ->
             SChapter.create().apply {
-                url = chapter.getChapterURL()
+                url = chapter.getChapterURL(chapterEndpoint)
                 name = chapter.getChapterTitle()
                 chapter_number = chapter.number
                 date_upload = chapter.getDateTimestamp()
