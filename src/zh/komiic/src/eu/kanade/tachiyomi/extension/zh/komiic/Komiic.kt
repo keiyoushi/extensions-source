@@ -33,6 +33,10 @@ class Komiic : HttpSource(), ConfigurableSource {
     private val queryAPIUrl = "$baseUrl/api/query"
     private val preferences = getPreferences()
 
+    private val SManga.id get() = url.substringAfterLast("/")
+    private val SChapter.id
+        get() = url.substringAfter("/chapter/").substringBefore("/page/")
+
     companion object {
         const val PAGE_SIZE = 20
         const val PREFIX_ID_SEARCH = "id:"
@@ -53,7 +57,7 @@ class Komiic : HttpSource(), ConfigurableSource {
             Pagination((page - 1) * PAGE_SIZE, "MONTH_VIEWS"),
         ).build()
         val payload = Payload("hotComics", variables, QUERY_HOT_COMICS)
-        return POST(queryAPIUrl, headers, payload.toJsonRequestBody())
+        return POST(queryAPIUrl, headers, payload.toRequestBody())
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -69,7 +73,7 @@ class Komiic : HttpSource(), ConfigurableSource {
             Pagination((page - 1) * PAGE_SIZE, "DATE_UPDATED"),
         ).build()
         val payload = Payload("recentUpdate", variables, QUERY_RECENT_UPDATE)
-        return POST(queryAPIUrl, headers, payload.toJsonRequestBody())
+        return POST(queryAPIUrl, headers, payload.toRequestBody())
     }
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
@@ -81,7 +85,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     private fun comicByIDRequest(id: String): Request {
         val variables = Variables().set("comicId", id).build()
         val payload = Payload("comicById", variables, QUERY_COMIC_BY_ID)
-        return POST(queryAPIUrl, headers, payload.toJsonRequestBody())
+        return POST(queryAPIUrl, headers, payload.toRequestBody())
     }
 
     /**
@@ -98,7 +102,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val variables = Variables().set("keyword", query).build()
         val payload = Payload("searchComicAndAuthorQuery", variables, QUERY_SEARCH)
-        return POST(queryAPIUrl, headers, payload.toJsonRequestBody())
+        return POST(queryAPIUrl, headers, payload.toRequestBody())
     }
 
     override fun fetchSearchManga(
@@ -122,14 +126,14 @@ class Komiic : HttpSource(), ConfigurableSource {
     }
 
     // Comic details
-    override fun mangaDetailsRequest(manga: SManga) = comicByIDRequest(manga.url.substringAfterLast("/"))
+    override fun mangaDetailsRequest(manga: SManga) = comicByIDRequest(manga.id)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val res = response.parseAs<Data<Comic>>()
         return res.data.result.toSManga()
     }
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+    override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
     /**
      * 解析日期
@@ -146,9 +150,9 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     // Chapter list
     override fun chapterListRequest(manga: SManga): Request {
-        val variables = Variables().set("comicId", manga.url.substringAfterLast("/")).build()
+        val variables = Variables().set("comicId", manga.id).build()
         val payload = Payload("chapterByComicId", variables, QUERY_CHAPTER)
-        return POST("$queryAPIUrl#${manga.url}", headers, payload.toJsonRequestBody())
+        return POST("$queryAPIUrl#${manga.url}", headers, payload.toRequestBody())
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -187,7 +191,7 @@ class Komiic : HttpSource(), ConfigurableSource {
      */
     private fun checkAPILimit(): Observable<Boolean> {
         val payload = Payload("reachedImageLimit", Variables().build(), QUERY_API_LIMIT)
-        val response = client.newCall(POST(queryAPIUrl, headers, payload.toJsonRequestBody()))
+        val response = client.newCall(POST(queryAPIUrl, headers, payload.toRequestBody()))
         val limit = response.asObservableSuccess().map { it.parseAs<Data<Boolean>>().data.result }
         return limit
     }
@@ -206,12 +210,9 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     // Page list
     override fun pageListRequest(chapter: SChapter): Request {
-        val variables = Variables().set(
-            "chapterId",
-            chapter.url.substringAfter("/chapter/").substringBefore("/page/"),
-        ).build()
+        val variables = Variables().set("chapterId", chapter.id).build()
         val payload = Payload("imagesByChapterId", variables, QUERY_PAGE_LIST)
-        return POST("$queryAPIUrl#${chapter.url}", headers, payload.toJsonRequestBody())
+        return POST("$queryAPIUrl#${chapter.url}", headers, payload.toRequestBody())
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -235,5 +236,5 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private inline fun <reified T> Payload<T>.toJsonRequestBody() = this.toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+    private inline fun <reified T> Payload<T>.toRequestBody() = this.toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 }
