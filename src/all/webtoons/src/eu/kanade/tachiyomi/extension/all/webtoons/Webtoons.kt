@@ -23,6 +23,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
 import rx.Observable
 import java.net.SocketException
 import java.util.Calendar
@@ -122,18 +123,23 @@ open class Webtoons(
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(ID_SEARCH_PREFIX)) {
-            val (_, titleLang, titleNo) = query.split(":", limit = 3)
+            val (_, type, lang, titleNo) = query.split(":", limit = 4)
             val tmpManga = SManga.create().apply {
-                url = "/episodeList?titleNo=$titleNo"
+                url = buildString {
+                    if (type == "canvas") {
+                        append("/challenge")
+                    }
+                    append("/episodeList?titleNo=")
+                    append(titleNo)
+                }
             }
-            return if (titleLang == langCode) {
+
+            return if (lang == langCode) {
                 fetchMangaDetails(tmpManga).map {
                     MangasPage(listOf(it), false)
                 }
             } else {
-                Observable.just(
-                    MangasPage(emptyList(), false),
-                )
+                Observable.just(MangasPage(emptyList(), false))
             }
         }
 
@@ -200,7 +206,7 @@ open class Webtoons(
                     else -> SManga.UNKNOWN
                 }
             }
-
+            initialized = true
             thumbnail_url = run {
                 val bannerFile = document.selectFirst(".detail_header .thmb img")
                     ?.absUrl("src")
@@ -232,18 +238,33 @@ open class Webtoons(
         val webtoonUrl = getMangaUrl(manga).toHttpUrl()
         val titleId = webtoonUrl.queryParameter("title_no")
             ?: webtoonUrl.queryParameter("titleNo")
-            ?: throw Exception("id not found, Migrate from $name to $name")
+            ?: throw Exception("Migrate from $name to $name")
 
-        val isCanvas = webtoonUrl.pathSegments.getOrNull(1)?.equals("canvas")
-            ?: throw Exception("unknown type, Migrate from $name to $name")
+        val type = run {
+            val path = webtoonUrl.pathSegments.filter(String::isNotEmpty)
+
+            // older url pattern, people have in their library
+            if (webtoonUrl.encodedPath.contains("episodeList")) {
+                when (path[0]) {
+                    // "/episodeList?titleNo=1049"
+                    "episodeList" -> "webtoon"
+                    // "/challenge/episodeList?titleNo=304446"
+                    "challenge" -> "canvas"
+                    else -> throw Exception("Migrate from $name to $name")
+                }
+            } else {
+                // "/en/canvas/meme-girls/list?title_no=304446"
+                if (path[1] == "canvas") {
+                    "canvas"
+                } else {
+                    "webtoon"
+                }
+            }
+        }
 
         val url = mobileUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("api/v1")
-            if (isCanvas) {
-                addPathSegment("canvas")
-            } else {
-                addPathSegment("webtoon")
-            }
+            addPathSegment(type)
             addPathSegment(titleId)
             addPathSegment("episodes")
             addQueryParameter("pageSize", "99999")
@@ -255,18 +276,54 @@ open class Webtoons(
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<EpisodeListResponse>()
 
-        return result.result.episodeList.map { episode ->
+        val recognized: MutableList<Int> = mutableListOf()
+        val unrecognized: MutableList<Int> = mutableListOf()
+
+        val chapters = result.result.episodeList.mapIndexed { index, episode ->
             SChapter.create().apply {
                 url = episode.viewerLink
-                name = episode.episodeTitle
+                name = Parser.unescapeEntities(episode.episodeTitle, false)
                 if (episode.hasBgm) {
                     name += " ♫"
                 }
                 date_upload = episode.exposureDateMillis
-                chapter_number = episode.episodeNo
+                chapter_number = episodeNoRegex
+                    .find(episode.episodeTitle)
+                    ?.groupValues
+                    ?.get(4)
+                    ?.toFloat()
+                    ?: -1f
+                if (chapter_number == -1f) {
+                    unrecognized += index
+                } else {
+                    recognized += index
+                }
             }
-        }.asReversed()
+        }
+
+        if (unrecognized.size > recognized.size) {
+            chapters.onEachIndexed { index, chapter ->
+                chapter.chapter_number = (index + 1).toFloat()
+            }
+        } else {
+            unrecognized.forEach { uIdx ->
+                val chapter = chapters[uIdx]
+                val previous = chapters.getOrNull(uIdx - 1)
+                if (previous == null) {
+                    chapter.chapter_number = 0f
+                } else {
+                    chapter.chapter_number = previous.chapter_number + 0.01f
+                }
+            }
+        }
+
+        return chapters.asReversed()
     }
+
+    private val episodeNoRegex = Regex(
+        """(ep(isode)?|ch(apter)?)\s*\.?\s*(\d+(\.\d+)?)""",
+        RegexOption.IGNORE_CASE,
+    )
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
