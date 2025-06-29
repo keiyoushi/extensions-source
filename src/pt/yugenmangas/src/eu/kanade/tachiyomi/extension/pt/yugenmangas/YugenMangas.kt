@@ -89,7 +89,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val script = document.selectFirst("script:containsData(initialSeries)")?.data()
-            ?: throw Exception("Não foi possivel encontrar a lista de mangás/manhwas")
+            ?: throw Exception(warning)
 
         val json = POPULAR_MANGA_REGEX.find(script)?.groups?.get(1)?.value
             ?.replace(ESCAPE_QUOTATION_MARK_REGEX, "\"")
@@ -111,7 +111,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
                 thumbnail_url = element.selectFirst("img")?.attrImageSet()
                 setUrlWithoutDomain(element.absUrl("href").substringBeforeLast("/"))
             }
-        }
+        }.takeIf(List<SManga>::isNotEmpty) ?: throw Exception(warning)
         return MangasPage(mangas, document.selectFirst("a[aria-label='Próxima página']:not([aria-disabled='true'])") != null)
     }
 
@@ -217,6 +217,12 @@ class YugenMangas : HttpSource(), ConfigurableSource {
             ?.map(String::trim)?.last(String::isNotBlank)
             ?.let { "$baseUrl$it" }
     }
+
+    private val warning = """
+        Não foi possível localizar a lista de mangás/manhwas.
+        Tente atualizar a URL acessando: Extensões > $name > Configurações.
+        Isso talvez resolva o problema.
+    """.trimIndent()
 
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
