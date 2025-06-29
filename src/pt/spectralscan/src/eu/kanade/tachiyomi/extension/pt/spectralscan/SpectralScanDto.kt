@@ -12,10 +12,14 @@ class SelectFilter(displayName: String = "", val parameter: String = "", private
 @Serializable
 class ImageSrc(
     @SerialName("image_data")
-    val base64: String,
+    val base64: String = "",
     @SerialName("mime_type")
-    val mimeType: String,
-)
+    val mimeType: String = "",
+    @SerialName("image_url")
+    val url: String = "",
+) {
+    fun isBase64() = base64.isNotBlank()
+}
 
 val sortList = arrayOf(
     "Mais Recentes" to "latest",
