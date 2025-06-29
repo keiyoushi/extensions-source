@@ -33,7 +33,7 @@ sealed class PixivTarget {
                 return null
             }
 
-            var pathSegments = uri.pathSegments ?: return null
+            var pathSegments = uri.pathSegments.ifEmpty { null } ?: return null
 
             if (KNOWN_LOCALES.contains(pathSegments[0])) {
                 pathSegments = pathSegments.subList(1, pathSegments.size)
