@@ -1,15 +1,12 @@
 package eu.kanade.tachiyomi.extension.es.tecnoprojects
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TecnoProjects : Madara(
+class TecnoProjects : MangaThemesia(
     "TecnoProjects",
-    "https://tecnoprojects.com",
+    "https://tecnoprojects.xyz",
     "es",
-    SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
-) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val useNewChapterEndpoint = true
-}
+    dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+)
