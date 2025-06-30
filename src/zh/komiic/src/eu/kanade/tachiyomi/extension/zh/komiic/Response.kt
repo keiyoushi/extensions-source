@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.komiic
 
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
 
@@ -22,20 +23,18 @@ data class Comic(
     var authors: List<ComicItem>,
     val categories: List<ComicItem>,
 ) {
-    private val parseStatus = when (status) {
-        "ONGOING" -> SManga.ONGOING
-        "END" -> SManga.COMPLETED
-        else -> SManga.UNKNOWN
-    }
-
     fun toSManga() = SManga.create().apply {
         url = "/comic/$id"
         title = this@Comic.title
         thumbnail_url = this@Comic.imageUrl
-        author = this@Comic.authors.joinToString(" ") { it.name }
+        author = this@Comic.authors.joinToString { it.name }
         genre = this@Comic.categories.joinToString { it.name }
         description = this@Comic.description
-        status = parseStatus
+        status = when (this@Comic.status) {
+            "ONGOING" -> SManga.ONGOING
+            "END" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
         initialized = this@Comic.description.isNotEmpty()
     }
 }
@@ -47,7 +46,19 @@ data class Chapter(
     val type: String,
     val size: Int,
     val dateCreated: String,
-)
+) {
+    fun toSChapter(comicUrl: String, parseDate: (String) -> Long) = SChapter.create().apply {
+        url = "$comicUrl/chapter/${this@Chapter.id}/page/1"
+        name = when (this@Chapter.type) {
+            "chapter" -> "第 ${this@Chapter.serial} 話"
+            "book" -> "第 ${this@Chapter.serial} 卷"
+            else -> this@Chapter.serial
+        }
+        scanlator = "${this@Chapter.size}P"
+        date_upload = parseDate(this@Chapter.dateCreated)
+        chapter_number = if (this@Chapter.type == "book") 0F else this@Chapter.serial.toFloatOrNull() ?: -1f
+    }
+}
 
 @Serializable
 data class Image(

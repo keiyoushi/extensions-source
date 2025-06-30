@@ -8,14 +8,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 
 @Serializable
-class Payload<T>(
+data class Payload<T>(
     val operationName: String,
     val variables: T,
     val query: String,
 )
 
 @Serializable
-class Pagination(
+data class Pagination(
     val offset: Int,
     val orderBy: String,
     @EncodeDefault
@@ -27,7 +27,6 @@ class Pagination(
 )
 
 class Variables {
-
     val variableMap = mutableMapOf<String, JsonElement>()
 
     inline fun <reified T> set(key: String, value: T): Variables {
