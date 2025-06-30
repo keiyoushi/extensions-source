@@ -67,7 +67,7 @@ val QUERY_CHAPTER = buildQuery {
         serial
         type
         size
-        dateUpdated
+        dateCreated
       }
     }
     """

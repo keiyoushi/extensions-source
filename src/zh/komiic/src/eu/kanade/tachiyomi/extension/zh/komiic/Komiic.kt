@@ -135,10 +135,6 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     override fun getMangaUrl(manga: SManga) = baseUrl + manga.url
 
-    /**
-     * 解析日期
-     * Parse date
-     */
     private fun parseDate(dateStr: String): Long {
         return try {
             DATE_FORMAT.parse(dateStr)?.time ?: 0L
@@ -177,7 +173,7 @@ class Komiic : HttpSource(), ConfigurableSource {
                     else -> it.serial
                 }
                 scanlator = "${it.size}P"
-                date_upload = parseDate(it.dateUpdated)
+                date_upload = parseDate(it.dateCreated)
                 chapter_number = if (it.type == "book") 0F else it.serial.toFloatOrNull() ?: -1f
             }
         }

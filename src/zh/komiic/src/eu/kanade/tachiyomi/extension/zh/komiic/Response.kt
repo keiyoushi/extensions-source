@@ -32,7 +32,7 @@ data class Comic(
         url = "/comic/$id"
         title = this@Comic.title
         thumbnail_url = this@Comic.imageUrl
-        author = this@Comic.authors.joinToString { it.name }
+        author = this@Comic.authors.joinToString(" ") { it.name }
         genre = this@Comic.categories.joinToString { it.name }
         description = this@Comic.description
         status = parseStatus
@@ -46,7 +46,7 @@ data class Chapter(
     val serial: String,
     val type: String,
     val size: Int,
-    val dateUpdated: String,
+    val dateCreated: String,
 )
 
 @Serializable
