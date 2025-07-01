@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.pixiv
 
 import android.net.Uri
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 interface PixivTargetCompanion<out T : PixivTarget> {
     val SEARCH_PREFIX: String
@@ -16,18 +19,19 @@ interface PixivTargetCompanion<out T : PixivTarget> {
 
 sealed class PixivTarget {
     companion object {
-        val BASE_URI = Uri.parse("https://www.pixiv.net")
+        val BASE_URI = "https://www.pixiv.net".toHttpUrl()
 
         fun fromSearchQuery(query: String) =
             sequenceOf<PixivTargetCompanion<*>>(User, Series, Illustration)
                 .firstNotNullOfOrNull { it.fromSearchQuery(query) }
 
-        fun fromUri(uri: String) = fromUri(Uri.parse(uri))
-        fun fromUri(uri: Uri): PixivTarget? {
+        fun fromUri(uri: String) = uri.toHttpUrlOrNull()?.let { fromUri(it) }
+        fun fromUri(uri: Uri) = fromUri(uri.toString())
+        fun fromUri(uri: HttpUrl): PixivTarget? {
             // if an absolute domain is specified, check if it matches. Tolerate relative urls as-is.
             if (!(
                 uri.scheme in listOf(null, "http", "https") &&
-                    uri.host?.let { "pixiv.net" == it.removePrefix("www.") } != false
+                    uri.host.let { "pixiv.net" == it.removePrefix("www.") }
                 )
             ) {
                 return null
@@ -54,7 +58,8 @@ sealed class PixivTarget {
         }
     }
 
-    abstract fun toUri(): Uri
+    abstract fun toHttpUrl(): HttpUrl
+    fun toUri() = Uri.parse(toHttpUrl().toString())
 
     abstract fun toSearchQuery(): String
 
@@ -64,8 +69,10 @@ sealed class PixivTarget {
             override fun fromSearchQueryId(id: String) = User(id)
         }
 
-        override fun toUri(): Uri =
-            BASE_URI.buildUpon().appendPath("users").appendPath(userId).build()
+        override fun toHttpUrl() =
+            BASE_URI.newBuilder()
+                .addPathSegment("users")
+                .addPathSegment(userId).build()
 
         override fun toSearchQuery(): String = SEARCH_PREFIX + userId
     }
@@ -76,8 +83,10 @@ sealed class PixivTarget {
             override fun fromSearchQueryId(id: String) = Illustration(id)
         }
 
-        override fun toUri(): Uri =
-            BASE_URI.buildUpon().appendPath("artworks").appendPath(illustId).build()
+        override fun toHttpUrl() =
+            BASE_URI.newBuilder()
+                .addPathSegment("artworks")
+                .addPathSegment(illustId).build()
 
         override fun toSearchQuery(): String = SEARCH_PREFIX + illustId
     }
@@ -88,13 +97,15 @@ sealed class PixivTarget {
             override fun fromSearchQueryId(id: String) = Series(id)
         }
 
-        override fun toUri(): Uri {
-            if (authorUserId == null) {
-                TODO("Not yet implemented")
-            }
-            return BASE_URI.buildUpon().appendPath("user").appendPath(authorUserId)
-                .appendPath("series").appendPath(seriesId).build()
-        }
+        override fun toHttpUrl() =
+            BASE_URI.newBuilder()
+                .addPathSegment("user")
+                .addPathSegment(
+                    authorUserId
+                        ?: throw UnsupportedOperationException("TBD what should be done in this case"),
+                )
+                .addPathSegment("series")
+                .addPathSegment(seriesId).build()
 
         override fun toSearchQuery(): String = SEARCH_PREFIX + seriesId
     }
