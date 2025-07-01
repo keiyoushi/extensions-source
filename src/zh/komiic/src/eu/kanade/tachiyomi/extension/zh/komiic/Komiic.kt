@@ -78,14 +78,14 @@ class Komiic : HttpSource(), ConfigurableSource {
     /**
      * 檢查 API 是否達到上限
      * Check if the API has reached its limit.
-     * TODO: how to throw an exception message to notify user in reading page?
+     * But how to throw an exception message to notify user in reading page?
      */
-    private fun checkAPILimit(): Observable<Boolean> {
-        val payload = Payload("reachedImageLimit", Variables.EMPTY, QUERY_API_LIMIT)
-        val response = client.newCall(POST(apiUrl, headers, payload.toRequestBody()))
-        val limit = response.asObservableSuccess().map { it.parseAs<Data<Boolean>>().data.result }
-        return limit
-    }
+    // private fun checkAPILimit(): Observable<Boolean> {
+    //     val payload = Payload("reachedImageLimit", Variables().build(), QUERY_API_LIMIT)
+    //     val response = client.newCall(POST(queryAPIUrl, headers, payload.toRequestBody()))
+    //     val limit = response.asObservableSuccess().map { it.parseAs<Data<Boolean>>().data.result }
+    //     return limit
+    // }
 
     // Popular Manga ===============================================================================
 
@@ -141,11 +141,7 @@ class Komiic : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> {
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_ID_SEARCH)) {
             client.newCall(comicByIDRequest(query.substringAfter(PREFIX_ID_SEARCH)))
                 .asObservableSuccess()
@@ -210,22 +206,12 @@ class Komiic : HttpSource(), ConfigurableSource {
         return POST("$apiUrl#${chapter.url}", headers, payload.toRequestBody())
     }
 
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        val fetchData = client.newCall(pageListRequest(chapter))
-            .asObservableSuccess().map(::pageListParse)
-        if (preferences.getBoolean(CHECK_API_LIMIT_PREF, false)) {
-            return Observable.zip(checkAPILimit(), fetchData) { isLimitReached, pages ->
-                require(!isLimitReached) { "今日圖片讀取次數已達上限，請登录或明天再來！" }
-                pages
-            }
-        }
-        return fetchData
-    }
-
     override fun pageListParse(response: Response): List<Page> {
-        val res = response.parseAs<Data<List<Image>>>()
+        val res = response.parseAs<MultiData<Boolean, List<Image>>>()
+        val check = preferences.getBoolean(CHECK_API_LIMIT_PREF, true)
+        require(!check || !res.data.result1) { "今日圖片讀取次數已達上限，請登录或明天再來！" }
         val chapterUrl = response.request.url.toString().split("#")[1]
-        return res.data.result.mapIndexed { index, image ->
+        return res.data.result2.mapIndexed { index, image ->
             Page(
                 index,
                 "${chapterUrl.substringBeforeLast("/")}/$index",
@@ -238,10 +224,7 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     override fun imageRequest(page: Page): Request {
         return super.imageRequest(page).newBuilder()
-            .addHeader(
-                "accept",
-                "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'",
-            )
+            .addHeader("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'")
             .addHeader("referer", page.url)
             .build()
     }
