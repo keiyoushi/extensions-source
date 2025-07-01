@@ -3,7 +3,7 @@ ext {
     extClass = '.HiveScans'
     themePkg = 'iken'
     baseUrl = 'https://hivetoons.org'
-    overrideVersionCode = 39
+    overrideVersionCode = 40
     isNsfw = false
 }
 
