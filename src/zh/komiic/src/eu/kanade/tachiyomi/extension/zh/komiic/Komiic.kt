@@ -49,11 +49,8 @@ class Komiic : HttpSource(), ConfigurableSource {
     }
 
     private val SManga.id get() = url.substringAfterLast("/")
-    private val SChapter.id
-        get() = url.substringAfter("/chapter/").substringBefore("/page/")
-
-    private inline fun <reified T> Payload<T>.toRequestBody() =
-        this.toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+    private val SChapter.id get() = url.substringAfterLast("/")
+    private inline fun <reified T> Payload<T>.toRequestBody() = this.toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 
     /**
      * 根據 ID 搜索漫畫
@@ -172,6 +169,8 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     // Chapter List ================================================================================
 
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url + "/images/all"
+
     override fun chapterListRequest(manga: SManga): Request {
         val variables = Variables().set("comicId", manga.id).build()
         val payload = Payload("chapterByComicId", variables, QUERY_CHAPTER)
@@ -206,13 +205,9 @@ class Komiic : HttpSource(), ConfigurableSource {
         val res = response.parseAs<MultiData<Boolean, List<Image>>>()
         val check = preferences.getBoolean(CHECK_API_LIMIT_PREF, true)
         require(!check || !res.data.result1) { "今日圖片讀取次數已達上限，請登录或明天再來！" }
-        val chapterUrl = response.request.url.toString().split("#")[1]
+        val chapterUrl = response.request.url.fragment!!
         return res.data.result2.mapIndexed { index, image ->
-            Page(
-                index,
-                "${chapterUrl.substringBeforeLast("/")}/$index",
-                "$baseUrl/api/image/${image.kid}",
-            )
+            Page(index, "$chapterUrl/page/$index", "$baseUrl/api/image/${image.kid}")
         }
     }
 

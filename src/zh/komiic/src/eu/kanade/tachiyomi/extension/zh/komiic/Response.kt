@@ -54,7 +54,7 @@ data class Chapter(
     val dateCreated: String,
 ) {
     fun toSChapter(comicUrl: String, parseDate: (String) -> Long) = SChapter.create().apply {
-        url = "$comicUrl/chapter/${this@Chapter.id}/page/1"
+        url = "$comicUrl/chapter/${this@Chapter.id}"
         name = when (this@Chapter.type) {
             "chapter" -> "第 ${this@Chapter.serial} 話"
             "book" -> "第 ${this@Chapter.serial} 卷"
