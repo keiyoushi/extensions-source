@@ -30,7 +30,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     override val supportsLatest = true
     override val client = network.cloudflareClient
 
-    private val queryAPIUrl = "$baseUrl/api/query"
+    private val apiUrl = "$baseUrl/api/query"
     private val preferences = getPreferences()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -49,8 +49,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     }
 
     private val SManga.id get() = url.substringAfterLast("/")
-    private val SChapter.id
-        get() = url.substringAfter("/chapter/").substringBefore("/page/")
+    private val SChapter.id get() = url.substringAfterLast("/")
     private inline fun <reified T> Payload<T>.toRequestBody() = this.toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 
     /**
@@ -60,7 +59,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     private fun comicByIDRequest(id: String): Request {
         val variables = Variables().set("comicId", id).build()
         val payload = Payload("comicById", variables, QUERY_COMIC_BY_ID)
-        return POST(queryAPIUrl, headers, payload.toRequestBody())
+        return POST(apiUrl, headers, payload.toRequestBody())
     }
 
     /**
@@ -93,7 +92,7 @@ class Komiic : HttpSource(), ConfigurableSource {
             Pagination((page - 1) * PAGE_SIZE, "MONTH_VIEWS"),
         ).build()
         val payload = Payload("hotComics", variables, QUERY_HOT_COMICS)
-        return POST(queryAPIUrl, headers, payload.toRequestBody())
+        return POST(apiUrl, headers, payload.toRequestBody())
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -110,7 +109,7 @@ class Komiic : HttpSource(), ConfigurableSource {
             Pagination((page - 1) * PAGE_SIZE, "DATE_UPDATED"),
         ).build()
         val payload = Payload("recentUpdate", variables, QUERY_RECENT_UPDATE)
-        return POST(queryAPIUrl, headers, payload.toRequestBody())
+        return POST(apiUrl, headers, payload.toRequestBody())
     }
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
@@ -120,7 +119,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val variables = Variables().set("keyword", query).build()
         val payload = Payload("searchComicAndAuthorQuery", variables, QUERY_SEARCH)
-        return POST(queryAPIUrl, headers, payload.toRequestBody())
+        return POST(apiUrl, headers, payload.toRequestBody())
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -152,10 +151,12 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     // Chapter List ================================================================================
 
+    override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url + "/images/all"
+
     override fun chapterListRequest(manga: SManga): Request {
         val variables = Variables().set("comicId", manga.id).build()
         val payload = Payload("chapterByComicId", variables, QUERY_CHAPTER)
-        return POST("$queryAPIUrl#${manga.url}", headers, payload.toRequestBody())
+        return POST("$apiUrl#${manga.url}", headers, payload.toRequestBody())
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -179,20 +180,16 @@ class Komiic : HttpSource(), ConfigurableSource {
     override fun pageListRequest(chapter: SChapter): Request {
         val variables = Variables().set("chapterId", chapter.id).build()
         val payload = Payload("imagesByChapterId", variables, QUERY_PAGE_LIST)
-        return POST("$queryAPIUrl#${chapter.url}", headers, payload.toRequestBody())
+        return POST("$apiUrl#${chapter.url}", headers, payload.toRequestBody())
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val res = response.parseAs<MultiData<Boolean, List<Image>>>()
         val check = preferences.getBoolean(CHECK_API_LIMIT_PREF, true)
         require(!check || !res.data.result1) { "今日圖片讀取次數已達上限，請登录或明天再來！" }
-        val chapterUrl = response.request.url.toString().split("#")[1]
+        val chapterUrl = response.request.url.fragment!!
         return res.data.result2.mapIndexed { index, image ->
-            Page(
-                index,
-                "${chapterUrl.substringBeforeLast("/")}/$index",
-                "$baseUrl/api/image/${image.kid}",
-            )
+            Page(index, "$chapterUrl/page/$index", "$baseUrl/api/image/${image.kid}")
         }
     }
 
