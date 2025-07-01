@@ -13,12 +13,12 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import keiyoushi.utils.tryParse
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -71,15 +71,6 @@ class Komiic : HttpSource(), ConfigurableSource {
         val res = response.parseAs<Data<Comic>>()
         val entries = listOf(res.data.result.toSManga())
         return MangasPage(entries, false)
-    }
-
-    private fun parseDate(dateStr: String): Long {
-        return try {
-            DATE_FORMAT.parse(dateStr)?.time ?: 0L
-        } catch (e: ParseException) {
-            e.printStackTrace()
-            0L
-        }
     }
 
     /**
@@ -180,7 +171,7 @@ class Komiic : HttpSource(), ConfigurableSource {
             else -> comics
         }
         val comicUrl = response.request.url.fragment!!
-        return items.map { it.toSChapter(comicUrl, ::parseDate) }
+        return items.map { it.toSChapter(comicUrl, DATE_FORMAT::tryParse) }
     }
 
     // Page List ===================================================================================
