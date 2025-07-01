@@ -133,7 +133,8 @@ class Komiic : HttpSource(), ConfigurableSource {
                 Pagination(
                     (page - 1) * PAGE_SIZE,
                     filters[3].toString(),
-                    status = filters[2].toString(),
+                    filters[2].toString(),
+                    false,
                 ),
             ).set("categoryId", categories.selected).build()
             val payload = Payload("comicByCategories", variables, QUERY_COMIC_BY_CATEGORY)
@@ -141,26 +142,21 @@ class Komiic : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return if (query.startsWith(PREFIX_ID_SEARCH)) {
-            client.newCall(comicByIDRequest(query.substringAfter(PREFIX_ID_SEARCH)))
-                .asObservableSuccess()
-                .map(::parseComicByID)
-        } else {
-            super.fetchSearchManga(page, query, filters)
-        }
+    override fun searchMangaParse(response: Response): MangasPage {
+        val res = response.parseAs<Data<Result<List<Comic>>>>()
+        val comics = res.data.result.result
+        return MangasPage(comics.map(Comic::toSManga), comics.size == PAGE_SIZE)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        var comics: List<Comic>
-        try {
-            val res = response.parseAs<Data<Result<List<Comic>>>>()
-            comics = res.data.result.result
-        } catch (e: Exception) {
-            val res = response.parseAs<Data<List<Comic>>>()
-            comics = res.data.result
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(PREFIX_ID_SEARCH)) {
+            return client.newCall(comicByIDRequest(query.substringAfter(PREFIX_ID_SEARCH)))
+                .asObservableSuccess().map(::parseComicByID)
+        } else if (query.isNotBlank()) {
+            return super.fetchSearchManga(page, query, filters)
         }
-        return MangasPage(comics.map(Comic::toSManga), comics.size == PAGE_SIZE)
+        return client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess().map(::popularMangaParse)
     }
 
     // Manga Details ===============================================================================
