@@ -27,6 +27,10 @@ data class Pagination(
 )
 
 class Variables {
+    companion object {
+        val EMPTY = Variables().build()
+    }
+
     val variableMap = mutableMapOf<String, JsonElement>()
 
     inline fun <reified T> set(key: String, value: T): Variables {

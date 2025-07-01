@@ -11,7 +11,7 @@ class Data<T>(val data: Result<T>)
 class Result<T>(val result: T)
 
 @Serializable
-data class ComicItem(val id: String, val name: String)
+data class Item(val id: String, val name: String)
 
 @Serializable
 data class Comic(
@@ -20,8 +20,8 @@ data class Comic(
     val description: String,
     val status: String,
     val imageUrl: String,
-    var authors: List<ComicItem>,
-    val categories: List<ComicItem>,
+    var authors: List<Item>,
+    val categories: List<Item>,
 ) {
     fun toSManga() = SManga.create().apply {
         url = "/comic/$id"

@@ -51,6 +51,14 @@ val QUERY_SEARCH = buildQuery(COMIC_BODY) {
     """
 }
 
+val QUERY_COMIC_BY_CATEGORY = buildQuery(COMIC_BODY) {
+    """
+    query comicByCategories(%categoryId: [ID!]!, %pagination: Pagination!) {
+      result: comicByCategories(categoryId: %categoryId, pagination: %pagination) #{body}
+    }
+    """
+}
+
 val QUERY_COMIC_BY_ID = buildQuery(COMIC_BODY) {
     """
     query comicById(%comicId: ID!) {

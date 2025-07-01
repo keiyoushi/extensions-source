@@ -10,15 +10,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import keiyoushi.utils.tryParse
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -30,8 +30,8 @@ class Komiic : HttpSource(), ConfigurableSource {
     override val supportsLatest = true
     override val client = network.cloudflareClient
 
-    private val queryAPIUrl = "$baseUrl/api/query"
-    private val preferences = getPreferences()
+    private val apiUrl = "$baseUrl/api/query"
+    private val preferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         preferencesInternal(screen.context).forEach(screen::addPreference)
@@ -51,7 +51,9 @@ class Komiic : HttpSource(), ConfigurableSource {
     private val SManga.id get() = url.substringAfterLast("/")
     private val SChapter.id
         get() = url.substringAfter("/chapter/").substringBefore("/page/")
-    private inline fun <reified T> Payload<T>.toRequestBody() = this.toJsonString().toRequestBody(JSON_MEDIA_TYPE)
+
+    private inline fun <reified T> Payload<T>.toRequestBody() =
+        this.toJsonString().toRequestBody(JSON_MEDIA_TYPE)
 
     /**
      * 根據 ID 搜索漫畫
@@ -60,7 +62,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     private fun comicByIDRequest(id: String): Request {
         val variables = Variables().set("comicId", id).build()
         val payload = Payload("comicById", variables, QUERY_COMIC_BY_ID)
-        return POST(queryAPIUrl, headers, payload.toRequestBody())
+        return POST(apiUrl, headers, payload.toRequestBody())
     }
 
     /**
@@ -73,23 +75,14 @@ class Komiic : HttpSource(), ConfigurableSource {
         return MangasPage(entries, false)
     }
 
-    private fun parseDate(dateStr: String): Long {
-        return try {
-            DATE_FORMAT.parse(dateStr)?.time ?: 0L
-        } catch (e: ParseException) {
-            e.printStackTrace()
-            0L
-        }
-    }
-
     /**
      * 檢查 API 是否達到上限
      * Check if the API has reached its limit.
      * TODO: how to throw an exception message to notify user in reading page?
      */
     private fun checkAPILimit(): Observable<Boolean> {
-        val payload = Payload("reachedImageLimit", Variables().build(), QUERY_API_LIMIT)
-        val response = client.newCall(POST(queryAPIUrl, headers, payload.toRequestBody()))
+        val payload = Payload("reachedImageLimit", Variables.EMPTY, QUERY_API_LIMIT)
+        val response = client.newCall(POST(apiUrl, headers, payload.toRequestBody()))
         val limit = response.asObservableSuccess().map { it.parseAs<Data<Boolean>>().data.result }
         return limit
     }
@@ -102,7 +95,7 @@ class Komiic : HttpSource(), ConfigurableSource {
             Pagination((page - 1) * PAGE_SIZE, "MONTH_VIEWS"),
         ).build()
         val payload = Payload("hotComics", variables, QUERY_HOT_COMICS)
-        return POST(queryAPIUrl, headers, payload.toRequestBody())
+        return POST(apiUrl, headers, payload.toRequestBody())
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -119,20 +112,40 @@ class Komiic : HttpSource(), ConfigurableSource {
             Pagination((page - 1) * PAGE_SIZE, "DATE_UPDATED"),
         ).build()
         val payload = Payload("recentUpdate", variables, QUERY_RECENT_UPDATE)
-        return POST(queryAPIUrl, headers, payload.toRequestBody())
+        return POST(apiUrl, headers, payload.toRequestBody())
     }
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search Manga ================================================================================
 
+    override fun getFilterList() = buildFilterList()
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val variables = Variables().set("keyword", query).build()
-        val payload = Payload("searchComicAndAuthorQuery", variables, QUERY_SEARCH)
-        return POST(queryAPIUrl, headers, payload.toRequestBody())
+        if (query.isNotBlank()) {
+            val variables = Variables().set("keyword", query).build()
+            val payload = Payload("searchComicAndAuthorQuery", variables, QUERY_SEARCH)
+            return POST(apiUrl, headers, payload.toRequestBody())
+        } else {
+            val categories = filters[1] as CategoryFilter
+            val variables = Variables().set(
+                "pagination",
+                Pagination(
+                    (page - 1) * PAGE_SIZE,
+                    filters[3].toString(),
+                    status = filters[2].toString(),
+                ),
+            ).set("categoryId", categories.selected).build()
+            val payload = Payload("comicByCategories", variables, QUERY_COMIC_BY_CATEGORY)
+            return POST(apiUrl, headers, payload.toRequestBody())
+        }
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_ID_SEARCH)) {
             client.newCall(comicByIDRequest(query.substringAfter(PREFIX_ID_SEARCH)))
                 .asObservableSuccess()
@@ -143,8 +156,14 @@ class Komiic : HttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val res = response.parseAs<Data<Result<List<Comic>>>>()
-        val comics = res.data.result.result
+        var comics: List<Comic>
+        try {
+            val res = response.parseAs<Data<Result<List<Comic>>>>()
+            comics = res.data.result.result
+        } catch (e: Exception) {
+            val res = response.parseAs<Data<List<Comic>>>()
+            comics = res.data.result
+        }
         return MangasPage(comics.map(Comic::toSManga), comics.size == PAGE_SIZE)
     }
 
@@ -164,7 +183,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     override fun chapterListRequest(manga: SManga): Request {
         val variables = Variables().set("comicId", manga.id).build()
         val payload = Payload("chapterByComicId", variables, QUERY_CHAPTER)
-        return POST("$queryAPIUrl#${manga.url}", headers, payload.toRequestBody())
+        return POST("$apiUrl#${manga.url}", headers, payload.toRequestBody())
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -180,7 +199,7 @@ class Komiic : HttpSource(), ConfigurableSource {
             else -> comics
         }
         val comicUrl = response.request.url.fragment!!
-        return items.map { it.toSChapter(comicUrl, ::parseDate) }
+        return items.map { it.toSChapter(comicUrl, DATE_FORMAT::tryParse) }
     }
 
     // Page List ===================================================================================
@@ -188,7 +207,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     override fun pageListRequest(chapter: SChapter): Request {
         val variables = Variables().set("chapterId", chapter.id).build()
         val payload = Payload("imagesByChapterId", variables, QUERY_PAGE_LIST)
-        return POST("$queryAPIUrl#${chapter.url}", headers, payload.toRequestBody())
+        return POST("$apiUrl#${chapter.url}", headers, payload.toRequestBody())
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
@@ -219,7 +238,10 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     override fun imageRequest(page: Page): Request {
         return super.imageRequest(page).newBuilder()
-            .addHeader("accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'")
+            .addHeader(
+                "accept",
+                "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'",
+            )
             .addHeader("referer", page.url)
             .build()
     }
