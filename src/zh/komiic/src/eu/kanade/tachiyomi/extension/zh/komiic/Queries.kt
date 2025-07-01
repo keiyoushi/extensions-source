@@ -76,7 +76,8 @@ val QUERY_CHAPTER = buildQuery {
 val QUERY_PAGE_LIST = buildQuery {
     """
     query imagesByChapterId(%chapterId: ID!) {
-      result: imagesByChapterId(chapterId: %chapterId) {
+      result1: reachedImageLimit,
+      result2: imagesByChapterId(chapterId: %chapterId) {
         id
         kid
         height
@@ -86,4 +87,4 @@ val QUERY_PAGE_LIST = buildQuery {
     """
 }
 
-val QUERY_API_LIMIT = buildQuery { "query reachedImageLimit { result: reachedImageLimit }" }
+// val QUERY_API_LIMIT = buildQuery { "query reachedImageLimit { result: reachedImageLimit }" }

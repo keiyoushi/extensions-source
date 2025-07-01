@@ -8,7 +8,13 @@ import kotlinx.serialization.Serializable
 class Data<T>(val data: Result<T>)
 
 @Serializable
+class MultiData<T, V>(val data: MultiResult<T, V>)
+
+@Serializable
 class Result<T>(val result: T)
+
+@Serializable
+class MultiResult<T, V>(val result1: T, val result2: V)
 
 @Serializable
 data class ComicItem(val id: String, val name: String)
