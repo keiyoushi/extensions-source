@@ -42,6 +42,12 @@ class SpectralScan : ParsedHttpSource() {
 
             if (url.fragment.isNullOrBlank().not() && url.fragment!!.contains("page")) {
                 val dto = response.parseAs<ImageSrc>()
+
+                if (dto.isBase64().not()) {
+                    response.close()
+                    return@addInterceptor chain.proceed(GET(dto.url, headers))
+                }
+
                 val byteString = dto.base64.decodeBase64()!!
                 return@addInterceptor response.newBuilder()
                     .body(byteString.toResponseBody(dto.mimeType.toMediaType()))
@@ -125,7 +131,7 @@ class SpectralScan : ParsedHttpSource() {
     // ==================== Page ==========================
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(".manga-page-container canvas").mapIndexed { index, element ->
+        return document.select(".manga-page-container").mapIndexed { index, element ->
             Page(index, imageUrl = "${element.absUrl("data-api-src")}#page")
         }
     }
