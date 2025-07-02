@@ -11,7 +11,7 @@ import org.jsoup.nodes.Document
 
 class Ikiru : MangaThemesia(
     "Ikiru",
-    "id",
+    "Id",
     "https://id.ikiru.wtf/",
     "https://api.id.ikiru.wtf/",
 ) {
