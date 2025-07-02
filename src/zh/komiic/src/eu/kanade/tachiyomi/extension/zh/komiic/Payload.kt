@@ -12,7 +12,9 @@ data class Payload<T>(
     val operationName: String,
     val variables: T,
     val query: String,
-)
+) {
+    constructor(query: Query, variables: T) : this(query.operation, variables, query.body)
+}
 
 @Serializable
 data class Pagination(
@@ -27,10 +29,6 @@ data class Pagination(
 )
 
 class Variables {
-    companion object {
-        val EMPTY = Variables().build()
-    }
-
     val variableMap = mutableMapOf<String, JsonElement>()
 
     inline fun <reified T> set(key: String, value: T): Variables {
