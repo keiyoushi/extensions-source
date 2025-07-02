@@ -9,9 +9,9 @@ import okhttp3.OkHttpClient
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.nodes.Document
 
-class Ikiru : MangaThemesia(
+class Ikiru : MangaThemesia (
     "Ikiru",
-    "Id",
+    "id",
     "https://id.ikiru.wtf/",
     "https://api.id.ikiru.wtf/",
 ) {
