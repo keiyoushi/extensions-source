@@ -3,7 +3,7 @@ ext {
     extClass = '.Ikiru'
     themePkg = 'mangathemesia'
     baseUrl = 'https://id.ikiru.wtf'
-    overrideVersionCode = 8
+    overrideVersionCode = 9
     isNsfw = true
 }
 
