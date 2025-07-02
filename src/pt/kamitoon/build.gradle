@@ -1,0 +1,10 @@
+ext {
+    extName = 'Kami Toon'
+    extClass = '.KamiToon'
+    themePkg = 'madara'
+    baseUrl = 'https://kamitoon.com.br'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
