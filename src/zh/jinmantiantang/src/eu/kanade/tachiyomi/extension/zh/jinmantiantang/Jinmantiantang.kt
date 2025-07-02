@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
+import android.util.Base64
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
@@ -167,6 +168,40 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
 
     // 漫画详情
 
+    private fun mangaDetailsResolve(response: Response): Document {
+        val document = response.asJsoup()
+        val scripts = document.select("#wrapper > script")
+
+        for (script in scripts) {
+            val jsCode = script.html().trim()
+
+            if (!jsCode.contains("function base64DecodeUtf8") || !jsCode.contains("document.write(html);")) continue
+
+            jsCode.lines().forEach { line ->
+                val trimmedLine = line.trim()
+                // html = base64DecodeUtf8("...")
+                if (trimmedLine.startsWith("const html") || trimmedLine.startsWith("let html") || trimmedLine.startsWith(
+                        "var html",
+                    )
+                ) {
+                    val start =
+                        trimmedLine.indexOf("base64DecodeUtf8(\"") + "base64DecodeUtf8(\"".length
+                    val end = trimmedLine.indexOf("\");", start)
+                    if (start > 0 && end > start) {
+                        val html = Base64.decode(trimmedLine.substring(start, end), Base64.DEFAULT)
+                        document.body().append(String(html))
+                    }
+                }
+            }
+        }
+        return document
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = mangaDetailsResolve(response)
+        return mangaDetailsParse(document)
+    }
+
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1")!!.text()
         // keep thumbnail_url same as the one in popularMangaFromElement()
@@ -239,7 +274,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+        val document = mangaDetailsResolve(response)
         if (document.select("div[id=episode-block] a li").size == 0) {
             val singleChapter = SChapter.create().apply {
                 name = "单章节"
