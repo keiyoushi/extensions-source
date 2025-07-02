@@ -170,12 +170,11 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
 
     private fun mangaDetailsResolve(response: Response): Document {
         val document = response.asJsoup()
-        val scripts = document.select("#wrapper > script")
+        val scripts =
+            document.select("#wrapper > script:containsData(function base64DecodeUtf8):containsData(document.write(html))")
 
         for (script in scripts) {
             val jsCode = script.html().trim()
-
-            if (!jsCode.contains("function base64DecodeUtf8") || !jsCode.contains("document.write(html);")) continue
 
             jsCode.lines().forEach { line ->
                 val trimmedLine = line.trim()
