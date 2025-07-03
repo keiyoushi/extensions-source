@@ -18,8 +18,8 @@ fun preferencesInternal(context: Context) = arrayOf(
     },
     SwitchPreferenceCompat(context).apply {
         key = CHECK_API_LIMIT_PREF
-        title = "自動檢查API受限"
-        summary = "點擊單個章節請求漫畫圖片時，自動檢查一次圖片API是否達到今日請求上限。若已達上限，則終止後續操作"
+        title = "自動檢查 API 狀態"
+        summary = "點擊單個章節請求漫畫圖片時，自動檢查一次圖片API是否達到今日請求上限。若已達上限，則終止後續操作（注：關閉后仍會檢查API，只是不再終止操作）"
         setDefaultValue(true)
     },
 )
