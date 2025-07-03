@@ -58,7 +58,7 @@ class Komiic : HttpSource(), ConfigurableSource {
      * Search the comic based on the ID.
      */
     private fun comicByIDRequest(id: String): Request {
-        val variables = Variables().set("comicId", id).build()
+        val variables = Variables().field("comicId", id).build()
         val payload = Payload(Query.COMIC_BY_ID, variables)
         return POST(apiUrl, headers, payload.toRequestBody())
     }
@@ -89,7 +89,7 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     override fun popularMangaRequest(page: Int): Request {
         val pagination = Pagination((page - 1) * PAGE_SIZE, "MONTH_VIEWS")
-        val variables = Variables().set("pagination", pagination).build()
+        val variables = Variables().field("pagination", pagination).build()
         val payload = Payload(Query.HOT_COMICS, variables)
         return POST(apiUrl, headers, payload.toRequestBody())
     }
@@ -104,7 +104,7 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val pagination = Pagination((page - 1) * PAGE_SIZE, "DATE_UPDATED")
-        val variables = Variables().set("pagination", pagination).build()
+        val variables = Variables().field("pagination", pagination).build()
         val payload = Payload(Query.RECENT_UPDATE, variables)
         return POST(apiUrl, headers, payload.toRequestBody())
     }
@@ -117,17 +117,17 @@ class Komiic : HttpSource(), ConfigurableSource {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
-            val variables = Variables().set("keyword", query).build()
+            val variables = Variables().field("keyword", query).build()
             val payload = Payload(Query.SEARCH, variables)
             return POST(apiUrl, headers, payload.toRequestBody())
         } else {
             val categories = filters.firstInstance<CategoryFilter>()
             val status = filters.firstInstance<StatusFilter>()
             val sort = filters.firstInstance<SortFilter>()
-            val variables = Variables().set(
+            val variables = Variables().field(
                 "pagination",
                 Pagination((page - 1) * PAGE_SIZE, sort.value, status.value, false),
-            ).set("categoryId", categories.selected).build()
+            ).field("categoryId", categories.selected).build()
             val payload = Payload(Query.COMIC_BY_CATEGORIES, variables)
             return POST(apiUrl, headers, payload.toRequestBody())
         }
@@ -166,7 +166,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     override fun getChapterUrl(chapter: SChapter) = baseUrl + chapter.url + "/images/all"
 
     override fun chapterListRequest(manga: SManga): Request {
-        val variables = Variables().set("comicId", manga.id).build()
+        val variables = Variables().field("comicId", manga.id).build()
         val payload = Payload(Query.CHAPTERS_BY_COMIC_ID, variables)
         return POST("$apiUrl#${manga.url}", headers, payload.toRequestBody())
     }
@@ -190,7 +190,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     // Page List ===================================================================================
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val variables = Variables().set("chapterId", chapter.id).build()
+        val variables = Variables().field("chapterId", chapter.id).build()
         val payload = Payload(Query.IMAGES_BY_CHAPTER_ID, variables)
         return POST("$apiUrl#${chapter.url}", headers, payload.toRequestBody())
     }

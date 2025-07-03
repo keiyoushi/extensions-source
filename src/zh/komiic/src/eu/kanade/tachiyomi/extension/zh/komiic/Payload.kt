@@ -31,7 +31,7 @@ data class Pagination(
 class Variables {
     val variableMap = mutableMapOf<String, JsonElement>()
 
-    inline fun <reified T> set(key: String, value: T): Variables {
+    inline fun <reified T> field(key: String, value: T): Variables {
         variableMap[key] = Json.encodeToJsonElement(value)
         return this
     }
