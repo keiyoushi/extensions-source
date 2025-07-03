@@ -37,9 +37,9 @@ class CategoryFilter(categories: Map<String, String>) :
 }
 
 class StatusFilter : Filter.Select<String>("狀態", arrayOf("全部", "連載", "完結")) {
-    override fun toString() = arrayOf("", "ONGOING", "END")[state]
+    val value get() = arrayOf("", "ONGOING", "END")[state]
 }
 
 class SortFilter : Filter.Select<String>("排序", arrayOf("更新", "觀看數", "喜愛數")) {
-    override fun toString() = arrayOf("DATE_UPDATED", "VIEWS", "FAVORITE_COUNT")[state]
+    val value get() = arrayOf("DATE_UPDATED", "VIEWS", "FAVORITE_COUNT")[state]
 }

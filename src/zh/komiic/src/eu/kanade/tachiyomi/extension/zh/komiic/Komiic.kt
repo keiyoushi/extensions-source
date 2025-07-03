@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -120,15 +121,12 @@ class Komiic : HttpSource(), ConfigurableSource {
             val payload = Payload(Query.SEARCH, variables)
             return POST(apiUrl, headers, payload.toRequestBody())
         } else {
-            val categories = filters[1] as CategoryFilter
+            val categories = filters.firstInstance<CategoryFilter>()
+            val status = filters.firstInstance<StatusFilter>()
+            val sort = filters.firstInstance<SortFilter>()
             val variables = Variables().set(
                 "pagination",
-                Pagination(
-                    (page - 1) * PAGE_SIZE,
-                    filters[3].toString(),
-                    filters[2].toString(),
-                    false,
-                ),
+                Pagination((page - 1) * PAGE_SIZE, sort.value, status.value, false),
             ).set("categoryId", categories.selected).build()
             val payload = Payload(Query.COMIC_BY_CATEGORIES, variables)
             return POST(apiUrl, headers, payload.toRequestBody())
