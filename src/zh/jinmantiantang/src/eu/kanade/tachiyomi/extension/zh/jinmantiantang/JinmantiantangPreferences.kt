@@ -84,12 +84,12 @@ private val SITE_ENTRIES_ARRAY_DESCRIPTION get() = arrayOf(
 // Please also update AndroidManifest
 private val SITE_ENTRIES_ARRAY get() = arrayOf(
     "18comic.vip",
-    "18comic.org",
-    "jmcomic.me",
-    "jmcomic1.me",
+    "18comic.ink",
+    "jmcomic-zzz.one",
+    "jmcomic-zzz.org",
 )
 
-private const val DEFAULT_LIST = "18comic-cn.vip,18comic-c.xyz,18comic-c.art"
+private const val DEFAULT_LIST = "18comic-aspa.club,18comic-aspa.org,18comic-wantgo.cc"
 private const val DEFAULT_LIST_PREF = "defaultBaseUrlList"
 private const val URL_LIST_PREF = "baseUrlList"
 
