@@ -1,6 +1,5 @@
-package eu.kanade.tachiyomi.extension.pt.readmangas
+package eu.kanade.tachiyomi.multisrc.zerotheme
 
-import eu.kanade.tachiyomi.extension.pt.readmangas.LerToons.Companion.CDN_URL
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -22,7 +21,7 @@ class Props<T>(
 class MangaDetailsDto(
     private val props: Props<MangaDto>,
 ) {
-    fun toSManga() = props.content.toSManga()
+    fun toSManga(baseUrl: String) = props.content.toSManga(baseUrl)
     fun toSChapterList() = props.content.chapters.map { it.toSChapter() }
 }
 
@@ -30,11 +29,11 @@ class MangaDetailsDto(
 class PageDto(
     val props: Props<ChapterWrapper>,
 ) {
-    fun toPageList(): List<Page> {
+    fun toPageList(baseUrl: String): List<Page> {
         return props.content.chapter.pages
             .filter { it.pathSegment.contains("xml").not() }
             .mapIndexed { index, path ->
-                Page(index, imageUrl = "$CDN_URL/images/${path.pathSegment}")
+                Page(index, imageUrl = "$baseUrl/${path.pathSegment}")
             }
     }
 
@@ -87,10 +86,10 @@ class MangaDto(
     val chapters: List<ChapterDto> = emptyList(),
 ) {
 
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(baseUrl: String) = SManga.create().apply {
         title = this@MangaDto.title
         description = Jsoup.parseBodyFragment(this@MangaDto.description).text()
-        this.thumbnail_url = thumbnailUrl?.let { "$CDN_URL/images/$it" }
+        this.thumbnail_url = thumbnailUrl?.let { "$baseUrl/$it" }
         status = when (this@MangaDto.status.firstOrNull()?.name?.lowercase()) {
             "em andamento" -> SManga.ONGOING
             else -> SManga.UNKNOWN
