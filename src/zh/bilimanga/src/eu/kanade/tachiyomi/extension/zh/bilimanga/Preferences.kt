@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.preference.ListPreference
 import androidx.preference.SwitchPreferenceCompat
 
-const val NATIVE_TITLE = "NATIVE_TITLE"
+const val BACKUP_TITLE = "NATIVE_TITLE"
 const val POPULAR_MANGA_DISPLAY = "POPULAR_MANGA_DISPLAY"
 
 fun preferencesInternal(context: Context) = arrayOf(
@@ -41,8 +41,9 @@ fun preferencesInternal(context: Context) = arrayOf(
         setDefaultValue("/top/weekvisit/%d.html")
     },
     SwitchPreferenceCompat(context).apply {
-        key = NATIVE_TITLE
+        key = BACKUP_TITLE
         title = "詳細頁使用別名標題"
+        summary = "別名一般是日文標題，在用記錄平臺搜索漫畫時比較好用"
         setDefaultValue(false)
     },
 )
