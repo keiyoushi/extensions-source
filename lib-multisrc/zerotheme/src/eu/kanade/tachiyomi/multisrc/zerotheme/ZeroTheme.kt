@@ -18,23 +18,30 @@ abstract class ZeroTheme(
     override val lang: String,
 ) : HttpSource() {
 
+    override val supportsLatest: Boolean = true
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
 
     open val cdnUrl: String = "https://cdn.${baseUrl.substringAfterLast("/")}"
 
-    override val supportsLatest = false
+    open val imageLocation: String = "images"
+
+    private val sourceLocation: String get() = "$cdnUrl/$imageLocation"
 
     // =========================== Popular ================================
 
     override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList())
+
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     // =========================== Latest ===================================
 
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int) = GET(baseUrl, headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        MangasPage(response.toDto<LatestDto>().toSMangaList(sourceLocation), hasNextPage = false)
 
     // =========================== Search =================================
 
@@ -62,10 +69,6 @@ abstract class ZeroTheme(
 
     // =========================== Pages ===================================
 
-    open val imageLocation: String = "images"
-
-    private val sourceLocation: String by lazy { "$cdnUrl/$imageLocation" }
-
     override fun pageListParse(response: Response): List<Page> =
         response.toDto<PageDto>().toPageList(sourceLocation)
 
@@ -76,9 +79,5 @@ abstract class ZeroTheme(
     inline fun <reified T> Response.toDto(): T {
         val jsonString = asJsoup().selectFirst("[data-page]")!!.attr("data-page")
         return jsonString.parseAs<T>()
-    }
-
-    companion object {
-        const val CDN_URL = "https://cdn.egotoons.com"
     }
 }

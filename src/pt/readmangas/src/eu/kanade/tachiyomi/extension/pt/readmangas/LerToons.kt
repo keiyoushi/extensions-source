@@ -8,9 +8,9 @@ class LerToons : ZeroTheme(
     "https://lertoons.com",
     "pt-BR",
 ) {
+    override val versionId = 3
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
-
-    override val versionId = 3
 }

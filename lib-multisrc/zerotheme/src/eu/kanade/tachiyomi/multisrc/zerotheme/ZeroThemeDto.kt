@@ -13,27 +13,39 @@ import java.util.Locale
 
 @Serializable
 class Props<T>(
-    @JsonNames("comic_infos", "chapter")
+    @JsonNames("comic_infos", "chapter", "new_chapters")
     val content: T,
 )
+
+@Serializable
+class LatestDto(
+    private val props: Props<List<Comic>>,
+) {
+    fun toSMangaList(srcPath: String) = props.content.map { it.comic.toSManga(srcPath) }
+
+    @Serializable
+    class Comic(
+        val comic: MangaDto,
+    )
+}
 
 @Serializable
 class MangaDetailsDto(
     private val props: Props<MangaDto>,
 ) {
-    fun toSManga(baseUrl: String) = props.content.toSManga(baseUrl)
-    fun toSChapterList() = props.content.chapters.map { it.toSChapter() }
+    fun toSManga(srcPath: String) = props.content.toSManga(srcPath)
+    fun toSChapterList() = props.content.chapters!!.map { it.toSChapter() }
 }
 
 @Serializable
 class PageDto(
     val props: Props<ChapterWrapper>,
 ) {
-    fun toPageList(baseUrl: String): List<Page> {
+    fun toPageList(srcPath: String): List<Page> {
         return props.content.chapter.pages
             .filter { it.pathSegment.contains("xml").not() }
             .mapIndexed { index, path ->
-                Page(index, imageUrl = "$baseUrl/${path.pathSegment}")
+                Page(index, imageUrl = "$srcPath/${path.pathSegment}")
             }
     }
 
@@ -77,24 +89,25 @@ class SearchDto(
 @Serializable
 class MangaDto(
     val title: String,
-    val description: String,
+    val description: String?,
     @SerialName("cover")
     val thumbnailUrl: String?,
     val slug: String,
-    val status: List<ValueDto> = emptyList(),
-    val genres: List<ValueDto> = emptyList(),
-    val chapters: List<ChapterDto> = emptyList(),
+    val status: List<ValueDto>? = emptyList(),
+    val genres: List<ValueDto>? = emptyList(),
+    val chapters: List<ChapterDto>? = emptyList(),
 ) {
 
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(srcPath: String) = SManga.create().apply {
         title = this@MangaDto.title
-        description = Jsoup.parseBodyFragment(this@MangaDto.description).text()
-        this.thumbnail_url = thumbnailUrl?.let { "$baseUrl/$it" }
-        status = when (this@MangaDto.status.firstOrNull()?.name?.lowercase()) {
+        description = this@MangaDto.description?.let { Jsoup.parseBodyFragment(it).text() }
+        this.thumbnail_url = thumbnailUrl?.let { "$srcPath/$it" }
+
+        status = when (this@MangaDto.status?.firstOrNull()?.name?.lowercase()) {
             "em andamento" -> SManga.ONGOING
             else -> SManga.UNKNOWN
         }
-        genre = genres.joinToString { it.name }
+        genre = genres?.joinToString { it.name }
         url = "/comic/$slug"
     }
 
