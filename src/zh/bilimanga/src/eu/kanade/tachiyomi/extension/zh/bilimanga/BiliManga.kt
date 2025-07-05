@@ -65,9 +65,8 @@ class BiliManga : HttpSource(), ConfigurableSource {
         return GET(baseUrl + String.format(suffix, page), headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val doc = response.asJsoup()
-        val mangas = doc.select(".book-layout").map {
+    override fun popularMangaParse(response: Response) = response.asJsoup().let {
+        val mangas = it.select(".book-layout").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 it.selectFirst("img")!!.let {
@@ -76,7 +75,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
                 }
             }
         }
-        return MangasPage(mangas, mangas.size >= PAGE_SIZE)
+        MangasPage(mangas, mangas.size >= PAGE_SIZE)
     }
 
     // Latest Page
@@ -133,12 +132,11 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     override fun chapterListRequest(manga: SManga) = GET("$baseUrl/read/${manga.id}/catalog", headers)
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val info = document.selectFirst(".chapter-sub-title")!!.text()
+    override fun chapterListParse(response: Response) = response.asJsoup().let {
+        val info = it.selectFirst(".chapter-sub-title")!!.text()
         val date = DATE_FORMAT.tryParse(DATE_REGEX.find(info)?.value)
-        val elements = document.select(".chapter-li-a")
-        return elements.mapIndexed { i, e ->
+        val elements = it.select(".chapter-li-a")
+        elements.mapIndexed { i, e ->
             val url = e.absUrl("href").takeUnless("javascript:cid(1)"::equals)
             SChapter.create().apply {
                 name = e.text().convert()
@@ -151,12 +149,12 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     // Manga View Page
 
-    override fun pageListParse(response: Response): List<Page> {
-        val doc = response.asJsoup()
-        val images = doc.select(".imagecontent")
-        require(images.size > 0) { doc.selectFirst("#acontentz")?.text() ?: "章节鏈接错误" }
-        return images.mapIndexed { i, it ->
-            Page(i, doc.location(), it.attr("data-src"))
+    override fun pageListParse(response: Response) = response.asJsoup().let {
+        val images = it.select(".imagecontent")
+        val prompt = it.selectFirst("#acontentz")
+        require(images.size > 0) { prompt?.let { "漫畫可能已下架或需要登錄查看" } ?: "章节鏈接错误" }
+        images.mapIndexed { i, image ->
+            Page(i, it.location(), image.attr("data-src"))
         }
     }
 
