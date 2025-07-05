@@ -144,7 +144,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
             SChapter.create().apply {
                 name = e.text().convert()
                 date_upload = date
-                if (url == null) scanlator = "該章节鏈接由插件預測生成"
+                if (url == null) scanlator = "章节鏈接缺失，由插件預測生成"
                 setUrlWithoutDomain(url ?: getChapterUrlByContext(i, elements))
             }
         }.reversed()
