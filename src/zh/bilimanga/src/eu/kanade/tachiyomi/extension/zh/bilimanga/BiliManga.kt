@@ -32,7 +32,6 @@ class BiliManga : HttpSource(), ConfigurableSource {
         .add("Referer", "$baseUrl/")
         .add("Accept-Language", "zh")
         .add("Accept", "*/*")
-        .add("Cookie", "night=0")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         preferencesInternal(screen.context).forEach(screen::addPreference)
@@ -144,7 +143,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
             SChapter.create().apply {
                 name = e.text().convert()
                 date_upload = date
-                if (url == null) scanlator = "章节鏈接缺失，由插件預測生成"
+                if (url == null) scanlator = "鏈接缺失，由插件預測生成"
                 setUrlWithoutDomain(url ?: getChapterUrlByContext(i, elements))
             }
         }.reversed()

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.bilimanga
 
-import eu.kanade.tachiyomi.extension.zh.bilimanga.BiliManga.Companion.MANGA_ID_REGEX
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -42,12 +41,6 @@ class MangaInterceptor : Interceptor {
             return response.newBuilder().code(302)
                 .header("Location", url ?: predictUrlByContext(origin.url)).build()
         }
-        MANGA_ID_REGEX.find(origin.url.toString())?.groups?.get(1)?.value?.let {
-            val new = origin.newBuilder()
-                .addHeader("Cookie", "jieqiVisitId=cartoon_cartoonviews%3D$it")
-                .build()
-            return chain.proceed(new)
-        }
-        return chain.proceed(origin)
+        return chain.proceed(origin.newBuilder().addHeader("Cookie", "night=1").build())
     }
 }

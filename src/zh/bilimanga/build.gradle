@@ -1,5 +1,5 @@
 ext {
-    extName = 'Bili Manga'
+    extName = 'BiliManga'
     extClass = '.BiliManga'
     extVersionCode = 1
     isNsfw = true
