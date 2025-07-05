@@ -1,7 +1,10 @@
 ext {
-    extName = 'Read Mangas'
-    extClass = '.ReadMangas'
-    extVersionCode = 40
+    extName = 'Ler Toons'
+    extClass = '.LerToons'
+    themePkg = 'zerotheme'
+    baseUrl = 'https://lertoons.com'
+    overrideVersionCode = 41
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
