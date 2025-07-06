@@ -156,7 +156,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
             throw Exception(if (prompt != null) "漫畫可能已下架或需要登錄查看" else "章节鏈接错误")
         }
         images.mapIndexed { i, image ->
-            Page(i, it.location(), image.attr("data-src"))
+            Page(i, imageUrl = image.attr("data-src"))
         }
     }
 
