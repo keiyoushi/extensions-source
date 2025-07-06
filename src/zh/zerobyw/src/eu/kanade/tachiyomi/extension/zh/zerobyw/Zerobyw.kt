@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.zh.zerobyw
 
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,10 +12,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferences
+import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -25,7 +31,54 @@ class Zerobyw : ParsedHttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(UpdateUrlInterceptor(preferences))
+        .addInterceptor(::authInterceptor)
         .build()
+
+    private fun authInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val username = preferences.getString("USERNAME", "")!!
+        val password = preferences.getString("PASSWORD", "")!!
+        // Only intercept page list request
+        if (request.url.queryParameter("a") != "read" || username.isBlank() || password.isBlank()) {
+            return chain.proceed(request)
+        }
+
+        val response = chain.proceed(request)
+        val document = Jsoup.parse(response.peekBody(Long.MAX_VALUE).string())
+        // Element which is only present if logged in
+        if (document.selectFirst("#myprompt_menu") != null) {
+            return response
+        }
+
+        val formhash = document.selectFirst("input[name=formhash]")!!.attr("value")
+        val tokenResult = getToken(username, password, formhash, chain)
+
+        val authRequest = request.newBuilder().build()
+        return chain.proceed(authRequest)
+    }
+
+    private fun getToken(username: String, password: String, formhash: String, chain: Interceptor.Chain) {
+        val formBody: RequestBody = FormBody.Builder()
+            .addEncoded("username", username)
+            .addEncoded("cookietime", "2592000")
+            .addEncoded("password", password)
+            .addEncoded("formhash", formhash)
+            .addEncoded("quickforward", "yes")
+            .addEncoded("handlekey", "ls")
+            .build()
+        val response = chain.proceed(
+            POST(
+                "$baseUrl/member.php?mod=logging&action=login&loginsubmit=yes&infloat=yes&lssubmit=yes&inajax=1",
+                headers,
+                formBody,
+            ),
+        )
+        val body = response.body.string()
+        if (body.contains("errorhandle_ls")) {
+            // Login failed
+            throw Exception(body.substringAfter("errorhandle_ls('").substringBefore("'"))
+        }
+    }
 
     override val baseUrl get() = when {
         isCi -> ciGetUrl(client)
@@ -214,5 +267,14 @@ class Zerobyw : ParsedHttpSource(), ConfigurableSource {
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         screen.addPreference(getBaseUrlPreference(screen.context))
+        EditTextPreference(screen.context).apply {
+            key = "USERNAME"
+            title = "用户名"
+        }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = "PASSWORD"
+            title = "密码"
+        }.let(screen::addPreference)
     }
 }
