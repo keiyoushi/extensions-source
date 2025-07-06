@@ -151,8 +151,10 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response) = response.asJsoup().let {
         val images = it.select(".imagecontent")
-        val prompt = it.selectFirst("#acontentz")
-        require(images.size > 0) { prompt?.let { "漫畫可能已下架或需要登錄查看" } ?: "章节鏈接错误" }
+        if (images.size == 0) {
+            val prompt = it.selectFirst("#acontentz")
+            throw Exception(if (prompt != null) "漫畫可能已下架或需要登錄查看" else "章节鏈接错误")
+        }
         images.mapIndexed { i, image ->
             Page(i, it.location(), image.attr("data-src"))
         }
