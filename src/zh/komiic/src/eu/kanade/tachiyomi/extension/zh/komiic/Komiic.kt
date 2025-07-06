@@ -198,7 +198,7 @@ class Komiic : HttpSource(), ConfigurableSource {
     override fun pageListParse(response: Response): List<Page> {
         val res = response.parseAs<MultiData<Boolean, List<Image>>>()
         val check = preferences.getBoolean(CHECK_API_LIMIT_PREF, true)
-        require(!check || !res.data.result1) { "今日圖片讀取次數已達上限，請登录或明天再來！" }
+        check(!check || !res.data.result1) { "今日圖片讀取次數已達上限，請登录或明天再來！" }
         val chapterUrl = response.request.url.fragment!!
         return res.data.result2.mapIndexed { index, image ->
             Page(index, "$chapterUrl/page/$index", "$baseUrl/api/image/${image.kid}")
