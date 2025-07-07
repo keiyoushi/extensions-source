@@ -89,7 +89,7 @@ private val SITE_ENTRIES_ARRAY get() = arrayOf(
     "jmcomic-zzz.org",
 )
 
-private const val DEFAULT_LIST = "18comic-aspa.club,18comic-aspa.org,18comic-wantgo.cc"
+private const val DEFAULT_LIST = "18comic-ive.club,18comic-aspa.org,18comic-wantgo.cc"
 private const val DEFAULT_LIST_PREF = "defaultBaseUrlList"
 private const val URL_LIST_PREF = "baseUrlList"
 
