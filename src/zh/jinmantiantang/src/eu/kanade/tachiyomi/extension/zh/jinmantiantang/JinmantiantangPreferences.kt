@@ -33,7 +33,7 @@ internal fun getPreferenceList(context: Context, preferences: SharedPreferences,
     ListPreference(context).apply {
         val urlList = preferences.urlList
         val fullList = SITE_ENTRIES_ARRAY + urlList
-        val fullDesc = SITE_ENTRIES_ARRAY_DESCRIPTION + Array(urlList.size) { "中国大陆线路${it + 1}" }
+        val fullDesc = SITE_ENTRIES_ARRAY_DESCRIPTION + Array(urlList.size) { "内地线路${it + 1}" }
         val count = fullList.size
 
         key = USE_MIRROR_URL_PREF
@@ -75,8 +75,8 @@ internal const val MAINSITE_RATELIMIT_PERIOD_DEFAULT = 3.toString()
 private const val USE_MIRROR_URL_PREF = "useMirrorWebsitePreference"
 
 private val SITE_ENTRIES_ARRAY_DESCRIPTION get() = arrayOf(
-    "主站",
-    "海外分流",
+    "主站1",
+    "主站2",
     "东南亚线路1",
     "东南亚线路2",
 )
@@ -84,12 +84,12 @@ private val SITE_ENTRIES_ARRAY_DESCRIPTION get() = arrayOf(
 // Please also update AndroidManifest
 private val SITE_ENTRIES_ARRAY get() = arrayOf(
     "18comic.vip",
-    "18comic.org",
-    "jmcomic.me",
-    "jmcomic1.me",
+    "18comic.ink",
+    "jmcomic-zzz.one",
+    "jmcomic-zzz.org",
 )
 
-private const val DEFAULT_LIST = "18comic-cn.vip,18comic-c.xyz,18comic-c.art"
+private const val DEFAULT_LIST = "18comic-ive.club,18comic-aspa.org,18comic-wantgo.cc"
 private const val DEFAULT_LIST_PREF = "defaultBaseUrlList"
 private const val URL_LIST_PREF = "baseUrlList"
 
