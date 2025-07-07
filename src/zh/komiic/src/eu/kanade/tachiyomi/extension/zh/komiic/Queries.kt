@@ -1,187 +1,90 @@
 package eu.kanade.tachiyomi.extension.zh.komiic
 
-private fun buildQuery(queryAction: () -> String): String {
-    return queryAction()
-        .trimIndent()
+private fun buildQuery(body: String = "", queryAction: () -> String): String {
+    return queryAction().trimIndent()
+        .replace("#{body}", body.trimIndent())
         .replace("%", "$")
 }
 
-val QUERY_HOT_COMICS: String = buildQuery {
+const val COMIC_BODY =
     """
-        query hotComics(%pagination: Pagination!) {
-          hotComics(pagination: %pagination) {
-            id
-            title
-            status
-            year
-            imageUrl
-            authors {
-              id
-              name
-              __typename
-            }
-            categories {
-              id
-              name
-              __typename
-            }
-            dateUpdated
-            monthViews
-            views
-            favoriteCount
-            lastBookUpdate
-            lastChapterUpdate
-            __typename
-          }
-        }
+    {
+      id
+      title
+      description
+      status
+      imageUrl
+      authors {
+        id
+        name
+      }
+      categories {
+        id
+        name
+      }
+    }
+    """
+
+val QUERY_HOT_COMICS = buildQuery(COMIC_BODY) {
+    """
+    query hotComics(%pagination: Pagination!) {
+      result: hotComics(pagination: %pagination) #{body}
+    }
     """
 }
 
-val QUERY_RECENT_UPDATE: String = buildQuery {
+val QUERY_RECENT_UPDATE = buildQuery(COMIC_BODY) {
     """
-        query recentUpdate(%pagination: Pagination!) {
-          recentUpdate(pagination: %pagination) {
-            id
-            title
-            status
-            year
-            imageUrl
-            authors {
-              id
-              name
-              __typename
-            }
-            categories {
-              id
-              name
-              __typename
-            }
-            dateUpdated
-            monthViews
-            views
-            favoriteCount
-            lastBookUpdate
-            lastChapterUpdate
-            __typename
-          }
-        }
+    query recentUpdate(%pagination: Pagination!) {
+      result: recentUpdate(pagination: %pagination) #{body}
+    }
     """
 }
 
-val QUERY_SEARCH: String = buildQuery {
+val QUERY_SEARCH = buildQuery(COMIC_BODY) {
     """
-        query searchComicAndAuthorQuery(%keyword: String!) {
-          searchComicsAndAuthors(keyword: %keyword) {
-            comics {
-              id
-              title
-              status
-              year
-              imageUrl
-              authors {
-                id
-                name
-                __typename
-              }
-              categories {
-                id
-                name
-                __typename
-              }
-              dateUpdated
-              monthViews
-              views
-              favoriteCount
-              lastBookUpdate
-              lastChapterUpdate
-              __typename
-            }
-            authors {
-              id
-              name
-              chName
-              enName
-              wikiLink
-              comicCount
-              views
-              __typename
-            }
-            __typename
-          }
-        }
+    query searchComicAndAuthorQuery(%keyword: String!) {
+      result: searchComicsAndAuthors(keyword: %keyword) {
+        result: comics #{body}
+      }
+    }
     """
 }
 
-val QUERY_CHAPTER: String = buildQuery {
+val QUERY_COMIC_BY_ID = buildQuery(COMIC_BODY) {
     """
-        query chapterByComicId(%comicId: ID!) {
-          chaptersByComicId(comicId: %comicId) {
-            id
-            serial
-            type
-            dateCreated
-            dateUpdated
-            size
-            __typename
-          }
-        }
+    query comicById(%comicId: ID!) {
+      result: comicById(comicId: %comicId) #{body}
+    }
     """
 }
 
-val QUERY_COMIC_BY_ID = buildQuery {
+val QUERY_CHAPTER = buildQuery {
     """
-        query comicById(%comicId: ID!) {
-          comicById(comicId: %comicId) {
-            id
-            title
-            status
-            year
-            imageUrl
-            authors {
-              id
-              name
-              __typename
-            }
-            categories {
-              id
-              name
-              __typename
-            }
-            dateCreated
-            dateUpdated
-            views
-            favoriteCount
-            lastBookUpdate
-            lastChapterUpdate
-            __typename
-          }
-        }
+    query chapterByComicId(%comicId: ID!) {
+      result: chaptersByComicId(comicId: %comicId) {
+        id
+        serial
+        type
+        size
+        dateCreated
+      }
+    }
     """
 }
 
 val QUERY_PAGE_LIST = buildQuery {
     """
-        query imagesByChapterId(%chapterId: ID!) {
-          imagesByChapterId(chapterId: %chapterId) {
-            id
-            kid
-            height
-            width
-            __typename
-          }
-        }
+    query imagesByChapterId(%chapterId: ID!) {
+      result1: reachedImageLimit,
+      result2: imagesByChapterId(chapterId: %chapterId) {
+        id
+        kid
+        height
+        width
+      }
+    }
     """
 }
 
-val QUERY_API_LIMIT = buildQuery {
-    """
-        query getImageLimit {
-          getImageLimit {
-            limit
-            usage
-            resetInSeconds
-            __typename
-          }
-        }
-    """
-}
+// val QUERY_API_LIMIT = buildQuery { "query reachedImageLimit { result: reachedImageLimit }" }

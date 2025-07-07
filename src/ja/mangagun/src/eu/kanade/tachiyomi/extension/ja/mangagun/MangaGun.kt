@@ -48,7 +48,7 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val slug = manga.url.substringAfter("manga-").substringBefore(".html")
+        val slug = manga.url.substringAfter("raw-").substringBefore(".html")
 
         return client.newCall(
             GET(

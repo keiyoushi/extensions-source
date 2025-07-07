@@ -3,7 +3,7 @@ ext {
     extClass = '.PinkRosa'
     themePkg = 'zeistmanga'
     baseUrl = 'https://scanpinkrosa.blogspot.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

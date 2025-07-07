@@ -7,12 +7,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.ByteString.Companion.decodeBase64
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.io.IOException
 
 class SpectralScan : ParsedHttpSource() {
 
@@ -28,6 +31,30 @@ class SpectralScan : ParsedHttpSource() {
 
     override val client = super.client.newBuilder()
         .rateLimit(2)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val response = chain.proceed(request)
+            val url = response.request.url
+
+            if (url.toString().contains("login")) {
+                throw IOException("Faça o login na WebView para acessar o contéudo")
+            }
+
+            if (url.fragment.isNullOrBlank().not() && url.fragment!!.contains("page")) {
+                val dto = response.parseAs<ImageSrc>()
+
+                if (dto.isBase64().not()) {
+                    response.close()
+                    return@addInterceptor chain.proceed(GET(dto.url, headers))
+                }
+
+                val byteString = dto.base64.decodeBase64()!!
+                return@addInterceptor response.newBuilder()
+                    .body(byteString.toResponseBody(dto.mimeType.toMediaType()))
+                    .build()
+            }
+            response
+        }
         .build()
 
     // ==================== Popular ==========================
@@ -93,24 +120,7 @@ class SpectralScan : ParsedHttpSource() {
 
     // ==================== Chapter =======================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val element = document.selectFirst("section.chapter-section")!!
-
-        val chapters = element.attr("data-total-chapters")
-        val pathSegment = element.attr("data-ajax-url")
-        val url = "$baseUrl$pathSegment".toHttpUrl().newBuilder()
-            .addQueryParameter("per_page", chapters)
-            .build()
-
-        val newHeaders = headers.newBuilder()
-            .set("X-Requested-With", "XMLHttpRequest")
-            .build()
-
-        return super.chapterListParse(client.newCall(GET(url, newHeaders)).execute())
-    }
-
-    override fun chapterListSelector() = ".chapter-item"
+    override fun chapterListSelector() = "a.chapter-item"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         name = element.selectFirst(".chapter-number")!!.text()
@@ -121,8 +131,8 @@ class SpectralScan : ParsedHttpSource() {
     // ==================== Page ==========================
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("#chapterPagesContainer img").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
+        return document.select(".manga-page-container").mapIndexed { index, element ->
+            Page(index, imageUrl = "${element.absUrl("data-api-src")}#page")
         }
     }
 

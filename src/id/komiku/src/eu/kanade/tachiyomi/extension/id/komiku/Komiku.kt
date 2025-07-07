@@ -19,7 +19,7 @@ import java.util.Locale
 class Komiku : ParsedHttpSource() {
     override val name = "Komiku"
 
-    override val baseUrl = "https://komiku.id"
+    override val baseUrl = "https://komiku.org"
 
     private val baseUrlApi = "https://api.komiku.id"
 

@@ -1,7 +1,7 @@
 ext {
     extName = 'Spectral Scan'
     extClass = '.SpectralScan'
-    extVersionCode = 44
+    extVersionCode = 47
     isNsfw = false
 }
 

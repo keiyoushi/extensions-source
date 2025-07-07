@@ -2,8 +2,8 @@ ext {
     extName = 'Manhwalist.org'
     extClass = '.ManhwalistOrg'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://manhwalist.org'
-    overrideVersionCode = 0
+    baseUrl = 'https://isekaikomik.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 

@@ -2,8 +2,8 @@ ext {
     extName = 'Kiryuu'
     extClass = '.Kiryuu'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://kiryuu01.com'
-    overrideVersionCode = 10
+    baseUrl = 'https://kiryuu02.com'
+    overrideVersionCode = 11
     isNsfw = false
 }
 

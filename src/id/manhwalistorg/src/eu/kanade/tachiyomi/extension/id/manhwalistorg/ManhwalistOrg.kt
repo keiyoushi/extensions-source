@@ -6,8 +6,7 @@ import java.util.Locale
 
 class ManhwalistOrg : MangaThemesia(
     "Manhwalist.org",
-    "https://manhwalist.org",
+    "https://isekaikomik.com",
     "id",
-    mangaUrlDirectory = "/manhwa",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
 )
