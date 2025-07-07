@@ -6,7 +6,10 @@ import kotlinx.serialization.Serializable
 data class SirenKomikDto(
     val `data`: DataWrapper,
 ) {
-    val pages get() = data.data.sources.firstOrNull()?.images ?: emptyList()
+    val pages: List<String>
+        get() = data.data.sources
+            .firstOrNull { it.images.isNotEmpty() }
+            ?.images ?: emptyList()
 }
 
 @Serializable
