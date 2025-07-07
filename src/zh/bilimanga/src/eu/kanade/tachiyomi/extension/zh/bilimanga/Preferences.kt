@@ -2,14 +2,12 @@ package eu.kanade.tachiyomi.extension.zh.bilimanga
 
 import android.content.Context
 import androidx.preference.ListPreference
-import androidx.preference.SwitchPreferenceCompat
 
-const val BACKUP_TITLE = "NATIVE_TITLE"
-const val POPULAR_MANGA_DISPLAY = "POPULAR_MANGA_DISPLAY"
+const val PREF_POPULAR_MANGA_DISPLAY = "POPULAR_MANGA_DISPLAY"
 
 fun preferencesInternal(context: Context) = arrayOf(
     ListPreference(context).apply {
-        key = POPULAR_MANGA_DISPLAY
+        key = PREF_POPULAR_MANGA_DISPLAY
         title = "熱門漫畫顯示内容"
         summary = "%s"
         entries = arrayOf(
@@ -39,11 +37,5 @@ fun preferencesInternal(context: Context) = arrayOf(
             "/top/newhot/%d.html",
         )
         setDefaultValue("/top/weekvisit/%d.html")
-    },
-    SwitchPreferenceCompat(context).apply {
-        key = BACKUP_TITLE
-        title = "詳細頁使用別名標題"
-        summary = "別名一般是日文標題，在用記錄平臺搜索漫畫時比較好用"
-        setDefaultValue(false)
     },
 )

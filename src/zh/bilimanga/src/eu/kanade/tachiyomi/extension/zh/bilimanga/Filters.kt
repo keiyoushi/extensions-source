@@ -4,24 +4,24 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 
 fun buildFilterList() = FilterList(
-    Filter.Header("过滤条件（搜索时无效）"),
+    Filter.Header("篩選條件（搜尋時無效）"),
     RankFilter(),
 )
 
 class RankFilter : Filter.Select<String>(
     "排行榜",
     arrayOf(
-        "月点击榜",
-        "周点击榜",
-        "月推荐榜",
-        "周推荐榜",
-        "月鲜花榜",
-        "周鲜花榜",
-        "月鸡蛋榜",
-        "周鸡蛋榜",
-        "最新入库",
+        "月點擊榜",
+        "周點擊榜",
+        "月推薦榜",
+        "周推薦榜",
+        "月鮮花榜",
+        "周鮮花榜",
+        "月雞蛋榜",
+        "周雞蛋榜",
+        "最新入庫",
         "收藏榜",
-        "新书榜",
+        "新書榜",
     ),
 ) {
     override fun toString(): String {

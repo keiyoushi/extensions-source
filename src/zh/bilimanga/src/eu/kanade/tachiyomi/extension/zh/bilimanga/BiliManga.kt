@@ -22,15 +22,21 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class BiliManga : HttpSource(), ConfigurableSource {
+
     override val baseUrl = "https://www.bilimanga.net"
+
     override val lang = "zh"
-    override val name = "嗶哩漫畫"
+
+    override val name = "嗶哩漫畫（Bilimanga）"
+
     override val supportsLatest = true
+
+    private val preferences by getPreferencesLazy()
+
     override val client = super.client.newBuilder()
         .rateLimit(10, 10).addNetworkInterceptor(MangaInterceptor()).build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36")
         .add("Referer", "$baseUrl/")
         .add("Accept-Language", "zh")
         .add("Accept", "*/*")
@@ -41,7 +47,6 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     // Customize
 
-    private val preferences by getPreferencesLazy()
     private val SManga.id get() = MANGA_ID_REGEX.find(url)!!.groups[1]!!.value
     private fun String.convert(): String {
         return this.map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
@@ -63,7 +68,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
     // Popular Page
 
     override fun popularMangaRequest(page: Int): Request {
-        val suffix = preferences.getString(POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
+        val suffix = preferences.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
         return GET(baseUrl + String.format(suffix, page), headers)
     }
 
@@ -71,10 +76,9 @@ class BiliManga : HttpSource(), ConfigurableSource {
         val mangas = it.select(".book-layout").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
-                it.selectFirst("img")!!.let { img ->
-                    thumbnail_url = img.absUrl("data-src")
-                    title = img.attr("alt")
-                }
+                val img = it.selectFirst("img")!!
+                thumbnail_url = img.absUrl("data-src")
+                title = img.attr("alt")
             }
         }
         MangasPage(mangas, mangas.size >= PAGE_SIZE)
@@ -82,7 +86,8 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     // Latest Page
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/top/lastupdate/$page.html", headers)
+    override fun latestUpdatesRequest(page: Int) =
+        GET("$baseUrl/top/lastupdate/$page.html", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -114,11 +119,11 @@ class BiliManga : HttpSource(), ConfigurableSource {
         val doc = response.asJsoup()
         val meta = doc.selectFirst(".book-meta")!!.text().split("|")
         val extra = meta.filterNot(META_REGEX::containsMatchIn)
-        val backup = preferences.getBoolean(BACKUP_TITLE, false)
+        val backupname = doc.selectFirst(".backupname")?.let { "漫畫別名：${it.text()}\n\n" }
         url = doc.location()
-        title = doc.selectFirst(if (backup) ".backupname" else ".book-title")!!.text()
+        title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
-        description = doc.selectFirst("#bookSummary")?.text()
+        description = backupname + doc.selectFirst("#bookSummary")?.text()
         artist = doc.selectFirst(".authorname")?.text()
         author = doc.selectFirst(".illname")?.text() ?: artist
         status = when (meta.firstOrNull()) {
@@ -132,7 +137,8 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     // Catalog Page
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/read/${manga.id}/catalog", headers)
+    override fun chapterListRequest(manga: SManga) =
+        GET("$baseUrl/read/${manga.id}/catalog", headers)
 
     override fun chapterListParse(response: Response) = response.asJsoup().let {
         val info = it.selectFirst(".chapter-sub-title")!!.text()
@@ -143,7 +149,6 @@ class BiliManga : HttpSource(), ConfigurableSource {
             SChapter.create().apply {
                 name = e.text().convert()
                 date_upload = date
-                if (url == null) scanlator = "鏈接缺失，由插件預測生成"
                 setUrlWithoutDomain(url ?: getChapterUrlByContext(i, elements))
             }
         }.reversed()
@@ -153,9 +158,10 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response) = response.asJsoup().let {
         val images = it.select(".imagecontent")
-        if (images.size == 0) {
-            val prompt = it.selectFirst("#acontentz")
-            throw Exception(if (prompt != null) "漫畫可能已下架或需要登錄查看" else "章节鏈接错误")
+        check(images.size > 0) {
+            it.selectFirst("#acontentz")?.let { e ->
+                if ("電腦端" in e.text()) "章節不支持桌面電腦端瀏覽器顯示" else "漫畫可能已下架或需要登錄查看"
+            } ?: "章节鏈接错误"
         }
         images.mapIndexed { i, image ->
             Page(i, imageUrl = image.attr("data-src"))
