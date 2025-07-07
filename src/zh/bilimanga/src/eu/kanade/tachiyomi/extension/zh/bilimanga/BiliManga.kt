@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.bilimanga
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -25,7 +26,8 @@ class BiliManga : HttpSource(), ConfigurableSource {
     override val lang = "zh"
     override val name = "嗶哩漫畫"
     override val supportsLatest = true
-    override val client = super.client.newBuilder().addNetworkInterceptor(MangaInterceptor()).build()
+    override val client = super.client.newBuilder()
+        .rateLimit(10, 10).addNetworkInterceptor(MangaInterceptor()).build()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36")
@@ -69,9 +71,9 @@ class BiliManga : HttpSource(), ConfigurableSource {
         val mangas = it.select(".book-layout").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
-                it.selectFirst("img")!!.let {
-                    thumbnail_url = it.absUrl("data-src")
-                    title = it.attr("alt")
+                it.selectFirst("img")!!.let { img ->
+                    thumbnail_url = img.absUrl("data-src")
+                    title = img.attr("alt")
                 }
             }
         }
