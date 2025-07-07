@@ -32,7 +32,7 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://goctruyentranh.net"
+    private val defaultBaseUrl = "https://goctruyentranh.org"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
