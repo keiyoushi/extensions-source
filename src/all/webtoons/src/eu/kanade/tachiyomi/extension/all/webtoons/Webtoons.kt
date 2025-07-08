@@ -285,9 +285,9 @@ open class Webtoons(
             val match = episodeNoRegex
                 .find(episode.episodeTitle)
                 ?.groupValues
-                ?.takeUnless { episode.episodeTitle.contains(bonusRegex) }
+                ?.takeIf { it[6].isEmpty() } // skip mini/bonus episodes
 
-            episode.chapterNumber = match?.get(8)?.toFloat() ?: -1f
+            episode.chapterNumber = match?.get(11)?.toFloat() ?: -1f
             episode.seasonNumber = match?.get(4)?.takeIf(String::isNotBlank)?.toInt() ?: 1
 
             if (episode.chapterNumber == -1f) {
@@ -302,7 +302,6 @@ open class Webtoons(
                 chapter.chapterNumber = (index + 1).toFloat()
             }
         } else {
-            // Handle season resets by maintaining continuous numbering
             var maxChapterNumber = 0f
             var currentSeason = 1
             var seasonOffset = 0f
@@ -345,12 +344,11 @@ open class Webtoons(
         }.asReversed()
     }
 
+    // season number - 4 capture group
+    // possible bonus/mini/special episode - 6 capture group
+    // episode number - 11 capture group
     private val episodeNoRegex = Regex(
-        """(?:(s(eason)?|part|vol(ume)?)\s*\.?\s*(\d+).*?)?(ep(isode)?|ch(apter)?)\s*\.?\s*(\d+(\.\d+)?)""",
-        RegexOption.IGNORE_CASE,
-    )
-    private val bonusRegex = Regex(
-        """"bonus|special|mini""",
+        """(?:(s(eason)?|part|vol(ume)?)\s*\.?\s*(\d+).*?)?(.*?(mini|bonus|special).*?)?(e(p(isode)?)?|ch(apter)?)\s*\.?\s*(\d+(\.\d+)?)""",
         RegexOption.IGNORE_CASE,
     )
 
