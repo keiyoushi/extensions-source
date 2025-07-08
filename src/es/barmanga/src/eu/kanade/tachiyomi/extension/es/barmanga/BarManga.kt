@@ -6,10 +6,11 @@ import java.util.Locale
 
 class BarManga : Madara(
     "BarManga",
-    "https://archiviumbar.com",
+    "https://libribar.com",
     "es",
     SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+
     override val mangaDetailsSelectorDescription = "div.flamesummary > div.manga-excerpt"
 }
