@@ -1,7 +1,0 @@
-ext {
-    extName = 'Read Mangas'
-    extClass = '.ReadMangas'
-    extVersionCode = 40
-}
-
-apply from: "$rootDir/common.gradle"
