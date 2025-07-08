@@ -278,10 +278,61 @@ open class Webtoons(
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<EpisodeListResponse>()
 
-        val recognized: MutableList<Int> = mutableListOf()
-        val unrecognized: MutableList<Int> = mutableListOf()
+        var recognized = 0
+        var unrecognized = 0
 
-        val chapters = result.result.episodeList.mapIndexed { index, episode ->
+        val chapters = result.result.episodeList.onEach { episode ->
+            val match = episodeNoRegex
+                .find(episode.episodeTitle)
+                ?.groupValues
+                ?.takeUnless { episode.episodeTitle.contains(bonusRegex) }
+
+            episode.chapterNumber = match?.get(8)?.toFloat() ?: -1f
+            episode.seasonNumber = match?.get(4)?.takeIf(String::isNotBlank)?.toInt() ?: 1
+
+            if (episode.chapterNumber == -1f) {
+                unrecognized++
+            } else {
+                recognized++
+            }
+        }
+
+        if (unrecognized > recognized) {
+            chapters.onEachIndexed { index, chapter ->
+                chapter.chapterNumber = (index + 1).toFloat()
+            }
+        } else {
+            // Handle season resets by maintaining continuous numbering
+            var maxChapterNumber = 0f
+            var currentSeason = 1
+            var seasonOffset = 0f
+
+            chapters.forEachIndexed { idx, chapter ->
+                if (chapter.chapterNumber != -1f) {
+                    val originalNumber = chapter.chapterNumber
+
+                    // Check if we've moved to a new season
+                    if (chapter.seasonNumber > currentSeason) {
+                        currentSeason = chapter.seasonNumber
+                        if (originalNumber <= maxChapterNumber) {
+                            seasonOffset = maxChapterNumber
+                        }
+                    }
+
+                    chapter.chapterNumber = seasonOffset + originalNumber
+                    maxChapterNumber = maxOf(maxChapterNumber, chapter.chapterNumber)
+                } else {
+                    val previous = chapters.getOrNull(idx - 1)
+                    if (previous == null) {
+                        chapter.chapterNumber = 0f
+                    } else {
+                        chapter.chapterNumber = previous.chapterNumber + 0.01f
+                    }
+                }
+            }
+        }
+
+        return chapters.map { episode ->
             SChapter.create().apply {
                 url = episode.viewerLink
                 name = Parser.unescapeEntities(episode.episodeTitle, false)
@@ -289,41 +340,17 @@ open class Webtoons(
                     name += " ♫"
                 }
                 date_upload = episode.exposureDateMillis
-                chapter_number = episodeNoRegex
-                    .find(episode.episodeTitle)
-                    ?.groupValues
-                    ?.get(4)
-                    ?.toFloat()
-                    ?: -1f
-                if (chapter_number == -1f) {
-                    unrecognized += index
-                } else {
-                    recognized += index
-                }
+                chapter_number = episode.chapterNumber
             }
-        }
-
-        if (unrecognized.size > recognized.size) {
-            chapters.onEachIndexed { index, chapter ->
-                chapter.chapter_number = (index + 1).toFloat()
-            }
-        } else {
-            unrecognized.forEach { uIdx ->
-                val chapter = chapters[uIdx]
-                val previous = chapters.getOrNull(uIdx - 1)
-                if (previous == null) {
-                    chapter.chapter_number = 0f
-                } else {
-                    chapter.chapter_number = previous.chapter_number + 0.01f
-                }
-            }
-        }
-
-        return chapters.asReversed()
+        }.asReversed()
     }
 
     private val episodeNoRegex = Regex(
-        """(ep(isode)?|ch(apter)?)\s*\.?\s*(\d+(\.\d+)?)""",
+        """(?:(s(eason)?|part|vol(ume)?)\s*\.?\s*(\d+).*?)?(ep(isode)?|ch(apter)?)\s*\.?\s*(\d+(\.\d+)?)""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val bonusRegex = Regex(
+        """"bonus|special|mini""",
         RegexOption.IGNORE_CASE,
     )
 
