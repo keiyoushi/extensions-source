@@ -1,0 +1,10 @@
+ext {
+    extName = 'Ler Toons'
+    extClass = '.LerToons'
+    themePkg = 'zerotheme'
+    baseUrl = 'https://lertoons.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
