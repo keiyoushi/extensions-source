@@ -2,8 +2,8 @@ ext {
     extName = 'RawXZ'
     extClass = '.RawXZ'
     themePkg = 'madara'
-    baseUrl = 'https://rawxz.si'
-    overrideVersionCode = 2
+    baseUrl = 'https://rawxjp.com'
+    overrideVersionCode = 3
     isNsfw = true
 }
 

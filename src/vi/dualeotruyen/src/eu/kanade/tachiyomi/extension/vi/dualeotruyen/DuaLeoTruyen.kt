@@ -52,7 +52,7 @@ class DuaLeoTruyen : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private val defaultBaseUrl: String = "https://dualeotruyeno.com"
+    private val defaultBaseUrl: String = "https://dualeotruyenp.com"
 
     override val lang = "vi"
 
