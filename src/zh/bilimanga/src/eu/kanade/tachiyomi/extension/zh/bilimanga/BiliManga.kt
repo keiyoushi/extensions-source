@@ -27,7 +27,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     override val lang = "zh"
 
-    override val name = "嗶哩漫畫（Bilimanga）"
+    override val name = "Bilimanga.net"
 
     override val supportsLatest = true
 
@@ -48,7 +48,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
     // Customize
 
     private val SManga.id get() = MANGA_ID_REGEX.find(url)!!.groups[1]!!.value
-    private fun String.convert(): String {
+    private fun String.toHalfWidthDigits(): String {
         return this.map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
     }
 
@@ -147,7 +147,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
         elements.mapIndexed { i, e ->
             val url = e.absUrl("href").takeUnless("javascript:cid(1)"::equals)
             SChapter.create().apply {
-                name = e.text().convert()
+                name = e.text().toHalfWidthDigits()
                 date_upload = date
                 setUrlWithoutDomain(url ?: getChapterUrlByContext(i, elements))
             }
