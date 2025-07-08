@@ -47,9 +47,19 @@ class MangaDistrict :
         } catch (_: Exception) {}
     }
 
+    override fun popularMangaFromElement(element: Element): SManga {
+        return super.popularMangaFromElement(element).cleanTitleIfNeeded()
+    }
+
     override fun popularMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
 
-    private val titleVersion = Regex("\\(.*\\)")
+    override fun latestUpdatesFromElement(element: Element): SManga {
+        return super.latestUpdatesFromElement(element).cleanTitleIfNeeded()
+    }
+
+    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun mangaDetailsParse(document: Document): SManga {
         val tags = document.select(mangaDetailsSelectorTag).mapNotNull { element ->
@@ -58,11 +68,8 @@ class MangaDistrict :
         }
         tagList = tagList.plus(tags)
 
-        return super.mangaDetailsParse(document).apply {
-            if (isRemoveTitleVersion()) {
-                title = this.title.replace(titleVersion, "").trim()
-            }
-        }
+        return super.mangaDetailsParse(document)
+            .cleanTitleIfNeeded()
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -158,6 +165,14 @@ class MangaDistrict :
     private fun String.urlKey(): String {
         return toHttpUrl().pathSegments.let { path ->
             "${path[1]}/${path[2]}"
+        }
+    }
+
+    private val titleVersion = Regex("\\(.*\\)")
+
+    private fun SManga.cleanTitleIfNeeded() = apply {
+        if (isRemoveTitleVersion()) {
+            title = title.replace(titleVersion, "").trim()
         }
     }
 
