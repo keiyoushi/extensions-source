@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
 import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -65,6 +66,7 @@ open class Webtoons(
             }
         }
         .addInterceptor(TextInterceptor())
+        .rateLimitHost(mobileUrl.toHttpUrl(), 1)
         .build()
 
     private val preferences by getPreferencesLazy()
