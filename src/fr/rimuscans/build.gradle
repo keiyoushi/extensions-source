@@ -3,7 +3,7 @@ ext {
     extClass = '.RimuScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://rimuscans.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 
