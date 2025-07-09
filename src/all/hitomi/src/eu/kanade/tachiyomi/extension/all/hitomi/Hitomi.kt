@@ -32,6 +32,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
+import java.util.LinkedHashSet
 import java.util.LinkedList
 import java.util.Locale
 import kotlin.math.min
@@ -325,7 +326,7 @@ class Hitomi(
         }
 
         // we know total number so avoid internal resize overhead
-        val galleryIDs = LinkedHashSet<Int>(initialCapacity = numberOfGalleryIDs, loadFactor = 1.0f)
+        val galleryIDs = LinkedHashSet<Int>(numberOfGalleryIDs, 1.0f)
 
         for (i in 0.until(numberOfGalleryIDs))
             galleryIDs.add(buffer.int)
@@ -413,7 +414,7 @@ class Hitomi(
         val size = arrayBuffer.remaining() / Int.SIZE_BYTES
 
         // we know total number so avoid internal resize overhead
-        val nozomi = LinkedHashSet<Int>(initialCapacity = size, loadFactor = 1.0f)
+        val nozomi = LinkedHashSet<Int>(size, 1.0f)
 
         while (arrayBuffer.hasRemaining())
             nozomi.add(arrayBuffer.int)
