@@ -86,8 +86,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     // Latest Page
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/top/lastupdate/$page.html", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/top/lastupdate/$page.html", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -118,12 +117,14 @@ class BiliManga : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val doc = response.asJsoup()
         val meta = doc.selectFirst(".book-meta")!!.text().split("|")
-        val extra = meta.filterNot(META_REGEX::containsMatchIn)
-        val backupname = doc.selectFirst(".backupname")?.let { "漫畫別名：${it.text()}\n\n" }
+        val extra = meta.filterNot(META_REGEX::containsMatchIn) // •
+        val backupname = doc.selectFirst(".backupname")?.let {
+            "\n\n漫畫別名：\n• ${it.text().split("、").joinToString("\n• ")}"
+        }
         url = doc.location()
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
-        description = backupname + doc.selectFirst("#bookSummary")?.text()
+        description = doc.selectFirst("#bookSummary")?.text() + backupname
         artist = doc.selectFirst(".authorname")?.text()
         author = doc.selectFirst(".illname")?.text() ?: artist
         status = when (meta.firstOrNull()) {
@@ -137,19 +138,22 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     // Catalog Page
 
-    override fun chapterListRequest(manga: SManga) =
-        GET("$baseUrl/read/${manga.id}/catalog", headers)
+    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/read/${manga.id}/catalog", headers)
 
     override fun chapterListParse(response: Response) = response.asJsoup().let {
         val info = it.selectFirst(".chapter-sub-title")!!.text()
         val date = DATE_FORMAT.tryParse(DATE_REGEX.find(info)?.value)
-        val elements = it.select(".chapter-li-a")
-        elements.mapIndexed { i, e ->
-            val url = e.absUrl("href").takeUnless("javascript:cid(1)"::equals)
-            SChapter.create().apply {
-                name = e.text().toHalfWidthDigits()
-                date_upload = date
-                setUrlWithoutDomain(url ?: getChapterUrlByContext(i, elements))
+        it.select(".catalog-volume").flatMap { v ->
+            val chapterBar = v.selectFirst(".chapter-bar")!!.text().toHalfWidthDigits()
+            val chapters = v.select(".chapter-li-a")
+            chapters.mapIndexed { i, e ->
+                val url = e.absUrl("href").takeUnless("javascript:cid(1)"::equals)
+                SChapter.create().apply {
+                    name = e.text().toHalfWidthDigits()
+                    date_upload = date
+                    scanlator = chapterBar
+                    setUrlWithoutDomain(url ?: getChapterUrlByContext(i, chapters))
+                }
             }
         }.reversed()
     }
