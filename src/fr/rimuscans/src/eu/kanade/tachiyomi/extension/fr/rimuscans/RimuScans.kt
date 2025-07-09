@@ -6,7 +6,7 @@ import java.util.Locale
 
 class RimuScans : MangaThemesia(
     "Rimu Scans",
-    "https://rimuscans.fr",
+    "https://rimuscans.com",
     "fr",
     dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale.FRENCH),
 )

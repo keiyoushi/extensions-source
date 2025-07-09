@@ -2,7 +2,7 @@ ext {
     extName = 'Rimu Scans'
     extClass = '.RimuScans'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://rimuscans.fr'
+    baseUrl = 'https://rimuscans.com'
     overrideVersionCode = 1
     isNsfw = false
 }
