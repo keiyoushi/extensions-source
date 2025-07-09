@@ -422,8 +422,29 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                     .any { publishingStatus.contains(it) } -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
-            thumbnail_url = data.cover?.let { buildCoverUrl(it) }
-                ?.let { getHDCoverUrlIfAvailable(it) }
+            // if new cover is same as cached cover, use cached cover
+            // to avoid making HEAD requests in `getHDCoverUrlIfAvailable`
+            thumbnail_url = run {
+                val newCover = data.cover?.let { buildCoverUrl(it) }
+                val cachedCover = getCachedCoverUrl(data.directory, data.permalink)
+
+                if (newCover == null || cachedCover == null) {
+                    newCover?.let { getHDCoverUrlIfAvailable(it) } ?: cachedCover
+                } else {
+                    val path = cachedCover.toHttpUrl().pathSegments
+                    val tmpSDCover = cachedCover.toHttpUrl().newBuilder().apply {
+                        val file = path.last().substringBeforeLast(".") + ".jpg"
+                        setPathSegment(5, "medium")
+                        setPathSegment(path.size - 1, file)
+                    }.toString()
+
+                    if (tmpSDCover == newCover) {
+                        cachedCover
+                    } else {
+                        getHDCoverUrlIfAvailable(newCover)
+                    }
+                }
+            }
         }
     }
 
