@@ -308,8 +308,6 @@ class Hitomi(
 
         val inbuf = getRangedResponse(url, offset.until(offset + length))
 
-        val galleryIDs = mutableSetOf<Int>()
-
         val buffer =
             ByteBuffer
                 .wrap(inbuf)
@@ -325,6 +323,9 @@ class Hitomi(
         require(inbuf.size == expectedLength) {
             "inbuf.byteLength ${inbuf.size} != expected_length $expectedLength"
         }
+
+        // we know total number so avoid internal resize overhead
+        val galleryIDs = LinkedHashSet<Int>(initialCapacity = numberOfGalleryIDs, loadFactor = 1.0f)
 
         for (i in 0.until(numberOfGalleryIDs))
             galleryIDs.add(buffer.int)
@@ -404,11 +405,15 @@ class Hitomi(
         }
 
         val bytes = getRangedResponse(nozomiAddress, range)
-        val nozomi = mutableSetOf<Int>()
 
         val arrayBuffer = ByteBuffer
             .wrap(bytes)
             .order(ByteOrder.BIG_ENDIAN)
+
+        val size = arrayBuffer.remaining() / Int.SIZE_BYTES
+
+        // we know total number so avoid internal resize overhead
+        val nozomi = LinkedHashSet<Int>(initialCapacity = size, loadFactor = 1.0f)
 
         while (arrayBuffer.hasRemaining())
             nozomi.add(arrayBuffer.int)
