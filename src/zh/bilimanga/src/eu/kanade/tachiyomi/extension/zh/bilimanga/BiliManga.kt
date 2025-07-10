@@ -117,7 +117,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val doc = response.asJsoup()
         val meta = doc.selectFirst(".book-meta")!!.text().split("|")
-        val extra = meta.filterNot(META_REGEX::containsMatchIn) // •
+        val extra = meta.filterNot(META_REGEX::containsMatchIn)
         val backupname = doc.selectFirst(".backupname")?.let {
             "\n\n漫畫別名：\n• ${it.text().split("、").joinToString("\n• ")}"
         }
@@ -164,7 +164,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
         val images = it.select(".imagecontent")
         check(images.size > 0) {
             it.selectFirst("#acontentz")?.let { e ->
-                if ("電腦端" in e.text()) "章節不支持桌面電腦端瀏覽器顯示" else "漫畫可能已下架或需要登錄查看"
+                if ("電腦端" in e.text()) "不支持電腦端查看，請在高級設置中更換移動端UA標識" else "漫畫可能已下架或需要登錄查看"
             } ?: "章节鏈接错误"
         }
         images.mapIndexed { i, image ->

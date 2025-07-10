@@ -28,13 +28,13 @@ class MangaInterceptor : Interceptor {
             "/read/${groups?.get(1)?.value}/${groups?.get(2)?.value?.toInt()?.minus(1)}.html"
         }
         else -> "/read/0/0.html"
-    } + "?predict"
+    }
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val origin = chain.request()
         regexOf(origin.url.fragment)?.let {
             val response = chain.proceed(origin.newBuilder().removeHeader("Accept-Encoding").build())
-            val url = it.find(response.body.string())?.groups?.get(1)?.value?.plus("?match")
+            val url = it.find(response.body.string())?.groups?.get(1)?.value
             return response.newBuilder().code(302)
                 .header("Location", url ?: predictUrlByContext(origin.url)).build()
         }
