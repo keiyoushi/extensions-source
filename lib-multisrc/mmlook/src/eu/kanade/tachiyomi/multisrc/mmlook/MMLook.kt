@@ -124,12 +124,13 @@ open class MMLook(
         val container = comicInfo.selectFirst(".detinfo")!!
         title = container.selectFirst("h1")!!.text()
 
+        var updated = ""
         for (span in container.select("span")) {
             val text = span.ownText()
             val value = text.substring(4).trimStart()
             when (val key = text.substring(0, 4)) {
                 "作 者：" -> author = value
-                "更新时间" -> {}
+                "更新时间" -> updated = "$value\n\n"
                 "标 签：" -> genre = value.replace(" ", ", ")
                 "状 态：" -> status = when (value) {
                     "连载中" -> SManga.ONGOING
@@ -141,7 +142,7 @@ open class MMLook(
             }
         }
 
-        description = container.selectFirst(".content")!!.text()
+        description = updated + container.selectFirst(".content")!!.text()
     }
 
     // Desktop page contains more initial chapters
