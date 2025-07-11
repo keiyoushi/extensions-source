@@ -11,17 +11,17 @@ fun preferencesInternal(context: Context) = arrayOf(
         title = "熱門漫畫顯示内容"
         summary = "%s"
         entries = arrayOf(
-            "月点击榜",
-            "周点击榜",
-            "月推荐榜",
-            "周推荐榜",
-            "月鲜花榜",
-            "周鲜花榜",
-            "月鸡蛋榜",
-            "周鸡蛋榜",
-            "最新入库",
+            "月點擊榜",
+            "周點擊榜",
+            "月推薦榜",
+            "周推薦榜",
+            "月鮮花榜",
+            "周鮮花榜",
+            "月雞蛋榜",
+            "周雞蛋榜",
+            "最新入庫",
             "收藏榜",
-            "新书榜",
+            "新書榜",
         )
         entryValues = arrayOf(
             "/top/monthvisit/%d.html",
