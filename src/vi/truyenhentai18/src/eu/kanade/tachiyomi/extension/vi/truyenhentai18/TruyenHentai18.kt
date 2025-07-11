@@ -111,6 +111,7 @@ class TruyenHentai18 : ParsedHttpSource() {
                 else -> SManga.UNKNOWN
             }
         }
+        setUrlWithoutDomain(document.location())
     }
 
     // ============================== Chapters ======================================
