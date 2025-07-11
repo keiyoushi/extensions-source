@@ -130,7 +130,7 @@ open class MMLook(
             val value = text.substring(4).trimStart()
             when (val key = text.substring(0, 4)) {
                 "作 者：" -> author = value
-                "更新时间" -> updated = "$value\n\n"
+                "更新时间" -> updated = "$text\n\n"
                 "标 签：" -> genre = value.replace(" ", ", ")
                 "状 态：" -> status = when (value) {
                     "连载中" -> SManga.ONGOING
