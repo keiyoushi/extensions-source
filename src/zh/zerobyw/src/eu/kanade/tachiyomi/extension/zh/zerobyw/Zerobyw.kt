@@ -51,7 +51,7 @@ class Zerobyw : ParsedHttpSource(), ConfigurableSource {
         }
 
         val formhash = document.selectFirst("input[name=formhash]")!!.attr("value")
-        val tokenResult = getToken(username, password, formhash, chain)
+        getToken(username, password, formhash, chain)
 
         val authRequest = request.newBuilder().build()
         return chain.proceed(authRequest)
