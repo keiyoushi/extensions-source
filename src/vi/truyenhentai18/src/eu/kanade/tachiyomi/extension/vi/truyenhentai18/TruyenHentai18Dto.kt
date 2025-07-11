@@ -15,8 +15,8 @@ class SearchDto(
 
 @Serializable
 class MangaDto(
-    val title: String,
-    val slug: String,
+    private val title: String,
+    private val slug: String,
 ) {
     fun toSManga() = SManga.create().apply {
         title = this@MangaDto.title
@@ -27,7 +27,7 @@ class MangaDto(
 @Serializable
 class ChapterWrapper(
     @SerialName("post_slug")
-    val postSlug: String,
+    private val postSlug: String,
     val data: List<ChapterDto>,
 ) {
     fun toSChapterList() = data.map { it.toSChapter(postSlug) }
@@ -37,9 +37,9 @@ class ChapterWrapper(
 class ChapterDto(
     val slug: String,
     @SerialName("chapter_number")
-    val chapterNumber: Float,
+    private val chapterNumber: Float,
     @SerialName("created_at")
-    val createdAt: String,
+    private val createdAt: String,
     val content: String,
 ) {
     fun toSChapter(postSlug: String) = SChapter.create().apply {
