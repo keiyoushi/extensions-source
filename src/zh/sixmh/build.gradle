@@ -1,7 +1,9 @@
 ext {
     extName = '6Manhua'
     extClass = '.SixMH'
-    extVersionCode = 13
+    themePkg = 'mccms'
+    baseUrl = 'https://www.liumanhua.com'
+    overrideVersionCode = 7
     isNsfw = true
 }
 

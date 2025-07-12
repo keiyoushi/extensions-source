@@ -35,11 +35,11 @@ private val STATUS_QUERIES_WEB = arrayOf("", "finish/1", "finish/2")
 class GenreFilter(private val values: Array<String>, private val queries: Array<String>) {
 
     private val apiQueries get() = queries.run {
-        Array(size) { i -> "type[tags]=" + this[i] }
+        Array(size) { i -> "type[tags]=" + this[i] }.apply { this[0] = "" }
     }
 
     private val webQueries get() = queries.run {
-        Array(size) { i -> "tags/" + this[i] }
+        Array(size) { i -> "tags/" + this[i] }.apply { this[0] = "" }
     }
 
     val filter get() = MCCMSFilter("标签(搜索文本时无效)", values, apiQueries, isTypeQuery = true)
