@@ -9,15 +9,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.net.URLEncoder
+import keiyoushi.utils.parseAs as parseAsRaw
 
 /**
  * 漫城CMS http://mccms.cn/
@@ -25,16 +23,26 @@ import java.net.URLEncoder
 open class MCCMS(
     override val name: String,
     override val baseUrl: String,
-    override val lang: String = "zh",
+    final override val lang: String = "zh",
     private val config: MCCMSConfig = MCCMSConfig(),
 ) : HttpSource() {
-    override val supportsLatest = true
+    override val supportsLatest get() = true
 
-    private val json: Json by injectLazy()
+    init {
+        Intl.lang = lang
+    }
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            .addInterceptor { chain -> // for thumbnail requests
+                var request = chain.request()
+                val referer = request.header("Referer")
+                if (referer != null && !request.url.toString().startsWith(referer)) {
+                    request = request.newBuilder().removeHeader("Referer").build()
+                }
+                chain.proceed(request)
+            }
             .build()
     }
 
@@ -42,12 +50,14 @@ open class MCCMS(
         .add("User-Agent", System.getProperty("http.agent")!!)
         .add("Referer", baseUrl)
 
+    protected open fun SManga.cleanup(): SManga = this
+
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/api/data/comic?page=$page&size=$PAGE_SIZE&order=hits", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val list: List<MangaDto> = response.parseAs()
-        return MangasPage(list.map { it.toSManga() }, list.size >= PAGE_SIZE)
+        return MangasPage(list.map { it.toSManga().cleanup() }, list.size >= PAGE_SIZE)
     }
 
     override fun latestUpdatesRequest(page: Int): Request =
@@ -86,7 +96,7 @@ open class MCCMS(
         return client.newCall(GET(url, headers))
             .asObservableSuccess().map { response ->
                 val list = response.parseAs<List<MangaDto>>()
-                list.first { it.cleanUrl == mangaUrl }.toSManga()
+                list.first { it.cleanUrl == mangaUrl }.toSManga().cleanup()
             }
     }
 
@@ -120,9 +130,7 @@ open class MCCMS(
     // Don't send referer
     override fun imageRequest(page: Page) = GET(page.imageUrl!!, pcHeaders)
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream<ResultDto<T>>(it.body.byteStream()).data
-    }
+    private inline fun <reified T> Response.parseAs(): T = parseAsRaw<ResultDto<T>>().data
 
     override fun getFilterList(): FilterList {
         val genreData = config.genreData.also { it.fetchGenres(this) }

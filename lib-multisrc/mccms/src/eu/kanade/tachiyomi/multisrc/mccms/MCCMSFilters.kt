@@ -18,32 +18,31 @@ open class MCCMSFilter(
     val query get() = queries[state]
 }
 
-class SortFilter : MCCMSFilter("排序", SORT_NAMES, SORT_QUERIES)
-class WebSortFilter : MCCMSFilter("排序", SORT_NAMES, SORT_QUERIES_WEB)
+class SortFilter : MCCMSFilter(Intl.sort, SORT_NAMES, SORT_QUERIES)
+class WebSortFilter : MCCMSFilter(Intl.sort, SORT_NAMES, SORT_QUERIES_WEB)
 
-private val SORT_NAMES = arrayOf("热门人气", "更新时间", "评分")
-private val SORT_QUERIES = arrayOf("order=hits", "order=addtime", "order=score")
-private val SORT_QUERIES_WEB = arrayOf("order/hits", "order/addtime", "order/score")
+private val SORT_NAMES get() = arrayOf(Intl.popular, Intl.latest, Intl.score)
+private val SORT_QUERIES get() = arrayOf("order=hits", "order=addtime", "order=score")
+private val SORT_QUERIES_WEB get() = arrayOf("order/hits", "order/addtime", "order/score")
 
-class StatusFilter : MCCMSFilter("进度", STATUS_NAMES, STATUS_QUERIES)
-class WebStatusFilter : MCCMSFilter("进度", STATUS_NAMES, STATUS_QUERIES_WEB)
+class StatusFilter : MCCMSFilter(Intl.status, STATUS_NAMES, STATUS_QUERIES)
+class WebStatusFilter : MCCMSFilter(Intl.status, STATUS_NAMES, STATUS_QUERIES_WEB)
 
-private val STATUS_NAMES = arrayOf("全部", "连载", "完结")
-private val STATUS_QUERIES = arrayOf("", "serialize=连载", "serialize=完结")
-private val STATUS_QUERIES_WEB = arrayOf("", "finish/1", "finish/2")
+private val STATUS_NAMES get() = arrayOf(Intl.all, Intl.ongoing, Intl.completed)
+private val STATUS_QUERIES get() = arrayOf("", "serialize=连载", "serialize=完结")
+private val STATUS_QUERIES_WEB get() = arrayOf("", "finish/1", "finish/2")
 
 class GenreFilter(private val values: Array<String>, private val queries: Array<String>) {
-
     private val apiQueries get() = queries.run {
-        Array(size) { i -> "type[tags]=" + this[i] }
+        Array(size) { i -> "type[tags]=" + this[i] }.apply { this[0] = "" }
     }
 
     private val webQueries get() = queries.run {
-        Array(size) { i -> "tags/" + this[i] }
+        Array(size) { i -> "tags/" + this[i] }.apply { this[0] = "" }
     }
 
-    val filter get() = MCCMSFilter("标签(搜索文本时无效)", values, apiQueries, isTypeQuery = true)
-    val webFilter get() = MCCMSFilter("标签", values, webQueries, isTypeQuery = true)
+    val filter get() = MCCMSFilter(Intl.genreApi, values, apiQueries, isTypeQuery = true)
+    val webFilter get() = MCCMSFilter(Intl.genreWeb, values, webQueries, isTypeQuery = true)
 }
 
 class GenreData(hasCategoryPage: Boolean) {
@@ -55,7 +54,12 @@ class GenreData(hasCategoryPage: Boolean) {
         status = FETCHING
         thread {
             try {
-                val response = source.client.newCall(GET("${source.baseUrl}/category/", pcHeaders)).execute()
+                val request = when (source) {
+                    // Web sources parse listings whenever possible. They call this function for mobile pages.
+                    is MCCMSWeb -> GET("${source.baseUrl.mobileUrl()}/category/", source.headers)
+                    else -> GET("${source.baseUrl}/category/", pcHeaders)
+                }
+                val response = source.client.newCall(request).execute()
                 parseGenres(response.asJsoup(), this)
             } catch (e: Exception) {
                 status = NOT_FETCHED
@@ -74,7 +78,7 @@ class GenreData(hasCategoryPage: Boolean) {
 
 internal fun parseGenres(document: Document, genreData: GenreData) {
     if (genreData.status == GenreData.FETCHED || genreData.status == GenreData.NO_DATA) return
-    val box = document.selectFirst(".cate-selector, .cy_list_l")
+    val box = document.selectFirst(".cate-selector, .cy_list_l, .ticai, .stui-screen__list")
     if (box == null || "/tags/" in document.location()) {
         genreData.status = GenreData.NOT_FETCHED
         return
@@ -85,7 +89,7 @@ internal fun parseGenres(document: Document, genreData: GenreData) {
         return
     }
     val result = buildList(genres.size + 1) {
-        add(Pair("全部", ""))
+        add(Pair(Intl.all, ""))
         genres.mapTo(this) {
             val tagId = it.attr("href").substringAfterLast('/')
             Pair(it.text(), tagId)
@@ -100,14 +104,14 @@ internal fun parseGenres(document: Document, genreData: GenreData) {
 
 internal fun getFilters(genreData: GenreData): FilterList {
     val list = buildList(4) {
-        add(StatusFilter())
+        if (Intl.lang == "zh") add(StatusFilter())
         add(SortFilter())
         if (genreData.status == GenreData.NO_DATA) return@buildList
         add(Filter.Separator())
         if (genreData.status == GenreData.FETCHED) {
             add(genreData.genreFilter.filter)
         } else {
-            add(Filter.Header("点击“重置”尝试刷新标签分类"))
+            add(Filter.Header(Intl.tapReset))
         }
     }
     return FilterList(list)
@@ -115,13 +119,13 @@ internal fun getFilters(genreData: GenreData): FilterList {
 
 internal fun getWebFilters(genreData: GenreData): FilterList {
     val list = buildList(4) {
-        add(Filter.Header("分类筛选（搜索时无效）"))
+        add(Filter.Header(Intl.categoryWeb))
         add(WebStatusFilter())
         add(WebSortFilter())
         when (genreData.status) {
             GenreData.NO_DATA -> return@buildList
             GenreData.FETCHED -> add(genreData.genreFilter.webFilter)
-            else -> add(Filter.Header("点击“重置”尝试刷新标签分类"))
+            else -> add(Filter.Header(Intl.tapReset))
         }
     }
     return FilterList(list)
