@@ -443,7 +443,7 @@ class PoseidonScans : HttpSource() {
             Page(
                 index = pageDto.order,
                 url = chapterPageUrl, // For Referer in imageRequest
-                imageUrl = pageDto.originalUrl.toAbsoluteUrl()
+                imageUrl = pageDto.originalUrl.toAbsoluteUrl(),
             )
         }.sortedBy { it.index }
     }
