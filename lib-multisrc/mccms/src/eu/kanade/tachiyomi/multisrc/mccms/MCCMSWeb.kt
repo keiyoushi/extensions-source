@@ -22,10 +22,14 @@ import rx.Observable
 open class MCCMSWeb(
     override val name: String,
     override val baseUrl: String,
-    override val lang: String = "zh",
+    final override val lang: String = "zh",
     protected val config: MCCMSConfig = MCCMSConfig(),
 ) : HttpSource() {
     override val supportsLatest get() = true
+
+    init {
+        Intl.lang = lang
+    }
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()
