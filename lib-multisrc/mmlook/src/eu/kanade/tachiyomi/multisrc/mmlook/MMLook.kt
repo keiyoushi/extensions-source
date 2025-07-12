@@ -24,6 +24,7 @@ open class MMLook(
     override val name: String,
     override val baseUrl: String,
     private val desktopUrl: String,
+    private val useLegacyMangaUrl: Boolean,
 ) : HttpSource() {
     override val lang: String get() = "zh"
     override val supportsLatest: Boolean get() = true
@@ -35,8 +36,7 @@ open class MMLook(
 
     private fun String.certificateWorkaround() = replace("https:", "http:")
 
-    // Allow subclass to keep the slashes (full path)
-    protected open fun SManga.formatUrl() = this
+    private fun SManga.formatUrl() = apply { if (useLegacyMangaUrl) url = "/$url/" }
 
     private fun rankingRequest(id: String) = GET("$desktopUrl/rank/$id", headers)
 
