@@ -35,6 +35,14 @@ open class MCCMS(
     override val client by lazy {
         network.cloudflareClient.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
+            .addInterceptor { chain -> // for thumbnail requests
+                var request = chain.request()
+                val referer = request.header("Referer")
+                if (referer != null && !request.url.toString().startsWith(referer)) {
+                    request = request.newBuilder().removeHeader("Referer").build()
+                }
+                chain.proceed(request)
+            }
             .build()
     }
 
