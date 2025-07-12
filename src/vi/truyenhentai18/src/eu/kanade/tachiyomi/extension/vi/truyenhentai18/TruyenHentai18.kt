@@ -37,13 +37,13 @@ class TruyenHentai18 : ParsedHttpSource() {
     // ============================== Popular ======================================
 
     override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/vi/truyen-de-xuat" + if (page > 1) "/page/$page" else "", headers)
+        GET("$baseUrl/truyen-de-xuat" + if (page > 1) "/page/$page" else "", headers)
 
     override fun popularMangaSelector() = ".container .p-2 .shadow-sm.overflow-hidden"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         element.selectFirst("a[title]")!!.let {
-            setUrlWithoutDomain(it.attr("href"))
+            setUrlWithoutDomain(it.absUrl("href").substringAfterLast(lang))
             title = it.attr("title")
         }
 
@@ -68,10 +68,8 @@ class TruyenHentai18 : ParsedHttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith(PREFIX_SLUG_SEARCH)) {
             val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
-            val url = "/vi/$slug"
-
-            fetchMangaDetails(SManga.create().apply { this.url = url })
-                .map { MangasPage(listOf(it.apply { this.url = url }), false) }
+            fetchMangaDetails(SManga.create().apply { this.url = "/$lang/$slug" })
+                .map { MangasPage(listOf(it), false) }
         } else {
             super.fetchSearchManga(page, query, filters)
         }
@@ -79,7 +77,7 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/posts".toHttpUrl().newBuilder()
-            .addQueryParameter("language", "vi")
+            .addQueryParameter("language", lang)
             .addQueryParameter("order", "latest")
             .addQueryParameter("status", "taxonomyid")
             .addQueryParameter("query", query)
@@ -100,6 +98,8 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     // ============================== Details ======================================
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/$lang${manga.url}"
+
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1")!!.text()
         genre = document.select("a[href*=the-loai]").joinToString { it.attr("title") }
@@ -111,10 +111,12 @@ class TruyenHentai18 : ParsedHttpSource() {
                 else -> SManga.UNKNOWN
             }
         }
-        setUrlWithoutDomain(document.location())
+        url = document.location().substringAfterLast(lang)
     }
 
     // ============================== Chapters ======================================
+
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/$lang${chapter.url}"
 
     override fun chapterListRequest(manga: SManga): Request {
         val document = client.newCall(super.chapterListRequest(manga))
@@ -125,7 +127,7 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     private fun chapterListRequest(postId: String): Request {
         val url = "$apiUrl/posts/$postId/chapters".toHttpUrl().newBuilder()
-            .addQueryParameter("language", "vi")
+            .addQueryParameter("language", lang)
             .addQueryParameter("limit", "9999")
             .addQueryParameter("page", "1")
             .build()
@@ -149,6 +151,8 @@ class TruyenHentai18 : ParsedHttpSource() {
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     // ============================== Pages ======================================
+
+    override fun pageListRequest(chapter: SChapter) = GET(getChapterUrl(chapter), headers)
 
     override fun pageListParse(document: Document): List<Page> {
         val postId = document.findPostId()

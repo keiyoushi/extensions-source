@@ -20,7 +20,7 @@ class MangaDto(
 ) {
     fun toSManga() = SManga.create().apply {
         title = this@MangaDto.title
-        url = "/vi/$slug.html"
+        url = "/$slug.html"
     }
 }
 
@@ -45,7 +45,7 @@ class ChapterDto(
     fun toSChapter(postSlug: String) = SChapter.create().apply {
         name = chapterNumber.toString()
         chapter_number = chapterNumber
-        url = "/vi/$postSlug/$slug.html"
+        url = "/$postSlug/$slug.html"
         date_upload = dateFormat.tryParse(createdAt)
     }
 

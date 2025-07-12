@@ -13,7 +13,7 @@
 
                 <data
                     android:host="truyenhentai18.app"
-                    android:pathPattern="/..*\\.html"
+                    android:pathPattern="/vi/..*\\.html"
                     android:scheme="https"/>
             </intent-filter>
         </activity>
