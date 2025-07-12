@@ -55,7 +55,12 @@ class GenreData(hasCategoryPage: Boolean) {
         status = FETCHING
         thread {
             try {
-                val response = source.client.newCall(GET("${source.baseUrl}/category/", pcHeaders)).execute()
+                val request = when (source) {
+                    // Web sources parse listings whenever possible. They call this function for mobile pages.
+                    is MCCMSWeb -> GET("${source.baseUrl.mobileUrl()}/category/", source.headers)
+                    else -> GET("${source.baseUrl}/category/", pcHeaders)
+                }
+                val response = source.client.newCall(request).execute()
                 parseGenres(response.asJsoup(), this)
             } catch (e: Exception) {
                 status = NOT_FETCHED
@@ -74,7 +79,7 @@ class GenreData(hasCategoryPage: Boolean) {
 
 internal fun parseGenres(document: Document, genreData: GenreData) {
     if (genreData.status == GenreData.FETCHED || genreData.status == GenreData.NO_DATA) return
-    val box = document.selectFirst(".cate-selector, .cy_list_l")
+    val box = document.selectFirst(".cate-selector, .cy_list_l, .ticai")
     if (box == null || "/tags/" in document.location()) {
         genreData.status = GenreData.NOT_FETCHED
         return
