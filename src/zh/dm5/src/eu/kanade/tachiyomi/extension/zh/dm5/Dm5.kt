@@ -82,8 +82,7 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         // May need to click button on website to read
-        document.selectFirst("ul#detail-list-select-1")?.attr("class")
-            ?: throw Exception("請到webview確認")
+        document.selectFirst("div#chapterlistload") ?: throw Exception("請到webview確認")
         val li = document.select("div#chapterlistload li > a").map {
             SChapter.create().apply {
                 url = it.attr("href")

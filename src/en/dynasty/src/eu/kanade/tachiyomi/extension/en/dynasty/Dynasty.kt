@@ -50,7 +50,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::fetchCoverUrlInterceptor)
         .addInterceptor(::coverInterceptor)
-        .rateLimit(1, 2)
+        .rateLimit(1)
         .build()
 
     private val coverClient = network.cloudflareClient
@@ -74,7 +74,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                     MangaEntry(
                         url = "/${tag.directory}/${tag.permalink}",
                         title = tag.name,
-                        cover = getCoverUrl(tag.directory, tag.permalink),
+                        cover = getCachedCoverUrl(tag.directory, tag.permalink),
                     ).also(entries::add)
 
                     // true if an associated series is found
@@ -115,7 +115,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             val entry = MangaEntry(
                 url = "/$directory/$permalink",
                 title = permalink.permalinkToTitle(),
-                cover = getCoverUrl(directory, permalink),
+                cover = getCachedCoverUrl(directory, permalink),
             ).toSManga()
 
             return Observable.just(
@@ -280,7 +280,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             val entry = MangaEntry(
                 url = "/$directory/$permalink",
                 title = title,
-                cover = getCoverUrl(directory, permalink),
+                cover = getCachedCoverUrl(directory, permalink),
             )
 
             if (firstEntry == null) {
@@ -422,7 +422,29 @@ open class Dynasty : HttpSource(), ConfigurableSource {
                     .any { publishingStatus.contains(it) } -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
-            thumbnail_url = data.cover?.let { buildCoverUrl(it) }
+            // if new cover is same as cached cover, use cached cover
+            // to avoid making HEAD requests in `getHDCoverUrlIfAvailable`
+            thumbnail_url = run {
+                val newCover = data.cover?.let { buildCoverUrl(it) }
+                val cachedCover = getCachedCoverUrl(data.directory, data.permalink)
+
+                if (newCover == null || cachedCover == null) {
+                    newCover?.let { getHDCoverUrlIfAvailable(it) } ?: cachedCover
+                } else {
+                    val path = cachedCover.toHttpUrl().pathSegments
+                    val tmpSDCover = cachedCover.toHttpUrl().newBuilder().apply {
+                        val file = path.last().substringBeforeLast(".") + ".jpg"
+                        setPathSegment(5, "medium")
+                        setPathSegment(path.size - 1, file)
+                    }.toString()
+
+                    if (tmpSDCover == newCover) {
+                        cachedCover
+                    } else {
+                        getHDCoverUrlIfAvailable(newCover)
+                    }
+                }
+            }
         }
     }
 
@@ -470,30 +492,15 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         }
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return if (manga.url.contains("/$CHAPTERS_DIR/")) {
-            Observable.just(
-                listOf(
-                    SChapter.create().apply {
-                        url = manga.url
-                        name = "Chapter"
-                        date_upload = dateFormat.tryParse(
-                            manga.description
-                                ?.substringAfter("Released:", ""),
-                        )
-                    },
-                ),
-            )
-        } else {
-            super.fetchChapterList(manga)
-        }
-    }
-
     override fun chapterListRequest(manga: SManga): Request {
         return mangaDetailsRequest(manga)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        if (response.request.url.pathSegments[0] == CHAPTERS_DIR) {
+            return listOf(individualChapterParse(response))
+        }
+
         val data = response.parseAs<MangaResponse>()
         val chapters = data.taggings.toMutableList()
 
@@ -539,6 +546,17 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             chapterList.asReversed()
         } else {
             chapterList
+        }
+    }
+
+    private fun individualChapterParse(response: Response): SChapter {
+        val data = response.parseAs<ChapterResponse>()
+
+        return SChapter.create().apply {
+            url = "/$CHAPTERS_DIR/${data.permalink}"
+            name = "Chapter"
+            scanlator = data.tags.filter { it.type == "Scanlator" }.joinToString { it.name }
+            date_upload = dateFormat.tryParse(data.releasedOn)
         }
     }
 
@@ -606,7 +624,7 @@ open class Dynasty : HttpSource(), ConfigurableSource {
             .parseAs()
     }
 
-    private fun getCoverUrl(directory: String?, permalink: String): String? {
+    private fun getCachedCoverUrl(directory: String?, permalink: String): String? {
         directory ?: return null
 
         if (directory == CHAPTERS_DIR) {
@@ -619,17 +637,44 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         return buildCoverUrl(file)
     }
 
+    private fun getHDCoverUrlIfAvailable(coverUrl: String): String {
+        val path = coverUrl.toHttpUrl().pathSegments
+
+        if (path.size == 7 && path[5] == "medium") {
+            listOf("jpg", "png", "jpeg", "webp").forEach { format ->
+                val newUrl = coverUrl.toHttpUrl().newBuilder().apply {
+                    val file = path.last().substringBeforeLast(".") + ".$format"
+                    setPathSegment(5, "original")
+                    setPathSegment(path.size - 1, file)
+                }.build()
+
+                val request = Request.Builder()
+                    .url(newUrl)
+                    .headers(headers)
+                    .head()
+                    .build()
+
+                if (coverClient.newCall(request).execute().isSuccessful) {
+                    return newUrl.toString()
+                }
+            }
+        }
+
+        return coverUrl
+    }
+
     private fun buildCoverUrl(file: String): String {
         val path = "$baseUrl$file".toHttpUrl()
             .encodedPath
             .removePrefix("/")
 
-        return baseUrl.toHttpUrl()
-            .newBuilder()
-            .addEncodedPathSegments(path)
-            .fragment(COVER_URL_FRAGMENT)
-            .build()
-            .toString()
+        return baseUrl.toHttpUrl().newBuilder().apply {
+            if (!path.startsWith("system/")) {
+                addEncodedPathSegments("system/tag_contents_covers/000")
+            }
+            addEncodedPathSegments(path)
+            fragment(COVER_URL_FRAGMENT)
+        }.toString()
     }
 
     private fun buildChapterCoverFetchUrl(permalink: String): String {

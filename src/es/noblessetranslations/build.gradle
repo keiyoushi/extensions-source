@@ -2,8 +2,8 @@ ext {
     extName = 'Noblesse Translations'
     extClass = '.NoblesseTranslations'
     themePkg = 'madara'
-    baseUrl = 'https://www.swordalada.org'
-    overrideVersionCode = 6
+    baseUrl = 'https://nobledicion.yoveo.xyz'
+    overrideVersionCode = 7
     isNsfw = false
 }
 

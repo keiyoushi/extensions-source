@@ -64,6 +64,6 @@ class SirenKomik : MangaThemesia(
     }
 
     companion object {
-        val postIdRegex = """postId.:(\d+)""".toRegex()
+        val postIdRegex = """chapter_id\s*=\s*(\d+)""".toRegex()
     }
 }

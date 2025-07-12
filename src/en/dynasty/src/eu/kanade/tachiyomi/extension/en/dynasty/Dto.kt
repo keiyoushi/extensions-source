@@ -74,6 +74,7 @@ class MangaEntry(
 class MangaResponse(
     val name: String,
     val type: String,
+    val permalink: String,
     val tags: List<BrowseTag>,
     val cover: String?,
     val description: String?,
@@ -81,7 +82,15 @@ class MangaResponse(
     @Serializable(with = ChapterItemListSerializer::class)
     val taggings: List<ChapterItem>,
     @SerialName("total_pages") val totalPages: Int = 0,
-)
+) {
+    val directory get() = when (type) {
+        SERIES_TYPE -> SERIES_DIR
+        ANTHOLOGY_TYPE -> ANTHOLOGIES_DIR
+        DOUJIN_TYPE -> DOUJINS_DIR
+        ISSUE_TYPE -> ISSUES_DIR
+        else -> throw Exception("Unsupported Type for directory: $type")
+    }
+}
 
 @Serializable
 sealed class ChapterItem
@@ -122,6 +131,7 @@ object ChapterItemListSerializer : JsonTransformingSerializer<List<ChapterItem>>
 @Serializable
 class ChapterResponse(
     val title: String,
+    val permalink: String,
     val tags: List<BrowseTag>,
     val pages: List<Page>,
     @SerialName("released_on") val releasedOn: String,
