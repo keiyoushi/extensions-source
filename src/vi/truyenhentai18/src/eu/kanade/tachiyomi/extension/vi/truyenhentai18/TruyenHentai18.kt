@@ -37,13 +37,14 @@ class TruyenHentai18 : ParsedHttpSource() {
     // ============================== Popular ======================================
 
     override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/truyen-de-xuat" + if (page > 1) "/page/$page" else "", headers)
+        GET("$baseUrl/$lang/truyen-de-xuat" + if (page > 1) "/page/$page" else "", headers)
 
     override fun popularMangaSelector() = ".container .p-2 .shadow-sm.overflow-hidden"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         element.selectFirst("a[title]")!!.let {
-            setUrlWithoutDomain(it.absUrl("href").substringAfterLast(lang))
+            setUrlWithoutDomain(it.absUrl("href"))
+            url = url.removePrefix("/$lang")
             title = it.attr("title")
         }
 
@@ -55,7 +56,7 @@ class TruyenHentai18 : ParsedHttpSource() {
     // ============================== Latest ======================================
 
     override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/truyen-moi" + if (page > 1) "/page/$page" else "", headers)
+        GET("$baseUrl/$lang/truyen-moi" + if (page > 1) "/page/$page" else "", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -111,7 +112,8 @@ class TruyenHentai18 : ParsedHttpSource() {
                 else -> SManga.UNKNOWN
             }
         }
-        url = document.location().substringAfterLast(lang)
+        setUrlWithoutDomain(document.location())
+        url = url.removePrefix("/$lang")
     }
 
     // ============================== Chapters ======================================
