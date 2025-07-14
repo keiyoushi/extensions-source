@@ -80,11 +80,13 @@ open class GoDa(
 
     private fun Element.getMangaId() = selectFirst("#mangachapters")!!.attr("data-mid")
 
+    open val elementCheck: Int = 6
+
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup().selectFirst("main")!!
         val titleElement = document.selectFirst("h1")!!
         val elements = titleElement.parent()!!.parent()!!.children()
-        check(elements.size == 6)
+        check(elements.size == elementCheck)
 
         title = titleElement.ownText()
         status = when (titleElement.child(0).text()) {

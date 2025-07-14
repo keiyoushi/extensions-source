@@ -38,6 +38,8 @@ class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
 
     private val json: Json = Injekt.get()
 
+    override val elementCheck: Int = 8
+
     override fun fetchChapterList(mangaId: String): List<SChapter> {
         val response = client.newCall(GET("https://api-get-v2.mgsearcher.com/api/manga/get?mid=$mangaId&mode=all", headers)).execute()
         return json.decodeFromString<ResponseDto<ChapterListDto>>(response.body.string()).data.toChapterList()
