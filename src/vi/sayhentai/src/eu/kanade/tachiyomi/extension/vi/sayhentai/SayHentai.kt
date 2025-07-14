@@ -10,7 +10,7 @@ import keiyoushi.utils.getPreferences
 class SayHentai :
     ManhwaZ(
         "SayHentai",
-        "https://sayhentaii.me",
+        "https://sayhentaii.art",
         "vi",
         mangaDetailsAuthorHeading = "Tác giả",
         mangaDetailsStatusHeading = "Trạng thái",

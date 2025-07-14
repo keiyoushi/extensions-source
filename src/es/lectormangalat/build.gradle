@@ -2,9 +2,13 @@ ext {
     extName = 'LectorManga.lat'
     extClass = '.LectorMangaLat'
     themePkg = 'madara'
-    baseUrl = 'https://www.lectormanga.lat'
-    overrideVersionCode = 0
+    baseUrl = 'https://lectormangaa.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation project(':lib:randomua')
+}
