@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -36,10 +37,14 @@ class TempleScanEsp :
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
         try {
-            val initClient = network.cloudflareClient
+            val initClient = network.cloudflareClient.newBuilder()
+                .followRedirects(false)
+                .build()
             val headers = super.headersBuilder().build()
-            val host = initClient.newCall(GET(preferences.prefBaseUrl, headers)).execute().request.url.host
-            val newDomain = "https://$host"
+            val response = initClient.newCall(GET(preferences.prefBaseUrl, headers)).execute()
+            if (!response.isRedirect) return@lazy preferences.prefBaseUrl
+            val newHost = response.header("Location")?.toHttpUrlOrNull() ?: return@lazy preferences.prefBaseUrl
+            val newDomain = "https://${newHost.host}"
             preferences.prefBaseUrl = newDomain
             newDomain
         } catch (_: Exception) {
