@@ -83,7 +83,7 @@ open class GoDa(
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup().selectFirst("main")!!
         val titleElement = document.selectFirst("h1")!!
-        val elements = titleElement.parent()!!.parent()!!.children()
+        val elements = document.selectFirst("#info > div > div:has(h1)")!!.children()
 
         title = titleElement.ownText()
         status = when (titleElement.child(0).text()) {
