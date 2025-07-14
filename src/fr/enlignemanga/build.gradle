@@ -1,0 +1,9 @@
+ext {
+    extName = 'En Ligne Manga'
+    extClass = '.EnLigneManga'
+    themePkg = 'mccms'
+    baseUrl = 'https://www.enlignemanga.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"

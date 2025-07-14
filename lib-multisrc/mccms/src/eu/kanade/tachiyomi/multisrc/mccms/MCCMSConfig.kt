@@ -12,6 +12,8 @@ val pcHeaders = Headers.headersOf("User-Agent", "Mozilla/5.0 (Windows NT 10.0; W
 
 fun String.removePathPrefix() = removePrefix("/index.php")
 
+fun String.mobileUrl() = replace("//www.", "//m.")
+
 open class MCCMSConfig(
     hasCategoryPage: Boolean = true,
     val textSearchOnlyPageOne: Boolean = false,
