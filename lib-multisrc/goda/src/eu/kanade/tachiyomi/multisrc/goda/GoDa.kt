@@ -89,8 +89,8 @@ open class GoDa(
         status = when (titleElement.child(0).text()) {
             "連載中", "Ongoing" -> SManga.ONGOING
             "完結" -> SManga.COMPLETED
-            "停止更新" -> SManga.ON_HIATUS
-            "休刊" -> SManga.CANCELLED
+            "停止更新" -> SManga.CANCELLED
+            "休刊" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
 
