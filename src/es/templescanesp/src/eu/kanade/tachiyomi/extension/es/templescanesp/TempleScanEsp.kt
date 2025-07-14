@@ -27,12 +27,7 @@ class TempleScanEsp :
     ),
     ConfigurableSource {
 
-    private val isCi = System.getenv("CI") == "true"
-
-    override val baseUrl get() = when {
-        isCi -> super.baseUrl
-        else -> preferences.prefBaseUrl
-    }
+    override val baseUrl get() = preferences.prefBaseUrl
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
