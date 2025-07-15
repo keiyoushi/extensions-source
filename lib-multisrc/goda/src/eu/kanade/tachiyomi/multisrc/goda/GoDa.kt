@@ -84,12 +84,14 @@ open class GoDa(
         val document = response.asJsoup().selectFirst("main")!!
         val titleElement = document.selectFirst("h1")!!
         val elements = titleElement.parent()!!.parent()!!.children()
-        check(elements.size == 6)
+        check(elements[4].tagName() == "p")
 
         title = titleElement.ownText()
         status = when (titleElement.child(0).text()) {
             "連載中", "Ongoing" -> SManga.ONGOING
             "完結" -> SManga.COMPLETED
+            "停止更新" -> SManga.CANCELLED
+            "休刊" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
         author = Entities.unescape(elements[1].children().drop(1).joinToString { it.text().removeSuffix(" ,") })

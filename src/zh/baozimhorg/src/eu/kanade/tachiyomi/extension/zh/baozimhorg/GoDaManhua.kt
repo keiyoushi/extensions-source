@@ -68,7 +68,7 @@ class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
 private const val MIRROR_PREF = "MIRROR"
 
 // https://nav.telltome.net/
-private val MIRRORS get() = arrayOf("baozimh.org", "godamh.com", "m.baozimh.one")
+private val MIRRORS get() = arrayOf("baozimh.org", "godamh.com", "m.baozimh.one", "bzmh.org", "g-mh.org", "m.g-mh.org")
 
 private class NotFoundInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
