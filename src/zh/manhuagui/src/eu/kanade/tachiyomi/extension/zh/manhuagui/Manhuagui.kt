@@ -1,6 +1,9 @@
 package eu.kanade.tachiyomi.extension.zh.manhuagui
 
 import android.content.SharedPreferences
+import androidx.preference.CheckBoxPreference
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.lzstring.LZString
 import eu.kanade.tachiyomi.lib.unpacker.Unpacker
 import eu.kanade.tachiyomi.network.GET
@@ -21,7 +24,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Call
@@ -66,24 +68,24 @@ class Manhuagui(
     private val imageServer = arrayOf("https://i.hamreus.com", "https://cf.hamreus.com")
     private val mobileWebsiteUrl = "https://m.$baseHost"
     private val json: Json by injectLazy()
-    private val baseHttpUrl: HttpUrl = baseUrl.toHttpUrl()
 
     // Add rate limit to fix manga thumbnail load failure
-    override val client: OkHttpClient =
-        if (getShowR18()) {
+    override val client: OkHttpClient
+
+    init {
+        val baseHttpUrl: HttpUrl = baseUrl.toHttpUrl()
+        client =
             network.cloudflareClient.newBuilder()
                 .rateLimitHost(baseHttpUrl, preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(), 10)
                 .rateLimitHost(imageServer[0].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
                 .rateLimitHost(imageServer[1].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
-                .addNetworkInterceptor(AddCookieHeaderInterceptor(baseHttpUrl.host))
+                .apply {
+                    if (getShowR18()) {
+                        addNetworkInterceptor(AddCookieHeaderInterceptor(baseHttpUrl.host))
+                    }
+                }
                 .build()
-        } else {
-            network.cloudflareClient.newBuilder()
-                .rateLimitHost(baseHttpUrl, preferences.getString(MAINSITE_RATELIMIT_PREF, MAINSITE_RATELIMIT_DEFAULT_VALUE)!!.toInt(), 10)
-                .rateLimitHost(imageServer[0].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
-                .rateLimitHost(imageServer[1].toHttpUrl(), preferences.getString(IMAGE_CDN_RATELIMIT_PREF, IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)!!.toInt())
-                .build()
-        }
+    }
 
     // Add R18 verification cookie
     class AddCookieHeaderInterceptor(private val baseHost: String) : Interceptor {
@@ -131,7 +133,7 @@ class Manhuagui(
                 sortOrder.startsWith(RANK_PREFIX) -> {
                     "$baseUrl/rank${params.toPathOrEmpty()}".let {
                         if (it.endsWith("rank")) {
-                            "$it/${sortOrder.removePrefix(RANK_PREFIX).toPathOrEmpty("",".html")}"
+                            "$it/${sortOrder.removePrefix(RANK_PREFIX).toPathOrEmpty("", ".html")}"
                         } else {
                             "$it${sortOrder.removePrefix(RANK_PREFIX).toPathOrEmpty("_")}.html"
                         }
@@ -165,39 +167,31 @@ class Manhuagui(
             // and a post request to https://www.manhuagui.com/tools/submit_ajax.ashx?action=user_check_login
             // to simulate what web page javascript do and get "country" cookie.
             // Send requests using coroutine in another (IO) thread.
-            GlobalScope.launch {
-                withContext(Dispatchers.IO) {
-                    // Delay 1 second to wait main manga details request complete
-                    delay(1000L)
-                    client.newCall(
-                        POST(
-                            "$baseUrl/tools/submit_ajax.ashx?action=user_check_login",
-                            headersBuilder()
-                                .set("Referer", manga.url)
-                                .set("X-Requested-With", "XMLHttpRequest")
-                                .build(),
-                        ),
-                    ).enqueue(
-                        object : Callback {
-                            override fun onFailure(call: Call, e: IOException) = e.printStackTrace()
-                            override fun onResponse(call: Call, response: Response) = response.close()
-                        },
-                    )
-
-                    client.newCall(
-                        GET(
-                            "$baseUrl/tools/vote.ashx?act=get&bid=$bid",
-                            headersBuilder()
-                                .set("Referer", manga.url)
-                                .set("X-Requested-With", "XMLHttpRequest").build(),
-                        ),
-                    ).enqueue(
-                        object : Callback {
-                            override fun onFailure(call: Call, e: IOException) = e.printStackTrace()
-                            override fun onResponse(call: Call, response: Response) = response.close()
-                        },
-                    )
+            GlobalScope.launch(Dispatchers.IO) {
+                // Delay 1 second to wait main manga details request complete
+                delay(1000L)
+                val callback = object : Callback {
+                    override fun onFailure(call: Call, e: IOException) = e.printStackTrace()
+                    override fun onResponse(call: Call, response: Response) = response.close()
                 }
+                client.newCall(
+                    POST(
+                        "$baseUrl/tools/submit_ajax.ashx?action=user_check_login",
+                        headersBuilder()
+                            .set("Referer", manga.url)
+                            .set("X-Requested-With", "XMLHttpRequest")
+                            .build(),
+                    ),
+                ).enqueue(callback)
+
+                client.newCall(
+                    GET(
+                        "$baseUrl/tools/vote.ashx?act=get&bid=$bid",
+                        headersBuilder()
+                            .set("Referer", manga.url)
+                            .set("X-Requested-With", "XMLHttpRequest").build(),
+                    ),
+                ).enqueue(callback)
             }
         }
         return call
@@ -275,7 +269,7 @@ class Manhuagui(
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .set("Referer", baseUrl)
-        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36")
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
         .set("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
 
     override fun popularMangaFromElement(element: Element) = mangaFromElement(element)
@@ -332,29 +326,24 @@ class Manhuagui(
             }
         }
         val latestChapterHref = document.select("div.book-detail > ul.detail-list > li.status > span > a.blue").first()?.attr("href")
-        val chNumRegex = Regex("""\d+""")
 
         val sectionList = document.select("[id^=chapter-list-]")
         sectionList.forEach { section ->
             val pageList = section.select("ul")
             pageList.reverse()
             pageList.forEach { page ->
-                val pageChapters = mutableListOf<SChapter>()
                 val chapterList = page.select("li > a.status0")
                 chapterList.forEach {
                     val currentChapter = SChapter.create()
                     currentChapter.url = it.attr("href")
                     currentChapter.name = it?.attr("title")?.trim() ?: it.select("span").first()!!.ownText()
-                    currentChapter.chapter_number = chNumRegex.find(currentChapter.name)?.value?.toFloatOrNull() ?: -1F
 
                     // Manhuagui only provide upload date for latest chapter
                     if (currentChapter.url == latestChapterHref) {
                         currentChapter.date_upload = parseDate(document.select("div.book-detail > ul.detail-list > li.status > span > span.red").last()!!)
                     }
-                    pageChapters.add(currentChapter)
+                    chapters.add(currentChapter)
                 }
-
-                chapters.addAll(pageChapters)
             }
         }
 
@@ -436,8 +425,8 @@ class Manhuagui(
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val mainSiteRateLimitPreference = androidx.preference.ListPreference(screen.context).apply {
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).run {
             key = MAINSITE_RATELIMIT_PREF
             title = MAINSITE_RATELIMIT_PREF_TITLE
             entries = ENTRIES_ARRAY
@@ -445,18 +434,10 @@ class Manhuagui(
             summary = MAINSITE_RATELIMIT_PREF_SUMMARY
 
             setDefaultValue(MAINSITE_RATELIMIT_DEFAULT_VALUE)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(MAINSITE_RATELIMIT_PREF, newValue as String).commit()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
+            screen.addPreference(this)
         }
 
-        val imgCDNRateLimitPreference = androidx.preference.ListPreference(screen.context).apply {
+        ListPreference(screen.context).run {
             key = IMAGE_CDN_RATELIMIT_PREF
             title = IMAGE_CDN_RATELIMIT_PREF_TITLE
             entries = ENTRIES_ARRAY
@@ -464,73 +445,33 @@ class Manhuagui(
             summary = IMAGE_CDN_RATELIMIT_PREF_SUMMARY
 
             setDefaultValue(IMAGE_CDN_RATELIMIT_DEFAULT_VALUE)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putString(IMAGE_CDN_RATELIMIT_PREF, newValue as String).commit()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
+            screen.addPreference(this)
         }
 
         // Simplified/Traditional Chinese version website switch
-        val zhHantPreference = androidx.preference.CheckBoxPreference(screen.context).apply {
+        CheckBoxPreference(screen.context).run {
             key = SHOW_ZH_HANT_WEBSITE_PREF
             title = SHOW_ZH_HANT_WEBSITE_PREF_TITLE
             summary = SHOW_ZH_HANT_WEBSITE_PREF_SUMMARY
-
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val setting = preferences.edit().putBoolean(SHOW_ZH_HANT_WEBSITE_PREF, newValue as Boolean).commit()
-                    setting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
+            screen.addPreference(this)
         }
 
         // R18+ switch
-        val r18Preference = androidx.preference.CheckBoxPreference(screen.context).apply {
+        CheckBoxPreference(screen.context).run {
             key = SHOW_R18_PREF
             title = SHOW_R18_PREF_TITLE
             summary = SHOW_R18_PREF_SUMMARY
-
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val newSetting = preferences.edit().putBoolean(SHOW_R18_PREF, newValue as Boolean).commit()
-                    newSetting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
+            screen.addPreference(this)
         }
 
-        val mirrorURLPreference = androidx.preference.CheckBoxPreference(screen.context).apply {
+        CheckBoxPreference(screen.context).run {
             key = USE_MIRROR_URL_PREF
             title = USE_MIRROR_URL_PREF_TITLE
             summary = USE_MIRROR_URL_PREF_SUMMARY
 
             setDefaultValue(false)
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val newSetting = preferences.edit().putBoolean(USE_MIRROR_URL_PREF, newValue as Boolean).commit()
-                    newSetting
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
-            }
+            screen.addPreference(this)
         }
-
-        screen.addPreference(mainSiteRateLimitPreference)
-        screen.addPreference(imgCDNRateLimitPreference)
-        screen.addPreference(zhHantPreference)
-        screen.addPreference(r18Preference)
-        screen.addPreference(mirrorURLPreference)
     }
 
     private fun getShowR18(): Boolean = preferences.getBoolean(SHOW_R18_PREF, false)
