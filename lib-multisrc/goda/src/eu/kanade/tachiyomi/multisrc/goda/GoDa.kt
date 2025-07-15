@@ -83,7 +83,8 @@ open class GoDa(
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup().selectFirst("main")!!
         val titleElement = document.selectFirst("h1")!!
-        val elements = document.selectFirst("#info > div > div:has(h1)")!!.children()
+        val elements = titleElement.parent()!!.parent()!!.children()
+        check(elements[4].tagName() == "p")
 
         title = titleElement.ownText()
         status = when (titleElement.child(0).text()) {
@@ -93,8 +94,6 @@ open class GoDa(
             "休刊" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-
-        check(elements[4].tagName() == "p")
         author = Entities.unescape(elements[1].children().drop(1).joinToString { it.text().removeSuffix(" ,") })
         genre = buildList {
             elements[2].children().drop(1).mapTo(this) { it.text().removeSuffix(" ,") }
