@@ -139,7 +139,6 @@ class Manhuagui(
                         }
                     }
                 }
-
                 else -> "$baseUrl/list${params.toPathOrEmpty()}/${sortOrder}_p$page.html"
             }
             return GET(url, headers)
