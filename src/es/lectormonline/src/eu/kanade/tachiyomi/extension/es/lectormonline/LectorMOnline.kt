@@ -108,12 +108,20 @@ class LectorMOnline : HttpSource(), ConfigurableSource {
         return MangasPage(mangas, hasNextPage)
     }
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/comics/${manga.url}"
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         return GET("$baseUrl/api/app/comic/${manga.url}", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
         return response.parseAs<ComicDto>().toSMangaDetails()
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val mangaSlug = chapter.url.substringBefore("/")
+        val chapterNumber = chapter.url.substringAfter("/")
+        return "$baseUrl/comics/$mangaSlug/chapters/$chapterNumber"
     }
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
