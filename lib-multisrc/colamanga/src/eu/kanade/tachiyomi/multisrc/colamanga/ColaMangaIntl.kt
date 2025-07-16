@@ -22,16 +22,9 @@ class ColaMangaIntl(private val lang: String) {
         else -> "Time in milliseconds to wait after using up all allowed requests. Lowering this value may reduce the chance of getting HTTP 403. Tachiyomi restart required.\nDefault value: $defaultValue\nCurrent value: %s"
     }
 
-    val timedOutDecryptingImageLinks = when (lang) {
-        else -> "Timed out decrypting image links"
-    }
-
-    val couldNotDeobufscateScript = when (lang) {
-        else -> "Could not deobfuscate script"
-    }
-
-    fun couldNotFindKey(forKeyType: String) = when (lang) {
-        else -> "Could not find key for keyType $forKeyType"
+    fun couldNotFetchImages(expect: Int, current: Int) = when (lang) {
+        "zh" -> "获取当前章节内容失败：\n应获取：$expect 页，实获取：$current 页"
+        else -> "Could not fetch images: \nexpect: $expect, we got: $current"
     }
 
     val searchType = when (lang) {
