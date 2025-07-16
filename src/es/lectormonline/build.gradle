@@ -1,0 +1,8 @@
+ext {
+    extName = 'Lector MOnline'
+    extClass = '.LectorMOnline'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
