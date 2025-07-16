@@ -70,14 +70,14 @@ class LectorMOnline : HttpSource(), ConfigurableSource {
                 is GenreFilter -> {
                     val selectedGenre = filter.toUriPart()
                     if (selectedGenre.isNotEmpty()) {
-                        return GET("$baseUrl/genres/$selectedGenre?page=$page".appendNsfwQueryParameter() + "#genreSearch", headers)
+                        return GET("$baseUrl/genres/$selectedGenre?page=$page".appendNsfwQueryParameter(), headers)
                     }
                 }
                 else -> { }
             }
         }
 
-        if (preferences.showNsfwPref) {
+        if (preferences.showNsfwPref()) {
             url.addQueryParameter("content", "adulto")
         }
 
@@ -86,7 +86,7 @@ class LectorMOnline : HttpSource(), ConfigurableSource {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        if (response.request.url.fragment == "genreSearch") {
+        if (response.request.url.pathSegments[0] == "genres") {
             return searchMangaGenreParse(document)
         }
         val script = document.select("script:containsData(self.__next_f.push)").joinToString { it.data() }
@@ -206,33 +206,18 @@ class LectorMOnline : HttpSource(), ConfigurableSource {
             key = SHOW_NSFW_PREF
             title = "Mostrar contenido NSFW"
             setDefaultValue(false)
-            setOnPreferenceChangeListener { _, newValue ->
-                _cachedNsfwPref = newValue as Boolean
-                true
-            }
         }.also { screen.addPreference(it) }
     }
 
     private fun String.appendNsfwQueryParameter(): String {
-        return if (preferences.showNsfwPref) {
+        return if (preferences.showNsfwPref()) {
             "$this&content=adulto"
         } else {
             this
         }
     }
 
-    private var _cachedNsfwPref: Boolean? = null
-    private var SharedPreferences.showNsfwPref: Boolean
-        get() {
-            if (_cachedNsfwPref == null) {
-                _cachedNsfwPref = getBoolean(SHOW_NSFW_PREF, false)
-            }
-            return _cachedNsfwPref!!
-        }
-        set(value) {
-            _cachedNsfwPref = value
-            edit().putBoolean(SHOW_NSFW_PREF, value).apply()
-        }
+    private fun SharedPreferences.showNsfwPref() = this.getBoolean(SHOW_NSFW_PREF, false)
 
     private fun String.unescape(): String {
         return UNESCAPE_REGEX.replace(this, "$1")
