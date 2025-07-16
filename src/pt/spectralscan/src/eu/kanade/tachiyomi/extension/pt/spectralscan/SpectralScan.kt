@@ -30,6 +30,7 @@ class SpectralScan : ParsedHttpSource() {
         .addInterceptor { chain ->
             chain.proceed(chain.request()).also {
                 if (it.request.url.toString().contains("login")) {
+                    it.close()
                     throw IOException("Faça o login na WebView para acessar o contéudo")
                 }
             }
