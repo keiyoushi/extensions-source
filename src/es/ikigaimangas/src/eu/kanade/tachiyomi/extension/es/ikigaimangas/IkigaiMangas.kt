@@ -70,8 +70,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
     private val cookieInterceptor = CookieInterceptor(
         "",
         listOf(
-            "data-saving" to "0",
-            "nsfw-mode" to "1",
+            "nsfw-mode" to "true",
         ),
     )
 
