@@ -22,7 +22,16 @@ class ColaMangaIntl(private val lang: String) {
         else -> "Time in milliseconds to wait after using up all allowed requests. Lowering this value may reduce the chance of getting HTTP 403. Tachiyomi restart required.\nDefault value: $defaultValue\nCurrent value: %s"
     }
 
+    val timeOutLoadingSChapter = when (lang) {
+        "zh" -> "加载章节超时"
+        else -> "Timed out loading chapter"
+    }
+    val timeOutLoadingImage = when (lang) {
+        "zh" -> "加载图片超时"
+        else -> "Timed out loading image"
+    }
     val timedOutDecryptingImageLinks = when (lang) {
+        "zh" -> "解密图片链接超时"
         else -> "Timed out decrypting image links"
     }
 
@@ -47,5 +56,10 @@ class ColaMangaIntl(private val lang: String) {
     val searchTypeExact = when (lang) {
         "zh" -> "精确"
         else -> "Exact"
+    }
+
+    val loadWebViewScriptFailed = when (lang) {
+        "zh" -> "WebView 脚本不存在"
+        else -> "WebView script not found"
     }
 }
