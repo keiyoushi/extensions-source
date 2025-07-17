@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
@@ -53,11 +54,11 @@ abstract class ColaManga(
 
     override val supportsLatest = true
 
-    private var pages: MutableMap<Float, ArrayList<Page>> = mutableMapOf()
+    private var pages: MutableMap<String, ArrayList<Page>> = mutableMapOf()
 
     private val intl = ColaMangaIntl(lang)
     private val preferences by getPreferencesLazy()
-    var webView: MutableMap<Float, WebView> = mutableMapOf()
+    var webView: MutableMap<String, WebView> = mutableMapOf()
     val interfaceName = randomString()
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -205,6 +206,11 @@ abstract class ColaManga(
     }
 
     val handler = Handler(Looper.getMainLooper())
+    fun postDelayed(
+        r: Runnable, token: Any?, delayMillis: Long,
+    ): Boolean {
+        return handler.postAtTime(r, token, SystemClock.uptimeMillis() + delayMillis)
+    }
 
     override fun pageListParse(document: Document) = throw UnsupportedOperationException()
     val baseUrlTopPrivateDomain = baseUrl.toHttpUrl().topPrivateDomain()
@@ -214,15 +220,15 @@ abstract class ColaManga(
     private fun pageListParse(chapter: SChapter): List<Page> {
         val url = baseUrl + chapter.url
         val latch = CountDownLatch(1)
-        val jsInterface = JsInterface(latch, chapter.chapter_number, pages)
+        val jsInterface = JsInterface(latch, chapter.name, pages)
         handler.post {
             WebView.setWebContentsDebuggingEnabled(true)
-            webView[chapter.chapter_number]?.let {
+            webView[chapter.name]?.let {
                 it.destroy()
-                webView.remove(chapter.chapter_number)
+                webView.remove(chapter.name)
             }
             val webview = WebView(Injekt.get<Application>())
-            webView.put(chapter.chapter_number, webview)
+            webView.put(chapter.name, webview)
             webview.settings.domStorageEnabled = true
             webview.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             webview.settings.javaScriptEnabled = true
@@ -272,17 +278,28 @@ abstract class ColaManga(
             jsInterface.webView = webview
         }
 
+        postDelayed(
+            {
+                webView[chapter.name]?.let {
+                    it.destroy()
+                    webView.remove(chapter.name)
+                }
+            },
+            chapter.name,
+            1800000,
+        )
+
         latch.await(30L, TimeUnit.SECONDS)
         if (latch.count == 1L) {
             handler.post {
-                webView[chapter.chapter_number]?.let {
+                webView[chapter.name]?.let {
                     it.destroy()
-                    webView.remove(chapter.chapter_number)
+                    webView.remove(chapter.name)
                 }
             }
             throw Exception(intl.timeOutLoadingSChapter)
         }
-        return pages[chapter.chapter_number]?.toList() ?: emptyList()
+        return pages[chapter.name]?.toList() ?: emptyList()
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
@@ -293,15 +310,26 @@ abstract class ColaManga(
 
     @OptIn(DelicateCoroutinesApi::class)
     override fun fetchImageUrl(page: Page): Observable<String> {
+        val chapterName: String = page.url
+        handler.removeCallbacksAndMessages(chapterName)
+        postDelayed(
+            {
+                webView[chapterName]?.let {
+                    it.destroy()
+                    webView.remove(chapterName)
+                }
+            },
+            chapterName,
+            1800000,
+        )
         return Observable.create { emitter ->
-            val chapterNumber: Float? = page.url.toFloatOrNull()
             handler.post {
-                webView[chapterNumber]?.evaluateJavascript("scrollIntoPage(${page.index});") {}
+                webView[chapterName]?.evaluateJavascript("scrollIntoPage(${page.index});") {}
             }
             kotlinx.coroutines.GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
                 while (true) {
-                    val result = pages[chapterNumber]?.get(page.index)?.imageUrl
+                    val result = pages[chapterName]?.get(page.index)?.imageUrl
                     if (result != null && result.startsWith("data")) {
                         emitter.onNext("https://127.0.0.1/?image" + result.substringAfter(":"))
                         emitter.onCompleted()
@@ -309,7 +337,7 @@ abstract class ColaManga(
                     }
                     if (System.currentTimeMillis() - startTime > 30000) {
                         handler.post {
-                            webView[chapterNumber]?.evaluateJavascript("reloadPic(${page.index});") {}
+                            webView[chapterName]?.evaluateJavascript("reloadPic(${page.index});") {}
                         }
                         emitter.onError(Exception(intl.timeOutLoadingImage))
                         break
@@ -365,8 +393,8 @@ abstract class ColaManga(
     @Suppress("UNUSED")
     private class JsInterface(
         private var latch: CountDownLatch,
-        private val chapterNumber: Float,
-        private val pages: MutableMap<Float, ArrayList<Page>>,
+        private val chapterName: String,
+        private val pages: MutableMap<String, ArrayList<Page>>,
     ) {
         val handler = Handler(Looper.getMainLooper())
         var webView: WebView? = null
@@ -377,10 +405,10 @@ abstract class ColaManga(
         fun setPageCount(count: Int) {
             val pageList = ArrayList<Page>(count).apply {
                 for (i in 0 until count) {
-                    add(Page(i, url = chapterNumber.toString()))
+                    add(Page(i, url = chapterName))
                 }
             }
-            pages[chapterNumber] = pageList
+            pages[chapterName] = pageList
             latch.countDown()
             if (count == 0) {
                 handler.post {
@@ -393,8 +421,8 @@ abstract class ColaManga(
 
         @JavascriptInterface
         fun setPage(index: Int, url: String) {
-            pages[chapterNumber]?.get(index)?.let { it.imageUrl = url }
-            pages[chapterNumber]?.let {
+            pages[chapterName]?.get(index)?.let { it.imageUrl = url }
+            pages[chapterName]?.let {
                 if (it.all { page -> page.imageUrl != null }) {
                     handler.post {
                         webView?.destroy()
