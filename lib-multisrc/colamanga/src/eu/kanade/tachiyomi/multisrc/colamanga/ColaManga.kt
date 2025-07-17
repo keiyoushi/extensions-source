@@ -207,7 +207,9 @@ abstract class ColaManga(
 
     val handler = Handler(Looper.getMainLooper())
     fun postDelayed(
-        r: Runnable, token: Any?, delayMillis: Long,
+        r: Runnable,
+        token: Any?,
+        delayMillis: Long,
     ): Boolean {
         return handler.postAtTime(r, token, SystemClock.uptimeMillis() + delayMillis)
     }
@@ -222,7 +224,6 @@ abstract class ColaManga(
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch, chapter.name, pages)
         handler.post {
-            WebView.setWebContentsDebuggingEnabled(true)
             webView[chapter.name]?.let {
                 it.destroy()
                 webView.remove(chapter.name)
