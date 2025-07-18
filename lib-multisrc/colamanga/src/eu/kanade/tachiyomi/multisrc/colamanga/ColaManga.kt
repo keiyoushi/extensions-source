@@ -237,17 +237,17 @@ abstract class ColaManga(
     val emptyResourceResponse = WebResourceResponse(null, null, 204, "No Content", null, null)
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun pageListParse(chapter: SChapter): List<Page> {
-        val url = baseUrl + chapter.url
+    private fun pageListParse(chapterUrl: String): List<Page> {
+        val url = baseUrl + chapterUrl
         val latch = CountDownLatch(1)
-        val jsInterface = JsInterface(latch, chapter.name, pages)
+        val jsInterface = JsInterface(latch, chapterUrl, pages)
         handler.post {
-            webView[chapter.name]?.let {
+            webView[chapterUrl]?.let {
                 it.destroy()
-                webView.remove(chapter.name)
+                webView.remove(chapterUrl)
             }
             val webview = WebView(Injekt.get<Application>())
-            webView.put(chapter.name, webview)
+            webView.put(chapterUrl, webview)
             webview.settings.domStorageEnabled = true
             webview.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             webview.settings.javaScriptEnabled = true
@@ -298,7 +298,7 @@ abstract class ColaManga(
                     detail: RenderProcessGoneDetail,
                 ): Boolean {
                     webview.destroy()
-                    webView.remove(chapter.name)
+                    webView.remove(chapterUrl)
                     return super.onRenderProcessGone(view, detail)
                 }
             }
@@ -308,12 +308,12 @@ abstract class ColaManga(
 
         postDelayed(
             {
-                webView[chapter.name]?.let {
+                webView[chapterUrl]?.let {
                     it.destroy()
-                    webView.remove(chapter.name)
+                    webView.remove(chapterUrl)
                 }
             },
-            chapter.name,
+            chapterUrl,
             1800000,
             handler,
         )
@@ -321,45 +321,49 @@ abstract class ColaManga(
         latch.await(30L, TimeUnit.SECONDS)
         if (latch.count == 1L) {
             handler.post {
-                webView[chapter.name]?.let {
+                webView[chapterUrl]?.let {
                     it.destroy()
-                    webView.remove(chapter.name)
+                    webView.remove(chapterUrl)
                 }
             }
             throw Exception(intl["time_out_loading_chapter"])
         }
-        return pages[chapter.name]?.toList() ?: emptyList()
+        return pages[chapterUrl]?.toList() ?: emptyList()
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return Observable.fromCallable {
-            pageListParse(chapter)
+            pageListParse(chapter.url)
         }
     }
 
     @OptIn(DelicateCoroutinesApi::class)
     override fun fetchImageUrl(page: Page): Observable<String> {
-        val chapterName: String = page.url
-        handler.removeCallbacksAndMessages(chapterName)
-        postDelayed(
-            {
-                webView[chapterName]?.let {
-                    it.destroy()
-                    webView.remove(chapterName)
-                }
-            },
-            chapterName,
-            1800000,
-            handler,
-        )
+        val chapterUrl: String = page.url
+        if (webView[chapterUrl] is WebView) {
+            handler.removeCallbacksAndMessages(chapterUrl)
+            postDelayed(
+                {
+                    webView[chapterUrl]?.let {
+                        it.destroy()
+                        webView.remove(chapterUrl)
+                    }
+                },
+                chapterUrl,
+                1800000,
+                handler,
+            )
+        } else {
+            pageListParse(chapterUrl)
+        }
         return Observable.create { emitter ->
             handler.post {
-                webView[chapterName]?.evaluateJavascript("scrollIntoPage(${page.index});") {}
+                webView[chapterUrl]?.evaluateJavascript("scrollIntoPage(${page.index});") {}
             }
             kotlinx.coroutines.GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
                 while (true) {
-                    val result = pages[chapterName]?.get(page.index)?.imageUrl
+                    val result = pages[chapterUrl]?.get(page.index)?.imageUrl
                     if (result != null && result.startsWith("data")) {
                         emitter.onNext("https://127.0.0.1/?image" + result.substringAfter(":"))
                         emitter.onCompleted()
@@ -367,7 +371,7 @@ abstract class ColaManga(
                     }
                     if (System.currentTimeMillis() - startTime > 30000) {
                         handler.post {
-                            webView[chapterName]?.evaluateJavascript("reloadPic(${page.index});") {}
+                            webView[chapterUrl]?.evaluateJavascript("reloadPic(${page.index});") {}
                         }
                         emitter.onError(Exception(intl["time_out_loading_image"]))
                         break
@@ -451,7 +455,7 @@ abstract class ColaManga(
     @Suppress("UNUSED")
     private class JsInterface(
         private var latch: CountDownLatch,
-        private val chapterName: String,
+        private val chapterUrl: String,
         private val pages: MutableMap<String, ArrayList<Page>>,
     ) {
         val handler = Handler(Looper.getMainLooper())
@@ -463,10 +467,10 @@ abstract class ColaManga(
         fun setPageCount(count: Int) {
             val pageList = ArrayList<Page>(count).apply {
                 for (i in 0 until count) {
-                    add(Page(i, url = chapterName))
+                    add(Page(i, url = chapterUrl))
                 }
             }
-            pages[chapterName] = pageList
+            pages[chapterUrl] = pageList
             latch.countDown()
             if (count == 0) {
                 handler.post {
@@ -479,14 +483,14 @@ abstract class ColaManga(
 
         @JavascriptInterface
         fun setPage(index: Int, url: String) {
-            pages[chapterName]?.get(index)?.let { it.imageUrl = url }
-            pages[chapterName]?.let {
+            pages[chapterUrl]?.get(index)?.let { it.imageUrl = url }
+            pages[chapterUrl]?.let {
                 if (it.all { page -> page.imageUrl != null }) {
                     handler.post {
                         webView?.destroy()
                         webView = null
                     }
-                    handler.removeCallbacksAndMessages(chapterName)
+                    handler.removeCallbacksAndMessages(chapterUrl)
                 }
             }
         }
