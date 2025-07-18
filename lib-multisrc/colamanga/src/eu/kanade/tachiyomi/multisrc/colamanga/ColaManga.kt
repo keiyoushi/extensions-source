@@ -74,7 +74,6 @@ abstract class ColaManga(
     var webView: MutableMap<String, WebView> = mutableMapOf()
     val interfaceName = randomString()
 
-    @SuppressLint("SetJavaScriptEnabled")
     override val client = network.cloudflareClient.newBuilder().rateLimitHost(
         baseUrl.toHttpUrl(),
         preferences.getString(RATE_LIMIT_PREF_KEY, RATE_LIMIT_PREF_DEFAULT)!!.toInt(),
@@ -271,7 +270,7 @@ abstract class ColaManga(
                 ): Boolean {
                     request?.url?.host?.let {
                         if (PublicSuffixDatabase.get()
-                            .getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain
+                                .getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain
                         ) {
                             return true
                         }
@@ -285,7 +284,7 @@ abstract class ColaManga(
                 ): WebResourceResponse? {
                     request?.url?.host?.let {
                         if (PublicSuffixDatabase.get()
-                            .getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain
+                                .getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain
                         ) {
                             return emptyResourceResponse
                         }
