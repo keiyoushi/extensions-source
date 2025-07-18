@@ -2,19 +2,26 @@ package eu.kanade.tachiyomi.multisrc.colamanga
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.View
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.dataimage.DataImageInterceptor
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.i18n.Intl
+import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_CUSTOM_UA
+import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_RANDOM_UA
+import eu.kanade.tachiyomi.lib.randomua.RANDOM_UA_VALUES
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
@@ -33,6 +40,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -43,6 +51,7 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -55,8 +64,12 @@ abstract class ColaManga(
     override val supportsLatest = true
 
     private var pages: MutableMap<String, ArrayList<Page>> = mutableMapOf()
-
-    private val intl = ColaMangaIntl(lang)
+    private val intl = Intl(
+        Locale.getDefault().language,
+        setOf("en", "zh"),
+        lang,
+        javaClass.classLoader!!,
+    )
     private val preferences by getPreferencesLazy()
     var webView: MutableMap<String, WebView> = mutableMapOf()
     val interfaceName = randomString()
@@ -210,8 +223,13 @@ abstract class ColaManga(
         r: Runnable,
         token: Any?,
         delayMillis: Long,
+        handler: Handler,
     ): Boolean {
-        return handler.postAtTime(r, token, SystemClock.uptimeMillis() + delayMillis)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            handler.postDelayed(r, token, delayMillis)
+        } else {
+            return handler.postAtTime(r, token, SystemClock.uptimeMillis() + delayMillis)
+        }
     }
 
     override fun pageListParse(document: Document) = throw UnsupportedOperationException()
@@ -253,7 +271,7 @@ abstract class ColaManga(
                 ): Boolean {
                     request?.url?.host?.let {
                         if (PublicSuffixDatabase.get()
-                                .getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain
+                            .getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain
                         ) {
                             return true
                         }
@@ -267,12 +285,21 @@ abstract class ColaManga(
                 ): WebResourceResponse? {
                     request?.url?.host?.let {
                         if (PublicSuffixDatabase.get()
-                                .getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain
+                            .getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain
                         ) {
                             return emptyResourceResponse
                         }
                     }
                     return super.shouldInterceptRequest(view, request)
+                }
+
+                override fun onRenderProcessGone(
+                    view: WebView,
+                    detail: RenderProcessGoneDetail,
+                ): Boolean {
+                    webview.destroy()
+                    webView.remove(chapter.name)
+                    return super.onRenderProcessGone(view, detail)
                 }
             }
             webview.loadUrl(url)
@@ -288,6 +315,7 @@ abstract class ColaManga(
             },
             chapter.name,
             1800000,
+            handler,
         )
 
         latch.await(30L, TimeUnit.SECONDS)
@@ -298,7 +326,7 @@ abstract class ColaManga(
                     webView.remove(chapter.name)
                 }
             }
-            throw Exception(intl.timeOutLoadingSChapter)
+            throw Exception(intl["time_out_loading_chapter"])
         }
         return pages[chapter.name]?.toList() ?: emptyList()
     }
@@ -322,6 +350,7 @@ abstract class ColaManga(
             },
             chapterName,
             1800000,
+            handler,
         )
         return Observable.create { emitter ->
             handler.post {
@@ -340,7 +369,7 @@ abstract class ColaManga(
                         handler.post {
                             webView[chapterName]?.evaluateJavascript("reloadPic(${page.index});") {}
                         }
-                        emitter.onError(Exception(intl.timeOutLoadingImage))
+                        emitter.onError(Exception(intl["time_out_loading_image"]))
                         break
                     }
                     delay(100)
@@ -356,31 +385,59 @@ abstract class ColaManga(
     )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
+        val context = screen.context
+        ListPreference(context).apply {
             key = RATE_LIMIT_PREF_KEY
-            title = intl.rateLimitPrefTitle
-            summary = intl.rateLimitPrefSummary(RATE_LIMIT_PREF_DEFAULT)
+            title = intl["rate_limit_pref_title"]
+            summary = intl.format("rate_limit_pref_summary", RATE_LIMIT_PREF_DEFAULT)
             entries = RATE_LIMIT_PREF_ENTRIES
             entryValues = RATE_LIMIT_PREF_ENTRIES
 
             setDefaultValue(RATE_LIMIT_PREF_DEFAULT)
         }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
+        ListPreference(context).apply {
             key = RATE_LIMIT_PERIOD_PREF_KEY
-            title = intl.rateLimitPeriodPrefTitle
-            summary = intl.rateLimitPeriodPrefSummary(RATE_LIMIT_PERIOD_PREF_DEFAULT)
+            title = intl["rate_limit_period_pref_title"]
+            summary = intl.format("rate_limit_period_pref_summary", RATE_LIMIT_PERIOD_PREF_DEFAULT)
             entries = RATE_LIMIT_PERIOD_PREF_ENTRIES
             entryValues = RATE_LIMIT_PERIOD_PREF_ENTRIES
 
             setDefaultValue(RATE_LIMIT_PERIOD_PREF_DEFAULT)
         }.also(screen::addPreference)
-        addRandomUAPreferenceToScreen(screen)
+
+        ListPreference(context).apply {
+            key = PREF_KEY_RANDOM_UA
+            title = intl["title_random_ua"]
+            entries = intl["entries_random_ua"].split(" ").toTypedArray()
+            entryValues = RANDOM_UA_VALUES
+            summary = "%s"
+            setDefaultValue("off")
+        }.also(screen::addPreference)
+
+        EditTextPreference(context).apply {
+            key = PREF_KEY_CUSTOM_UA
+            title = intl["title_custom_ua"]
+            summary = intl["custom_ua_summary"]
+            setOnPreferenceChangeListener { _, newValue ->
+                try {
+                    Headers.headersOf("User-Agent", newValue as String)
+                    true
+                } catch (e: IllegalArgumentException) {
+                    Toast.makeText(
+                        context,
+                        intl.format("custom_ua_invalid", e.message),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    false
+                }
+            }
+        }.also(screen::addPreference)
     }
 
     private val webviewScript by lazy {
         javaClass.getResource("/assets/webview-script.js")?.readText()
-            ?: throw Exception(intl.loadWebViewScriptFailed)
+            ?: throw Exception(intl["load_webview_script_failed"])
     }
 
     private fun randomString() = buildString(15) {
@@ -429,6 +486,7 @@ abstract class ColaManga(
                         webView?.destroy()
                         webView = null
                     }
+                    handler.removeCallbacksAndMessages(chapterName)
                 }
             }
         }
