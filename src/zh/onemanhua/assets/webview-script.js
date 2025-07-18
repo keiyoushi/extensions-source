@@ -1,14 +1,22 @@
 let pageCount = 0;
 const ImgToBlobBase64 = async (i, e) => {
-    const canvas = new OffscreenCanvas(e.naturalWidth, e.naturalHeight);
+    const canvas = OffscreenCanvas && OffscreenCanvas.prototype.convertToBlob
+        ? new OffscreenCanvas(e.naturalWidth, e.naturalHeight)
+        : document.createElement("canvas");
+    canvas.width = e.naturalWidth;
+    canvas.height = e.naturalHeight;
     const canvasCtx = canvas.getContext("2d");
     canvasCtx.drawImage(e, 0, 0);
-    const blob = await canvas.convertToBlob({ quality: 1 });
-    const reader = new FileReader();
-    reader.onloadend = () => {
-        window.__interface__.setPage(i, reader.result);
-    };
-    reader.readAsDataURL(blob);
+    if (canvas instanceof OffscreenCanvas) {
+        const blob = await canvas.convertToBlob();
+        const reader = new FileReader();
+        reader.onloadend = () => window.__interface__.setPage(i, reader.result);
+        reader.readAsDataURL(blob);
+    } else {
+        const dataUrl = canvas.toDataURL();
+        window.__interface__.setPage(i, dataUrl);
+        canvas.remove();
+    }
 };
 function waitForElm(selector) {
     return new Promise(resolve => {
