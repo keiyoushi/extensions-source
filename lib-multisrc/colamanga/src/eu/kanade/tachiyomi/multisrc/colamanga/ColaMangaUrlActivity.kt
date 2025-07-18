@@ -13,7 +13,7 @@ class ColaMangaUrlActivity : Activity() {
 
         val pathSegments = intent?.data?.pathSegments
 
-        if (pathSegments != null && pathSegments.size > 0) {
+        if (pathSegments != null && pathSegments.isNotEmpty()) {
             val intent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
                 putExtra("query", "${ColaManga.PREFIX_SLUG_SEARCH}${pathSegments[0]}")
