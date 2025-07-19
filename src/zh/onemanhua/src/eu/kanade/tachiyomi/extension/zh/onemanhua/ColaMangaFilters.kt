@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.colamanga
+package eu.kanade.tachiyomi.extension.zh.onemanhua
 
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
@@ -22,11 +22,11 @@ open class UriPartFilter(
     }
 }
 
-class SearchTypeFilter(intl: ColaMangaIntl) : UriPartFilter(
-    intl.searchType,
+class SearchTypeFilter() : UriPartFilter(
+    "搜索类型",
     "type",
     arrayOf(
-        intl.searchTypeFuzzy to "1",
-        intl.searchTypeExact to "2",
+        "模糊" to "1",
+        "精确" to "2",
     ),
 )

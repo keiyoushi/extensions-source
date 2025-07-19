@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
-            android:name="eu.kanade.tachiyomi.multisrc.colamanga.ColaMangaUrlActivity"
+            android:name="eu.kanade.tachiyomi.extension.zh.onemanhua.ColaMangaUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -12,8 +12,8 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
 
                 <data
-                    android:host="${SOURCEHOST}"
-                    android:scheme="${SOURCESCHEME}"
+                    android:host="www.colamanga.com"
+                    android:scheme="https"
                     android:pathPattern="/manga-..*/" />
             </intent-filter>
         </activity>
