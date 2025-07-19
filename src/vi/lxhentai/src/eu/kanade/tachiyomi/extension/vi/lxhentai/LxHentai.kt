@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -148,9 +149,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         name = element.select("span.text-ellipsis").text()
-        date_upload = runCatching {
-            dateFormat.parse(element.select("span.timeago").attr("datetime"))?.time
-        }.getOrNull() ?: 0L
+        date_upload = dateFormat.tryParse(element.select("span.timeago").attr("datetime"))
 
         val match = CHAPTER_NUMBER_REGEX.findAll(name)
         chapter_number = if (match.count() > 1 && name.lowercase().startsWith("vol")) {
@@ -166,7 +165,7 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>, state: Int = 0) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
