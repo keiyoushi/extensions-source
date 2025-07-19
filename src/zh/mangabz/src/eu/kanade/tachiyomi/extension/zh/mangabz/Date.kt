@@ -29,10 +29,10 @@ fun parseDateInternal(source: String): Long {
     return fullDateFormat.parse(source)!!.time
 }
 
-private val recentRegex by lazy { Regex("""[今昨前]天 \d{2}:\d{2}""") }
-private val timeFormat by lazy { cstFormat("yyyy-MM-dd hh:mm") }
-private val shortDateFormat by lazy { cstFormat("yyyy MM月dd") }
-private val fullDateFormat by lazy { cstFormat("yyyy-MM-dd") }
+private val recentRegex = Regex("""[今昨前]天 \d{2}:\d{2}""")
+private val timeFormat = cstFormat("yyyy-MM-dd hh:mm")
+private val shortDateFormat = cstFormat("yyyy MM月dd")
+private val fullDateFormat = cstFormat("yyyy-MM-dd")
 
 private fun cstFormat(pattern: String) =
     SimpleDateFormat(pattern, Locale.ENGLISH).apply { timeZone = TimeZone.getTimeZone("GMT+8") }
