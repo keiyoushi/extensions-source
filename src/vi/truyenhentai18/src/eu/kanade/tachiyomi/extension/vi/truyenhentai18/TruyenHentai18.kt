@@ -51,7 +51,7 @@ class TruyenHentai18 : ParsedHttpSource() {
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
     }
 
-    override fun popularMangaNextPageSelector() = "ul.pagination li.page-item.active:not(:last-child)"
+    override fun popularMangaNextPageSelector() = "div.overflow-x-scroll div button"
 
     // ============================== Latest ======================================
 
