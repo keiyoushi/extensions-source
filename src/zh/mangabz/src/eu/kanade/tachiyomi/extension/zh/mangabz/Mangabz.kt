@@ -95,7 +95,7 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
 
     override fun parseDescription(element: Element, title: String, details: Elements): String {
         val text = element.ownText()
-        val start = if (text.startsWith(title)) title.length + 4 else 0
+        val start = if (text.startsWith(title) && text != title) title.length + 4 else 0
         val collapsed = element.selectFirst(Evaluator.Tag("span"))?.ownText()
             ?: return text.substring(start)
         return buildString { append(text, start, text.length - 1).append(collapsed) }
