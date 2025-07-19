@@ -324,7 +324,7 @@ abstract class ColaManga(
         }
         return Observable.create { emitter ->
             handler.post {
-                webViewCache[chapterUrl]?.evaluateJavascript("scrollIntoPage(${page.index});") {}
+                webViewCache[chapterUrl]?.evaluateJavascript("loadPic(${page.index});") {}
             }
             GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
@@ -336,9 +336,6 @@ abstract class ColaManga(
                         break
                     }
                     if (System.currentTimeMillis() - startTime > 30000) {
-                        handler.post {
-                            webViewCache[chapterUrl]?.evaluateJavascript("reloadPic(${page.index});") {}
-                        }
                         emitter.onError(Exception("加载图片超时"))
                         break
                     }

@@ -35,43 +35,18 @@ function waitForElm(selector) {
         });
     });
 }
-let currentPageIndex = 0;
-let scrollQueue = Promise.resolve();
-function scrollIntoPage(targetPageIndex) {
-    scrollQueue = scrollQueue.then(() => {
-        return new Promise(resolve => {
-            if (targetPageIndex !== currentPageIndex) {
-                const step = targetPageIndex > currentPageIndex ? 1 : -1;
-                let delay = 0;
-                for (let i = currentPageIndex; i !== targetPageIndex; i += step) {
-                    delay += 5000;
-                    setTimeout(() => {
-                        const target = document.querySelector(`div.mh_comicpic[p="${i + step + 1}"] img[src]`)
-                            || document.querySelector(`div.mh_comicpic[p="${i + step + 1}"] .mh_loading`);
-                        if (target) target.scrollIntoView();
-                        if (i + step === targetPageIndex) {
-                            currentPageIndex = targetPageIndex;
-                            resolve();
-                        }
-                    }, delay);
-                }
-            } else {
-                const target = document.querySelector(`div.mh_comicpic[p="${targetPageIndex + 1}"] img[src]`)
-                    || document.querySelector(`div.mh_comicpic[p="${targetPageIndex + 1}"] .mh_loading`);
-                if (target) target.scrollIntoView();
-                currentPageIndex = targetPageIndex;
-                resolve();
-            }
-        });
-    });
-}
-function reloadPic(pageIndex) {
-    const button = document.querySelector('div.mh_comicpic[p="' + (pageIndex + 1) + '"] .mh_loaderr .mh_btn');
-    if (button && document.querySelector('div.mh_comicpic[p="' + (pageIndex + 1) + '"] .mh_loaderr').style.display !== 'none') {
-        __cr.reloadPic(button, pageIndex + 1);
+function loadPic(pageIndex) {
+    const page = pageIndex + 1;
+    const target = document.querySelector(`div.mh_comicpic[p="${page}"] img[src]`)
+        || document.querySelector(`div.mh_comicpic[p="${page}"] .mh_loading`);
+    if (target) target.scrollIntoView();
+    const button = document.querySelector('div.mh_comicpic[p="' + (page) + '"] .mh_loaderr .mh_btn');
+    if (button && document.querySelector('div.mh_comicpic[p="' + (page) + '"] .mh_loaderr').style.display !== 'none') {
+        __cr.reloadPic(button, page);
     }
 }
 waitForElm('div.mh_comicpic img').then(() => {
+    __ad = ''
     pageCount = parseInt($.cookie(__cad.getCookieValue()[1] + mh_info.pageid) || "0");
     window.__interface__.setPageCount(pageCount);
 });
