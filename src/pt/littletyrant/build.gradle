@@ -3,7 +3,7 @@ ext {
     extClass = '.LittleTyrant'
     themePkg = 'madara'
     baseUrl = 'https://www.tiraninha.baby'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
