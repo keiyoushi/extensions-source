@@ -134,12 +134,7 @@ abstract class ColaManga(
             val url = "/$slug/"
 
             fetchMangaDetails(SManga.create().apply { this.url = url })
-                .map {
-                    MangasPage(
-                        listOf(it.apply { this.url = url }),
-                        false,
-                    )
-                }
+                .map { MangasPage(listOf(it.apply { this.url = url }), false) }
         } else {
             super.fetchSearchManga(page, query, filters)
         }
