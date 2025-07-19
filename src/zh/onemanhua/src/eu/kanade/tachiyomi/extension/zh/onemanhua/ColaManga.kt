@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.colamanga
+package eu.kanade.tachiyomi.extension.zh.onemanhua
 
 import android.annotation.SuppressLint
 import android.app.Application
@@ -29,6 +29,7 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -325,7 +326,7 @@ abstract class ColaManga(
             handler.post {
                 webViewCache[chapterUrl]?.evaluateJavascript("scrollIntoPage(${page.index});") {}
             }
-            kotlinx.coroutines.GlobalScope.launch {
+            GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
                 while (true) {
                     val result = pagesMap[chapterUrl]?.get(page.index)?.imageUrl

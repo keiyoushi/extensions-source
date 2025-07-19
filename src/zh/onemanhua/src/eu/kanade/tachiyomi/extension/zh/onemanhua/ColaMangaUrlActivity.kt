@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.colamanga
+package eu.kanade.tachiyomi.extension.zh.onemanhua
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
