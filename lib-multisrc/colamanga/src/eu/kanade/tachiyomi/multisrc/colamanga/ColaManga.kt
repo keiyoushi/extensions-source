@@ -13,18 +13,9 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
-import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.dataimage.DataImageInterceptor
-import eu.kanade.tachiyomi.lib.i18n.Intl
-import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_CUSTOM_UA
-import eu.kanade.tachiyomi.lib.randomua.PREF_KEY_RANDOM_UA
-import eu.kanade.tachiyomi.lib.randomua.RANDOM_UA_VALUES
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -40,7 +31,6 @@ import keiyoushi.utils.tryParse
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -51,7 +41,6 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -63,34 +52,29 @@ abstract class ColaManga(
 
     override val supportsLatest = true
 
-    private var pages: MutableMap<String, ArrayList<Page>> = mutableMapOf()
-    private val intl = Intl(
-        Locale.getDefault().language,
-        setOf("en", "zh"),
-        lang,
-        javaClass.classLoader!!,
-    )
+    private var pagesMap: MutableMap<String, ArrayList<Page>> = mutableMapOf()
     private val preferences by getPreferencesLazy()
-    var webView: MutableMap<String, WebView> = mutableMapOf()
-    val interfaceName = randomString()
+    private val webViewCache = object : LinkedHashMap<String, WebView>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, WebView>): Boolean {
+            if (size <= 5) return false
+            handler.post {
+                eldest.value.destroy()
+            }
+            return true
+        }
+    }
+    private val interfaceName = randomString()
 
     override val client = network.cloudflareClient.newBuilder().rateLimitHost(
         baseUrl.toHttpUrl(),
         preferences.getString(RATE_LIMIT_PREF_KEY, RATE_LIMIT_PREF_DEFAULT)!!.toInt(),
-        preferences.getString(RATE_LIMIT_PERIOD_PREF_KEY, RATE_LIMIT_PERIOD_PREF_DEFAULT)!!
-            .toLong(),
+        preferences.getString(RATE_LIMIT_PERIOD_PREF_KEY, RATE_LIMIT_PERIOD_PREF_DEFAULT)!!.toLong(),
         TimeUnit.MILLISECONDS,
-    ).setRandomUserAgent(
-        preferences.getPrefUAType(),
-        preferences.getPrefCustomUA(),
-        filterInclude = listOf("Chrome"),
     ).addInterceptor(DataImageInterceptor()).build()
 
-    override fun headersBuilder() =
-        super.headersBuilder().add("Origin", baseUrl).add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder().add("Origin", baseUrl).add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/show?orderBy=dailyCount&page=$page", headers)
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/show?orderBy=dailyCount&page=$page", headers)
 
     override fun popularMangaSelector() = "li.fed-list-item"
 
@@ -102,8 +86,7 @@ abstract class ColaManga(
         thumbnail_url = element.selectFirst("a.fed-list-pics")?.absUrl("data-original")
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/show?orderBy=update&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/show?orderBy=update&page=$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -114,16 +97,14 @@ abstract class ColaManga(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = if (query.isNotEmpty()) {
             "$baseUrl/search".toHttpUrl().newBuilder().apply {
-                filters.ifEmpty { getFilterList() }.firstOrNull { it is SearchTypeFilter }
-                    ?.let { (it as SearchTypeFilter).addToUri(this) }
+                filters.ifEmpty { getFilterList() }.firstOrNull { it is SearchTypeFilter }?.let { (it as SearchTypeFilter).addToUri(this) }
 
                 addQueryParameter("searchString", query)
                 addQueryParameter("page", page.toString())
             }.build()
         } else {
             "$baseUrl/show".toHttpUrl().newBuilder().apply {
-                filters.ifEmpty { getFilterList() }.filterIsInstance<UriFilter>()
-                    .filterNot { it is SearchTypeFilter }.forEach { it.addToUri(this) }
+                filters.ifEmpty { getFilterList() }.filterIsInstance<UriFilter>().filterNot { it is SearchTypeFilter }.forEach { it.addToUri(this) }
 
                 addQueryParameter("page", page.toString())
             }.build()
@@ -185,21 +166,16 @@ abstract class ColaManga(
         title = document.selectFirst("h1.fed-part-eone")!!.text()
         thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-original")
         author = document.selectFirst("span.fed-text-muted:contains($authorTitle) + a")?.text()
-        genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a")
-            .joinToString { it.text() }
-        description =
-            document.selectFirst("ul.fed-part-rows li.fed-col-xs12.fed-show-md-block .fed-part-esan")
-                ?.ownText()
-        status =
-            when (document.selectFirst("span.fed-text-muted:contains($statusTitle) + a")?.text()) {
-                statusOngoing -> SManga.ONGOING
-                statusCompleted -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
+        genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a").joinToString { it.text() }
+        description = document.selectFirst("ul.fed-part-rows li.fed-col-xs12.fed-show-md-block .fed-part-esan")?.ownText()
+        status = when (document.selectFirst("span.fed-text-muted:contains($statusTitle) + a")?.text()) {
+            statusOngoing -> SManga.ONGOING
+            statusCompleted -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
     }
 
-    override fun chapterListSelector(): String =
-        "div:not(.fed-hidden) > div.all_data_list > ul.fed-part-rows a"
+    override fun chapterListSelector(): String = "div:not(.fed-hidden) > div.all_data_list > ul.fed-part-rows a"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
@@ -217,8 +193,9 @@ abstract class ColaManga(
         name = element.attr("title")
     }
 
-    val handler = Handler(Looper.getMainLooper())
-    fun postDelayed(
+    private val handler = Handler(Looper.getMainLooper())
+    private val webViewIdleDelayMillis: Long = 1800000
+    private fun postDelayed(
         r: Runnable,
         token: Any?,
         delayMillis: Long,
@@ -232,21 +209,18 @@ abstract class ColaManga(
     }
 
     override fun pageListParse(document: Document) = throw UnsupportedOperationException()
-    val baseUrlTopPrivateDomain = baseUrl.toHttpUrl().topPrivateDomain()
-    val emptyResourceResponse = WebResourceResponse(null, null, 204, "No Content", null, null)
+    private val baseUrlTopPrivateDomain = baseUrl.toHttpUrl().topPrivateDomain()
+    private val emptyResourceResponse = WebResourceResponse(null, null, 204, "No Content", null, null)
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun pageListParse(chapterUrl: String): List<Page> {
         val url = baseUrl + chapterUrl
         val latch = CountDownLatch(1)
-        val jsInterface = JsInterface(latch, chapterUrl, pages)
+        val jsInterface = JsInterface(latch, chapterUrl, pagesMap)
         handler.post {
-            webView[chapterUrl]?.let {
-                it.destroy()
-                webView.remove(chapterUrl)
-            }
+            webViewCache.remove(chapterUrl)?.destroy()
             val webview = WebView(Injekt.get<Application>())
-            webView.put(chapterUrl, webview)
+            webViewCache.put(chapterUrl, webview)
             webview.settings.domStorageEnabled = true
             webview.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             webview.settings.javaScriptEnabled = true
@@ -269,9 +243,7 @@ abstract class ColaManga(
                     request: WebResourceRequest?,
                 ): Boolean {
                     request?.url?.host?.let {
-                        if (PublicSuffixDatabase.get()
-                                .getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain
-                        ) {
+                        if (PublicSuffixDatabase.get().getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain) {
                             return true
                         }
                     }
@@ -283,9 +255,7 @@ abstract class ColaManga(
                     request: WebResourceRequest?,
                 ): WebResourceResponse? {
                     request?.url?.host?.let {
-                        if (PublicSuffixDatabase.get()
-                                .getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain
-                        ) {
+                        if (PublicSuffixDatabase.get().getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain) {
                             return emptyResourceResponse
                         }
                     }
@@ -297,7 +267,7 @@ abstract class ColaManga(
                     detail: RenderProcessGoneDetail,
                 ): Boolean {
                     webview.destroy()
-                    webView.remove(chapterUrl)
+                    webViewCache.remove(chapterUrl)
                     return super.onRenderProcessGone(view, detail)
                 }
             }
@@ -307,27 +277,21 @@ abstract class ColaManga(
 
         postDelayed(
             {
-                webView[chapterUrl]?.let {
-                    it.destroy()
-                    webView.remove(chapterUrl)
-                }
+                webViewCache.remove(chapterUrl)?.destroy()
             },
             chapterUrl,
-            1800000,
+            webViewIdleDelayMillis,
             handler,
         )
 
         latch.await(30L, TimeUnit.SECONDS)
         if (latch.count == 1L) {
             handler.post {
-                webView[chapterUrl]?.let {
-                    it.destroy()
-                    webView.remove(chapterUrl)
-                }
+                webViewCache.remove(chapterUrl)?.destroy()
             }
-            throw Exception(intl["time_out_loading_chapter"])
+            throw Exception("加载章节超时")
         }
-        return pages[chapterUrl]?.toList() ?: emptyList()
+        return pagesMap[chapterUrl]?.toList() ?: emptyList()
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
@@ -339,17 +303,14 @@ abstract class ColaManga(
     @OptIn(DelicateCoroutinesApi::class)
     override fun fetchImageUrl(page: Page): Observable<String> {
         val chapterUrl: String = page.url
-        if (webView[chapterUrl] is WebView) {
+        if (webViewCache[chapterUrl] is WebView) {
             handler.removeCallbacksAndMessages(chapterUrl)
             postDelayed(
                 {
-                    webView[chapterUrl]?.let {
-                        it.destroy()
-                        webView.remove(chapterUrl)
-                    }
+                    webViewCache.remove(chapterUrl)?.destroy()
                 },
                 chapterUrl,
-                1800000,
+                webViewIdleDelayMillis,
                 handler,
             )
         } else {
@@ -357,12 +318,12 @@ abstract class ColaManga(
         }
         return Observable.create { emitter ->
             handler.post {
-                webView[chapterUrl]?.evaluateJavascript("scrollIntoPage(${page.index});") {}
+                webViewCache[chapterUrl]?.evaluateJavascript("scrollIntoPage(${page.index});") {}
             }
             kotlinx.coroutines.GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
                 while (true) {
-                    val result = pages[chapterUrl]?.get(page.index)?.imageUrl
+                    val result = pagesMap[chapterUrl]?.get(page.index)?.imageUrl
                     if (result != null && result.startsWith("data")) {
                         emitter.onNext("https://127.0.0.1/?image" + result.substringAfter(":"))
                         emitter.onCompleted()
@@ -370,9 +331,9 @@ abstract class ColaManga(
                     }
                     if (System.currentTimeMillis() - startTime > 30000) {
                         handler.post {
-                            webView[chapterUrl]?.evaluateJavascript("reloadPic(${page.index});") {}
+                            webViewCache[chapterUrl]?.evaluateJavascript("reloadPic(${page.index});") {}
                         }
-                        emitter.onError(Exception(intl["time_out_loading_image"]))
+                        emitter.onError(Exception("加载图片超时"))
                         break
                     }
                     delay(100)
@@ -384,15 +345,15 @@ abstract class ColaManga(
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
-        SearchTypeFilter(intl),
+        SearchTypeFilter(),
     )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val context = screen.context
         ListPreference(context).apply {
             key = RATE_LIMIT_PREF_KEY
-            title = intl["rate_limit_pref_title"]
-            summary = intl.format("rate_limit_pref_summary", RATE_LIMIT_PREF_DEFAULT)
+            title = "主站连接限制"
+            summary = "此值影响主站的连接请求量。降低此值可以减少获得HTTP 403错误的几率，但加载速度也会变慢。需要重启软件以生效。\n默认值：${RATE_LIMIT_PREF_DEFAULT}\n当前值：%s"
             entries = RATE_LIMIT_PREF_ENTRIES
             entryValues = RATE_LIMIT_PREF_ENTRIES
 
@@ -401,46 +362,17 @@ abstract class ColaManga(
 
         ListPreference(context).apply {
             key = RATE_LIMIT_PERIOD_PREF_KEY
-            title = intl["rate_limit_period_pref_title"]
-            summary = intl.format("rate_limit_period_pref_summary", RATE_LIMIT_PERIOD_PREF_DEFAULT)
+            title = "主站连接限制期"
+            summary = "此值影响主站点连接限制时的延迟（毫秒）。增加这个值可能会减少出现HTTP 403错误的机会，但加载速度也会变慢。需要重启软件以生效。\n默认值：${RATE_LIMIT_PERIOD_PREF_DEFAULT}\n当前值：%s"
             entries = RATE_LIMIT_PERIOD_PREF_ENTRIES
             entryValues = RATE_LIMIT_PERIOD_PREF_ENTRIES
 
             setDefaultValue(RATE_LIMIT_PERIOD_PREF_DEFAULT)
         }.also(screen::addPreference)
-
-        ListPreference(context).apply {
-            key = PREF_KEY_RANDOM_UA
-            title = intl["title_random_ua"]
-            entries = intl["entries_random_ua"].split(" ").toTypedArray()
-            entryValues = RANDOM_UA_VALUES
-            summary = "%s"
-            setDefaultValue("off")
-        }.also(screen::addPreference)
-
-        EditTextPreference(context).apply {
-            key = PREF_KEY_CUSTOM_UA
-            title = intl["title_custom_ua"]
-            summary = intl["custom_ua_summary"]
-            setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    Headers.headersOf("User-Agent", newValue as String)
-                    true
-                } catch (e: IllegalArgumentException) {
-                    Toast.makeText(
-                        context,
-                        intl.format("custom_ua_invalid", e.message),
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    false
-                }
-            }
-        }.also(screen::addPreference)
     }
 
     private val webviewScript by lazy {
-        javaClass.getResource("/assets/webview-script.js")?.readText()
-            ?: throw Exception(intl["load_webview_script_failed"])
+        javaClass.getResource("/assets/webview-script.js")?.readText() ?: throw Exception("WebView 脚本不存在")
     }
 
     private fun randomString() = buildString(15) {
@@ -506,5 +438,4 @@ private val RATE_LIMIT_PREF_ENTRIES = (1..10).map { i -> i.toString() }.toTypedA
 
 private const val RATE_LIMIT_PERIOD_PREF_KEY = "mainSiteRatePeriodMillisPreference"
 private const val RATE_LIMIT_PERIOD_PREF_DEFAULT = "2500"
-private val RATE_LIMIT_PERIOD_PREF_ENTRIES =
-    (2000..6000 step 500).map { i -> i.toString() }.toTypedArray()
+private val RATE_LIMIT_PERIOD_PREF_ENTRIES = (2000..6000 step 500).map { i -> i.toString() }.toTypedArray()

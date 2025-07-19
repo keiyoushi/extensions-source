@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.colamanga
 
-import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 
@@ -23,11 +22,11 @@ open class UriPartFilter(
     }
 }
 
-class SearchTypeFilter(intl: Intl) : UriPartFilter(
-    intl["search_type"],
+class SearchTypeFilter() : UriPartFilter(
+    "搜索类型",
     "type",
     arrayOf(
-        intl["search_type_fuzzy"] to "1",
-        intl["search_type_exact"] to "2",
+        "模糊" to "1",
+        "精确" to "2",
     ),
 )
