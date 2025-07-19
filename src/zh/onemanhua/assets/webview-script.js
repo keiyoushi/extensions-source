@@ -63,7 +63,7 @@ function scrollIntoPage(targetPageIndex) {
     });
 }
 function reloadPic(pageIndex) {
-    __cr.reloadPic(document.querySelectorAll("#mangalist"), pageIndex + 1)
+    __cr.reloadPic(document.querySelector('div.mh_comicpic[p="' + (pageIndex + 1) + '"] .mh_loaderr .mh_btn'), pageIndex + 1)
 }
 waitForElm('div.mh_comicpic img').then(() => {
     pageCount = parseInt($.cookie(__cad.getCookieValue()[1] + mh_info.pageid) || "0");
