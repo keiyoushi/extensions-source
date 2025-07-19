@@ -65,16 +65,22 @@ abstract class ColaManga(
     }
     private val interfaceName = randomString()
 
-    override val client = network.cloudflareClient.newBuilder().rateLimitHost(
-        baseUrl.toHttpUrl(),
-        preferences.getString(RATE_LIMIT_PREF_KEY, RATE_LIMIT_PREF_DEFAULT)!!.toInt(),
-        preferences.getString(RATE_LIMIT_PERIOD_PREF_KEY, RATE_LIMIT_PERIOD_PREF_DEFAULT)!!.toLong(),
-        TimeUnit.MILLISECONDS,
-    ).addInterceptor(DataImageInterceptor()).build()
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimitHost(
+            baseUrl.toHttpUrl(),
+            preferences.getString(RATE_LIMIT_PREF_KEY, RATE_LIMIT_PREF_DEFAULT)!!.toInt(),
+            preferences.getString(RATE_LIMIT_PERIOD_PREF_KEY, RATE_LIMIT_PERIOD_PREF_DEFAULT)!!.toLong(),
+            TimeUnit.MILLISECONDS,
+        )
+        .addInterceptor(DataImageInterceptor())
+        .build()
 
-    override fun headersBuilder() = super.headersBuilder().add("Origin", baseUrl).add("Referer", "$baseUrl/")
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Origin", baseUrl)
+        .add("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/show?orderBy=dailyCount&page=$page", headers)
+    override fun popularMangaRequest(page: Int) =
+        GET("$baseUrl/show?orderBy=dailyCount&page=$page", headers)
 
     override fun popularMangaSelector() = "li.fed-list-item"
 
@@ -97,14 +103,19 @@ abstract class ColaManga(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = if (query.isNotEmpty()) {
             "$baseUrl/search".toHttpUrl().newBuilder().apply {
-                filters.ifEmpty { getFilterList() }.firstOrNull { it is SearchTypeFilter }?.let { (it as SearchTypeFilter).addToUri(this) }
+                filters.ifEmpty { getFilterList() }
+                    .firstOrNull { it is SearchTypeFilter }
+                    ?.let { (it as SearchTypeFilter).addToUri(this) }
 
                 addQueryParameter("searchString", query)
                 addQueryParameter("page", page.toString())
             }.build()
         } else {
             "$baseUrl/show".toHttpUrl().newBuilder().apply {
-                filters.ifEmpty { getFilterList() }.filterIsInstance<UriFilter>().filterNot { it is SearchTypeFilter }.forEach { it.addToUri(this) }
+                filters.ifEmpty { getFilterList() }
+                    .filterIsInstance<UriFilter>()
+                    .filterNot { it is SearchTypeFilter }
+                    .forEach { it.addToUri(this) }
 
                 addQueryParameter("page", page.toString())
             }.build()
@@ -122,14 +133,13 @@ abstract class ColaManga(
             val slug = query.removePrefix(PREFIX_SLUG_SEARCH)
             val url = "/$slug/"
 
-            fetchMangaDetails(
-                SManga.create().apply { this.url = url },
-            ).map {
-                MangasPage(
-                    listOf(it.apply { this.url = url }),
-                    false,
-                )
-            }
+            fetchMangaDetails(SManga.create().apply { this.url = url })
+                .map {
+                    MangasPage(
+                        listOf(it.apply { this.url = url }),
+                        false,
+                    )
+                }
         } else {
             super.fetchSearchManga(page, query, filters)
         }
@@ -167,7 +177,9 @@ abstract class ColaManga(
         thumbnail_url = document.selectFirst("a.fed-list-pics")?.absUrl("data-original")
         author = document.selectFirst("span.fed-text-muted:contains($authorTitle) + a")?.text()
         genre = document.select("span.fed-text-muted:contains($genreTitle) ~ a").joinToString { it.text() }
-        description = document.selectFirst("ul.fed-part-rows li.fed-col-xs12.fed-show-md-block .fed-part-esan")?.ownText()
+        description = document
+            .selectFirst("ul.fed-part-rows li.fed-col-xs12.fed-show-md-block .fed-part-esan")
+            ?.ownText()
         status = when (document.selectFirst("span.fed-text-muted:contains($statusTitle) + a")?.text()) {
             statusOngoing -> SManga.ONGOING
             statusCompleted -> SManga.COMPLETED
@@ -181,9 +193,7 @@ abstract class ColaManga(
         val document = response.asJsoup()
         return document.select(chapterListSelector()).map { chapterFromElement(it) }.apply {
             if (isNotEmpty()) {
-                this[0].date_upload = dateFormat.tryParse(
-                    document.selectFirst("span.fed-text-muted:contains($lastUpdated) + a")?.text(),
-                )
+                this[0].date_upload = dateFormat.tryParse(document.selectFirst("span.fed-text-muted:contains($lastUpdated) + a")?.text())
             }
         }
     }
