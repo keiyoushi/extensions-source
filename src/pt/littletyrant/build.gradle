@@ -2,8 +2,8 @@ ext {
     extName = 'Little Tyrant'
     extClass = '.LittleTyrant'
     themePkg = 'madara'
-    baseUrl = 'https://www.tiraninha.baby'
-    overrideVersionCode = 0
+    baseUrl = 'https://tiraninha.baby'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
