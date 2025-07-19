@@ -60,9 +60,11 @@ function loadPic(pageIndex) {
     } else if (mh_loading?.style.display != 'none') {
         mh_loading.scrollIntoView()
     } else if (mh_loaderr?.style.display != 'none') {
+        mh_loaderr.scrollIntoView()
         const button = mh_loaderr.querySelector('.mh_btn')
         if (button) {
             __cr.reloadPic(button, page)
+            scrollIntoPage(pageIndex)
         }
     } else { // fallback
         scrollIntoPage(pageIndex)
