@@ -45,13 +45,13 @@ class NetTruyenCO : WPComics(
     // Build and return the request to fetch all chapters in JSON form
     override fun chapterListRequest(manga: SManga): Request {
         val slugAndId = manga.url.substringAfterLast("/") // e.g. "slug-12345"
-        val comicId = slugAndId.substringAfterLast("-").toInt() // 12345
+        val comicId = slugAndId.substringAfterLast("-") // 12345
         val slug = slugAndId.substringBeforeLast("-") // "slug"
         val url = baseUrl.toHttpUrl()
             .newBuilder()
             .addPathSegments("Comic/Services/ComicService.asmx/ChapterList")
             .addQueryParameter("slug", slug)
-            .addQueryParameter("comicId", comicId.toString())
+            .addQueryParameter("comicId", comicId)
             .build()
         return GET(url, headers)
     }
