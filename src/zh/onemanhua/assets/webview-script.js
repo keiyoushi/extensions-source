@@ -80,13 +80,9 @@ const observer = new MutationObserver(() => {
         const images = document.querySelectorAll("div.mh_comicpic img")
         images.forEach(img => {
             if (!img._Hijacked) {
-                const originalSet = Object.getOwnPropertyDescriptor(img['__proto__'], 'src')
-                img._src = ''
-                Object.defineProperty(img, 'src', {
-                    enumerable: originalSet.enumerable,
-                    get: function () {
-                        return this._src
-                    },
+                const originalSrc = Object.getOwnPropertyDescriptor(img['__proto__'], "src")
+                Object.defineProperty(img, "src", {
+                    ...originalSrc,
                     set: function (value) {
                         fetch(value).then(response => {
                             return response.blob()
@@ -95,8 +91,7 @@ const observer = new MutationObserver(() => {
                             reader.onloadend = () => { window.__interface__.setPage(this.parentElement.getAttribute('p') - 1, reader.result) }
                             reader.readAsDataURL(blob)
                         })
-                        this._src = value
-                        originalSet.set.call(this, this._src)
+                        originalSrc.set.call(this, value)
                     }
                 })
                 img._Hijacked = true
