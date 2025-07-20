@@ -63,10 +63,7 @@ function loadPic(pageIndex) {
     } else if (mh_loaderr?.style.display != 'none') {
         mh_loaderr.scrollIntoView()
         mh_loaderr.dispatchEvent(new CustomEvent('scroll'))
-        const button = mh_loaderr.querySelector('.mh_btn')
-        if (button) {
-            __cr.reloadPic(button, page)
-        }
+        mh_loaderr.querySelector('.mh_btn')?.click()
     } else {
         scroll()
     }
