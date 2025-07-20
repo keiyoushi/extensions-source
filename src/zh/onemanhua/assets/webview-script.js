@@ -15,21 +15,58 @@ function waitForElm(selector) {
         })
     })
 }
+let scrolled = false
+let scrolling = false
+async function scroll() {
+    if (scrolling) return
+    window.scrollTo(0, 0)
+    await new Promise((resolve, reject) => {
+        try {
+            const maxScroll = Number.MAX_SAFE_INTEGER
+            let lastScroll = 0
+            scrolling = true
+            const interval = setInterval(() => {
+                window.scrollBy(0, 100)
+                const scrollTop = document.documentElement.scrollTop
+                if (scrollTop === maxScroll || scrollTop === lastScroll) {
+                    clearInterval(interval)
+                    resolve()
+                    scrolling = false
+                    scrolled = true
+                } else {
+                    lastScroll = scrollTop
+                }
+            }, 100)
+        } catch (err) {
+            reject(err.toString())
+        }
+    })
+}
 function loadPic(pageIndex) {
+    if (!scrolled) {
+        scroll()
+    }
+    if (scrolling) return
+    document.querySelector("#mangalist").dispatchEvent(new CustomEvent('scroll'))
     const page = pageIndex + 1
     const target = document.querySelector(`div.mh_comicpic[p="${page}"] img[src]`)
     const mh_loading = document.querySelector(`div.mh_comicpic[p="${page}"] .mh_loading`)
     const mh_loaderr = document.querySelector(`div.mh_comicpic[p="${page}"] .mh_loaderr`)
     if (target) {
         target.scrollIntoView()
+        target.dispatchEvent(new CustomEvent('scroll'))
     } else if (mh_loading?.style.display != 'none') {
         mh_loading.scrollIntoView()
+        mh_loading.dispatchEvent(new CustomEvent('scroll'))
     } else if (mh_loaderr?.style.display != 'none') {
         mh_loaderr.scrollIntoView()
+        mh_loaderr.dispatchEvent(new CustomEvent('scroll'))
         const button = mh_loaderr.querySelector('.mh_btn')
         if (button) {
             __cr.reloadPic(button, page)
         }
+    } else {
+        scroll()
     }
 }
 window.__ad = () => { }
