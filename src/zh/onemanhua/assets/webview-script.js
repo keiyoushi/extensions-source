@@ -26,7 +26,7 @@ async function scroll() {
             let lastScroll = 0
             scrolling = true
             const interval = setInterval(() => {
-                window.scrollBy(0, 50)
+                window.scrollBy(0, 25)
                 const scrollTop = document.documentElement.scrollTop
                 if (scrollTop === maxScroll || scrollTop === lastScroll) {
                     clearInterval(interval)
@@ -36,7 +36,7 @@ async function scroll() {
                 } else {
                     lastScroll = scrollTop
                 }
-            }, 50)
+            }, 25)
         } catch (err) {
             reject(err.toString())
         }
