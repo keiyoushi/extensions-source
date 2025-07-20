@@ -17,10 +17,12 @@ class SearchDto(
 class MangaDto(
     private val title: String,
     private val slug: String,
+    private val thumbnail: String,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(cdnUrl: String) = SManga.create().apply {
         title = this@MangaDto.title
         url = "/$slug.html"
+        thumbnail_url = "$cdnUrl/uploads/$thumbnail"
     }
 }
 

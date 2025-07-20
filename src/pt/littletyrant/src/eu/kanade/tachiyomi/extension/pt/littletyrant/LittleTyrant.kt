@@ -7,7 +7,7 @@ import java.util.Locale
 
 class LittleTyrant : Madara(
     "Little Tyrant",
-    "https://www.tiraninha.baby",
+    "https://tiraninha.baby",
     "pt-BR",
     dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
 ) {
