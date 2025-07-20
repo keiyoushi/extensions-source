@@ -61,8 +61,8 @@ abstract class ColaManga(
             if (size <= 5) return false
             handler.post {
                 eldest.value.destroy()
-                handler.removeCallbacksAndMessages(eldest.key)
             }
+            handler.removeCallbacksAndMessages(eldest.key)
             return true
         }
     }
@@ -321,7 +321,6 @@ abstract class ColaManga(
                 pageListParse(chapterUrl)
             }
         }
-
         return Observable.create { emitter ->
             val imageUrl = pagesMap[chapterUrl]?.get(page.index)?.imageUrl
             if (imageUrl == null) {
@@ -332,9 +331,9 @@ abstract class ColaManga(
             GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
                 while (true) {
-                    val imageUrl = pagesMap[chapterUrl]?.get(page.index)?.imageUrl
-                    if (imageUrl != null && imageUrl.startsWith("data")) {
-                        emitter.onNext("https://127.0.0.1/?image${imageUrl.substringAfter(":")}")
+                    val url = pagesMap[chapterUrl]?.get(page.index)?.imageUrl
+                    if (url != null && url.startsWith("data")) {
+                        emitter.onNext("https://127.0.0.1/?image${url.substringAfter(":")}")
                         emitter.onCompleted()
                         break
                     }
