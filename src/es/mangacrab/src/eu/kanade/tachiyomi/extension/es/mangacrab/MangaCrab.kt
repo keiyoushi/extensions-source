@@ -10,13 +10,14 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferences
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class MangaCrab :
     Madara(
         "Manga Crab",
-        "https://mangacrab.org",
+        "https://mangacrab.topmanhuas.org",
         "es",
         SimpleDateFormat("dd/MM/yyyy", Locale("es")),
     ),
@@ -43,5 +44,18 @@ class MangaCrab :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         addRandomUAPreferenceToScreen(screen)
+    }
+
+    override val pageListParseSelector = "div.page-break:not([style*='display:none'])"
+
+    override fun imageFromElement(element: Element): String? {
+        return when {
+            element.hasAttr("data-src") -> element.attr("abs:data-src")
+            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
+            element.hasAttr("srcset") -> element.attr("abs:srcset").getSrcSetImage()
+            element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
+            element.hasAttr("data-src-base64") -> element.attr("abs:data-src-base64")
+            else -> element.attr("abs:src")
+        }
     }
 }
