@@ -35,3 +35,8 @@ class ChapterDTO(
     val title: String,
     val createdAt: String,
 )
+
+@Serializable
+class PageListDTO(
+    val pages: List<String>,
+)

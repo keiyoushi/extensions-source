@@ -16,7 +16,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -110,12 +109,8 @@ class MiMiHentai : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val json = JSONObject(response.body.string())
-        val pagesArray = json.getJSONArray("pages")
-        val listUrl = (0 until pagesArray.length()).map { i ->
-            pagesArray.getString(i)
-        }
-        return listUrl.mapIndexed { index, url ->
+        val res = response.parseAs<PageListDTO>()
+        return res.pages.mapIndexed { index, url ->
             Page(index, imageUrl = url)
         }
     }
