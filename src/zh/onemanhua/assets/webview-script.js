@@ -15,38 +15,40 @@ function waitForElm(selector) {
         })
     })
 }
-let scrolled = false
+let hasImgReady = false
+let scrolledOnce = false
 let scrolling = false
 async function scroll() {
-    if (scrolling) return
+    if (scrolling || !hasImgReady) return
+    scrolling = true
     window.scrollTo(0, 0)
     await new Promise((resolve, reject) => {
         try {
             const maxScroll = Number.MAX_SAFE_INTEGER
             let lastScroll = 0
-            scrolling = true
             const interval = setInterval(() => {
-                window.scrollBy(0, 25)
+                window.scrollBy(0, 100)
                 const scrollTop = document.documentElement.scrollTop
                 if (scrollTop === maxScroll || scrollTop === lastScroll) {
                     clearInterval(interval)
-                    resolve()
                     scrolling = false
-                    scrolled = true
+                    scrolledOnce = true
+                    resolve()
                 } else {
                     lastScroll = scrollTop
                 }
-            }, 25)
+            }, 100)
         } catch (err) {
             reject(err.toString())
         }
     })
 }
 function loadPic(pageIndex) {
-    if (!scrolled) {
+    if (scrolling || !hasImgReady) return
+    if (!scrolledOnce) {
         scroll()
+        return
     }
-    if (scrolling) return
     document.querySelector("#mangalist").dispatchEvent(new CustomEvent('scroll'))
     const page = pageIndex + 1
     const target = document.querySelector(`div.mh_comicpic[p="${page}"] img[src]`)
@@ -88,7 +90,10 @@ const observer = new MutationObserver(() => {
                             return response.blob()
                         }).then(blob => {
                             const reader = new FileReader()
-                            reader.onloadend = () => { window.__interface__.setPage(this.parentElement.getAttribute('p') - 1, reader.result) }
+                            reader.onloadend = () => {
+                                window.__interface__.setPage(this.parentElement.getAttribute('p') - 1, reader.result)
+                                hasImgReady = true
+                            }
                             reader.readAsDataURL(blob)
                         })
                         originalSrc.set.call(this, value)
