@@ -1,6 +1,6 @@
 ext {
     extName = 'Lector MOnline / MangasX'
-    extClass = '.LectorMOnlineFactory                                                                               '
+    extClass = '.LectorMOnlineFactory'
     extVersionCode = 1
     isNsfw = true
 }
