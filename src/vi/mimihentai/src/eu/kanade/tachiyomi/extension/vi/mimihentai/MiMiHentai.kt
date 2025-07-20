@@ -56,12 +56,14 @@ class MiMiHentai : HttpSource() {
             SManga.create().apply {
                 title = it.title
                 thumbnail_url = it.coverUrl
-                setUrlWithoutDomain("$baseUrl/g/${it.id}")
+                setUrlWithoutDomain("/g/${it.id}")
             }
         }
         val hasNextPage = res.currentPage != res.totalPage
         return MangasPage(manga, hasNextPage)
     }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun chapterListRequest(manga: SManga): Request {
         val id = manga.url.substringAfterLast("/")
@@ -78,7 +80,7 @@ class MiMiHentai : HttpSource() {
             SChapter.create().apply {
                 name = chapterDTO.title
                 date_upload = dateFormat.tryParse(chapterDTO.createdAt)
-                setUrlWithoutDomain("/api/v1/manga/chapter?id=" + chapterDTO.id)
+                setUrlWithoutDomain("$apiUrl/chapter?id=${chapterDTO.id}")
             }
         }
     }

@@ -28,3 +28,10 @@ class Author(
 class Genre(
     val name: String,
 )
+
+@Serializable
+class ChapterDTO(
+    val id: Long,
+    val title: String,
+    val createdAt: String,
+)
