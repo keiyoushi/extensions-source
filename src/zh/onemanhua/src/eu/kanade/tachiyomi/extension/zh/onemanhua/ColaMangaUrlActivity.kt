@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.colamanga
+package eu.kanade.tachiyomi.extension.zh.onemanhua
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -13,7 +13,7 @@ class ColaMangaUrlActivity : Activity() {
 
         val pathSegments = intent?.data?.pathSegments
 
-        if (pathSegments != null && pathSegments.size > 0) {
+        if (pathSegments != null && pathSegments.isNotEmpty()) {
             val intent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
                 putExtra("query", "${ColaManga.PREFIX_SLUG_SEARCH}${pathSegments[0]}")
