@@ -55,11 +55,13 @@ abstract class ColaManga(
 
     private var pagesMap: MutableMap<String, ArrayList<Page>> = mutableMapOf()
     private val preferences by getPreferencesLazy()
+    private val handler = Handler(Looper.getMainLooper())
     private val webViewCache = object : LinkedHashMap<String, WebView>() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, WebView>): Boolean {
             if (size <= 5) return false
             handler.post {
                 eldest.value.destroy()
+                handler.removeCallbacksAndMessages(eldest.key)
             }
             return true
         }
@@ -199,7 +201,6 @@ abstract class ColaManga(
         name = element.attr("title")
     }
 
-    private val handler = Handler(Looper.getMainLooper())
     private val webViewIdleDelayMillis: Long = 1800000
     private fun postDelayed(
         r: Runnable,
@@ -217,14 +218,18 @@ abstract class ColaManga(
     override fun pageListParse(document: Document) = throw UnsupportedOperationException()
     private val baseUrlTopPrivateDomain = baseUrl.toHttpUrl().topPrivateDomain()
     private val emptyResourceResponse = WebResourceResponse(null, null, 204, "No Content", null, null)
+    private fun destroyWebView(chapterUrl: String) {
+        handler.post { webViewCache.remove(chapterUrl)?.destroy() }
+        handler.removeCallbacksAndMessages(chapterUrl)
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun pageListParse(chapterUrl: String): List<Page> {
         val url = baseUrl + chapterUrl
         val latch = CountDownLatch(1)
-        val jsInterface = JsInterface(latch, chapterUrl, pagesMap)
+        val jsInterface = JsInterface(latch, chapterUrl, pagesMap, webViewCache)
+        destroyWebView(chapterUrl)
         handler.post {
-            webViewCache.remove(chapterUrl)?.destroy()
             val webview = WebView(Injekt.get<Application>())
             webViewCache.put(chapterUrl, webview)
             webview.settings.domStorageEnabled = true
@@ -272,18 +277,16 @@ abstract class ColaManga(
                     view: WebView,
                     detail: RenderProcessGoneDetail,
                 ): Boolean {
-                    webview.destroy()
-                    webViewCache.remove(chapterUrl)
+                    destroyWebView(chapterUrl)
                     return super.onRenderProcessGone(view, detail)
                 }
             }
             webview.loadUrl(url)
-            jsInterface.webView = webview
         }
 
         postDelayed(
             {
-                webViewCache.remove(chapterUrl)?.destroy()
+                destroyWebView(chapterUrl)
             },
             chapterUrl,
             webViewIdleDelayMillis,
@@ -292,12 +295,13 @@ abstract class ColaManga(
 
         latch.await(30L, TimeUnit.SECONDS)
         if (latch.count == 1L) {
-            handler.post {
-                webViewCache.remove(chapterUrl)?.destroy()
-            }
+            destroyWebView(chapterUrl)
             throw Exception("加载章节超时")
         }
-        return pagesMap[chapterUrl]?.toList() ?: emptyList()
+        return pagesMap[chapterUrl]?.toList() ?: run {
+            destroyWebView(chapterUrl)
+            throw Exception("加载章节失败：页面列表为空")
+        }
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
@@ -308,37 +312,34 @@ abstract class ColaManga(
 
     @OptIn(DelicateCoroutinesApi::class)
     override fun fetchImageUrl(page: Page): Observable<String> {
-        val chapterUrl: String = page.url
-        if (webViewCache[chapterUrl] is WebView) {
+        val chapterUrl = page.url
+        webViewCache[chapterUrl]?.let {
             handler.removeCallbacksAndMessages(chapterUrl)
-            postDelayed(
-                {
-                    webViewCache.remove(chapterUrl)?.destroy()
-                },
-                chapterUrl,
-                webViewIdleDelayMillis,
-                handler,
-            )
-        } else {
-            pageListParse(chapterUrl)
+            postDelayed({ destroyWebView(chapterUrl) }, chapterUrl, webViewIdleDelayMillis, handler)
+        } ?: pagesMap[chapterUrl]?.let { pages ->
+            if (pages.any { it.imageUrl == null }) {
+                pageListParse(chapterUrl)
+            }
         }
+
         return Observable.create { emitter ->
-            handler.post {
-                webViewCache[chapterUrl]?.evaluateJavascript("loadPic(${page.index})") {}
+            val imageUrl = pagesMap[chapterUrl]?.get(page.index)?.imageUrl
+            if (imageUrl == null) {
+                handler.post {
+                    webViewCache[chapterUrl]?.evaluateJavascript("loadPic(${page.index})") {}
+                }
             }
             GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
                 while (true) {
-                    val result = pagesMap[chapterUrl]?.get(page.index)?.imageUrl
-                    if (result != null && result.startsWith("data")) {
-                        emitter.onNext("https://127.0.0.1/?image" + result.substringAfter(":"))
+                    val imageUrl = pagesMap[chapterUrl]?.get(page.index)?.imageUrl
+                    if (imageUrl != null && imageUrl.startsWith("data")) {
+                        emitter.onNext("https://127.0.0.1/?image${imageUrl.substringAfter(":")}")
                         emitter.onCompleted()
                         break
                     }
                     if (System.currentTimeMillis() - startTime > 30000) {
-                        handler.post {
-                            webViewCache[chapterUrl]?.evaluateJavascript("scroll()") {}
-                        }
+                        handler.post { webViewCache[chapterUrl]?.evaluateJavascript("scroll()") {} }
                         emitter.onError(Exception("加载图片超时"))
                         break
                     }
@@ -393,39 +394,36 @@ abstract class ColaManga(
     private class JsInterface(
         private var latch: CountDownLatch,
         private val chapterUrl: String,
-        private val pages: MutableMap<String, ArrayList<Page>>,
+        private val pagesMap: MutableMap<String, ArrayList<Page>>,
+        private val webViewCache: LinkedHashMap<String, WebView>,
     ) {
         val handler = Handler(Looper.getMainLooper())
-        var webView: WebView? = null
         var pageCount = 0
             private set
 
         @JavascriptInterface
         fun setPageCount(count: Int) {
+            if (count <= 0) {
+                latch.countDown()
+                return
+            }
             val pageList = ArrayList<Page>(count).apply {
                 for (i in 0 until count) {
                     add(Page(i, url = chapterUrl))
                 }
             }
-            pages[chapterUrl] = pageList
-            latch.countDown()
-            if (count == 0) {
-                handler.post {
-                    webView?.destroy()
-                    webView = null
-                }
-            }
+            pagesMap[chapterUrl] = pageList
             pageCount = count
+            latch.countDown()
         }
 
         @JavascriptInterface
         fun setPage(index: Int, url: String) {
-            pages[chapterUrl]?.get(index)?.let { it.imageUrl = url }
-            pages[chapterUrl]?.let {
+            pagesMap[chapterUrl]?.get(index)?.let { it.imageUrl = url }
+            pagesMap[chapterUrl]?.let {
                 if (it.all { page -> page.imageUrl != null }) {
                     handler.post {
-                        webView?.destroy()
-                        webView = null
+                        webViewCache.remove(chapterUrl)?.destroy()
                     }
                     handler.removeCallbacksAndMessages(chapterUrl)
                 }
