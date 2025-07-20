@@ -1,8 +1,10 @@
 ext {
-    extName = 'Lector MOnline / MangasX'
-    extClass = '.LectorMOnlineFactory'
-    extVersionCode = 1
-    isNsfw = true
+    extName = 'Lector MOnline'
+    extClass = '.LectorMOnline'
+    themePkg = 'lectormonline'
+    baseUrl = 'https://www.lectormangas.online'
+    overrideVersionCode = 0
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
