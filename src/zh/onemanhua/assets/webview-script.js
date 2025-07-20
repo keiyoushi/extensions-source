@@ -71,7 +71,7 @@ function loadPic(pageIndex) {
         scroll()
     }
 }
-window.__ad = () => { }
+window.__ad = () => { } // Ad placeholder to prevent site anti-ad measures
 let pageCount = 0
 waitForElm("#mangalist").then(() => {
     pageCount = parseInt($.cookie(__cad.getCookieValue()[1] + mh_info.pageid) || "0")
