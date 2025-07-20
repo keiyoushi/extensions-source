@@ -232,16 +232,13 @@ abstract class ColaManga(
             webview.settings.javaScriptEnabled = true
             webview.addJavascriptInterface(jsInterface, interfaceName)
             webview.webViewClient = object : WebViewClient() {
-                override fun onLoadResource(view: WebView?, url: String?) {
-                    if (url == "$baseUrl/counting") { // the time when document.body is ready
-                        view?.evaluateJavascript(
-                            webviewScript.replace(
-                                "__interface__",
-                                interfaceName,
-                            ),
-                        ) {}
-                    }
-                    super.onLoadResource(view, url)
+                override fun onPageCommitVisible(view: WebView?, url: String?) {
+                    view?.evaluateJavascript(
+                        webviewScript.replace(
+                            "__interface__",
+                            interfaceName,
+                        ),
+                    ) {}
                 }
 
                 override fun shouldOverrideUrlLoading(
