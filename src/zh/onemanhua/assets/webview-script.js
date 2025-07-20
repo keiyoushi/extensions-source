@@ -26,7 +26,7 @@ async function scroll() {
             let lastScroll = 0
             scrolling = true
             const interval = setInterval(() => {
-                window.scrollBy(0, 100)
+                window.scrollBy(0, 50)
                 const scrollTop = document.documentElement.scrollTop
                 if (scrollTop === maxScroll || scrollTop === lastScroll) {
                     clearInterval(interval)
@@ -36,7 +36,7 @@ async function scroll() {
                 } else {
                     lastScroll = scrollTop
                 }
-            }, 100)
+            }, 50)
         } catch (err) {
             reject(err.toString())
         }
@@ -80,7 +80,7 @@ const observer = new MutationObserver(() => {
         const images = document.querySelectorAll("div.mh_comicpic img")
         images.forEach(img => {
             if (!img._Hijacked) {
-                const originalSrc = Object.getOwnPropertyDescriptor(img['__proto__'], "src")
+                const originalSrc = Object.getOwnPropertyDescriptor(img.__proto__, "src")
                 Object.defineProperty(img, "src", {
                     ...originalSrc,
                     set: function (value) {
