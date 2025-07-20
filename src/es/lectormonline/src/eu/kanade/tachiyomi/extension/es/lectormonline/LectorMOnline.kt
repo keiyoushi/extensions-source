@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.es.lectormonline
 
-import android.content.SharedPreferences
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,7 +10,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -23,30 +18,26 @@ import org.jsoup.nodes.Document
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
-class LectorMOnline : HttpSource(), ConfigurableSource {
-
-    override val name = "Lector MOnline"
-
-    override val baseUrl = "https://www.lectormangas.online"
-
-    override val lang = "es"
+class LectorMOnline(
+    override val name: String,
+    override val baseUrl: String,
+    override val lang: String = "es",
+) : HttpSource() {
 
     override val supportsLatest = true
-
-    private val preferences = getPreferences()
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
         .build()
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/comics?sort=views&page=$page".appendNsfwQueryParameter(), headers)
+        return GET("$baseUrl/comics?sort=views&page=$page", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/comics?page=$page".appendNsfwQueryParameter(), headers)
+        return GET("$baseUrl/comics?page=$page", headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
@@ -70,15 +61,11 @@ class LectorMOnline : HttpSource(), ConfigurableSource {
                 is GenreFilter -> {
                     val selectedGenre = filter.toUriPart()
                     if (selectedGenre.isNotEmpty()) {
-                        return GET("$baseUrl/genres/$selectedGenre?page=$page".appendNsfwQueryParameter(), headers)
+                        return GET("$baseUrl/genres/$selectedGenre?page=$page", headers)
                     }
                 }
                 else -> { }
             }
-        }
-
-        if (preferences.showNsfwPref()) {
-            url.addQueryParameter("content", "adulto")
         }
 
         return GET(url.build(), headers)
@@ -201,24 +188,6 @@ class LectorMOnline : HttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_NSFW_PREF
-            title = "Mostrar contenido NSFW"
-            setDefaultValue(false)
-        }.also { screen.addPreference(it) }
-    }
-
-    private fun String.appendNsfwQueryParameter(): String {
-        return if (preferences.showNsfwPref()) {
-            "$this&content=adulto"
-        } else {
-            this
-        }
-    }
-
-    private fun SharedPreferences.showNsfwPref() = this.getBoolean(SHOW_NSFW_PREF, false)
-
     private fun String.unescape(): String {
         return UNESCAPE_REGEX.replace(this, "$1")
     }
@@ -226,6 +195,5 @@ class LectorMOnline : HttpSource(), ConfigurableSource {
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
         private val COMICS_LIST_REGEX = """\\"comicsData\\":(\{.*?\}),\\"searchParams""".toRegex()
-        private const val SHOW_NSFW_PREF = "pref_show_nsfw"
     }
 }
