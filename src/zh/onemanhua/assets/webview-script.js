@@ -33,40 +33,41 @@ function loadPic(pageIndex) {
     }
 }
 window.__ad = () => { }
-waitForElm("#mangalist").then((elm) => {
-    const pageCount = parseInt($.cookie(__cad.getCookieValue()[1] + mh_info.pageid) || "0")
+let pageCount = 0
+waitForElm("#mangalist").then(() => {
+    pageCount = parseInt($.cookie(__cad.getCookieValue()[1] + mh_info.pageid) || "0")
     window.__interface__.setPageCount(pageCount)
-    const observer = new MutationObserver(() => {
-        if (document.querySelector("div.mh_comicpic img")) {
-            const images = document.querySelectorAll("div.mh_comicpic img")
-            images.forEach(img => {
-                if (!img._Hijacked) {
-                    const originalSet = Object.getOwnPropertyDescriptor(img['__proto__'], 'src')
-                    img._src = ''
-                    Object.defineProperty(img, 'src', {
-                        enumerable: originalSet.enumerable,
-                        get: function () {
-                            return this._src
-                        },
-                        set: function (value) {
-                            fetch(value).then(response => {
-                                return response.blob()
-                            }).then(blob => {
-                                const reader = new FileReader()
-                                reader.onloadend = () => { window.__interface__.setPage(this.parentElement.getAttribute('p') - 1, reader.result) }
-                                reader.readAsDataURL(blob)
-                            })
-                            this._src = value
-                            originalSet.set.call(this, this._src)
-                        }
-                    })
-                    img._Hijacked = true
-                }
-            })
-            if (images.length >= pageCount) {
-                observer.disconnect()
-            }
-        }
-    })
-    observer.observe(elm, { subtree: true, childList: true })
 })
+const observer = new MutationObserver(() => {
+    if (document.querySelector("div.mh_comicpic img")) {
+        const images = document.querySelectorAll("div.mh_comicpic img")
+        images.forEach(img => {
+            if (!img._Hijacked) {
+                const originalSet = Object.getOwnPropertyDescriptor(img['__proto__'], 'src')
+                img._src = ''
+                Object.defineProperty(img, 'src', {
+                    enumerable: originalSet.enumerable,
+                    get: function () {
+                        return this._src
+                    },
+                    set: function (value) {
+                        fetch(value).then(response => {
+                            return response.blob()
+                        }).then(blob => {
+                            const reader = new FileReader()
+                            reader.onloadend = () => { window.__interface__.setPage(this.parentElement.getAttribute('p') - 1, reader.result) }
+                            reader.readAsDataURL(blob)
+                        })
+                        this._src = value
+                        originalSet.set.call(this, this._src)
+                    }
+                })
+                img._Hijacked = true
+            }
+        })
+        if (images.length >= pageCount) {
+            observer.disconnect()
+        }
+    }
+})
+observer.observe(document.body, { subtree: true, childList: true })
