@@ -228,7 +228,6 @@ abstract class ColaManga(
         handler.removeCallbacksAndMessages(chapterUrl)
     }
 
-
     @SuppressLint("SetJavaScriptEnabled")
     private fun pageListParse(chapterUrl: String): List<Page> {
         val url = baseUrl + chapterUrl
@@ -398,10 +397,6 @@ abstract class ColaManga(
         private val pagesMap: MutableMap<String, ArrayList<Page>>,
         private val webViewCache: LinkedHashMap<String, WebView>,
     ) {
-        val handler = Handler(Looper.getMainLooper())
-        var pageCount = 0
-            private set
-
         @JavascriptInterface
         fun setPageCount(count: Int) {
             if (count <= 0) {
@@ -414,15 +409,16 @@ abstract class ColaManga(
                 }
             }
             pagesMap[chapterUrl] = pageList
-            pageCount = count
             latch.countDown()
         }
 
         @JavascriptInterface
         fun setPage(index: Int, url: String) {
+            latch.await()
             pagesMap[chapterUrl]?.get(index)?.let { it.imageUrl = url }
             pagesMap[chapterUrl]?.let {
                 if (it.all { page -> page.imageUrl != null }) {
+                    val handler = Handler(Looper.getMainLooper())
                     handler.post {
                         webViewCache.remove(chapterUrl)?.destroy()
                     }
