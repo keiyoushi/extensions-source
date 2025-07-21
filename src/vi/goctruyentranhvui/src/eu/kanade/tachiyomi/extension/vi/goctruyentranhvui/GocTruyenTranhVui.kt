@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -17,8 +16,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -44,26 +41,19 @@ class GocTruyenTranhVui() : HttpSource() {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val urls = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()
-        val mangaId = checkChapterLists(urls)
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val res = response.asJsoup()
+        val mangaUrl = response.request.url
+        val mangaId = res.selectFirst("input[id=comic-id-comment]")!!.attr("value")
         return client.newCall(GET("$baseUrl/api/comic/$mangaId/chapter?offset=21&limit=-1", headers))
-            .asObservableSuccess()
-            .map { response ->
-                val res = response.parseAs<ChapterDTO>()
-                res.result.chapters.map { itm ->
-                    SChapter.create().apply {
-                        name = itm.numberChapter
-                        date_upload = dateFormat.tryParse(itm.stringUpdateTime)
-                        setUrlWithoutDomain("$baseUrl${manga.url}/chuong-${itm.numberChapter}")
-                    }
+            .execute().parseAs<ChapterDTO>().result.chapters.map { itm ->
+                SChapter.create().apply {
+                    name = itm.numberChapter
+                    date_upload = dateFormat.tryParse(itm.stringUpdateTime)
+                    setUrlWithoutDomain("$mangaUrl/chuong-${itm.numberChapter}")
                 }
             }
     }
-
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
-
-    private fun checkChapterLists(document: Document) = document.selectFirst("input[id=comic-id-comment]")!!.attr("value")
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val element = response.asJsoup()
@@ -108,6 +98,7 @@ class GocTruyenTranhVui() : HttpSource() {
         val pattern = Regex("chapterJson:\\s*`(.*?)`", RegexOption.DOT_MATCHES_ALL)
         val match = pattern.find(html)
         val jsonString = match?.groups?.get(1)?.value ?: error("Không tìm thấy chapterJson")
+        if (jsonString.isEmpty()) error("Không có nội dung. Hãy đăng nhập trong WebView") // loginRequired
         val result = jsonString.parseAs<ChapterWrapper>()
         val imageList = result.body.result.data
         return imageList.mapIndexed { i, url ->
