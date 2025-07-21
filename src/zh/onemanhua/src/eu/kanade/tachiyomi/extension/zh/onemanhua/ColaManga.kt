@@ -52,21 +52,7 @@ abstract class ColaManga(
 ) : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
-
-    private var pagesMap: MutableMap<String, ArrayList<Page>> = mutableMapOf()
     private val preferences by getPreferencesLazy()
-    private val handler = Handler(Looper.getMainLooper())
-    private val webViewCache = object : LinkedHashMap<String, WebView>() {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, WebView>): Boolean {
-            if (size <= 5) return false
-            handler.post {
-                eldest.value.destroy()
-            }
-            handler.removeCallbacksAndMessages(eldest.key)
-            return true
-        }
-    }
-    private val interfaceName = randomString()
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(
@@ -201,7 +187,25 @@ abstract class ColaManga(
         name = element.attr("title")
     }
 
+    private var pagesMap: MutableMap<String, ArrayList<Page>> = mutableMapOf()
+    private val handler = Handler(Looper.getMainLooper())
+    private val webViewCache = object : LinkedHashMap<String, WebView>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, WebView>): Boolean {
+            if (size <= 5) return false
+            handler.post {
+                eldest.value.destroy()
+            }
+            handler.removeCallbacksAndMessages(eldest.key)
+            return true
+        }
+    }
+    private val interfaceName = randomString()
     private val webViewIdleDelayMillis: Long = 1800000
+    private val webviewScript by lazy {
+        javaClass.getResource("/assets/webview-script.js")?.readText() ?: throw Exception("WebView 脚本不存在")
+    }
+    private val baseUrlTopPrivateDomain = baseUrl.toHttpUrl().topPrivateDomain()
+    private val emptyResourceResponse = WebResourceResponse(null, null, 204, "No Content", null, null)
     private fun postDelayed(
         r: Runnable,
         token: Any?,
@@ -215,13 +219,12 @@ abstract class ColaManga(
         }
     }
 
-    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
-    private val baseUrlTopPrivateDomain = baseUrl.toHttpUrl().topPrivateDomain()
-    private val emptyResourceResponse = WebResourceResponse(null, null, 204, "No Content", null, null)
     private fun destroyWebView(chapterUrl: String) {
         handler.post { webViewCache.remove(chapterUrl)?.destroy() }
         handler.removeCallbacksAndMessages(chapterUrl)
     }
+
+    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun pageListParse(chapterUrl: String): List<Page> {
@@ -375,10 +378,6 @@ abstract class ColaManga(
 
             setDefaultValue(RATE_LIMIT_PERIOD_PREF_DEFAULT)
         }.also(screen::addPreference)
-    }
-
-    private val webviewScript by lazy {
-        javaClass.getResource("/assets/webview-script.js")?.readText() ?: throw Exception("WebView 脚本不存在")
     }
 
     private fun randomString() = buildString(15) {
