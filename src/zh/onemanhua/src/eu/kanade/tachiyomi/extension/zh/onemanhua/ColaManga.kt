@@ -52,6 +52,7 @@ abstract class ColaManga(
 ) : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
+
     private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
@@ -187,6 +188,8 @@ abstract class ColaManga(
         name = element.attr("title")
     }
 
+    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
+
     private var pagesMap: MutableMap<String, ArrayList<Page>> = mutableMapOf()
     private val handler = Handler(Looper.getMainLooper())
     private val webViewCache = object : LinkedHashMap<String, WebView>() {
@@ -206,6 +209,7 @@ abstract class ColaManga(
     }
     private val baseUrlTopPrivateDomain = baseUrl.toHttpUrl().topPrivateDomain()
     private val emptyResourceResponse = WebResourceResponse(null, null, 204, "No Content", null, null)
+
     private fun postDelayed(
         r: Runnable,
         token: Any?,
@@ -224,7 +228,6 @@ abstract class ColaManga(
         handler.removeCallbacksAndMessages(chapterUrl)
     }
 
-    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun pageListParse(chapterUrl: String): List<Page> {
