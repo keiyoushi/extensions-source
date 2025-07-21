@@ -10,10 +10,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -112,11 +112,8 @@ class GocTruyenTranhVui() : ParsedHttpSource() {
         val html = response.body.string()
         val pattern = Regex("chapterJson:\\s*`(.*?)`", RegexOption.DOT_MATCHES_ALL)
         val match = pattern.find(html)
-        val json = Json {
-            ignoreUnknownKeys = true
-        }
         val jsonString = match?.groups?.get(1)?.value ?: error("Không tìm thấy chapterJson")
-        val result = json.decodeFromString<ChapterWrapper>(jsonString)
+        val result = jsonInstance.decodeFromString<ChapterWrapper>(jsonString)
         val imageList = result.body.result.data
         return imageList.mapIndexed { i, url ->
             Page(i, imageUrl = url)
