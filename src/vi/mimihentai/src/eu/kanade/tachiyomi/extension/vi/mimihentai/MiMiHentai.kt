@@ -149,7 +149,6 @@ class MiMiHentai : HttpSource() {
     private fun searchMangaByIdParse(response: Response, id: String): MangasPage {
         val details = mangaDetailsParse(response)
         details.url = "/info/$id"
-        client.newCall(GET("$apiUrl/gallery/$id", headers)).asObservableSuccess().map { resp -> chapterListParse(resp) }
         return MangasPage(listOf(details), false)
     }
 
