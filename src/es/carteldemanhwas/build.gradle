@@ -2,8 +2,8 @@ ext {
     extName = 'Cartel de Manhwas'
     extClass = '.CarteldeManhwas'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://carteldemanhwas.com'
-    overrideVersionCode = 6
+    baseUrl = 'https://carteldemanhwas.net'
+    overrideVersionCode = 7
     isNsfw = true
 }
 

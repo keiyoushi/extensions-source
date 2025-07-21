@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.colamanga
+package eu.kanade.tachiyomi.extension.zh.onemanhua
 
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
