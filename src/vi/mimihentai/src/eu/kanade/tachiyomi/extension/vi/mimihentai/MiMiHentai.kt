@@ -70,7 +70,7 @@ class MiMiHentai : HttpSource() {
 
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
-    override fun imageUrlParse(response: Response): String = ""
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = manga.url.substringAfterLast("/")
