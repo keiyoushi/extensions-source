@@ -46,18 +46,11 @@ class MiMiHentai : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val res = response.parseAs<MangaDTO>()
-        val manga = res.data.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = it.coverUrl
-                setUrlWithoutDomain("/g/${it.id}")
-            }
-        }
         val hasNextPage = res.currentPage != res.totalPage
-        return MangasPage(manga, hasNextPage)
+        return MangasPage(res.data.map { it.toManga() }, hasNextPage)
     }
 
-    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/g/${manga.url}"
 
     override fun chapterListRequest(manga: SManga): Request {
         val id = manga.url.substringAfterLast("/")
@@ -96,7 +89,7 @@ class MiMiHentai : HttpSource() {
                 author = manga.authors.joinToString { i -> i.name }
                 genre = manga.genres.joinToString { i -> i.name }
                 thumbnail_url = manga.coverUrl
-                title = manga.title
+                title = manga.titles
             }
         }
     }

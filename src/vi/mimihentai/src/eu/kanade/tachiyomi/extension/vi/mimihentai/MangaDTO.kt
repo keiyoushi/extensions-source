@@ -1,27 +1,36 @@
 package eu.kanade.tachiyomi.extension.vi.mimihentai
 
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
 class MangaDTO(
-    val data: ArrayList<Manga> = arrayListOf(),
+    val data: List<Manga>,
     val totalPage: Long,
     val currentPage: Long,
 )
 
 @Serializable
 class Manga(
-    val id: Long,
-    val title: String,
+    private val id: Long,
+    @SerialName("title")
+    val titles: String,
     val coverUrl: String,
     val description: String,
-    val authors: ArrayList<Author> = arrayListOf(),
-    val genres: ArrayList<Genre> = arrayListOf(),
-)
+    val authors: List<Author>,
+    val genres: List<Genre>,
+) {
+    fun toManga(): SManga = SManga.create().apply {
+        title = titles
+        thumbnail_url = coverUrl
+        url = "$id"
+    }
+}
 
 @Serializable
 class Author(
