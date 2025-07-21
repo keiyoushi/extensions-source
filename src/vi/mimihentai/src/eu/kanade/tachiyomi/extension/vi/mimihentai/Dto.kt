@@ -3,32 +3,34 @@ package eu.kanade.tachiyomi.extension.vi.mimihentai
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-class MangaDTO(
-    val data: List<Manga>,
+class ListingDto(
+    val data: List<MangaDto>,
     val totalPage: Long,
     val currentPage: Long,
 )
 
 @Serializable
-class Manga(
+class MangaDto(
     private val id: Long,
-    @SerialName("title")
-    val titles: String,
-    val coverUrl: String,
-    val description: String,
-    val authors: List<Author>,
-    val genres: List<Genre>,
+    private val title: String,
+    private val coverUrl: String,
+    private val description: String,
+    private val authors: List<Author>,
+    private val genres: List<Genre>,
 ) {
-    fun toManga(): SManga = SManga.create().apply {
-        title = titles
+    fun toSManga(): SManga = SManga.create().apply {
+        title = this@MangaDto.title
         thumbnail_url = coverUrl
         url = "$id"
+        description = this@MangaDto.description
+        author = authors.joinToString { i -> i.name }
+        genre = genres.joinToString { i -> i.name }
+        initialized = true
     }
 }
 
@@ -43,20 +45,20 @@ class Genre(
 )
 
 @Serializable
-class ChapterDTO(
+class ChapterDto(
     private val id: Long,
     private val title: String,
     private val createdAt: String,
 ) {
-    fun toChapterDTO(mangaUrl: String): SChapter = SChapter.create().apply {
+    fun toSChapter(mangaId: String): SChapter = SChapter.create().apply {
         name = title
         date_upload = dateFormat.tryParse(createdAt)
-        url = "/g/$mangaUrl/chapter/$id"
+        url = "$mangaId/$id"
     }
 }
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.US)
 
 @Serializable
-class PageListDTO(
+class PageListDto(
     val pages: List<String>,
 )

@@ -45,9 +45,9 @@ class MiMiHentai : HttpSource() {
     )
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val res = response.parseAs<MangaDTO>()
+        val res = response.parseAs<ListingDto>()
         val hasNextPage = res.currentPage != res.totalPage
-        return MangasPage(res.data.map { it.toManga() }, hasNextPage)
+        return MangasPage(res.data.map { it.toSManga() }, hasNextPage)
     }
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl/g/${manga.url}"
@@ -63,12 +63,16 @@ class MiMiHentai : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val segments = response.request.url.pathSegments
-        val mangaUrl = segments.last()
-        val res = response.parseAs<List<ChapterDTO>>()
-        return res.map { it.toChapterDTO(mangaUrl) }
+        val mangaId = segments.last()
+        val res = response.parseAs<List<ChapterDto>>()
+        return res.map { it.toSChapter(mangaId) }
     }
 
-    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String {
+        val mangaId = chapter.url.substringBefore('/')
+        val chapterId = chapter.url.substringAfter('/')
+        return "$baseUrl/g/$mangaId/chapter/$chapterId"
+    }
 
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
@@ -82,16 +86,8 @@ class MiMiHentai : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val res = response.parseAs<Manga>()
-        return res.let { manga ->
-            SManga.create().apply {
-                description = manga.description
-                author = manga.authors.joinToString { i -> i.name }
-                genre = manga.genres.joinToString { i -> i.name }
-                thumbnail_url = manga.coverUrl
-                title = manga.titles
-            }
-        }
+        val res = response.parseAs<MangaDto>()
+        return res.toSManga()
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -99,7 +95,7 @@ class MiMiHentai : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val res = response.parseAs<PageListDTO>()
+        val res = response.parseAs<PageListDto>()
         return res.pages.mapIndexed { index, url ->
             Page(index, imageUrl = url)
         }
@@ -122,12 +118,12 @@ class MiMiHentai : HttpSource() {
                 val id = query.removePrefix(PREFIX_ID_SEARCH)
                 client.newCall(searchMangaByIdRequest(id))
                     .asObservableSuccess()
-                    .map { response -> searchMangaByIdParse(response, id) }
+                    .map { response -> searchMangaByIdParse(response) }
             }
             query.toIntOrNull() != null -> {
                 client.newCall(searchMangaByIdRequest(query))
                     .asObservableSuccess()
-                    .map { response -> searchMangaByIdParse(response, query) }
+                    .map { response -> searchMangaByIdParse(response) }
             }
             else -> super.fetchSearchManga(page, query, filters)
         }
@@ -136,9 +132,8 @@ class MiMiHentai : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
 
-    private fun searchMangaByIdParse(response: Response, id: String): MangasPage {
+    private fun searchMangaByIdParse(response: Response): MangasPage {
         val details = mangaDetailsParse(response)
-        details.url = "/info/$id"
         return MangasPage(listOf(details), false)
     }
 
