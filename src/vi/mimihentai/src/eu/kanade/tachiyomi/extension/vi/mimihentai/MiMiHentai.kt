@@ -11,14 +11,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class MiMiHentai : HttpSource() {
     override val name: String = "MiMiHentai"
@@ -37,8 +34,6 @@ class MiMiHentai : HttpSource() {
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
-
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.US)
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
         apiUrl.toHttpUrl().newBuilder().apply {
@@ -74,15 +69,13 @@ class MiMiHentai : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        val segments = response.request.url.pathSegments
+        val mangaUrl = segments.last()
         val res = response.parseAs<List<ChapterDTO>>()
-        return res.map { chapterDTO ->
-            SChapter.create().apply {
-                name = chapterDTO.title
-                date_upload = dateFormat.tryParse(chapterDTO.createdAt)
-                setUrlWithoutDomain("$apiUrl/chapter?id=${chapterDTO.id}")
-            }
-        }
+        return res.map { it.toChapterDTO(mangaUrl) }
     }
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override fun imageUrlParse(response: Response): String = ""
 
@@ -106,6 +99,10 @@ class MiMiHentai : HttpSource() {
                 title = manga.title
             }
         }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        return GET("$apiUrl/chapter?id=${chapter.url.substringAfterLast("/")}", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {

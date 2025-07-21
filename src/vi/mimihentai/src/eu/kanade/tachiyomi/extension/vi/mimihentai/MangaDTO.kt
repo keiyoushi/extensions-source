@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.vi.mimihentai
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Serializable
 class MangaDTO(
@@ -31,10 +35,17 @@ class Genre(
 
 @Serializable
 class ChapterDTO(
-    val id: Long,
-    val title: String,
-    val createdAt: String,
-)
+    private val id: Long,
+    private val title: String,
+    private val createdAt: String,
+) {
+    fun toChapterDTO(mangaUrl: String): SChapter = SChapter.create().apply {
+        name = title
+        date_upload = dateFormat.tryParse(createdAt)
+        url = "/g/$mangaUrl/chapter/$id"
+    }
+}
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.US)
 
 @Serializable
 class PageListDTO(
