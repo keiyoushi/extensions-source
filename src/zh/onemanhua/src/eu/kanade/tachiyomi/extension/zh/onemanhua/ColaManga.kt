@@ -303,9 +303,13 @@ abstract class ColaManga(
             destroyWebView(chapterUrl)
             throw Exception("加载章节超时")
         }
-        return pagesMap[chapterUrl]?.toList() ?: run {
+        if (jsInterface.pageCount <= 0) {
             destroyWebView(chapterUrl)
-            throw Exception("加载章节失败：页面列表为空")
+            throw Exception("加载章节失败：页面数量为 0")
+        }
+
+        return List(jsInterface.pageCount) { index ->
+            Page(index, url = chapterUrl)
         }
     }
 
@@ -336,24 +340,27 @@ abstract class ColaManga(
             }
             GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
-                while (true) {
-                    val foundPage = pages?.find { it.index == pageIndex }
-                    if (foundPage != null) {
+                val foundPage = pages?.find { it.index == pageIndex }
+                if (foundPage != null) {
+                    while (true) {
                         val imageUrl = foundPage.imageUrl
                         if (imageUrl != null && imageUrl.startsWith("data")) {
                             pages.remove(foundPage)
                             pages.trimToSize()
+                            if (pages.isEmpty()) {
+                                pagesMap.remove(chapterUrl)
+                            }
                             emitter.onNext("https://127.0.0.1/?image${imageUrl.substringAfter(":")}")
                             emitter.onCompleted()
                             break
                         }
+                        if (System.currentTimeMillis() - startTime > 30000) {
+                            webViewCache[chapterUrl]?.let { handler.post { it.evaluateJavascript("scroll()") {} } }
+                            emitter.onError(Exception("加载图片超时"))
+                            break
+                        }
+                        delay(100)
                     }
-                    if (System.currentTimeMillis() - startTime > 30000) {
-                        webViewCache[chapterUrl]?.let { handler.post { it.evaluateJavascript("scroll()") {} } }
-                        emitter.onError(Exception("加载图片超时"))
-                        break
-                    }
-                    delay(100)
                 }
             }
         }
@@ -403,18 +410,21 @@ abstract class ColaManga(
         private val pagesMap: MutableMap<String, ArrayList<Page>>,
         private val webViewCache: LinkedHashMap<String, WebView>,
     ) {
+        var pageCount = 0
+            private set
+
         @JavascriptInterface
         fun setPageCount(count: Int) {
             if (count <= 0) {
                 latch.countDown()
                 return
             }
-            val pageList = ArrayList<Page>(count).apply {
+            pageCount = count
+            pagesMap[chapterUrl] = ArrayList<Page>(count).apply {
                 for (i in 0 until count) {
-                    add(Page(i, url = chapterUrl))
+                    add(Page(i))
                 }
             }
-            pagesMap[chapterUrl] = pageList
             latch.countDown()
         }
 
