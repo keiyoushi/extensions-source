@@ -122,7 +122,7 @@ class GocTruyenTranhVui() : HttpSource() {
     )
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val json = response.parseAs<PopularDTO>()
+        val json = response.parseAs<MangaDTO>()
         val manga = json.result.data.map {
             SManga.create().apply {
                 title = it.name

@@ -19,7 +19,7 @@ class ResultChapter(
 )
 
 @Serializable
-class PopularDTO(
+class MangaDTO(
     val result: Result,
 )
 
@@ -27,14 +27,19 @@ class PopularDTO(
 class Result(
     val p: Int? = null,
     val next: Boolean? = null,
-    val data: ArrayList<Data>,
+    val data: List<Manga>,
 )
 
 @Serializable
-class Data(
+class Manga(
     val name: String,
     val photo: String,
     val nameEn: String,
+)
+
+@Serializable
+class SearchDTO(
+    val result: List<Manga>,
 )
 
 @Serializable
@@ -51,16 +56,4 @@ class ChapterBody(
 @Serializable
 class ResultContent(
     val data: List<String>,
-)
-
-@Serializable
-class SearchDTO(
-    val result: List<ResultSearch>,
-)
-
-@Serializable
-class ResultSearch(
-    val name: String,
-    val photo: String,
-    val nameEn: String,
 )
