@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -18,12 +18,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class GocTruyenTranhVui() : ParsedHttpSource() {
+class GocTruyenTranhVui() : HttpSource() {
     override val lang = "vi"
 
     override val baseUrl = "https://goctruyentranhvui17.com"
@@ -62,23 +61,22 @@ class GocTruyenTranhVui() : ParsedHttpSource() {
             }
     }
 
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+
     private fun checkChapterLists(document: Document) = document.selectFirst("input[id=comic-id-comment]")!!.attr("value")
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
-
-    override fun chapterListSelector(): String = ""
-
-    override fun imageUrlParse(document: Document): String = ""
-
-    override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        element.selectFirst("a.mt-1").let {
-            setUrlWithoutDomain(it!!.absUrl("href"))
-            title = it.text()
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val element = response.asJsoup()
+        val manga = element.select(".row .col-md-2").map { itm ->
+            SManga.create().apply {
+                setUrlWithoutDomain(itm.select("a.mt-1").attr("href"))
+                title = itm.select("a.mt-1").text()
+                thumbnail_url = itm.selectFirst("img.lazy")!!.absUrl("data-original")
+            }
         }
-        thumbnail_url = element.selectFirst("img.lazy")!!.absUrl("data-original")
+        val hasNextPage = element.select(".ma-3 a").text().isNotEmpty()
+        return MangasPage(manga, hasNextPage)
     }
-
-    override fun latestUpdatesNextPageSelector(): String = ".ma-3 a"
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
         baseUrl.toHttpUrl().newBuilder().apply {
@@ -88,9 +86,8 @@ class GocTruyenTranhVui() : ParsedHttpSource() {
         headers,
     )
 
-    override fun latestUpdatesSelector(): String = ".row .col-md-2"
-
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         title = document.select(".v-card-title").text()
         genre = document.select(".group-content > .v-chip-link").joinToString { it.text().trim(',', ' ') }
         thumbnail_url = document.selectFirst("img.image")!!.absUrl("src")
@@ -114,15 +111,15 @@ class GocTruyenTranhVui() : ParsedHttpSource() {
         val result = jsonString.parseAs<ChapterWrapper>()
         val imageList = result.body.result.data
         return imageList.mapIndexed { i, url ->
-            Page(i, imageUrl = url)
+            val finalUrl = if (url.startsWith("/image/")) {
+                "$baseUrl$url"
+            } else {
+                url
+            }
+            Page(i, imageUrl = finalUrl)
         }
     }
-
-    override fun pageListParse(document: Document): List<Page> = throw UnsupportedOperationException()
-
-    override fun popularMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector(): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = ""
 
     override fun popularMangaRequest(page: Int): Request = GET(
         apiUrl.toHttpUrl().newBuilder().apply {
@@ -146,12 +143,6 @@ class GocTruyenTranhVui() : ParsedHttpSource() {
         return MangasPage(manga, hasNextPage)
     }
 
-    override fun popularMangaSelector(): String = throw UnsupportedOperationException()
-
-    override fun searchMangaFromElement(element: Element): SManga = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector(): String = ""
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = searchUrl.toHttpUrl().newBuilder().apply {
             addQueryParameter("name", query)
@@ -171,6 +162,4 @@ class GocTruyenTranhVui() : ParsedHttpSource() {
         val hasNextPage = false
         return MangasPage(manga, hasNextPage)
     }
-
-    override fun searchMangaSelector(): String = ""
 }
