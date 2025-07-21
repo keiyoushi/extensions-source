@@ -318,32 +318,38 @@ abstract class ColaManga(
     @OptIn(DelicateCoroutinesApi::class)
     override fun fetchImageUrl(page: Page): Observable<String> {
         val chapterUrl = page.url
+        val pageIndex = page.index
         webViewCache[chapterUrl]?.let {
+            // reset idle timer
             handler.removeCallbacksAndMessages(chapterUrl)
             postDelayed({ destroyWebView(chapterUrl) }, chapterUrl, webViewIdleDelayMillis, handler)
-        } ?: pagesMap[chapterUrl]?.let { pages ->
-            if (pages.any { it.imageUrl == null }) {
+        } ?: pagesMap[chapterUrl]?.let { pages -> // webview not cached
+            if (pages.any { it.imageUrl == null }) { // if any imageUrl is null, we need to load the webview
                 pageListParse(chapterUrl)
             }
         }
         return Observable.create { emitter ->
-            val imageUrl = pagesMap[chapterUrl]?.get(page.index)?.imageUrl
-            if (imageUrl == null) {
-                handler.post {
-                    webViewCache[chapterUrl]?.evaluateJavascript("loadPic(${page.index})") {}
-                }
+            val pages = pagesMap[chapterUrl]
+            pages?.find { it.index == pageIndex && it.imageUrl == null }?.let {
+                // if the page is not loaded yet, we need to load it
+                webViewCache[chapterUrl]?.let { handler.post { it.evaluateJavascript("loadPic($pageIndex)") {} } }
             }
             GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
                 while (true) {
-                    val url = pagesMap[chapterUrl]?.get(page.index)?.imageUrl
-                    if (url != null && url.startsWith("data")) {
-                        emitter.onNext("https://127.0.0.1/?image${url.substringAfter(":")}")
-                        emitter.onCompleted()
-                        break
+                    val foundPage = pages?.find { it.index == pageIndex }
+                    if (foundPage != null) {
+                        val imageUrl = foundPage.imageUrl
+                        if (imageUrl != null && imageUrl.startsWith("data")) {
+                            pages.remove(foundPage)
+                            pages.trimToSize()
+                            emitter.onNext("https://127.0.0.1/?image${imageUrl.substringAfter(":")}")
+                            emitter.onCompleted()
+                            break
+                        }
                     }
                     if (System.currentTimeMillis() - startTime > 30000) {
-                        handler.post { webViewCache[chapterUrl]?.evaluateJavascript("scroll()") {} }
+                        webViewCache[chapterUrl]?.let { handler.post { it.evaluateJavascript("scroll()") {} } }
                         emitter.onError(Exception("加载图片超时"))
                         break
                     }
@@ -415,7 +421,7 @@ abstract class ColaManga(
         @JavascriptInterface
         fun setPage(index: Int, url: String) {
             latch.await()
-            pagesMap[chapterUrl]?.get(index)?.let { it.imageUrl = url }
+            pagesMap[chapterUrl]?.find { it.index == index }?.let { it.imageUrl = url }
             pagesMap[chapterUrl]?.let {
                 if (it.all { page -> page.imageUrl != null }) {
                     val handler = Handler(Looper.getMainLooper())
