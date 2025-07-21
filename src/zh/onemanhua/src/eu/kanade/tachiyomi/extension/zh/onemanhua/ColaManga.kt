@@ -327,8 +327,9 @@ abstract class ColaManga(
             // reset idle timer
             handler.removeCallbacksAndMessages(chapterUrl)
             postDelayed({ destroyWebView(chapterUrl) }, chapterUrl, webViewIdleDelayMillis, handler)
-        } ?: pagesMap[chapterUrl]?.let { pages -> // webview not cached
-            if (pages.any { it.imageUrl == null }) { // if any imageUrl is null, we need to load the webview
+        } ?: run {
+            val pages = pagesMap[chapterUrl]
+            if (pages == null || pages.any { it.imageUrl == null }) {
                 pageListParse(chapterUrl)
             }
         }
@@ -355,7 +356,6 @@ abstract class ColaManga(
                             break
                         }
                         if (System.currentTimeMillis() - startTime > 30000) {
-                            webViewCache[chapterUrl]?.let { handler.post { it.evaluateJavascript("scroll()") {} } }
                             emitter.onError(Exception("加载图片超时"))
                             break
                         }
