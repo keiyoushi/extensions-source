@@ -327,42 +327,33 @@ abstract class ColaManga(
             // reset idle timer
             handler.removeCallbacksAndMessages(chapterUrl)
             postDelayed({ destroyWebView(chapterUrl) }, chapterUrl, webViewIdleDelayMillis, handler)
-        } ?: run {
-            val pages = pagesMap[chapterUrl]
-            if (pages == null || pages.any { it.imageUrl == null }) {
-                pageListParse(chapterUrl)
-            }
-        }
+        } ?: pagesMap[chapterUrl]?.takeIf { it.none { it -> it.index == pageIndex } } ?: pageListParse(chapterUrl) // webview not found and page not found, load webview
         return Observable.create { emitter ->
-            val pages = pagesMap[chapterUrl]
-            pages?.find { it.index == pageIndex && it.imageUrl == null }?.let {
+            pagesMap[chapterUrl]?.takeIf { it.none { page -> page.index == pageIndex } }?.let {
                 // if the page is not loaded yet, we need to load it
                 webViewCache[chapterUrl]?.let { handler.post { it.evaluateJavascript("loadPic($pageIndex)") {} } }
             }
             GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
-                val foundPage = pages?.find { it.index == pageIndex }
-                if (foundPage != null) {
-                    while (true) {
-                        val imageUrl = foundPage.imageUrl
-                        if (imageUrl != null && imageUrl.startsWith("data")) {
-                            pages.remove(foundPage)
-                            pages.trimToSize()
-                            if (pages.isEmpty()) {
-                                pagesMap.remove(chapterUrl)
-                            }
-                            emitter.onNext("https://127.0.0.1/?image${imageUrl.substringAfter(":")}")
-                            emitter.onCompleted()
-                            break
+                while (true) {
+                    val pages = pagesMap[chapterUrl]
+                    val foundPage = pages?.find { it.index == pageIndex }
+                    val imageUrl = foundPage?.imageUrl?.takeIf { it.startsWith("data") }
+                    if (imageUrl != null) {
+                        emitter.onNext("https://127.0.0.1/?image${imageUrl.substringAfter(":")}")
+                        pagesMap[chapterUrl]?.apply {
+                            remove(foundPage)
+                            trimToSize()
+                            if (isEmpty()) pagesMap.remove(chapterUrl)
                         }
-                        if (System.currentTimeMillis() - startTime > 30000) {
-                            emitter.onError(Exception("加载图片超时"))
-                            break
-                        }
-                        delay(100)
+                        emitter.onCompleted()
+                        break
                     }
-                } else {
-                    emitter.onError(Exception("加载图片失败"))
+                    if (System.currentTimeMillis() - startTime > 30000) {
+                        emitter.onError(Exception("加载图片超时"))
+                        break
+                    }
+                    delay(100)
                 }
             }
         }
@@ -414,6 +405,8 @@ abstract class ColaManga(
     ) {
         var pageCount = 0
             private set
+        var setPageCount = 0
+            private set
 
         @JavascriptInterface
         fun setPageCount(count: Int) {
@@ -422,25 +415,17 @@ abstract class ColaManga(
                 return
             }
             pageCount = count
-            pagesMap[chapterUrl] = ArrayList<Page>(count).apply {
-                for (i in 0 until count) {
-                    add(Page(i))
-                }
-            }
             latch.countDown()
         }
 
         @JavascriptInterface
         fun setPage(index: Int, url: String) {
-            latch.await()
-            pagesMap[chapterUrl]?.find { it.index == index }?.let { it.imageUrl = url }
-            pagesMap[chapterUrl]?.let {
-                if (it.all { page -> page.imageUrl != null }) {
-                    val handler = Handler(Looper.getMainLooper())
-                    handler.post {
-                        webViewCache.remove(chapterUrl)?.destroy()
-                    }
-                    handler.removeCallbacksAndMessages(chapterUrl)
+            pagesMap.getOrPut(chapterUrl) { ArrayList() }.add(Page(index, imageUrl = url))
+            setPageCount++
+            if (pageCount > 0 && setPageCount >= pageCount) {
+                Handler(Looper.getMainLooper()).apply {
+                    post { webViewCache.remove(chapterUrl)?.destroy() }
+                    removeCallbacksAndMessages(chapterUrl)
                 }
             }
         }
