@@ -17,6 +17,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 class GocTruyenTranhVui() : HttpSource() {
@@ -31,7 +32,6 @@ class GocTruyenTranhVui() : HttpSource() {
     private val searchUrl = "$baseUrl/api/comic/search"
 
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.US)
-
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -43,17 +43,31 @@ class GocTruyenTranhVui() : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val res = response.asJsoup()
-        val mangaUrl = response.request.url
+        val mangaUrl = response.request.url.toString()
         val mangaId = res.selectFirst("input[id=comic-id-comment]")!!.attr("value")
-        return client.newCall(GET("$baseUrl/api/comic/$mangaId/chapter?offset=21&limit=-1", headers))
-            .execute().parseAs<ChapterDTO>().result.chapters.map { itm ->
+        val chapter = client.newCall(GET("$baseUrl/api/comic/$mangaId/chapter?offset=21&limit=-1", headers)).execute().parseAs<ListChapter>()
+
+        return chapter.result.chapters.map { it.toChapter(mangaUrl) }.ifEmpty {
+            res.select(".chapter-list .list .col-md-6").map { itm ->
                 SChapter.create().apply {
-                    name = itm.numberChapter
-                    date_upload = dateFormat.tryParse(itm.stringUpdateTime)
-                    setUrlWithoutDomain("$mangaUrl/chuong-${itm.numberChapter}")
+                    name = itm.select("a .chapter-info").text()
+                    date_upload = parseDate(itm.select(".col-md-6 .text--disabled .d-flex").text())
+                    setUrlWithoutDomain(itm.selectFirst("a")!!.absUrl("href"))
                 }
             }
+        }
     }
+
+    private fun parseDate(date: String): Long = runCatching {
+        val calendar = Calendar.getInstance()
+        val number = date.replace(Regex("[^0-9]"), "").trim().toInt()
+        when (date.replace(Regex("[0-9]"), "").trim()) {
+            "phút trước" -> calendar.apply { add(Calendar.MINUTE, -number) }.timeInMillis
+            "giờ trước" -> calendar.apply { add(Calendar.HOUR, -number) }.timeInMillis
+            "ngày trước" -> calendar.apply { add(Calendar.DAY_OF_YEAR, -number) }.timeInMillis
+            else -> dateFormat.tryParse(date)
+        }
+    }.getOrNull() ?: 0L
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val element = response.asJsoup()
@@ -122,16 +136,9 @@ class GocTruyenTranhVui() : HttpSource() {
     )
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val json = response.parseAs<MangaDTO>()
-        val manga = json.result.data.map {
-            SManga.create().apply {
-                title = it.name
-                thumbnail_url = baseUrl + it.photo
-                setUrlWithoutDomain("$baseUrl/truyen/" + it.nameEn)
-            }
-        }
-        val hasNextPage = json.result.p != 100
-        return MangasPage(manga, hasNextPage)
+        val res = response.parseAs<ListManga>()
+        val hasNextPage = res.result.p != 100
+        return MangasPage(res.result.data.map { it.toManga(baseUrl) }, hasNextPage)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -142,15 +149,7 @@ class GocTruyenTranhVui() : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val res = response.parseAs<SearchDTO>()
-        val manga = res.result.map { item ->
-            SManga.create().apply {
-                title = item.name
-                thumbnail_url = baseUrl + item.photo
-                setUrlWithoutDomain("$baseUrl/truyen/" + item.nameEn)
-            }
-        }
-        val hasNextPage = false
-        return MangasPage(manga, hasNextPage)
+        val res = response.parseAs<SearchDTO>().result.map { it.toManga(baseUrl) }
+        return MangasPage(res, hasNextPage = false)
     }
 }
