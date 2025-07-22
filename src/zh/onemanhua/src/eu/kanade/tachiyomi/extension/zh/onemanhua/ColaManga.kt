@@ -420,7 +420,7 @@ abstract class ColaManga(
 
         @JavascriptInterface
         fun setPage(index: Int, url: String) {
-            pagesMap.getOrPut(chapterUrl) { ArrayList() }.add(Page(index, imageUrl = url))
+            pagesMap.getOrPut(chapterUrl) { ArrayList() }.add(Page(index, url=chapterUrl, imageUrl = url))
             setPageCount++
             if (pageCount > 0 && setPageCount >= pageCount) {
                 Handler(Looper.getMainLooper()).apply {
