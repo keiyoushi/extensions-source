@@ -417,7 +417,7 @@ abstract class ColaManga(
         fun setPage(index: Int, url: String) {
             pagesMap.find { it.index == index && it.url == chapterUrl }?.apply {
                 imageUrl = url
-            } ?: {
+            } ?: run {
                 pagesMap.add(Page(index, url = chapterUrl, imageUrl = url))
                 setPageCount++
             }
