@@ -190,7 +190,7 @@ abstract class ColaManga(
 
     override fun pageListParse(document: Document) = throw UnsupportedOperationException()
 
-    private var pagesMap: MutableMap<String, ArrayList<Page>> = mutableMapOf()
+    private val pagesMap: ArrayList<Page> = ArrayList()
     private val handler = Handler(Looper.getMainLooper())
     private val webViewCache = object : LinkedHashMap<String, WebView>() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, WebView>): Boolean {
@@ -324,28 +324,23 @@ abstract class ColaManga(
         val chapterUrl = page.url
         val pageIndex = page.index
         webViewCache[chapterUrl]?.let {
-            // reset idle timer
+            // webview cached, reset idle timer
             handler.removeCallbacksAndMessages(chapterUrl)
             postDelayed({ destroyWebView(chapterUrl) }, chapterUrl, webViewIdleDelayMillis, handler)
-        } ?: pagesMap[chapterUrl]?.takeIf { it.none { it -> it.index == pageIndex } } ?: pageListParse(chapterUrl) // webview not found and page not found, load webview
+        } ?: pagesMap.none { it.url == chapterUrl && it.index == pageIndex }.let { pageListParse(chapterUrl) } // webview not found and page not found, load webview
         return Observable.create { emitter ->
-            pagesMap[chapterUrl]?.takeIf { it.none { page -> page.index == pageIndex } }?.let {
+            pagesMap.none { it.url == chapterUrl && it.index == pageIndex }.let {
                 // if the page is not loaded yet, we need to load it
                 webViewCache[chapterUrl]?.let { handler.post { it.evaluateJavascript("loadPic($pageIndex)") {} } }
             }
             GlobalScope.launch {
                 val startTime = System.currentTimeMillis()
                 while (true) {
-                    val pages = pagesMap[chapterUrl]
-                    val foundPage = pages?.find { it.index == pageIndex }
+                    val foundPage = pagesMap.find { it.url == chapterUrl && it.index == pageIndex }
                     val imageUrl = foundPage?.imageUrl?.takeIf { it.startsWith("data") }
                     if (imageUrl != null) {
                         emitter.onNext("https://127.0.0.1/?image${imageUrl.substringAfter(":")}")
-                        pagesMap[chapterUrl]?.apply {
-                            remove(foundPage)
-                            trimToSize()
-                            if (isEmpty()) pagesMap.remove(chapterUrl)
-                        }
+                        pagesMap.remove(foundPage)
                         emitter.onCompleted()
                         break
                     }
@@ -400,7 +395,7 @@ abstract class ColaManga(
     private class JsInterface(
         private var latch: CountDownLatch,
         private val chapterUrl: String,
-        private val pagesMap: MutableMap<String, ArrayList<Page>>,
+        private val pagesMap: ArrayList<Page>,
         private val webViewCache: LinkedHashMap<String, WebView>,
     ) {
         var pageCount = 0
@@ -420,7 +415,9 @@ abstract class ColaManga(
 
         @JavascriptInterface
         fun setPage(index: Int, url: String) {
-            pagesMap.getOrPut(chapterUrl) { ArrayList() }.add(Page(index, url=chapterUrl, imageUrl = url))
+            pagesMap.find { it.index == index && it.url == chapterUrl }?.apply {
+                imageUrl = url
+            } ?: pagesMap.add(Page(index, url = chapterUrl, imageUrl = url))
             setPageCount++
             if (pageCount > 0 && setPageCount >= pageCount) {
                 Handler(Looper.getMainLooper()).apply {
