@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.ar.mangapro
 
-import eu.kanade.tachiyomi.multisrc.iken.Iken
+import eu.kanade.tachiyomi.multisrc.iken.Manga
 
-class MangaPro : Iken(
+class MangaPro : Manga(
     "Manga Pro",
     "ar",
     "https://promanga.net",
