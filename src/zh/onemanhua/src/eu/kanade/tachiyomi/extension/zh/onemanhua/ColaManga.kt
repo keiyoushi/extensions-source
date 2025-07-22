@@ -361,6 +361,8 @@ abstract class ColaManga(
                         }
                         delay(100)
                     }
+                } else {
+                    emitter.onError(Exception("加载图片失败"))
                 }
             }
         }
