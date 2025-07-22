@@ -233,7 +233,6 @@ abstract class ColaManga(
         val url = baseUrl + chapterUrl
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch, chapterUrl, pagesMap, webViewCache)
-        jsInterface.setPageCount = pagesMap.count { it.url == chapterUrl }
         destroyWebView(chapterUrl)
         handler.post {
             val webview = WebView(Injekt.get<Application>())
@@ -242,6 +241,7 @@ abstract class ColaManga(
             webview.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             webview.settings.javaScriptEnabled = true
             webview.addJavascriptInterface(jsInterface, interfaceName)
+            jsInterface.setPageCount = pagesMap.count { it.url == chapterUrl }
             webview.webViewClient = object : WebViewClient() {
                 override fun onLoadResource(view: WebView?, url: String?) {
                     if (url == "$baseUrl/counting") { // the time when document.body is ready
@@ -402,6 +402,8 @@ abstract class ColaManga(
         var pageCount = 0
             private set
         var setPageCount = 0
+        var currentSetCount = 0
+            private set
 
         @JavascriptInterface
         fun setPageCount(count: Int) {
@@ -421,7 +423,8 @@ abstract class ColaManga(
                 pagesMap.add(Page(index, url = chapterUrl, imageUrl = url))
                 setPageCount++
             }
-            if (pageCount > 0 && setPageCount >= pageCount) {
+            currentSetCount++
+            if (pageCount > 0 && (setPageCount >= pageCount || currentSetCount >= pageCount)) {
                 Handler(Looper.getMainLooper()).apply {
                     post { webViewCache.remove(chapterUrl)?.destroy() }
                     removeCallbacksAndMessages(chapterUrl)
