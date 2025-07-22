@@ -52,17 +52,11 @@ function loadPic(pageIndex) {
     document.querySelector("#mangalist").dispatchEvent(new CustomEvent('scroll'))
     const page = pageIndex + 1
     const target = document.querySelector(`div.mh_comicpic[p="${page}"] img[src]`)
-    const mh_loading = document.querySelector(`div.mh_comicpic[p="${page}"] .mh_loading`)
     const mh_loaderr = document.querySelector(`div.mh_comicpic[p="${page}"] .mh_loaderr`)
     if (target) {
         target.scrollIntoView()
-        target.dispatchEvent(new CustomEvent('scroll'))
-    } else if (mh_loading?.style.display != 'none') {
-        mh_loading.scrollIntoView()
-        mh_loading.dispatchEvent(new CustomEvent('scroll'))
     } else if (mh_loaderr?.style.display != 'none') {
         mh_loaderr.scrollIntoView()
-        mh_loaderr.dispatchEvent(new CustomEvent('scroll'))
         mh_loaderr.querySelector('.mh_btn')?.click()
     } else {
         scroll()
