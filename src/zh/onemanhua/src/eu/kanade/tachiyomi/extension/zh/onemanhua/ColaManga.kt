@@ -233,6 +233,7 @@ abstract class ColaManga(
         val url = baseUrl + chapterUrl
         val latch = CountDownLatch(1)
         val jsInterface = JsInterface(latch, chapterUrl, pagesMap, webViewCache)
+        jsInterface.setPageCount = pagesMap.count { it.url == chapterUrl }
         destroyWebView(chapterUrl)
         handler.post {
             val webview = WebView(Injekt.get<Application>())
@@ -401,7 +402,6 @@ abstract class ColaManga(
         var pageCount = 0
             private set
         var setPageCount = 0
-            private set
 
         @JavascriptInterface
         fun setPageCount(count: Int) {
@@ -417,8 +417,10 @@ abstract class ColaManga(
         fun setPage(index: Int, url: String) {
             pagesMap.find { it.index == index && it.url == chapterUrl }?.apply {
                 imageUrl = url
-            } ?: pagesMap.add(Page(index, url = chapterUrl, imageUrl = url))
-            setPageCount++
+            } ?: {
+                pagesMap.add(Page(index, url = chapterUrl, imageUrl = url))
+                setPageCount++
+            }
             if (pageCount > 0 && setPageCount >= pageCount) {
                 Handler(Looper.getMainLooper()).apply {
                     post { webViewCache.remove(chapterUrl)?.destroy() }
