@@ -11,8 +11,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -143,9 +143,12 @@ class MiMiHentai : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("advance-search")
-            if (query.isNotEmpty()){
-            addQueryParameter("page", maxOf(0, page - 1).toString())
-            addQueryParameter("name", query)
+            addQueryParameter("author", "")
+            addQueryParameter("character", "")
+            addQueryParameter("parody", "")
+            if (query.isNotEmpty()) {
+                addQueryParameter("page", maxOf(0, page - 1).toString())
+                addQueryParameter("name", query)
             }
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filters ->
                 when (filters) {
@@ -154,10 +157,8 @@ class MiMiHentai : HttpSource() {
                             val sort = getSortByList()[filters.state]
                             addQueryParameter("sort", sort.id)
                         }
-                    is Author -> addQueryParameter("author", filters.state)
-                    is Character -> addQueryParameter("character", filters.state)
-                    is Parody -> addQueryParameter("parody", filters.state)
                     is GenreList -> addQueryParameter("genre", filters.toGenre().toString())
+                    is TextField -> setQueryParameter(filters.key, filters.state)
                     else -> {}
                 }
             }
@@ -195,15 +196,15 @@ class MiMiHentai : HttpSource() {
         }
     }
 
-    private class Author : Filter.Text("Tác giả", "")
-    private class Parody : Filter.Text("Parody", "")
     private class Character : Filter.Text("Nhân vật", "")
+    private class TextField(name: String, val key: String) : Filter.Text(name)
     override fun getFilterList(): FilterList {
         launchIO { fetchGenres() }
         return FilterList(
             SortByList(getSortByList()),
-            Author(),
-            Parody(),
+            TextField("Tác giả", "author"),
+            TextField("Parody", "parody"),
+            TextField("Nhân vật", "character"),
             Character(),
             if (genreList.isEmpty()) {
                 Filter.Header("Thể loại")
