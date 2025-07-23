@@ -43,11 +43,11 @@ class GocTruyenTranhVui() : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val res = response.asJsoup()
-        val mangaUrl = response.request.url.toString()
         val mangaId = res.selectFirst("input[id=comic-id-comment]")!!.attr("value")
+        val slug = response.request.url.toString().substringAfterLast("/") // slug
         val chapter = client.newCall(GET("$baseUrl/api/comic/$mangaId/chapter?offset=21&limit=-1", headers)).execute().parseAs<ListChapter>()
 
-        return chapter.result.chapters.map { it.toChapter(mangaUrl) }.ifEmpty {
+        return chapter.result.chapters.map { it.toChapter(slug) }.ifEmpty {
             res.select(".chapter-list .list .col-md-6").map { itm ->
                 SChapter.create().apply {
                     name = itm.select("a .chapter-info").text()
@@ -109,7 +109,7 @@ class GocTruyenTranhVui() : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val html = response.body.string()
-        val pattern = Regex("chapterJson:\\s*`(.*?)`", RegexOption.DOT_MATCHES_ALL)
+        val pattern = Regex("chapterJson:\\s*`(.*?)`")
         val match = pattern.find(html)
         val jsonString = match?.groups?.get(1)?.value ?: error("Không tìm thấy chapterJson")
         if (jsonString.isEmpty()) error("Không có nội dung. Hãy đăng nhập trong WebView") // loginRequired

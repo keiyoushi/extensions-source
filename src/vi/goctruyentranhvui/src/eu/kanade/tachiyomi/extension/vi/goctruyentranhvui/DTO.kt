@@ -19,10 +19,10 @@ class ChapterDTO(
     private val numberChapter: String,
     private val stringUpdateTime: String,
 ) {
-    fun toChapter(mangaUrl: String): SChapter = SChapter.create().apply {
+    fun toChapter(slug: String): SChapter = SChapter.create().apply {
         name = numberChapter
         date_upload = dateFormat.tryParse(stringUpdateTime)
-        url = "$mangaUrl/chuong-$numberChapter}"
+        url = "/truyen/$slug/chuong-$numberChapter"
     }
 }
 
@@ -52,7 +52,7 @@ class MangaDTO(
     fun toManga(baseUrl: String): SManga = SManga.create().apply {
         title = name
         thumbnail_url = baseUrl + photo
-        url = "$baseUrl/truyen/$nameEn"
+        url = "/truyen/$nameEn"
     }
 }
 
