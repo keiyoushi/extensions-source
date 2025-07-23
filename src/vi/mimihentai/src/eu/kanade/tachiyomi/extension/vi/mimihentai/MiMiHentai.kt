@@ -186,8 +186,7 @@ class MiMiHentai : HttpSource() {
 
     private var genreList: List<Pair<Long, String>> = emptyList()
 
-    private fun launchIO(block: () -> Unit) = scope.launch { block() }
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private fun launchIO(block: suspend () -> Unit) = GlobalScope.launch(Dispatchers.IO) { block() }
     private class GenreList(name: String, pairs: List<Pair<Long, String>>) : GenresFilter(name, pairs)
     private class SortByList(sort: Array<SortBy>) : Filter.Select<SortBy>("Sắp xếp", sort)
     private class SortBy(name: String, val id: String) : Filter.CheckBox(name) {
