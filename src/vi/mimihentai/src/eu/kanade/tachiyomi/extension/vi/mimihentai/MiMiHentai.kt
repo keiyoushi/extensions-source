@@ -11,6 +11,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -38,7 +41,7 @@ class MiMiHentai : HttpSource() {
     override fun latestUpdatesRequest(page: Int): Request = GET(
         apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("tatcatruyen")
-            addQueryParameter("page", page.toString())
+            addQueryParameter("page", maxOf(0, page - 1).toString())
             addQueryParameter("sort", "updated_at")
         }.build(),
         headers,
@@ -106,7 +109,7 @@ class MiMiHentai : HttpSource() {
     override fun popularMangaRequest(page: Int): Request = GET(
         apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("tatcatruyen")
-            addQueryParameter("page", page.toString())
+            addQueryParameter("page", maxOf(0, page - 1).toString())
             addQueryParameter("sort", "views")
         }.build(),
         headers,
@@ -139,10 +142,9 @@ class MiMiHentai : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("search")
-            addQueryParameter("page", page.toString())
+            addPathSegments("advance-search")
             addQueryParameter("name", query)
-
+            addQueryParameter("page", maxOf(0, page - 1).toString())
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filters ->
                 when (filters) {
                     is SortByList ->
@@ -150,7 +152,10 @@ class MiMiHentai : HttpSource() {
                             val sort = getSortByList()[filters.state]
                             addQueryParameter("sort", sort.id)
                         }
-
+                    is Author -> addQueryParameter("author", filters.state)
+                    is Character -> addQueryParameter("character", filters.state)
+                    is Parody -> addQueryParameter("parody", filters.state)
+                    is GenreList -> addQueryParameter("genre", filters.toGenre().toString())
                     else -> {}
                 }
             }
@@ -158,6 +163,30 @@ class MiMiHentai : HttpSource() {
         return GET(url, headers)
     }
 
+    private fun genresRequest(): Request = GET("$apiUrl/genres", headers)
+
+    private fun parseGenres(response: Response): List<Pair<Long, String>> {
+        return response.parseAs<List<Genres>>().map { Pair(it.id, it.name) }
+    }
+
+    private var fetchGenresAttempts: Int = 0
+    private fun fetchGenres() {
+        if (fetchGenresAttempts < 3 && genreList.isEmpty()) {
+            try {
+                val response = client.newCall(genresRequest()).execute()
+                genreList = parseGenres(response)
+            } catch (_: Exception) {
+            } finally {
+                fetchGenresAttempts++
+            }
+        }
+    }
+
+    private var genreList: List<Pair<Long, String>> = emptyList()
+
+    private fun launchIO(block: () -> Unit) = scope.launch { block() }
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private class GenreList(name: String, pairs: List<Pair<Long, String>>) : GenresFilter(name, pairs)
     private class SortByList(sort: Array<SortBy>) : Filter.Select<SortBy>("Sắp xếp", sort)
     private class SortBy(name: String, val id: String) : Filter.CheckBox(name) {
         override fun toString(): String {
@@ -165,10 +194,28 @@ class MiMiHentai : HttpSource() {
         }
     }
 
-    override fun getFilterList() = FilterList(
-        SortByList(getSortByList()),
-    )
+    private class Author : Filter.Text("Tác giả", "")
+    private class Parody : Filter.Text("Parody", "")
+    private class Character : Filter.Text("Nhân vật", "")
+    override fun getFilterList(): FilterList {
+        launchIO { fetchGenres() }
+        return FilterList(
+            SortByList(getSortByList()),
+            Author(),
+            Parody(),
+            Character(),
+            if (genreList.isEmpty()) {
+                Filter.Header("Thể loại")
+            } else {
+                GenreList("Thể loại", genreList)
+            },
+        )
+    }
 
+    private open class GenresFilter(displayName: String, private val pairs: List<Pair<Long, String>>) :
+        Filter.Select<String>(displayName, pairs.map { it.second }.toTypedArray()) {
+        fun toGenre() = pairs[state].first
+    }
     private fun getSortByList() = arrayOf(
         SortBy("Mới", "updated_at"),
         SortBy("Likes", "likes"),
