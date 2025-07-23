@@ -97,7 +97,7 @@ open class BatoTo(
         get() {
             val current = field
             if (current.isNotEmpty()) {
-                return if (current == "Auto") getMirrorPref() else current
+                return current
             }
             field = getMirrorPref()
             return field
@@ -112,7 +112,7 @@ open class BatoTo(
                     pm.getPackageInfo(BuildConfig.APPLICATION_ID, 0).lastUpdateTime
                 }.getOrElse {
                     BuildConfig.VERSION_NAME.hashCode().toLong()
-                }
+                }.coerceAtLeast(0)
 
                 MIRROR_PREF_ENTRY_VALUES[1 + (seed % (MIRROR_PREF_ENTRIES.size - 1)).toInt()]
             }
