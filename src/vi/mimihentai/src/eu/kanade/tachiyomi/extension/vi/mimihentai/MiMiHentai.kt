@@ -143,8 +143,10 @@ class MiMiHentai : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("advance-search")
-            addQueryParameter("name", query)
+            if (query.isNotEmpty()){
             addQueryParameter("page", maxOf(0, page - 1).toString())
+            addQueryParameter("name", query)
+            }
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filters ->
                 when (filters) {
                     is SortByList ->
