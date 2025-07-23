@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.vi.mimihentai
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -13,6 +14,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -41,7 +43,7 @@ class MiMiHentai : HttpSource() {
     override fun latestUpdatesRequest(page: Int): Request = GET(
         apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("tatcatruyen")
-            addQueryParameter("page", maxOf(0, page - 1).toString())
+            addQueryParameter("page", (page - 1).toString())
             addQueryParameter("sort", "updated_at")
         }.build(),
         headers,
@@ -109,7 +111,7 @@ class MiMiHentai : HttpSource() {
     override fun popularMangaRequest(page: Int): Request = GET(
         apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("tatcatruyen")
-            addQueryParameter("page", maxOf(0, page - 1).toString())
+            addQueryParameter("page", (page - 1).toString())
             addQueryParameter("sort", "views")
         }.build(),
         headers,
@@ -147,9 +149,9 @@ class MiMiHentai : HttpSource() {
             addQueryParameter("character", "")
             addQueryParameter("parody", "")
             if (query.isNotEmpty()) {
-                addQueryParameter("page", maxOf(0, page - 1).toString())
                 addQueryParameter("name", query)
             }
+            addQueryParameter("page", (page - 1).toString())
             (if (filters.isEmpty()) getFilterList() else filters).forEach { filters ->
                 when (filters) {
                     is SortByList ->
@@ -173,21 +175,25 @@ class MiMiHentai : HttpSource() {
     }
 
     private var fetchGenresAttempts: Int = 0
-    private fun fetchGenres() {
-        if (fetchGenresAttempts < 3 && genreList.isEmpty()) {
-            try {
-                val response = client.newCall(genresRequest()).execute()
-                genreList = parseGenres(response)
-            } catch (_: Exception) {
-            } finally {
-                fetchGenresAttempts++
+    private fun fetchGenres(): Job {
+        if (fetchGenresAttempts >= 3 || genreList.isEmpty()) {
+            return launchIO {
+                try {
+                    val response = client.newCall(genresRequest()).await()
+                    genreList = parseGenres(response)
+                } catch (_: Exception) {
+                } finally {
+                    fetchGenresAttempts++
+                }
             }
         }
+        return fetchGenres()
     }
 
     private var genreList: List<Pair<Long, String>> = emptyList()
 
     private fun launchIO(block: suspend () -> Unit) = GlobalScope.launch(Dispatchers.IO) { block() }
+
     private class GenreList(name: String, pairs: List<Pair<Long, String>>) : GenresFilter(name, pairs)
     private class SortByList(sort: Array<SortBy>) : Filter.Select<SortBy>("Sắp xếp", sort)
     private class SortBy(name: String, val id: String) : Filter.CheckBox(name) {
@@ -196,16 +202,14 @@ class MiMiHentai : HttpSource() {
         }
     }
 
-    private class Character : Filter.Text("Nhân vật", "")
     private class TextField(name: String, val key: String) : Filter.Text(name)
     override fun getFilterList(): FilterList {
-        launchIO { fetchGenres() }
+        fetchGenres()
         return FilterList(
             SortByList(getSortByList()),
             TextField("Tác giả", "author"),
             TextField("Parody", "parody"),
             TextField("Nhân vật", "character"),
-            Character(),
             if (genreList.isEmpty()) {
                 Filter.Header("Thể loại")
             } else {
