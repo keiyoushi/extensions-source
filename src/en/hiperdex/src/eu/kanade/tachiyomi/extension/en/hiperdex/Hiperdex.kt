@@ -15,7 +15,7 @@ import keiyoushi.utils.getPreferences
 class Hiperdex :
     Madara(
         "Hiperdex",
-        "https://hiperdex.com",
+        "https://hiperdex.tv",
         "en",
     ),
     ConfigurableSource {
