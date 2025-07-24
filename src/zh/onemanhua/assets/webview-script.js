@@ -62,7 +62,6 @@ function loadPic(pageIndex) {
         scroll()
     }
 }
-window.__ad = () => { } // Ad placeholder to prevent site anti-ad measures
 let pageCount = 0
 waitForElm("#mangalist").then(() => {
     pageCount = parseInt($.cookie(__cad.getCookieValue()[1] + mh_info.pageid) || "0")
@@ -93,7 +92,7 @@ const observer = new MutationObserver(() => {
                 img._Hijacked = true
             }
         })
-        if (images.length >= pageCount) {
+        if (pageCount>0 && images.length >= pageCount) {
             observer.disconnect()
         }
     }
