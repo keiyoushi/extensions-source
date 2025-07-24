@@ -14,7 +14,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -178,22 +177,18 @@ class MiMiHentai : HttpSource() {
     }
 
     private var fetchGenresAttempts: Int = 0
-    private fun fetchGenres(): Job {
+    private suspend fun fetchGenres() {
         if (fetchGenresAttempts >= 3 || genreList.isEmpty()) {
-            return launchIO {
-                try {
-                    client.newCall(genresRequest()).await()
-                        .use { parseGenres(it) }
-                        .takeIf { it.isNotEmpty() }
-                        ?.also { genreList = it }
-                } catch (_: Exception) {
-                } finally {
-                    fetchGenresAttempts++
-                }
+            try {
+                client.newCall(genresRequest()).await()
+                    .use { parseGenres(it) }
+                    .takeIf { it.isNotEmpty() }
+                    ?.also { genreList = it }
+            } catch (_: Exception) {
+            } finally {
+                fetchGenresAttempts++
             }
         }
-
-        return fetchGenres()
     }
 
     private fun launchIO(block: suspend () -> Unit) = CoroutineScope(Dispatchers.IO).launch { block() }
@@ -214,7 +209,7 @@ class MiMiHentai : HttpSource() {
 
     private class TextField(name: String, val key: String) : Filter.Text(name)
     override fun getFilterList(): FilterList {
-        fetchGenres()
+        launchIO { fetchGenres() }
         return FilterList(
             SortByList(getSortByList()),
             TextField("Tác giả", "author"),
