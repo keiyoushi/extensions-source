@@ -157,10 +157,7 @@ class MiMiHentai : HttpSource() {
                             addQueryParameter("sort", sort.id)
                         }
                     is GenreList -> {
-                        filters.state.filter { it.state }
-                            .let { list ->
-                                if (list.isNotEmpty()) { list.forEach { genre -> addQueryParameter("genre", genre.id) } }
-                            }
+                        filters.state.forEach { genre -> if (genre.state) addQueryParameter("genre", genre.id) }
                     }
                     is TextField -> setQueryParameter(filters.key, filters.state)
                     else -> {}
@@ -218,7 +215,7 @@ class MiMiHentai : HttpSource() {
             TextField("Parody", "parody"),
             TextField("Nhân vật", "character"),
             if (genreList.isEmpty()) {
-                Filter.Header("Thể loại")
+                Filter.Header("Nhấn 'Làm mới' để thử tải thể loại")
             } else {
                 GenreList("Thể loại", genreList)
             },
