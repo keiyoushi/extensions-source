@@ -57,11 +57,6 @@ class MangaDTO(
 }
 
 @Serializable
-class SearchDTO(
-    val result: List<MangaDTO>,
-)
-
-@Serializable
 class ChapterWrapper(
     val headers: Map<String, String> = emptyMap(),
     val body: ChapterBody,

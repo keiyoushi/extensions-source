@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -29,8 +30,6 @@ class GocTruyenTranhVui() : HttpSource() {
 
     private val apiUrl = "$baseUrl/api/v2"
 
-    private val searchUrl = "$baseUrl/api/comic/search"
-
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.US)
     override val supportsLatest: Boolean = true
 
@@ -52,7 +51,7 @@ class GocTruyenTranhVui() : HttpSource() {
                 SChapter.create().apply {
                     name = itm.select("a .chapter-info").text()
                     date_upload = parseDate(itm.select(".col-md-6 .text--disabled .d-flex").text())
-                    setUrlWithoutDomain(itm.selectFirst("a")!!.absUrl("href"))
+                    itm.selectFirst("a")?.absUrl("href")?.let { setUrlWithoutDomain(it) }
                 }
             }
         }
@@ -69,23 +68,13 @@ class GocTruyenTranhVui() : HttpSource() {
         }
     }.getOrNull() ?: 0L
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val element = response.asJsoup()
-        val manga = element.select(".row .col-md-2").map { itm ->
-            SManga.create().apply {
-                setUrlWithoutDomain(itm.select("a.mt-1").attr("href"))
-                title = itm.select("a.mt-1").text()
-                thumbnail_url = itm.selectFirst("img.lazy")!!.absUrl("data-original")
-            }
-        }
-        val hasNextPage = element.select(".ma-3 a").text().isNotEmpty()
-        return MangasPage(manga, hasNextPage)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
-        baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("truyen-cap-nhat")
-            addQueryParameter("p", page.toString())
+        apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("home/filter")
+            addQueryParameter("p", (page - 1).toString())
+            addQueryParameter("value", "updated-date")
         }.build(),
         headers,
     )
@@ -124,12 +113,12 @@ class GocTruyenTranhVui() : HttpSource() {
             Page(i, imageUrl = finalUrl)
         }
     }
-    override fun imageUrlParse(response: Response): String = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun popularMangaRequest(page: Int): Request = GET(
         apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("home/filter")
-            addQueryParameter("p", page.toString())
+            addQueryParameter("p", (page - 1).toString())
             addQueryParameter("value", "recommend")
         }.build(),
         headers,
@@ -142,14 +131,112 @@ class GocTruyenTranhVui() : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = searchUrl.toHttpUrl().newBuilder().apply {
-            addQueryParameter("name", query)
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("search")
+            addQueryParameter("p", (page - 1).toString())
+            addQueryParameter("searchValue", query)
+            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+                when (filter) {
+                    is GenreList ->
+                        filter.state
+                            .filter { it.state }
+                            .map { it.id }
+                            .forEach { addQueryParameter("categories%5B%5D", it) }
+                    is StatusList ->
+                        filter.state
+                            .filter { it.state }
+                            .map { it.id }
+                            .forEach { addQueryParameter("status%5B%5D", it) }
+
+                    is SortByList ->
+                        {
+                            filter.state
+                                .filter { it.state }
+                                .map { it.id }
+                                .forEach { addQueryParameter("orders%5B%5D", it) }
+                        }
+
+                    else -> {}
+                }
+            }
         }.build()
         return GET(url, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val res = response.parseAs<SearchDTO>().result.map { it.toManga(baseUrl) }
-        return MangasPage(res, hasNextPage = false)
-    }
+    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun getFilterList() = FilterList(
+        StatusList(getStatusList()),
+        SortByList(getSortByList()),
+        GenreList(getGenreList()),
+    )
+    private class StatusList(status: List<Status>) : Filter.Group<Status>("Trạng Thái", status)
+    private class Status(name: String, val id: String) : Filter.CheckBox(name)
+    private fun getStatusList() = listOf(
+        Status("Chưa bắt đầu", "STA"),
+        Status("Đã dừng", "STO"),
+        Status("Hoãn lại", "PDG"),
+        Status("Đang thực hiện", "PRG"),
+        Status("Hoàn thành", "END"),
+        Status("Truyện Chữ", "novel"),
+    )
+    private class SortByList(sort: List<SortBy>) : Filter.Group<SortBy>("Sắp xếp", sort)
+    private class SortBy(name: String, val id: String) : Filter.CheckBox(name)
+    private fun getSortByList() = listOf(
+        SortBy("Lượt xem", "viewCount"),
+        SortBy("Lượt đánh giá", "evaluationScore"),
+        SortBy("Lượt theo dõi", "followerCount"),
+        SortBy("Ngày Cập Nhật", "recentDate"),
+        SortBy("Truyện Mới", "createdAt"),
+    )
+    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
+    private class Genre(name: String, val id: String) : Filter.CheckBox(name)
+
+    private fun getGenreList() = listOf(
+        Genre("Anime", "ANI"),
+        Genre("Drama", "DRA"),
+        Genre("Josei", "JOS"),
+        Genre("Manhwa", "MAW"),
+        Genre("One Shot", "OSH"),
+        Genre("Shounen", "SHO"),
+        Genre("Webtoons", "WEB"),
+        Genre("Shoujo", "SHJ"),
+        Genre("Harem", "HAR"),
+        Genre("Ecchi", "ECC"),
+        Genre("Mature", "MAT"),
+        Genre("Slice of life", "SOL"),
+        Genre("Isekai", "ISE"),
+        Genre("Manga", "MAG"),
+        Genre("Manhua", "MAU"),
+        Genre("Hành Động", "ACT"),
+        Genre("Phiêu Lưu", "ADV"),
+        Genre("Hài Hước", "COM"),
+        Genre("Võ Thuật", "MAA"),
+        Genre("Huyền Bí", "MYS"),
+        Genre("Lãng Mạn", "ROM"),
+        Genre("Thể Thao", "SPO"),
+        Genre("Học Đường", "SCL"),
+        Genre("Lịch Sử", "HIS"),
+        Genre("Kinh Dị", "HOR"),
+        Genre("Siêu Nhiên", "SUN"),
+        Genre("Bi Kịch", "TRA"),
+        Genre("Trùng Sinh", "RED"),
+        Genre("Game", "GAM"),
+        Genre("Viễn Tưởng", "FTS"),
+        Genre("Khoa Học", "SCF"),
+        Genre("Truyện Màu", "COI"),
+        Genre("Người Lớn", "ADU"),
+        Genre("BoyLove", "BBL"),
+        Genre("Hầm Ngục", "DUN"),
+        Genre("Săn Bắn", "HUNT"),
+        Genre("Ngôn Từ Nhạy Cảm", "NTNC"),
+        Genre("Doujinshi", "DOU"),
+        Genre("Bạo Lực", "BLM"),
+        Genre("Ngôn Tình", "NTT"),
+        Genre("Nữ Cường", "NCT"),
+        Genre("Gender Bender", "GDB"),
+        Genre("Murim", "MRR"),
+        Genre("Leo Tháp", "LTT"),
+        Genre("Nấu Ăn", "COO"),
+    )
 }
