@@ -8,9 +8,17 @@ import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import rx.Observable
 
 class Hiperdex :
     Madara(
@@ -51,6 +59,38 @@ class Hiperdex :
         }.also { screen.addPreference(it) }
 
         addRandomUAPreferenceToScreen(screen)
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val mangaUrl = baseUrl.toHttpUrl().newBuilder().apply {
+            addQueryParameter("s", query)
+            addQueryParameter("post_type", "wp-manga")
+        }.build()
+        return client.newCall(GET(mangaUrl, headers))
+            .asObservableSuccess().map { response ->
+                val document = response.asJsoup()
+                val anchor = document.getElementById("loop-content")
+                if (anchor == null) {
+                    MangasPage(emptyList(), false)
+                } else {
+                    val mangaList = mutableListOf<SManga>()
+                    val elementsList = anchor.select(".page-listing-item")
+                    for (element in elementsList) {
+                        mangaList.add(
+                            SManga.create().apply {
+                                val imgSrc = element.selectFirst("img")!!.attr("src")
+                                val linkElement = element.selectFirst("a")!!
+
+                                setUrlWithoutDomain(linkElement.attr("href"))
+                                title = linkElement.attr("title")
+                                thumbnail_url = imgSrc
+                            },
+                        )
+                    }
+
+                    MangasPage(mangaList, false)
+                }
+            }
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
