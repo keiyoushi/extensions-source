@@ -96,8 +96,8 @@ class GocTruyenTranhVui : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val html = response.body.string()
         val pattern = Regex("chapterJson:\\s*`(.*?)`")
-        val match = pattern.find(html)
-        val jsonPage = match?.groups?.get(1)?.value ?: throw Exception("Không tìm thấy Json") // find json
+        val match = pattern.find(html) ?: throw Exception("Không tìm thấy Json") // find json
+        val jsonPage = match.groups[1]!!.value
         if (jsonPage.isEmpty()) throw Exception("Không có nội dung. Hãy đăng nhập trong WebView") // loginRequired
         val result = jsonPage.parseAs<ImageListWrapper>()
         val imageList = result.body.result.data
