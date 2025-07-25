@@ -14,8 +14,6 @@ class ResultDto<T>(
     val result: T,
 )
 
-typealias ListChapter = ResultDto<ResultChapter>
-
 @Serializable
 class ChapterDto(
     private val numberChapter: String,
@@ -32,8 +30,6 @@ class ChapterDto(
 class ResultChapter(
     val chapters: List<ChapterDto>,
 )
-
-typealias ListManga = ResultDto<Result>
 
 @Serializable
 class Result(
@@ -59,10 +55,8 @@ class MangaDto(
 @Serializable
 class ChapterWrapper(
     val headers: Map<String, String> = emptyMap(),
-    val body: ChapterBody,
+    val body: ResultDto<ResultContent>,
 )
-
-typealias ChapterBody = ResultDto<ResultContent>
 
 @Serializable
 class ResultContent(
