@@ -41,7 +41,7 @@ class MangaDto(
     private val photo: String,
     private val nameEn: String,
     private val author: String,
-    private val category: List<String>,
+    private val category: List<String>? = null,
 ) {
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         title = name
@@ -49,7 +49,7 @@ class MangaDto(
         url = "$id:$nameEn"
         author = this@MangaDto.author
         description = this@MangaDto.description
-        genre = category.joinToString()
+        genre = category?.joinToString()
         status = when (statusCode) {
             "PRG" -> SManga.ONGOING
             "END" -> SManga.COMPLETED

@@ -50,11 +50,7 @@ class GocTruyenTranhVui : HttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
-        apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("home/filter")
-            addQueryParameter("p", (page - 1).toString())
-            addQueryParameter("value", "updated-date")
-        }.build(),
+        "$apiUrl/search?p=${page - 1}&orders%5B%5D=recentDate",
         headers,
     )
 
