@@ -8,15 +8,11 @@ import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
-import rx.Observable
+import org.jsoup.nodes.Element
 
 class Hiperdex :
     Madara(
@@ -59,32 +55,24 @@ class Hiperdex :
         addRandomUAPreferenceToScreen(screen)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchRequest(page, query, filters))
-            .asObservableSuccess().map { response ->
-                val document = response.asJsoup()
-                val anchor = document.getElementById("loop-content")
-                if (anchor == null) {
-                    MangasPage(emptyList(), false)
-                } else {
-                    val mangaList = mutableListOf<SManga>()
-                    val elementsList = anchor.select(".page-listing-item")
-                    for (element in elementsList) {
-                        mangaList.add(
-                            SManga.create().apply {
-                                val imageElement = element.selectFirst("img")!!
-                                val linkElement = element.selectFirst("a")!!
+    override fun searchMangaSelector() = "#loop-content div.page-listing-item"
 
-                                setUrlWithoutDomain(linkElement.attr("href"))
-                                title = linkElement.attr("title")
-                                thumbnail_url = imageFromElement(imageElement)
-                            },
-                        )
-                    }
+    override val searchMangaUrlSelector = "div.item-thumb a"
 
-                    MangasPage(mangaList, false)
-                }
+    override fun searchMangaFromElement(element: Element): SManga {
+        val manga = SManga.create()
+
+        with(element) {
+            selectFirst(searchMangaUrlSelector)!!.let {
+                manga.setUrlWithoutDomain(it.attr("abs:href"))
+                manga.title = it.attr("title")
             }
+            selectFirst("img")?.let {
+                manga.thumbnail_url = imageFromElement(it)
+            }
+        }
+
+        return manga
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
