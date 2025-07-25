@@ -1,7 +1,10 @@
+package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
+
 import eu.kanade.tachiyomi.source.model.Filter
 
 class StatusList(status: List<Status>) : Filter.Group<Status>("Trạng Thái", status)
 class Status(name: String, val id: String) : Filter.CheckBox(name)
+
 fun getStatusList() = listOf(
     Status("Chưa bắt đầu", "STA"),
     Status("Đã dừng", "STO"),
@@ -10,8 +13,10 @@ fun getStatusList() = listOf(
     Status("Hoàn thành", "END"),
     Status("Truyện Chữ", "novel"),
 )
+
 class SortByList(sort: List<SortBy>) : Filter.Group<SortBy>("Sắp xếp", sort)
 class SortBy(name: String, val id: String) : Filter.CheckBox(name)
+
 fun getSortByList() = listOf(
     SortBy("Lượt xem", "viewCount"),
     SortBy("Lượt đánh giá", "evaluationScore"),
@@ -19,6 +24,7 @@ fun getSortByList() = listOf(
     SortBy("Ngày Cập Nhật", "recentDate"),
     SortBy("Truyện Mới", "createdAt"),
 )
+
 class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
 class Genre(name: String, val id: String) : Filter.CheckBox(name)
 

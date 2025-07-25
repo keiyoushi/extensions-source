@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
-import GenreList
-import SortByList
-import StatusList
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -12,9 +9,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import getGenreList
-import getSortByList
-import getStatusList
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -26,7 +20,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class GocTruyenTranhVui() : HttpSource() {
+class GocTruyenTranhVui : HttpSource() {
     override val lang = "vi"
 
     override val baseUrl = "https://goctruyentranhvui17.com"
@@ -155,6 +149,7 @@ class GocTruyenTranhVui() : HttpSource() {
             Page(i, imageUrl = finalUrl)
         }
     }
+
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -169,6 +164,7 @@ class GocTruyenTranhVui() : HttpSource() {
                             .filter { it.state }
                             .map { it.id }
                             .forEach { addQueryParameter("categories%5B%5D", it) }
+
                     is StatusList ->
                         filter.state
                             .filter { it.state }
