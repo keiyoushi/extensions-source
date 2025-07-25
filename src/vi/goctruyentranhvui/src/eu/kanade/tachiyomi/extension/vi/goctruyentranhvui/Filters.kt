@@ -2,76 +2,76 @@ package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
 import eu.kanade.tachiyomi.source.model.Filter
 
-class StatusList(status: List<Status>) : Filter.Group<Status>("Trạng Thái", status)
-class Status(name: String, val id: String) : Filter.CheckBox(name)
+class Option(name: String, val id: String) : Filter.CheckBox(name)
+open class FilterGroup(name: String, val query: String, state: List<Option>) : Filter.Group<Option>(name, state)
+
+class StatusList(status: List<Option>) : FilterGroup("Trạng Thái", "status[]", status)
 
 fun getStatusList() = listOf(
-    Status("Chưa bắt đầu", "STA"),
-    Status("Đã dừng", "STO"),
-    Status("Hoãn lại", "PDG"),
-    Status("Đang thực hiện", "PRG"),
-    Status("Hoàn thành", "END"),
-    Status("Truyện Chữ", "novel"),
+    Option("Chưa bắt đầu", "STA"),
+    Option("Đã dừng", "STO"),
+    Option("Hoãn lại", "PDG"),
+    Option("Đang thực hiện", "PRG"),
+    Option("Hoàn thành", "END"),
+    Option("Truyện Chữ", "novel"),
 )
 
-class SortByList(sort: List<SortBy>) : Filter.Group<SortBy>("Sắp xếp", sort)
-class SortBy(name: String, val id: String) : Filter.CheckBox(name)
+class SortByList(sort: List<Option>) : FilterGroup("Sắp xếp", "orders[]", sort)
 
 fun getSortByList() = listOf(
-    SortBy("Lượt xem", "viewCount"),
-    SortBy("Lượt đánh giá", "evaluationScore"),
-    SortBy("Lượt theo dõi", "followerCount"),
-    SortBy("Ngày Cập Nhật", "recentDate"),
-    SortBy("Truyện Mới", "createdAt"),
+    Option("Lượt xem", "viewCount"),
+    Option("Lượt đánh giá", "evaluationScore"),
+    Option("Lượt theo dõi", "followerCount"),
+    Option("Ngày Cập Nhật", "recentDate"),
+    Option("Truyện Mới", "createdAt"),
 )
 
-class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
-class Genre(name: String, val id: String) : Filter.CheckBox(name)
+class GenreList(genres: List<Option>) : FilterGroup("Thể loại", "categories[]", genres)
 
 fun getGenreList() = listOf(
-    Genre("Anime", "ANI"),
-    Genre("Drama", "DRA"),
-    Genre("Josei", "JOS"),
-    Genre("Manhwa", "MAW"),
-    Genre("One Shot", "OSH"),
-    Genre("Shounen", "SHO"),
-    Genre("Webtoons", "WEB"),
-    Genre("Shoujo", "SHJ"),
-    Genre("Harem", "HAR"),
-    Genre("Ecchi", "ECC"),
-    Genre("Mature", "MAT"),
-    Genre("Slice of life", "SOL"),
-    Genre("Isekai", "ISE"),
-    Genre("Manga", "MAG"),
-    Genre("Manhua", "MAU"),
-    Genre("Hành Động", "ACT"),
-    Genre("Phiêu Lưu", "ADV"),
-    Genre("Hài Hước", "COM"),
-    Genre("Võ Thuật", "MAA"),
-    Genre("Huyền Bí", "MYS"),
-    Genre("Lãng Mạn", "ROM"),
-    Genre("Thể Thao", "SPO"),
-    Genre("Học Đường", "SCL"),
-    Genre("Lịch Sử", "HIS"),
-    Genre("Kinh Dị", "HOR"),
-    Genre("Siêu Nhiên", "SUN"),
-    Genre("Bi Kịch", "TRA"),
-    Genre("Trùng Sinh", "RED"),
-    Genre("Game", "GAM"),
-    Genre("Viễn Tưởng", "FTS"),
-    Genre("Khoa Học", "SCF"),
-    Genre("Truyện Màu", "COI"),
-    Genre("Người Lớn", "ADU"),
-    Genre("BoyLove", "BBL"),
-    Genre("Hầm Ngục", "DUN"),
-    Genre("Săn Bắn", "HUNT"),
-    Genre("Ngôn Từ Nhạy Cảm", "NTNC"),
-    Genre("Doujinshi", "DOU"),
-    Genre("Bạo Lực", "BLM"),
-    Genre("Ngôn Tình", "NTT"),
-    Genre("Nữ Cường", "NCT"),
-    Genre("Gender Bender", "GDB"),
-    Genre("Murim", "MRR"),
-    Genre("Leo Tháp", "LTT"),
-    Genre("Nấu Ăn", "COO"),
+    Option("Anime", "ANI"),
+    Option("Drama", "DRA"),
+    Option("Josei", "JOS"),
+    Option("Manhwa", "MAW"),
+    Option("One Shot", "OSH"),
+    Option("Shounen", "SHO"),
+    Option("Webtoons", "WEB"),
+    Option("Shoujo", "SHJ"),
+    Option("Harem", "HAR"),
+    Option("Ecchi", "ECC"),
+    Option("Mature", "MAT"),
+    Option("Slice of life", "SOL"),
+    Option("Isekai", "ISE"),
+    Option("Manga", "MAG"),
+    Option("Manhua", "MAU"),
+    Option("Hành Động", "ACT"),
+    Option("Phiêu Lưu", "ADV"),
+    Option("Hài Hước", "COM"),
+    Option("Võ Thuật", "MAA"),
+    Option("Huyền Bí", "MYS"),
+    Option("Lãng Mạn", "ROM"),
+    Option("Thể Thao", "SPO"),
+    Option("Học Đường", "SCL"),
+    Option("Lịch Sử", "HIS"),
+    Option("Kinh Dị", "HOR"),
+    Option("Siêu Nhiên", "SUN"),
+    Option("Bi Kịch", "TRA"),
+    Option("Trùng Sinh", "RED"),
+    Option("Game", "GAM"),
+    Option("Viễn Tưởng", "FTS"),
+    Option("Khoa Học", "SCF"),
+    Option("Truyện Màu", "COI"),
+    Option("Người Lớn", "ADU"),
+    Option("BoyLove", "BBL"),
+    Option("Hầm Ngục", "DUN"),
+    Option("Săn Bắn", "HUNT"),
+    Option("Ngôn Từ Nhạy Cảm", "NTNC"),
+    Option("Doujinshi", "DOU"),
+    Option("Bạo Lực", "BLM"),
+    Option("Ngôn Tình", "NTT"),
+    Option("Nữ Cường", "NCT"),
+    Option("Gender Bender", "GDB"),
+    Option("Murim", "MRR"),
+    Option("Leo Tháp", "LTT"),
+    Option("Nấu Ăn", "COO"),
 )

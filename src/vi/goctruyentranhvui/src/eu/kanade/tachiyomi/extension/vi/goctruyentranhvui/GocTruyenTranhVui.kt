@@ -118,25 +118,12 @@ class GocTruyenTranhVui : HttpSource() {
             addPathSegments("search")
             addQueryParameter("p", (page - 1).toString())
             addQueryParameter("searchValue", query)
-            (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
+            for (filter in filters) {
                 when (filter) {
-                    is GenreList ->
-                        filter.state
-                            .filter { it.state }
-                            .map { it.id }
-                            .forEach { addQueryParameter("categories%5B%5D", it) }
-
-                    is StatusList ->
-                        filter.state
-                            .filter { it.state }
-                            .map { it.id }
-                            .forEach { addQueryParameter("status%5B%5D", it) }
-
-                    is SortByList ->
-                        filter.state
-                            .filter { it.state }
-                            .map { it.id }
-                            .forEach { addQueryParameter("orders%5B%5D", it) }
+                    is FilterGroup ->
+                        for (checkbox in filter.state) {
+                            if (checkbox.state) addQueryParameter(filter.query, checkbox.id)
+                        }
 
                     else -> {}
                 }
