@@ -53,17 +53,7 @@ class MangaDTO(
     fun toManga(baseUrl: String): SManga = SManga.create().apply {
         title = name
         thumbnail_url = baseUrl + photo
-        url = "/truyen/$nameEn"
-        MangaIdCache.map[nameEn] = id
-    }
-}
-object MangaIdCache {
-    private const val MAX_SIZE = 150 // Limit entry cache
-
-    val map: MutableMap<String, String> = object : LinkedHashMap<String, String>(MAX_SIZE, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
-            return size > MAX_SIZE
-        }
+        url = "/truyen/$nameEn#$id"
     }
 }
 

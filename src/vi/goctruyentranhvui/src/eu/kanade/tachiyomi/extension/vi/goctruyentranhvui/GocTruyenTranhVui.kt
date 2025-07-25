@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
+import GenreList
+import SortByList
+import StatusList
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,7 +12,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import getGenreList
+import getSortByList
+import getStatusList
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -42,43 +48,20 @@ class GocTruyenTranhVui() : HttpSource() {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val res = response.asJsoup()
-        val mangaIdRes = res.selectFirst("input[id=comic-id-comment]")!!.attr("value") // id
-        val slug = response.request.url.toString().substringAfterLast("/") // slug
-        val mangaId = MangaIdCache.map[slug] ?: mangaIdRes // id
+    override fun popularMangaRequest(page: Int): Request = GET(
+        apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("home/filter")
+            addQueryParameter("p", (page - 1).toString())
+            addQueryParameter("value", "recommend")
+        }.build(),
+        headers,
+    )
 
-        val urlChapter = apiComic.toHttpUrl().newBuilder().apply {
-            addPathSegments(mangaId)
-            addPathSegments("chapter")
-            addQueryParameter("limit", "-1")
-        }.build()
-        val getChapter = client.newCall(GET(urlChapter, headers))
-        val chapter = getChapter.execute().parseAs<ListChapter>()
-        return chapter.result.chapters.map { it.toChapter(slug) }.ifEmpty {
-            // Get chapter from manga page if chapterJson doesn't have chapter
-            res.select(".chapter-list .list .col-md-6").map { itm ->
-                SChapter.create().apply {
-                    name = itm.select("a .chapter-info").text()
-                    date_upload = parseDate(itm.select(".col-md-6 .text--disabled .d-flex").text())
-                    itm.selectFirst("a")?.absUrl("href")?.let { setUrlWithoutDomain(it) }
-                }
-            }
-        }
+    override fun popularMangaParse(response: Response): MangasPage {
+        val res = response.parseAs<ListManga>()
+        val hasNextPage = res.result.p != 100
+        return MangasPage(res.result.data.map { it.toManga(baseUrl) }, hasNextPage)
     }
-
-    private fun parseDate(date: String): Long = runCatching {
-        val calendar = Calendar.getInstance()
-        val number = date.replace(Regex("[^0-9]"), "").trim().toInt()
-        when (date.replace(Regex("[0-9]"), "").trim()) {
-            "phút trước" -> calendar.apply { add(Calendar.MINUTE, -number) }.timeInMillis
-            "giờ trước" -> calendar.apply { add(Calendar.HOUR, -number) }.timeInMillis
-            "ngày trước" -> calendar.apply { add(Calendar.DAY_OF_YEAR, -number) }.timeInMillis
-            else -> dateFormat.parse(date)?.time
-        }
-    }.getOrNull() ?: 0L
-
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
         apiUrl.toHttpUrl().newBuilder().apply {
@@ -88,6 +71,55 @@ class GocTruyenTranhVui() : HttpSource() {
         }.build(),
         headers,
     )
+
+    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val mangaUrl = "$baseUrl${manga.url}"
+        val mangaId = mangaUrl.toHttpUrl().fragment
+            ?: throw Exception("mangaId bị thiếu trong url: $mangaUrl")
+        val url = apiComic.toHttpUrl().newBuilder()
+            .addPathSegments(mangaId)
+            .addPathSegments("chapter")
+            .addQueryParameter("limit", "-1")
+            .build()
+        return GET(url, headers)
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val slug = response.request.url.toString().substringAfterLast("/") // slug
+        val chapterJson = response.parseAs<ListChapter>()
+        val chapterList = chapterJson.result.chapters.map { it.toChapter(slug) }
+
+        if (chapterList.isNotEmpty()) {
+            return chapterList
+        }
+        return fallbackChapterFromHtml(slug)
+    }
+
+    private fun fallbackChapterFromHtml(slug: String): List<SChapter> {
+        val mangaPageUrl = "$baseUrl/truyen/$slug"
+        val res = client.newCall(GET(mangaPageUrl, headers)).execute().asJsoup()
+
+        return res.select(".chapter-list .list .col-md-6").map { itm ->
+            SChapter.create().apply {
+                name = itm.select("a .chapter-info").text()
+                date_upload = parseDate(itm.select(".col-md-6 .text--disabled .d-flex").text())
+                itm.selectFirst("a")?.absUrl("href")?.let { setUrlWithoutDomain(it) }
+            }
+        }
+    }
+
+    private fun parseDate(date: String): Long {
+        val calendar = Calendar.getInstance()
+        val number = date.replace(Regex("[^0-9]"), "").trim().toInt()
+        return when (date.replace(Regex("[0-9]"), "").trim()) {
+            "phút trước" -> calendar.apply { add(Calendar.MINUTE, -number) }.timeInMillis
+            "giờ trước" -> calendar.apply { add(Calendar.HOUR, -number) }.timeInMillis
+            "ngày trước" -> calendar.apply { add(Calendar.DAY_OF_YEAR, -number) }.timeInMillis
+            else -> dateFormat.tryParse(date)
+        }
+    }
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
@@ -116,7 +148,7 @@ class GocTruyenTranhVui() : HttpSource() {
         val imageList = result.body.result.data
         return imageList.mapIndexed { i, url ->
             val finalUrl = if (url.startsWith("/image/")) {
-                "$baseUrl$url"
+                baseUrl + url
             } else {
                 url
             }
@@ -124,21 +156,6 @@ class GocTruyenTranhVui() : HttpSource() {
         }
     }
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    override fun popularMangaRequest(page: Int): Request = GET(
-        apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("home/filter")
-            addQueryParameter("p", (page - 1).toString())
-            addQueryParameter("value", "recommend")
-        }.build(),
-        headers,
-    )
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val res = response.parseAs<ListManga>()
-        val hasNextPage = res.result.p != 100
-        return MangasPage(res.result.data.map { it.toManga(baseUrl) }, hasNextPage)
-    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
@@ -159,12 +176,10 @@ class GocTruyenTranhVui() : HttpSource() {
                             .forEach { addQueryParameter("status%5B%5D", it) }
 
                     is SortByList ->
-                        {
-                            filter.state
-                                .filter { it.state }
-                                .map { it.id }
-                                .forEach { addQueryParameter("orders%5B%5D", it) }
-                        }
+                        filter.state
+                            .filter { it.state }
+                            .map { it.id }
+                            .forEach { addQueryParameter("orders%5B%5D", it) }
 
                     else -> {}
                 }
@@ -179,74 +194,5 @@ class GocTruyenTranhVui() : HttpSource() {
         StatusList(getStatusList()),
         SortByList(getSortByList()),
         GenreList(getGenreList()),
-    )
-    private class StatusList(status: List<Status>) : Filter.Group<Status>("Trạng Thái", status)
-    private class Status(name: String, val id: String) : Filter.CheckBox(name)
-    private fun getStatusList() = listOf(
-        Status("Chưa bắt đầu", "STA"),
-        Status("Đã dừng", "STO"),
-        Status("Hoãn lại", "PDG"),
-        Status("Đang thực hiện", "PRG"),
-        Status("Hoàn thành", "END"),
-        Status("Truyện Chữ", "novel"),
-    )
-    private class SortByList(sort: List<SortBy>) : Filter.Group<SortBy>("Sắp xếp", sort)
-    private class SortBy(name: String, val id: String) : Filter.CheckBox(name)
-    private fun getSortByList() = listOf(
-        SortBy("Lượt xem", "viewCount"),
-        SortBy("Lượt đánh giá", "evaluationScore"),
-        SortBy("Lượt theo dõi", "followerCount"),
-        SortBy("Ngày Cập Nhật", "recentDate"),
-        SortBy("Truyện Mới", "createdAt"),
-    )
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
-    private class Genre(name: String, val id: String) : Filter.CheckBox(name)
-
-    private fun getGenreList() = listOf(
-        Genre("Anime", "ANI"),
-        Genre("Drama", "DRA"),
-        Genre("Josei", "JOS"),
-        Genre("Manhwa", "MAW"),
-        Genre("One Shot", "OSH"),
-        Genre("Shounen", "SHO"),
-        Genre("Webtoons", "WEB"),
-        Genre("Shoujo", "SHJ"),
-        Genre("Harem", "HAR"),
-        Genre("Ecchi", "ECC"),
-        Genre("Mature", "MAT"),
-        Genre("Slice of life", "SOL"),
-        Genre("Isekai", "ISE"),
-        Genre("Manga", "MAG"),
-        Genre("Manhua", "MAU"),
-        Genre("Hành Động", "ACT"),
-        Genre("Phiêu Lưu", "ADV"),
-        Genre("Hài Hước", "COM"),
-        Genre("Võ Thuật", "MAA"),
-        Genre("Huyền Bí", "MYS"),
-        Genre("Lãng Mạn", "ROM"),
-        Genre("Thể Thao", "SPO"),
-        Genre("Học Đường", "SCL"),
-        Genre("Lịch Sử", "HIS"),
-        Genre("Kinh Dị", "HOR"),
-        Genre("Siêu Nhiên", "SUN"),
-        Genre("Bi Kịch", "TRA"),
-        Genre("Trùng Sinh", "RED"),
-        Genre("Game", "GAM"),
-        Genre("Viễn Tưởng", "FTS"),
-        Genre("Khoa Học", "SCF"),
-        Genre("Truyện Màu", "COI"),
-        Genre("Người Lớn", "ADU"),
-        Genre("BoyLove", "BBL"),
-        Genre("Hầm Ngục", "DUN"),
-        Genre("Săn Bắn", "HUNT"),
-        Genre("Ngôn Từ Nhạy Cảm", "NTNC"),
-        Genre("Doujinshi", "DOU"),
-        Genre("Bạo Lực", "BLM"),
-        Genre("Ngôn Tình", "NTT"),
-        Genre("Nữ Cường", "NCT"),
-        Genre("Gender Bender", "GDB"),
-        Genre("Murim", "MRR"),
-        Genre("Leo Tháp", "LTT"),
-        Genre("Nấu Ăn", "COO"),
     )
 }
