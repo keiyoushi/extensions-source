@@ -15,7 +15,7 @@ import keiyoushi.utils.getPreferences
 class Hiperdex :
     Madara(
         "Hiperdex",
-        "https://hiperdex.com",
+        "https://hiperdex.tv",
         "en",
     ),
     ConfigurableSource {
@@ -52,6 +52,8 @@ class Hiperdex :
 
         addRandomUAPreferenceToScreen(screen)
     }
+
+    override fun searchMangaSelector() = "#loop-content div.page-listing-item"
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
 
