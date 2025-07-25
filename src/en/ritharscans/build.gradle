@@ -3,7 +3,7 @@ ext {
     extClass = '.RitharScans'
     themePkg = 'keyoapp'
     baseUrl = 'https://ritharscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
