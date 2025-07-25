@@ -2,12 +2,7 @@ package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import java.text.SimpleDateFormat
-import java.util.Locale
-
-private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.US)
 
 @Serializable
 class ResultDto<T>(
@@ -17,11 +12,11 @@ class ResultDto<T>(
 @Serializable
 class ChapterDto(
     private val numberChapter: String,
-    private val stringUpdateTime: String,
+    private val updateTime: Long,
 ) {
     fun toSChapter(slug: String): SChapter = SChapter.create().apply {
         name = numberChapter
-        date_upload = dateFormat.tryParse(stringUpdateTime)
+        date_upload = updateTime
         url = "/truyen/$slug/chuong-$numberChapter"
     }
 }
