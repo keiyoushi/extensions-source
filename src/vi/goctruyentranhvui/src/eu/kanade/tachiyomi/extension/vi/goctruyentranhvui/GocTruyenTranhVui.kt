@@ -54,7 +54,7 @@ class GocTruyenTranhVui : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val res = response.parseAs<ListManga>()
         val hasNextPage = res.result.p != 100
-        return MangasPage(res.result.data.map { it.toManga(baseUrl) }, hasNextPage)
+        return MangasPage(res.result.data.map { it.toSManga(baseUrl) }, hasNextPage)
     }
 
     override fun latestUpdatesRequest(page: Int): Request = GET(
@@ -83,7 +83,7 @@ class GocTruyenTranhVui : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val slug = response.request.url.toString().substringAfterLast("/") // slug
         val chapterJson = response.parseAs<ListChapter>()
-        val chapterList = chapterJson.result.chapters.map { it.toChapter(slug) }
+        val chapterList = chapterJson.result.chapters.map { it.toSChapter(slug) }
 
         if (chapterList.isNotEmpty()) {
             return chapterList
