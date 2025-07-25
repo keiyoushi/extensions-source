@@ -45,7 +45,7 @@ class GocTruyenTranhVui : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val res = response.parseAs<ResultDto<ListingDto>>()
-        val hasNextPage = res.result.p != 100
+        val hasNextPage = res.result.next
         return MangasPage(res.result.data.map { it.toSManga(baseUrl) }, hasNextPage)
     }
 
@@ -78,12 +78,12 @@ class GocTruyenTranhVui : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
-        title = document.select(".v-card-title").text()
-        genre = document.select(".group-content > .v-chip-link").joinToString { it.text().trim(',', ' ') }
+        title = document.selectFirst(".v-card-title")!!.text()
+        genre = document.select(".group-content > .v-chip-link").joinToString { it.text() }
         thumbnail_url = document.selectFirst("img.image")!!.absUrl("src")
-        status = parseStatus(document.select(".mb-1:contains(Trạng thái:) span").text())
-        author = document.select(".mb-1:contains(Tác giả:) span").text()
-        description = document.select(".v-card-text").text()
+        status = parseStatus(document.selectFirst(".mb-1:contains(Trạng thái:) span")!!.text())
+        author = document.selectFirst(".mb-1:contains(Tác giả:) span")!!.text()
+        description = document.selectFirst(".v-card-text")!!.text()
     }
 
     private fun parseStatus(status: String?) = when {

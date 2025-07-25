@@ -28,8 +28,7 @@ class ChapterListDto(
 
 @Serializable
 class ListingDto(
-    val p: Int? = null,
-    val next: Boolean? = null,
+    val next: Boolean,
     val data: List<MangaDto>,
 )
 
@@ -37,19 +36,31 @@ class ListingDto(
 class MangaDto(
     private val id: String,
     private val name: String,
+    private val description: String,
+    private val statusCode: String,
     private val photo: String,
     private val nameEn: String,
+    private val author: String,
+    private val category: List<String>,
 ) {
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         title = name
         thumbnail_url = baseUrl + photo
         url = "$id:$nameEn"
+        author = this@MangaDto.author
+        description = this@MangaDto.description
+        genre = category.joinToString()
+        status = when (statusCode) {
+            "PRG" -> SManga.ONGOING
+            "END" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+        initialized = true
     }
 }
 
 @Serializable
 class ImageListWrapper(
-    val headers: Map<String, String> = emptyMap(),
     val body: ResultDto<ImageListDto>,
 )
 

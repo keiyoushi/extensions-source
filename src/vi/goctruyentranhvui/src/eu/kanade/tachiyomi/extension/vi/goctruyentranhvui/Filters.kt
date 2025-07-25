@@ -8,9 +8,6 @@ open class FilterGroup(name: String, val query: String, state: List<Option>) : F
 class StatusList(status: List<Option>) : FilterGroup("Trạng Thái", "status[]", status)
 
 fun getStatusList() = listOf(
-    Option("Chưa bắt đầu", "STA"),
-    Option("Đã dừng", "STO"),
-    Option("Hoãn lại", "PDG"),
     Option("Đang thực hiện", "PRG"),
     Option("Hoàn thành", "END"),
     Option("Truyện Chữ", "novel"),
