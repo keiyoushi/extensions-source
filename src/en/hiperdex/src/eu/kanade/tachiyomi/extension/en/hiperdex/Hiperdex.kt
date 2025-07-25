@@ -78,12 +78,12 @@ class Hiperdex :
                     for (element in elementsList) {
                         mangaList.add(
                             SManga.create().apply {
-                                val imgSrc = element.selectFirst("img")!!.attr("src")
+                                val imgSrc = element.selectFirst("img")!!
                                 val linkElement = element.selectFirst("a")!!
 
                                 setUrlWithoutDomain(linkElement.attr("href"))
                                 title = linkElement.attr("title")
-                                thumbnail_url = imgSrc
+                                thumbnail_url = imageFromElement(imgSrc)
                             },
                         )
                     }
