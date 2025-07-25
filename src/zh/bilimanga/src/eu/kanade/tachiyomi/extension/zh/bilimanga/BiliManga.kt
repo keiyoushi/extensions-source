@@ -27,7 +27,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     override val lang = "zh"
 
-    override val name = "Bilimanga.net"
+    override val name = "嗶哩漫畫"
 
     override val supportsLatest = true
 
@@ -121,7 +121,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
         val backupname = doc.selectFirst(".backupname")?.let {
             "\n\n漫畫別名：\n• ${it.text().split("、").joinToString("\n• ")}"
         }
-        url = doc.location()
+        setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
         description = doc.selectFirst("#bookSummary")?.text() + backupname
