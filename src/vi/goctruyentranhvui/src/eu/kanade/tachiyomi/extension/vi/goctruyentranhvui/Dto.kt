@@ -10,9 +10,11 @@ import java.util.Locale
 private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.US)
 
 @Serializable
-class ListChapter(
-    val result: ResultChapter,
+class ResultDto<T>(
+    val result: T,
 )
+
+typealias ListChapter = ResultDto<ResultChapter>
 
 @Serializable
 class ChapterDto(
@@ -31,10 +33,7 @@ class ResultChapter(
     val chapters: List<ChapterDto>,
 )
 
-@Serializable
-class ListManga(
-    val result: Result,
-)
+typealias ListManga = ResultDto<Result>
 
 @Serializable
 class Result(
@@ -63,10 +62,7 @@ class ChapterWrapper(
     val body: ChapterBody,
 )
 
-@Serializable
-class ChapterBody(
-    val result: ResultContent,
-)
+typealias ChapterBody = ResultDto<ResultContent>
 
 @Serializable
 class ResultContent(
