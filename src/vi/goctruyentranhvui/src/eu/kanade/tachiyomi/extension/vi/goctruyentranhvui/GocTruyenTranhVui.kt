@@ -10,15 +10,11 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
 
 class GocTruyenTranhVui : HttpSource() {
     override val lang = "vi"
@@ -28,10 +24,6 @@ class GocTruyenTranhVui : HttpSource() {
     override val name = "Goc Truyen Tranh Vui"
 
     private val apiUrl = "$baseUrl/api/v2"
-
-    private val apiComic = "$baseUrl/api/comic"
-
-    private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.US)
 
     override val supportsLatest: Boolean = true
 
@@ -68,52 +60,21 @@ class GocTruyenTranhVui : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/truyen/${manga.url.substringAfter(':')}"
+
     override fun chapterListRequest(manga: SManga): Request {
-        val mangaUrl = "$baseUrl${manga.url}"
-        val mangaId = mangaUrl.toHttpUrl().fragment
-            ?: throw Exception("mangaId bị thiếu trong url: $mangaUrl")
-        val url = apiComic.toHttpUrl().newBuilder()
-            .addPathSegments(mangaId)
-            .addPathSegments("chapter")
-            .addQueryParameter("limit", "-1")
-            .build()
-        return GET(url, headers)
+        val mangaId = manga.url.substringBefore(':')
+        val slug = manga.url.substringAfter(':')
+        return GET("$baseUrl/api/comic/$mangaId/chapter?limit=-1#$slug", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val slug = response.request.url.toString().substringAfterLast("/") // slug
+        val slug = response.request.url.fragment!!
         val chapterJson = response.parseAs<ResultDto<ChapterListDto>>()
-        val chapterList = chapterJson.result.chapters.map { it.toSChapter(slug) }
-
-        if (chapterList.isNotEmpty()) {
-            return chapterList
-        }
-        return fallbackChapterFromHtml(slug)
+        return chapterJson.result.chapters.map { it.toSChapter(slug) }
     }
 
-    private fun fallbackChapterFromHtml(slug: String): List<SChapter> {
-        val mangaPageUrl = "$baseUrl/truyen/$slug"
-        val res = client.newCall(GET(mangaPageUrl, headers)).execute().asJsoup()
-
-        return res.select(".chapter-list .list .col-md-6").map { itm ->
-            SChapter.create().apply {
-                name = itm.select("a .chapter-info").text()
-                date_upload = parseDate(itm.select(".col-md-6 .text--disabled .d-flex").text())
-                itm.selectFirst("a")?.absUrl("href")?.let { setUrlWithoutDomain(it) }
-            }
-        }
-    }
-
-    private fun parseDate(date: String): Long {
-        val calendar = Calendar.getInstance()
-        val number = date.replace(Regex("[^0-9]"), "").trim().toInt()
-        return when (date.replace(Regex("[0-9]"), "").trim()) {
-            "phút trước" -> calendar.apply { add(Calendar.MINUTE, -number) }.timeInMillis
-            "giờ trước" -> calendar.apply { add(Calendar.HOUR, -number) }.timeInMillis
-            "ngày trước" -> calendar.apply { add(Calendar.DAY_OF_YEAR, -number) }.timeInMillis
-            else -> dateFormat.tryParse(date)
-        }
-    }
+    override fun mangaDetailsRequest(manga: SManga) = GET(getMangaUrl(manga), headers)
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()

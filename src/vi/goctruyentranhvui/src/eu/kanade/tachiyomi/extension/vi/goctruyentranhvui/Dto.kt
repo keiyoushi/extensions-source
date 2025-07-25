@@ -48,7 +48,7 @@ class MangaDto(
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         title = name
         thumbnail_url = baseUrl + photo
-        url = "/truyen/$nameEn#$id"
+        url = "$id:$nameEn"
     }
 }
 
