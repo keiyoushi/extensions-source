@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -30,7 +29,10 @@ class GocTruyenTranhVui() : HttpSource() {
 
     private val apiUrl = "$baseUrl/api/v2"
 
+    private val apiComic = "$baseUrl/api/comic"
+
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.US)
+
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
@@ -42,11 +44,20 @@ class GocTruyenTranhVui() : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val res = response.asJsoup()
-        val mangaId = res.selectFirst("input[id=comic-id-comment]")!!.attr("value")
+        val mangaIdRes = res.selectFirst("input[id=comic-id-comment]")!!.attr("value") // id
         val slug = response.request.url.toString().substringAfterLast("/") // slug
-        val chapter = client.newCall(GET("$baseUrl/api/comic/$mangaId/chapter?offset=21&limit=-1", headers)).execute().parseAs<ListChapter>()
+        val mangaId = MangaIdCache.map[slug] ?: mangaIdRes // id
 
+
+        val urlChapter = apiComic.toHttpUrl().newBuilder().apply {
+            addPathSegments(mangaId)
+            addPathSegments("chapter")
+            addQueryParameter("limit", "-1")
+        }.build()
+        val getChapter = client.newCall(GET(urlChapter, headers))
+        val chapter = getChapter.execute().parseAs<ListChapter>()
         return chapter.result.chapters.map { it.toChapter(slug) }.ifEmpty {
+            // Get chapter from manga page if chapterJson doesn't have chapter
             res.select(".chapter-list .list .col-md-6").map { itm ->
                 SChapter.create().apply {
                     name = itm.select("a .chapter-info").text()
@@ -64,7 +75,7 @@ class GocTruyenTranhVui() : HttpSource() {
             "phút trước" -> calendar.apply { add(Calendar.MINUTE, -number) }.timeInMillis
             "giờ trước" -> calendar.apply { add(Calendar.HOUR, -number) }.timeInMillis
             "ngày trước" -> calendar.apply { add(Calendar.DAY_OF_YEAR, -number) }.timeInMillis
-            else -> dateFormat.tryParse(date)
+            else -> dateFormat.parse(date)?.time
         }
     }.getOrNull() ?: 0L
 
@@ -100,9 +111,9 @@ class GocTruyenTranhVui() : HttpSource() {
         val html = response.body.string()
         val pattern = Regex("chapterJson:\\s*`(.*?)`")
         val match = pattern.find(html)
-        val jsonString = match?.groups?.get(1)?.value ?: error("Không tìm thấy chapterJson")
-        if (jsonString.isEmpty()) error("Không có nội dung. Hãy đăng nhập trong WebView") // loginRequired
-        val result = jsonString.parseAs<ChapterWrapper>()
+        val jsonPage = match?.groups?.get(1)?.value ?: throw Exception("Không tìm thấy Json") // find json
+        if (jsonPage.isEmpty()) throw Exception("Không có nội dung. Hãy đăng nhập trong WebView") // loginRequired
+        val result = jsonPage.parseAs<ChapterWrapper>()
         val imageList = result.body.result.data
         return imageList.mapIndexed { i, url ->
             val finalUrl = if (url.startsWith("/image/")) {

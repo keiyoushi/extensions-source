@@ -45,6 +45,7 @@ class Result(
 
 @Serializable
 class MangaDTO(
+    private val id: String,
     private val name: String,
     private val photo: String,
     private val nameEn: String,
@@ -53,7 +54,11 @@ class MangaDTO(
         title = name
         thumbnail_url = baseUrl + photo
         url = "/truyen/$nameEn"
+        MangaIdCache.map[nameEn] = id
     }
+}
+object MangaIdCache {
+    val map = mutableMapOf<String, String>()
 }
 
 @Serializable
