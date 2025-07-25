@@ -58,7 +58,13 @@ class MangaDTO(
     }
 }
 object MangaIdCache {
-    val map = mutableMapOf<String, String>()
+    private const val MAX_SIZE = 150 // Limit entry cache
+
+    val map: MutableMap<String, String> = object : LinkedHashMap<String, String>(MAX_SIZE, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
+            return size > MAX_SIZE
+        }
+    }
 }
 
 @Serializable

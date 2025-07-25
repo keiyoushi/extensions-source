@@ -48,7 +48,6 @@ class GocTruyenTranhVui() : HttpSource() {
         val slug = response.request.url.toString().substringAfterLast("/") // slug
         val mangaId = MangaIdCache.map[slug] ?: mangaIdRes // id
 
-
         val urlChapter = apiComic.toHttpUrl().newBuilder().apply {
             addPathSegments(mangaId)
             addPathSegments("chapter")
