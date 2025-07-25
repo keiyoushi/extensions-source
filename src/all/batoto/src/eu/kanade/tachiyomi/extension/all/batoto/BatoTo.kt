@@ -112,7 +112,7 @@ open class BatoTo(
                     pm.getPackageInfo(BuildConfig.APPLICATION_ID, 0).lastUpdateTime
                 }.getOrElse {
                     BuildConfig.VERSION_NAME.hashCode().toLong()
-                }
+                }.coerceAtLeast(0)
 
                 MIRROR_PREF_ENTRY_VALUES[1 + (seed % (MIRROR_PREF_ENTRIES.size - 1)).toInt()]
             }
