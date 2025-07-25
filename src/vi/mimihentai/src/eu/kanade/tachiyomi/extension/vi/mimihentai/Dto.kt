@@ -62,3 +62,9 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale
 class PageListDto(
     val pages: List<String>,
 )
+
+@Serializable
+class Genres(
+    val id: Long,
+    val name: String,
+)
