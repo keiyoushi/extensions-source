@@ -52,7 +52,7 @@ class GocTruyenTranhVui : HttpSource() {
     )
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val res = response.parseAs<ResultDto<Result>>()
+        val res = response.parseAs<ResultDto<ListingDto>>()
         val hasNextPage = res.result.p != 100
         return MangasPage(res.result.data.map { it.toSManga(baseUrl) }, hasNextPage)
     }
@@ -82,7 +82,7 @@ class GocTruyenTranhVui : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val slug = response.request.url.toString().substringAfterLast("/") // slug
-        val chapterJson = response.parseAs<ResultDto<ResultChapter>>()
+        val chapterJson = response.parseAs<ResultDto<ChapterListDto>>()
         val chapterList = chapterJson.result.chapters.map { it.toSChapter(slug) }
 
         if (chapterList.isNotEmpty()) {
@@ -138,7 +138,7 @@ class GocTruyenTranhVui : HttpSource() {
         val match = pattern.find(html)
         val jsonPage = match?.groups?.get(1)?.value ?: throw Exception("Không tìm thấy Json") // find json
         if (jsonPage.isEmpty()) throw Exception("Không có nội dung. Hãy đăng nhập trong WebView") // loginRequired
-        val result = jsonPage.parseAs<ChapterWrapper>()
+        val result = jsonPage.parseAs<ImageListWrapper>()
         val imageList = result.body.result.data
         return imageList.mapIndexed { i, url ->
             val finalUrl = if (url.startsWith("/image/")) {

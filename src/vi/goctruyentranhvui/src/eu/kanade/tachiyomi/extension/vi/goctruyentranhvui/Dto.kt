@@ -27,12 +27,12 @@ class ChapterDto(
 }
 
 @Serializable
-class ResultChapter(
+class ChapterListDto(
     val chapters: List<ChapterDto>,
 )
 
 @Serializable
-class Result(
+class ListingDto(
     val p: Int? = null,
     val next: Boolean? = null,
     val data: List<MangaDto>,
@@ -53,12 +53,12 @@ class MangaDto(
 }
 
 @Serializable
-class ChapterWrapper(
+class ImageListWrapper(
     val headers: Map<String, String> = emptyMap(),
-    val body: ResultDto<ResultContent>,
+    val body: ResultDto<ImageListDto>,
 )
 
 @Serializable
-class ResultContent(
+class ImageListDto(
     val data: List<String>,
 )
