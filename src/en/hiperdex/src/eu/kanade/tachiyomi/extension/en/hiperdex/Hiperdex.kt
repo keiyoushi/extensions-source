@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -17,7 +16,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import rx.Observable
 
 class Hiperdex :
@@ -62,11 +60,7 @@ class Hiperdex :
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val mangaUrl = baseUrl.toHttpUrl().newBuilder().apply {
-            addQueryParameter("s", query)
-            addQueryParameter("post_type", "wp-manga")
-        }.build()
-        return client.newCall(GET(mangaUrl, headers))
+        return client.newCall(searchRequest(page, query, filters))
             .asObservableSuccess().map { response ->
                 val document = response.asJsoup()
                 val anchor = document.getElementById("loop-content")
@@ -78,12 +72,12 @@ class Hiperdex :
                     for (element in elementsList) {
                         mangaList.add(
                             SManga.create().apply {
-                                val imgSrc = element.selectFirst("img")!!
+                                val imageElement = element.selectFirst("img")!!
                                 val linkElement = element.selectFirst("a")!!
 
                                 setUrlWithoutDomain(linkElement.attr("href"))
                                 title = linkElement.attr("title")
-                                thumbnail_url = imageFromElement(imgSrc)
+                                thumbnail_url = imageFromElement(imageElement)
                             },
                         )
                     }
