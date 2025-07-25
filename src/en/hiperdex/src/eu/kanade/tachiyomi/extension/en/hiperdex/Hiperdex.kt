@@ -10,9 +10,7 @@ import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.getPreferences
-import org.jsoup.nodes.Element
 
 class Hiperdex :
     Madara(
@@ -56,24 +54,6 @@ class Hiperdex :
     }
 
     override fun searchMangaSelector() = "#loop-content div.page-listing-item"
-
-    override val searchMangaUrlSelector = "div.item-thumb a"
-
-    override fun searchMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-
-        with(element) {
-            selectFirst(searchMangaUrlSelector)!!.let {
-                manga.setUrlWithoutDomain(it.attr("abs:href"))
-                manga.title = it.attr("title")
-            }
-            selectFirst("img")?.let {
-                manga.thumbnail_url = imageFromElement(it)
-            }
-        }
-
-        return manga
-    }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
 
