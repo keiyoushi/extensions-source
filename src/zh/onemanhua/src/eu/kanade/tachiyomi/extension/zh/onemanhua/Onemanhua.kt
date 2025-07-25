@@ -1,7 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.onemanhua
 
-import eu.kanade.tachiyomi.multisrc.colamanga.ColaManga
-import eu.kanade.tachiyomi.multisrc.colamanga.UriPartFilter
 import eu.kanade.tachiyomi.source.model.FilterList
 
 class Onemanhua : ColaManga("COLAMANGA", "https://www.colamanga.com", "zh") {

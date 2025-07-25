@@ -25,6 +25,8 @@ class TruyenHentai18 : ParsedHttpSource() {
 
     private val apiUrl = "https://api.th18.app"
 
+    private val cdnUrl = "https://vi-api.th18.app"
+
     override val lang = "vi"
 
     override val supportsLatest = true
@@ -89,7 +91,7 @@ class TruyenHentai18 : ParsedHttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<SearchDto>().data.map { it.toSManga() }
+        val mangas = response.parseAs<SearchDto>().data.map { it.toSManga(cdnUrl) }
         return MangasPage(mangas, hasNextPage = false)
     }
 

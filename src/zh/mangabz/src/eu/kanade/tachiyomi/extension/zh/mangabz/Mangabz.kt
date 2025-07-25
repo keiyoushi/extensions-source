@@ -26,7 +26,7 @@ import rx.Observable
 
 class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
 
-    private val _baseUrl: String
+    override val baseUrl: String
     override val client: OkHttpClient
 
     private val urlSuffix: String
@@ -34,7 +34,10 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
     init {
         val preferences = getPreferences()
         val mirror = preferences.mirror
-        _baseUrl = "https://" + mirror.domain
+        baseUrl = when (System.getenv("CI")) {
+            "true" -> MIRRORS.joinToString("#, ") { "https://" + it.domain }
+            else -> "https://" + mirror.domain
+        }
         urlSuffix = mirror.urlSuffix
 
         val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang)
@@ -44,14 +47,8 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
             .build()
     }
 
-    private val isCi = System.getenv("CI") == "true"
-    override val baseUrl get() = when {
-        isCi -> MIRRORS.joinToString("#, ") { "https://" + it.domain }
-        else -> _baseUrl
-    }
-
     override fun headersBuilder() = Headers.Builder()
-        .add("Referer", _baseUrl)
+        .add("Referer", baseUrl)
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
 
     private fun SManga.stripMirror() = apply {
@@ -95,10 +92,10 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
 
     override fun parseDescription(element: Element, title: String, details: Elements): String {
         val text = element.ownText()
-        val start = if (text.startsWith(title)) title.length + 4 else 0
+        val start = text.removePrefix("${title}漫画 ，").removePrefix("${title}漫畫 ，")
         val collapsed = element.selectFirst(Evaluator.Tag("span"))?.ownText()
-            ?: return text.substring(start)
-        return buildString { append(text, start, text.length - 1).append(collapsed) }
+            ?: return start
+        return start + collapsed
     }
 
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url.toMirror(), headers)

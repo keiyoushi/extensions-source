@@ -118,8 +118,9 @@ abstract class VerComics(
     protected open val pageListSelector =
         "div.wp-content p > img:not(noscript img), " +
             "div.wp-content div#lector > img:not(noscript img), " +
-            "div.wp-content > figure img:not(noscript img)," +
-            "div.wp-content > img, div.wp-content > p img"
+            "div.wp-content > figure img:not(noscript img), " +
+            "div.wp-content > img, div.wp-content > p img, " +
+            "div.post-imgs > img"
 
     override fun pageListParse(document: Document): List<Page> = document.select(pageListSelector)
         .mapIndexed { i, img -> Page(i, imageUrl = img.imgAttr()) }
