@@ -1,10 +1,12 @@
 package eu.kanade.tachiyomi.extension.pt.huntersscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Response
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -24,29 +26,19 @@ class HuntersScans : Madara(
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        launchIO { countViews(document) }
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(fetchAllChapters(manga))
 
-        val mangaUrl = document.location().removeSuffix("/")
-        var page = 1
-        val chapters = mutableListOf<SChapter>()
-        do {
-            val url = xhrChaptersRequest(mangaUrl).url.newBuilder()
-                .addQueryParameter("t", "${page++}")
-                .build()
+    private tailrec fun fetchAllChapters(manga: SManga, page: Int = 1, accumulator: List<SChapter> = emptyList()): List<SChapter> {
+        val document = client.newCall(POST("${getMangaUrl(manga)}ajax/chapters?t=$page", xhrHeaders))
+            .execute()
+            .asJsoup()
 
-            val request = xhrChaptersRequest(mangaUrl).newBuilder()
-                .url(url)
-                .build()
+        val chapters = document.select(chapterListSelector())
+            .map(::chapterFromElement)
 
-            val xhrResponse = client.newCall(request)
-                .execute()
-                .asJsoup()
-
-            val currentPage = xhrResponse.select(chapterListSelector()).map(::chapterFromElement)
-            chapters += currentPage
-        } while (currentPage.isNotEmpty())
-        return chapters
+        if (chapters.isEmpty()) {
+            return accumulator
+        }
+        return fetchAllChapters(manga, page.plus(1), accumulator + chapters)
     }
 }
