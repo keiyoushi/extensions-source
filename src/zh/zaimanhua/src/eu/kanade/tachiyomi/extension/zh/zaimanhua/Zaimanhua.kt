@@ -40,6 +40,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     override val name = "再漫画"
     override val baseUrl = "https://manhua.zaimanhua.com"
+    private val mobileBaseUrl = "https://m.zaimanhua.com"
     private val apiUrl = "https://v4api.zaimanhua.com/app/v1"
     private val accountApiUrl = "https://account-api.zaimanhua.com/v1"
     private val checkTokenRegex = Regex("""$apiUrl/comic/(detail|chapter)""")
@@ -125,6 +126,10 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     // Detail
+    override fun getMangaUrl(manga: SManga): String {
+        return "$mobileBaseUrl/pages/comic/detail?id=${manga.url}"
+    }
+
     // path: "/comic/detail/mangaId"
     override fun mangaDetailsRequest(manga: SManga): Request =
         GET("$apiUrl/comic/detail/${manga.url}?channel=android", apiHeaders)
@@ -151,6 +156,11 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     // PageList
+    override fun getChapterUrl(chapter: SChapter): String {
+        val (mangaId, chapterId) = chapter.url.split("/", limit = 2)
+        return "$mobileBaseUrl/pages/comic/page?comic_id=$mangaId&chapter_id=$chapterId"
+    }
+
     // path: "/comic/chapter/mangaId/chapterId"
     private fun pageListApiRequest(path: String): Request =
         GET("$apiUrl/comic/chapter/$path", apiHeaders, USE_CACHE)
