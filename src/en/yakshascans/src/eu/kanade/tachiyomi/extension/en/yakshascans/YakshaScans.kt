@@ -22,33 +22,36 @@ class YakshaScans : Madara(
         .addInterceptor(::jsChallengeInterceptor)
         .build()
 
+    // Linked to src/pt/leitordemanga
     private fun jsChallengeInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val origRes = chain.proceed(request)
-        if (origRes.code != 403) return origRes
-        origRes.close()
+        val response = chain.proceed(chain.request())
+        if (response.code != 403) {
+            return response
+        }
+        response.close()
 
-        // Same delay as the source
         Thread.sleep(3000L)
         val token = fetchToken(chain).sha256()
+        val body = FormBody.Builder()
+            .add("challenge", token)
+            .build()
 
-        val body = FormBody.Builder().add("challenge", token).build()
-        val challengeReq = POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers, body = body)
-
-        val challengeResponse = chain.proceed(challengeReq)
-        challengeResponse.close()
-        if (challengeResponse.code != 200) throw IOException("Failed to bypass js challenge!")
-
-        return chain.proceed(request)
+        chain.proceed(POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers, body)).use {
+            if (it.isSuccessful.not()) {
+                throw IOException("Failed to bypass js challenge!")
+            }
+        }
+        return chain.proceed(chain.request())
     }
 
-    private tailrec fun fetchToken(chain: Interceptor.Chain, attempt: Int = 0): String {
-        if (attempt > 5) throw IOException("Failed to fetch challenge token!")
-        val request = GET("$baseUrl/hcdn-cgi/jschallenge", headers)
-        val res = chain.proceed(request).body.string()
-
-        return res.substringAfter("cjs = '").substringBefore("'")
-            .takeUnless { it == "nil" } ?: fetchToken(chain, attempt + 1)
+    private fun fetchToken(chain: Interceptor.Chain, attempt: Int = 0): String {
+        if (attempt > MAX_ATTEMPT) {
+            throw IOException("Failed to fetch challenge token!")
+        }
+        return chain.proceed(GET("$baseUrl/hcdn-cgi/jschallenge", headers)).let {
+            TOKEN_REGEX.find(it.body.string())?.groups?.get(1)?.value
+                ?.takeUnless { it == "nil" } ?: fetchToken(chain, attempt.plus(1))
+        }
     }
 
     private fun String.sha256(): String {
@@ -62,4 +65,9 @@ class YakshaScans : Madara(
 
     override val mangaDetailsSelectorDescription: String =
         "div.description-summary div.summary__content h3 + p, div.description-summary div.summary__content:not(:has(h3)), div.summary_content div.post-content_item > h5 + div, div.summary_content div.manga-excerpt"
+
+    companion object {
+        private const val MAX_ATTEMPT = 5
+        private val TOKEN_REGEX = """cjs[^']+'([^']+)""".toRegex()
+    }
 }
