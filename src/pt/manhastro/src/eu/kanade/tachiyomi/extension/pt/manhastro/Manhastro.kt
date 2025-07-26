@@ -58,10 +58,8 @@ class Manhastro :
     private var showWarning: Boolean = true
 
     private val authCookie: Cookie by lazy {
-        handler.post {
-            cookieManager.removeAllCookies { }
-            cookieManager.flush()
-        }
+        cookieManager.removeAllCookies(null)
+        cookieManager.flush()
 
         val cookieJson = preferences.getString(COOKIE_STORAGE_PREF, "") as String
         if (cookieJson.isBlank()) {
