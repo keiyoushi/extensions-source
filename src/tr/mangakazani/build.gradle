@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaKazani'
-    extClass = '.MangaKazani'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://mangakazani.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
