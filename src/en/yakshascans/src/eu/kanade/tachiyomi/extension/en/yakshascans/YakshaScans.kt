@@ -44,13 +44,18 @@ class YakshaScans : Madara(
         return chain.proceed(chain.request())
     }
 
-    private fun fetchToken(chain: Interceptor.Chain, attempt: Int = 0): String {
+    private tailrec fun fetchToken(chain: Interceptor.Chain, attempt: Int = 0): String {
         if (attempt > MAX_ATTEMPT) {
             throw IOException("Failed to fetch challenge token!")
         }
-        return chain.proceed(GET("$baseUrl/hcdn-cgi/jschallenge", headers)).let {
-            TOKEN_REGEX.find(it.body.string())?.groups?.get(1)?.value
-                ?.takeUnless { it == "nil" } ?: fetchToken(chain, attempt.plus(1))
+
+        val response = chain.proceed(GET("$baseUrl/hcdn-cgi/jschallenge", headers))
+        val token = TOKEN_REGEX.find(response.body.string())?.groups?.get(1)?.value
+
+        return if (token != null && token != "nil") {
+            token
+        } else {
+            fetchToken(chain, attempt + 1)
         }
     }
 
