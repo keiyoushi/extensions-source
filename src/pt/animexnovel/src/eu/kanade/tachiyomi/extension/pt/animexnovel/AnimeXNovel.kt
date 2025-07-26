@@ -62,26 +62,36 @@ class AnimeXNovel : ZeistManga(
             .map(Element::data)
             .firstOrNull(MANGA_TITLE_REGEX::containsMatchIn)?.let {
                 MANGA_TITLE_REGEX.find(it)?.groups?.get(1)?.value
-            } ?: return emptyList()
+            } ?: throw IOException("Manga title not found")
 
         val script = document.select("script")
             .map(Element::data)
-            .firstOrNull(API_KEY_REGEX::containsMatchIn)
-            ?: return emptyList()
+            .firstOrNull(API_KEYS_REGEX::containsMatchIn)
+            ?: throw IOException("The API keys could not be found.")
 
-        val blogId = BLOG_ID_REGEX.find(script)?.groups?.get(1)?.value ?: return emptyList()
-        val apiKey = API_KEY_REGEX.find(script)?.groups?.get(1)?.value ?: return emptyList()
+        val blogId = BLOG_ID_REGEX.find(script)?.groups?.get(1)?.value
+            ?: throw IOException("Failed to retrieve blog ID")
 
-        val url = "https://www.googleapis.com/blogger/v3/blogs/$blogId/posts".toHttpUrl().newBuilder()
-            .addQueryParameter("key", apiKey)
-            .addQueryParameter("labels", label)
-            .addQueryParameter("maxResults", "500")
-            .build()
+        val apiKeys = getApiKeys(script)
+            ?: throw IOException("Failed to retrieve API keys")
 
-        val response = client.newCall(GET(url, headers)).execute()
+        lateinit var response: Response
+        for (apiKey in apiKeys) {
+            val url = "https://www.googleapis.com/blogger/v3/blogs/$blogId/posts".toHttpUrl().newBuilder()
+                .addQueryParameter("key", apiKey)
+                .addQueryParameter("labels", label)
+                .addQueryParameter("maxResults", "500")
+                .build()
+
+            response = client.newCall(GET(url, headers)).execute()
+            if (response.isSuccessful) {
+                break
+            }
+            response.close()
+        }
 
         if (response.isSuccessful.not()) {
-            throw IOException("Capítulos não encontrados")
+            throw IOException("Chapters not found")
         }
 
         return response.parseAs<ChapterWrapperDto>().items.map {
@@ -92,6 +102,11 @@ class AnimeXNovel : ZeistManga(
             }
         }
     }
+
+    private fun getApiKeys(script: String): List<String>? =
+        API_KEYS_REGEX.find(script)?.groupValues?.get(1)?.let { content ->
+            API_KEY_REGEX.findAll(content).map { it.groupValues[1] }.toList()
+        }
 
     // ============================== Pages ===============================
 
@@ -113,7 +128,8 @@ class AnimeXNovel : ZeistManga(
     }
 
     companion object {
-        private val API_KEY_REGEX = """(?:API_KEY(?:\s+)?=(?:\s+)?.)"([^(\\|")]+)""".toRegex()
+        private val API_KEY_REGEX = """"([^"]+)"""".toRegex()
+        private val API_KEYS_REGEX = """const\s+API_KEYS\s*=\s*\[\s*([\s\S]*?)\s*];""".toRegex()
         private val BLOG_ID_REGEX = """(?:BLOG_ID(?:\s+)?=(?:\s+)?.)"([^(\\|")]+)""".toRegex()
         private val MANGA_TITLE_REGEX = """iniciarCapituloLoader\("([^"]+)"\)""".toRegex()
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
