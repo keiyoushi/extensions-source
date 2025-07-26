@@ -53,7 +53,11 @@ open class BatoTo(
     private val preferences by getPreferencesLazy { migrateMirrorPref() }
 
     override val name: String = "Bato.to"
-    override val baseUrl: String get() = mirror
+    override val baseUrl: String get() = when (System.getenv("CI")) {
+        "true" -> (MIRROR_PREF_ENTRY_VALUES.drop(1) + DEPRECATED_MIRRORS).joinToString("#, ")
+        else -> mirror
+    }
+
     override val id: Long = when (lang) {
         "zh-Hans" -> 2818874445640189582
         "zh-Hant" -> 38886079663327225
