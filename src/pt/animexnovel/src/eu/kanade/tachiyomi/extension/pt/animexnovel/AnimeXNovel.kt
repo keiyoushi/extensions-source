@@ -86,6 +86,7 @@ class AnimeXNovel : ZeistManga(
             if (response.isSuccessful) {
                 break
             }
+            response.close()
         }
 
         if (response.isSuccessful.not()) {
