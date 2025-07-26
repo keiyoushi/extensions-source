@@ -43,7 +43,6 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.random.Random
 
 open class BatoTo(
@@ -121,11 +120,7 @@ open class BatoTo(
                     BuildConfig.VERSION_NAME.hashCode().toLong()
                 }
 
-                val prng = Random(seed)
-                val randomValue = abs(prng.nextInt())
-                val index = 1 + (randomValue % (MIRROR_PREF_ENTRIES.size - 1))
-
-                MIRROR_PREF_ENTRY_VALUES[index]
+                MIRROR_PREF_ENTRY_VALUES.drop(1).random(Random(seed))
             }
     }
 
