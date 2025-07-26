@@ -51,11 +51,10 @@ class ChapterGroupDto(
 ) {
     fun toSChapterList(mangaId: String, lastUpdateChapter: String, lastUpdateTime: Long): List<SChapter> {
         val groupName = title
-        val isDefaultGroup = groupName == "连载"
         val current = System.currentTimeMillis()
         return data.map {
             it.toSChapterInternal().apply {
-                if (!isDefaultGroup) scanlator = groupName
+                scanlator = groupName
                 // For some chapters, api will always return current time as upload time
                 // Therefore upload times that differ too little from the current time will be ignored
                 // When the chapter is the latest chapter, use the last update time as the upload time
