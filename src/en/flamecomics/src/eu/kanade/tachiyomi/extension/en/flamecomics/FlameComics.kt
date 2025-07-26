@@ -51,11 +51,7 @@ class FlameComics : HttpSource() {
         addPathSegment(buildId)
     }
 
-    private fun imageApiUrlBuilder() = cdn.toHttpUrl().newBuilder().apply {
-        addPathSegment("uploads")
-        addPathSegment("images")
-        addPathSegment("series")
-    }
+    private fun imageApiUrlBuilder() = "$cdn/uploads/images/series".toHttpUrl().newBuilder()
 
     private fun thumbnailUrl(seriesData: Series) =
         imageApiUrlBuilder().apply {
