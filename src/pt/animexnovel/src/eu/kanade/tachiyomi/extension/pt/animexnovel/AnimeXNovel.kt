@@ -62,17 +62,18 @@ class AnimeXNovel : ZeistManga(
             .map(Element::data)
             .firstOrNull(MANGA_TITLE_REGEX::containsMatchIn)?.let {
                 MANGA_TITLE_REGEX.find(it)?.groups?.get(1)?.value
-            } ?: return emptyList()
+            } ?: throw IOException("Manga title not found")
 
         val script = document.select("script")
             .map(Element::data)
             .firstOrNull(API_KEYS_REGEX::containsMatchIn)
-            ?: return emptyList()
+            ?: throw IOException("The API keys could not be found.")
 
-        val blogId = BLOG_ID_REGEX.find(script)?.groups?.get(1)?.value ?: return emptyList()
-        val apiKeys = API_KEYS_REGEX.find(script)?.groupValues?.get(1)?.let { content ->
-            API_KEY_REGEX.findAll(content).map { it.groupValues[1] }.toList()
-        }?.takeIf(List<String>::isNotEmpty) ?: emptyList()
+        val blogId = BLOG_ID_REGEX.find(script)?.groups?.get(1)?.value
+            ?: throw IOException("Failed to retrieve blog ID")
+
+        val apiKeys = getApiKeys(script)
+            ?: throw IOException("Failed to retrieve API keys")
 
         lateinit var response: Response
         for (apiKey in apiKeys) {
@@ -90,7 +91,7 @@ class AnimeXNovel : ZeistManga(
         }
 
         if (response.isSuccessful.not()) {
-            throw IOException("Capítulos não encontrados")
+            throw IOException("Chapters not found")
         }
 
         return response.parseAs<ChapterWrapperDto>().items.map {
@@ -101,6 +102,11 @@ class AnimeXNovel : ZeistManga(
             }
         }
     }
+
+    private fun getApiKeys(script: String): List<String>? =
+        API_KEYS_REGEX.find(script)?.groupValues?.get(1)?.let { content ->
+            API_KEY_REGEX.findAll(content).map { it.groupValues[1] }.toList()
+        }
 
     // ============================== Pages ===============================
 
