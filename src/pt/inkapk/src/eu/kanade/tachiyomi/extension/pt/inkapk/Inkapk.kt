@@ -15,6 +15,8 @@ class Inkapk : Madara(
         .rateLimit(2)
         .build()
 
+    override val mangaSubString = "obras"
+
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val useNewChapterEndpoint = true

@@ -3,7 +3,7 @@ ext {
     extClass = '.Inkapk'
     themePkg = 'madara'
     baseUrl = 'https://inkapk.net'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
