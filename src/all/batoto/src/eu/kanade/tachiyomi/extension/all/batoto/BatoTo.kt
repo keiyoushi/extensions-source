@@ -43,6 +43,7 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.random.Random
 
 open class BatoTo(
     final override val lang: String,
@@ -107,14 +108,19 @@ open class BatoTo(
         return preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
             ?.takeUnless { it == MIRROR_PREF_DEFAULT_VALUE }
             ?: let {
+                /* Semi-sticky mirror:
+                 * - Don't randomize on boot
+                 * - Don't randomize per language
+                 * - Fallback for non-Android platform
+                 */
                 val seed = runCatching {
                     val pm = Injekt.get<Application>().packageManager
                     pm.getPackageInfo(BuildConfig.APPLICATION_ID, 0).lastUpdateTime
                 }.getOrElse {
                     BuildConfig.VERSION_NAME.hashCode().toLong()
-                }.coerceAtLeast(0)
+                }
 
-                MIRROR_PREF_ENTRY_VALUES[1 + (seed % (MIRROR_PREF_ENTRIES.size - 1)).toInt()]
+                MIRROR_PREF_ENTRY_VALUES.drop(1).random(Random(seed))
             }
     }
 
