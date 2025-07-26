@@ -22,14 +22,16 @@ class SaikaiScan : HttpSource() {
 
     override val name = SOURCE_NAME
 
-    override val baseUrl = "https://saikaiscans.net"
+    override val baseUrl = "https://housesaikai.net"
+
+    private val apiUrl = "https://api.${baseUrl.substringAfterLast("/")}"
 
     override val lang = "pt-BR"
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimitHost(API_URL.toHttpUrl(), 1, 2)
+        .rateLimitHost(apiUrl.toHttpUrl(), 1, 2)
         .rateLimitHost(IMAGE_SERVER_URL.toHttpUrl(), 1, 1)
         .build()
 
@@ -44,7 +46,7 @@ class SaikaiScan : HttpSource() {
             .add("Accept", ACCEPT_JSON)
             .build()
 
-        val apiEndpointUrl = "$API_URL/api/stories".toHttpUrl().newBuilder()
+        val apiEndpointUrl = "$apiUrl/api/stories".toHttpUrl().newBuilder()
             .addQueryParameter("format", COMIC_FORMAT_ID)
             .addQueryParameter("sortProperty", "pageviews")
             .addQueryParameter("sortDirection", "desc")
@@ -69,7 +71,7 @@ class SaikaiScan : HttpSource() {
             .add("Accept", ACCEPT_JSON)
             .build()
 
-        val apiEndpointUrl = "$API_URL/api/lancamentos".toHttpUrl().newBuilder()
+        val apiEndpointUrl = "$apiUrl/api/lancamentos".toHttpUrl().newBuilder()
             .addQueryParameter("format", COMIC_FORMAT_ID)
             .addQueryParameter("page", page.toString())
             .addQueryParameter("per_page", PER_PAGE)
@@ -86,7 +88,7 @@ class SaikaiScan : HttpSource() {
             .add("Accept", ACCEPT_JSON)
             .build()
 
-        val apiEndpointUrl = "$API_URL/api/stories".toHttpUrl().newBuilder()
+        val apiEndpointUrl = "$apiUrl/api/stories".toHttpUrl().newBuilder()
             .addQueryParameter("format", COMIC_FORMAT_ID)
             .addQueryParameter("q", query)
             .addQueryParameter("sortProperty", "pageViews")
@@ -112,7 +114,7 @@ class SaikaiScan : HttpSource() {
             .add("Accept", ACCEPT_JSON)
             .build()
 
-        val apiEndpointUrl = "$API_URL/api/stories".toHttpUrl().newBuilder()
+        val apiEndpointUrl = "$apiUrl/api/stories".toHttpUrl().newBuilder()
             .addQueryParameter("format", COMIC_FORMAT_ID)
             .addQueryParameter("slug", storySlug)
             .addQueryParameter("per_page", "1")
@@ -135,7 +137,7 @@ class SaikaiScan : HttpSource() {
             .add("Accept", ACCEPT_JSON)
             .build()
 
-        val apiEndpointUrl = "$API_URL/api/stories".toHttpUrl().newBuilder()
+        val apiEndpointUrl = "$apiUrl/api/stories".toHttpUrl().newBuilder()
             .addQueryParameter("format", COMIC_FORMAT_ID)
             .addQueryParameter("slug", storySlug)
             .addQueryParameter("per_page", "1")
@@ -166,7 +168,7 @@ class SaikaiScan : HttpSource() {
             .add("Accept", ACCEPT_JSON)
             .build()
 
-        val apiEndpointUrl = "$API_URL/api/releases/$releaseId".toHttpUrl().newBuilder()
+        val apiEndpointUrl = "$apiUrl/api/releases/$releaseId".toHttpUrl().newBuilder()
             .addQueryParameter("relationships", "releaseImages")
             .build()
 
@@ -294,7 +296,6 @@ class SaikaiScan : HttpSource() {
         private const val COMIC_FORMAT_ID = "2"
         private const val PER_PAGE = "12"
 
-        private const val API_URL = "https://api.saikaiscans.net"
-        const val IMAGE_SERVER_URL = "https://s3-alpha.saikaiscans.net"
+        const val IMAGE_SERVER_URL = "https://s3-beta.housesaikai.net"
     }
 }
