@@ -51,21 +51,18 @@ class FlameComics : HttpSource() {
         addPathSegment(buildId)
     }
 
-    private fun imageApiUrlBuilder(dataUrl: String) = baseUrl.toHttpUrl().newBuilder().apply {
-        addPathSegment("_next")
-        addPathSegment("image")
-    }.build().toString() + "?url=$dataUrl"
+    private fun imageApiUrlBuilder() = cdn.toHttpUrl().newBuilder().apply {
+        addPathSegment("uploads")
+        addPathSegment("images")
+        addPathSegment("series")
+    }
 
-    private fun thumbnailUrl(seriesData: Series) = imageApiUrlBuilder(
-        cdn.toHttpUrl().newBuilder().apply {
-            addPathSegment("series")
+    private fun thumbnailUrl(seriesData: Series) =
+        imageApiUrlBuilder().apply {
             addPathSegment(seriesData.series_id.toString())
             addPathSegment(seriesData.cover)
             addQueryParameter(seriesData.last_edit, null)
-            addQueryParameter("w", "384")
-            addQueryParameter("q", "75")
-        }.build().toString(),
-    )
+        }.build().toString()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
         GET(
@@ -247,20 +244,15 @@ class FlameComics : HttpSource() {
         return chapter.images.mapIndexed { idx, page ->
             Page(
                 idx,
-                imageUrl = imageApiUrlBuilder(
-                    cdn.toHttpUrl().newBuilder().apply {
-                        addPathSegment("series")
-                        addPathSegment(chapter.series_id.toString())
-                        addPathSegment(chapter.token)
-                        addPathSegment(page.name)
-                        addQueryParameter(
-                            chapter.release_date.toString(),
-                            value = null,
-                        )
-                        addQueryParameter("w", "1920")
-                        addQueryParameter("q", "100")
-                    }.build().toString(),
-                ),
+                imageUrl = imageApiUrlBuilder().apply {
+                    addPathSegment(chapter.series_id.toString())
+                    addPathSegment(chapter.token)
+                    addPathSegment(page.name)
+                    addQueryParameter(
+                        chapter.release_date.toString(),
+                        value = null,
+                    )
+                }.build().toString(),
             )
         }
     }
