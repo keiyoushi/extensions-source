@@ -36,11 +36,13 @@ class YakshaScans : Madara(
             .add("challenge", token)
             .build()
 
-        chain.proceed(POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers, body)).use {
-            if (it.isSuccessful.not()) {
-                throw IOException("Failed to bypass js challenge!")
+        chain.proceed(POST("$baseUrl/hcdn-cgi/jschallenge-validate", headers, body))
+            .apply(Response::close)
+            .run {
+                if (!isSuccessful) {
+                    throw IOException("Failed to bypass js challenge!")
+                }
             }
-        }
         return chain.proceed(chain.request())
     }
 
