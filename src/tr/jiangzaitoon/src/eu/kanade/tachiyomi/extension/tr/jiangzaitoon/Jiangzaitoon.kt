@@ -29,7 +29,6 @@ class Jiangzaitoon : Madara(
          */
         return this
             .split(",")
-            .map(String::trim)
             .mapNotNull { candidate ->
                 candidate
                     .trim()
