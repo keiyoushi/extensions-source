@@ -26,19 +26,24 @@ class HuntersScans : Madara(
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(fetchAllChapters(manga))
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        Observable.fromCallable { fetchAllChapters(manga) }
 
-    private tailrec fun fetchAllChapters(manga: SManga, page: Int = 1, accumulator: List<SChapter> = emptyList()): List<SChapter> {
-        val document = client.newCall(POST("${getMangaUrl(manga)}ajax/chapters?t=$page", xhrHeaders))
-            .execute()
-            .asJsoup()
+    private fun fetchAllChapters(manga: SManga): List<SChapter> {
+        val chapters = mutableListOf<SChapter>()
+        var page = 1
+        while (true) {
+            val document = client.newCall(POST("${getMangaUrl(manga)}ajax/chapters?t=${page++}", xhrHeaders))
+                .execute()
+                .asJsoup()
+            val currentPage = document.select(chapterListSelector())
+                .map(::chapterFromElement)
 
-        val chapters = document.select(chapterListSelector())
-            .map(::chapterFromElement)
+            chapters += currentPage
 
-        if (chapters.isEmpty()) {
-            return accumulator
+            if (currentPage.isEmpty()) {
+                return chapters
+            }
         }
-        return fetchAllChapters(manga, page.plus(1), accumulator + chapters)
     }
 }
