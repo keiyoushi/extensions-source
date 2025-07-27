@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import android.util.Log
+import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -52,9 +53,14 @@ class Manhastro :
 
     private val application: Application by lazy { Injekt.get<Application>() }
 
+    private val cookieManager by lazy { CookieManager.getInstance() }
+
     private var showWarning: Boolean = true
 
     private val authCookie: Cookie by lazy {
+        cookieManager.removeAllCookies(null)
+        cookieManager.flush()
+
         val cookieJson = preferences.getString(COOKIE_STORAGE_PREF, "") as String
         if (cookieJson.isBlank()) {
             return@lazy doAuth().also(::upsetCookie)
