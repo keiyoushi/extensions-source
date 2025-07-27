@@ -26,13 +26,15 @@ class SaikaiScan : HttpSource() {
 
     private val apiUrl = "https://api.${baseUrl.substringAfterLast("/")}"
 
+    private val storageUrl = "https://s3-beta.${baseUrl.substringAfterLast("/")}"
+
     override val lang = "pt-BR"
 
     override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(apiUrl.toHttpUrl(), 1, 2)
-        .rateLimitHost(IMAGE_SERVER_URL.toHttpUrl(), 1, 1)
+        .rateLimitHost(storageUrl.toHttpUrl(), 1, 1)
         .build()
 
     private val json: Json by injectLazy()
@@ -61,7 +63,7 @@ class SaikaiScan : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SaikaiScanPaginatedStoriesDto>()
 
-        val mangaList = result.data!!.map(SaikaiScanStoryDto::toSManga)
+        val mangaList = result.data!!.map { it.toSManga(storageUrl) }
 
         return MangasPage(mangaList, result.hasNextPage)
     }
@@ -127,7 +129,7 @@ class SaikaiScan : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<SaikaiScanPaginatedStoriesDto>()
 
-        return result.data!![0].toSManga()
+        return result.data!![0].toSManga(storageUrl)
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -179,7 +181,7 @@ class SaikaiScan : HttpSource() {
         val result = response.parseAs<SaikaiScanReleaseResultDto>()
 
         return result.data?.releaseImages.orEmpty().mapIndexed { i, obj ->
-            Page(i, "", "$IMAGE_SERVER_URL/${obj.image}")
+            Page(i, "", "$storageUrl/${obj.image}")
         }
     }
 
@@ -289,13 +291,9 @@ class SaikaiScan : HttpSource() {
 
     companion object {
         const val SOURCE_NAME = "Saikai Scan"
-
         private const val ACCEPT_IMAGE = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         private const val ACCEPT_JSON = "application/json, text/plain, */*"
-
         private const val COMIC_FORMAT_ID = "2"
         private const val PER_PAGE = "12"
-
-        const val IMAGE_SERVER_URL = "https://s3-beta.housesaikai.net"
     }
 }
