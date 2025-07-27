@@ -31,12 +31,17 @@ class Jiangzaitoon : Madara(
             .split(",")
             .map(String::trim)
             .mapNotNull { candidate ->
-                val (url, desc) = candidate.split(" ")
-                desc
-                    .takeIf { it.endsWith("w") }
-                    ?.removeSuffix("w")
-                    ?.toIntOrNull()
-                    ?.let { size -> url to size }
+                candidate
+                    .trim()
+                    .split(" ", limit = 2)
+                    .takeIf { it.size == 2 }
+                    ?.let { (url, desc) ->
+                        desc
+                            .takeIf { it.endsWith("w") }
+                            ?.removeSuffix("w")
+                            ?.toIntOrNull()
+                            ?.let { size -> url to size }
+                    }
             }
             .maxByOrNull { it.second }
             ?.first
