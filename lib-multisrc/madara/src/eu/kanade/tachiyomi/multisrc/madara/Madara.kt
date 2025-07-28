@@ -788,7 +788,7 @@ abstract class Madara(
     /**
      *  Get the best image quality available from srcset
      */
-    protected fun String.getSrcSetImage(): String? {
+    protected open fun String.getSrcSetImage(): String? {
         return this.split(" ")
             .filter(URL_REGEX::matches)
             .maxOfOrNull(String::toString)
