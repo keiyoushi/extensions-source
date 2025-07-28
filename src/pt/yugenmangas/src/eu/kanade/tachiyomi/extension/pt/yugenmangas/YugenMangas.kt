@@ -45,7 +45,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         else -> preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
     }
 
-    private val defaultBaseUrl: String = "https://yugenmangasbr.deliciousdelight.online"
+    private val defaultBaseUrl: String = "https://yugenmangasbr.yocat.xyz"
 
     override val lang = "pt-BR"
 
