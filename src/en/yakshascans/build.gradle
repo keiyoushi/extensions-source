@@ -3,7 +3,7 @@ ext {
     extClass = '.YakshaScans'
     themePkg = 'madara'
     baseUrl = 'https://yakshascans.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
