@@ -92,6 +92,14 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
             description = profileManga.selectFirst(".sinopsis")!!.text()
             status = parseStatus(profileManga.select("span.anime-type-peli").last()!!.text())
             genre = profileManga.select("p.genres > span").joinToString { it.text() }
+            profileManga.selectFirst(altNameSelector)?.ownText()?.let {
+                if (it.isBlank().not() && it.notUpdating()) {
+                    description = when {
+                        description.isNullOrBlank() -> "$altName $it"
+                        else -> "${description}\n\n$altName $it"
+                    }
+                }
+            }
         }
     }
 
@@ -100,6 +108,8 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
         "complete" -> SManga.COMPLETED
         else -> SManga.UNKNOWN
     }
+
+    override val altNameSelector = "div.container div aside h2.h5"
 
     // chapter list
     override fun chapterListSelector() = "aside.principal ul.episodes-list li"
