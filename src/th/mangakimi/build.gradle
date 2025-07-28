@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaKimi'
     themePkg = 'mangathemesia'
     baseUrl = 'https://www.mangakimi.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
