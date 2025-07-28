@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 
 class Jiangzaitoon : Madara(
     "Jiangzaitoon",
-    "https://jiangzaitoon.wtf",
+    "https://jiangzaitoon.lgbt",
     "tr",
     SimpleDateFormat("d MMM yyy", Locale("tr")),
 ) {
@@ -22,4 +22,27 @@ class Jiangzaitoon : Madara(
     }
 
     override val chapterUrlSelector = "> a"
+
+    override fun String.getSrcSetImage(): String? {
+        /* Assumption: URL is absolute
+         * Assumption: descriptor is always in width
+         */
+        return this
+            .split(",")
+            .mapNotNull { candidate ->
+                candidate
+                    .trim()
+                    .split(" ", limit = 2)
+                    .takeIf { it.size == 2 }
+                    ?.let { (url, desc) ->
+                        desc
+                            .takeIf { it.endsWith("w") }
+                            ?.removeSuffix("w")
+                            ?.toIntOrNull()
+                            ?.let { size -> url to size }
+                    }
+            }
+            .maxByOrNull { it.second }
+            ?.first
+    }
 }
