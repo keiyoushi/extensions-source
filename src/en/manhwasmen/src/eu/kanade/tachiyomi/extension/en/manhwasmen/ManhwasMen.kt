@@ -93,7 +93,7 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
             status = parseStatus(profileManga.select("span.anime-type-peli").last()!!.text())
             genre = profileManga.select("p.genres > span").joinToString { it.text() }
             profileManga.selectFirst(altNameSelector)?.ownText()?.let {
-                if (it.isBlank().not() && it.notUpdating()) {
+                if (it.isNotBlank() && it.notUpdating()) {
                     description = when {
                         description.isNullOrBlank() -> "$altName $it"
                         else -> "${description}\n\n$altName $it"
