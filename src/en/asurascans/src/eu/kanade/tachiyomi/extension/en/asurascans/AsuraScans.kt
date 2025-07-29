@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.asurascans
 
 import android.content.SharedPreferences
+import android.webkit.CookieManager
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -16,6 +17,9 @@ import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -44,6 +48,8 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences = getPreferences()
 
+    private val cookieManager by lazy { CookieManager.getInstance() }
+
     init {
         // remove legacy preferences
         preferences.run {
@@ -67,6 +73,30 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::forceHighQualityInterceptor)
         .rateLimit(1, 3)
+        .cookieJar(
+            object : CookieJar {
+                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+                    for (cookie in cookies) {
+                        cookieManager.setCookie(url.toString(), cookie.toString())
+                    }
+                }
+
+                override fun loadForRequest(url: HttpUrl): MutableList<Cookie> {
+                    val cookiesString = cookieManager.getCookie(url.toString())
+
+                    if (cookiesString != null && cookiesString.isNotEmpty()) {
+                        val cookieHeaders = cookiesString.split("; ").toList()
+                        val cookies = mutableListOf<Cookie>()
+                        for (header in cookieHeaders) {
+                            cookies.add(Cookie.parse(url, header)!!)
+                        }
+                        return cookies
+                    } else {
+                        return mutableListOf()
+                    }
+                }
+            },
+        )
         .build()
 
     private var failedHighQuality = false
