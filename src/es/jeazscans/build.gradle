@@ -1,9 +1,9 @@
 ext {
     extName = 'Jeaz Scans'
     extClass = '.JeazScans'
-    themePkg = 'mangathemesia'
+    themePkg = 'madara'
     baseUrl = 'https://lectorhub.j5z.xyz'
-    overrideVersionCode = 17
+    overrideVersionCode = 18
     isNsfw = false
 }
 
