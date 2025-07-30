@@ -71,9 +71,7 @@ open class NHentai(
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
     private val dataRegex = Regex("""JSON\.parse\(\s*"(.*)"\s*\)""")
-    private val hentaiSelector = "script:containsData(JSON.parse)"
-    private val cdnRegex = Regex("""image_cdn_urls: (\[.*])""")
-    private val cdnSelector = "script:not(:containsData(JSON.parse))"
+    private val hentaiSelector = "script:containsData(JSON.parse):not(:containsData(media_server))"
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -257,13 +255,14 @@ open class NHentai(
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst(hentaiSelector)!!.data()
-        val json = dataRegex.find(script)?.groupValues!![1]
-        val data = json.parseAs<Hentai>()
+    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
 
-        val scripts = document.select(cdnSelector).map { it.data() }.filter { it.isNotEmpty() }
-        val cdnJson = scripts.firstNotNullOf { cdnRegex.find(it)?.groupValues!![1] }
+    override fun pageListParse(response: Response): List<Page> {
+        val html = response.body.string()
+
+        val json = dataRegex.find(html)?.groupValues!![1]
+        val data = json.parseAs<Hentai>()
+        val cdnJson = Regex("""image_cdn_urls:\s*(\[.*])""").find(html)?.groupValues!![1]
         val cdnList = cdnJson.parseAs<List<String>>()
 
         return data.images.pages.mapIndexed { i, image ->
