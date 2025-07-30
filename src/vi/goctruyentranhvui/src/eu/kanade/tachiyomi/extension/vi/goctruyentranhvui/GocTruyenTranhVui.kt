@@ -35,8 +35,6 @@ class GocTruyenTranhVui : HttpSource() {
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
-        .add("X-Requested-With", "XMLHttpRequest")
-        .add("Authorization", TOKEN_KEY)
 
     override fun popularMangaRequest(page: Int): Request = GET(
         apiUrl.toHttpUrl().newBuilder().apply {
@@ -98,16 +96,16 @@ class GocTruyenTranhVui : HttpSource() {
         val pattern = Regex("chapterJson:\\s*`(.*?)`")
         val match = pattern.find(html) ?: throw Exception("Không tìm thấy Json") // find json
         val jsonPage = match.groups[1]!!.value
-        val regexMangaId = Regex("""comic\s*=\s*\{\s*id:\s*"(\d{10})"""")
-        val matchId = regexMangaId.find(html) ?: throw Exception("Không tìm thấy mangaId") // find mangaId
-        val mangaId = matchId.groups[1]!!.value
-        val nameEn = response.request.url.toString().substringAfter("/truyen/").substringBefore("/")
-        val chapterNumber = response.request.url.toString().substringAfterLast("chuong-")
-        val body = FormBody.Builder().add("comicId", mangaId)
-            .add("chapterNumber", chapterNumber).add("nameEn", nameEn).build()
-        val request = POST("$baseUrl/api/chapter/auth", headers, body)
 
         val imageUrls = if (jsonPage.isEmpty()) {
+            val regexMangaId = Regex("""comic\s*=\s*\{\s*id:\s*"(\d{10})"""")
+            val matchId = regexMangaId.find(html) ?: throw Exception("Không tìm thấy mangaId") // find mangaId
+            val mangaId = matchId.groups[1]!!.value
+            val nameEn = response.request.url.toString().substringAfter("/truyen/").substringBefore("/")
+            val chapterNumber = response.request.url.toString().substringAfterLast("chuong-")
+            val body = FormBody.Builder().add("comicId", mangaId)
+                .add("chapterNumber", chapterNumber).add("nameEn", nameEn).build()
+            val request = POST("$baseUrl/api/chapter/auth", pageHeaders, body)
             client.newCall(request).execute().parseAs<ResultDto<ImageListDto>>().result.data
         } else {
             jsonPage.parseAs<ImageListWrapper>().body.result.data
@@ -116,6 +114,12 @@ class GocTruyenTranhVui : HttpSource() {
             val finalUrl = if (url.startsWith("/image/")) { baseUrl + url } else { url }
             Page(i, imageUrl = finalUrl)
         }
+    }
+    private val pageHeaders by lazy {
+        headersBuilder()
+            .add("X-Requested-With", "XMLHttpRequest")
+            .add("Authorization", TOKEN_KEY)
+            .build()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -146,7 +150,5 @@ class GocTruyenTranhVui : HttpSource() {
         SortByList(getSortByList()),
         GenreList(getGenreList()),
     )
-    companion object {
-        private const val TOKEN_KEY = "Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJBbG9uZSBGb3JldmVyIiwiY29taWNJZHMiOltdLCJyb2xlSWQiOm51bGwsImdyb3VwSWQiOm51bGwsImFkbWluIjpmYWxzZSwicmFuayI6MCwicGVybWlzc2lvbiI6W10sImlkIjoiMDAwMTA4NDQyNSIsInRlYW0iOmZhbHNlLCJpYXQiOjE3NTM2OTgyOTAsImVtYWlsIjoibnVsbCJ9.HT080LGjvzfh6XAPmdDZhf5vhnzUhXI4GU8U6tzwlnXWjgMO4VdYL1_jsSFWd-s3NBGt-OAt89XnzaQ03iqDyA"
-    }
 }
+private const val TOKEN_KEY = "Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJBbG9uZSBGb3JldmVyIiwiY29taWNJZHMiOltdLCJyb2xlSWQiOm51bGwsImdyb3VwSWQiOm51bGwsImFkbWluIjpmYWxzZSwicmFuayI6MCwicGVybWlzc2lvbiI6W10sImlkIjoiMDAwMTA4NDQyNSIsInRlYW0iOmZhbHNlLCJpYXQiOjE3NTM2OTgyOTAsImVtYWlsIjoibnVsbCJ9.HT080LGjvzfh6XAPmdDZhf5vhnzUhXI4GU8U6tzwlnXWjgMO4VdYL1_jsSFWd-s3NBGt-OAt89XnzaQ03iqDyA"
