@@ -255,18 +255,20 @@ open class NHentai(
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script:containsData(media_server)")!!.data()
-        val script2 = document.selectFirst(hentaiSelector)!!.data()
+    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
 
-        val mediaServer = Regex("""media_server\s*:\s*(\d+)""").find(script)?.groupValues!![1]
-        val json = dataRegex.find(script2)?.groupValues!![1]
+    override fun pageListParse(response: Response): List<Page> {
+        val html = response.body.string()
 
+        val json = dataRegex.find(html)?.groupValues!![1]
         val data = json.parseAs<Hentai>()
+        val cdnJson = Regex("""image_cdn_urls:\s*(\[.*])""").find(html)?.groupValues!![1]
+        val cdnList = cdnJson.parseAs<List<String>>()
+
         return data.images.pages.mapIndexed { i, image ->
             Page(
                 i,
-                imageUrl = "${baseUrl.replace("https://", "https://i$mediaServer.")}/galleries/${data.media_id}/${i + 1}" +
+                imageUrl = "https://${cdnList.random()}/galleries/${data.media_id}/${i + 1}" +
                     when (image.t) {
                         "w" -> ".webp"
                         "p" -> ".png"
