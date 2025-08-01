@@ -34,6 +34,7 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -44,6 +45,7 @@ abstract class GigaViewer(
     override val baseUrl: String,
     override val lang: String,
     private val cdnUrl: String = "",
+    private val isPaginated: Boolean = false,
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
@@ -134,7 +136,7 @@ abstract class GigaViewer(
             .attr("data-src")
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    protected fun chapterListParseSinglePage(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
 
@@ -178,6 +180,68 @@ abstract class GigaViewer(
         result.close()
 
         return chapters
+    }
+
+    protected fun paginatedChaptersRequest(referer: String, aggregateId: String, offset: Int): Response {
+        val headers = headers.newBuilder()
+            .set("Referer", referer)
+            .build()
+
+        val apiUrl = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("api")
+            .addPathSegment("viewer")
+            .addPathSegment("pagination_readable_products")
+            .addQueryParameter("type", "episode")
+            .addQueryParameter("aggregate_id", aggregateId)
+            .addQueryParameter("sort_order", "desc")
+            .addQueryParameter("offset", offset.toString())
+            .build()
+            .toString()
+
+        val request = GET(apiUrl, headers)
+        return client.newCall(request).execute()
+    }
+
+    protected fun chapterListParsePaginated(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val referer = response.request.url.toString()
+        val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
+
+        val chapters = mutableListOf<SChapter>()
+
+        var offset = 0
+
+        // make initial request
+        var result = paginatedChaptersRequest(referer, aggregateId, offset)
+        var resultData = json.decodeFromString<GigaViewerEpisodesDto>("{\"episodes\": ${result.body.string()}}")
+
+        // repeat until the offset is too large to return any chapters, resulting in an empty list
+        while (resultData.episodes.isNotEmpty()) {
+            resultData.episodes.mapTo(chapters) { element ->
+                SChapter.create().apply {
+                    name = element.title
+                    date_upload = parseDate(element.display_open_at)
+                    scanlator = publisher
+                    setUrlWithoutDomain("/episode/${element.readable_product_id}")
+                }
+            }
+            // increase offset and make next request
+            offset += resultData.episodes.size
+            result = paginatedChaptersRequest(referer, aggregateId, offset)
+            resultData = json.decodeFromString<GigaViewerEpisodesDto>("{\"episodes\": ${result.body.string()}}")
+        }
+
+        result.close()
+
+        return chapters
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        return if (isPaginated) {
+            chapterListParsePaginated(response)
+        } else {
+            chapterListParseSinglePage(response)
+        }
     }
 
     override fun chapterListSelector() = "li.episode"
@@ -331,5 +395,22 @@ abstract class GigaViewer(
 
         private const val YEN_BANKNOTE = "💴 "
         private const val LOCK = "🔒 "
+
+        private const val IS_FREE = "is_free"
+        private const val IS_RENTABLE = "is_rentable"
+        private const val UNPUBLISHED = "unpublished"
+
+        private val dateFormat by lazy {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
+        }
+
+        // date formatting
+        private fun parseDate(dateStr: String): Long {
+            return try {
+                dateFormat.parse(dateStr)!!.time
+            } catch (_: ParseException) {
+                0L
+            }
+        }
     }
 }
