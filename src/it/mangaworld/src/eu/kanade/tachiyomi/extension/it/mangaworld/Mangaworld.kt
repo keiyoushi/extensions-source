@@ -4,6 +4,6 @@ import eu.kanade.tachiyomi.multisrc.mangaworld.MangaWorld
 
 class Mangaworld : MangaWorld(
     "Mangaworld",
-    "https://www.mangaworld.nz",
+    "https://www.mangaworld.cx",
     "it",
 )
