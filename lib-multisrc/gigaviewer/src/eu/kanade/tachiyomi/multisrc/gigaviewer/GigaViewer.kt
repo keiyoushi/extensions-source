@@ -34,7 +34,6 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -379,12 +378,13 @@ abstract class GigaViewer(
     }
 
     private fun String.toDate(): Long {
-        return runCatching { DATE_PARSER.parse(this)?.time }
+        return runCatching { (if (isPaginated) DATE_PARSER_COMPLEX else DATE_PARSER_SIMPLE).parse(this)?.time }
             .getOrNull() ?: 0L
     }
 
     companion object {
-        private val DATE_PARSER by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH) }
+        private val DATE_PARSER_SIMPLE by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH) }
+        private val DATE_PARSER_COMPLEX by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH) }
 
         private const val DIVIDE_NUM = 4
         private const val MULTIPLE = 8
@@ -399,18 +399,5 @@ abstract class GigaViewer(
         private const val IS_FREE = "is_free"
         private const val IS_RENTABLE = "is_rentable"
         private const val UNPUBLISHED = "unpublished"
-
-        private val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
-        }
-
-        // date formatting
-        private fun parseDate(dateStr: String): Long {
-            return try {
-                dateFormat.parse(dateStr)!!.time
-            } catch (_: ParseException) {
-                0L
-            }
-        }
     }
 }
