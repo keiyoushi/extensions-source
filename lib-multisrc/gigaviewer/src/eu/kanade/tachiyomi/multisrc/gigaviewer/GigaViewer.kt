@@ -219,7 +219,12 @@ abstract class GigaViewer(
             resultData.episodes.mapTo(chapters) { element ->
                 SChapter.create().apply {
                     name = element.title
-                    date_upload = parseDate(element.display_open_at)
+                    if (chapterListMode == CHAPTER_LIST_PAID && element.status?.label != IS_FREE) {
+                        name = YEN_BANKNOTE + name
+                    } else if (chapterListMode == CHAPTER_LIST_LOCKED && element.status?.label == UNPUBLISHED) {
+                        name = LOCK + name
+                    }
+                    date_upload = element.display_open_at.toDate()
                     scanlator = publisher
                     setUrlWithoutDomain("/episode/${element.readable_product_id}")
                 }
@@ -396,6 +401,7 @@ abstract class GigaViewer(
         private const val YEN_BANKNOTE = "💴 "
         private const val LOCK = "🔒 "
 
+        // chapter status labels
         private const val IS_FREE = "is_free"
         private const val IS_RENTABLE = "is_rentable"
         private const val UNPUBLISHED = "unpublished"
