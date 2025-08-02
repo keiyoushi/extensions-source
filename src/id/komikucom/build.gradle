@@ -2,8 +2,8 @@ ext {
     extName = 'Komiku.com'
     extClass = '.KomikuCom'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://komiku.one'
-    overrideVersionCode = 1
+    baseUrl = 'https://01.komiku.asia'
+    overrideVersionCode = 2
     isNsfw = false
 }
 
