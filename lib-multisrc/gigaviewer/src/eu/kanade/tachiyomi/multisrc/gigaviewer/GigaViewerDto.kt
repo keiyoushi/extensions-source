@@ -33,7 +33,7 @@ data class GigaViewerEpisodesDto(
 @Serializable
 data class GigaViewerPaginationReadableProduct(
     val description: String?,
-    val display_open_at: String = "",
+    val display_open_at: String?,
     val event_free_open_limit: String?,
     val free_term_start_at: String?,
     val open_limit: String?,

@@ -224,7 +224,7 @@ abstract class GigaViewer(
                     } else if (chapterListMode == CHAPTER_LIST_LOCKED && element.status?.label == UNPUBLISHED) {
                         name = LOCK + name
                     }
-                    date_upload = element.display_open_at.toDate()
+                    date_upload = element.display_open_at?.toDate() ?: 0L
                     scanlator = publisher
                     setUrlWithoutDomain("/episode/${element.readable_product_id}")
                 }
