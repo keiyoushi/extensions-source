@@ -404,6 +404,7 @@ abstract class GigaViewer(
         // chapter status labels
         private const val IS_FREE = "is_free"
         private const val IS_RENTABLE = "is_rentable"
+        private const val IS_PURCHASABLE = "is_purchasable"
         private const val UNPUBLISHED = "unpublished"
     }
 }
