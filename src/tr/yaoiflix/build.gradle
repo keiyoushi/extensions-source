@@ -2,8 +2,8 @@ ext {
     extName = 'Yaoi Flix'
     extClass = '.YaoiFlix'
     themePkg = 'madara'
-    baseUrl = 'https://yaoiflix.kim'
-    overrideVersionCode = 1
+    baseUrl = 'https://yaoiflix.my'
+    overrideVersionCode = 2
     isNsfw = true
 }
 

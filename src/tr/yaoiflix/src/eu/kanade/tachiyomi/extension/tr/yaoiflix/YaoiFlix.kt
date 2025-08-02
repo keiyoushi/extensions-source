@@ -7,7 +7,7 @@ import java.util.Locale
 
 class YaoiFlix : Madara(
     "Yaoi Flix",
-    "https://yaoiflix.kim",
+    "https://yaoiflix.my",
     "tr",
     SimpleDateFormat("MMMM dd, yyyy", Locale("tr")),
 ) {
