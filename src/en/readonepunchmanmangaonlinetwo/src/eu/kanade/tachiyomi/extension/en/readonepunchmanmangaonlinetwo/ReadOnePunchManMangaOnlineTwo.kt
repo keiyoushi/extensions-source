@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
-class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Online", "https://ww3.readopm.com", "en") {
+class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Online", "https://ww6.readopm.com", "en") {
     override val sourceList = listOf(
         Pair("One Punch Man", "$baseUrl/manga/one-punch-man/"),
         Pair("Onepunch-Man (ONE)", "$baseUrl/manga/onepunch-man-one/"),
