@@ -44,6 +44,7 @@ abstract class GigaViewer(
     override val baseUrl: String,
     override val lang: String,
     private val cdnUrl: String = "",
+    private val isPaginated: Boolean = false,
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
@@ -134,7 +135,7 @@ abstract class GigaViewer(
             .attr("data-src")
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    protected fun chapterListParseSinglePage(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
 
@@ -178,6 +179,73 @@ abstract class GigaViewer(
         result.close()
 
         return chapters
+    }
+
+    protected fun paginatedChaptersRequest(referer: String, aggregateId: String, offset: Int): Response {
+        val headers = headers.newBuilder()
+            .set("Referer", referer)
+            .build()
+
+        val apiUrl = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("api")
+            .addPathSegment("viewer")
+            .addPathSegment("pagination_readable_products")
+            .addQueryParameter("type", "episode")
+            .addQueryParameter("aggregate_id", aggregateId)
+            .addQueryParameter("sort_order", "desc")
+            .addQueryParameter("offset", offset.toString())
+            .build()
+            .toString()
+
+        val request = GET(apiUrl, headers)
+        return client.newCall(request).execute()
+    }
+
+    protected fun chapterListParsePaginated(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val referer = response.request.url.toString()
+        val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
+
+        val chapters = mutableListOf<SChapter>()
+
+        var offset = 0
+
+        // make initial request
+        var result = paginatedChaptersRequest(referer, aggregateId, offset)
+        var resultData = json.decodeFromString<GigaViewerEpisodesDto>("{\"episodes\": ${result.body.string()}}")
+
+        // repeat until the offset is too large to return any chapters, resulting in an empty list
+        while (resultData.episodes.isNotEmpty()) {
+            resultData.episodes.mapTo(chapters) { element ->
+                SChapter.create().apply {
+                    name = element.title
+                    if (chapterListMode == CHAPTER_LIST_PAID && element.status?.label != IS_FREE) {
+                        name = YEN_BANKNOTE + name
+                    } else if (chapterListMode == CHAPTER_LIST_LOCKED && element.status?.label == UNPUBLISHED) {
+                        name = LOCK + name
+                    }
+                    date_upload = element.display_open_at?.toDate() ?: 0L
+                    scanlator = publisher
+                    setUrlWithoutDomain("/episode/${element.readable_product_id}")
+                }
+            }
+            // increase offset and make next request
+            offset += resultData.episodes.size
+            result = paginatedChaptersRequest(referer, aggregateId, offset)
+            resultData = json.decodeFromString<GigaViewerEpisodesDto>("{\"episodes\": ${result.body.string()}}")
+        }
+
+        result.close()
+
+        return chapters
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        return if (isPaginated) {
+            chapterListParsePaginated(response)
+        } else {
+            chapterListParseSinglePage(response)
+        }
     }
 
     override fun chapterListSelector() = "li.episode"
@@ -315,12 +383,13 @@ abstract class GigaViewer(
     }
 
     private fun String.toDate(): Long {
-        return runCatching { DATE_PARSER.parse(this)?.time }
+        return runCatching { (if (isPaginated) DATE_PARSER_COMPLEX else DATE_PARSER_SIMPLE).parse(this)?.time }
             .getOrNull() ?: 0L
     }
 
     companion object {
-        private val DATE_PARSER by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH) }
+        private val DATE_PARSER_SIMPLE by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH) }
+        private val DATE_PARSER_COMPLEX by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH) }
 
         private const val DIVIDE_NUM = 4
         private const val MULTIPLE = 8
@@ -331,5 +400,11 @@ abstract class GigaViewer(
 
         private const val YEN_BANKNOTE = "💴 "
         private const val LOCK = "🔒 "
+
+        // chapter status labels
+        private const val IS_FREE = "is_free"
+        private const val IS_RENTABLE = "is_rentable"
+        private const val IS_PURCHASABLE = "is_purchasable"
+        private const val UNPUBLISHED = "unpublished"
     }
 }

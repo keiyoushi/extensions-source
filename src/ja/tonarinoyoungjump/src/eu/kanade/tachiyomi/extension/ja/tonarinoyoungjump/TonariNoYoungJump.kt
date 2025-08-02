@@ -10,6 +10,7 @@ class TonariNoYoungJump : GigaViewer(
     "https://tonarinoyj.jp",
     "ja",
     "https://cdn-img.tonarinoyj.jp/public/page",
+    isPaginated = true,
 ) {
 
     override val supportsLatest: Boolean = false
