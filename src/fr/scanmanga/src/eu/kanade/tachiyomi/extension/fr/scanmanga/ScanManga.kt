@@ -1,38 +1,33 @@
 package eu.kanade.tachiyomi.extension.fr.scanmanga
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.parser.Parser
-import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import kotlin.random.Random
 
 class ScanManga : ParsedHttpSource() {
 
     override val name = "Scan-Manga"
 
-    override val baseUrl = "https://www.scan-manga.com"
+    override val baseUrl = "https://m.scan-manga.com"
 
     override val lang = "fr"
 
     override val supportsLatest = true
+
+    private val desktopBaseUrl = "https://www.scan-manga.com" // URL desktop pour la recherche
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor { chain ->
@@ -46,23 +41,36 @@ class ScanManga : ParsedHttpSource() {
         }.build()
 
     private val json: Json by injectLazy()
+    private fun shuffle(s: String): String {
+        val chars = s.toMutableList()
+        chars.shuffle()
+        return chars.joinToString("")
+    }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")
+        .set(
+            "User-Agent",
+            "Mozilla/5.0 (Linux; Android 16; LM-X420) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.158 Mobile Safari/537.36",
+        )
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/TOP-Manga-Webtoon-22.html", headers)
+        return GET("$baseUrl/TOP-Manga-Webtoon-36.html", headers)
     }
 
-    override fun popularMangaSelector() = "div.image_manga a[href]"
+    override fun popularMangaSelector() = "div.top"
 
     override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            title = element.select("img").attr("title")
-            setUrlWithoutDomain(element.attr("href"))
-            thumbnail_url = element.select("img").attr("data-original")
-        }
+        val manga = SManga.create()
+
+        val titleElement = element.selectFirst("a.atop")
+        val imgElement = element.selectFirst("a > img")
+
+        manga.setUrlWithoutDomain(titleElement?.attr("href")?.removePrefix(baseUrl) ?: "")
+        manga.title = titleElement?.text()?.trim() ?: "Titre inconnu"
+        manga.thumbnail_url = imgElement?.attr("data-original") ?: imgElement?.attr("data-original")
+        return manga
     }
 
     override fun popularMangaNextPageSelector(): String? = null
@@ -78,119 +86,87 @@ class ScanManga : ParsedHttpSource() {
         return SManga.create().apply {
             title = element.select("a.nom_manga").text()
             setUrlWithoutDomain(element.select("a.nom_manga").attr("href"))
-            /*thumbnail_url = element.select(".logo_manga img").let {
-                if (it.hasAttr("data-original"))
-                    it.attr("data-original") else it.attr("src")
-            }*/
-            // Better not use it, width is too large, which results in terrible image
         }
     }
 
     override fun latestUpdatesNextPageSelector(): String? = null
 
     // Search
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
-
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage = parseMangaFromJson(response)
-
-    private fun shuffle(s: String?): String {
-        val result = StringBuffer(s!!)
-        var n = result.length
-        while (n > 1) {
-            val randomPoint: Int = Random.nextInt(n)
-            val randomChar = result[randomPoint]
-            result.setCharAt(n - 1, randomChar)
-            n--
-        }
-        return result.toString()
-    }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val searchHeaders = headersBuilder()
-            .add("Referer", "$baseUrl/scanlation/liste_series.html")
-            .add("x-requested-with", "XMLHttpRequest")
+        val url = desktopBaseUrl.toHttpUrlOrNull()!!.newBuilder()
+            .addPathSegments("scanlation/liste_series.html")
+            .addQueryParameter("q", query)
             .build()
+            .toString()
 
-        return GET("$baseUrl/scanlation/scan.data.json", searchHeaders)
+        return GET(
+            url,
+            headersBuilder()
+                .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36")
+                .add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
+                .add("Referer", desktopBaseUrl)
+                .build(),
+        )
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response ->
-                searchMangaParse(response, query)
-            }
+    override fun searchMangaSelector() = "div.texte_manga.book_close, div.texte_manga.book_stop"
+
+    override fun searchMangaFromElement(element: Element): SManga {
+        val manga = SManga.create()
+        val link = element.selectFirst("a.texte_manga")!!
+
+        val path = link.attr("href")
+        // Construction correcte de l'URL vers la version mobile
+        manga.setUrlWithoutDomain(path)
+        manga.url = if (path.startsWith("/")) "https://m.scan-manga.com$path" else path
+
+        manga.title = link.text().trim()
+        manga.thumbnail_url = null // Pas d'image dispo ici
+        return manga
     }
 
-    private fun searchMangaParse(response: Response, query: String): MangasPage {
-        return MangasPage(parseMangaFromJson(response).mangas.filter { it.title.contains(query, ignoreCase = true) }, false)
-    }
-
-    private fun parseMangaFromJson(response: Response): MangasPage {
-        val jsonRaw = response.body.string()
-
-        if (jsonRaw.isEmpty()) {
-            return MangasPage(emptyList(), hasNextPage = false)
-        }
-
-        val jsonObj = json.parseToJsonElement(jsonRaw).jsonObject
-
-        val mangaList = jsonObj.entries.map { entry ->
-            SManga.create().apply {
-                title = Parser.unescapeEntities(entry.key, false)
-                genre = entry.value.jsonArray[2].jsonPrimitive.content.let {
-                    when {
-                        it.contains("0") -> "Shōnen"
-                        it.contains("1") -> "Shōjo"
-                        it.contains("2") -> "Seinen"
-                        it.contains("3") -> "Josei"
-                        else -> null
-                    }
-                }
-                status = entry.value.jsonArray[3].jsonPrimitive.content.let {
-                    when {
-                        it.contains("0") -> SManga.ONGOING // En cours
-                        it.contains("1") -> SManga.ONGOING // En pause
-                        it.contains("2") -> SManga.COMPLETED // Terminé
-                        it.contains("3") -> SManga.COMPLETED // One shot
-                        else -> SManga.UNKNOWN
-                    }
-                }
-                url = "/" + entry.value.jsonArray[0].jsonPrimitive.content + "/" +
-                    entry.value.jsonArray[1].jsonPrimitive.content + ".html"
-            }
-        }
-
-        return MangasPage(mangaList, hasNextPage = false)
-    }
-
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
+    override fun searchMangaNextPageSelector(): String? = null
 
     // Details
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.select("h2[itemprop=\"name\"]").text()
-        author = document.select("li[itemprop=\"author\"] a").joinToString { it.text() }
-        description = document.select("p[itemprop=\"description\"]").text()
-        thumbnail_url = document.select(".contenu_fiche_technique .image_manga img").attr("src")
+    override fun mangaDetailsParse(document: Document): SManga {
+        val manga = SManga.create()
+
+        manga.title = document.select("h1.main_title[itemprop=name]").text()
+        manga.author = document.select("div[itemprop=author]").text()
+        manga.description = document.select("div.titres_desc[itemprop=description]").text()
+        manga.genre = document.select("div.titres_souspart span[itemprop=genre]").joinToString(", ") { it.text() }
+
+        val statutText = document.select("div.titres_souspart").firstOrNull { it.text().contains("Statut") }?.ownText()
+        manga.status = when {
+            statutText?.contains("En cours", ignoreCase = true) == true -> SManga.ONGOING
+            statutText?.contains("Terminé", ignoreCase = true) == true -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+
+        manga.thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").attr("src")
+
+        return manga
     }
 
     // Chapters
-    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterListSelector() = "div.chapt_m"
 
-    override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element): SChapter {
+        val linkEl = element.selectFirst("td.publimg span.i a") ?: throw Exception("Lien chapitre introuvable")
+        val titleEl = element.selectFirst("td.publititle")
+
+        val chapterName = linkEl.text().trim()
+        val extraTitle = titleEl?.text()?.trim().orEmpty()
+
+        return SChapter.create().apply {
+            name = if (extraTitle.isNotEmpty()) "$chapterName - $extraTitle" else chapterName
+            setUrlWithoutDomain(linkEl.attr("href"))
+        }
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-
-        return document.select("div.texte_volume_manga ul li.chapitre div.chapitre_nom a").map {
-            SChapter.create().apply {
-                name = it.text()
-                setUrlWithoutDomain(it.attr("href"))
-                scanlator = document.select("li[itemprop=\"translator\"] a").joinToString { it.text() }
-            }
-        }
+        return document.select(chapterListSelector()).map { chapterFromElement(it) }
     }
 
     // Pages
