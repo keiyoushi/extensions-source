@@ -47,7 +47,7 @@ data class GigaViewerPaginationReadableProduct(
 
 @Serializable
 data class GigaViewerPaginationReadableProductStatus(
-    val buy_price: String?,
+    val buy_price: Int?,
     val label: String?,
     val rental_end_at: String?,
     val rental_price: Int?,
