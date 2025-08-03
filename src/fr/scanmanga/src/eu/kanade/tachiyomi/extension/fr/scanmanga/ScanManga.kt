@@ -160,7 +160,7 @@ class ScanManga : ParsedHttpSource() {
 
         return SChapter.create().apply {
             name = if (extraTitle.isNotEmpty()) "$chapterName - $extraTitle" else chapterName
-            setUrlWithoutDomain(linkEl.attr("href"))
+            setUrlWithoutDomain(linkEl.absUrl("href"))
         }
     }
 
