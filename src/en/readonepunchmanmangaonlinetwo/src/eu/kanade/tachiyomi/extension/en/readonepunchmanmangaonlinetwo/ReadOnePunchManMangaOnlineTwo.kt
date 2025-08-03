@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.readonepunchmanmangaonlinetwo
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -30,12 +31,8 @@ class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Onl
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         name = element.select("td:first-child").text()
         url = element.select("a").attr("abs:href")
-        date_upload = parseDate(element.select("td:nth-child(2)").text())
-    }
-
-    private fun parseDate(date: String) = DATE_FORMAT.parse(date)?.time ?: System.currentTimeMillis()
-
-    companion object {
-        private val DATE_FORMAT = SimpleDateFormat("MMM dd, yyyy", Locale.US)
+        date_upload = DATE_FORMAT.tryParse(element.select("td:nth-child(2)").text())
     }
 }
+
+private val DATE_FORMAT = SimpleDateFormat("MMM dd, yyyy", Locale.US)

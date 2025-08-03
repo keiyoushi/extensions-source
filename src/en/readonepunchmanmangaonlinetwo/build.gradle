@@ -3,7 +3,7 @@ ext {
     extClass = '.ReadOnePunchManMangaOnlineTwo'
     themePkg = 'mangacatalog'
     baseUrl = 'https://ww6.readopm.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 1
     isNsfw = false
 }
 
