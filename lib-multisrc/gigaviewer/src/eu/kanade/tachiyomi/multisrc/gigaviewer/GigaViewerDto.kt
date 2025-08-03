@@ -42,28 +42,20 @@ class GigaViewerPaginationReadableProduct(
 ) {
     fun toSChapter(chapterListMode: Int, publisher: String) = SChapter.create().apply {
         name = title
-        if (chapterListMode == CHAPTER_LIST_PAID && status?.label != IS_FREE) {
+        if (chapterListMode == CHAPTER_LIST_PAID && status?.label != "is_free") {
             name = YEN_BANKNOTE + name
-        } else if (chapterListMode == CHAPTER_LIST_LOCKED && status?.label == UNPUBLISHED) {
+        } else if (chapterListMode == CHAPTER_LIST_LOCKED && status?.label == "unpublished") {
             name = LOCK + name
         }
         date_upload = DATE_PARSER_COMPLEX.tryParse(display_open_at)
         scanlator = publisher
         url = "/episode/$readable_product_id"
     }
-
-    companion object {
-        // chapter status labels
-        private const val IS_FREE = "is_free"
-        private const val IS_RENTABLE = "is_rentable"
-        private const val IS_PURCHASABLE = "is_purchasable"
-        private const val UNPUBLISHED = "unpublished"
-    }
 }
 
 @Serializable
 class GigaViewerPaginationReadableProductStatus(
-    val label: String?,
+    val label: String?,  // is_free, is_rentable, is_purchasable, unpublished
 )
 
 val DATE_PARSER_SIMPLE = SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH)
