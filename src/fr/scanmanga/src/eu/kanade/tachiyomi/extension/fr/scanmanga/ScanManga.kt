@@ -142,7 +142,7 @@ class ScanManga : ParsedHttpSource() {
             else -> SManga.UNKNOWN
         }
 
-        manga.thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").attr("src")
+        manga.thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").absUrl("src")
 
         return manga
     }
