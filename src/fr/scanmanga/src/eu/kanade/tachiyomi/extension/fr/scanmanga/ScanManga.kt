@@ -158,7 +158,7 @@ class ScanManga : ParsedHttpSource() {
         val extraTitle = titleEl?.text()?.orEmpty()
 
         return SChapter.create().apply {
-            name = if (extraTitle.isNotEmpty()) "$chapterName - $extraTitle" else chapterName
+            name = if (extraTitle != null) "$chapterName - $extraTitle" else chapterName
             setUrlWithoutDomain(linkEl.absUrl("href"))
         }
     }
