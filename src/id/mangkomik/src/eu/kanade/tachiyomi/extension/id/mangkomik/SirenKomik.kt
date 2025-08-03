@@ -14,7 +14,7 @@ import java.util.Locale
 
 class SirenKomik : MangaThemesia(
     "Siren Komik",
-    "https://sirenkomik.my.id",
+    "https://sirenkomik.xyz",
     "id",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
 ) {
