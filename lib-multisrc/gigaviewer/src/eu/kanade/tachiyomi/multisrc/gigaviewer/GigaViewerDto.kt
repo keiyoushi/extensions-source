@@ -34,17 +34,10 @@ data class GigaViewerPage(
 
 @Serializable
 class GigaViewerPaginationReadableProduct(
-    val description: String?,
-    val display_open_at: String?,
-    val event_free_open_limit: String?,
-    val free_term_start_at: String?,
-    val open_limit: String?,
-    val readable_product_id: String = "",
-    val status: GigaViewerPaginationReadableProductStatus?,
-    val thumbnail_alt: String = "",
-    val thumbnail_uri: String = "",
-    val title: String = "",
-    val viewer_uri: String = "",
+    private val display_open_at: String?,
+    private val readable_product_id: String = "",
+    private val status: GigaViewerPaginationReadableProductStatus?,
+    private val title: String = "",
 ) {
     fun toSChapter(chapterListMode: Int, publisher: String) = SChapter.create().apply {
         name = title
@@ -69,13 +62,7 @@ class GigaViewerPaginationReadableProduct(
 
 @Serializable
 class GigaViewerPaginationReadableProductStatus(
-    val buy_price: Int?,
     val label: String?,
-    val rental_end_at: String?,
-    val rental_price: Int?,
-    val rental_term: Int?,
-    val private_reason_message: String?,
-    val type: String?,
 )
 
 val DATE_PARSER_SIMPLE = SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH)
