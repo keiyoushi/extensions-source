@@ -27,7 +27,7 @@ class ScanManga : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    private val desktopBaseUrl = "https://www.scan-manga.com" // URL desktop pour la recherche
+    private val desktopBaseUrl = "https://www.scan-manga.com" // Desktop URL for search
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor { chain ->
