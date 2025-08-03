@@ -209,10 +209,10 @@ open class NHentai(
 
     override fun mangaDetailsParse(document: Document): SManga {
         val data = document.getHentaiData()
-        val cdn = document.getCDNs(thumbnail = true).random()
+        val cdnUrl = document.getCdnUrls(thumbnail = true).random()
         return SManga.create().apply {
             title = if (displayFullTitle) data.title.english ?: data.title.japanese ?: data.title.pretty!! else data.title.pretty ?: (data.title.english ?: data.title.japanese)!!.shortenTitle()
-            thumbnail_url = "https://$cdn/galleries/${data.media_id}/1t.${data.images.pages[0].extension}"
+            thumbnail_url = "https://$cdnUrl/galleries/${data.media_id}/1t.${data.images.pages[0].extension}"
             status = SManga.COMPLETED
             artist = getArtists(data)
             author = getGroups(data) ?: getArtists(data)
@@ -249,12 +249,12 @@ open class NHentai(
 
     override fun pageListParse(document: Document): List<Page> {
         val data = document.getHentaiData()
-        val cdnList = document.getCDNs()
+        val cdnUrls = document.getCdnUrls(thumbnail = false)
 
         return data.images.pages.mapIndexed { i, image ->
             Page(
                 index = i,
-                imageUrl = "https://${cdnList.random()}/galleries/${data.media_id}/${i + 1}.${image.extension}",
+                imageUrl = "https://${cdnUrls.random()}/galleries/${data.media_id}/${i + 1}.${image.extension}",
             )
         }
     }
@@ -264,7 +264,7 @@ open class NHentai(
         return dataRegex.find(script)!!.groupValues[1].parseAs()
     }
 
-    private fun Document.getCDNs(thumbnail: Boolean = false): List<String> {
+    private fun Document.getCdnUrls(thumbnail: Boolean): List<String> {
         val regex = Regex(
             if (thumbnail) {
                 """thumb_cdn_urls:\s*(\[.*])"""
