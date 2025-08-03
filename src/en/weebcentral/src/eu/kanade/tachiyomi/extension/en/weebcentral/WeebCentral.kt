@@ -246,6 +246,8 @@ class WeebCentral : ParsedHttpSource() {
     )
 
     companion object {
+        // The related "&limit=" query parameter of the api is currently non functional
+        // and always returns 32 entries per request
         const val FETCH_LIMIT = 32
         const val URL_SEARCH_PREFIX = "id:"
     }
