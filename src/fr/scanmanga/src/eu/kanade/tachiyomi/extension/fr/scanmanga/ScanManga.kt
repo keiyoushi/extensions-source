@@ -155,8 +155,8 @@ class ScanManga : ParsedHttpSource() {
         val linkEl = element.selectFirst("td.publimg span.i a") ?: throw Exception("Lien chapitre introuvable")
         val titleEl = element.selectFirst("td.publititle")
 
-        val chapterName = linkEl.text().trim()
-        val extraTitle = titleEl?.text()?.trim().orEmpty()
+        val chapterName = linkEl.text()
+        val extraTitle = titleEl?.text()?.orEmpty()
 
         return SChapter.create().apply {
             name = if (extraTitle.isNotEmpty()) "$chapterName - $extraTitle" else chapterName
