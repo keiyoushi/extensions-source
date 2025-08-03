@@ -68,7 +68,7 @@ class ScanManga : ParsedHttpSource() {
         val imgElement = element.selectFirst("a > img")
 
         manga.setUrlWithoutDomain(titleElement?.attr("href")?.removePrefix(baseUrl) ?: "")
-        manga.title = titleElement?.text()?.trim() ?: "Titre inconnu"
+        manga.title = titleElement?.text()!!
         manga.thumbnail_url = imgElement?.attr("data-original") ?: imgElement?.attr("data-original")
         return manga
     }
