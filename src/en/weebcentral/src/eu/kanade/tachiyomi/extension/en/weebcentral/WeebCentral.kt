@@ -246,7 +246,7 @@ class WeebCentral : ParsedHttpSource() {
     )
 
     companion object {
-        const val FETCH_LIMIT = 24
+        const val FETCH_LIMIT = 32
         const val URL_SEARCH_PREFIX = "id:"
     }
 }
