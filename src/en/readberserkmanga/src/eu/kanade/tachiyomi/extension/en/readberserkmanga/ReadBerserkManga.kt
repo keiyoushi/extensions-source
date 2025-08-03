@@ -3,8 +3,11 @@ package eu.kanade.tachiyomi.extension.en.readberserkmanga
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class ReadBerserkManga : MangaCatalog("Read Berserk Manga", "https://readberserk.com", "en") {
     override val sourceList = listOf(
@@ -26,6 +29,8 @@ class ReadBerserkManga : MangaCatalog("Read Berserk Manga", "https://readberserk
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         name = element.select("td:first-child").text()
         url = element.select("a.btn-primary").attr("abs:href")
-        date_upload = System.currentTimeMillis() // I have no idear how to parse Date stuff
+        date_upload = DATE_FORMAT.tryParse(element.select("td:nth-child(2)").text())
     }
 }
+
+private val DATE_FORMAT = SimpleDateFormat("MMM dd, yyyy", Locale.US)

@@ -3,16 +3,22 @@ package eu.kanade.tachiyomi.extension.en.readonepunchmanmangaonlinetwo
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Online", "https://ww3.readopm.com", "en") {
+class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Online", "https://ww6.readopm.com", "en") {
     override val sourceList = listOf(
         Pair("One Punch Man", "$baseUrl/manga/one-punch-man/"),
+        Pair("Official", "$baseUrl/manga/one-punch-man-official/"),
         Pair("Onepunch-Man (ONE)", "$baseUrl/manga/onepunch-man-one/"),
         Pair("Colored", "$baseUrl/manga/one-punch-man-colored/"),
         Pair("Mob Psycho 100", "$baseUrl/manga/mob-psycho-100/"),
         Pair("Reigen", "$baseUrl/manga/reigen/"),
+        Pair("Versus (ONE)", "$baseUrl/manga/versus/"),
+        Pair("Bug Ego", "$baseUrl/manga/bug-ego/"),
         Pair("Eyeshield 21", "$baseUrl/manga/eyeshield-21/"),
     ).sortedBy { it.first }.distinctBy { it.second }
 
@@ -25,6 +31,8 @@ class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Onl
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         name = element.select("td:first-child").text()
         url = element.select("a").attr("abs:href")
-        date_upload = System.currentTimeMillis() // I have no idear how to parse Date stuff
+        date_upload = DATE_FORMAT.tryParse(element.select("td:nth-child(2)").text())
     }
 }
+
+private val DATE_FORMAT = SimpleDateFormat("MMM dd, yyyy", Locale.US)

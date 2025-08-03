@@ -2,7 +2,7 @@ ext {
     extName = 'Read One-Punch Man Manga Online'
     extClass = '.ReadOnePunchManMangaOnlineTwo'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww3.readopm.com'
+    baseUrl = 'https://ww6.readopm.com'
     overrideVersionCode = 1
     isNsfw = false
 }
