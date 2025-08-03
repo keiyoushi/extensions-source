@@ -69,7 +69,7 @@ class ScanManga : ParsedHttpSource() {
 
         manga.setUrlWithoutDomain(titleElement!!.absUrl("href"))
         manga.title = titleElement?.text()!!
-        manga.thumbnail_url = imgElement?.attr("data-original") ?: imgElement?.attr("data-original")
+        manga.thumbnail_url = imgElement?.absUrl("data-original")
         return manga
     }
 
