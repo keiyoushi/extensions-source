@@ -93,7 +93,7 @@ class ScanManga : ParsedHttpSource() {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = desktopBaseUrl.toHttpUrlOrNull()!!.newBuilder()
+        val url = desktopBaseUrl.toHttpUrl().newBuilder()
             .addPathSegments("scanlation/liste_series.html")
             .addQueryParameter("q", query)
             .build()
