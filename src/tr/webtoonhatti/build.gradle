@@ -2,8 +2,8 @@ ext {
     extName = 'Webtoon Hatti'
     extClass = '.WebtoonHatti'
     themePkg = 'madara'
-    baseUrl = 'https://webtoonhatti.me'
-    overrideVersionCode = 6
+    baseUrl = 'https://webtoonhatti.club'
+    overrideVersionCode = 7
     isNsfw = false
 }
 
