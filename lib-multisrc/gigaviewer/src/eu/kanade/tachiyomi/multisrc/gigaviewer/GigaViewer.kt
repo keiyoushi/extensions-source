@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -34,7 +35,6 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.floor
@@ -210,32 +210,20 @@ abstract class GigaViewer(
 
         var offset = 0
 
-        // make initial request
-        var result = paginatedChaptersRequest(referer, aggregateId, offset)
-        var resultData = json.decodeFromString<GigaViewerEpisodesDto>("{\"episodes\": ${result.body.string()}}")
-
         // repeat until the offset is too large to return any chapters, resulting in an empty list
-        while (resultData.episodes.isNotEmpty()) {
-            resultData.episodes.mapTo(chapters) { element ->
-                SChapter.create().apply {
-                    name = element.title
-                    if (chapterListMode == CHAPTER_LIST_PAID && element.status?.label != IS_FREE) {
-                        name = YEN_BANKNOTE + name
-                    } else if (chapterListMode == CHAPTER_LIST_LOCKED && element.status?.label == UNPUBLISHED) {
-                        name = LOCK + name
-                    }
-                    date_upload = element.display_open_at?.toDate() ?: 0L
-                    scanlator = publisher
-                    setUrlWithoutDomain("/episode/${element.readable_product_id}")
-                }
+        while (true) {
+            // make request
+            val result = paginatedChaptersRequest(referer, aggregateId, offset)
+            val resultData = result.parseAs<List<GigaViewerPaginationReadableProduct>>()
+            if (resultData.isEmpty()) {
+                break
             }
-            // increase offset and make next request
-            offset += resultData.episodes.size
-            result = paginatedChaptersRequest(referer, aggregateId, offset)
-            resultData = json.decodeFromString<GigaViewerEpisodesDto>("{\"episodes\": ${result.body.string()}}")
+            resultData.mapTo(chapters) { element ->
+                element.toSChapter(chapterListMode, publisher)
+            }
+            // increase offset
+            offset += resultData.size
         }
-
-        result.close()
 
         return chapters
     }
@@ -388,9 +376,6 @@ abstract class GigaViewer(
     }
 
     companion object {
-        private val DATE_PARSER_SIMPLE by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH) }
-        private val DATE_PARSER_COMPLEX by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH) }
-
         private const val DIVIDE_NUM = 4
         private const val MULTIPLE = 8
         private val jpegMediaType = "image/jpeg".toMediaType()
@@ -398,13 +383,7 @@ abstract class GigaViewer(
         const val CHAPTER_LIST_PAID = 0
         const val CHAPTER_LIST_LOCKED = 1
 
-        private const val YEN_BANKNOTE = "💴 "
-        private const val LOCK = "🔒 "
-
-        // chapter status labels
-        private const val IS_FREE = "is_free"
-        private const val IS_RENTABLE = "is_rentable"
-        private const val IS_PURCHASABLE = "is_purchasable"
-        private const val UNPUBLISHED = "unpublished"
+        const val YEN_BANKNOTE = "💴 "
+        const val LOCK = "🔒 "
     }
 }
