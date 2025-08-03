@@ -9,10 +9,13 @@ import org.jsoup.nodes.Element
 class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Online", "https://ww6.readopm.com", "en") {
     override val sourceList = listOf(
         Pair("One Punch Man", "$baseUrl/manga/one-punch-man/"),
+        Pair("Official", "$baseUrl/manga/one-punch-man-official/"),
         Pair("Onepunch-Man (ONE)", "$baseUrl/manga/onepunch-man-one/"),
         Pair("Colored", "$baseUrl/manga/one-punch-man-colored/"),
         Pair("Mob Psycho 100", "$baseUrl/manga/mob-psycho-100/"),
         Pair("Reigen", "$baseUrl/manga/reigen/"),
+        Pair("Versus (ONE)", "$baseUrl/manga/versus/"),
+        Pair("Bug Ego", "$baseUrl/manga/bug-ego/"),
         Pair("Eyeshield 21", "$baseUrl/manga/eyeshield-21/"),
     ).sortedBy { it.first }.distinctBy { it.second }
 
