@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer.Companion.CHAPTER_LIST
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer.Companion.LOCK
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer.Companion.YEN_BANKNOTE
 import eu.kanade.tachiyomi.source.model.SChapter
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -46,7 +47,7 @@ class GigaViewerPaginationReadableProduct(
         } else if (chapterListMode == CHAPTER_LIST_LOCKED && status?.label == UNPUBLISHED) {
             name = LOCK + name
         }
-        date_upload = display_open_at?.toDate() ?: 0L
+        date_upload = DATE_PARSER_COMPLEX.tryParse(display_open_at)
         scanlator = publisher
         url = "/episode/$readable_product_id"
     }
@@ -67,7 +68,3 @@ class GigaViewerPaginationReadableProductStatus(
 
 val DATE_PARSER_SIMPLE = SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH)
 val DATE_PARSER_COMPLEX = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
-
-private fun String.toDate(): Long {
-    return runCatching { DATE_PARSER_COMPLEX.parse(this)?.time }.getOrNull() ?: 0L
-}

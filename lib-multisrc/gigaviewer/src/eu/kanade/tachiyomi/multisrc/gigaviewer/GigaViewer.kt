@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -251,9 +252,7 @@ abstract class GigaViewer(
             } else if (chapterListMode == CHAPTER_LIST_LOCKED && element.hasClass("private")) {
                 name = LOCK + name
             }
-            date_upload = info.selectFirst("span.series-episode-list-date")
-                ?.text().orEmpty()
-                .toDate()
+            date_upload = DATE_PARSER_SIMPLE.tryParse(info.selectFirst("span.series-episode-list-date")?.text().orEmpty())
             scanlator = publisher
             setUrlWithoutDomain(if (info.tagName() == "a") info.attr("href") else mangaUrl)
         }
@@ -368,11 +367,6 @@ abstract class GigaViewer(
                 throw Exception("HTTP error ${response.code}")
             }
         }
-    }
-
-    private fun String.toDate(): Long {
-        return runCatching { (if (isPaginated) DATE_PARSER_COMPLEX else DATE_PARSER_SIMPLE).parse(this)?.time }
-            .getOrNull() ?: 0L
     }
 
     companion object {
