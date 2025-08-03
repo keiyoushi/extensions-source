@@ -151,7 +151,7 @@ class ScanManga : ParsedHttpSource() {
     override fun chapterListSelector() = "div.chapt_m"
 
     override fun chapterFromElement(element: Element): SChapter {
-        val linkEl = element.selectFirst("td.publimg span.i a") ?: throw Exception("Lien chapitre introuvable")
+        val linkEl = element.selectFirst("td.publimg span.i a")!!
         val titleEl = element.selectFirst("td.publititle")
 
         val chapterName = linkEl.text()
