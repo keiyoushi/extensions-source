@@ -121,7 +121,6 @@ class ScanManga : ParsedHttpSource() {
         manga.url = if (path.startsWith("/")) "https://m.scan-manga.com$path" else path
 
         manga.title = link.text().trim()
-        manga.thumbnail_url = null // Pas d'image dispo ici
         return manga
     }
 
