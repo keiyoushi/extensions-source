@@ -10,6 +10,7 @@ class MagComi : GigaViewer(
     "https://magcomi.com",
     "ja",
     "https://cdn-img.magcomi.com/public/page",
+    isPaginated = true,
 ) {
 
     override val supportsLatest: Boolean = false

@@ -10,6 +10,7 @@ class ComicGardo : GigaViewer(
     "https://comic-gardo.com",
     "ja",
     "https://cdn-img.comic-gardo.com/public/page",
+    isPaginated = true,
 ) {
 
     override val supportsLatest: Boolean = false
