@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Online", "https://ww6.readopm.com", "en") {
     override val sourceList = listOf(
@@ -28,6 +30,12 @@ class ReadOnePunchManMangaOnlineTwo : MangaCatalog("Read One-Punch Man Manga Onl
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         name = element.select("td:first-child").text()
         url = element.select("a").attr("abs:href")
-        date_upload = System.currentTimeMillis() // I have no idear how to parse Date stuff
+        date_upload = parseDate(element.select("td:nth-child(2)").text())
+    }
+
+    private fun parseDate(date: String) = DATE_FORMAT.parse(date)?.time ?: System.currentTimeMillis()
+
+    companion object {
+        private val DATE_FORMAT = SimpleDateFormat("MMM dd, yyyy", Locale.US)
     }
 }
