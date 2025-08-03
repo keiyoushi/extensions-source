@@ -208,14 +208,11 @@ open class NHentai(
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val script = document.selectFirst(hentaiSelector)!!.data()
-
-        val json = dataRegex.find(script)?.groupValues!![1]
-
-        val data = json.parseAs<Hentai>()
+        val data = document.getHentaiData()
+        val cdn = document.getCDNs(thumbnail = true).random()
         return SManga.create().apply {
             title = if (displayFullTitle) data.title.english ?: data.title.japanese ?: data.title.pretty!! else data.title.pretty ?: (data.title.english ?: data.title.japanese)!!.shortenTitle()
-            thumbnail_url = document.select("#cover > a > img").attr("data-src")
+            thumbnail_url = "https://$cdn/galleries/${data.media_id}/1t.${data.images.pages[0].extension}"
             status = SManga.COMPLETED
             artist = getArtists(data)
             author = getGroups(data) ?: getArtists(data)
@@ -235,12 +232,7 @@ open class NHentai(
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val script = document.selectFirst(hentaiSelector)!!.data()
-
-        val json = dataRegex.find(script)?.groupValues!![1]
-
-        val data = json.parseAs<Hentai>()
+        val data = response.asJsoup().getHentaiData()
         return listOf(
             SChapter.create().apply {
                 name = "Chapter"
@@ -255,28 +247,35 @@ open class NHentai(
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
-    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
-
-    override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
-
-        val json = dataRegex.find(html)?.groupValues!![1]
-        val data = json.parseAs<Hentai>()
-        val cdnJson = Regex("""image_cdn_urls:\s*(\[.*])""").find(html)?.groupValues!![1]
-        val cdnList = cdnJson.parseAs<List<String>>()
+    override fun pageListParse(document: Document): List<Page> {
+        val data = document.getHentaiData()
+        val cdnList = document.getCDNs()
 
         return data.images.pages.mapIndexed { i, image ->
             Page(
-                i,
-                imageUrl = "https://${cdnList.random()}/galleries/${data.media_id}/${i + 1}" +
-                    when (image.t) {
-                        "w" -> ".webp"
-                        "p" -> ".png"
-                        "g" -> ".gif"
-                        else -> ".jpg"
-                    },
+                index = i,
+                imageUrl = "https://${cdnList.random()}/galleries/${data.media_id}/${i + 1}.${image.extension}",
             )
         }
+    }
+
+    private fun Document.getHentaiData(): Hentai {
+        val script = selectFirst(hentaiSelector)!!.data()
+        return dataRegex.find(script)!!.groupValues[1].parseAs()
+    }
+
+    private fun Document.getCDNs(thumbnail: Boolean = false): List<String> {
+        val regex = Regex(
+            if (thumbnail) {
+                """thumb_cdn_urls:\s*(\[.*])"""
+            } else {
+                """image_cdn_urls:\s*(\[.*])"""
+            },
+        )
+        val html = body().html()
+        val cdnJson = regex.find(html)!!.groupValues[1]
+
+        return cdnJson.parseAs<List<String>>()
     }
 
     override fun getFilterList(): FilterList = FilterList(
