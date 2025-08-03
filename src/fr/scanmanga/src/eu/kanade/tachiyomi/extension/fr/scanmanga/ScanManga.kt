@@ -134,7 +134,7 @@ class ScanManga : ParsedHttpSource() {
         manga.title = document.select("h1.main_title[itemprop=name]").text()
         manga.author = document.select("div[itemprop=author]").text()
         manga.description = document.select("div.titres_desc[itemprop=description]").text()
-        manga.genre = document.select("div.titres_souspart span[itemprop=genre]").joinToString(", ") { it.text() }
+        manga.genre = document.select("div.titres_souspart span[itemprop=genre]").joinToString { it.text() }
 
         val statutText = document.select("div.titres_souspart").firstOrNull { it.text().contains("Statut") }?.ownText()
         manga.status = when {
