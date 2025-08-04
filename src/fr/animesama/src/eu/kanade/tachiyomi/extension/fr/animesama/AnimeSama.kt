@@ -65,7 +65,7 @@ class AnimeSama : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
             title = element.select("h1").text()
-            url = element.select("a").attr("href")
+            setUrlWithoutDomain(element.select("a").attr("href").removeSuffix("scan/vf/"))
             thumbnail_url = element.select("img").attr("src")
         }
     }
