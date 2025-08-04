@@ -81,8 +81,8 @@ class AnimeSama : ParsedHttpSource() {
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        description = document.select("#sousBlocMilieu > div h2:contains(Synopsis)+p").text()
-        genre = document.select("#sousBlocMilieu > div h2:contains(Genres)+a").text()
+        description = document.select("#sousBlocMiddle > div h2:contains(Synopsis)+p").text()
+        genre = document.select("#sousBlocMiddle > div h2:contains(Genres)+a").text()
         title = document.select("#titreOeuvre").text()
         thumbnail_url = document.select("#coverOeuvre").attr("src")
     }
