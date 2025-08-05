@@ -71,7 +71,7 @@ open class NHentai(
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
     private val dataRegex = Regex("""JSON\.parse\(\s*"(.*)"\s*\)""")
-    private val hentaiSelector = "script:containsData(JSON.parse):not(:containsData(media_server))"
+    private val hentaiSelector = "script:containsData(JSON.parse):not(:containsData(media_server)):not(:containsData(avatar_url))"
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
