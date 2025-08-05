@@ -72,8 +72,8 @@ class ArgosScan : ParsedHttpSource() {
     // ============================ Search ======================================
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return fetchPopularManga(page).map { (mangas, _) ->
-            MangasPage(mangas.filter { it.title.contains(query, ignoreCase = true) }, hasNextPage = false)
+        return fetchPopularManga(page).map { mangasPage ->
+            MangasPage(mangasPage.mangas.filter { it.title.contains(query, ignoreCase = true) }, hasNextPage = false)
         }
     }
 
