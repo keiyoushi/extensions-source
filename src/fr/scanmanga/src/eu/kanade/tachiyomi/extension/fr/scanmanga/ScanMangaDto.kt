@@ -1,0 +1,31 @@
+package eu.kanade.tachiyomi.extension.fr.scanmanga
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class Page(
+    val f: String, // filename
+    val e: String, // extension
+)
+
+@Serializable
+data class UrlPayload(
+    val dN: String,
+    val l: Int,
+    val s: String,
+    val v: String,
+    val c: String,
+    val p: Map<String, Page>,
+) {
+    fun generateImageUrls(): Map<Int, String> {
+        val baseUrl = "https://$dN/$s/$v/$c"
+        return p.entries
+            .mapNotNull { (key, page) ->
+                key.toIntOrNull()?.let { pageIndex ->
+                    pageIndex to "$baseUrl/${page.f}.${page.e}"
+                }
+            }
+            .sortedBy { it.first } // sort by page index
+            .toMap()
+    }
+}

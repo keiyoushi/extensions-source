@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.scanmanga
 
+import android.util.Base64
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -7,15 +9,21 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.logging.HttpLoggingInterceptor
+import org.json.JSONObject
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
+import java.util.zip.Inflater
 
 class ScanManga : ParsedHttpSource() {
 
@@ -38,7 +46,37 @@ class ScanManga : ParsedHttpSource() {
                 .header("Cookie", "$originalCookies; _ga=GA1.2.${shuffle("123456789")}.${System.currentTimeMillis() / 1000}")
                 .build()
             chain.proceed(newReq)
-        }.build()
+        }.addInterceptor(
+            HttpLoggingInterceptor { message: String ->
+                val bins = mutableListOf<MutableList<String>>()
+                var currentBin = mutableListOf<String>()
+                bins += currentBin
+
+                for (line_ in message.splitToSequence(Regex("\r?\n"))) {
+                    var line = line_
+
+                    do {
+                        if (line.length < 4011) {
+                            currentBin.add(line)
+                            line = ""
+                        } else {
+                            // Start new bin
+                            currentBin = mutableListOf()
+                            bins += currentBin
+
+                            // Add chunk to new bin
+                            currentBin.add(line.substring(0, 4011))
+                            line = line.substring(4011)
+                        }
+                    } while (line.isNotEmpty())
+                }
+
+                for (bin in bins) {
+                    Log.v("ScanManga.OkHttpClient", bin.joinToString("\n"))
+                }
+            }.setLevel(HttpLoggingInterceptor.Level.BODY),
+        )
+        .build()
 
     private val json: Json by injectLazy()
     private fun shuffle(s: String): String {
@@ -59,9 +97,12 @@ class ScanManga : ParsedHttpSource() {
         return GET("$baseUrl/TOP-Manga-Webtoon-36.html", headers)
     }
 
-    override fun popularMangaSelector() = "div.top"
+    override fun popularMangaSelector() = "div.top:has(a.atop)"
 
     override fun popularMangaFromElement(element: Element): SManga {
+        if (element.html().isEmpty()) {
+            error("WTF")
+        }
         val manga = SManga.create()
 
         val titleElement = element.selectFirst("a.atop")
@@ -142,7 +183,7 @@ class ScanManga : ParsedHttpSource() {
             else -> SManga.UNKNOWN
         }
 
-        manga.thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").absUrl("src")
+        // manga.thumbnail_url = document.selectFirst("div.full_img_serie img[itemprop=image]")?.absUrl("src")
 
         return manga
     }
@@ -169,17 +210,125 @@ class ScanManga : ParsedHttpSource() {
     }
 
     // Pages
+    private fun decodeHunter(obfuscatedJs: String): String {
+        val regex = Regex("""eval\(function\(h,u,n,t,e,r\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
+        val (encoded, mask, intervalStr, optionStr) = regex.find(obfuscatedJs)?.destructured
+            ?: error("Failed to match obfuscation pattern: $obfuscatedJs")
+
+        val interval = intervalStr.toInt()
+        val option = optionStr.toInt()
+        val delimiter = mask[option]
+        val tokens = encoded.split(delimiter).filter { it.isNotEmpty() }
+        val reversedMap = mask.withIndex().associate { it.value to it.index }
+
+        return buildString {
+            for (token in tokens) {
+                // Reverse the hashIt() operation: convert masked characters back to digits
+                val digitString = token.map { c ->
+                    reversedMap[c]?.toString() ?: error("Invalid masked character: $c")
+                }.joinToString("")
+
+                // Convert from base `option` to decimal
+                val number = digitString.toIntOrNull(option)
+                    ?: error("Failed to parse token: $digitString as base $option")
+
+                // Reverse the shift done during encodeIt()
+                val originalCharCode = number - interval
+
+                append(originalCharCode.toChar())
+            }
+        }
+    }
+
+    private fun dataAPI(data: String, idc: Int): UrlPayload {
+        // Step 1: Base64 decode the input
+        val compressedBytes = Base64.decode(data, Base64.DEFAULT)
+
+        // Step 2: Inflate (zlib decompress)
+        val inflater = Inflater()
+        inflater.setInput(compressedBytes)
+        val outputBuffer = ByteArray(512 * 1024) // 512 kb buffer, should be more than enough
+        val decompressedLength = inflater.inflate(outputBuffer)
+        inflater.end()
+
+        val inflated = String(outputBuffer, 0, decompressedLength)
+
+        // Step 3: Remove trailing hex string and reverse
+        val hexIdc = idc.toString(16)
+        val cleaned = inflated.replace(Regex("$hexIdc$"), "")
+        val reversed = cleaned.reversed()
+
+        // Step 4: Base64 decode and parse JSON
+        val finalJsonStr = String(Base64.decode(reversed, Base64.DEFAULT))
+
+        return finalJsonStr.parseAs<UrlPayload>()
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        return GET(
+            "https://httpbingo.org/anything" + chapter.url,
+            headers.newBuilder()
+                .add("Host", Regex("https?://").replace(baseUrl, ""))
+                .build(),
+        )
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        val goodHeaders = headers.newBuilder()
+            .add("Origin", "https://m.scanmanga.com")
+            .add("Referer", "https://m.scanmanga.com")
+            .build()
+        try {
+            val parameters = document.selectFirst("body > script:not([src])")!!
+
+            val decodedParameters = decodeHunter(parameters.data())
+            val hiddenDataRegex = Regex("""sml = '([^']+)';\n.*var sme = '([^']+)'""")
+
+            val (sml, sme) = hiddenDataRegex.find(decodedParameters)!!.destructured
+
+            Log.d(
+                "ScanManga",
+                JSONObject()
+                    .put("a (sme)", sme)
+                    .put("b (sml)", sml)
+                    .toString(),
+            )
+
+            val chapterInfoRegex = Regex("""const idc = (\d+)""")
+            val (chapterId) = chapterInfoRegex.find(parameters.data())!!.destructured
+
+            val chapterListRequeset = Request.Builder()
+                .url("$baseUrl/api/lel/$chapterId.json")
+                .headers(
+                    goodHeaders.newBuilder()
+                        .add("source", document.location())
+                        .add("Token", "yf")
+                        .build(),
+                )
+                .post(
+                    JSONObject()
+                        .put("a", sme)
+                        .put("b", "SmUBAwluHBVvYToTagIASx9GfwUHJFRbXxcRE0NPY1NVWUs9GQ==")
+                        .toString()
+                        .toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()),
+                ).build()
+
+            val compressedResponse = client.newCall(chapterListRequeset).execute()
+            // assert(compressedResponse.isSuccessful)
+            val response = dataAPI(compressedResponse.body.toString(), chapterId.toInt())
+
+            return response.generateImageUrls().map { Page(it.key, it.value) }
+        } catch (e: Exception) {
+            Log.d("ScanManga", document.baseUri())
+            Log.e("ScanManga", e.toString(), e)
+
+            throw e
+        }
+    }
+
     override fun pageListParse(document: Document): List<Page> {
-        val docString = document.toString()
-
-        var lelUrl = Regex("""['"](http.*?scanmanga.eu.*)['"]""").find(docString)?.groupValues?.get(1)
-        if (lelUrl == null) {
-            lelUrl = Regex("""['"](http.*?le[il].scan-manga.com.*)['"]""").find(docString)?.groupValues?.get(1)
-        }
-
-        return Regex("""["'](.*?zoneID.*?pageID.*?siteID.*?)["']""").findAll(docString).toList().mapIndexed { i, pageParam ->
-            Page(i, document.location(), lelUrl + pageParam.groupValues[1])
-        }
+        throw NotImplementedError("Not implemented yet")
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
