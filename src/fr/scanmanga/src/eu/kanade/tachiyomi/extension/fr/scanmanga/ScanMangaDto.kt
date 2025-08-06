@@ -11,7 +11,6 @@ data class Page(
 @Serializable
 data class UrlPayload(
     val dN: String,
-    val l: Int,
     val s: String,
     val v: String,
     val c: String,

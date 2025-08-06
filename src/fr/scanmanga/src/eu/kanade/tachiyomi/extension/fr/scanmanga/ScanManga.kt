@@ -12,8 +12,9 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -36,14 +37,21 @@ class ScanManga : ParsedHttpSource() {
     override val supportsLatest = true
 
     private val desktopBaseUrl = "https://www.scan-manga.com" // Desktop URL for search
+    private val mobileUserAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
+    private val desktopUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+
+    private fun isMobile(url: HttpUrl): Boolean {
+        return url.host.startsWith("m.")
+    }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor { chain ->
-            val originalCookies = chain.request().header("Cookie") ?: ""
+            val domain = chain.request().url
+            val newUA = if (isMobile(domain)) mobileUserAgent else desktopUserAgent
             val newReq = chain
                 .request()
                 .newBuilder()
-                .header("Cookie", "$originalCookies; _ga=GA1.2.${shuffle("123456789")}.${System.currentTimeMillis() / 1000}")
+                .header("User-Agent", newUA)
                 .build()
             chain.proceed(newReq)
         }.addInterceptor(
@@ -86,11 +94,7 @@ class ScanManga : ParsedHttpSource() {
     }
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept-Language", "fr-FR")
-        .set(
-            "User-Agent",
-            "Mozilla/5.0 (Linux; Android 16; LM-X420) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.158 Mobile Safari/537.36",
-        )
+        .add("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
@@ -109,7 +113,7 @@ class ScanManga : ParsedHttpSource() {
         val imgElement = element.selectFirst("a > img")
 
         manga.setUrlWithoutDomain(titleElement!!.absUrl("href"))
-        manga.title = titleElement?.text()!!
+        manga.title = titleElement.text()
         manga.thumbnail_url = imgElement?.absUrl("data-original")
         return manga
     }
@@ -143,8 +147,6 @@ class ScanManga : ParsedHttpSource() {
         return GET(
             url,
             headersBuilder()
-                .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36")
-                .add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
                 .add("Referer", "$desktopBaseUrl/")
                 .build(),
         )
@@ -196,10 +198,10 @@ class ScanManga : ParsedHttpSource() {
         val titleEl = element.selectFirst("td.publititle")
 
         val chapterName = linkEl.text()
-        val extraTitle = titleEl?.text()?.orEmpty()
+        val extraTitle = titleEl?.text().orEmpty()
 
         return SChapter.create().apply {
-            name = if (extraTitle != null) "$chapterName - $extraTitle" else chapterName
+            name = if (extraTitle.isNotEmpty()) "$chapterName - $extraTitle" else chapterName
             setUrlWithoutDomain(linkEl.absUrl("href"))
         }
     }
@@ -247,7 +249,7 @@ class ScanManga : ParsedHttpSource() {
         // Step 2: Inflate (zlib decompress)
         val inflater = Inflater()
         inflater.setInput(compressedBytes)
-        val outputBuffer = ByteArray(512 * 1024) // 512 kb buffer, should be more than enough
+        val outputBuffer = ByteArray(512 * 1024) // 512 KB buffer, should be more than enough
         val decompressedLength = inflater.inflate(outputBuffer)
         inflater.end()
 
@@ -264,78 +266,69 @@ class ScanManga : ParsedHttpSource() {
         return finalJsonStr.parseAs<UrlPayload>()
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(
-            "https://httpbingo.org/anything" + chapter.url,
-            headers.newBuilder()
-                .add("Host", Regex("https?://").replace(baseUrl, ""))
-                .build(),
-        )
-    }
+    /*
+        override fun pageListRequest(chapter: SChapter): Request {
+            val req = GET(baseUrl + chapter.url, headers)
+            Log.d("ScanManga", "${req.url}")
+            Log.d("ScanManga", req.headers.joinToString("\n") { "${it.first}: ${it.second}" })
+            return req
+        }
+     */
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val goodHeaders = headers.newBuilder()
-            .add("Origin", "https://m.scanmanga.com")
-            .add("Referer", "https://m.scanmanga.com")
-            .build()
-        try {
-            val parameters = document.selectFirst("body > script:not([src])")!!
+        val packedScript = document.selectFirst("script:containsData(h,u,n,t,e,r)")!!.data()
 
-            val decodedParameters = decodeHunter(parameters.data())
-            val hiddenDataRegex = Regex("""sml = '([^']+)';\n.*var sme = '([^']+)'""")
+        val unpackedScript = decodeHunter(packedScript)
+        val parametersRegex = Regex("""sml = '([^']+)';\n.*var sme = '([^']+)'""")
 
-            val (sml, sme) = hiddenDataRegex.find(decodedParameters)!!.destructured
+        val (sml, sme) = parametersRegex.find(unpackedScript)!!.destructured
 
-            Log.d(
-                "ScanManga",
-                JSONObject()
-                    .put("a (sme)", sme)
-                    .put("b (sml)", sml)
-                    .toString(),
+        Log.d(
+            "ScanManga",
+            JSONObject()
+                .put("a (sme)", sme)
+                .put("b (sml)", sml)
+                .toString(),
+        )
+
+        if (sml == "SWIHHAJjEwpkYWkLbg==") { error("(╯°□°)╯︵ ┻━┻  HOW DO THEY DETECT ME") }
+
+        val chapterInfoRegex = Regex("""const idc = (\d+)""")
+        val (chapterId) = chapterInfoRegex.find(packedScript)!!.destructured
+
+        val MEDIA_TYPE = "application/json; charset=UTF-8".toMediaType()
+        val requestBody = """{"a":"$sme","b":"$sml"}"""
+
+        val chapterListRequest = Request.Builder()
+            .url("$baseUrl/api/lel/$chapterId.json")
+            .post(requestBody.toRequestBody(MEDIA_TYPE))
+            .headers(
+                headersBuilder()
+                    .set("source", "${response.request.url}")
+                    .set("Token", "yf")
+                    .set("Origin", "https://m.scan-manga.com")
+                    .build(),
             )
+            .build()
 
-            val chapterInfoRegex = Regex("""const idc = (\d+)""")
-            val (chapterId) = chapterInfoRegex.find(parameters.data())!!.destructured
-
-            val chapterListRequeset = Request.Builder()
-                .url("$baseUrl/api/lel/$chapterId.json")
-                .headers(
-                    goodHeaders.newBuilder()
-                        .add("source", document.location())
-                        .add("Token", "yf")
-                        .build(),
-                )
-                .post(
-                    JSONObject()
-                        .put("a", sme)
-                        .put("b", "SmUBAwluHBVvYToTagIASx9GfwUHJFRbXxcRE0NPY1NVWUs9GQ==")
-                        .toString()
-                        .toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()),
-                ).build()
-
-            val compressedResponse = client.newCall(chapterListRequeset).execute()
-            // assert(compressedResponse.isSuccessful)
-            val response = dataAPI(compressedResponse.body.toString(), chapterId.toInt())
-
-            return response.generateImageUrls().map { Page(it.key, it.value) }
-        } catch (e: Exception) {
-            Log.d("ScanManga", document.baseUri())
-            Log.e("ScanManga", e.toString(), e)
-
-            throw e
+        val lelResponse = client.newCall(chapterListRequest).execute().use { response ->
+            if (!response.isSuccessful) { error("Unexpected error while fetching lel.") }
+            dataAPI(response.body.toString(), chapterId.toInt())
         }
+
+        return lelResponse.generateImageUrls().map { Page(it.key, it.value) }
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        throw NotImplementedError("Not implemented yet")
+        throw NotImplementedError("Stub!")
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headersBuilder()
-            .add("Referer", page.url)
+            .add("Origin", page.url.toHttpUrl().host) // This is data.scan-manga.fr but it's ok, it's working
             .build()
 
         return GET(page.imageUrl!!, imgHeaders)
