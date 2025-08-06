@@ -1,6 +1,7 @@
 -dontobfuscate
 
 # Injekt
+# https://r8.googlesource.com/r8/+/refs/heads/master/compatibility-faq.md#troubleshooting-gson-gson
 -keepattributes Signature
 -keep class * extends uy.kohesive.injekt.api.FullTypeReference
 
