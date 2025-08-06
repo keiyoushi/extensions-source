@@ -45,6 +45,7 @@ class MGKomik : Madara(
 
     // ================================== Popular ======================================
 
+    // overriding to change title selector and manga url selector
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
