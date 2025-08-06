@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
-import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -18,6 +17,7 @@ class MGKomik : Madara(
     "id",
     SimpleDateFormat("dd MMM yy", Locale.US),
 ) {
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val useNewChapterEndpoint = false
 
@@ -45,10 +45,6 @@ class MGKomik : Madara(
 
     // ================================== Popular ======================================
 
-    override fun popularMangaRequest(page: Int): Request = loadMoreRequest(page, popular = true)
-
-    override fun popularMangaSelector() = "div.manga"
-
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
@@ -67,21 +63,6 @@ class MGKomik : Madara(
     }
 
     override fun popularMangaNextPageSelector() = "body:not(:has(.no-posts))"
-
-    // ================================== Latest =======================================
-
-    override fun latestUpdatesRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = false)
-        } else {
-            GET("$baseUrl/$mangaSubString/${searchPage(page)}", headers)
-        }
-
-    // ================================== Search =======================================
-
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return searchLoadMoreRequest(page, query, filters)
-    }
 
     // ================================ Chapters ================================
 
