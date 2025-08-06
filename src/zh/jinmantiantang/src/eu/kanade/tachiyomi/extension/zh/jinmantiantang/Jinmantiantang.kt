@@ -318,6 +318,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         CategoryGroup(),
         SortFilter(),
         TimeFilter(),
+        TypeFilter(),
     )
 
     private class CategoryGroup : UriPartFilter(
@@ -412,10 +413,21 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     private class TimeFilter : UriPartFilter(
         "时间",
         arrayOf(
-            Pair("全部", "t=a"),
-            Pair("今天", "t=t"),
-            Pair("这周", "t=w"),
-            Pair("本月", "t=m"),
+            Pair("全部", "t=a&"),
+            Pair("今天", "t=t&"),
+            Pair("这周", "t=w&"),
+            Pair("本月", "t=m&"),
+        ),
+    )
+
+    private class TypeFilter : UriPartFilter(
+        "搜索范围",
+        arrayOf(
+            Pair("站内搜索", "main_tag=0"),
+            Pair("作品", "main_tag=1"),
+            Pair("作者", "main_tag=2"),
+            Pair("标签", "main_tag=3"),
+            Pair("登场人物", "main_tag=4"),
         ),
     )
 
