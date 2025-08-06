@@ -5,8 +5,10 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.Request
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -16,7 +18,6 @@ class MGKomik : Madara(
     "id",
     SimpleDateFormat("dd MMM yy", Locale.US),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
 
     override val useNewChapterEndpoint = false
 
@@ -44,7 +45,28 @@ class MGKomik : Madara(
 
     // ================================== Popular ======================================
 
-    override fun popularMangaNextPageSelector() = ".wp-pagenavi span.current + a"
+    override fun popularMangaRequest(page: Int): Request = loadMoreRequest(page, popular = true)
+
+    override fun popularMangaSelector() = "div.manga"
+
+    override fun popularMangaFromElement(element: Element): SManga {
+        val manga = SManga.create()
+
+        with(element) {
+            selectFirst("div.item-thumb a")!!.let {
+                manga.setUrlWithoutDomain(it.attr("abs:href"))
+                manga.title = it.attr("title")
+            }
+
+            selectFirst("img")?.let {
+                manga.thumbnail_url = imageFromElement(it)
+            }
+        }
+
+        return manga
+    }
+
+    override fun popularMangaNextPageSelector() = "body:not(:has(.no-posts))"
 
     // ================================== Latest =======================================
 
@@ -57,25 +79,9 @@ class MGKomik : Madara(
 
     // ================================== Search =======================================
 
-    override fun searchRequest(page: Int, query: String, filters: FilterList): Request {
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreContentFilter -> {
-                    val url = filter.toUriPart()
-                    if (url.isBlank()) {
-                        return@forEach
-                    }
-                    return GET(filter.toUriPart(), headers)
-                }
-                else -> {}
-            }
-        }
-        return super.searchRequest(page, query, filters)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        return searchLoadMoreRequest(page, query, filters)
     }
-
-    override fun searchMangaSelector() = "${super.searchMangaSelector()}, .page-listing-item .page-item-detail"
-
-    override fun searchMangaNextPageSelector() = "a.page.larger"
 
     // ================================ Chapters ================================
 
