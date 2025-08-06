@@ -9,6 +9,8 @@ class RokariComics : MangaThemesia(
     "https://rokaricomics.com",
     "en",
 ) {
+    override fun chapterListSelector() = "#chapterlist li:has(div.chbox):has(div.eph-num):has(a[href])"
+
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>(
             StatusFilter(intl["status_filter_title"], statusOptions),
