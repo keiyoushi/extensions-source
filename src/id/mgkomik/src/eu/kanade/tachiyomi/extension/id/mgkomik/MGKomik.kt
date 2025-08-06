@@ -63,7 +63,6 @@ class MGKomik : Madara(
         return manga
     }
 
-    override fun popularMangaNextPageSelector() = "body:not(:has(.no-posts))"
 
     // ================================ Chapters ================================
 
