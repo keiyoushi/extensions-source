@@ -26,7 +26,7 @@ class AnimeSama : ParsedHttpSource() {
 
     override val lang = "fr"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     override val client: OkHttpClient = network.cloudflareClient
 
@@ -56,13 +56,21 @@ class AnimeSama : ParsedHttpSource() {
     override fun popularMangaNextPageSelector(): String = "#list_pagination > a.bg-sky-900 + a"
 
     // Latest
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
+    override fun latestUpdatesRequest(page: Int): Request {
+        return GET(baseUrl, headers)
+    }
 
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesSelector() = "#containerAjoutsScans > div"
 
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
+    override fun latestUpdatesFromElement(element: Element): SManga {
+        return SManga.create().apply {
+            title = element.select("h1").text()
+            setUrlWithoutDomain(element.select("a").attr("href").removeSuffix("scan/vf/"))
+            thumbnail_url = element.select("img").attr("src")
+        }
+    }
 
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = "#list_pagination > a.bg-sky-900 + a"
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -81,8 +89,8 @@ class AnimeSama : ParsedHttpSource() {
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        description = document.select("#sousBlocMilieu > div h2:contains(Synopsis)+p").text()
-        genre = document.select("#sousBlocMilieu > div h2:contains(Genres)+a").text()
+        description = document.select("#sousBlocMiddle > div h2:contains(Synopsis)+p").text()
+        genre = document.select("#sousBlocMiddle > div h2:contains(Genres)+a").text()
         title = document.select("#titreOeuvre").text()
         thumbnail_url = document.select("#coverOeuvre").attr("src")
     }
