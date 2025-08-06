@@ -17,9 +17,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -29,7 +28,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -43,16 +41,14 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val id: Long = 6425642624422299254
 
-    private val defaultBaseUrl = "https://vlogtruyen50.com"
+    private val defaultBaseUrl = "https://vlogtruyen52.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.US)
 
-    private val json: Json by injectLazy()
-
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -97,14 +93,14 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val json = json.decodeFromString<ChapterDTO>(response.body.string().replace("\\n", ""))
+        val json = response.parseAs<ChapterDTO>()
         val document = Jsoup.parseBodyFragment(json.data.chaptersHtml, response.request.url.toString())
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
-        return document.select("li, .ul-list-chaper-detail-commic li").filterNot {
+        return document.select("li").filterNot {
             if (hidePaidChapters) {
-                it.select("li:not(:has(> b))").text().isBlank().or(!hidePaidChapters)
+                it.select("li > b").isNotEmpty()
             } else {
-                it.select("li > a").text().isBlank().or(false)
+                false
             }
         }
             .mapNotNull {
