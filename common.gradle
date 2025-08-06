@@ -63,7 +63,8 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
+            minifyEnabled true
+            proguardFile layout.buildDirectory.file("proguard-rules.pro")
             vcsInfo.include false
         }
     }
@@ -116,6 +117,12 @@ tasks.register("writeManifestFile") {
                 }
             }
             manifest.srcFile(tempFile.path)
+        }
+        File proguardFile = android.buildTypes.release.proguardFiles[0]
+        if (!proguardFile.exists()) {
+            proguardFile.withWriter {
+                it.write("-keep class ${android.namespace}.${android.defaultConfig.applicationIdSuffix}${extClass} { *; }")
+            }
         }
     }
 }
