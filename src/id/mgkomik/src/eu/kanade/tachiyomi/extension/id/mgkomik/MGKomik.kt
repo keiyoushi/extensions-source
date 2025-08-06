@@ -63,7 +63,6 @@ class MGKomik : Madara(
         return manga
     }
 
-
     // ================================ Chapters ================================
 
     override val chapterUrlSuffix = ""
