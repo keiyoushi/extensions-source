@@ -188,7 +188,7 @@ class GenreFilter : CheckBoxGroup(
         "Virtual Reality" to "2490",
         "Webtoons" to "486",
         "Yuri" to "357",
-        "Zombies" to "377"
+        "Zombies" to "377",
     ),
     queryParameterName = "genre[]",
 )
