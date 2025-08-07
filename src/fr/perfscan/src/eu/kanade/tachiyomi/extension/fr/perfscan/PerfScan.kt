@@ -20,8 +20,8 @@ import java.util.Locale
 
 class PerfScan : HttpSource() {
     override val name = "Perf Scan"
-    override val baseUrl = "https://perf-scan.net"
-    private val apiUrl = "https://api.perf-scan.net"
+    override val baseUrl = "https://perf-scan.xyz"
+    private val apiUrl = "https://api.perf-scan.xyz"
     override val lang = "fr"
     override val supportsLatest = true
     override val versionId = 2
