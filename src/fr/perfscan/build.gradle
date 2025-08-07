@@ -1,8 +1,8 @@
 ext {
     extName = 'Perf Scan'
     extClass = '.PerfScan'
-    baseUrl = 'https://perf-scan.net'
-    extVersionCode = 30
+    baseUrl = 'https://perf-scan.xyz'
+    extVersionCode = 31
     isNsfw = true
 }
 
