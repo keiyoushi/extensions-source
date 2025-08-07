@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.Headers
@@ -27,11 +26,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
 
+@Suppress("SpellCheckingInspection")
 class ScanManga : ParsedHttpSource() {
     class SimpleCookieJar : CookieJar {
         private val cookieStore = mutableListOf<Cookie>()
@@ -53,70 +51,51 @@ class ScanManga : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    private val desktopBaseUrl = "https://www.scan-manga.com" // Desktop URL for search
     private val mobileUserAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
-    private val desktopUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 
-    private fun isMobile(url: HttpUrl): Boolean {
-        return url.host.startsWith("m.")
-    }
+    val adbLoggingInterceptor = HttpLoggingInterceptor { message ->
+        val chunkSize = 4011 // logcat can take a maximum of 4011 characters in the message
+        val bins = mutableListOf<MutableList<String>>()
+        var currentBin = mutableListOf<String>()
+        bins += currentBin
+
+        for (line in message.split(Regex("\r?\n"))) {
+            var part = line
+
+            do {
+                if (part.length < chunkSize) {
+                    currentBin.add(part)
+                    part = ""
+                } else {
+                    // Start a new bin for large chunks
+                    currentBin = mutableListOf()
+                    bins += currentBin
+
+                    currentBin.add(part.take(chunkSize))
+                    part = part.drop(chunkSize)
+                }
+            } while (part.isNotEmpty())
+        }
+
+        for (bin in bins) {
+            Log.v("ScanManga.OkHttpClient", bin.joinToString("\n"))
+        }
+    }.setLevel(HttpLoggingInterceptor.Level.BODY)
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .cookieJar(SimpleCookieJar())
         .addNetworkInterceptor { chain ->
-            val originalRequest = chain.request()
-            val domain = originalRequest.url
-            val newUA = if (isMobile(domain)) mobileUserAgent else desktopUserAgent
-            val newReq = chain
-                .request()
-                .newBuilder()
-                .header("User-Agent", newUA)
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-G973U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/14.2 Chrome/87.0.4280.141 Mobile Safari/537.36")
-                .header("Accept", "*/*")
-                .header("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
-                .header("Referer", originalRequest.header("Referer") ?: "")
-                .header("Content-Type", "application/json; charset=UTF-8")
-                .header("Origin", "https://m.scan-manga.com")
-                .header("source", originalRequest.header("source") ?: "")
-                .header("Token", "yf")
-                .header("Connection", "keep-alive")
+            val newReq = chain.request().newBuilder()
+                .header("User-Agent", mobileUserAgent)
                 .build()
             chain.proceed(newReq)
         }.addInterceptor(
-            HttpLoggingInterceptor { message: String ->
-                val bins = mutableListOf<MutableList<String>>()
-                var currentBin = mutableListOf<String>()
-                bins += currentBin
-
-                for (line_ in message.splitToSequence(Regex("\r?\n"))) {
-                    var line = line_
-
-                    do {
-                        if (line.length < 4011) {
-                            currentBin.add(line)
-                            line = ""
-                        } else {
-                            // Start new bin
-                            currentBin = mutableListOf()
-                            bins += currentBin
-
-                            // Add chunk to new bin
-                            currentBin.add(line.substring(0, 4011))
-                            line = line.substring(4011)
-                        }
-                    } while (line.isNotEmpty())
-                }
-
-                for (bin in bins) {
-                    Log.v("ScanManga.OkHttpClient", bin.joinToString("\n"))
-                }
-            }.setLevel(HttpLoggingInterceptor.Level.BODY),
+            adbLoggingInterceptor,
         )
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    private val json: Json by injectLazy()
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
 
@@ -171,7 +150,7 @@ class ScanManga : ParsedHttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val json = response.body!!.string()
+        val json = response.body.string()
         val jsonObj = JSONObject(json)
 
         val titlesArray = jsonObj.optJSONArray("title") ?: JSONArray()
@@ -186,7 +165,7 @@ class ScanManga : ParsedHttpSource() {
 
                 setUrlWithoutDomain(item.optString("url", ""))
 
-                thumbnail_url = item.optString("image", null)?.let { "https://static.scan-manga.com/img/manga/$it" }
+                thumbnail_url = item.optString("image", "").let { "https://static.scan-manga.com/img/manga/$it" }
             }
             mangas.add(manga)
         }
@@ -343,105 +322,57 @@ class ScanManga : ParsedHttpSource() {
      */
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script:containsData(const idc)")!!.data()
+        val packedScript = document.selectFirst("script:containsData(h,u,n,t,e,r)")!!.data()
 
-        Log.d("MyExtension", "script : $script")
+        val unpackedScript = decodeHunter(packedScript)
+        val parametersRegex = Regex("""sml = '([^']+)';\n.*var sme = '([^']+)'""")
 
-        val obfuscatedJs = script.trimIndent()
-        val decodedJs = decodeHunter(obfuscatedJs)
-        Log.d("MyExtension", "decodedJS : $decodedJs")
+        val (sml, sme) = parametersRegex.find(unpackedScript)!!.destructured
 
-        val sme = Regex("""sme\s*=\s*["'](.+?)["']""").find(decodedJs)?.groupValues?.get(1)
-            ?: error("Impossible d'extraire 'sme'")
-        val sml = Regex("""sml\s*=\s*["'](.+?)["']""").find(decodedJs)?.groupValues?.get(1)
-            ?: error("Impossible d'extraire 'sml'")
-
-        Log.d("MyExtension", "a : $sme")
-        Log.d("MyExtension", "b : $sml")
+        Log.d(
+            "ScanManga",
+            JSONObject()
+                .put("a (sme)", sme)
+                .put("b (sml)", sml)
+                .toString(),
+        )
 
         val chapterInfoRegex = Regex("""const idc = (\d+)""")
-        val (chapterId) = chapterInfoRegex.find(obfuscatedJs)!!.destructured
-        Log.d("MyExtension", "chapterID : $chapterId")
-
-        Log.d("MyExtension", "baseUrl : $baseUrl")
-        val chapterUrl = document.location()
-        Log.d("MyExtension", "chapterURL : $chapterUrl")
-
-        val postUrl = "$baseUrl/api/lel/$chapterId.json"
-        Log.d("MyExtension", "postUrl : $postUrl")
-
-        val client = network.cloudflareClient.newBuilder()
-            .cookieJar(SimpleCookieJar())
-            .build()
-
-        Log.d("MyExtension", "client : $client")
-
-        val jsonBody = """
-        {
-        "a": "$sme",
-        "b": "$sml"
-        }
-        """.trimIndent()
-        Log.d("MyExtension", "jsonBody : $jsonBody")
+        val (chapterId) = chapterInfoRegex.find(packedScript)!!.destructured
 
         val mediaType = "application/json; charset=UTF-8".toMediaType()
-        val body = jsonBody.toRequestBody(mediaType)
-        Log.d("MyExtension", "mediaType : $mediaType")
-        Log.d("MyExtension", "body : $body")
+        val requestBody = """{"a":"$sme","b":"$sml"}"""
 
-        val request = Request.Builder()
-            .url(postUrl)
-            .post(body)
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-G973U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/14.2 Chrome/87.0.4280.141 Mobile Safari/537.36")
-            .header("Accept", "*/*")
-            .header("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
-            .header("Content-Type", "application/json; charset=UTF-8")
-            .header("source", chapterUrl)
+        val documentUrl = document.baseUri().toHttpUrl()
+
+        val chapterListRequest = Request.Builder()
+            .url("$baseUrl/api/lel/$chapterId.json")
+            .post(requestBody.toRequestBody(mediaType))
+            .header("User-Agent", mobileUserAgent)
+            .header("Accept-Language", "fr")
+            .header("Referer", documentUrl.toString())
+            .header("Origin", "${documentUrl.scheme}://${documentUrl.host}")
             .header("Token", "yf")
-            .header("Referer", chapterUrl)
-            // Option:
-            .header("Sec-Fetch-Dest", "empty")
-            .header("Sec-Fetch-Mode", "cors")
-            .header("Sec-Fetch-Site", "same-origin")
-            .header("Priority", "u=4")
             .build()
 
-        val response = client.newCall(request).execute()
-        val responseBody = response.body.string()
-        Log.e("MyExtension", "response : $response")
-        Log.e("MyExtension", "responseBody : $responseBody")
+        val lelResponse = client.newBuilder().cookieJar(SimpleCookieJar()).build()
+            .newCall(chapterListRequest).execute().use { response ->
+                if (!response.isSuccessful) { error("Unexpected error while fetching lel.") }
+                dataAPI(response.body.toString(), chapterId.toInt())
+            }
 
-        val dataJson = dataAPI(responseBody, chapterId.toInt())
-        Log.d("MyExtension", "dataJson : $dataJson")
-
-        return dataJson.generateImageUrls().map { Page(it.key, chapterUrl, it.value) }
-
-        /* val server = dataJson.getString("dC")
-        val path = dataJson.getString("s")
-        val images = dataJson.getJSONObject("p")
-        Log.d("MyExtension", "dataImages : $images")
-
-        return images.keys().asSequence().map { key ->
-            val obj = images.getJSONObject(key)
-            val file = obj.getString("f")
-            val ext = obj.getString("e")
-            val imageUrl = "https://$server/$path/$file.$ext"
-            Log.d("MyExtension", "page : $imageUrl")
-            Page(
-                index = key.toInt() - 1,
-                url = chapterUrl,
-                imageUrl = imageUrl,
-            )
-        }.toList()*/
+        val pages = lelResponse.generateImageUrls().map { Page(it.key, it.value) }
+        pages.forEach { page -> Log.d("ScanManga", page.toString()) }
+        return pages
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = Headers.Builder()
-            .add("User-Agent", "Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-G973U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/14.2 Chrome/87.0.4280.141 Mobile Safari/537.36")
+            .add("User-Agent", mobileUserAgent)
             .add("Referer", page.url)
-            .add("Origin", "$baseUrl")
+            .add("Origin", baseUrl)
             .add("Accept", "*/*")
             .add("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
             .add("Connection", "keep-alive")
@@ -449,91 +380,4 @@ class ScanManga : ParsedHttpSource() {
 
         return GET(page.imageUrl!!, imgHeaders)
     }
-}
-
-class Deobfuscator(
-    private val encoded: String,
-    private val mask: String,
-    private val interval: Int,
-    private val option: Int,
-) {
-
-    fun decode(): String {
-        val delimiter = mask[option]
-        val tokens = encoded.split(delimiter).filter { it.isNotEmpty() }
-        val reversedMap = mask.withIndex().associateBy({ it.value }, { it.index })
-
-        val result = StringBuilder()
-
-        for (token in tokens) {
-            // Reverse the hashIt() operation: convert masked characters back to digits
-            val digitString = token.map { c ->
-                reversedMap[c]?.toString() ?: error("Invalid masked character: $c")
-            }.joinToString("")
-
-            // Convert from base `option` to decimal
-            val number = digitString.toIntOrNull(option)
-                ?: error("Failed to parse token: $digitString as base $option")
-
-            // Reverse the shift done during encodeIt()
-            val originalCharCode = number - interval
-
-            result.append(originalCharCode.toChar())
-        }
-
-        return result.toString()
-    }
-}
-
-data class ObfuscationParams(
-    val encoded: String,
-    val mask: String,
-    val interval: Int,
-    val option: Int,
-)
-
-fun extractParams(obfuscatedJs: String): ObfuscationParams {
-    val regex = Regex("""eval\(function\(h,u,n,t,e,r\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
-
-    val match = regex.find(obfuscatedJs) ?: error("Failed to match obfuscation pattern")
-
-    val (encoded, mask, intervalStr, optionStr) = match.destructured
-
-    return ObfuscationParams(
-        encoded = encoded,
-        mask = mask,
-        interval = intervalStr.toInt(),
-        option = optionStr.toInt(),
-    )
-}
-
-fun decodeDataApi(D: String, idc: String): JSONObject {
-    val decodedBytes = Base64.decode(D, Base64.DEFAULT)
-
-
-    val inflater = Inflater(true)
-    inflater.setInput(decodedBytes)
-
-    val outputStream = ByteArrayOutputStream()
-    val buffer = ByteArray(1024)
-    while (!inflater.finished()) {
-        val count = inflater.inflate(buffer)
-        outputStream.write(buffer, 0, count)
-    }
-    inflater.end()
-
-    val inflated = outputStream.toString("UTF-8")
-    outputStream.close()
-
-
-    val idcHex = idc.toInt().toString(16)
-    val trimmed = inflated.removeSuffix(idcHex)
-
-
-    val reversed = trimmed.reversed()
-
-    // Base64 decode
-    val finalJsonString = String(Base64.decode(reversed, Base64.DEFAULT))
-
-    return JSONObject(finalJsonString)
 }
