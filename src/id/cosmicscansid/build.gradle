@@ -2,8 +2,8 @@ ext {
     extName = 'CosmicScans.id'
     extClass = '.CosmicScansID'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://lc3.cosmicscans.asia'
-    overrideVersionCode = 12
+    baseUrl = 'https://novascans.id'
+    overrideVersionCode = 13
     isNsfw = true
 }
 

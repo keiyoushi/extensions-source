@@ -7,7 +7,7 @@ import java.util.Locale
 
 class BiblioPanda : Madara(
     "Biblio Panda",
-    "https://bibliopanda.com",
+    "https://bibliopanda.visblog.online",
     "es",
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {

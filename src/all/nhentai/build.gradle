@@ -1,7 +1,7 @@
 ext {
     extName = 'NHentai'
     extClass = '.NHFactory'
-    extVersionCode = 51
+    extVersionCode = 54
     isNsfw = true
 }
 
