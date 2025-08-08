@@ -2,8 +2,8 @@ ext {
     extName = 'KlikManga'
     extClass = '.KlikManga'
     themePkg = 'madara'
-    baseUrl = 'https://klikmanga.com'
-    overrideVersionCode = 3
+    baseUrl = 'https://klikmanga.org'
+    overrideVersionCode = 4
     isNsfw = true
 }
 
