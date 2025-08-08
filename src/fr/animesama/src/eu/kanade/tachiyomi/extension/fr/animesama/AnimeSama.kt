@@ -21,7 +21,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.lang.Exception
 
 class AnimeSama : ParsedHttpSource() {
 
@@ -41,10 +40,10 @@ class AnimeSama : ParsedHttpSource() {
         .add("Accept-Language", "fr-FR")
 
     // filters
-    protected var genreList = listOf<Pair<String, String>>()
+    private var genreList = listOf<Pair<String, String>>()
     private var fetchFilterAttempts = 0
 
-    protected suspend fun fetchFilters() {
+    private suspend fun fetchFilters() {
         if (fetchFilterAttempts < 3 && (genreList.isEmpty())) {
             try {
                 val response = client.newCall(filtersRequest()).await().asJsoup()
@@ -56,13 +55,13 @@ class AnimeSama : ParsedHttpSource() {
         }
     }
 
-    protected open fun filtersRequest() = GET("$baseUrl/catalogue", headers)
+    private fun filtersRequest() = GET("$baseUrl/catalogue", headers)
 
-    protected open fun parseFilters(document: Document) {
+    private fun parseFilters(document: Document) {
         genreList = document.select("#list_genres label").mapNotNull { labelElement ->
             val input = labelElement.selectFirst("input[name=genre[]]") ?: return@mapNotNull null
             val labelText = labelElement.ownText()
-            val value = input.attr("value") ?: return@mapNotNull null
+            val value = input.attr("value")
             labelText to value
         }
     }
@@ -82,7 +81,7 @@ class AnimeSama : ParsedHttpSource() {
     }
 
     private val scope = CoroutineScope(Dispatchers.IO)
-    protected fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
+    private fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
@@ -155,14 +154,14 @@ class AnimeSama : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter = throw UnsupportedOperationException()
 
-    fun String.containsMultipleTimes(search: String): Boolean {
+    private fun String.containsMultipleTimes(search: String): Boolean {
         val regex = Regex(search)
         val matches = regex.findAll(this)
         val count = matches.count()
         return count > 1
     }
 
-    private fun parseChapterFromResponse(response: Response, translation_name: String): List<SChapter> {
+    private fun parseChapterFromResponse(response: Response, translationName: String): List<SChapter> {
         val document = response.asJsoup()
 
         val chapterUrl = document.baseUri().toHttpUrl()
@@ -201,7 +200,7 @@ class AnimeSama : ParsedHttpSource() {
                                 SChapter.create().apply {
                                     name = "Chapitre $i"
                                     setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
-                                    scanlator = translation_name
+                                    scanlator = translationName
                                 },
                             )
                         }
@@ -212,7 +211,7 @@ class AnimeSama : ParsedHttpSource() {
                             SChapter.create().apply {
                                 name = "Chapitre $title"
                                 setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
-                                scanlator = translation_name
+                                scanlator = translationName
                             },
                         )
                         chapterDelay++
@@ -221,12 +220,12 @@ class AnimeSama : ParsedHttpSource() {
                 }
             }
         }
-        for (index in parsedChapterList.size..parsedJavascriptFileToJson.size - 1) {
+        for (index in parsedChapterList.size until parsedJavascriptFileToJson.size) {
             parsedChapterList.add(
                 SChapter.create().apply {
                     name = "Chapitre " + (parsedChapterList.size + 1 - chapterDelay)
                     setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).build().toString())
-                    scanlator = translation_name
+                    scanlator = translationName
                 },
             )
         }
@@ -277,7 +276,7 @@ class AnimeSama : ParsedHttpSource() {
 
         val documentString = document.body().toString()
 
-        val allChapters: Map<Int, Int> = Regex("""eps(\d+)\s*(?:=\s*\[(.*?)\]|\.length\s*=\s*(\d+))""")
+        val allChapters: Map<Int, Int> = Regex("""eps(\d+)\s*(?:=\s*\[(.*?)]|\.length\s*=\s*(\d+))""")
             .findAll(documentString)
             .associate { match ->
                 val episode = match.groupValues[1].toInt()
@@ -293,16 +292,16 @@ class AnimeSama : ParsedHttpSource() {
                 episode to length
             }
 
-        val chapterSize = allChapters.get(chapter?.toInt()) ?: 1
+        val chapterSize = allChapters[chapter?.toInt()] ?: 1
 
-        val image_list = mutableListOf<Page>()
+        val imageList = mutableListOf<Page>()
         for (index in 1 until chapterSize + 1) {
-            image_list.add(
+            imageList.add(
                 Page(index, imageUrl = "$cdn$title/$chapter/$index.jpg"),
             )
         }
 
-        return image_list
+        return imageList
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
