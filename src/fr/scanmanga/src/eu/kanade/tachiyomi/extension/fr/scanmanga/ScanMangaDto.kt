@@ -28,3 +28,15 @@ data class UrlPayload(
             .toMap()
     }
 }
+
+@Serializable
+data class MangaSearchDto(
+    val title: List<MangaItemDto>?,
+)
+
+@Serializable
+data class MangaItemDto(
+    val nom_match: String?,
+    val url: String?,
+    val image: String?,
+)
