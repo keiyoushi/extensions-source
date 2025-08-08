@@ -1,12 +1,18 @@
 package eu.kanade.tachiyomi.extension.fr.animesama
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -15,6 +21,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.lang.Exception
 
 class AnimeSama : ParsedHttpSource() {
 
@@ -33,13 +40,56 @@ class AnimeSama : ParsedHttpSource() {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr-FR")
 
+    // filters
+    protected var genreList = listOf<Pair<String, String>>()
+    private var fetchFilterAttempts = 0
+
+    protected suspend fun fetchFilters() {
+        if (fetchFilterAttempts < 3 && (genreList.isEmpty())) {
+            try {
+                val response = client.newCall(filtersRequest()).await().asJsoup()
+                parseFilters(response)
+            } catch (e: Exception) {
+                Log.e("$name: Filters", e.stackTraceToString())
+            }
+            fetchFilterAttempts++
+        }
+    }
+
+    protected open fun filtersRequest() = GET("$baseUrl/catalogue", headers)
+
+    protected open fun parseFilters(document: Document) {
+        genreList = document.select("#list_genres label").mapNotNull { labelElement ->
+            val input = labelElement.selectFirst("input[name=genre[]]") ?: return@mapNotNull null
+            val labelText = labelElement.ownText()
+            val value = input.attr("value") ?: return@mapNotNull null
+            labelText to value
+        }
+    }
+
+    override fun getFilterList(): FilterList {
+        val filters = mutableListOf<Filter<*>>()
+        launchIO { fetchFilters() }
+
+        if (genreList.isNotEmpty()) {
+            filters.add(GenreFilter(genreList))
+        }
+        if (filters.size < 1) {
+            filters.add(0, Filter.Header("Press 'reset' to load more filters"))
+        }
+
+        return FilterList(filters)
+    }
+
+    private val scope = CoroutineScope(Dispatchers.IO)
+    protected fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
+
     // Popular
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/catalogue".toHttpUrl().newBuilder()
             .addQueryParameter("type[0]", "Scans")
             .addQueryParameter("page", page.toString())
             .build()
-
         return GET(url, headers)
     }
 
@@ -78,6 +128,11 @@ class AnimeSama : ParsedHttpSource() {
             .addQueryParameter("type[0]", "Scans")
             .addQueryParameter("search", query)
             .addQueryParameter("page", page.toString())
+            .apply {
+                filters.filterIsInstance<UrlPartFilter>().forEach {
+                    it.addUrlParameter(this)
+                }
+            }
             .build()
 
         return GET(url, headers)
