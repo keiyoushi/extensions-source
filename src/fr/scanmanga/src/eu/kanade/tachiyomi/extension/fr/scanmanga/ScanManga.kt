@@ -26,6 +26,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
 
@@ -252,7 +253,12 @@ class ScanManga : ParsedHttpSource() {
 
     private fun dataAPI(data: String, idc: Int): UrlPayload {
         // Step 1: Base64 decode the input
-        val compressedBytes = Base64.decode(data, Base64.DEFAULT)
+        val compressedBytes = Base64.decode(data, Base64.NO_WRAP or Base64.NO_PADDING)
+
+        val md = MessageDigest.getInstance("SHA-256")
+        Log.d("ScanManga", (data.toByteArray()).joinToString("") { "%02x".format(it) })
+        Log.d("ScanManga", md.digest(data.toByteArray()).joinToString("") { "%02x".format(it) })
+        Log.d("ScanManga", md.digest(compressedBytes).joinToString("") { "%02x".format(it) })
 
         // Step 2: Inflate (zlib decompress)
         val inflater = Inflater()
@@ -358,10 +364,10 @@ class ScanManga : ParsedHttpSource() {
         val lelResponse = client.newBuilder().cookieJar(SimpleCookieJar()).build()
             .newCall(chapterListRequest).execute().use { response ->
                 if (!response.isSuccessful) { error("Unexpected error while fetching lel.") }
-                dataAPI(response.body.toString(), chapterId.toInt())
+                dataAPI(response.body.string(), chapterId.toInt())
             }
 
-        val pages = lelResponse.generateImageUrls().map { Page(it.key, it.value) }
+        val pages = lelResponse.generateImageUrls().map { Page(it.key, documentUrl.toString(), it.value) }
         pages.forEach { page -> Log.d("ScanManga", page.toString()) }
         return pages
     }
