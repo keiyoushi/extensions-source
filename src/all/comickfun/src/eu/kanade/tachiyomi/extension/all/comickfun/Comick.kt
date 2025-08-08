@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.comickfun
 
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -9,7 +10,6 @@ import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -249,9 +249,22 @@ abstract class Comick(
 
     override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(::errorInterceptor)
-        .rateLimit(12, 8, TimeUnit.SECONDS) // == 1.5req/1sec == 3req/2sec == 90req/60sec
-        .rateLimitHost(apiUrl.toHttpUrl(), 5, 6, TimeUnit.SECONDS) // == 50req each (60sec / 1min)
+        .addInterceptor(::imageInterceptor)
+        .rateLimit(5, 6, TimeUnit.SECONDS) // == 50req each (60sec / 1min)
         .build()
+
+    private val imageClient = network.cloudflareClient.newBuilder()
+        .rateLimit(12, 8, TimeUnit.SECONDS) // == 1.5req/1sec == 3req/2sec == 90req/60sec
+        .build()
+
+    private fun imageInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        return if (request.url.host.endsWith("comick.pictures")) {
+            imageClient.newCall(request).execute()
+        } else {
+            chain.proceed(request)
+        }
+    }
 
     private fun errorInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
