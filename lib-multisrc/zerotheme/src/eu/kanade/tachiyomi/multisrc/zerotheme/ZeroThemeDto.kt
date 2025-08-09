@@ -108,7 +108,7 @@ class MangaDto(
             else -> SManga.UNKNOWN
         }
         genre = genres?.joinToString { it.name }
-        url = "/comic/$slug"
+        url = "/$slug"
     }
 
     @Serializable
@@ -130,7 +130,7 @@ class ChapterDto(
         name = number.toString()
         chapter_number = number
         date_upload = dateFormat.tryParse(createdAt)
-        url = "/chapter/$path"
+        url = "/$path"
     }
 
     companion object {
