@@ -36,7 +36,7 @@ class XGMN : HttpSource() {
 
     // Popular Page
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/top.html")
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/top.html", headers)
 
     override fun popularMangaParse(response: Response) = response.asJsoup().let { doc ->
         redirectUrl = redirectUrl ?: doc.location().toHttpUrl().let { "${it.scheme}://${it.host}" }
@@ -56,7 +56,7 @@ class XGMN : HttpSource() {
 
     // Latest Page
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/new.html")
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/new.html", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -143,7 +143,7 @@ class XGMN : HttpSource() {
         val seq = response.request.url.fragment!!
         val url = response.asJsoup()
             .selectXpath("//*[contains(@class,'article-content')]/p[@*[contains(.,'center')]]/img[position()=$seq]")
-            .first() ?: throw Exception("$seq | ${response.request.url}")
-        return "$baseUrl/${getUrlWithoutDomain(url.attr("src"))}"
+            .first() ?: throw Exception("没找到图片")
+        return "$baseUrl/${getUrlWithoutDomain(url.absUrl("src"))}"
     }
 }
