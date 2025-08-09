@@ -8,7 +8,7 @@ import java.util.Locale
 
 class KoreliScans : Madara(
     "Koreli Scans",
-    "https://koreliscans.com",
+    "https://koreliscans.net",
     "tr",
     dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
 ) {
