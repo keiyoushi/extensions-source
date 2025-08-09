@@ -160,7 +160,7 @@ class ElderManga : ParsedHttpSource() {
         }
     }
 
-    override fun imageUrlParse(document: Document) = ""
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     private fun isMangaPage(document: Document): Boolean =
         document.selectFirst("div.grid h2 + p") != null
