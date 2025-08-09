@@ -2,22 +2,21 @@ package eu.kanade.tachiyomi.extension.zh.xgmn
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class XGMN : ParsedHttpSource() {
+class XGMN : HttpSource() {
 
     override val baseUrl = "http://xgmn8.vip"
     override val lang = "zh"
@@ -28,68 +27,83 @@ class XGMN : ParsedHttpSource() {
     companion object {
         val ID_REGEX = Regex("\\d+(?=\\.html)")
         val PAGE_SIZE_REGEX = Regex("\\d+(?=P)")
-        val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINA)
+        val DATE_FORMAT = SimpleDateFormat("yyyy.MM.dd", Locale.CHINA)
+    }
+
+    private fun getUrlWithoutDomain(url: String): String {
+        val prefix = listOf("http://", "https://").firstOrNull(url::startsWith)
+        return url.substringAfter(prefix ?: "").substringAfter('/')
     }
 
     // Popular Page
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/top.html")
 
-    override fun popularMangaSelector() = ".related_box"
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        element.selectFirst("a")!!.let {
-            title = it.attr("title")
-            setUrlWithoutDomain(it.absUrl("href"))
-        }
-    }
-
-    override fun popularMangaNextPageSelector() = null
+    override fun popularMangaParse(response: Response) = MangasPage(
+        response.asJsoup().select(".related_box").map {
+            SManga.create().apply {
+                thumbnail_url = it.selectFirst("img")?.absUrl("src")
+                it.selectFirst("a")!!.let {
+                    title = it.attr("title")
+                    setUrlWithoutDomain(it.absUrl("href"))
+                }
+            }
+        },
+        false,
+    )
 
     // Latest Page
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/new.html")
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector() = null
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
     // Search Page
 
+    override fun getFilterList() = buildFilterList()
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val httpUrl = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("/plus/search/index.asp")
-            .addQueryParameter("keyword", query)
-            .addQueryParameter("p", page.toString())
-        return GET(httpUrl.build())
+        val url = baseUrl.toHttpUrl().newBuilder()
+        if (query.isNotBlank()) {
+            url.addPathSegments("/plus/search/index.asp")
+                .addQueryParameter("keyword", query)
+                .addQueryParameter("p", page.toString())
+        } else {
+            url.addPathSegments(filters.first().toString())
+            if (page > 1) url.addPathSegment("page_$page.html")
+        }
+        return GET(url.build())
     }
 
-    override fun searchMangaSelector() = ".node > p > a"
-
-    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        title = element.text()
-        setUrlWithoutDomain(element.absUrl("href"))
-        thumbnail_url = "$baseUrl/uploadfile/pic/${ID_REGEX.find(url)?.value}.jpg"
-    }
-
-    override fun searchMangaNextPageSelector() = null
+    override fun searchMangaParse(response: Response) =
+        if (response.request.url.pathSegments.contains("search")) {
+            val doc = response.asJsoup()
+            val current = doc.selectFirst(".current")!!.text().toInt()
+            MangasPage(
+                doc.select(".node > p > a").map {
+                    SManga.create().apply {
+                        title = it.text()
+                        setUrlWithoutDomain(it.absUrl("href"))
+                        thumbnail_url = "$baseUrl/uploadfile/pic/${ID_REGEX.find(url)?.value}.jpg"
+                    }
+                },
+                current < doc.select(".list .pagination a").size,
+            )
+        } else {
+            popularMangaParse(response)
+        }
 
     // Manga Detail Page
 
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        author = document.selectFirst(".item-2")?.text()?.substringAfter("模特：")
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        status = SManga.COMPLETED
+    override fun mangaDetailsParse(response: Response) = response.asJsoup().let {
+        SManga.create().apply {
+            author = it.selectFirst(".item-2")?.text()?.substringAfter("模特：")
+            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+            status = SManga.COMPLETED
+        }
     }
 
     // Manga Detail Page / Chapters Page (Separate)
-
-    override fun chapterListSelector() = throw UnsupportedOperationException()
-
-    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun chapterListParse(response: Response) = response.asJsoup().let {
         listOf(
@@ -106,18 +120,19 @@ class XGMN : ParsedHttpSource() {
 
     // Manga View Page
 
-    override fun pageListParse(document: Document): List<Page> {
-        val prefix = document.selectFirst(".current")!!.absUrl("href").substringBeforeLast(".html")
-        val total = PAGE_SIZE_REGEX.find(document.selectFirst(".article-title")!!.text())!!.value
-        val size = document.select(".article-content > p[style] > img").size
-        return List(total.toInt()) {
-            Page(it, prefix + (it / size).let { v -> if (v == 0) "" else "_$v" } + ".html#${it % size + 1}")
+    override fun pageListParse(response: Response) = response.asJsoup().let { doc ->
+        val prefix = doc.selectFirst(".current")!!.absUrl("href").substringBeforeLast(".html")
+        val total = PAGE_SIZE_REGEX.find(doc.selectFirst(".article-title")!!.text())!!.value
+        val size = doc.select(".article-content > p[style] > img").size
+        List(total.toInt()) {
+            Page(
+                it,
+                prefix + (it / size).let { v -> if (v == 0) "" else "_$v" } + ".html#${it % size + 1}",
+            )
         }
     }
 
     // Image
-
-    // override fun imageRequest(page: Page) = GET(page.url)
 
     override fun imageUrlParse(response: Response): String {
         val seq = response.request.url.fragment!!
@@ -125,12 +140,5 @@ class XGMN : ParsedHttpSource() {
             .selectXpath("//*[contains(@class,'article-content')]/p[@*[contains(.,'center')]]/img[position()=$seq]")
             .first() ?: throw Exception("$seq | ${response.request.url}")
         return "$baseUrl/${getUrlWithoutDomain(url.attr("src"))}"
-    }
-
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    private fun getUrlWithoutDomain(url: String): String {
-        val prefix = listOf("http://", "https://").firstOrNull(url::startsWith)
-        return url.substringAfter(prefix ?: "").substringAfter('/')
     }
 }
