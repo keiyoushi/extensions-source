@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -23,10 +23,13 @@ import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ElderManga : ParsedHttpSource() {
+class ElderManga : HttpSource() {
     override val name = "Elder Manga"
 
     override val baseUrl = "https://eldermanga.com"
+
+    // CDN used for search API responses and images
+    private val CDN_URL = "https://cdn1.eldermanga.com"
 
     override val lang = "tr"
 
@@ -44,11 +47,9 @@ class ElderManga : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/search?page=$page&search=&order=4")
 
-    override fun popularMangaNextPageSelector(): String? = null
+    private fun popularMangaSelector() = "section[aria-label='series area'] .card"
 
-    override fun popularMangaSelector() = "section[aria-label='series area'] .card"
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+    private fun popularMangaFromElement(element: Element) = SManga.create().apply {
         title = element.selectFirst("h2")!!.text()
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
@@ -67,11 +68,8 @@ class ElderManga : ParsedHttpSource() {
     override fun latestUpdatesRequest(page: Int) =
         GET("$baseUrl/search?page=$page&search=&order=3")
 
-    override fun latestUpdatesNextPageSelector(): String? = null
-
-    override fun latestUpdatesSelector() = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    private fun latestUpdatesSelector() = popularMangaSelector()
+    private fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
@@ -89,7 +87,7 @@ class ElderManga : ParsedHttpSource() {
             return client.newCall(GET(url, headers)).asObservableSuccess().map { response ->
                 val document = response.asJsoup()
                 when {
-                    isMangaPage(document) -> MangasPage(listOf(mangaDetailsParse(document)), false)
+                    isMangaPage(document) -> MangasPage(listOf(mangaDetailsParse(response)), false)
                     else -> MangasPage(emptyList(), false)
                 }
             }
@@ -117,13 +115,10 @@ class ElderManga : ParsedHttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
+    // Not used (JSON-based search)
 
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-
-    override fun mangaDetailsParse(document: Document) = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
         with(document.selectFirst("#content")!!) {
             title = selectFirst("h1")!!.text()
             thumbnail_url = selectFirst("img")?.absUrl("src")
@@ -141,15 +136,19 @@ class ElderManga : ParsedHttpSource() {
         }
     }
 
-    override fun chapterListSelector() = "div.list-episode a"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        name = element.selectFirst("h3")!!.text()
-        date_upload = element.selectFirst("span")?.text()?.toDate() ?: 0L
-        setUrlWithoutDomain(element.absUrl("href"))
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("div.list-episode a").map { element ->
+            SChapter.create().apply {
+                name = element.selectFirst("h3")!!.text()
+                date_upload = element.selectFirst("span")?.text()?.toDate() ?: 0L
+                setUrlWithoutDomain(element.absUrl("href"))
+            }
+        }
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val script = document.select("script")
             .map { it.html() }.firstOrNull { pageRegex.find(it) != null }
             ?: return emptyList()
@@ -157,10 +156,10 @@ class ElderManga : ParsedHttpSource() {
         return pageRegex.findAll(script).mapIndexed { index, result ->
             val url = result.groups.get(1)!!.value
             Page(index, imageUrl = "$CDN_URL/upload/series/$url")
-        }
+        }.toList()
     }
 
-    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = ""
 
     private fun isMangaPage(document: Document): Boolean =
         document.selectFirst("div.grid h2 + p") != null
@@ -188,10 +187,13 @@ class ElderManga : ParsedHttpSource() {
         fragment.any { trim().contains(it, ignoreCase = true) }
 
     companion object {
-        const val CDN_URL = "https://cdn1.eldermanga.com"
         const val URL_SEARCH_PREFIX = "slug:"
         val dateFormat = SimpleDateFormat("MMM d ,yyyy", Locale("tr"))
         val pageRegex = """\\"path\\":\\"([^"]+)\\""".trimIndent().toRegex()
+    }
+
+    private inline fun <reified T> Response.parseAs(): T {
+        return json.decodeFromString(body.string())
     }
 }
 
