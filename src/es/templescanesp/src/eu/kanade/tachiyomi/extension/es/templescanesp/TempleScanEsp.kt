@@ -11,9 +11,9 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -32,14 +32,13 @@ class TempleScanEsp :
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
         try {
-            val initClient = network.cloudflareClient.newBuilder()
-                .followRedirects(false)
-                .build()
+            val initClient = network.cloudflareClient
             val headers = super.headersBuilder().build()
-            val response = initClient.newCall(GET(preferences.prefBaseUrl, headers)).execute()
-            if (!response.isRedirect) return@lazy preferences.prefBaseUrl
-            val newHost = response.header("Location")?.toHttpUrlOrNull() ?: return@lazy preferences.prefBaseUrl
-            val newDomain = "https://${newHost.host}"
+            val document = initClient.newCall(GET("https://templescanesp.net", headers)).execute().asJsoup()
+            val domain = document.selectFirst("main a:has(button)")?.attr("abs:href")
+                ?: return@lazy preferences.prefBaseUrl
+            val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
+            val newDomain = "https://$host"
             preferences.prefBaseUrl = newDomain
             newDomain
         } catch (_: Exception) {
