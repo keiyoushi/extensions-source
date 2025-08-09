@@ -1,8 +1,8 @@
 /**
  * Add or remove modules to load as needed for local development here.
  */
-// loadAllIndividualExtensions()
-loadIndividualExtension("zh", "xgmn")
+loadAllIndividualExtensions()
+// loadIndividualExtension("all", "mangadex")
 
 /**
  * ===================================== COMMON CONFIGURATION ======================================
