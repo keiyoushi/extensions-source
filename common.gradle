@@ -17,7 +17,7 @@ android {
     namespace "eu.kanade.tachiyomi.extension"
     sourceSets {
         main {
-            manifest.srcFile "AndroidManifest.xml"
+            manifest.srcFile layout.buildDirectory.file("tempAndroidManifest.xml")
             java.srcDirs = ['src']
             res.srcDirs = ['res']
             assets.srcDirs = ['assets']
@@ -105,17 +105,20 @@ dependencies {
     compileOnly(libs.bundles.common)
 }
 
+tasks.register("copyManifestFile", Copy) {
+    from 'AndroidManifest.xml'
+    rename { 'tempAndroidManifest.xml' }
+    into layout.buildDirectory
+}
+
 tasks.register("writeManifestFile") {
+    dependsOn(copyManifestFile)
     doLast {
-        def manifest = android.sourceSets.getByName("main").manifest
-        if (!manifest.srcFile.exists()) {
-            File tempFile = layout.buildDirectory.get().file("tempAndroidManifest.xml").getAsFile()
-            if (!tempFile.exists()) {
-                tempFile.withWriter {
-                    it.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
-                }
+        File manifest = android.sourceSets.getByName("main").manifest.srcFile
+        if (!manifest.exists()) {
+            manifest.withWriter {
+                it.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
             }
-            manifest.srcFile(tempFile.path)
         }
     }
 }
