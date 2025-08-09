@@ -17,12 +17,11 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class XGMN : HttpSource() {
-
-    override val baseUrl = "http://xgmn8.vip"
+    override val baseUrl get() = redirectUrl ?: "http://xgmn8.vip"
     override val lang = "zh"
     override val name = "性感美女"
     override val supportsLatest = true
-    // private var realUrl = baseUrl;
+    private var redirectUrl: String? = null
 
     companion object {
         val ID_REGEX = Regex("\\d+(?=\\.html)")
@@ -39,18 +38,21 @@ class XGMN : HttpSource() {
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/top.html")
 
-    override fun popularMangaParse(response: Response) = MangasPage(
-        response.asJsoup().select(".related_box").map {
-            SManga.create().apply {
-                thumbnail_url = it.selectFirst("img")?.absUrl("src")
-                it.selectFirst("a")!!.let {
-                    title = it.attr("title")
-                    setUrlWithoutDomain(it.absUrl("href"))
+    override fun popularMangaParse(response: Response) = response.asJsoup().let { doc ->
+        redirectUrl = redirectUrl ?: doc.location().toHttpUrl().let { "${it.scheme}://${it.host}" }
+        MangasPage(
+            doc.select(".related_box").map {
+                SManga.create().apply {
+                    thumbnail_url = it.selectFirst("img")?.absUrl("src")
+                    it.selectFirst("a")!!.let {
+                        title = it.attr("title")
+                        setUrlWithoutDomain(it.absUrl("href"))
+                    }
                 }
-            }
-        },
-        false,
-    )
+            },
+            false,
+        )
+    }
 
     // Latest Page
 
@@ -78,6 +80,7 @@ class XGMN : HttpSource() {
     override fun searchMangaParse(response: Response) =
         if (response.request.url.pathSegments.contains("search")) {
             val doc = response.asJsoup()
+            redirectUrl = redirectUrl ?: doc.location().toHttpUrl().let { "${it.scheme}://${it.host}" }
             val current = doc.selectFirst(".current")!!.text().toInt()
             MangasPage(
                 doc.select(".node > p > a").map {
@@ -95,9 +98,10 @@ class XGMN : HttpSource() {
 
     // Manga Detail Page
 
-    override fun mangaDetailsParse(response: Response) = response.asJsoup().let {
+    override fun mangaDetailsParse(response: Response) = response.asJsoup().let { doc ->
+        redirectUrl = redirectUrl ?: doc.location().toHttpUrl().let { "${it.scheme}://${it.host}" }
         SManga.create().apply {
-            author = it.selectFirst(".item-2")?.text()?.substringAfter("模特：")
+            author = doc.selectFirst(".item-2")?.text()?.substringAfter("模特：")
             update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
             status = SManga.COMPLETED
         }
@@ -105,14 +109,15 @@ class XGMN : HttpSource() {
 
     // Manga Detail Page / Chapters Page (Separate)
 
-    override fun chapterListParse(response: Response) = response.asJsoup().let {
+    override fun chapterListParse(response: Response) = response.asJsoup().let { doc ->
+        redirectUrl = redirectUrl ?: doc.location().toHttpUrl().let { "${it.scheme}://${it.host}" }
         listOf(
             SChapter.create().apply {
-                setUrlWithoutDomain(it.selectFirst(".current")!!.absUrl("href"))
-                name = it.selectFirst(".article-title")!!.text()
+                setUrlWithoutDomain(doc.selectFirst(".current")!!.absUrl("href"))
+                name = doc.selectFirst(".article-title")!!.text()
                 chapter_number = 1F
                 date_upload = DATE_FORMAT.tryParse(
-                    it.selectFirst(".item-1")?.text()?.substringAfter("更新："),
+                    doc.selectFirst(".item-1")?.text()?.substringAfter("更新："),
                 )
             },
         )
