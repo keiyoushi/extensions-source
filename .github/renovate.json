@@ -16,6 +16,9 @@
     },
     {
       "matchManagers": ["gradle"],
+      "matchPackageNames": [
+        "!com.android.tools.build:gradle"
+      ],
       "enabled": false
     },
     {
