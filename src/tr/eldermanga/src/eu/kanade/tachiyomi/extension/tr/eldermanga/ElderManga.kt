@@ -156,8 +156,8 @@ class ElderManga : ParsedHttpSource() {
 
         return pageRegex.findAll(script).mapIndexed { index, result ->
             val url = result.groups.get(1)!!.value
-            Page(index, document.location(), "$CDN_URL/upload/series/$url")
-        }.toList()
+            Page(index, imageUrl = "$CDN_URL/upload/series/$url")
+        }
     }
 
     override fun imageUrlParse(document: Document) = ""
