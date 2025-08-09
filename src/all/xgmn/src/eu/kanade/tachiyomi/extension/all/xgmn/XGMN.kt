@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.zh.xgmn
+package eu.kanade.tachiyomi.extension.all.xgmn
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -18,7 +18,7 @@ import java.util.Locale
 
 class XGMN : HttpSource() {
     override val baseUrl get() = redirectUrl ?: "http://xgmn8.vip"
-    override val lang = "zh"
+    override val lang = "all"
     override val name = "性感美女"
     override val supportsLatest = true
     private var redirectUrl: String? = null
