@@ -103,6 +103,59 @@ abstract class EHentai(
         return MangasPage(parsedMangas, hasNextPage)
     }
 
+    // New parser for /watched
+    private fun watchedMangaParse(response: Response): MangasPage {
+        val doc = response.asJsoup()
+        val parsedMangas = mutableListOf<SManga>()
+    
+        val galleryElements = doc.select("table.itg > tbody > tr")
+    
+        for (element in galleryElements) {
+            val linkElement = element.selectFirst("td.gl3c a") ?: continue
+            val titleElement = linkElement.selectFirst(".glink") ?: continue
+            val thumbnailElement = element.select("td.gl2c img").firstOrNull()
+    
+            val manga = SManga.create().apply {
+                title = titleElement.text()
+                url = ExGalleryMetadata.normalizeUrl(linkElement.attr("href"))
+                thumbnail_url = thumbnailElement?.attr("data-src")?.nullIfBlank()
+                    ?: thumbnailElement?.attr("src")
+            }
+    
+            parsedMangas.add(manga)
+        }
+    
+        val hasNextPage = doc.select("a#unext[href]").isNotEmpty()
+        return MangasPage(parsedMangas, hasNextPage)
+    }
+
+    // New parser for /favorites.php
+    private fun favoritesMangaParse(response: Response): MangasPage {
+        val doc = response.asJsoup()
+        val parsedMangas = mutableListOf<SManga>()
+    
+        val galleryElements = doc.select("table.itg > tbody > tr")
+    
+        for (element in galleryElements) {
+            val linkElement = element.selectFirst("td.gl3c a") ?: continue
+            val titleElement = linkElement.selectFirst(".glink") ?: continue
+            val thumbnailElement = element.select("td.gl2c img").firstOrNull()
+    
+            val manga = SManga.create().apply {
+                title = titleElement.text()
+                url = ExGalleryMetadata.normalizeUrl(linkElement.attr("href"))
+                thumbnail_url = thumbnailElement?.attr("data-src")?.nullIfBlank()
+                    ?: thumbnailElement?.attr("src")
+            }
+    
+            parsedMangas.add(manga)
+        }
+    
+        val hasNextPage = doc.select("a#unext[href]").isNotEmpty()
+        return MangasPage(parsedMangas, hasNextPage)
+    }
+
+
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.just(
         listOf(
             SChapter.create().apply {
@@ -212,7 +265,17 @@ abstract class EHentai(
     override fun latestUpdatesRequest(page: Int) = exGet(baseUrl, page)
 
     override fun popularMangaParse(response: Response) = genericMangaParse(response)
-    override fun searchMangaParse(response: Response) = genericMangaParse(response)
+
+    // Updated function to navigate watched and favourites
+    override fun searchMangaParse(response: Response): MangasPage {
+        val path = response.request.url.encodedPath
+        return when {
+            path.contains("/watched") -> watchedMangaParse(response)
+            path.contains("/favorites.php") -> favoritesMangaParse(response)
+            else -> genericMangaParse(response)
+        }
+    }
+
     override fun latestUpdatesParse(response: Response) = genericMangaParse(response)
 
     private fun exGet(url: String, page: Int? = null, additionalHeaders: Headers? = null, cache: Boolean = true): Request {
