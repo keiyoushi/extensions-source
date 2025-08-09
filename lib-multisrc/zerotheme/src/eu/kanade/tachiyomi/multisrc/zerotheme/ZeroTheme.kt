@@ -5,6 +5,8 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
@@ -27,6 +29,10 @@ abstract class ZeroTheme(
     open val cdnUrl: String = "https://cdn.${baseUrl.substringAfterLast("/")}"
 
     open val imageLocation: String = "images"
+
+    open val mangaSubString: String = "comic"
+
+    open val chapterSubString: String = "chapter"
 
     private val sourceLocation: String get() = "$cdnUrl/$imageLocation"
 
@@ -61,13 +67,23 @@ abstract class ZeroTheme(
 
     // =========================== Details =================================
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/$mangaSubString/${manga.url.substringAfterLast("/")}"
+
+    override fun mangaDetailsRequest(manga: SManga) = GET(getMangaUrl(manga), headers)
+
     override fun mangaDetailsParse(response: Response) = response.toDto<MangaDetailsDto>().toSManga(sourceLocation)
 
     // =========================== Chapter =================================
 
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/$chapterSubString/${chapter.url.substringAfterLast("/")}"
+
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+
     override fun chapterListParse(response: Response) = response.toDto<MangaDetailsDto>().toSChapterList()
 
     // =========================== Pages ===================================
+
+    override fun pageListRequest(chapter: SChapter) = GET(getChapterUrl(chapter), headers)
 
     override fun pageListParse(response: Response): List<Page> =
         response.toDto<PageDto>().toPageList(sourceLocation)
