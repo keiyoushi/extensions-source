@@ -248,8 +248,22 @@ abstract class Comick(
 
     override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(::errorInterceptor)
-        .rateLimit(3, 1, TimeUnit.SECONDS)
+        .addInterceptor(::imageInterceptor)
+        .rateLimit(5, 6, TimeUnit.SECONDS) // == 50req each (60sec / 1min)
         .build()
+
+    private val imageClient = network.cloudflareClient.newBuilder()
+        .rateLimit(12, 8, TimeUnit.SECONDS) // == 1.5req/1sec == 3req/2sec == 90req/60sec
+        .build()
+
+    private fun imageInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        return if (request.url.host.endsWith("comick.pictures")) {
+            imageClient.newCall(request).execute()
+        } else {
+            chain.proceed(request)
+        }
+    }
 
     private fun errorInterceptor(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
