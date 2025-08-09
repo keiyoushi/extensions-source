@@ -80,8 +80,7 @@ class AnimeSama : ParsedHttpSource() {
         return FilterList(filters)
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO)
-    private fun launchIO(block: suspend () -> Unit) = scope.launch { block() }
+    private fun launchIO(block: suspend () -> Unit) = GlobalScope.launch { block() }
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
