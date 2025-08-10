@@ -11,6 +11,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.Headers
@@ -25,12 +27,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
 
+private val json = Json { ignoreUnknownKeys = true }
+
 class ScanManga : ParsedHttpSource() {
+
     class SimpleCookieJar : CookieJar {
         private val cookieStore = mutableListOf<Cookie>()
 
@@ -45,9 +49,12 @@ class ScanManga : ParsedHttpSource() {
 
     override val name = "Scan-Manga"
 
-    override val baseUrl = "https://m.scan-manga.com"
+    private val host = "www.scan-manga.com"
+    override val baseUrl = "https://www.scan-manga.com"
 
     override val lang = "fr"
+
+    private val urlNoImg = "https://i.postimg.cc/gcyWbCTk/NOIMAGE.png"
 
     override val supportsLatest = true
 
@@ -56,12 +63,15 @@ class ScanManga : ParsedHttpSource() {
         .addNetworkInterceptor { chain ->
             val originalRequest = chain.request()
             val newRequest = originalRequest.newBuilder()
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-G973U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/14.2 Chrome/87.0.4280.141 Mobile Safari/537.36")
+                .header(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0",
+                )
                 .header("Accept", "*/*")
                 .header("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
                 .header("Referer", originalRequest.header("Referer") ?: "")
                 .header("Content-Type", "application/json; charset=UTF-8")
-                .header("Origin", "https://m.scan-manga.com")
+                .header("Origin", baseUrl)
                 .header("source", originalRequest.header("source") ?: "")
                 .header("Token", "yf")
                 .header("Connection", "keep-alive")
@@ -72,28 +82,24 @@ class ScanManga : ParsedHttpSource() {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    private val json: Json by injectLazy()
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept-Language", "fr-FR")
-        .set(
-            "User-Agent",
-            "Mozilla/5.0 (Linux; Android 16; LM-X420) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.158 Mobile Safari/537.36",
-        )
-
     // Popular
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/TOP-Manga-Webtoon-36.html", headers)
     }
 
-    override fun popularMangaSelector() = "#carouselTOPContainer > div.top"
+    override fun popularMangaSelector() = "div.image_manga.image_listing"
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            val titleElement = element.selectFirst("a.atop")!!
+            val linkElement = element.selectFirst("a[href]")!!
+            val imgElement = element.selectFirst("img")!!
 
-            title = titleElement.text()
-            setUrlWithoutDomain(titleElement.attr("href"))
-            thumbnail_url = element.selectFirst("img")?.attr("data-original")
+            title = imgElement.attr("title")
+            setUrlWithoutDomain(linkElement.attr("href"))
+
+            thumbnail_url = imgElement.attr("data-original")
+                .takeIf { it.isNotBlank() }
+                ?: imgElement.attr("src")
         }
     }
 
@@ -104,16 +110,16 @@ class ScanManga : ParsedHttpSource() {
         return GET(baseUrl, headers)
     }
 
-    override fun latestUpdatesSelector() = "#content_news .publi"
+    override fun latestUpdatesSelector() = "div#content_news div.listing"
 
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
-            val mangaElement = element.selectFirst("a.l_manga")!!
+            val mangaElement = element.selectFirst("a.nom_manga")!!
 
             title = mangaElement.text()
             setUrlWithoutDomain(mangaElement.attr("href"))
 
-            thumbnail_url = element.selectFirst("img")?.attr("src")
+            thumbnail_url = urlNoImg
         }
     }
 
@@ -131,7 +137,8 @@ class ScanManga : ParsedHttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val json = response.body!!.string()
+        val urlRequest = "https://static.scan-manga.com/img/manga"
+        val json = response.body.string()
         val jsonObj = JSONObject(json)
 
         val titlesArray = jsonObj.optJSONArray("title") ?: JSONArray()
@@ -142,11 +149,10 @@ class ScanManga : ParsedHttpSource() {
             val item = titlesArray.getJSONObject(i)
 
             val manga = SManga.create().apply {
-                title = item.optString("nom_match", "Titre inconnu")
-
+                title = item.optString("nom_match", "")
                 setUrlWithoutDomain(item.optString("url", ""))
 
-                thumbnail_url = item.optString("image", null)?.let { "https://static.scan-manga.com/img/manga/$it" }
+                thumbnail_url = item.optString("image").let { "$urlRequest/$it" }
             }
             mangas.add(manga)
         }
@@ -163,54 +169,90 @@ class ScanManga : ParsedHttpSource() {
         val manga = SManga.create()
 
         manga.title = document.select("h1.main_title[itemprop=name]").text()
-        manga.author = document.select("div[itemprop=author]").text()
-        manga.description = document.selectFirst("div.titres_desc[itemprop=description]")?.text()
-        manga.genre = document.selectFirst("div.titres_souspart span[itemprop=genre]")?.text()
 
-        val statutText = document.selectFirst("div.titres_souspart")?.ownText()
+        val authors = document.select("div.contenu_texte_fiche_technique li[itemprop=author] a")
+            .joinToString(", ") { it.text() }
+        manga.author = authors
+
+        manga.description = document.selectFirst("div.texte_synopsis_manga p[itemprop=description]")?.text()
+
+        val genreLi = document.selectFirst("div.contenu_texte_fiche_technique li[itemprop=genre]")
+        val genreSimple = genreLi?.text()?.takeIf { it.isNotBlank() } ?: ""
+
+        val genreDetailsLi = genreLi?.nextElementSibling()
+        val genreDetails = genreDetailsLi?.select("a")
+            ?.map { a ->
+                a.textNodes().joinToString(" ") { it.text().trim() }
+            }
+            ?.filter { it.isNotBlank() }
+            ?.joinToString(", ") ?: ""
+
+        manga.genre = listOf(genreSimple, genreDetails)
+            .filter { it.isNotBlank() }
+            .joinToString(", ")
+
+        val statusText = document.select("div.contenu_texte_fiche_technique li")
+            .firstOrNull { it.text().contains("En cours", ignoreCase = true) || it.text().contains("Terminé", ignoreCase = true) }
+            ?.text()
         manga.status = when {
-            statutText?.contains("En cours", ignoreCase = true) == true -> SManga.ONGOING
-            statutText?.contains("Terminé", ignoreCase = true) == true -> SManga.COMPLETED
+            statusText?.contains("En cours", ignoreCase = true) == true -> SManga.ONGOING
+            statusText?.contains("Terminé", ignoreCase = true) == true -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
 
-        manga.thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").attr("src")
+        manga.thumbnail_url = document.selectFirst("div.image_manga img[itemprop=image]")?.attr("src")
 
         return manga
     }
 
-    // Chapters
-    override fun chapterListSelector() = "div.chapt_m"
+    // chapter
+    override fun chapterListSelector() = "div.volume_manga"
 
     override fun chapterFromElement(element: Element): SChapter {
-        val linkEl = element.selectFirst("td.publimg span.i a")!!
-        val titleEl = element.selectFirst("td.publititle")
+        val linkEl = element.selectFirst("ul li.chapitre a[href]")!!
+        val chapitreNomEl = element.selectFirst("ul li.chapitre div.chapitre_nom")
 
-        val chapterName = linkEl.text()
-        val extraTitle = titleEl?.text()
+        val chapterName = chapitreNomEl?.text() ?: linkEl.text()
 
         return SChapter.create().apply {
-            name = if (extraTitle != null) "$chapterName - $extraTitle" else chapterName
-            setUrlWithoutDomain(linkEl.absUrl("href"))
+            name = chapterName.trim()
+            setUrlWithoutDomain(linkEl.attr("href"))
         }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select(chapterListSelector()).map { chapterFromElement(it) }
+        val chapters = mutableListOf<SChapter>()
+
+        document.select(chapterListSelector()).forEach { volume ->
+            val ul = volume.selectFirst("ul") ?: return@forEach
+            ul.select("li.chapitre").forEach { li ->
+                val linkEl = li.selectFirst("a[href]") ?: return@forEach
+                val chapitreNomEl = li.selectFirst("div.chapitre_nom")
+
+                val chapterName = chapitreNomEl?.text() ?: linkEl.text()
+
+                chapters.add(
+                    SChapter.create().apply {
+                        name = chapterName.trim()
+                        setUrlWithoutDomain(linkEl.attr("href"))
+                    },
+                )
+            }
+        }
+
+        return chapters
     }
 
     // Pages
-
     override fun pageListParse(document: Document): List<Page> {
+        // Decode
         val script = document.select("script")
             .mapNotNull { it.data() }
-            .firstOrNull { it.contains("const idc") }
-            ?: throw Exception("Script contenant 'const idc' non trouvé")
-
-        Log.d("MyExtension", "script : $script")
+            .firstOrNull { it.contains("const idc") }!!
 
         val obfuscatedJs = script.trimIndent()
+
         val params = extractParams(obfuscatedJs)
 
         val deobfuscator = Deobfuscator(
@@ -221,98 +263,79 @@ class ScanManga : ParsedHttpSource() {
         )
 
         val decodedJs = deobfuscator.decode()
-        Log.d("MyExtension", "decodedJS : $decodedJs")
 
+        // Variables
         val sme = Regex("""sme\s*=\s*["'](.+?)["']""").find(decodedJs)?.groupValues?.get(1)
-            ?: error("Impossible d'extraire 'sme'")
         val sml = Regex("""sml\s*=\s*["'](.+?)["']""").find(decodedJs)?.groupValues?.get(1)
-            ?: error("Impossible d'extraire 'sml'")
-
-        Log.d("MyExtension", "a : $sme")
-        Log.d("MyExtension", "b : $sml")
 
         val idc = document.location()
             .substringAfterLast("_")
             .substringBefore(".html")
-        Log.d("MyExtension", "chapterID : $idc")
 
-        Log.d("MyExtension", "baseUrl : $baseUrl")
+        val idcINT = idc.toInt()
+
         val chapterUrl = document.location()
-        Log.d("MyExtension", "chapterURL : $chapterUrl")
 
         val postUrl = "$baseUrl/api/lel/$idc.json"
-        Log.d("MyExtension", "postUrl : $postUrl")
 
+        // Request
         val client = network.cloudflareClient.newBuilder()
             .cookieJar(SimpleCookieJar())
             .build()
 
-        Log.d("MyExtension", "client : $client")
+        val jsonBody = JSONObject().apply {
+            put("a", sme)
+            put("b", sml)
+        }.toString()
 
-        val jsonBody = """
-        {
-        "a": "$sme",
-        "b": "$sml"
-        }
-        """.trimIndent()
-        Log.d("MyExtension", "jsonBody : $jsonBody")
+        Log.d("ScanManga", "host: $host")
+        Log.d("ScanManga", "chapiitre: $chapterUrl")
 
-        val mediaType = "application/json; charset=UTF-8".toMediaType()
-        val body = jsonBody.toRequestBody(mediaType)
-        Log.d("MyExtension", "mediaType : $mediaType")
-        Log.d("MyExtension", "body : $body")
+        Log.d("ScanManga", "baseUrl: $baseUrl")
+        val headers = headersBuilder()
+            .add("Host", host)
+            .add("Referer", chapterUrl)
+            .add("Content-Length", jsonBody.length.toString())
+            .add("Origin", baseUrl)
+            .add("Connection", "keep-alive")
+            .add("Sec-Fetch-Dest", "empty")
+            .add("Sec-Fetch-Mode", "cors")
+            .add("Sec-Fetch-Site", "same-origin")
+            .add("TE", "trailers")
+            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
+            .add("Accept", "*/*")
+            .add("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
+            .add("Content-Type", "application/json; charset=UTF-8")
+            .add("source", chapterUrl)
+            .add("Token", "yf")
+            .add("Priority", "u=4")
+            .build()
 
         val request = Request.Builder()
             .url(postUrl)
-            .post(body)
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-G973U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/14.2 Chrome/87.0.4280.141 Mobile Safari/537.36")
-            .header("Accept", "*/*")
-            .header("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
-            .header("Content-Type", "application/json; charset=UTF-8")
-            .header("source", chapterUrl)
-            .header("Token", "yf")
-            .header("Referer", chapterUrl)
-            // Option:
-            .header("Sec-Fetch-Dest", "empty")
-            .header("Sec-Fetch-Mode", "cors")
-            .header("Sec-Fetch-Site", "same-origin")
-            .header("Priority", "u=4")
+            .post(jsonBody.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+            .headers(headers)
             .build()
 
         val response = client.newCall(request).execute()
-        val responseBody = response.body.string()
-        Log.e("MyExtension", "response : $response")
-        Log.e("MyExtension", "responseBody : $responseBody")
 
-        val dataJson = decodeDataApi(responseBody, idc)
-        Log.d("MyExtension", "dataJson : $dataJson")
+        val rawString = response.body.string()
 
-        val server = dataJson.getString("dC")
-        val path = dataJson.getString("s")
-        val images = dataJson.getJSONObject("p")
-        Log.d("MyExtension", "dataImages : $images")
+        val pages = decodeDataAPIToPages(rawString, idcINT, document.location())
 
-        return images.keys().asSequence().map { key ->
-            val obj = images.getJSONObject(key)
-            val file = obj.getString("f")
-            val ext = obj.getString("e")
-            val imageUrl = "https://$server/$path/$file.$ext"
-            Log.d("MyExtension", "page : $imageUrl")
-            Page(
-                index = key.toInt() - 1,
-                url = chapterUrl,
-                imageUrl = imageUrl,
-            )
-        }.toList()
+        return pages
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
+        Log.d("ScanManga", "page.url: ${page.url}")
+
+        Log.d("ScanManga", "baseUrl: $baseUrl")
         val imgHeaders = Headers.Builder()
-            .add("User-Agent", "Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-G973U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/14.2 Chrome/87.0.4280.141 Mobile Safari/537.36")
+            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
             .add("Referer", page.url)
-            .add("Origin", "$baseUrl")
+            .add("Origin", baseUrl)
             .add("Accept", "*/*")
             .add("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
             .add("Connection", "keep-alive")
@@ -322,6 +345,7 @@ class ScanManga : ParsedHttpSource() {
     }
 }
 
+// Class and functions
 class Deobfuscator(
     private val encoded: String,
     private val mask: String,
@@ -378,13 +402,13 @@ fun extractParams(obfuscatedJs: String): ObfuscationParams {
     )
 }
 
-fun decodeDataApi(D: String, idc: String): JSONObject {
-    val decodedBytes = Base64.decode(D, Base64.DEFAULT)
+fun decodeDataAPIToPages(chaine: String, idc: Int, chapterUrl: String): List<Page> {
+    // 1. Base64 decode de D
+    val step1 = Base64.decode(chaine, Base64.DEFAULT)
 
-
-    val inflater = Inflater(true)
-    inflater.setInput(decodedBytes)
-
+    // 2. Décompression zlib
+    val inflater = Inflater()
+    inflater.setInput(step1)
     val outputStream = ByteArrayOutputStream()
     val buffer = ByteArray(1024)
     while (!inflater.finished()) {
@@ -392,19 +416,39 @@ fun decodeDataApi(D: String, idc: String): JSONObject {
         outputStream.write(buffer, 0, count)
     }
     inflater.end()
+    var step2 = outputStream.toString(Charsets.UTF_8.name())
 
-    val inflated = outputStream.toString("UTF-8")
-    outputStream.close()
+    // 3. Supprimer l'idc en hex à la fin
+    val hexId = idc.toString(16)
+    step2 = step2.replace(Regex(hexId + "$"), "")
 
+    // 4. Inverser la chaîne
+    val reversed = step2.reversed()
 
-    val idcHex = idc.toInt().toString(16)
-    val trimmed = inflated.removeSuffix(idcHex)
+    // 5. Base64 decode à nouveau
+    val step3 = Base64.decode(reversed, Base64.DEFAULT)
 
+    // 6. Convertir en JSON
+    val jsonString = String(step3, Charsets.UTF_8)
 
-    val reversed = trimmed.reversed()
+    val jsonObject = json.parseToJsonElement(jsonString).jsonObject
 
-    // Base64 decode
-    val finalJsonString = String(Base64.decode(reversed, Base64.DEFAULT))
+    val dN = jsonObject["dN"]!!.jsonPrimitive.content
+    val s = jsonObject["s"]!!.jsonPrimitive.content
+    val v = jsonObject["v"]!!.jsonPrimitive.content
+    val c = jsonObject["c"]!!.jsonPrimitive.content
+    val images = jsonObject["p"]!!.jsonObject
 
-    return JSONObject(finalJsonString)
+    return images.entries.map { (key, value) ->
+        val obj = value.jsonObject
+        val file = obj["f"]!!.jsonPrimitive.content
+        val ext = obj["e"]!!.jsonPrimitive.content
+        val imageUrl = "https://$dN/$s/$v/$c/$file.$ext"
+
+        Page(
+            index = key.toInt() - 1,
+            url = chapterUrl,
+            imageUrl = imageUrl,
+        )
+    }.sortedBy { it.index }
 }
