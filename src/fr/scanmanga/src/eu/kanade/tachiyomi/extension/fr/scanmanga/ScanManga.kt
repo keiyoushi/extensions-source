@@ -54,7 +54,7 @@ class ScanManga : ParsedHttpSource() {
 
     override val lang = "fr"
 
-    private val urlNoImg = "https://i.postimg.cc/gcyWbCTk/NOIMAGE.png"
+    private val urlNoImg = "https://i.postimg.cc/fW9ZL3qC/Frieren-No-Img.png"
 
     override val supportsLatest = true
 
