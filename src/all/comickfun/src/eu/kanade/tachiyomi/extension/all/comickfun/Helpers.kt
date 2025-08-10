@@ -39,13 +39,32 @@ internal fun Int?.parseStatus(translationComplete: Boolean?): Int {
         else -> SManga.UNKNOWN
     }
 }
+enum class CoverQuality {
+    Original, // HQ original
+    Compressed, // HQ but compressed
+    WebDefault, // what comick serves in browser, usually compressed + downscaled
+}
 
-internal fun parseCover(thumbnailUrl: String?, mdCovers: List<MDcovers>): String? {
-    val b2key = mdCovers.firstOrNull()?.b2key
-        ?: return thumbnailUrl
-    val vol = mdCovers.firstOrNull()?.vol.orEmpty()
+internal fun parseCover(thumbnailUrl: String?, mdCovers: List<MDcovers>, coverQuality: CoverQuality = CoverQuality.WebDefault): String? {
+    fun addOrReplaceCoverSuffix(url: String, suffix: String): String {
+        val ext = url.substringAfterLast('.', missingDelimiterValue = "")
+        if (ext.isEmpty()) return url
 
-    return thumbnailUrl?.replaceAfterLast("/", "$b2key#$vol")
+        val choppedUrl = url.removeSuffix(".$ext")
+
+        val newChoppedUrl = choppedUrl.replace(Regex("-(m|s)$"), "") + suffix
+
+        return "$newChoppedUrl.$ext"
+    }
+
+    return when (coverQuality) {
+        CoverQuality.Original -> {
+            val b2key = mdCovers.firstOrNull() ?: return thumbnailUrl
+            thumbnailUrl?.replaceAfterLast("/", "${b2key.b2key}#${b2key.vol.orEmpty()}")
+        }
+        CoverQuality.Compressed -> thumbnailUrl?.let { addOrReplaceCoverSuffix(it, "-m") }
+        CoverQuality.WebDefault -> thumbnailUrl
+    }
 }
 
 internal fun beautifyChapterName(vol: String, chap: String, title: String): String {
