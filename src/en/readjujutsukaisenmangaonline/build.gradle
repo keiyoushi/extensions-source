@@ -2,8 +2,8 @@ ext {
     extName = 'Read Jujutsu Kaisen Manga Online'
     extClass = '.ReadJujutsuKaisenMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww1.readjujutsukaisen.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://ww5.readjujutsukaisen.com'
+    overrideVersionCode = 2
     isNsfw = false
 }
 

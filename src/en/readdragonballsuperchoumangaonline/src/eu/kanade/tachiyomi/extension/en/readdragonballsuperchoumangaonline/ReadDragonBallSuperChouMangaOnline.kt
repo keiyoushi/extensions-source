@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.readdragonballsuperchoumangaonline
 
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
-class ReadDragonBallSuperChouMangaOnline : MangaCatalog("Read Dragon Ball Super Chou Manga Online", "https://ww6.dbsmanga.com", "en") {
+class ReadDragonBallSuperChouMangaOnline : MangaCatalog("Read Dragon Ball Super Chou Manga Online", "https://ww10.dbsmanga.com", "en") {
     override val sourceList = listOf(
         Pair("Dragon Ball Super", "$baseUrl/manga/dragon-ball-super/"),
         Pair("Dragon Ball", "$baseUrl/manga/dragon-ball/"),
@@ -16,7 +16,11 @@ class ReadDragonBallSuperChouMangaOnline : MangaCatalog("Read Dragon Ball Super 
         Pair("Universe Mission", "$baseUrl/manga/super-dragon-ball-heroes-universe-mission/"),
         Pair("Colored: Saiyan Arc", "$baseUrl/manga/dragon-ball-full-color-saiyan-arc/"),
         Pair("Colored: Freeza Arc", "$baseUrl/manga/dragon-ball-full-color-freeza-arc/"),
-        Pair("Big Bang Mission!", "$baseUrl/manga/super-dragon-ball-heroes-big-bang-mission/"),
+        Pair("Big Bang", "$baseUrl/manga/super-dragon-ball-heroes-big-bang-mission/"),
         Pair("DBS Colored", "$baseUrl/manga/dragon-ball-super-colored/"),
-    ).sortedBy { it.first }.distinctBy { it.second }
+        Pair("Ultra God Mission", "$baseUrl/manga/super-dragon-ball-heroes-ultra-god-mission/"),
+        Pair("Neko Majin", "$baseUrl/manga/neko-majin/"),
+        Pair("Sand Land", "$baseUrl/manga/sand-land/"),
+        Pair("Sand Land Colored", "$baseUrl/manga/sand-land-digital-colored-comics/"),
+    )
 }
