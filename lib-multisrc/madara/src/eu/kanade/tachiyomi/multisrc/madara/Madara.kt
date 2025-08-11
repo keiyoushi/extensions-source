@@ -163,6 +163,7 @@ abstract class Madara(
     override fun popularMangaSelector() = "div.page-item-detail:not(:has(a[href*='bilibilicomics.com']))$mangaEntrySelector , .manga__item"
 
     open val popularMangaUrlSelector = "div.post-title a"
+    open val popularMangaUrlSelectorImg = "img"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -173,7 +174,7 @@ abstract class Madara(
                 manga.title = it.ownText()
             }
 
-            selectFirst("img")?.let {
+            selectFirst(popularMangaUrlSelectorImg)?.let {
                 manga.thumbnail_url = imageFromElement(it)
             }
         }
