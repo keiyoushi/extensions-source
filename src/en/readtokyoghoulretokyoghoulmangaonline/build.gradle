@@ -3,7 +3,7 @@ ext {
     extClass = '.ReadTokyoGhoulReTokyoGhoulMangaOnline'
     themePkg = 'mangacatalog'
     baseUrl = 'https://ww11.tokyoghoulre.com'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 

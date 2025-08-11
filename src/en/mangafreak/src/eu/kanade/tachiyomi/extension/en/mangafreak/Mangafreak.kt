@@ -22,7 +22,7 @@ class Mangafreak : ParsedHttpSource() {
 
     override val lang: String = "en"
 
-    override val baseUrl: String = "https://ww1.mangafreak.me"
+    override val baseUrl: String = "https://ww2.mangafreak.me"
 
     override val supportsLatest: Boolean = true
 

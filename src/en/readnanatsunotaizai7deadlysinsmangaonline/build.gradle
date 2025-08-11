@@ -2,8 +2,8 @@ ext {
     extName = 'Read Nanatsu no Taizai 7 Deadly Sins Manga Online'
     extClass = '.ReadNanatsuNoTaizai7DeadlySinsMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww3.read7deadlysins.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://ww7.read7deadlysins.com'
+    overrideVersionCode = 3
     isNsfw = false
 }
 

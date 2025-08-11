@@ -2,8 +2,8 @@ ext {
     extName = 'Read Haikyuu!! Manga Online'
     extClass = '.ReadHaikyuuMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww6.readhaikyuu.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://ww9.readhaikyuu.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 

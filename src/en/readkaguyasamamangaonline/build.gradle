@@ -2,8 +2,8 @@ ext {
     extName = 'Read Kaguya-sama Manga Online'
     extClass = '.ReadKaguyaSamaMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww1.readkaguyasama.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://ww4.readkaguyasama.com'
+    overrideVersionCode = 2
     isNsfw = false
 }
 

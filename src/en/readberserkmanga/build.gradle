@@ -3,7 +3,7 @@ ext {
     extClass = '.ReadBerserkManga'
     themePkg = 'mangacatalog'
     baseUrl = 'https://readberserk.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

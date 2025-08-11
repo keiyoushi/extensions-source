@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.readonepiecemangaonline
 
 import eu.kanade.tachiyomi.multisrc.mangacatalog.MangaCatalog
 
-class ReadOnePieceMangaOnline : MangaCatalog("Read One Piece Manga Online", "https://ww8.readonepiece.com", "en") {
+class ReadOnePieceMangaOnline : MangaCatalog("Read One Piece Manga Online", "https://ww12.readonepiece.com", "en") {
     override val sourceList = listOf(
         Pair("One Piece", "$baseUrl/manga/one-piece/"),
         Pair("Colored", "$baseUrl/manga/one-piece-digital-colored-comics/"),
@@ -14,7 +14,13 @@ class ReadOnePieceMangaOnline : MangaCatalog("Read One Piece Manga Online", "htt
         Pair("Ace's Story", "$baseUrl/manga/one-piece-ace-s-story/"),
         Pair("Omake", "$baseUrl/manga/one-piece-omake/"),
         Pair("Vivre Card", "$baseUrl/manga/vivre-card-databook/"),
+        Pair("Pirate Recipes", "$baseUrl/manga/one-piece-pirate-recipes/"),
         Pair("Databook", "$baseUrl/manga/one-piece-databook/"),
         Pair("Ace's Story Manga", "$baseUrl/manga/one-piece-ace-story-manga/"),
-    ).sortedBy { it.first }.distinctBy { it.second }
+        Pair("OP Academy", "$baseUrl/manga/one-piece-academy/"),
+        Pair("MONSTERS", "$baseUrl/manga/monsters/"),
+        Pair("Zoro Novel", "$baseUrl/manga/one-piece-novel-zoro/"),
+        Pair("OP in Love", "$baseUrl/manga/one-piece-in-love/"),
+        Pair("Heroines", "$baseUrl/manga/one-piece-novel-heroines/"),
+    )
 }

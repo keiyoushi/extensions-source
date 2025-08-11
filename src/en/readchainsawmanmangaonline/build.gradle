@@ -2,8 +2,8 @@ ext {
     extName = 'Read Chainsaw Man Manga Online'
     extClass = '.ReadChainsawManMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww4.readchainsawman.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://ww5.readchainsawman.com'
+    overrideVersionCode = 2
     isNsfw = true
 }
 

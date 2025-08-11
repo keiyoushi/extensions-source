@@ -2,8 +2,8 @@ ext {
     extName = 'Read The Promised Neverland Manga Online'
     extClass = '.ReadThePromisedNeverlandMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww3.readneverland.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://ww7.readneverland.com'
+    overrideVersionCode = 2
     isNsfw = false
 }
 

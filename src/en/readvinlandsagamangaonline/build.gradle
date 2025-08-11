@@ -2,8 +2,8 @@ ext {
     extName = 'Read Vinland Saga Manga Online'
     extClass = '.ReadVinlandSagaMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww1.readvinlandsaga.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://ww5.readvinlandsaga.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 

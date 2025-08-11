@@ -2,8 +2,8 @@ ext {
     extName = 'Read Black Clover Manga Online'
     extClass = '.ReadBlackCloverMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww7.readblackclover.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://ww10.readblackclover.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
