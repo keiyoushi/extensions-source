@@ -7,10 +7,9 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
 @Serializable
-data class SakuraMangasResultDto(
+class SakuraMangasResultDto(
     val hasMore: Boolean,
-    val html: String,
-    val success: Boolean,
+    private val html: String,
 ) {
 
     fun asJsoup(baseUri: String = ""): Document {
@@ -19,27 +18,16 @@ data class SakuraMangasResultDto(
 }
 
 @Serializable
-data class SakuraMangaInfoDto(
-    val titulo: String,
-    val autor: String?,
-    val sinopse: String?,
-    val tags: List<String>,
-    val demografia: String?,
-    val status: String,
-    val ano: Int?,
-    val classificacao: String?,
-    val mangadex: String?,
-    val views: Int?,
-    val avaliacao: Double?,
-    val num_avaliacoes: Int?,
-    val total_favoritos: Int?,
-    val relacionados_html: List<String>,
-    val primeiro_capitulo: Int?,
-    val ultimo_capitulo: Int?,
-    val favorito: String?,
-    val nota_usuario: String?,
-    val status_usuario: String?,
-    val ultimo_cap_lido: String?,
+class SakuraMangaInfoDto(
+    private val titulo: String,
+    private val autor: String?,
+    private val sinopse: String?,
+    private val tags: List<String>,
+    private val demografia: String?,
+    private val status: String,
+    private val ano: Int?,
+    private val classificacao: String?,
+    private val avaliacao: Double?,
 ) {
     fun toSManga(mangaUrl: String): SManga = SManga.create().apply {
         title = titulo
@@ -67,7 +55,6 @@ data class SakuraMangaInfoDto(
 }
 
 @Serializable
-data class SakuraMangaChapterReadDto(
+class SakuraMangaChapterReadDto(
     val imageUrls: List<String>,
-    val numPages: Int,
 )

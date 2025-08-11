@@ -12,21 +12,16 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import rx.Observable
 import java.util.Calendar
+import kotlin.concurrent.thread
 
 class SakuraMangas : HttpSource() {
-    private val tag by lazy { javaClass.simpleName }
-
     override val lang = "pt-BR"
 
     override val supportsLatest = true
@@ -167,50 +162,42 @@ class SakuraMangas : HttpSource() {
         return POST("$baseUrl/dist/sakura/models/manga/manga_capitulos.php", headers, form.build())
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val mangaId = client.newCall(chapterListRequest(manga))
-            .execute()
-            .asJsoup()
-            .selectFirst("meta[manga-id]")!!
-            .attr("manga-id")
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val mangaId = document.selectFirst("meta[manga-id]")!!.attr("manga-id")
 
         var page = 1
         val chapters = mutableListOf<SChapter>()
         do {
-            val response = client.newCall(chapterListApiRequest(mangaId, page++)).execute()
-            val chapterGroup = chapterListParse(response).also {
+            val doc = client.newCall(chapterListApiRequest(mangaId, page++)).execute().asJsoup()
+
+            val chapterGroup = doc.select(".capitulo-item").map(::chapterFromElement).also {
                 chapters += it
             }
         } while (chapterGroup.isNotEmpty())
 
-        return Observable.just(chapters)
+        return chapters
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = buildString {
+            element.selectFirst(".num-capitulo")
+                ?.text()
+                ?.let { append(it) }
 
-        return document.select(".capitulo-item").map { element ->
-            SChapter.create().apply {
-                name = buildString {
-                    element.selectFirst(".num-capitulo")
-                        ?.text()
-                        ?.let { append(it) }
-
-                    element.selectFirst(".cap-titulo")
-                        ?.text()
-                        ?.takeIf { it.isNotBlank() }
-                        ?.let { append(" - $it") }
-                }
-                scanlator = element.selectFirst(".scan-nome")?.text()
-                chapter_number =
-                    element
-                        .selectFirst(".num-capitulo")!!
-                        .attr("data-chapter")
-                        .toFloatOrNull() ?: 1F
-                date_upload = element.selectFirst(".cap-data")?.text()?.toDate() ?: 0L
-                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-            }
+            element.selectFirst(".cap-titulo")
+                ?.text()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { append(" - $it") }
         }
+        scanlator = element.selectFirst(".scan-nome")?.text()
+        chapter_number =
+            element
+                .selectFirst(".num-capitulo")!!
+                .attr("data-chapter")
+                .toFloatOrNull() ?: 1F
+        date_upload = element.selectFirst(".cap-data")?.text()?.toDate() ?: 0L
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
     // ================================ Pages =======================================
@@ -249,7 +236,7 @@ class SakuraMangas : HttpSource() {
     override fun imageUrlParse(response: Response): String = ""
 
     override fun getFilterList(): FilterList {
-        CoroutineScope(Dispatchers.IO).launch {
+        thread {
             fetchFilters()
         }
 
@@ -265,6 +252,10 @@ class SakuraMangas : HttpSource() {
     }
 
     private fun fetchFilters() {
+        if (genresSet.isNotEmpty()) {
+            return
+        }
+
         try {
             val document = client
                 .newCall(GET("$baseUrl/obras/", headers))
@@ -298,7 +289,7 @@ class SakuraMangas : HttpSource() {
             }
             if (orderOptions.isNotEmpty()) orderByOptions = orderOptions
         } catch (e: Exception) {
-            Log.e(tag, e.stackTraceToString())
+            Log.e("SakuraMangas", "failed to fetch genres", e)
         }
     }
 
