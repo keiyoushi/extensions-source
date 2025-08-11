@@ -2,8 +2,8 @@ ext {
     extName = 'Read Attack on Titan Shingeki no Kyojin Manga'
     extClass = '.ReadAttackOnTitanShingekiNoKyojinManga'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww9.readsnk.com'
-    overrideVersionCode = 5
+    baseUrl = 'https://ww11.readsnk.com'
+    overrideVersionCode = 6
     isNsfw = false
 }
 
