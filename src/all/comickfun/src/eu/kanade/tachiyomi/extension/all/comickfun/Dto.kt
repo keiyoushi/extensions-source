@@ -41,7 +41,7 @@ class Manga(
         covers: List<MDcovers>? = null,
         groupTags: Boolean = GROUP_TAGS_DEFAULT,
         titleLang: String,
-        coverQuality: CoverQuality = CoverQuality.WebDefault,
+        coverQuality: CoverQuality = CoverQuality.Original,
     ): SManga {
         val entryTitle = comic.altTitles.firstOrNull {
             titleLang != "all" && !it.lang.isNullOrBlank() && titleLang.startsWith(it.lang)

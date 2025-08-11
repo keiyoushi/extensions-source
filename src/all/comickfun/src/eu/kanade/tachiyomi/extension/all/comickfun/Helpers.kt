@@ -59,8 +59,8 @@ internal fun parseCover(thumbnailUrl: String?, mdCovers: List<MDcovers>, coverQu
 
     return when (coverQuality) {
         CoverQuality.Original -> {
-            val b2key = mdCovers.firstOrNull() ?: return thumbnailUrl
-            thumbnailUrl?.replaceAfterLast("/", "${b2key.b2key}#${b2key.vol.orEmpty()}")
+            val mdCover = mdCovers.firstOrNull() ?: return thumbnailUrl
+            thumbnailUrl?.replaceAfterLast("/", "${mdCover.b2key}#${mdCover.vol.orEmpty()}")
         }
         CoverQuality.Compressed -> thumbnailUrl?.let { addOrReplaceCoverSuffix(it, "-m") }
         CoverQuality.WebDefault -> thumbnailUrl

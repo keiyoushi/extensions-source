@@ -547,7 +547,6 @@ abstract class Comick(
                 covers = localCovers.ifEmpty { originalCovers }.ifEmpty { firstVol },
                 groupTags = preferences.groupTags,
                 titleLang = preferences.localTitle,
-                coverQuality = coverQuality,
             )
         }
         return mangaData.toSManga(
