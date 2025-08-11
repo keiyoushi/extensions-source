@@ -10,16 +10,15 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -38,8 +37,6 @@ class ElderManga : HttpSource() {
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(3)
         .build()
-
-    private val json: Json by injectLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -141,7 +138,7 @@ class ElderManga : HttpSource() {
         return document.select("div.list-episode a").map { element ->
             SChapter.create().apply {
                 name = element.selectFirst("h3")!!.text()
-                date_upload = element.selectFirst("span")?.text()?.toDate() ?: 0L
+                date_upload = dateFormat.tryParse(element.selectFirst("span")?.text())
                 setUrlWithoutDomain(element.absUrl("href"))
             }
         }
@@ -153,13 +150,14 @@ class ElderManga : HttpSource() {
             .map { it.html() }.firstOrNull { pageRegex.find(it) != null }
             ?: return emptyList()
 
-        return pageRegex.findAll(script).mapIndexed { index, result ->
+        val results = pageRegex.findAll(script).toList()
+        return results.mapIndexed { index, result ->
             val url = result.groups.get(1)!!.value
             Page(index, imageUrl = "$CDN_URL/upload/series/$url")
-        }.toList()
+        }
     }
 
-    override fun imageUrlParse(response: Response) = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private fun isMangaPage(document: Document): Boolean =
         document.selectFirst("div.grid h2 + p") != null
@@ -180,9 +178,6 @@ class ElderManga : HttpSource() {
         return pageNumbers.any { it > currentPage }
     }
 
-    private fun String.toDate(): Long =
-        try { dateFormat.parse(this)!!.time } catch (_: Exception) { 0L }
-
     private fun String.contains(vararg fragment: String): Boolean =
         fragment.any { trim().contains(it, ignoreCase = true) }
 
@@ -190,10 +185,6 @@ class ElderManga : HttpSource() {
         const val URL_SEARCH_PREFIX = "slug:"
         val dateFormat = SimpleDateFormat("MMM d ,yyyy", Locale("tr"))
         val pageRegex = """\\"path\\":\\"([^"]+)\\""".trimIndent().toRegex()
-    }
-
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
     }
 }
 
