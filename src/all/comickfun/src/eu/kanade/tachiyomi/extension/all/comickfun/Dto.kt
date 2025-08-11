@@ -22,7 +22,7 @@ class SearchManga(
         // appending # at end as part of migration from slug to hid
         url = "/comic/$hid#"
         title = this@SearchManga.title
-        thumbnail_url = parseCover(cover, mdCovers, CoverQuality.WebDefault)
+        thumbnail_url = parseCover(cover, mdCovers)
     }
 }
 
