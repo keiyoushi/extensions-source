@@ -8,9 +8,9 @@ import okhttp3.Request
 class NiaddEn : Niadd(
     name = "Niadd (English)",
     baseUrl = "https://www.niadd.com",
-    langCode = "en"
+    langCode = "en",
 ) {
-    // Override do searchMangaRequest para garantir assinatura correta
+    // Override para garantir assinatura correta e evitar conflito
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search/?name=$query&page=$page"
         return GET(url, headers)

@@ -1,6 +1,6 @@
 ext {
     extName = 'Niadd'
-    extClass = '.NiaddFactory'
+    extClass = '.NiaddFactory' // O ponto no início é obrigatório para extensão
     extVersionCode = 1
     isNsfw = true
 }

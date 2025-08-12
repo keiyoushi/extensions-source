@@ -13,15 +13,14 @@ import org.jsoup.nodes.Element
 open class Niadd(
     override val name: String,
     override val baseUrl: String,
-    private val langCode: String
+    private val langCode: String,
 ) : ParsedHttpSource() {
 
     override val lang: String = langCode
     override val supportsLatest: Boolean = true
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/category/?page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseUrl/category/?page=$page", headers)
 
     override fun popularMangaSelector(): String = "div.manga-item"
 
@@ -36,9 +35,8 @@ open class Niadd(
 
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/category/last_update/?page=$page", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request =
+        GET("$baseUrl/category/last_update/?page=$page", headers)
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
 
@@ -47,10 +45,8 @@ open class Niadd(
 
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    // Adiciona o override aqui para evitar problema no NiaddEn
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/search/?name=$query&page=$page", headers)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+        GET("$baseUrl/search/?name=$query&page=$page", headers)
 
     override fun searchMangaSelector(): String = popularMangaSelector()
 
@@ -77,11 +73,10 @@ open class Niadd(
         return chapter
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.reader-page img").mapIndexed { i, img ->
+    override fun pageListParse(document: Document): List<Page> =
+        document.select("div.reader-page img").mapIndexed { i, img ->
             Page(i, "", img.absUrl("src"))
         }
-    }
 
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException("Not used")
