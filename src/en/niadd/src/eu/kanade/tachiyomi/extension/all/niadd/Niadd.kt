@@ -60,7 +60,15 @@ open class Niadd(
         manga.title = document.selectFirst("h1")?.text() ?: ""
         manga.description = document.selectFirst("div.detail-desc")?.text()
         manga.thumbnail_url = document.selectFirst("div.detail-cover img")?.absUrl("src")
+        // Gêneros separados por vírgula
+        manga.genre = document.select("div.detail-info a.genre").joinToString(", ") { it.text() }
         return manga
+    }
+
+    // Aqui fazemos a requisição para a página de capítulos específica
+    override fun chapterListRequest(manga: SManga): Request {
+        val chapterUrl = "$baseUrl${manga.url}/chapters.html"
+        return GET(chapterUrl, headers)
     }
 
     override fun chapterListSelector(): String = "ul.chapter-list li"
@@ -70,6 +78,7 @@ open class Niadd(
         val link = element.selectFirst("a")!!
         chapter.setUrlWithoutDomain(link.attr("href"))
         chapter.name = link.text()
+        chapter.date_upload = 0L
         return chapter
     }
 
