@@ -132,7 +132,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     // path: "/comic/detail/mangaId"
     override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$apiUrl/comic/detail/${manga.url}?channel=android&_v=2.2.5", apiHeaders)
+        GET("$apiUrl/comic/detail/${manga.url}?_v=2.2.5", apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ResponseDto<DataWrapperDto<MangaDto>>>()
