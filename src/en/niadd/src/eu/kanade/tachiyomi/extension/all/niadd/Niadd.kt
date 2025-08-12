@@ -9,6 +9,8 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.*
 
 open class Niadd(
     override val name: String,
@@ -57,21 +59,34 @@ open class Niadd(
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
+
+        // Título
         manga.title = document.selectFirst("h1")?.text() ?: ""
+
+        // Descrição
         manga.description = document.selectFirst("div.detail-desc")?.text()
+
+        // Capa
         manga.thumbnail_url = document.selectFirst("div.detail-cover img")?.absUrl("src")
 
-        // Opcional: pegar gêneros se existirem
+        // Gêneros
         val genres = document.select("div.detail-info span.genres a").joinToString(", ") { it.text() }
         if (genres.isNotEmpty()) {
             manga.genre = genres
         }
 
+        // Autor e artista - baseado no padrão que aparece na página de detalhes
+        val author = document.selectFirst("div.detail-info span.author a")?.text()
+        if (!author.isNullOrBlank()) {
+            manga.author = author
+            manga.artist = author
+        }
+
         return manga
     }
 
-    // Aqui o override que faz a diferença para buscar os capítulos na URL certa
     override fun chapterListRequest(manga: SManga): Request {
+        // Garante que vai na página /chapters.html para pegar lista de capítulos
         val chaptersUrl = if (manga.url.endsWith("/chapters.html")) {
             manga.url
         } else {
@@ -80,14 +95,33 @@ open class Niadd(
         return GET(baseUrl + chaptersUrl, headers)
     }
 
-    override fun chapterListSelector(): String = "ul.chapter-list li"
+    // Selector para pegar cada <a> dentro do <ul class="chapter-list">
+    override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-        val link = element.selectFirst("a")!!
-        chapter.setUrlWithoutDomain(link.attr("href"))
-        chapter.name = link.text()
+
+        // Link do capítulo, relativo ao domínio
+        chapter.setUrlWithoutDomain(element.attr("href"))
+
+        // Nome do capítulo (título)
+        chapter.name = element.selectFirst("span.chp-title")?.text() ?: element.text()
+
+        // Data do capítulo
+        val dateText = element.selectFirst("span.chp-time")?.text()
+        chapter.date_upload = parseDate(dateText)
+
         return chapter
+    }
+
+    private fun parseDate(dateString: String?): Long {
+        if (dateString.isNullOrBlank()) return 0L
+        return try {
+            val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
+            sdf.parse(dateString)?.time ?: 0L
+        } catch (e: Exception) {
+            0L
+        }
     }
 
     override fun pageListParse(document: Document): List<Page> =
