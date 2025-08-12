@@ -30,7 +30,9 @@ open class Niadd(
         val manga = SManga.create()
         val link = element.selectFirst("a")!!
         manga.setUrlWithoutDomain(link.attr("href"))
-        manga.title = element.selectFirst("h3")?.text() ?: ""
+        manga.title = element.selectFirst("h3")?.text()?.trim()
+            ?: link.attr("title")?.trim()
+            ?: link.text().trim()
         manga.thumbnail_url = element.selectFirst("img")?.absUrl("src")
         return manga
     }
@@ -63,31 +65,33 @@ open class Niadd(
         // Título
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
-        // Descrição (sinopse)
-        manga.description = document.selectFirst("section.detail-section.detail-synopsis")?.text()?.trim()
+        // Descrição (sinopse) — seletor preciso
+        manga.description = document.selectFirst("section.detail-section.detail-synopsis p, section.detail-section.detail-synopsis")?.text()?.trim()
 
         // Capa
         manga.thumbnail_url = document.selectFirst("div.detail-cover img")?.absUrl("src")
 
-        // Autor - pegar o primeiro autor
-        val author = document.select("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value").firstOrNull()?.text()?.trim()
+        // Autor
+        val author = document.select("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value")
+            .firstOrNull()?.text()?.trim()
         if (!author.isNullOrBlank()) {
             manga.author = author
         }
 
-        // Artista - pegar o artista explicitamente, se existir
-        val artist = document.select("div.bookside-bookinfo div[itemprop=author]").getOrNull(1)?.selectFirst("span.bookside-bookinfo-value")?.text()?.trim()
+        // Artista
+        val artist = document.select("div.bookside-bookinfo div[itemprop=author]")
+            .getOrNull(1)?.selectFirst("span.bookside-bookinfo-value")?.text()?.trim()
         manga.artist = if (!artist.isNullOrBlank()) artist else author
 
-        // Gêneros - juntar todos os gêneros separados por vírgula
-        val genres = document.select("div.bookside-bookinfo span.bookside-bookinfo-value a span.bookside-bookinfo-value")
+        // Gêneros — apenas no bloco correto
+        val genres = document.select("div.bookside-bookinfo > div:has(span.bookside-bookinfo-key:contains(Genres)) a span.bookside-bookinfo-value")
             .map { it.text().trim().trimStart(',') }
             .joinToString(", ")
         if (genres.isNotEmpty()) {
             manga.genre = genres
         }
 
-        // Status - sem dado explícito, pode deixar UNKNOWN por enquanto
+        // Status — ainda sem dado explícito
         manga.status = SManga.UNKNOWN
 
         return manga
@@ -107,7 +111,8 @@ open class Niadd(
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.attr("href"))
-        chapter.name = element.selectFirst("span.chp-title")?.text() ?: element.text()
+        chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
+            ?: element.text().trim()
         val dateText = element.selectFirst("span.chp-time")?.text()
         chapter.date_upload = parseDate(dateText)
         return chapter
