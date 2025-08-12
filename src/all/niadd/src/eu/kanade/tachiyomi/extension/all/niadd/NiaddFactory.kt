@@ -21,15 +21,15 @@ class NiaddFactory : SourceFactory {
 abstract class NiaddBaseLang(
     override val name: String,
     override val baseUrl: String,
-    override val lang: String
+    override val lang: String,
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    // Busca — agora com filtro incluído, mas pode ignorar
+    // Busca — com filtro (pode ignorar filtros, mas o método precisa existir)
     protected abstract fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request
 
-    // O ParsedHttpSource exige esse método que chama o de cima passando filtro vazio
+    // Implementação padrão, que chama a acima com filtro vazio
     override fun searchMangaRequest(page: Int, query: String): Request =
         searchMangaRequest(page, query, FilterList())
 
@@ -42,7 +42,7 @@ abstract class NiaddBaseLang(
 
     override fun searchMangaNextPageSelector() = "a:contains(Next)"
 
-    // Lista de populares
+    // Populares
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl/popular/", headers)
 
@@ -96,7 +96,7 @@ abstract class NiaddBaseLang(
 class NiaddEn : NiaddBaseLang(
     name = "Niadd (English)",
     baseUrl = "https://www.niadd.com",
-    lang = "en"
+    lang = "en",
 ) {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/search/?keyword=$query&page=$page"

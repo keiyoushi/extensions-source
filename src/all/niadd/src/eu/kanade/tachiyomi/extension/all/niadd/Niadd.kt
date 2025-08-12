@@ -13,7 +13,7 @@ import org.jsoup.nodes.Element
 open class Niadd(
     override val name: String,
     override val baseUrl: String,
-    private val langCode: String
+    private val langCode: String,
 ) : ParsedHttpSource() {
 
     override val lang: String = langCode
