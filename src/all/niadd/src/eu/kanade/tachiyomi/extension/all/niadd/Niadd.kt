@@ -1,11 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.niadd
 
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -13,7 +13,7 @@ import org.jsoup.nodes.Element
 open class Niadd(
     override val name: String,
     override val baseUrl: String,
-    private val langCode: String,
+    private val langCode: String
 ) : ParsedHttpSource() {
 
     override val lang: String = langCode
@@ -47,6 +47,7 @@ open class Niadd(
 
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
+    // Adiciona o override aqui para evitar problema no NiaddEn
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         return GET("$baseUrl/search/?name=$query&page=$page", headers)
     }
