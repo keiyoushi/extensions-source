@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -25,9 +26,12 @@ abstract class NiaddBaseLang(
 
     override val supportsLatest = true
 
-    // Busca
-    override fun searchMangaRequest(page: Int, query: String) =
-        GET("$baseUrl/search/?keyword=$query", headers)
+    // Busca — agora com filtro incluído, mas pode ignorar
+    protected abstract fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request
+
+    // O ParsedHttpSource exige esse método que chama o de cima passando filtro vazio
+    override fun searchMangaRequest(page: Int, query: String): Request =
+        searchMangaRequest(page, query, FilterList())
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         val link = element.selectFirst("td.manga-part a")!!
@@ -93,4 +97,9 @@ class NiaddEn : NiaddBaseLang(
     name = "Niadd (English)",
     baseUrl = "https://www.niadd.com",
     lang = "en"
-)
+) {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/search/?keyword=$query&page=$page"
+        return GET(url, headers)
+    }
+}

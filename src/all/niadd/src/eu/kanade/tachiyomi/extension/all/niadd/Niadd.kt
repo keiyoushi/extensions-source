@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.niadd
 
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.network.GET
