@@ -46,9 +46,9 @@ enum class CoverQuality {
 }
 
 internal fun parseCover(thumbnailUrl: String?, mdCovers: List<MDcovers>, coverQuality: CoverQuality = CoverQuality.WebDefault): String? {
-    fun addOrReplaceCoverSuffix(url: String, suffix: String): String {
+    fun addOrReplaceCoverQualitySuffix(url: String, qualitySuffix: String): String {
         return url.substringBeforeLast('.').replace(Regex("-(m|s)$"), "") +
-            "$suffix.jpg#${url.substringAfter('#', "")}"
+            "$qualitySuffix.jpg#${url.substringAfter('#', "")}"
     }
 
     val mdCover = mdCovers.firstOrNull()
@@ -60,8 +60,8 @@ internal fun parseCover(thumbnailUrl: String?, mdCovers: List<MDcovers>, coverQu
 
     return when (coverQuality) {
         CoverQuality.Original -> coverUrl
-        CoverQuality.Compressed -> addOrReplaceCoverSuffix(coverUrl, "-m")
-        CoverQuality.WebDefault -> addOrReplaceCoverSuffix(coverUrl, "-s")
+        CoverQuality.Compressed -> addOrReplaceCoverQualitySuffix(coverUrl, "-m")
+        CoverQuality.WebDefault -> addOrReplaceCoverQualitySuffix(coverUrl, "-s")
     }
 }
 
