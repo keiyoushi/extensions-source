@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import okhttp3.Request
 
 class NiaddEn : Niadd(
-    name = "Niadd (English)",
+    name = "Niadd",
     baseUrl = "https://www.niadd.com",
     langCode = "en",
 ) {

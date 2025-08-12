@@ -61,32 +61,39 @@ open class Niadd(
         val manga = SManga.create()
 
         // Título
-        manga.title = document.selectFirst("h1")?.text() ?: ""
+        manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
-        // Descrição
-        manga.description = document.selectFirst("div.detail-desc")?.text()
+        // Descrição (sinopse)
+        manga.description = document.selectFirst("section.detail-section.detail-synopsis")?.text()?.trim()
 
         // Capa
         manga.thumbnail_url = document.selectFirst("div.detail-cover img")?.absUrl("src")
 
-        // Gêneros
-        val genres = document.select("div.detail-info span.genres a").joinToString(", ") { it.text() }
+        // Autor - pegar o primeiro autor
+        val author = document.select("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value").firstOrNull()?.text()?.trim()
+        if (!author.isNullOrBlank()) {
+            manga.author = author
+        }
+
+        // Artista - pegar o artista explicitamente, se existir
+        val artist = document.select("div.bookside-bookinfo div[itemprop=author]").getOrNull(1)?.selectFirst("span.bookside-bookinfo-value")?.text()?.trim()
+        manga.artist = if (!artist.isNullOrBlank()) artist else author
+
+        // Gêneros - juntar todos os gêneros separados por vírgula
+        val genres = document.select("div.bookside-bookinfo span.bookside-bookinfo-value a span.bookside-bookinfo-value")
+            .map { it.text().trim().trimStart(',') }
+            .joinToString(", ")
         if (genres.isNotEmpty()) {
             manga.genre = genres
         }
 
-        // Autor e artista - baseado no padrão que aparece na página de detalhes
-        val author = document.selectFirst("div.detail-info span.author a")?.text()
-        if (!author.isNullOrBlank()) {
-            manga.author = author
-            manga.artist = author
-        }
+        // Status - sem dado explícito, pode deixar UNKNOWN por enquanto
+        manga.status = SManga.UNKNOWN
 
         return manga
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        // Garante que vai na página /chapters.html para pegar lista de capítulos
         val chaptersUrl = if (manga.url.endsWith("/chapters.html")) {
             manga.url
         } else {
@@ -95,22 +102,14 @@ open class Niadd(
         return GET(baseUrl + chaptersUrl, headers)
     }
 
-    // Selector para pegar cada <a> dentro do <ul class="chapter-list">
     override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-
-        // Link do capítulo, relativo ao domínio
         chapter.setUrlWithoutDomain(element.attr("href"))
-
-        // Nome do capítulo (título)
         chapter.name = element.selectFirst("span.chp-title")?.text() ?: element.text()
-
-        // Data do capítulo
         val dateText = element.selectFirst("span.chp-time")?.text()
         chapter.date_upload = parseDate(dateText)
-
         return chapter
     }
 
