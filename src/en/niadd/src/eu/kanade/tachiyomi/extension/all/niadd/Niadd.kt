@@ -35,11 +35,13 @@ open class Niadd(
         val link = element.selectFirst("a[href*='/manga/']") ?: return manga
         manga.setUrlWithoutDomain(link.attr("href"))
 
+        // Get title
         manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
             ?: element.selectFirst("h3")?.text()?.trim()
             ?: link.attr("title")?.trim()
             ?: link.text().trim()
 
+        // Get thumbnail
         val img = element.selectFirst("img")
         manga.thumbnail_url = img?.absUrl("src")
             ?.takeIf { it.isNotBlank() }
@@ -47,6 +49,7 @@ open class Niadd(
             ?: img?.absUrl("data-src")
             ?: img?.absUrl("data-original")
 
+        // Get description
         manga.description = element.selectFirst("div.manga-intro")?.text()?.trim()
         return manga
     }
@@ -81,7 +84,7 @@ open class Niadd(
         // Title
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
-        // Cloak
+        // Cover image
         run {
             val img = document.selectFirst("div.detail-cover img, .bookside-cover img")
             manga.thumbnail_url = img?.absUrl("src")
@@ -105,7 +108,7 @@ open class Niadd(
             ?.trim()
             ?: ""
 
-        // Alternate Names
+        // Alternate names
         val alternatives = document.selectFirst("div.bookside-general-cell:contains(Alternative(s):)")
             ?.ownText()
             ?.replace("Alternative(s):", "")
@@ -148,10 +151,12 @@ open class Niadd(
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.attr("href"))
 
+        // Chapter name
         chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
             ?: element.attr("title")?.trim()
             ?: element.text().trim()
 
+        // Chapter upload date
         val dateText = element.selectFirst("span.chp-time")?.text()
         chapter.date_upload = parseDate(dateText)
         return chapter
@@ -170,7 +175,8 @@ open class Niadd(
     // ---------- Pages / Images ----------
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.reader-page img, img.reader-page-image").mapIndexed { i, img ->
+        // Parse all page images for the chapter
+        return document.select("div.mangaread-img div.pic_box img.manga_pic").mapIndexed { i, img ->
             val url = img.absUrl("src")
                 .ifEmpty { img.absUrl("data-src") }
                 .ifEmpty { img.absUrl("data-original") }
@@ -180,6 +186,7 @@ open class Niadd(
     }
 
     override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException("Not used")
+        // Not used for multi-page sources
+        throw UnsupportedOperationException("Use pageListParse to get chapter images")
     }
 }
