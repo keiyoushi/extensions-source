@@ -209,7 +209,7 @@ class HentaiCosplay : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("amp-img[src*=upload]")
+        return document.select("amp-img[src*=upload]:not(.related-thumbnail)")
             .mapIndexed { index, element ->
                 Page(
                     index = index,

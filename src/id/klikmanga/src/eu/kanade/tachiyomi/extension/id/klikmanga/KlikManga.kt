@@ -6,7 +6,7 @@ import java.util.Locale
 
 class KlikManga : Madara(
     "KlikManga",
-    "https://klikmanga.com",
+    "https://klikmanga.org",
     "id",
     SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
 ) {
