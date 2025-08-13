@@ -35,31 +35,32 @@ open class Niadd(
         val link = element.selectFirst("a[href*='/manga/']") ?: return manga
         manga.setUrlWithoutDomain(link.attr("href"))
 
-        // Title fallback chain
+        // Reforço de fallback do título
         manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
+            ?: element.selectFirst("a[title]")?.attr("title")?.trim()
             ?: element.selectFirst("h3")?.text()?.trim()
-            ?: link.attr("title")?.trim()
-            ?: element.selectFirst("img")?.attr("alt")?.trim()
+            ?: element.selectFirst("img[alt]")?.attr("alt")?.trim()
             ?: link.text().trim()
 
-        // Thumbnail fallback chain
+        // Thumbnail
         val img = element.selectFirst("img")
-        manga.thumbnail_url = img?.absUrl("data-original")
+        manga.thumbnail_url = img?.absUrl("src")
             ?.takeIf { it.isNotBlank() }
-            ?: img?.absUrl("data-src")
             ?: img?.absUrl("data-cfsrc")
-            ?: img?.absUrl("src")
+            ?: img?.absUrl("data-src")
+            ?: img?.absUrl("data-original")
 
+        // Description
         manga.description = element.selectFirst("div.manga-intro")?.text()?.trim()
         return manga
     }
 
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
-    // ---------- Latest ----------
+    // ---------- Latest / Recent Updates ----------
 
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/category/last_update/?page=$page", headers)
+        GET("$baseUrl/list/New-Update/?page=$page", headers) // URL correta de recentes
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
@@ -81,18 +82,15 @@ open class Niadd(
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
 
-        // Title
-        manga.title = document.selectFirst("h1")?.text()?.trim()
-            ?: document.selectFirst("div.detail-cover img")?.attr("alt")?.trim()
-            ?: ""
+        manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
         // Thumbnail
         val img = document.selectFirst("div.detail-cover img, .bookside-cover img")
-        manga.thumbnail_url = img?.absUrl("data-original")
+        manga.thumbnail_url = img?.absUrl("src")
             ?.takeIf { it.isNotBlank() }
-            ?: img?.absUrl("data-src")
             ?: img?.absUrl("data-cfsrc")
-            ?: img?.absUrl("src")
+            ?: img?.absUrl("data-src")
+            ?: img?.absUrl("data-original")
 
         // Author / Artist
         val author = document.selectFirst("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value")
@@ -128,9 +126,7 @@ open class Niadd(
             ?.joinToString(", ") { it.text().trim().trimStart(',') }
             ?: ""
 
-        // Status
         manga.status = SManga.UNKNOWN
-
         return manga
     }
 
@@ -145,39 +141,20 @@ open class Niadd(
         return GET(baseUrl + chaptersUrl, headers)
     }
 
-    override fun chapterListSelector(): String = "div.pic_box a" // Updated selector
+    override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.attr("href"))
 
-        // Chapter name fallback chain
-        chapter.name = element.text().trim()
-            .ifEmpty { element.attr("title").trim() }
-            .ifEmpty { element.selectFirst("img")?.attr("alt")?.trim() ?: "" }
+        chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
+            ?: element.attr("title")?.trim()
+            ?: element.text().trim()
 
-        chapter.date_upload = 0L // Niadd does not show upload dates reliably
+        val dateText = element.selectFirst("span.chp-time")?.text()
+        chapter.date_upload = parseDate(dateText)
         return chapter
     }
-
-    // ---------- Pages / Images ----------
-
-    override fun pageListParse(document: Document): List<Page> {
-        // Each div.pic_box contains an <img>
-        return document.select("div.mangaread-img div.pic_box img").mapIndexed { i, img ->
-            val url = img.absUrl("data-original")
-                .ifEmpty { img.absUrl("data-src") }
-                .ifEmpty { img.absUrl("data-cfsrc") }
-                .ifEmpty { img.absUrl("src") }
-            Page(i, "", url)
-        }
-    }
-
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException("Not used")
-    }
-
-    // ---------- Date Parsing ----------
 
     private fun parseDate(dateString: String?): Long {
         if (dateString.isNullOrBlank()) return 0L
@@ -187,5 +164,21 @@ open class Niadd(
         } catch (_: Exception) {
             0L
         }
+    }
+
+    // ---------- Pages / Images ----------
+
+    override fun pageListParse(document: Document): List<Page> {
+        return document.select("div.reader-page img, img.reader-page-image").mapIndexed { i, img ->
+            val url = img.absUrl("src")
+                .ifEmpty { img.absUrl("data-src") }
+                .ifEmpty { img.absUrl("data-original") }
+                .ifEmpty { img.absUrl("data-cfsrc") }
+            Page(i, "", url)
+        }
+    }
+
+    override fun imageUrlParse(document: Document): String {
+        throw UnsupportedOperationException("Not used")
     }
 }
