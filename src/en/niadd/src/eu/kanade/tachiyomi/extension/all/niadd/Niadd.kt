@@ -9,8 +9,9 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
 
 open class Niadd(
     override val name: String,
@@ -21,44 +22,64 @@ open class Niadd(
     override val lang: String = langCode
     override val supportsLatest: Boolean = true
 
+    // ---------- Popular ----------
+
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/category/?page=$page", headers)
 
-    override fun popularMangaSelector(): String = "div.manga-item"
+    // Só itens que realmente têm link para /manga/
+    override fun popularMangaSelector(): String =
+        "div.manga-item:has(a[href*='/manga/'])"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        val link = element.selectFirst("a[href*=/manga/]")!!
+
+        val link = element.selectFirst("a[href*='/manga/']") ?: return manga
         manga.setUrlWithoutDomain(link.attr("href"))
+
+        // Título robusto (funciona na busca e em listagens)
         manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
+            ?: element.selectFirst("h3")?.text()?.trim()
             ?: link.attr("title")?.trim()
             ?: link.text().trim()
-        manga.thumbnail_url = element.selectFirst("img")?.absUrl("src")
+
+        // Thumb robusta (algumas páginas usam data-cfsrc)
+        val img = element.selectFirst("img")
+        manga.thumbnail_url = img?.absUrl("src")
+            ?.takeIf { it.isNotBlank() }
+            ?: img?.absUrl("data-cfsrc")
+            ?: img?.absUrl("data-src")
+            ?: img?.absUrl("data-original")
+
+        // Snippet da intro (quando existir na busca)
         manga.description = element.selectFirst("div.manga-intro")?.text()?.trim()
+
         return manga
     }
 
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
+    // ---------- Latest ----------
+
     override fun latestUpdatesRequest(page: Int): Request =
         GET("$baseUrl/category/last_update/?page=$page", headers)
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
-
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        GET("$baseUrl/search/?name=$query&page=$page", headers)
+    // ---------- Search ----------
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val q = URLEncoder.encode(query, "UTF-8")
+        return GET("$baseUrl/search/?name=$q&page=$page", headers)
+    }
 
     override fun searchMangaSelector(): String = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
-
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
+
+    // ---------- Details ----------
 
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
@@ -67,17 +88,22 @@ open class Niadd(
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
         // Capa
-        manga.thumbnail_url = document.selectFirst("div.detail-cover img")?.absUrl("src")
+        run {
+            val img = document.selectFirst("div.detail-cover img, .bookside-cover img")
+            manga.thumbnail_url = img?.absUrl("src")
+                ?.takeIf { it.isNotBlank() }
+                ?: img?.absUrl("data-cfsrc")
+                ?: img?.absUrl("data-src")
+                ?: img?.absUrl("data-original")
+        }
 
-        // Autor
-        manga.author = document.selectFirst("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value")
-            ?.text()
-            ?.trim()
+        // Autor / Artista
+        val author = document.selectFirst("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value")
+            ?.text()?.trim()
+        manga.author = author
+        manga.artist = author
 
-        // Artista (mesmo que autor se não encontrado separado)
-        manga.artist = manga.author
-
-        // Descrição (pega só do bloco "Synopsis")
+        // Descrição — pegar exclusivamente do bloco "Synopsis"
         manga.description = document.select("div.detail-section-box")
             .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Synopsis", true) == true }
             ?.selectFirst("section.detail-synopsis")
@@ -85,18 +111,20 @@ open class Niadd(
             ?.trim()
             ?: ""
 
-        // Gêneros (pega só do bloco "Genres")
+        // Gêneros — pegar exclusivamente do bloco "Genres"
         manga.genre = document.select("div.detail-section-box")
             .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Genres", true) == true }
             ?.select("section.detail-synopsis a span[itemprop=genre]")
             ?.joinToString(", ") { it.text().trim().trimStart(',') }
             ?: ""
 
-        // Status
+        // Status (o site não exibe claro; manter UNKNOWN)
         manga.status = SManga.UNKNOWN
 
         return manga
     }
+
+    // ---------- Chapters ----------
 
     override fun chapterListRequest(manga: SManga): Request {
         val chaptersUrl = if (manga.url.endsWith("/chapters.html")) {
@@ -112,8 +140,11 @@ open class Niadd(
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.attr("href"))
+
         chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
+            ?: element.attr("title")?.trim()
             ?: element.text().trim()
+
         val dateText = element.selectFirst("span.chp-time")?.text()
         chapter.date_upload = parseDate(dateText)
         return chapter
@@ -124,15 +155,24 @@ open class Niadd(
         return try {
             val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH)
             sdf.parse(dateString)?.time ?: 0L
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             0L
         }
     }
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("div.reader-page img").mapIndexed { i, img ->
-            Page(i, "", img.absUrl("src"))
+    // ---------- Pages / Images ----------
+
+    override fun pageListParse(document: Document): List<Page> {
+        // Mantém seletor padrão; se o site usar data-* nas imagens,
+        // o próprio absUrl("") resolve quando o atributo existir.
+        return document.select("div.reader-page img, img.reader-page-image").mapIndexed { i, img ->
+            val url = img.absUrl("src")
+                .ifEmpty { img.absUrl("data-src") }
+                .ifEmpty { img.absUrl("data-original") }
+                .ifEmpty { img.absUrl("data-cfsrc") }
+            Page(i, "", url)
         }
+    }
 
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException("Not used")
