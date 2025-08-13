@@ -38,11 +38,9 @@ class NovelInterceptor : Interceptor {
             val response =
                 chain.proceed(origin.newBuilder().removeHeader("Accept-Encoding").build())
             val url = it.find(response.body.string())?.groups?.get(1)?.value
+                ?: predictUrlByContext(origin.url)
             return response.newBuilder().code(302)
-                .header(
-                    "Location",
-                    BiliNovel.addSuffixToUrl(url ?: predictUrlByContext(origin.url)),
-                ).build()
+                .header("Location", url.replace(".", "_2.")).build()
         }
         return chain.proceed(origin.newBuilder().addHeader("Cookie", "night=1").build())
     }

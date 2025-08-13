@@ -61,17 +61,6 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         val CHAPTER_ID_REGEX = Regex("/novel/\\d+/(\\d+)(?:_\\d+)?\\.html")
         val PAGE_SIZE_REGEX = Regex("（\\d+/(\\d+)）")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
-
-        fun addSuffixToUrl(url: String): String {
-            val index = url.lastIndexOf(".")
-            if (index != -1) {
-                val newUrl = StringBuilder(url.substring(0, index))
-                newUrl.append("_2")
-                newUrl.append(url.substring(index))
-                return newUrl.toString()
-            }
-            return url
-        }
     }
 
     private fun getChapterUrlByContext(i: Int, els: Elements) = when (i) {
@@ -156,7 +145,8 @@ class BiliNovel : HttpSource(), ConfigurableSource {
 
     // Latest Page
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/top/lastupdate/$page.html", headers)
+    override fun latestUpdatesRequest(page: Int) =
+        GET("$baseUrl/top/lastupdate/$page.html", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -176,7 +166,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.contains("detail")) {
+        if (response.request.url.pathSegments.contains("novel")) {
             return MangasPage(listOf(mangaDetailsParse(response)), false)
         }
         return popularMangaParse(response)
@@ -188,7 +178,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         val doc = response.asJsoup()
         val meta = doc.select(".book-meta")[1].text().split("|")
         val backupname = doc.selectFirst(".bkname-body")?.let { "\n\n別名：${it.text()}" } ?: ""
-        url = doc.location()
+        setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
         description = doc.selectFirst("#bookSummary > content")?.wholeText() + backupname
@@ -198,13 +188,15 @@ class BiliNovel : HttpSource(), ConfigurableSource {
             "完结" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        genre = (doc.select(".tag-small").map(Element::text) + meta.getOrElse(2) { "" }).joinToString()
+        genre =
+            (doc.select(".tag-small").map(Element::text) + meta.getOrElse(2) { "" }).joinToString()
         initialized = true
     }
 
     // Catalog Page
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/novel/${manga.id}/catalog", headers)
+    override fun chapterListRequest(manga: SManga) =
+        GET("$baseUrl/novel/${manga.id}/catalog", headers)
 
     override fun chapterListParse(response: Response) = response.asJsoup().let {
         val info = it.selectFirst(".chapter-sub-title")!!.text()
@@ -213,7 +205,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
             val chapterBar = v.selectFirst(".chapter-bar")!!.text().toHalfWidthDigits()
             val chapters = v.select(".chapter-li-a")
             chapters.mapIndexed { i, e ->
-                val url = e.absUrl("href").takeUnless("javascript:cid(1)"::equals)?.let(::addSuffixToUrl)
+                val url = e.absUrl("href").takeUnless("javascript:cid(1)"::equals)
                 SChapter.create().apply {
                     name = e.text().toHalfWidthDigits()
                     date_upload = date
@@ -225,6 +217,9 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     }
 
     // Manga View Page
+
+    override fun pageListRequest(chapter: SChapter) =
+        GET(baseUrl + chapter.url.replace(".", "_2."), headers)
 
     override fun pageListParse(response: Response) = response.asJsoup().let {
         val size = PAGE_SIZE_REGEX.find(it.selectFirst("#atitle")!!.text())!!.groups[1]!!.value
