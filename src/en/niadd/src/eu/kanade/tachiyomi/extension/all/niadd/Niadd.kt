@@ -35,21 +35,21 @@ open class Niadd(
         val link = element.selectFirst("a[href*='/manga/']") ?: return manga
         manga.setUrlWithoutDomain(link.attr("href"))
 
-        // Get title
+        // Title fallback chain
         manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
             ?: element.selectFirst("h3")?.text()?.trim()
             ?: link.attr("title")?.trim()
+            ?: element.selectFirst("img")?.attr("alt")?.trim()
             ?: link.text().trim()
 
-        // Get thumbnail
+        // Thumbnail fallback chain
         val img = element.selectFirst("img")
-        manga.thumbnail_url = img?.absUrl("src")
+        manga.thumbnail_url = img?.absUrl("data-original")
             ?.takeIf { it.isNotBlank() }
-            ?: img?.absUrl("data-cfsrc")
             ?: img?.absUrl("data-src")
-            ?: img?.absUrl("data-original")
+            ?: img?.absUrl("data-cfsrc")
+            ?: img?.absUrl("src")
 
-        // Get description
         manga.description = element.selectFirst("div.manga-intro")?.text()?.trim()
         return manga
     }
@@ -82,17 +82,17 @@ open class Niadd(
         val manga = SManga.create()
 
         // Title
-        manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
+        manga.title = document.selectFirst("h1")?.text()?.trim()
+            ?: document.selectFirst("div.detail-cover img")?.attr("alt")?.trim()
+            ?: ""
 
-        // Cover image
-        run {
-            val img = document.selectFirst("div.detail-cover img, .bookside-cover img")
-            manga.thumbnail_url = img?.absUrl("src")
-                ?.takeIf { it.isNotBlank() }
-                ?: img?.absUrl("data-cfsrc")
-                ?: img?.absUrl("data-src")
-                ?: img?.absUrl("data-original")
-        }
+        // Thumbnail
+        val img = document.selectFirst("div.detail-cover img, .bookside-cover img")
+        manga.thumbnail_url = img?.absUrl("data-original")
+            ?.takeIf { it.isNotBlank() }
+            ?: img?.absUrl("data-src")
+            ?: img?.absUrl("data-cfsrc")
+            ?: img?.absUrl("src")
 
         // Author / Artist
         val author = document.selectFirst("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value")
@@ -108,7 +108,7 @@ open class Niadd(
             ?.trim()
             ?: ""
 
-        // Alternate names
+        // Alternate Names
         val alternatives = document.selectFirst("div.bookside-general-cell:contains(Alternative(s):)")
             ?.ownText()
             ?.replace("Alternative(s):", "")
@@ -145,22 +145,39 @@ open class Niadd(
         return GET(baseUrl + chaptersUrl, headers)
     }
 
-    override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
+    override fun chapterListSelector(): String = "div.pic_box a" // Updated selector
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(element.attr("href"))
 
-        // Chapter name
-        chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
-            ?: element.attr("title")?.trim()
-            ?: element.text().trim()
+        // Chapter name fallback chain
+        chapter.name = element.text().trim()
+            .ifEmpty { element.attr("title").trim() }
+            .ifEmpty { element.selectFirst("img")?.attr("alt")?.trim() ?: "" }
 
-        // Chapter upload date
-        val dateText = element.selectFirst("span.chp-time")?.text()
-        chapter.date_upload = parseDate(dateText)
+        chapter.date_upload = 0L // Niadd does not show upload dates reliably
         return chapter
     }
+
+    // ---------- Pages / Images ----------
+
+    override fun pageListParse(document: Document): List<Page> {
+        // Each div.pic_box contains an <img>
+        return document.select("div.mangaread-img div.pic_box img").mapIndexed { i, img ->
+            val url = img.absUrl("data-original")
+                .ifEmpty { img.absUrl("data-src") }
+                .ifEmpty { img.absUrl("data-cfsrc") }
+                .ifEmpty { img.absUrl("src") }
+            Page(i, "", url)
+        }
+    }
+
+    override fun imageUrlParse(document: Document): String {
+        throw UnsupportedOperationException("Not used")
+    }
+
+    // ---------- Date Parsing ----------
 
     private fun parseDate(dateString: String?): Long {
         if (dateString.isNullOrBlank()) return 0L
@@ -170,23 +187,5 @@ open class Niadd(
         } catch (_: Exception) {
             0L
         }
-    }
-
-    // ---------- Pages / Images ----------
-
-    override fun pageListParse(document: Document): List<Page> {
-        // Parse all page images for the chapter
-        return document.select("div.mangaread-img div.pic_box img.manga_pic").mapIndexed { i, img ->
-            val url = img.absUrl("src")
-                .ifEmpty { img.absUrl("data-src") }
-                .ifEmpty { img.absUrl("data-original") }
-                .ifEmpty { img.absUrl("data-cfsrc") }
-            Page(i, "", url)
-        }
-    }
-
-    override fun imageUrlParse(document: Document): String {
-        // Not used for multi-page sources
-        throw UnsupportedOperationException("Use pageListParse to get chapter images")
     }
 }
