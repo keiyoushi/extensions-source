@@ -27,23 +27,19 @@ open class Niadd(
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/category/?page=$page", headers)
 
-    // Só itens que realmente têm link para /manga/
     override fun popularMangaSelector(): String =
         "div.manga-item:has(a[href*='/manga/'])"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-
         val link = element.selectFirst("a[href*='/manga/']") ?: return manga
         manga.setUrlWithoutDomain(link.attr("href"))
 
-        // Título robusto (funciona na busca e em listagens)
         manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
             ?: element.selectFirst("h3")?.text()?.trim()
             ?: link.attr("title")?.trim()
             ?: link.text().trim()
 
-        // Thumb robusta (algumas páginas usam data-cfsrc)
         val img = element.selectFirst("img")
         manga.thumbnail_url = img?.absUrl("src")
             ?.takeIf { it.isNotBlank() }
@@ -51,9 +47,7 @@ open class Niadd(
             ?: img?.absUrl("data-src")
             ?: img?.absUrl("data-original")
 
-        // Snippet da intro (quando existir na busca)
         manga.description = element.selectFirst("div.manga-intro")?.text()?.trim()
-
         return manga
     }
 
@@ -103,22 +97,35 @@ open class Niadd(
         manga.author = author
         manga.artist = author
 
-        // Descrição — pegar exclusivamente do bloco "Synopsis"
-        manga.description = document.select("div.detail-section-box")
+        // Sinopse
+        val synopsis = document.select("div.detail-section-box")
             .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Synopsis", true) == true }
             ?.selectFirst("section.detail-synopsis")
             ?.text()
             ?.trim()
             ?: ""
 
-        // Gêneros — pegar exclusivamente do bloco "Genres"
+        // Nomes alternativos
+        val alternatives = document.selectFirst("div.bookside-general-cell:contains(Alternative(s):)")
+            ?.ownText()
+            ?.replace("Alternative(s):", "")
+            ?.trim()
+
+        manga.description = buildString {
+            append(synopsis)
+            if (!alternatives.isNullOrBlank()) {
+                append("\n\n**Alternative(s):** $alternatives")
+            }
+        }
+
+        // Gêneros
         manga.genre = document.select("div.detail-section-box")
             .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Genres", true) == true }
             ?.select("section.detail-synopsis a span[itemprop=genre]")
             ?.joinToString(", ") { it.text().trim().trimStart(',') }
             ?: ""
 
-        // Status (o site não exibe claro; manter UNKNOWN)
+        // Status
         manga.status = SManga.UNKNOWN
 
         return manga
@@ -163,8 +170,6 @@ open class Niadd(
     // ---------- Pages / Images ----------
 
     override fun pageListParse(document: Document): List<Page> {
-        // Mantém seletor padrão; se o site usar data-* nas imagens,
-        // o próprio absUrl("") resolve quando o atributo existir.
         return document.select("div.reader-page img, img.reader-page-image").mapIndexed { i, img ->
             val url = img.absUrl("src")
                 .ifEmpty { img.absUrl("data-src") }
