@@ -145,53 +145,15 @@ open class Niadd(
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        // Images already in HTML
-        val imgElements = document.select("div.pic_box img, img.manga_pic, div.reader-page img")
+        val imgElements = document.select("section#mangaread-img img.manga_pic")
         imgElements.forEachIndexed { index, img ->
             val url = img.absUrl("src")
                 .ifEmpty { img.absUrl("data-src") }
                 .ifEmpty { img.absUrl("data-original") }
                 .ifEmpty { img.absUrl("data-cfsrc") }
+                .ifEmpty { img.attr("onerror").substringAfter("'").substringBefore("'") }
 
             if (url.isNotBlank()) pages.add(Page(index, "", url))
-        }
-
-        // Try to get images from JS
-        if (pages.isEmpty()) {
-            document.select("script").firstOrNull { it.data().contains("chp_url_pre") }?.data()?.let { js ->
-                val regex = Regex("chp_url_pre\\s*=\\s*\"(.*?)\".*?url_end\\s*=\\s*\"(.*?)\".*?next_page\\s*=\\s*(\\d+)", RegexOption.DOT_MATCHES_ALL)
-                regex.find(js)?.let { match ->
-                    val base = match.groupValues[1]
-                    val urlEnd = match.groupValues[2]
-                    val nextPage = match.groupValues[3].toIntOrNull() ?: 1
-                    for (i in 1..nextPage) {
-                        pages.add(Page(i - 1, "", "$base$i$urlEnd"))
-                    }
-                }
-            }
-        }
-
-        // Fallback using defalt -1.html, -2.html ...
-        if (pages.isEmpty()) {
-            val chapterBaseUrl = document.location().substringBeforeLast("-1.html")
-            var pageIndex = 1
-            while (true) {
-                val pageUrl = "$chapterBaseUrl-$pageIndex.html"
-                try {
-                    val pageDoc = client.newCall(GET(pageUrl, headers)).execute().use { it.body?.string() }?.let { org.jsoup.Jsoup.parse(it) }
-                        ?: break
-                    val img = pageDoc.selectFirst("div.mangaread-img img, img.manga_pic, div.reader-page img")
-                    val url = img?.absUrl("src")
-                        ?.ifEmpty { img.absUrl("data-src") }
-                        ?.ifEmpty { img.absUrl("data-original") }
-                        ?.ifEmpty { img.absUrl("data-cfsrc") }
-                        ?: break
-                    pages.add(Page(pageIndex - 1, "", url))
-                } catch (_: Exception) {
-                    break
-                }
-                pageIndex++
-            }
         }
 
         return pages
