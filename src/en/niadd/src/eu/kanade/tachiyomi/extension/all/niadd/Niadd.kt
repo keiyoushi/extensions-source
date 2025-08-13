@@ -23,7 +23,6 @@ open class Niadd(
     override val supportsLatest: Boolean = true
 
     // ---------- Popular ----------
-
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/category/?page=$page", headers)
 
@@ -35,14 +34,12 @@ open class Niadd(
         val link = element.selectFirst("a[href*='/manga/']") ?: return manga
         manga.setUrlWithoutDomain(link.attr("href"))
 
-        // Reforço de fallback do título
         manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
             ?: element.selectFirst("a[title]")?.attr("title")?.trim()
             ?: element.selectFirst("h3")?.text()?.trim()
             ?: element.selectFirst("img[alt]")?.attr("alt")?.trim()
             ?: link.text().trim()
 
-        // Thumbnail
         val img = element.selectFirst("img")
         manga.thumbnail_url = img?.absUrl("src")
             ?.takeIf { it.isNotBlank() }
@@ -50,7 +47,6 @@ open class Niadd(
             ?: img?.absUrl("data-src")
             ?: img?.absUrl("data-original")
 
-        // Description
         manga.description = element.selectFirst("div.manga-intro")?.text()?.trim()
         return manga
     }
@@ -58,16 +54,14 @@ open class Niadd(
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
     // ---------- Latest / Recent Updates ----------
-
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/list/New-Update/?page=$page", headers) // URL correta de recentes
+        GET("$baseUrl/list/New-Update/?page=$page", headers)
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // ---------- Search ----------
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val q = URLEncoder.encode(query, "UTF-8")
         return GET("$baseUrl/search/?name=$q&page=$page", headers)
@@ -78,13 +72,10 @@ open class Niadd(
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // ---------- Details ----------
-
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
-
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
-        // Thumbnail
         val img = document.selectFirst("div.detail-cover img, .bookside-cover img")
         manga.thumbnail_url = img?.absUrl("src")
             ?.takeIf { it.isNotBlank() }
@@ -92,52 +83,36 @@ open class Niadd(
             ?: img?.absUrl("data-src")
             ?: img?.absUrl("data-original")
 
-        // Author / Artist
         val author = document.selectFirst("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value")
             ?.text()?.trim()
         manga.author = author
         manga.artist = author
 
-        // Synopsis
         val synopsis = document.select("div.detail-section-box")
             .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Synopsis", true) == true }
             ?.selectFirst("section.detail-synopsis")
-            ?.text()
-            ?.trim()
-            ?: ""
+            ?.text()?.trim() ?: ""
 
-        // Alternate Names
         val alternatives = document.selectFirst("div.bookside-general-cell:contains(Alternative(s):)")
-            ?.ownText()
-            ?.replace("Alternative(s):", "")
-            ?.trim()
+            ?.ownText()?.replace("Alternative(s):", "")?.trim()
 
         manga.description = buildString {
             append(synopsis)
-            if (!alternatives.isNullOrBlank()) {
-                append("\n\nAlternative(s): $alternatives")
-            }
+            if (!alternatives.isNullOrBlank()) append("\n\nAlternative(s): $alternatives")
         }
 
-        // Genres
         manga.genre = document.select("div.detail-section-box")
             .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Genres", true) == true }
             ?.select("section.detail-synopsis a span[itemprop=genre]")
-            ?.joinToString(", ") { it.text().trim().trimStart(',') }
-            ?: ""
+            ?.joinToString(", ") { it.text().trim().trimStart(',') } ?: ""
 
         manga.status = SManga.UNKNOWN
         return manga
     }
 
     // ---------- Chapters ----------
-
     override fun chapterListRequest(manga: SManga): Request {
-        val chaptersUrl = if (manga.url.endsWith("/chapters.html")) {
-            manga.url
-        } else {
-            manga.url.removeSuffix("/") + "/chapters.html"
-        }
+        val chaptersUrl = if (manga.url.endsWith("/chapters.html")) manga.url else manga.url.removeSuffix("/") + "/chapters.html"
         return GET(baseUrl + chaptersUrl, headers)
     }
 
@@ -167,15 +142,38 @@ open class Niadd(
     }
 
     // ---------- Pages / Images ----------
-
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.reader-page img, img.reader-page-image").mapIndexed { i, img ->
+        val pages = mutableListOf<Page>()
+
+        // 1️⃣ Clicar no "continue" se existir
+        document.selectFirst(".chp-warn-continue")?.let { _ ->
+            // Tachiyomi carrega o HTML completo, então o clique só garante que o HTML certo já esteja presente
+        }
+
+        // 2️⃣ Seleciona todas as imagens do capítulo
+        val imgElements = document.select("div.pic_box img, img.manga_pic")
+        imgElements.forEachIndexed { index, img ->
             val url = img.absUrl("src")
                 .ifEmpty { img.absUrl("data-src") }
                 .ifEmpty { img.absUrl("data-original") }
                 .ifEmpty { img.absUrl("data-cfsrc") }
-            Page(i, "", url)
+
+            if (url.isNotBlank()) pages.add(Page(index, "", url))
         }
+
+        // 3️⃣ Se não houver imagens, tentar extrair do JS
+        if (pages.isEmpty()) {
+            document.select("script").firstOrNull { it.data().contains("chp_url_pre") }?.data()?.let { js ->
+                val regex = Regex("chp_url_pre\\s*=\\s*\"(.*?)\".*?url_end\\s*=\\s*\"(.*?)\".*?next_page\\s*=\\s*\"(.*?)\"", RegexOption.DOT_MATCHES_ALL)
+                regex.find(js)?.let {
+                    val base = it.groupValues[1]
+                    val urlEnd = it.groupValues[2]
+                    pages.add(Page(0, "", base + urlEnd))
+                }
+            }
+        }
+
+        return pages
     }
 
     override fun imageUrlParse(document: Document): String {
