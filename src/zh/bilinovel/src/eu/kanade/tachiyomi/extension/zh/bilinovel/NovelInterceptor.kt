@@ -23,20 +23,26 @@ class NovelInterceptor : Interceptor {
             val groups = CHAPTER_ID_REGEX.find(url.toString())?.groups
             "/novel/${groups?.get(1)?.value}/${groups?.get(2)?.value?.toInt()?.plus(1)}.html"
         }
+
         "next" -> {
             val groups = CHAPTER_ID_REGEX.find(url.toString())?.groups
             "/novel/${groups?.get(1)?.value}/${groups?.get(2)?.value?.toInt()?.minus(1)}.html"
         }
+
         else -> "/novel/0/0.html"
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val origin = chain.request()
         regexOf(origin.url.fragment)?.let {
-            val response = chain.proceed(origin.newBuilder().removeHeader("Accept-Encoding").build())
+            val response =
+                chain.proceed(origin.newBuilder().removeHeader("Accept-Encoding").build())
             val url = it.find(response.body.string())?.groups?.get(1)?.value
             return response.newBuilder().code(302)
-                .header("Location", url ?: predictUrlByContext(origin.url)).build()
+                .header(
+                    "Location",
+                    BiliNovel.addSuffixToUrl(url ?: predictUrlByContext(origin.url)),
+                ).build()
         }
         return chain.proceed(origin.newBuilder().addHeader("Cookie", "night=1").build())
     }

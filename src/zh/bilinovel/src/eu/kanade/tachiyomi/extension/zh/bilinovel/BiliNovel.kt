@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.zh.bilinovel
 
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -20,6 +21,7 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.floor
 
 class BiliNovel : HttpSource(), ConfigurableSource {
 
@@ -56,12 +58,81 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         const val PAGE_SIZE = 50
         val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
         val MANGA_ID_REGEX = Regex("/novel/(\\d+)\\.html")
+        val CHAPTER_ID_REGEX = Regex("/novel/\\d+/(\\d+)(?:_\\d+)?\\.html")
+        val PAGE_SIZE_REGEX = Regex("（\\d+/(\\d+)）")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
+
+        fun addSuffixToUrl(url: String): String {
+            val index = url.lastIndexOf(".")
+            if (index != -1) {
+                val newUrl = StringBuilder(url.substring(0, index))
+                newUrl.append("_2")
+                newUrl.append(url.substring(index))
+                return newUrl.toString()
+            }
+            return url
+        }
     }
 
     private fun getChapterUrlByContext(i: Int, els: Elements) = when (i) {
         0 -> "${els[1].attr("href")}#prev"
         else -> "${els[i - 1].attr("href")}#next"
+    }
+
+    private fun handleContent(content: Element, chapterId: Int): String {
+        // 1. 计算种子
+        val seed = chapterId * 135 + 236
+
+        // 2. 获取所有子节点（包括文本节点等）
+        val childNodes = content.children().filterNot {
+            it.tagName() == "img"
+        }.toMutableList()
+
+        // 3. 过滤出有效的<p>元素节点
+        val paragraphs = childNodes.filter {
+            it.tagName() == "p" && it.text().trim().isNotBlank()
+        }.toMutableList()
+
+        // 5. 创建排列数组
+        val n = paragraphs.size
+        val permutation = mutableListOf<Int>().apply {
+            // 前20个保持原顺序
+            addAll(0 until minOf(20, n))
+            // 处理超过20的部分
+            if (n > 20) {
+                val after20 = (20 until n).toMutableList()
+                var num = seed.toLong()
+                for (i in after20.size - 1 downTo 1) {
+                    num = (num * 9302L + 49397L) % 233280L
+                    val j = floor((num / 233280.0) * (i + 1)).toInt()
+                    after20[j] = after20[i].also { after20[i] = after20[j] }
+                }
+                addAll(after20)
+            }
+        }
+
+        // 6. 创建重排序后的段落数组
+        val shuffled = arrayOfNulls<Element>(n).apply {
+            for (i in 0 until n) {
+                this[permutation[i]] = paragraphs[i].also {
+                    it.removeAttr("class")
+                    it.text("\u00A0\u00A0\u00A0\u00A0" + it.text())
+                }
+            }
+        }.map { it!! } // 转换为非空列表
+
+        // 7. 替换原始节点中的<p>元素
+        // var paraIndex = 0
+        // for (i in 0..paragraphs.size) {
+        //     paragraphs[i] = shuffled[paraIndex++]
+        // }
+
+        // 8. 清空并重新添加处理后的节点
+        content.html("")
+        content.appendChildren(shuffled)
+
+        // 9. 返回最终HTML
+        return content.html()
     }
 
     // Popular Page
@@ -116,9 +187,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val doc = response.asJsoup()
         val meta = doc.select(".book-meta")[1].text().split("|")
-        val backupname = doc.selectFirst(".bkname-body")?.let {
-            "\n\n小说別名：\n• ${it.text().split("、").joinToString("\n• ")}"
-        } ?: ""
+        val backupname = doc.selectFirst(".bkname-body")?.let { "\n\n別名：${it.text()}" } ?: ""
         url = doc.location()
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
@@ -144,7 +213,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
             val chapterBar = v.selectFirst(".chapter-bar")!!.text().toHalfWidthDigits()
             val chapters = v.select(".chapter-li-a")
             chapters.mapIndexed { i, e ->
-                val url = e.absUrl("href").takeUnless("javascript:cid(1)"::equals)
+                val url = e.absUrl("href").takeUnless("javascript:cid(1)"::equals)?.let(::addSuffixToUrl)
                 SChapter.create().apply {
                     name = e.text().toHalfWidthDigits()
                     date_upload = date
@@ -158,18 +227,18 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     // Manga View Page
 
     override fun pageListParse(response: Response) = response.asJsoup().let {
-        val images = it.select(".imagecontent")
-        check(images.size > 0) {
-            it.selectFirst("#acontentz")?.let { e ->
-                if ("电脑端" in e.text()) "不支持电脑端查看，请在高级设置中更换移动端UA标识" else "漫画可能已下架或需要登录查看"
-            } ?: "章节URL错误"
-        }
-        images.mapIndexed { i, image ->
-            Page(i, imageUrl = image.attr("data-src"))
+        val size = PAGE_SIZE_REGEX.find(it.selectFirst("#atitle")!!.text())!!.groups[1]!!.value
+        val prefix = it.location().substringBeforeLast("_")
+        List(size.toInt()) { i ->
+            Page(i, prefix + "${if (i > 0) "_${i + 1}" else ""}.html")
         }
     }
 
     // Image
 
-    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response) = response.asJsoup().let {
+        val content = it.selectFirst("#acontent")!!
+        val chapterId = CHAPTER_ID_REGEX.find(it.location())!!.groups[1]!!.value
+        TextInterceptorHelper.createUrl("", handleContent(content, chapterId.toInt()))
+    }
 }
