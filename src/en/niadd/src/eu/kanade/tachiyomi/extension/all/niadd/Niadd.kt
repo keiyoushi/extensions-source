@@ -66,11 +66,6 @@ open class Niadd(
         // Título
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
-        // Descrição — apenas do bloco correto
-        manga.description = document.selectFirst("section.detail-section.detail-synopsis")
-            ?.text()
-            ?.trim()
-
         // Capa
         manga.thumbnail_url = document.selectFirst("div.detail-cover img")?.absUrl("src")
 
@@ -79,14 +74,23 @@ open class Niadd(
             ?.text()
             ?.trim()
 
-        // Artista
+        // Artista (mesmo que autor se não encontrado separado)
         manga.artist = manga.author
 
-        // Gêneros
-        val genres = document.select("a[href*=/category/]").map { it.text().trim() }
-        if (genres.isNotEmpty()) {
-            manga.genre = genres.joinToString(", ")
-        }
+        // Descrição (pega só do bloco "Synopsis")
+        manga.description = document.select("div.detail-section-box")
+            .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Synopsis", true) == true }
+            ?.selectFirst("section.detail-synopsis")
+            ?.text()
+            ?.trim()
+            ?: ""
+
+        // Gêneros (pega só do bloco "Genres")
+        manga.genre = document.select("div.detail-section-box")
+            .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Genres", true) == true }
+            ?.select("section.detail-synopsis a span[itemprop=genre]")
+            ?.joinToString(", ") { it.text().trim().trimStart(',') }
+            ?: ""
 
         // Status
         manga.status = SManga.UNKNOWN
