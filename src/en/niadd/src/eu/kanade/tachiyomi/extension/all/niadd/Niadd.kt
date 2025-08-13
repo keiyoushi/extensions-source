@@ -145,53 +145,40 @@ open class Niadd(
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        // Images already in HTML
-        val imgElements = document.select("div.pic_box img, img.manga_pic, div.reader-page img")
-        imgElements.forEachIndexed { index, img ->
-            val url = img.absUrl("src")
-                .ifEmpty { img.absUrl("data-src") }
-                .ifEmpty { img.absUrl("data-original") }
-                .ifEmpty { img.absUrl("data-cfsrc") }
-
-            if (url.isNotBlank()) pages.add(Page(index, "", url))
-        }
-
-        // Try to get images from JS
-        if (pages.isEmpty()) {
-            document.select("script").firstOrNull { it.data().contains("chp_url_pre") }?.data()?.let { js ->
-                val regex = Regex("chp_url_pre\\s*=\\s*\"(.*?)\".*?url_end\\s*=\\s*\"(.*?)\".*?next_page\\s*=\\s*(\\d+)", RegexOption.DOT_MATCHES_ALL)
-                regex.find(js)?.let { match ->
-                    val base = match.groupValues[1]
-                    val urlEnd = match.groupValues[2]
-                    val nextPage = match.groupValues[3].toIntOrNull() ?: 1
-                    for (i in 1..nextPage) {
-                        pages.add(Page(i - 1, "", "$base$i$urlEnd"))
-                    }
-                }
+        // Função para pegar imagens de um bloco HTML
+        fun parseBlock(doc: Document, startIndex: Int = 0) {
+            val imgElements = doc.select("div.pic_box img, img.manga_pic, div.reader-page img")
+            imgElements.forEachIndexed { index, img ->
+                val url = img.absUrl("src")
+                    .ifEmpty { img.absUrl("data-src") }
+                    .ifEmpty { img.absUrl("data-original") }
+                    .ifEmpty { img.absUrl("data-cfsrc") }
+                if (url.isNotBlank()) pages.add(Page(startIndex + index, "", url))
             }
         }
 
-        // Fallback using defalt -1.html, -2.html ...
-        if (pages.isEmpty()) {
-            val chapterBaseUrl = document.location().substringBeforeLast("-1.html")
-            var pageIndex = 1
-            while (true) {
-                val pageUrl = "$chapterBaseUrl-$pageIndex.html"
-                try {
-                    val pageDoc = client.newCall(GET(pageUrl, headers)).execute().use { it.body?.string() }?.let { org.jsoup.Jsoup.parse(it) }
-                        ?: break
-                    val img = pageDoc.selectFirst("div.mangaread-img img, img.manga_pic, div.reader-page img")
-                    val url = img?.absUrl("src")
-                        ?.ifEmpty { img.absUrl("data-src") }
-                        ?.ifEmpty { img.absUrl("data-original") }
-                        ?.ifEmpty { img.absUrl("data-cfsrc") }
-                        ?: break
-                    pages.add(Page(pageIndex - 1, "", url))
-                } catch (_: Exception) {
-                    break
-                }
-                pageIndex++
+        // 1. Pega imagens do primeiro bloco (HTML atual)
+        parseBlock(document)
+
+        // 2. Descobre se existem blocos adicionais
+        val totalPagesText = document.selectFirst("div.tool a[title*='of']")?.text() ?: ""
+        val totalPages = Regex("""of (\d+)""").find(totalPagesText)?.groupValues?.get(1)?.toIntOrNull() ?: -1
+        if (totalPages <= pages.size) return pages
+
+        // 3. Loop para pegar blocos adicionais (-10-2.html, -10-3.html ...)
+        var blockIndex = 1
+        while (pages.size < totalPages) {
+            val baseChapterUrl = document.location().substringBeforeLast("-1.html")
+            val nextBlockUrl = "$baseChapterUrl-10-${blockIndex + 1}.html"
+            try {
+                val blockDoc = client.newCall(GET(nextBlockUrl, headers)).execute().use { response ->
+                    response.body?.string()?.let { org.jsoup.Jsoup.parse(it) }
+                } ?: break
+                parseBlock(blockDoc, pages.size)
+            } catch (_: Exception) {
+                break
             }
+            blockIndex++
         }
 
         return pages
