@@ -78,10 +78,10 @@ open class Niadd(
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
 
-        // Título
+        // Title
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
-        // Capa
+        // Cloak
         run {
             val img = document.selectFirst("div.detail-cover img, .bookside-cover img")
             manga.thumbnail_url = img?.absUrl("src")
@@ -91,13 +91,13 @@ open class Niadd(
                 ?: img?.absUrl("data-original")
         }
 
-        // Autor / Artista
+        // Author / Artist
         val author = document.selectFirst("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value")
             ?.text()?.trim()
         manga.author = author
         manga.artist = author
 
-        // Sinopse
+        // Synopsis
         val synopsis = document.select("div.detail-section-box")
             .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Synopsis", true) == true }
             ?.selectFirst("section.detail-synopsis")
@@ -105,7 +105,7 @@ open class Niadd(
             ?.trim()
             ?: ""
 
-        // Nomes alternativos
+        // Alternate Names
         val alternatives = document.selectFirst("div.bookside-general-cell:contains(Alternative(s):)")
             ?.ownText()
             ?.replace("Alternative(s):", "")
@@ -114,11 +114,11 @@ open class Niadd(
         manga.description = buildString {
             append(synopsis)
             if (!alternatives.isNullOrBlank()) {
-                append("\n\n**Alternative(s):** $alternatives")
+                append("\n\nAlternative(s): $alternatives")
             }
         }
 
-        // Gêneros
+        // Genres
         manga.genre = document.select("div.detail-section-box")
             .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Genres", true) == true }
             ?.select("section.detail-synopsis a span[itemprop=genre]")
