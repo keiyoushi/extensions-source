@@ -28,12 +28,13 @@ open class Niadd(
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
-        val link = element.selectFirst("a")!!
+        val link = element.selectFirst("a[href*=/manga/]")!!
         manga.setUrlWithoutDomain(link.attr("href"))
-        manga.title = element.selectFirst("h3")?.text()?.trim()
+        manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
             ?: link.attr("title")?.trim()
             ?: link.text().trim()
         manga.thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        manga.description = element.selectFirst("div.manga-intro")?.text()?.trim()
         return manga
     }
 
@@ -65,33 +66,29 @@ open class Niadd(
         // Título
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
-        // Descrição (sinopse) — seletor preciso
-        manga.description = document.selectFirst("section.detail-section.detail-synopsis p, section.detail-section.detail-synopsis")?.text()?.trim()
+        // Descrição — apenas do bloco correto
+        manga.description = document.selectFirst("section.detail-section.detail-synopsis")
+            ?.text()
+            ?.trim()
 
         // Capa
         manga.thumbnail_url = document.selectFirst("div.detail-cover img")?.absUrl("src")
 
         // Autor
-        val author = document.select("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value")
-            .firstOrNull()?.text()?.trim()
-        if (!author.isNullOrBlank()) {
-            manga.author = author
-        }
+        manga.author = document.selectFirst("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value")
+            ?.text()
+            ?.trim()
 
         // Artista
-        val artist = document.select("div.bookside-bookinfo div[itemprop=author]")
-            .getOrNull(1)?.selectFirst("span.bookside-bookinfo-value")?.text()?.trim()
-        manga.artist = if (!artist.isNullOrBlank()) artist else author
+        manga.artist = manga.author
 
-        // Gêneros — apenas no bloco correto
-        val genres = document.select("div.bookside-bookinfo > div:has(span.bookside-bookinfo-key:contains(Genres)) a span.bookside-bookinfo-value")
-            .map { it.text().trim().trimStart(',') }
-            .joinToString(", ")
+        // Gêneros
+        val genres = document.select("a[href*=/category/]").map { it.text().trim() }
         if (genres.isNotEmpty()) {
-            manga.genre = genres
+            manga.genre = genres.joinToString(", ")
         }
 
-        // Status — ainda sem dado explícito
+        // Status
         manga.status = SManga.UNKNOWN
 
         return manga
