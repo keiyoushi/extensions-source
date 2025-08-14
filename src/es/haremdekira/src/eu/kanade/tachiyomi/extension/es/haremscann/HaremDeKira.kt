@@ -15,7 +15,7 @@ class HaremDeKira : Madara(
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
-    override val versionId = 4
+    override val versionId = 1
 
     override val mangaSubString = "serie"
 
