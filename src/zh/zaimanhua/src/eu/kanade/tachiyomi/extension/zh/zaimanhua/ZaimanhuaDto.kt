@@ -11,25 +11,25 @@ import kotlinx.serialization.json.JsonNames
 class MangaDto(
     private val id: Int,
     private val title: String,
-    private val cover: String,
-    private val description: String? = null,
-    private val types: List<TagDto>,
-    private val status: List<TagDto>,
-    private val authors: List<TagDto>? = null,
+    private val cover: String?,
+    private val description: String?,
+    private val types: List<TagDto>?,
+    private val status: List<TagDto>?,
+    private val authors: List<TagDto>?,
     @SerialName("chapters")
     private val chapterGroups: List<ChapterGroupDto>,
     @SerialName("last_update_chapter_id")
-    private val lastUpdateChapterId: Int = 0,
+    private val lastUpdateChapterId: Int,
     @SerialName("last_updatetime")
-    private val lastUpdateTime: Long = 0,
+    private val lastUpdateTime: Long,
 ) {
     fun toSManga() = SManga.create().apply {
         url = id.toString()
         title = this@MangaDto.title
         author = authors?.joinToString { it.name }
         description = this@MangaDto.description
-        genre = types.joinToString { it.name }
-        status = parseStatus(this@MangaDto.status[0].name)
+        genre = types?.joinToString { it.name }
+        status = parseStatus(this@MangaDto.status?.firstOrNull()?.name.orEmpty())
         thumbnail_url = cover
         initialized = true
     }
@@ -80,12 +80,12 @@ class ChapterDto(
     @SerialName("chapter_title")
     private val name: String,
     @SerialName("updatetime")
-    private val updateTime: Long = 0,
+    private val updateTime: Long?,
 ) {
     fun toSChapterInternal() = SChapter.create().apply {
         url = id.toString()
         name = this@ChapterDto.name.formatChapterName()
-        date_upload = updateTime * 1000
+        date_upload = updateTime?.times(1000) ?: 0L
     }
 }
 
@@ -93,6 +93,7 @@ class ChapterDto(
 class ChapterImagesDto(
     @SerialName("page_url_hd")
     val images: List<String>,
+    val canRead: Boolean,
 )
 
 @Serializable
@@ -111,25 +112,21 @@ class PageDto(
 
 @Serializable
 class PageItemDto(
-    private val id: Int = 0,
+    private val id: Int?,
     @SerialName("comic_id")
-    private val comicId: Int = 0,
+    private val comicId: Int,
     private val title: String,
-    private val authors: String = "",
-    private val status: String,
-    private val cover: String,
-    private val types: String,
+    private val authors: String?,
+    private val status: String?,
+    private val cover: String?,
+    private val types: String?,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = if (this@PageItemDto.id != 0) {
-            this@PageItemDto.id.toString()
-        } else {
-            this@PageItemDto.comicId.toString()
-        }
+        url = (this@PageItemDto.id?.takeIf { it != 0 } ?: this@PageItemDto.comicId).toString()
         title = this@PageItemDto.title
-        author = authors.formatList()
-        genre = types.formatList()
-        status = parseStatus(this@PageItemDto.status)
+        author = authors?.formatList()
+        genre = types?.formatList()
+        status = parseStatus(this@PageItemDto.status ?: "")
         thumbnail_url = cover
     }
 }
@@ -158,12 +155,12 @@ class DataWrapperDto<T>(
 
 @Serializable
 class SimpleResponseDto(
-    val errno: Int = 0,
+    val errno: Int? = 0,
 )
 
 @Serializable
 class ResponseDto<T>(
-    val errno: Int = 0,
+    val errno: Int? = 0,
     val errmsg: String = "",
     val data: T,
 )
