@@ -41,6 +41,7 @@ class Manga(
         covers: List<MDcovers>? = null,
         groupTags: Boolean = GROUP_TAGS_DEFAULT,
         titleLang: String,
+        coverQuality: CoverQuality = CoverQuality.Compressed,
     ): SManga {
         val entryTitle = comic.altTitles.firstOrNull {
             titleLang != "all" && !it.lang.isNullOrBlank() && titleLang.startsWith(it.lang)
@@ -82,6 +83,7 @@ class Manga(
             thumbnail_url = parseCover(
                 comic.cover,
                 covers ?: comic.mdCovers,
+                coverQuality,
             )
             artist = artists.joinToString { it.name.trim() }
             author = authors.joinToString { it.name.trim() }

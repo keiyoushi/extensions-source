@@ -141,6 +141,29 @@ abstract class Comick(
             }
         }.also(screen::addPreference)
 
+        ListPreference(screen.context).apply {
+            key = COVER_QUALITY_PREF
+            title = intl["cover_quality_title"]
+            entries = arrayOf(
+                intl["cover_quality_original"],
+                intl["cover_quality_compressed"],
+                intl["cover_quality_web_default"],
+            )
+            entryValues = arrayOf(
+                "Original",
+                "Compressed",
+                COVER_QUALITY_DEFAULT,
+            )
+            setDefaultValue(COVER_QUALITY_DEFAULT)
+            summary = "%s"
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putString(COVER_QUALITY_PREF, newValue as String)
+                    .commit()
+            }
+        }.also(screen::addPreference)
+
         SwitchPreferenceCompat(screen.context).apply {
             key = LOCAL_TITLE_PREF
             title = intl["local_title_title"]
@@ -224,6 +247,11 @@ abstract class Comick(
     private val SharedPreferences.updateCover: Boolean
         get() = getBoolean(FIRST_COVER_PREF, FIRST_COVER_DEFAULT)
 
+    private val coverQuality: CoverQuality
+        get() = CoverQuality.valueOf(
+            preferences.getString(COVER_QUALITY_PREF, COVER_QUALITY_DEFAULT) ?: COVER_QUALITY_DEFAULT,
+        )
+
     private val SharedPreferences.localTitle: String
         get() = if (getBoolean(
                 LOCAL_TITLE_PREF,
@@ -253,7 +281,7 @@ abstract class Comick(
         .build()
 
     private val imageClient = network.cloudflareClient.newBuilder()
-        .rateLimit(12, 8, TimeUnit.SECONDS) // == 1.5req/1sec == 3req/2sec == 90req/60sec
+        .rateLimit(14, 8, TimeUnit.SECONDS) // == 1.75req/1sec == 7req/4sec == 105req/60sec
         .build()
 
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
@@ -519,6 +547,7 @@ abstract class Comick(
                 covers = localCovers.ifEmpty { originalCovers }.ifEmpty { firstVol },
                 groupTags = preferences.groupTags,
                 titleLang = preferences.localTitle,
+                coverQuality = coverQuality,
             )
         }
         return mangaData.toSManga(
@@ -527,6 +556,7 @@ abstract class Comick(
             showAlternativeTitles = preferences.showAlternativeTitles,
             groupTags = preferences.groupTags,
             titleLang = preferences.localTitle,
+            coverQuality = coverQuality,
         )
     }
 
@@ -663,6 +693,8 @@ abstract class Comick(
         private const val MIGRATED_IGNORED_GROUPS = "MigratedIgnoredGroups"
         private const val FIRST_COVER_PREF = "DefaultCover"
         private const val FIRST_COVER_DEFAULT = true
+        private const val COVER_QUALITY_PREF = "CoverQuality"
+        const val COVER_QUALITY_DEFAULT = "WebDefault"
         private const val SCORE_POSITION_PREF = "ScorePosition"
         const val SCORE_POSITION_DEFAULT = "top"
         private const val LOCAL_TITLE_PREF = "LocalTitle"
