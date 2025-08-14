@@ -93,6 +93,7 @@ class ChapterDto(
 class ChapterImagesDto(
     @SerialName("page_url_hd")
     val images: List<String>,
+    val canRead: Boolean,
 )
 
 @Serializable
