@@ -132,7 +132,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     // path: "/comic/detail/mangaId"
     override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$apiUrl/comic/detail/${manga.url}?channel=android", apiHeaders)
+        GET("$apiUrl/comic/detail/${manga.url}?_v=2.2.5", apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ResponseDto<DataWrapperDto<MangaDto>>>()
@@ -163,7 +163,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     // path: "/comic/chapter/mangaId/chapterId"
     private fun pageListApiRequest(path: String): Request =
-        GET("$apiUrl/comic/chapter/$path", apiHeaders, USE_CACHE)
+        GET("$apiUrl/comic/chapter/$path?_v=2.2.5", apiHeaders, USE_CACHE)
 
     override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
 
@@ -173,8 +173,11 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         if (result.errmsg.isNotBlank()) {
             throw Exception(result.errmsg)
         } else {
+            if (!result.data.data!!.canRead) {
+                throw Exception("用户权限不足，请提升用户等级")
+            }
             return Observable.just(
-                result.data.data!!.images.mapIndexed { index, it ->
+                result.data.data.images.mapIndexed { index, it ->
                     val fragment = json.encodeToString(ImageRetryParamsDto(chapter.url, index))
                     Page(index, imageUrl = "$it#$fragment")
                 },
@@ -266,6 +269,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     companion object {
         val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()
     }
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             EditTextPreference(screen.context).apply {
