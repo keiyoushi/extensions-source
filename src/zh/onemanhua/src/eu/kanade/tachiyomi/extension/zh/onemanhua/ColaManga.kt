@@ -2,14 +2,20 @@ package eu.kanade.tachiyomi.extension.zh.onemanhua
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.View
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
+import eu.kanade.tachiyomi.lib.dataimage.DataImageInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -22,19 +28,19 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.internal.publicsuffix.PublicSuffixDatabase
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -47,10 +53,6 @@ abstract class ColaManga(
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
-
-    private val intl = ColaMangaIntl(lang)
-
     private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
@@ -60,7 +62,7 @@ abstract class ColaManga(
             preferences.getString(RATE_LIMIT_PERIOD_PREF_KEY, RATE_LIMIT_PERIOD_PREF_DEFAULT)!!.toLong(),
             TimeUnit.MILLISECONDS,
         )
-        .addInterceptor(ColaMangaImageInterceptor())
+        .addInterceptor(DataImageInterceptor())
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -80,8 +82,7 @@ abstract class ColaManga(
         thumbnail_url = element.selectFirst("a.fed-list-pics")?.absUrl("data-original")
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/show?orderBy=update&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/show?orderBy=update&page=$page", headers)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
 
@@ -187,117 +188,200 @@ abstract class ColaManga(
         name = element.attr("title")
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    override fun pageListParse(document: Document): List<Page> {
-        val interfaceName = randomString()
+    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
 
-        document.body().prepend(
-            """
-            <script>
-                !function () {
-                    __cr.init();
-                    __cad.setCookieValue();
-
-                    const pageCountKey = __cad.getCookieValue()[1] + mh_info.pageid.toString();
-                    const pageCount = parseInt($.cookie(pageCountKey) || "0");
-                    const images = [...Array(pageCount).keys()].map((i) => __cr.getPicUrl(i + 1));
-
-                    __cr.isfromMangaRead = 1;
-
-                    const key = CryptoJS.enc.Utf8.stringify(__js.getDataParse());
-
-                    window.$interfaceName.passData(JSON.stringify({ images, key }), window.image_info.keyType || "0");
-                }();
-            </script>
-            """.trimIndent(),
-        )
-
-        val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        val jsInterface = JsInterface(latch, json)
-        var webView: WebView? = null
-
-        handler.post {
-            val innerWv = WebView(Injekt.get<Application>())
-            webView = innerWv
-            innerWv.settings.javaScriptEnabled = true
-            innerWv.settings.domStorageEnabled = true
-            innerWv.settings.blockNetworkImage = true
-            innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-            innerWv.addJavascriptInterface(jsInterface, interfaceName)
-
-            innerWv.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "UTF-8", null)
+    private val pagesMap: ArrayList<Page> = ArrayList()
+    private val handler = Handler(Looper.getMainLooper())
+    private val webViewCache = object : LinkedHashMap<String, WebView>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, WebView>): Boolean {
+            if (size <= 5) return false
+            handler.post {
+                eldest.value.destroy()
+            }
+            handler.removeCallbacksAndMessages(eldest.key)
+            return true
         }
+    }
+    private val interfaceName = randomString()
+    private val webViewIdleDelayMillis: Long = 1800000
+    private val webviewScript by lazy {
+        javaClass.getResource("/assets/webview-script.js")?.readText() ?: throw Exception("WebView 脚本不存在")
+    }
+    private val baseUrlTopPrivateDomain = baseUrl.toHttpUrl().topPrivateDomain()
+    private val emptyResourceResponse = WebResourceResponse(null, null, 204, "No Content", null, null)
 
-        latch.await(30L, TimeUnit.SECONDS)
-        handler.post { webView?.destroy() }
-
-        if (latch.count == 1L) {
-            throw Exception(intl.timedOutDecryptingImageLinks)
-        }
-
-        val key = if (jsInterface.keyType.isNotEmpty()) {
-            keyMapping[jsInterface.keyType]
-                ?: throw Exception(intl.couldNotFindKey(jsInterface.keyType))
+    private fun postDelayed(
+        r: Runnable,
+        token: Any?,
+        delayMillis: Long,
+        handler: Handler,
+    ): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            handler.postDelayed(r, token, delayMillis)
         } else {
-            jsInterface.key
+            return handler.postAtTime(r, token, SystemClock.uptimeMillis() + delayMillis)
         }
+    }
 
-        return jsInterface.images.mapIndexed { i, it ->
-            val imageUrl = buildString(it.length + 6) {
-                if (it.startsWith("//")) {
-                    append("https:")
+    private fun destroyWebView(chapterUrl: String) {
+        handler.post { webViewCache.remove(chapterUrl)?.destroy() }
+        handler.removeCallbacksAndMessages(chapterUrl)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun pageListParse(chapterUrl: String): List<Page> {
+        val url = baseUrl + chapterUrl
+        val latch = CountDownLatch(1)
+        val jsInterface = JsInterface(latch, chapterUrl, pagesMap, webViewCache)
+        destroyWebView(chapterUrl)
+        handler.post {
+            val webview = WebView(Injekt.get<Application>())
+            webViewCache.put(chapterUrl, webview)
+            webview.settings.domStorageEnabled = true
+            webview.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            webview.settings.javaScriptEnabled = true
+            webview.addJavascriptInterface(jsInterface, interfaceName)
+            jsInterface.setPageCount = pagesMap.count { it.url == chapterUrl }
+            webview.webViewClient = object : WebViewClient() {
+                override fun onLoadResource(view: WebView?, url: String?) {
+                    if (url == "$baseUrl/counting") { // the time when document.body is ready
+                        view?.evaluateJavascript(
+                            webviewScript.replace(
+                                "__interface__",
+                                interfaceName,
+                            ),
+                        ) {}
+                    }
+                    super.onLoadResource(view, url)
                 }
 
-                append(it)
+                override fun shouldOverrideUrlLoading(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): Boolean {
+                    request?.url?.host?.let {
+                        if (PublicSuffixDatabase.get().getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain) {
+                            return true // prevent redirects to external sites, some ad scheme is intent and break the webview
+                        }
+                    }
+                    return super.shouldOverrideUrlLoading(view, request)
+                }
 
-                if (key.isNotEmpty()) {
-                    append("#")
-                    append(ColaMangaImageInterceptor.KEY_PREFIX)
-                    append(key)
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): WebResourceResponse? {
+                    request?.url?.host?.let {
+                        if (PublicSuffixDatabase.get().getEffectiveTldPlusOne(it) != baseUrlTopPrivateDomain) {
+                            return emptyResourceResponse // prevent loading resources from external sites, all of them are ads
+                        }
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
+
+                override fun onRenderProcessGone(
+                    view: WebView,
+                    detail: RenderProcessGoneDetail,
+                ): Boolean {
+                    destroyWebView(chapterUrl)
+                    return super.onRenderProcessGone(view, detail)
                 }
             }
+            webview.loadUrl(url)
+        }
 
-            Page(i, imageUrl = imageUrl)
+        postDelayed(
+            {
+                destroyWebView(chapterUrl)
+            },
+            chapterUrl,
+            webViewIdleDelayMillis,
+            handler,
+        )
+
+        latch.await(30L, TimeUnit.SECONDS)
+        if (latch.count == 1L) {
+            destroyWebView(chapterUrl)
+            throw Exception("加载章节超时")
+        }
+        if (jsInterface.pageCount <= 0) {
+            destroyWebView(chapterUrl)
+            throw Exception("加载章节失败：页面数量为 0")
+        }
+
+        return List(jsInterface.pageCount) { index ->
+            Page(index, url = chapterUrl)
+        }
+    }
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        return Observable.fromCallable {
+            pageListParse(chapter.url)
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    override fun fetchImageUrl(page: Page): Observable<String> {
+        val chapterUrl = page.url
+        val pageIndex = page.index
+        webViewCache[chapterUrl]?.let {
+            // webview cached, reset idle timer
+            handler.removeCallbacksAndMessages(chapterUrl)
+            postDelayed({ destroyWebView(chapterUrl) }, chapterUrl, webViewIdleDelayMillis, handler)
+        } ?: pagesMap.none { it.url == chapterUrl && it.index == pageIndex }.let { pageListParse(chapterUrl) } // webview not found and page not found, load webview
+        return Observable.create { emitter ->
+            pagesMap.none { it.url == chapterUrl && it.index == pageIndex }.let {
+                // if the page is not loaded yet, we need to load it
+                webViewCache[chapterUrl]?.let { handler.post { it.evaluateJavascript("loadPic($pageIndex)") {} } }
+            }
+            GlobalScope.launch {
+                val startTime = System.currentTimeMillis()
+                while (true) {
+                    val foundPage = pagesMap.find { it.url == chapterUrl && it.index == pageIndex }
+                    val imageUrl = foundPage?.imageUrl?.takeIf { it.startsWith("data") }
+                    if (imageUrl != null) {
+                        emitter.onNext("https://127.0.0.1/?image${imageUrl.substringAfter(":")}")
+                        pagesMap.remove(foundPage)
+                        emitter.onCompleted()
+                        break
+                    }
+                    if (System.currentTimeMillis() - startTime > 30000) {
+                        emitter.onError(Exception("加载图片超时"))
+                        break
+                    }
+                    delay(100)
+                }
+            }
         }
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
-        SearchTypeFilter(intl),
+        SearchTypeFilter(),
     )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        ListPreference(screen.context).apply {
+        val context = screen.context
+        ListPreference(context).apply {
             key = RATE_LIMIT_PREF_KEY
-            title = intl.rateLimitPrefTitle
-            summary = intl.rateLimitPrefSummary(RATE_LIMIT_PREF_DEFAULT)
+            title = "主站连接限制"
+            summary = "此值影响主站的连接请求量。降低此值可以减少获得HTTP 403错误的几率，但加载速度也会变慢。需要重启软件以生效。\n默认值：${RATE_LIMIT_PREF_DEFAULT}\n当前值：%s"
             entries = RATE_LIMIT_PREF_ENTRIES
             entryValues = RATE_LIMIT_PREF_ENTRIES
 
             setDefaultValue(RATE_LIMIT_PREF_DEFAULT)
         }.also(screen::addPreference)
 
-        ListPreference(screen.context).apply {
+        ListPreference(context).apply {
             key = RATE_LIMIT_PERIOD_PREF_KEY
-            title = intl.rateLimitPeriodPrefTitle
-            summary = intl.rateLimitPeriodPrefSummary(RATE_LIMIT_PERIOD_PREF_DEFAULT)
+            title = "主站连接限制期"
+            summary = "此值影响主站点连接限制时的延迟（毫秒）。增加这个值可能会减少出现HTTP 403错误的机会，但加载速度也会变慢。需要重启软件以生效。\n默认值：${RATE_LIMIT_PERIOD_PREF_DEFAULT}\n当前值：%s"
             entries = RATE_LIMIT_PERIOD_PREF_ENTRIES
             entryValues = RATE_LIMIT_PERIOD_PREF_ENTRIES
 
             setDefaultValue(RATE_LIMIT_PERIOD_PREF_DEFAULT)
         }.also(screen::addPreference)
-    }
-
-    private val keyMappingRegex = Regex("""if\s*\(\s*([a-zA-Z0-9_]+)\s*==\s*(\d+)\s*\)\s*\{\s*return\s*'([a-zA-Z0-9_]+)'\s*;""")
-
-    private val keyMapping by lazy {
-        val obfuscatedReadJs = client.newCall(GET("$baseUrl/js/manga.read.js")).execute().body.string()
-        val readJs = Deobfuscator.deobfuscateScript(obfuscatedReadJs)
-            ?: throw Exception(intl.couldNotDeobufscateScript)
-
-        keyMappingRegex.findAll(readJs).associate { it.groups[2]!!.value to it.groups[3]!!.value }
     }
 
     private fun randomString() = buildString(15) {
@@ -309,28 +393,43 @@ abstract class ColaManga(
     }
 
     @Suppress("UNUSED")
-    private class JsInterface(private val latch: CountDownLatch, private val json: Json) {
-        var images: List<String> = listOf()
+    private class JsInterface(
+        private var latch: CountDownLatch,
+        private val chapterUrl: String,
+        private val pagesMap: ArrayList<Page>,
+        private val webViewCache: LinkedHashMap<String, WebView>,
+    ) {
+        var pageCount = 0
             private set
-
-        var key: String = ""
-            private set
-
-        var keyType: String = ""
+        var setPageCount = 0
+        var currentSetCount = 0
             private set
 
         @JavascriptInterface
-        fun passData(rawData: String, keyType: String) {
-            val data = json.parseToJsonElement(rawData).jsonObject
-
-            images = data["images"]!!.jsonArray.map { it.jsonPrimitive.content }
-            key = data["key"]!!.jsonPrimitive.content
-
-            if (keyType != "0") {
-                this.keyType = keyType
+        fun setPageCount(count: Int) {
+            if (count <= 0) {
+                latch.countDown()
+                return
             }
-
+            pageCount = count
             latch.countDown()
+        }
+
+        @JavascriptInterface
+        fun setPage(index: Int, url: String) {
+            pagesMap.find { it.index == index && it.url == chapterUrl }?.apply {
+                imageUrl = url
+            } ?: run {
+                pagesMap.add(Page(index, url = chapterUrl, imageUrl = url))
+                setPageCount++
+            }
+            currentSetCount++
+            if (pageCount > 0 && (setPageCount >= pageCount || currentSetCount >= pageCount)) {
+                Handler(Looper.getMainLooper()).apply {
+                    post { webViewCache.remove(chapterUrl)?.destroy() }
+                    removeCallbacksAndMessages(chapterUrl)
+                }
+            }
         }
     }
 

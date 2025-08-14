@@ -1,12 +1,12 @@
 ext {
     extName = 'COLAMANGA'
     extClass = '.Onemanhua'
-    extVersionCode = 24
+    extVersionCode = 25
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
 
 dependencies {
-    implementation(project(":lib:synchrony"))
+    implementation project(':lib:dataimage')
 }
