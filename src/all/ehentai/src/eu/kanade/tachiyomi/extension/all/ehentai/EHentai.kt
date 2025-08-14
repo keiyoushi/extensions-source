@@ -32,6 +32,21 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.net.URLEncoder
 
+import android.util.Log
+import okhttp3.Interceptor
+
+
+class SimpleLogger : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val req = chain.request()
+        Log.d("EH-HTTP", "→ ${req.method} ${req.url}")
+        val res = chain.proceed(req)
+        Log.d("EH-HTTP", "← ${res.code} ${res.request.url}")
+        return res
+    }
+}
+
+
 abstract class EHentai(
     override val lang: String,
     private val ehLang: String,
@@ -96,26 +111,39 @@ abstract class EHentai(
 
     private fun watchedMangaParse(response: Response): MangasPage {
         val doc = response.asJsoup()
-        val galleryElements = doc.select("table.itg > tbody > tr")
+        val rows = doc.select("table.itg > tbody > tr")
 
-        val parsedMangas = galleryElements.map { element ->
-            val linkElement = element.selectFirst("td.gl3c a")!! // fail fast
-            val titleElement = linkElement.selectFirst(".glink")!! // fail fast
-            val thumbnailElement = element.selectFirst("td.gl2c img")!! // fail fast
+        val parsed = rows.mapNotNull { row ->
+            // Try several known layouts
+            val linkEl = row.selectFirst("td.gl3c a, td.gl4c a, div.gl3t a, td.glname a") ?: return@mapNotNull null
+            val titleEl = linkEl.selectFirst(".glink") ?: linkEl // sometimes the anchor itself holds text
+            // Thumb can live in different places
+            val thumbEl = row.selectFirst("td.gl2c img, .glthumb img, img[src*=/images/thumb], img[data-src]")
+
+            val href = linkEl.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val title = titleEl.text().takeIf { it.isNotBlank() } ?: return@mapNotNull null
 
             SManga.create().apply {
-                title = titleElement.text()
-                url = ExGalleryMetadata.normalizeUrl(linkElement.attr("href"))
-                thumbnail_url = thumbnailElement.attr("data-src").nullIfBlank()
-                    ?: thumbnailElement.attr("src")
+                this.title = title
+                url = ExGalleryMetadata.normalizeUrl(href)
+                thumbnail_url = thumbEl?.attr("data-src").nullIfBlank()
+                    ?: thumbEl?.attr("src").nullIfBlank()
             }
         }
 
-        val hasNextPage = doc.select("a#unext[href]").isNotEmpty()
-        return MangasPage(parsedMangas, hasNextPage)
+        // If nothing parsed, try generic as a graceful fallback (layout drift)
+        val out = if (parsed.isEmpty()) genericMangaParse(response) else MangasPage(parsed, hasNextPage(doc))
+        return out
     }
 
-    // /favorites.php reuses the watched parser
+    // Replaces the previous single-selector approach
+    private fun hasNextPage(doc: org.jsoup.nodes.Document): Boolean {
+        // id=unext sometimes, other times pager uses '>' in a disabled anchor
+        return doc.select("a#unext[href], div#unext > a[href]").isNotEmpty() ||
+            doc.select("a[onclick='return false']").any { it.text().trim() == ">" }
+    }
+
+    // favorites reuse watched parser in your code; keep it, but it’s safer now
     private fun favoritesMangaParse(response: Response): MangasPage = watchedMangaParse(response)
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
@@ -179,6 +207,7 @@ abstract class EHentai(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val enforceLanguageFilter = filters.find { it is EnforceLanguageFilter }?.state == true
         val uri = Uri.parse("$baseUrl$QUERY_PREFIX").buildUpon()
+        Log.d("EH-URL", "Built URL: ${uri}")
 
         var modifiedQuery = when {
             !isLangNatural() -> query
@@ -434,7 +463,8 @@ abstract class EHentai(
                 .addHeader("Cookie", cookiesHeader)
                 .build()
             chain.proceed(newReq)
-        }.build()
+        }.addInterceptor(SimpleLogger())
+        .build()
 
     // Filters
     override fun getFilterList() = FilterList(
