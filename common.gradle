@@ -80,6 +80,11 @@ android {
         resources.excludes.add("kotlin-tooling-metadata.json")
     }
 
+    // https://stackoverflow.com/a/77745844
+    tasks.withType(com.android.build.gradle.tasks.PackageAndroidArtifact).configureEach {
+        doFirst { appMetadata.asFile.get().write('') }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -116,9 +121,7 @@ tasks.register("writeManifestFile") {
     doLast {
         File tempFile = android.sourceSets.getByName('main').manifest.srcFile
         if (!tempFile.exists()) {
-            tempFile.withWriter {
-                it.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
-            }
+            tempFile.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
         }
     }
 }
