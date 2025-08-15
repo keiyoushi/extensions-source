@@ -7,14 +7,16 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import okhttp3.Request
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.math.ceil
 
 open class Niadd(
     override val name: String,
@@ -145,28 +147,40 @@ open class Niadd(
     }
 
     // Pages
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(document: Document): List<Page> = runBlocking {
         val pages = mutableListOf<Page>()
-
-        // Seleciona todas as URLs de lotes disponíveis
         val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
 
-        // Ordena pra garantir que o primeiro lote venha antes
-        val sortedUrls = pageOptions.sortedBy { it }
+        val regex = Regex(""".*-(\d+)-(\d+)\.html""")
 
-        var pageIndex = 0
-        sortedUrls.forEach { url ->
-            // Faz request apenas para cada lote
-            val pageDoc = client.newCall(GET(url, headers)).execute().asJsoup()
-            pageDoc.select("img.manga_pic").forEach { img ->
-                val imageUrl = img.absUrl("src")
-                    .ifBlank { img.absUrl("data-src") }
-                    .ifBlank { img.absUrl("data-original") }
-                pages.add(Page(pageIndex++, "", imageUrl))
+        val urlsWithIndex = pageOptions.mapNotNull { url ->
+            val match = regex.find(url)
+            if (match != null) {
+                val lote = match.groupValues[1].toIntOrNull() ?: 0
+                val page = match.groupValues[2].toIntOrNull() ?: 0
+                Triple(lote, page, url)
+            } else null
+        }.sortedWith(compareBy({ it.first }, { it.second }))
+
+        val deferredPages = urlsWithIndex.map { (_, _, url) ->
+            async(Dispatchers.IO) {
+                val batchPages = mutableListOf<Page>()
+                val pageDoc = client.newCall(GET(url, headers)).execute().asJsoup()
+                pageDoc.select("img.manga_pic").forEach { img ->
+                    val imageUrl = img.absUrl("src")
+                        .ifBlank { img.absUrl("data-src") }
+                        .ifBlank { img.absUrl("data-original") }
+                    batchPages.add(Page(0, "", imageUrl))
+                }
+                batchPages
             }
         }
 
-        return pages
+        deferredPages.awaitAll().flatten().forEachIndexed { index, page ->
+            pages.add(Page(index, page.url, page.imageUrl))
+        }
+
+        pages
     }
 
     override fun imageUrlParse(document: Document): String {
