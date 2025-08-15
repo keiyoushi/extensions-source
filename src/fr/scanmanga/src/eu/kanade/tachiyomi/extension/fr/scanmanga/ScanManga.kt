@@ -24,7 +24,6 @@ import org.jsoup.nodes.Element
 import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
 
-@Suppress("SpellCheckingInspection")
 class ScanManga : ParsedHttpSource() {
     class SimpleCookieJar : CookieJar {
         private val cookieStore = mutableListOf<Cookie>()
@@ -213,7 +212,7 @@ class ScanManga : ParsedHttpSource() {
 
         // Step 3: Remove trailing hex string and reverse
         val hexIdc = idc.toString(16)
-        val cleaned = inflated.replace(Regex("$hexIdc$"), "")
+        val cleaned = inflated.removeSuffix(hexIdc)
         val reversed = cleaned.reversed()
 
         // Step 4: Base64 decode and parse JSON
@@ -238,17 +237,15 @@ class ScanManga : ParsedHttpSource() {
 
         val documentUrl = document.baseUri().toHttpUrl()
 
-        val pageListRequest = Request.Builder()
-            .url("$baseUrl/api/lel/$chapterId.json")
-            .post(requestBody.toRequestBody(mediaType))
-            .headers(
-                headers.newBuilder()
-                    .add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
-                    .add("Referer", documentUrl.toString())
-                    .add("Token", "yf")
-                    .build(),
-            )
-            .build()
+        val pageListRequest = POST(
+            "$baseUrl/api/lel/$chapterId.json",
+            headers.newBuilder()
+                .add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
+                .add("Referer", documentUrl.toString())
+                .add("Token", "yf")
+                .build(),
+            requestBody.toRequestBody(mediaType),
+        )
 
         val lelResponse = client.newBuilder().cookieJar(SimpleCookieJar()).build()
             .newCall(pageListRequest).execute().use { response ->
@@ -256,7 +253,7 @@ class ScanManga : ParsedHttpSource() {
                 dataAPI(response.body.string(), chapterId.toInt())
             }
 
-        return lelResponse.generateImageUrls().map { Page(it.key, documentUrl.toString(), it.value) }
+        return lelResponse.generateImageUrls().map { Page(it.key, imageUrl = it.value) }
     }
 
     // Page
