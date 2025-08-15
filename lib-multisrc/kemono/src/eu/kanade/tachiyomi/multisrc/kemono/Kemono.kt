@@ -40,6 +40,14 @@ open class Kemono(
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(1)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            if (request.url.pathSegments.first() == "api") {
+                chain.proceed(request.newBuilder().header("Accept", "text/css").build())
+            } else {
+                chain.proceed(request)
+            }
+        }
         .apply {
             val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
             if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
@@ -133,7 +141,8 @@ open class Kemono(
                 if (response.isSuccessful) {
                     response.parseAs<List<KemonoFavoritesDto>>().filterNot { it.service.lowercase() == "discord" }
                 } else {
-                    val message = if (response.code == 401) "you are not logged in" else "HTTP ${response.code}"
+                    response.close()
+                    val message = if (response.code == 401) "You are not logged in" else "HTTP error ${response.code}"
                     throw Exception("Failed to fetch favorites: $message")
                 }
             } else {
@@ -141,11 +150,15 @@ open class Kemono(
             }
 
             val request = GET(
-                "$baseUrl/$apiPath/creators.txt",
+                "$baseUrl/$apiPath/creators",
                 headers,
                 CacheControl.Builder().maxStale(30, TimeUnit.MINUTES).build(),
             )
             val response = creatorsClient.newCall(request).execute()
+            if (!response.isSuccessful) {
+                response.close()
+                throw Exception("HTTP error ${response.code}")
+            }
             val allCreators = response.parseAs<List<KemonoCreatorDto>>().filterNot { it.service.lowercase() == "discord" }
             allCreators.filter {
                 val includeType = typeIncluded.isEmpty() || typeIncluded.contains(it.service.serviceName().lowercase())
