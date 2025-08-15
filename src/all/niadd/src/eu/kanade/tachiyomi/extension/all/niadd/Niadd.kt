@@ -146,18 +146,15 @@ open class Niadd(
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        // Seleciona todas as URLs de lotes disponíveis
         val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
 
-        // Regex para extrair lote e página: ex: 11464565-10-2.html
         val regex = Regex(""".*-(\d+)-(\d+)\.html""")
 
-        // Ordena primeiro pelo lote, depois pelo índice da página
         val sortedUrls = pageOptions.sortedWith(compareBy { url ->
             val match = regex.find(url)
             val lote = match?.groupValues?.get(1)?.toIntOrNull() ?: 0
             val page = match?.groupValues?.get(2)?.toIntOrNull() ?: 0
-            lote * 1000 + page // garante ordenação correta mesmo com múltiplos lotes
+            lote * 1000 + page
         })
 
         var pageIndex = 0
