@@ -59,7 +59,9 @@ open class Niadd(
         GET("$baseUrl/list/New-Update/?page=$page", headers)
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        popularMangaFromElement(element)
+
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // Search
@@ -69,7 +71,9 @@ open class Niadd(
     }
 
     override fun searchMangaSelector(): String = popularMangaSelector()
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun searchMangaFromElement(element: Element): SManga =
+        popularMangaFromElement(element)
+
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // Details
@@ -84,8 +88,9 @@ open class Niadd(
             ?: img?.absUrl("data-src")
             ?: img?.absUrl("data-original")
 
-        val author = document.selectFirst("div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value")
-            ?.text()?.trim()
+        val author = document.selectFirst(
+            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value"
+        )?.text()?.trim()
         manga.author = author
         manga.artist = author
 
@@ -113,7 +118,8 @@ open class Niadd(
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        val chaptersUrl = if (manga.url.endsWith("/chapters.html")) manga.url else manga.url.removeSuffix("/") + "/chapters.html"
+        val chaptersUrl =
+            if (manga.url.endsWith("/chapters.html")) manga.url else manga.url.removeSuffix("/") + "/chapters.html"
         return GET(baseUrl + chaptersUrl, headers)
     }
 
@@ -145,7 +151,6 @@ open class Niadd(
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-
         val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
 
         val regex = Regex(""".*-(\d+)-(\d+)\.html""")

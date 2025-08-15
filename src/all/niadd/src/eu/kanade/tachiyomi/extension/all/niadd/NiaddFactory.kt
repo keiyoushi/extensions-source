@@ -17,6 +17,6 @@ class NiaddFactory : SourceFactory {
         NiaddFr(),
         NiaddIt(),
         NiaddPTbr(),
-        NiaddRu()
+        NiaddRu(),
     )
 }
