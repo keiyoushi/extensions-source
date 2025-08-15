@@ -6,7 +6,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -23,7 +25,7 @@ open class Niadd(
     override val lang: String = langCode
     override val supportsLatest: Boolean = true
 
-    // ---------- Popular ----------
+    // Popular
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/category/?page=$page", headers)
 
@@ -54,7 +56,7 @@ open class Niadd(
 
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
-    // ---------- Latest / Recent Updates ----------
+    // Latest
     override fun latestUpdatesRequest(page: Int): Request =
         GET("$baseUrl/list/New-Update/?page=$page", headers)
 
@@ -62,7 +64,7 @@ open class Niadd(
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    // ---------- Search ----------
+    // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val q = URLEncoder.encode(query, "UTF-8")
         return GET("$baseUrl/search/?name=$q&page=$page", headers)
@@ -72,7 +74,7 @@ open class Niadd(
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    // ---------- Details ----------
+    // Details
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
@@ -111,7 +113,7 @@ open class Niadd(
         return manga
     }
 
-    // ---------- Chapters ----------
+    // Chapters
     override fun chapterListRequest(manga: SManga): Request {
         val chaptersUrl = if (manga.url.endsWith("/chapters.html")) manga.url else manga.url.removeSuffix("/") + "/chapters.html"
         return GET(baseUrl + chaptersUrl, headers)
@@ -142,38 +144,43 @@ open class Niadd(
         }
     }
 
-    // ---------- Pages / Images ----------
+    // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        // Pega a URL atual
         val currentUrl = document.location()
-        val match = Regex("""/chapter/(\d+)-(\d+)-(\d+)\.html""").find(currentUrl)
+        val match = Regex(""".*/chapter/([^/]+)_(\d+)(?:-(\d+)-(\d+))?\.html""").find(currentUrl)
 
         if (match != null) {
-            val chapterId = match.groupValues[1] // ID do capítulo
-            val pagesPerLoad = match.groupValues[2].toInt() // Quantidade de páginas por lote
-            var batchNumber = match.groupValues[3].toInt() // Lote atual
+            val slug = match.groupValues[1]          // Nome do capítulo no link
+            val chapterId = match.groupValues[2]     // ID numérico do capítulo
+            var pagesPerLoad = match.groupValues[3].toIntOrNull() ?: 10
+            var currentBatch = match.groupValues[4].toIntOrNull() ?: 1
 
-            // Pega total de páginas visível no HTML
+            // Total de páginas
             val totalPages = document.select("select#page_select option").size
-            val totalBatches = Math.ceil(totalPages / pagesPerLoad.toDouble()).toInt()
+            val totalBatches = ceil(totalPages / pagesPerLoad.toDouble()).toInt()
 
-            // Loop por todos os lotes
+            // Baixa todos os lotes
             for (batch in 1..totalBatches) {
-                val batchUrl = "https://www.niadd.com/chapter/${chapterId}-${pagesPerLoad}-${batch}.html"
+                val batchUrl = "$baseUrl/chapter/${slug}_${chapterId}-${pagesPerLoad}-${batch}.html"
                 val batchDoc = client.newCall(GET(batchUrl, headers)).execute().asJsoup()
 
                 batchDoc.select("img.manga_pic").forEachIndexed { index, img ->
-                    val imageUrl = img.attr("src")
+                    val imageUrl = img.absUrl("src")
+                        .ifBlank { img.absUrl("data-src") }
+                        .ifBlank { img.absUrl("data-original") }
                     val pageIndex = (batch - 1) * pagesPerLoad + index
                     pages.add(Page(pageIndex, "", imageUrl))
                 }
             }
         } else {
-            // Caso não encontre o padrão, pega as imagens normalmente
+            // fallback
             document.select("img.manga_pic").forEachIndexed { i, img ->
-                pages.add(Page(i, "", img.attr("src")))
+                val imageUrl = img.absUrl("src")
+                    .ifBlank { img.absUrl("data-src") }
+                    .ifBlank { img.absUrl("data-original") }
+                pages.add(Page(i, "", imageUrl))
             }
         }
 
