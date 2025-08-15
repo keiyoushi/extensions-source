@@ -15,11 +15,9 @@ import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
 
 class ScanManga : HttpSource() {
@@ -31,12 +29,6 @@ class ScanManga : HttpSource() {
     override val lang = "fr"
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.client.newBuilder()
-        .cookieJar(CookieJar.NO_COOKIES)
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
@@ -232,10 +224,11 @@ class ScanManga : HttpSource() {
             requestBody.toRequestBody(mediaType),
         )
 
-        val lelResponse = client.newCall(pageListRequest).execute().use { response ->
-            if (!response.isSuccessful) { error("Unexpected error while fetching lel.") }
-            dataAPI(response.body.string(), chapterId.toInt())
-        }
+        val lelResponse = client.newBuilder().cookieJar(CookieJar.NO_COOKIES).build()
+            .newCall(pageListRequest).execute().use { response ->
+                if (!response.isSuccessful) { error("Unexpected error while fetching lel.") }
+                dataAPI(response.body.string(), chapterId.toInt())
+            }
 
         return lelResponse.generateImageUrls().map { Page(it.first, imageUrl = it.second) }
     }
