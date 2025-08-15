@@ -26,6 +26,7 @@ class ScanManga : HttpSource() {
     override val name = "Scan-Manga"
 
     override val baseUrl = "https://m.scan-manga.com"
+    private val baseImageUrl = "https://static.scan-manga.com/img/manga"
 
     override val lang = "fr"
 
@@ -104,7 +105,7 @@ class ScanManga : HttpSource() {
                 SManga.create().apply {
                     title = it.nom_match
                     setUrlWithoutDomain(it.url)
-                    thumbnail_url = "https://static.scan-manga.com/img/manga/${it.image}"
+                    thumbnail_url = "$baseImageUrl/${it.image}"
                 }
             } ?: emptyList(),
             false,
