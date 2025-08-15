@@ -148,18 +148,21 @@ open class Niadd(
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        // Seleciona todas as URLs de páginas do capítulo
-        val pageUrls = document.select("select.sl-page option")
-            .map { it.attr("value") }
+        // Seleciona todas as URLs de lotes disponíveis
+        val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
 
-        pageUrls.forEachIndexed { pageIndex, url ->
+        // Ordena pra garantir que o primeiro lote venha antes
+        val sortedUrls = pageOptions.sortedBy { it }
+
+        var pageIndex = 0
+        sortedUrls.forEach { url ->
+            // Faz request apenas para cada lote
             val pageDoc = client.newCall(GET(url, headers)).execute().asJsoup()
-            pageDoc.select("img.manga_pic").forEachIndexed { index, img ->
+            pageDoc.select("img.manga_pic").forEach { img ->
                 val imageUrl = img.absUrl("src")
                     .ifBlank { img.absUrl("data-src") }
                     .ifBlank { img.absUrl("data-original") }
-                // O índice da página é cumulativo
-                pages.add(Page(pages.size, "", imageUrl))
+                pages.add(Page(pageIndex++, "", imageUrl))
             }
         }
 
