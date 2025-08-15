@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.fr.scanmanga
 
 import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,10 +10,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.parseAs
-import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.Headers
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -25,18 +24,6 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
 
 class ScanManga : ParsedHttpSource() {
-    class SimpleCookieJar : CookieJar {
-        private val cookieStore = mutableListOf<Cookie>()
-
-        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-            cookieStore += cookies
-        }
-
-        override fun loadForRequest(url: HttpUrl): List<Cookie> {
-            return cookieStore
-        }
-    }
-
     override val name = "Scan-Manga"
 
     override val baseUrl = "https://m.scan-manga.com"
@@ -45,17 +32,15 @@ class ScanManga : ParsedHttpSource() {
 
     override val supportsLatest = true
 
-    private val mobileUserAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36"
-
     override val client: OkHttpClient = network.client.newBuilder()
-        .cookieJar(SimpleCookieJar())
+        .cookieJar(CookieJar.NO_COOKIES)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
-        .set("User-Agent", mobileUserAgent)
+        .set("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
@@ -116,8 +101,8 @@ class ScanManga : ParsedHttpSource() {
         return MangasPage(
             json.parseAs<MangaSearchDto>().title?.map {
                 SManga.create().apply {
-                    title = it.nom_match ?: "Titre inconnu"
-                    setUrlWithoutDomain(it.url!!)
+                    title = it.nom_match
+                    setUrlWithoutDomain(it.url)
                     thumbnail_url = "https://static.scan-manga.com/img/manga/${it.image}"
                 }
             } ?: emptyList(),
@@ -247,13 +232,12 @@ class ScanManga : ParsedHttpSource() {
             requestBody.toRequestBody(mediaType),
         )
 
-        val lelResponse = client.newBuilder().cookieJar(SimpleCookieJar()).build()
-            .newCall(pageListRequest).execute().use { response ->
-                if (!response.isSuccessful) { error("Unexpected error while fetching lel.") }
-                dataAPI(response.body.string(), chapterId.toInt())
-            }
+        val lelResponse = client.newCall(pageListRequest).execute().use { response ->
+            if (!response.isSuccessful) { error("Unexpected error while fetching lel.") }
+            dataAPI(response.body.string(), chapterId.toInt())
+        }
 
-        return lelResponse.generateImageUrls().map { Page(it.key, imageUrl = it.value) }
+        return lelResponse.generateImageUrls().map { Page(it.first, imageUrl = it.second) }
     }
 
     // Page
