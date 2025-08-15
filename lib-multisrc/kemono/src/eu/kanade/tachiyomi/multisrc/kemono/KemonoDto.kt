@@ -10,7 +10,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-class KemonoFavouritesDto(
+class KemonoFavoritesDto(
     val id: String,
     val name: String,
     val service: String,
