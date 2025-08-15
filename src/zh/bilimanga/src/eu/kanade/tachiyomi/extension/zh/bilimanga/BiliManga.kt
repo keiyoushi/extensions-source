@@ -27,7 +27,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     override val lang = "zh"
 
-    override val name = "嗶哩漫畫"
+    override val name = "Bilimanga.net"
 
     override val supportsLatest = true
 
