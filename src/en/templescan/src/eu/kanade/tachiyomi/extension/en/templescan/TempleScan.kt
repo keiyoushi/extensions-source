@@ -209,9 +209,12 @@ class TempleScan : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        return response.asJsoup().select("img[alt^=chapter]").mapIndexed { idx, img ->
-            Page(idx, imageUrl = img.absUrl("src"))
-        }
+        return IMAGES_REGEX.find(response.body.string())!!.groupValues[1]
+            .unescape()
+            .parseAs<List<String>>()
+            .mapIndexed { index, image ->
+                Page(index, imageUrl = image)
+            }
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -240,3 +243,4 @@ class TempleScan : HttpSource(), ConfigurableSource {
 
 private val UNESCAPE_REGEX = """\\(.)""".toRegex()
 private val DETAILS_REGEX = Regex("""info\\":(\{.*\}).*userIsFollowed""")
+private val IMAGES_REGEX = Regex("""images\\":(\[.*?]).*""")
