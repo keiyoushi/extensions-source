@@ -21,7 +21,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     override val name = "MANGA Plus Creators by SHUEISHA"
 
-    override val baseUrl = "https://medibang.com/mpc"
+    override val baseUrl = "https://mangaplus-creators.jp"
 
     override val supportsLatest = true
 
@@ -196,7 +196,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     companion object {
-        private const val API_URL = "https://medibang.com/api/mpc"
+        private const val API_URL = "https://mangaplus-creators.jp/api"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
 
