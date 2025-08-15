@@ -8,7 +8,8 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.CookieJar
 import okhttp3.Headers
@@ -18,12 +19,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.util.concurrent.TimeUnit
 import java.util.zip.Inflater
 
-class ScanManga : ParsedHttpSource() {
+class ScanManga : HttpSource() {
     override val name = "Scan-Manga"
 
     override val baseUrl = "https://m.scan-manga.com"
@@ -47,37 +46,39 @@ class ScanManga : ParsedHttpSource() {
         return GET("$baseUrl/TOP-Manga-Webtoon-36.html", headers)
     }
 
-    override fun popularMangaSelector() = "#carouselTOPContainer > div.top"
+    override fun popularMangaParse(response: Response): MangasPage {
+        val mangas = response.asJsoup().select("#carouselTOPContainer > div.top").map { element ->
+            SManga.create().apply {
+                val titleElement = element.selectFirst("a.atop")!!
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            val titleElement = element.selectFirst("a.atop")!!
-
-            title = titleElement.text()
-            setUrlWithoutDomain(titleElement.attr("href"))
-            thumbnail_url = element.selectFirst("img")?.attr("data-original")
+                title = titleElement.text()
+                setUrlWithoutDomain(titleElement.attr("href"))
+                thumbnail_url = element.selectFirst("img")?.attr("data-original")
+            }
         }
-    }
 
-    override fun popularMangaNextPageSelector(): String? = null
+        return MangasPage(mangas, false)
+    }
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun latestUpdatesSelector() = "#content_news .publi"
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            val mangaElement = element.selectFirst("a.l_manga")!!
+        val mangas = document.select("#content_news .publi").map { element ->
+            SManga.create().apply {
+                val mangaElement = element.selectFirst("a.l_manga")!!
 
-            title = mangaElement.text()
-            setUrlWithoutDomain(mangaElement.attr("href"))
+                title = mangaElement.text()
+                setUrlWithoutDomain(mangaElement.attr("href"))
 
-            thumbnail_url = element.selectFirst("img")?.attr("src")
+                thumbnail_url = element.selectFirst("img")?.attr("src")
+            }
         }
-    }
 
-    override fun latestUpdatesNextPageSelector(): String? = null
+        return MangasPage(mangas, false)
+    }
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -110,44 +111,41 @@ class ScanManga : ParsedHttpSource() {
         )
     }
 
-    override fun searchMangaSelector() = throw UnsupportedOperationException("Not used")
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException("Not used")
-    override fun searchMangaNextPageSelector() = null
-
     // Details
-    override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
 
-        manga.title = document.select("h1.main_title[itemprop=name]").text()
-        manga.author = document.select("div[itemprop=author]").text()
-        manga.description = document.selectFirst("div.titres_desc[itemprop=description]")?.text()
-        manga.genre = document.selectFirst("div.titres_souspart span[itemprop=genre]")?.text()
+        return SManga.create().apply {
+            title = document.select("h1.main_title[itemprop=name]").text()
+            author = document.select("div[itemprop=author]").text()
+            description = document.selectFirst("div.titres_desc[itemprop=description]")?.text()
+            genre = document.selectFirst("div.titres_souspart span[itemprop=genre]")?.text()
 
-        val statutText = document.selectFirst("div.titres_souspart")?.ownText()
-        manga.status = when {
-            statutText?.contains("En cours", ignoreCase = true) == true -> SManga.ONGOING
-            statutText?.contains("Terminé", ignoreCase = true) == true -> SManga.COMPLETED
-            else -> SManga.UNKNOWN
+            val statutText = document.selectFirst("div.titres_souspart")?.ownText()
+            status = when {
+                statutText?.contains("En cours", ignoreCase = true) == true -> SManga.ONGOING
+                statutText?.contains("Terminé", ignoreCase = true) == true -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+
+            thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").attr("src")
         }
-        // TODO: Check this
-        manga.thumbnail_url = document.select("div.full_img_serie img[itemprop=image]").attr("src")
-
-        return manga
     }
 
     // Chapters
-    override fun chapterListSelector() = "div.chapt_m"
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("div.chapt_m").map { element ->
+            val linkEl = element.selectFirst("td.publimg span.i a")!!
+            val titleEl = element.selectFirst("td.publititle")
 
-    override fun chapterFromElement(element: Element): SChapter {
-        val linkEl = element.selectFirst("td.publimg span.i a")!!
-        val titleEl = element.selectFirst("td.publititle")
+            val chapterName = linkEl.text()
+            val extraTitle = titleEl?.text()
 
-        val chapterName = linkEl.text()
-        val extraTitle = titleEl?.text()
-
-        return SChapter.create().apply {
-            name = if (!extraTitle.isNullOrEmpty()) "$chapterName - $extraTitle" else chapterName
-            setUrlWithoutDomain(linkEl.absUrl("href"))
+            SChapter.create().apply {
+                name = if (!extraTitle.isNullOrEmpty()) "$chapterName - $extraTitle" else chapterName
+                setUrlWithoutDomain(linkEl.absUrl("href"))
+            }
         }
     }
 
@@ -206,7 +204,8 @@ class ScanManga : ParsedHttpSource() {
         return finalJsonStr.parseAs<UrlPayload>()
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val packedScript = document.selectFirst("script:containsData(h,u,n,t,e,r)")!!.data()
 
         val unpackedScript = decodeHunter(packedScript)
@@ -241,7 +240,7 @@ class ScanManga : ParsedHttpSource() {
     }
 
     // Page
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
         val imgHeaders = headers.newBuilder()
