@@ -9,7 +9,6 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -21,11 +20,10 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -34,7 +32,6 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -46,10 +43,6 @@ abstract class ColaManga(
 ) : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
-
-    private val intl = ColaMangaIntl(lang)
 
     private val preferences by getPreferencesLazy()
 
@@ -206,7 +199,11 @@ abstract class ColaManga(
 
                     const key = CryptoJS.enc.Utf8.stringify(__js.getDataParse());
 
-                    window.$interfaceName.passData(JSON.stringify({ images, key }), window.image_info.keyType || "0");
+                    const passData = (keyData = key) => {
+                        window.$interfaceName.passData(JSON.stringify({ images, key: keyData }));
+                    };
+
+                    $webviewScript
                 }();
             </script>
             """.trimIndent(),
@@ -214,7 +211,7 @@ abstract class ColaManga(
 
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
-        val jsInterface = JsInterface(latch, json)
+        val jsInterface = JsInterface(latch)
         var webView: WebView? = null
 
         handler.post {
@@ -233,15 +230,10 @@ abstract class ColaManga(
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
-            throw Exception(intl.timedOutDecryptingImageLinks)
+            throw Exception("加载图片超时")
         }
 
-        val key = if (jsInterface.keyType.isNotEmpty()) {
-            keyMapping[jsInterface.keyType]
-                ?: throw Exception(intl.couldNotFindKey(jsInterface.keyType))
-        } else {
-            jsInterface.key
-        }
+        val key = jsInterface.key
 
         return jsInterface.images.mapIndexed { i, it ->
             val imageUrl = buildString(it.length + 6) {
@@ -265,14 +257,14 @@ abstract class ColaManga(
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
     override fun getFilterList() = FilterList(
-        SearchTypeFilter(intl),
+        SearchTypeFilter(),
     )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             key = RATE_LIMIT_PREF_KEY
-            title = intl.rateLimitPrefTitle
-            summary = intl.rateLimitPrefSummary(RATE_LIMIT_PREF_DEFAULT)
+            title = "主站连接限制"
+            summary = "此值影响主站的连接请求量。降低此值可以减少获得HTTP 403错误的几率，但加载速度也会变慢。需要重启软件以生效。\n默认值：$RATE_LIMIT_PREF_DEFAULT\n当前值：%s"
             entries = RATE_LIMIT_PREF_ENTRIES
             entryValues = RATE_LIMIT_PREF_ENTRIES
 
@@ -281,8 +273,8 @@ abstract class ColaManga(
 
         ListPreference(screen.context).apply {
             key = RATE_LIMIT_PERIOD_PREF_KEY
-            title = intl.rateLimitPeriodPrefTitle
-            summary = intl.rateLimitPeriodPrefSummary(RATE_LIMIT_PERIOD_PREF_DEFAULT)
+            title = "主站连接限制期"
+            summary = "此值影响主站点连接限制时的延迟（毫秒）。增加这个值可能会减少出现HTTP 403错误的机会，但加载速度也会变慢。需要重启软件以生效。\n默认值：$RATE_LIMIT_PERIOD_PREF_DEFAULT\n当前值：%s"
             entries = RATE_LIMIT_PERIOD_PREF_ENTRIES
             entryValues = RATE_LIMIT_PERIOD_PREF_ENTRIES
 
@@ -290,14 +282,9 @@ abstract class ColaManga(
         }.also(screen::addPreference)
     }
 
-    private val keyMappingRegex = Regex("""if\s*\(\s*([a-zA-Z0-9_]+)\s*==\s*(\d+)\s*\)\s*\{\s*return\s*'([a-zA-Z0-9_]+)'\s*;""")
-
-    private val keyMapping by lazy {
-        val obfuscatedReadJs = client.newCall(GET("$baseUrl/js/manga.read.js")).execute().body.string()
-        val readJs = Deobfuscator.deobfuscateScript(obfuscatedReadJs)
-            ?: throw Exception(intl.couldNotDeobufscateScript)
-
-        keyMappingRegex.findAll(readJs).associate { it.groups[2]!!.value to it.groups[3]!!.value }
+    private val webviewScript by lazy {
+        javaClass.getResource("/assets/webview-script.js")?.readText()
+            ?: throw Exception("WebView 脚本不存在")
     }
 
     private fun randomString() = buildString(15) {
@@ -309,29 +296,25 @@ abstract class ColaManga(
     }
 
     @Suppress("UNUSED")
-    private class JsInterface(private val latch: CountDownLatch, private val json: Json) {
+    private class JsInterface(private val latch: CountDownLatch) {
         var images: List<String> = listOf()
             private set
 
         var key: String = ""
             private set
 
-        var keyType: String = ""
-            private set
-
         @JavascriptInterface
-        fun passData(rawData: String, keyType: String) {
-            val data = json.parseToJsonElement(rawData).jsonObject
+        fun passData(rawData: String) {
+            val data = rawData.parseAs<Data>(Json)
 
-            images = data["images"]!!.jsonArray.map { it.jsonPrimitive.content }
-            key = data["key"]!!.jsonPrimitive.content
-
-            if (keyType != "0") {
-                this.keyType = keyType
-            }
+            images = data.images
+            key = data.key
 
             latch.countDown()
         }
+
+        @Serializable
+        private class Data(val images: List<String>, val key: String)
     }
 
     companion object {
