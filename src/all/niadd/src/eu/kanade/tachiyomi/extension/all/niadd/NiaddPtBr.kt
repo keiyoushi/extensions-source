@@ -1,9 +1,9 @@
-package eu.kanade.tachiyomi.extension.pt.niadd
+package eu.kanade.tachiyomi.extension.all.niadd
 
 import eu.kanade.tachiyomi.extension.all.niadd.Niadd
 
 class NiaddPtBr : Niadd(
-    name = "Niadd PT-BR",
+    name = "Niadd",
     baseUrl = "https://br.niadd.com",
     langCode = "pt-BR",
 )
