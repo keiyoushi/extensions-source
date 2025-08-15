@@ -147,43 +147,10 @@ open class Niadd(
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-
-        val currentUrl = document.location()
-        val match = Regex(""".*/chapter/([^/]+)_(\d+)(?:-(\d+)-(\d+))?\.html""").find(currentUrl)
-
-        if (match != null) {
-            val slug = match.groupValues[1]          // Nome do capítulo no link
-            val chapterId = match.groupValues[2]     // ID numérico do capítulo
-            var pagesPerLoad = match.groupValues[3].toIntOrNull() ?: 10
-            var currentBatch = match.groupValues[4].toIntOrNull() ?: 1
-
-            // Total de páginas
-            val totalPages = document.select("select#page_select option").size
-            val totalBatches = ceil(totalPages / pagesPerLoad.toDouble()).toInt()
-
-            // Baixa todos os lotes
-            for (batch in 1..totalBatches) {
-                val batchUrl = "$baseUrl/chapter/${slug}_${chapterId}-${pagesPerLoad}-${batch}.html"
-                val batchDoc = client.newCall(GET(batchUrl, headers)).execute().asJsoup()
-
-                batchDoc.select("img.manga_pic").forEachIndexed { index, img ->
-                    val imageUrl = img.absUrl("src")
-                        .ifBlank { img.absUrl("data-src") }
-                        .ifBlank { img.absUrl("data-original") }
-                    val pageIndex = (batch - 1) * pagesPerLoad + index
-                    pages.add(Page(pageIndex, "", imageUrl))
-                }
-            }
-        } else {
-            // fallback
-            document.select("img.manga_pic").forEachIndexed { i, img ->
-                val imageUrl = img.absUrl("src")
-                    .ifBlank { img.absUrl("data-src") }
-                    .ifBlank { img.absUrl("data-original") }
-                pages.add(Page(i, "", imageUrl))
-            }
+        document.select("section.mangaread-img img.manga_pic").forEachIndexed { index, img ->
+            val imageUrl = img.attr("src").ifBlank { img.attr("data-src") }
+            pages.add(Page(index, "", imageUrl))
         }
-
         return pages
     }
 
