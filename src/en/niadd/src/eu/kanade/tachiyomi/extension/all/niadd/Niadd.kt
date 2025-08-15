@@ -12,6 +12,7 @@ import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.ceil
 
 open class Niadd(
     override val name: String,
@@ -145,40 +146,35 @@ open class Niadd(
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        // Função para pegar imagens de um bloco HTML
-        fun parseBlock(doc: Document, startIndex: Int = 0) {
-            val imgElements = doc.select("div.pic_box img, img.manga_pic, div.reader-page img")
-            imgElements.forEachIndexed { index, img ->
-                val url = img.absUrl("src")
-                    .ifEmpty { img.absUrl("data-src") }
-                    .ifEmpty { img.absUrl("data-original") }
-                    .ifEmpty { img.absUrl("data-cfsrc") }
-                if (url.isNotBlank()) pages.add(Page(startIndex + index, "", url))
+        // Pega a URL atual
+        val currentUrl = document.location()
+        val match = Regex("""/chapter/(\d+)-(\d+)-(\d+)\.html""").find(currentUrl)
+
+        if (match != null) {
+            val chapterId = match.groupValues[1] // ID do capítulo
+            val pagesPerLoad = match.groupValues[2].toInt() // Quantidade de páginas por lote
+            var batchNumber = match.groupValues[3].toInt() // Lote atual
+
+            // Pega total de páginas visível no HTML
+            val totalPages = document.select("select#page_select option").size
+            val totalBatches = Math.ceil(totalPages / pagesPerLoad.toDouble()).toInt()
+
+            // Loop por todos os lotes
+            for (batch in 1..totalBatches) {
+                val batchUrl = "https://www.niadd.com/chapter/${chapterId}-${pagesPerLoad}-${batch}.html"
+                val batchDoc = client.newCall(GET(batchUrl, headers)).execute().asJsoup()
+
+                batchDoc.select("img.manga_pic").forEachIndexed { index, img ->
+                    val imageUrl = img.attr("src")
+                    val pageIndex = (batch - 1) * pagesPerLoad + index
+                    pages.add(Page(pageIndex, "", imageUrl))
+                }
             }
-        }
-
-        // 1. Pega imagens do primeiro bloco (HTML atual)
-        parseBlock(document)
-
-        // 2. Descobre se existem blocos adicionais
-        val totalPagesText = document.selectFirst("div.tool a[title*='of']")?.text() ?: ""
-        val totalPages = Regex("""of (\d+)""").find(totalPagesText)?.groupValues?.get(1)?.toIntOrNull() ?: -1
-        if (totalPages <= pages.size) return pages
-
-        // 3. Loop para pegar blocos adicionais (-10-2.html, -10-3.html ...)
-        var blockIndex = 1
-        while (pages.size < totalPages) {
-            val baseChapterUrl = document.location().substringBeforeLast("-1.html")
-            val nextBlockUrl = "$baseChapterUrl-10-${blockIndex + 1}.html"
-            try {
-                val blockDoc = client.newCall(GET(nextBlockUrl, headers)).execute().use { response ->
-                    response.body?.string()?.let { org.jsoup.Jsoup.parse(it) }
-                } ?: break
-                parseBlock(blockDoc, pages.size)
-            } catch (_: Exception) {
-                break
+        } else {
+            // Caso não encontre o padrão, pega as imagens normalmente
+            document.select("img.manga_pic").forEachIndexed { i, img ->
+                pages.add(Page(i, "", img.attr("src")))
             }
-            blockIndex++
         }
 
         return pages
