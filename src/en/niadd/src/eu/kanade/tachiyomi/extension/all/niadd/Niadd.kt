@@ -147,10 +147,22 @@ open class Niadd(
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        document.select("section.mangaread-img img.manga_pic").forEachIndexed { index, img ->
-            val imageUrl = img.attr("src").ifBlank { img.attr("data-src") }
-            pages.add(Page(index, "", imageUrl))
+
+        // Seleciona todas as URLs de páginas do capítulo
+        val pageUrls = document.select("select.sl-page option")
+            .map { it.attr("value") }
+
+        pageUrls.forEachIndexed { pageIndex, url ->
+            val pageDoc = client.newCall(GET(url, headers)).execute().asJsoup()
+            pageDoc.select("img.manga_pic").forEachIndexed { index, img ->
+                val imageUrl = img.absUrl("src")
+                    .ifBlank { img.absUrl("data-src") }
+                    .ifBlank { img.absUrl("data-original") }
+                // O índice da página é cumulativo
+                pages.add(Page(pages.size, "", imageUrl))
+            }
         }
+
         return pages
     }
 
