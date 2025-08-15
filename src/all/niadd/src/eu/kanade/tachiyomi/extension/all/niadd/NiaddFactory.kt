@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.niadd
+package eu.kanade.tachiyomi.extension.all.niadd
 
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.extension.de.niadd.NiaddDe
