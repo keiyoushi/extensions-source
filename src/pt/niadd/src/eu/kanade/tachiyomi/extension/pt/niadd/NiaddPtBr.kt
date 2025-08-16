@@ -38,6 +38,9 @@ class NiaddPtBr : HttpSource() {
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
         Observable.just(emptyList())
 
+    // Image URL parse (obrigatório) - retorna vazio
+    override fun imageUrlParse(response: Response): String = ""
+
     // Métodos obrigatórios de parse (não usados ainda)
     override fun popularMangaRequest(page: Int): Request = throw NotImplementedError()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw NotImplementedError()
