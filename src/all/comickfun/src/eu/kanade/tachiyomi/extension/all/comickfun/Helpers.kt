@@ -47,7 +47,7 @@ enum class CoverQuality {
 
 internal fun parseCover(thumbnailUrl: String?, mdCovers: List<MDcovers>, coverQuality: CoverQuality = CoverQuality.WebDefault): String? {
     fun addOrReplaceCoverQualitySuffix(url: String, qualitySuffix: String): String {
-        return url.substringBeforeLast('.').replace(Regex("-(m|s)$"), "") +
+        return url.substringBeforeLast('#').substringBeforeLast('.').replace(Regex("-(m|s)$"), "") +
             "$qualitySuffix.jpg#${url.substringAfter('#', "")}"
     }
 
