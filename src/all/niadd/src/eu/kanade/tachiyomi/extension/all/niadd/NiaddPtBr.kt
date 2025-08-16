@@ -24,11 +24,12 @@ class NiaddPtBr : ParsedHttpSource() {
     override val supportsLatest: Boolean = true
 
     // Popular
-    override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/category/?page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        println("[NiaddPtBr] Requisição popularMangaRequest - página: $page")
+        return GET("$baseUrl/category/?page=$page", headers)
+    }
 
-    override fun popularMangaSelector(): String =
-        "div.manga-item:has(a[href*='/manga/'])"
+    override fun popularMangaSelector(): String = "div.manga-item:has(a[href*='/manga/'])"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -49,30 +50,41 @@ class NiaddPtBr : ParsedHttpSource() {
             ?: img?.absUrl("data-original")
 
         manga.description = element.selectFirst("div.manga-intro")?.text()?.trim()
+
+        println("[NiaddPtBr] popularMangaFromElement - título: ${manga.title}, url: ${manga.url}")
         return manga
     }
 
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
     // Latest
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/list/New-Update/?page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request {
+        println("[NiaddPtBr] Requisição latestUpdatesRequest - página: $page")
+        return GET("$baseUrl/list/New-Update/?page=$page", headers)
+    }
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun latestUpdatesFromElement(element: Element): SManga {
+        val manga = popularMangaFromElement(element)
+        println("[NiaddPtBr] latestUpdatesFromElement - título: ${manga.title}")
+        return manga
+    }
 
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val q = URLEncoder.encode(query, "UTF-8")
+        println("[NiaddPtBr] Requisição searchMangaRequest - query: $query, página: $page")
         return GET("$baseUrl/search/?name=$q&page=$page", headers)
     }
 
     override fun searchMangaSelector(): String = popularMangaSelector()
-    override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
+    override fun searchMangaFromElement(element: Element): SManga {
+        val manga = popularMangaFromElement(element)
+        println("[NiaddPtBr] searchMangaFromElement - título: ${manga.title}")
+        return manga
+    }
 
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
@@ -113,6 +125,8 @@ class NiaddPtBr : ParsedHttpSource() {
             ?.joinToString(", ") { it.text().trim().trimStart(',') } ?: ""
 
         manga.status = SManga.UNKNOWN
+
+        println("[NiaddPtBr] mangaDetailsParse - título: ${manga.title}, autor: ${manga.author}, gêneros: ${manga.genre}")
         return manga
     }
 
@@ -120,6 +134,7 @@ class NiaddPtBr : ParsedHttpSource() {
     override fun chapterListRequest(manga: SManga): Request {
         val chaptersUrl =
             if (manga.url.endsWith("/chapters.html")) manga.url else manga.url.removeSuffix("/") + "/chapters.html"
+        println("[NiaddPtBr] Requisição chapterListRequest - url: $chaptersUrl")
         return GET(baseUrl + chaptersUrl, headers)
     }
 
@@ -135,6 +150,8 @@ class NiaddPtBr : ParsedHttpSource() {
 
         val dateText = element.selectFirst("span.chp-time")?.text()
         chapter.date_upload = parseDate(dateText)
+
+        println("[NiaddPtBr] chapterFromElement - capítulo: ${chapter.name}, data: $dateText")
         return chapter
     }
 
@@ -164,11 +181,13 @@ class NiaddPtBr : ParsedHttpSource() {
 
         var pageIndex = 0
         sortedUrls.forEach { url ->
+            println("[NiaddPtBr] pageListParse - carregando url: $url")
             val pageDoc = client.newCall(GET(url, headers)).execute().asJsoup()
             pageDoc.select("img.manga_pic").forEach { img ->
                 val imageUrl = img.absUrl("src")
                     .ifBlank { img.absUrl("data-src") }
                     .ifBlank { img.absUrl("data-original") }
+                println("[NiaddPtBr] pageListParse - página $pageIndex, imagem: $imageUrl")
                 pages.add(Page(pageIndex++, "", imageUrl))
             }
         }
