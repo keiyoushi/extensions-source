@@ -1,5 +1,6 @@
 ext {
     extName = 'Niadd'
+    pkgNameSuffix = 'all.niadd'
     extClass = '.NiaddFactory'
     extVersionCode = 1
     isNsfw = true
