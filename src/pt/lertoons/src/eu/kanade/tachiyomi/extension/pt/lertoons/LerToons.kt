@@ -13,4 +13,6 @@ class LerToons : ZeroTheme(
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
+
+    override val mangaSubString: String = "manga"
 }
