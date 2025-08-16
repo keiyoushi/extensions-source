@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.niadd
 
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.*
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -11,11 +11,11 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class Niadd(
-    override val name: String,
-    override val baseUrl: String,
-    private val langCode: String,
-) : ParsedHttpSource() {
+class NiaddEn : ParsedHttpSource() {
+
+    override val name: String = "Niadd English"
+    override val baseUrl: String = "https://www.niadd.com"
+    private val langCode: String = "en"
 
     override val lang: String = langCode
     override val supportsLatest: Boolean = true
@@ -24,7 +24,8 @@ open class Niadd(
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/category/?page=$page", headers)
 
-    override fun popularMangaSelector(): String = "div.manga-item:has(a[href*='/manga/'])"
+    override fun popularMangaSelector(): String =
+        "div.manga-item:has(a[href*='/manga/'])"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
