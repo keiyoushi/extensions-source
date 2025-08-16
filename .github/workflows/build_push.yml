@@ -11,6 +11,8 @@ on:
       - '.github/scripts/**'
       - '.github/workflows/build_push.yml'
 
+permissions: {}
+
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
@@ -22,7 +24,7 @@ env:
 jobs:
   prepare:
     name: Prepare job
-    runs-on: 'ubuntu-24.04'
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
       delete: ${{ steps.generate-matrices.outputs.delete }}
@@ -31,6 +33,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
@@ -44,24 +47,27 @@ jobs:
           cache-read-only: true
 
       - name: Get last successful CI commit
-        id: last_successful_ci_commit
         uses: nrwl/nx-set-shas@826660b82addbef3abff5fa871492ebad618c9e1 # v4.3.3
+        with:
+          fallback-sha: 4b825dc642cb6eb9a060e54bf8d69288fbee4904 # empty tree
 
       - id: generate-matrices
         name: Create output matrices
         run: |
-          python ./.github/scripts/generate-build-matrices.py ${{ steps.last_successful_ci_commit.outputs.base }} Release
+          python ./.github/scripts/generate-build-matrices.py "$NX_BASE" Release
 
   build:
     name: Build extensions (${{ matrix.chunk.number }})
     needs: prepare
-    runs-on: 'ubuntu-24.04'
+    runs-on: ubuntu-latest
     if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - name: Checkout main branch
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
@@ -80,11 +86,12 @@ jobs:
 
       - name: Build extensions (${{ matrix.chunk.number }})
         env:
+          MODULES: ${{ join(matrix.chunk.modules, ' ') }}
           ALIAS: ${{ secrets.ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          ./gradlew $(echo '${{ toJson(matrix.chunk.modules) }}' | jq -r 'join(" ")')
+          ./gradlew $MODULES
 
       - name: Upload APKs (${{ matrix.chunk.number }})
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -101,7 +108,7 @@ jobs:
     name: Publish extension repo
     needs: [prepare, build]
     if: "github.repository == 'keiyoushi/extensions-source'"
-    runs-on: 'ubuntu-24.04'
+    runs-on: ubuntu-latest
     steps:
       - name: Download APK artifacts
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
@@ -119,6 +126,7 @@ jobs:
         with:
           ref: main
           path: main
+          persist-credentials: false
 
       - name: Create repo artifacts
         run: |
@@ -136,9 +144,12 @@ jobs:
           token: ${{ secrets.BOT_PAT }}
           ref: repo
           path: repo
+          persist-credentials: true
 
       - name: Merge and deploy repo
+        env:
+          DELETE: ${{ needs.prepare.outputs.delete }}
         run: |
           cd repo
-          python ../main/.github/scripts/merge-repo.py '${{ needs.prepare.outputs.delete }}'
+          python ../main/.github/scripts/merge-repo.py "$DELETE"
           ../main/.github/scripts/commit-repo.sh
