@@ -80,6 +80,18 @@ abstract class Comick(
         }.also(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
+            key = PREFERRED_GROUPS_PREF
+            title = intl["preferred_groups_title"]
+            summary = intl["preferred_groups_summary"]
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putString(PREFERRED_GROUPS_PREF, newValue.toString())
+                    .commit()
+            }
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
             key = IGNORED_TAGS_PREF
             title = intl["ignored_tags_title"]
             summary = intl["ignored_tags_summary"]
@@ -219,6 +231,16 @@ abstract class Comick(
 
     private val SharedPreferences.ignoredGroups: Set<String>
         get() = getString(IGNORED_GROUPS_PREF, "")
+            ?.lowercase()
+            ?.split("\n")
+            ?.map(String::trim)
+            ?.filter(String::isNotEmpty)
+            ?.sorted()
+            .orEmpty()
+            .toSet()
+
+    private val SharedPreferences.preferredGroups: Set<String>
+        get() = getString(PREFERRED_GROUPS_PREF, "")
             ?.lowercase()
             ?.split("\n")
             ?.map(String::trim)
@@ -599,7 +621,8 @@ abstract class Comick(
 
         val currentTimestamp = System.currentTimeMillis()
 
-        return chapterListResponse.chapters
+        // First, apply the ignored groups filter to remove chapters from blocked groups
+        val filteredChapters = chapterListResponse.chapters
             .filter {
                 val publishTime = try {
                     publishedDateFormat.parse(it.publishedAt)!!.time
@@ -610,13 +633,45 @@ abstract class Comick(
                 val publishedChapter = publishTime <= currentTimestamp
 
                 val noGroupBlock = it.groups.map { g -> g.lowercase() }
-                    .intersect(preferences.ignoredGroups)
+                    .intersect(preferences.ignoredGroups.map { it.lowercase() })
                     .isEmpty()
 
                 publishedChapter && noGroupBlock
             }
-            .filterOnScore(preferences.chapterScoreFiltering)
-            .map { it.toSChapter(mangaUrl) }
+
+        // Now apply the primary filtering logic based on user preferences
+        val finalChapters = if (preferences.preferredGroups.isEmpty()) {
+            // If preferredGroups is empty, fall back to the existing score filter
+            filteredChapters.filterOnScore(preferences.chapterScoreFiltering)
+        } else {
+            // If preferredGroups is not empty, use the list to grab chapters from those groups in order of preference
+            val chaptersByNumber = filteredChapters.groupBy { it.chap }
+            val preferredFilteredChapters = mutableListOf<Chapter>()
+
+            // Iterate through each chapter number's group of chapters
+            chaptersByNumber.forEach { (_, chaptersForNumber) ->
+                // Find the chapter from the most preferred group
+                val preferredChapter = preferences.preferredGroups.firstNotNullOfOrNull { preferredGroup ->
+                    chaptersForNumber.find { chapter ->
+                        chapter.groups.any { group ->
+                            group.lowercase() == preferredGroup.lowercase()
+                        }
+                    }
+                }
+
+                if (preferredChapter != null) {
+                    preferredFilteredChapters.add(preferredChapter)
+                } else {
+                    // If no preferred group chapter was found, fall back to the score filter
+                    val fallbackChapter = chaptersForNumber.filterOnScore(preferences.chapterScoreFiltering)
+                    preferredFilteredChapters.addAll(fallbackChapter)
+                }
+            }
+            preferredFilteredChapters
+        }
+
+        // Finally, map the filtered chapters to the SChapter model
+        return finalChapters.map { it.toSChapter(mangaUrl) }
     }
 
     private fun List<Chapter>.filterOnScore(shouldFilter: Boolean): Collection<Chapter> {
@@ -687,10 +742,29 @@ abstract class Comick(
             .apply()
     }
 
+    private fun SharedPreferences.newLinePreferredGroups() {
+        if (getBoolean(MIGRATED_PREFERRED_GROUPS, false)) return
+
+        val preferredGroups = getString(PREFERRED_GROUPS_PREF, "").orEmpty()
+
+        edit()
+            .putString(
+                PREFERRED_GROUPS_PREF,
+                preferredGroups
+                    .split(",")
+                    .map(String::trim)
+                    .filter(String::isNotEmpty)
+                    .joinToString("\n"),
+            )
+            .putBoolean(MIGRATED_PREFERRED_GROUPS, true)
+            .apply()
+    }
+
     companion object {
         const val SLUG_SEARCH_PREFIX = "id:"
         private val SPACE_AND_SLASH_REGEX = Regex("[ /]")
         private const val IGNORED_GROUPS_PREF = "IgnoredGroups"
+        private const val PREFERRED_GROUPS_PREF = "PreferredGroups"
         private const val IGNORED_TAGS_PREF = "IgnoredTags"
         private const val SHOW_ALTERNATIVE_TITLES_PREF = "ShowAlternativeTitles"
         const val SHOW_ALTERNATIVE_TITLES_DEFAULT = false
@@ -699,6 +773,7 @@ abstract class Comick(
         private const val GROUP_TAGS_PREF = "GroupTags"
         const val GROUP_TAGS_DEFAULT = false
         private const val MIGRATED_IGNORED_GROUPS = "MigratedIgnoredGroups"
+        private const val MIGRATED_PREFERRED_GROUPS = "MigratedPreferredGroups"
         private const val FIRST_COVER_PREF = "DefaultCover"
         private const val FIRST_COVER_DEFAULT = true
         private const val COVER_QUALITY_PREF = "CoverQuality"
