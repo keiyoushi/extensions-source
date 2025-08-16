@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.manhastro
 
+import android.content.SharedPreferences
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,12 +9,15 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import uy.kohesive.injekt.injectLazy
 import java.io.IOException
-import java.text.Normalizer
 
 class Manhastro : HttpSource() {
 
@@ -31,14 +35,14 @@ class Manhastro : HttpSource() {
 
     private val mangaSubString = "manga"
 
-    private val oldMangaSubString = "lermanga"
+    private val preferences: SharedPreferences = getPreferences()
+
+    private val json: Json by injectLazy()
+
+    private val mangaSubStrings = listOf("lermanga", mangaSubString)
 
     private val database: Map<Int, MangaDto> by lazy {
-        client.newCall(GET("$apiUrl/dados"))
-            .execute()
-            .parseAs<ResponseWrapper<List<MangaDto>>>()
-            .data
-            .associateBy { it.id }
+        (loadFromCache() ?: loadFromNetwork()).data.associateBy(MangaDto::id)
     }
 
     override val supportsLatest: Boolean = true
@@ -69,16 +73,11 @@ class Manhastro : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun getMangaUrl(manga: SManga): String {
-        if (manga.url.contains(oldMangaSubString, ignoreCase = true)) {
-            throw IOException("Migrate a obra para a $name")
-        }
-        return "$baseUrl/$mangaSubString/${manga.url}"
-    }
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/$mangaSubString/${manga.url}"
 
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         return Observable.fromCallable {
-            if (manga.url.contains(oldMangaSubString)) {
+            if (mangaSubStrings.any { manga.url.contains(it, ignoreCase = true) }) {
                 return@fromCallable tryCompatibility(manga)
             }
             database[manga.url.toInt()]?.toSManga() ?: throw IOException("Não encontrado")
@@ -88,7 +87,7 @@ class Manhastro : HttpSource() {
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga): Request {
-        val url = if (manga.url.contains(oldMangaSubString)) tryCompatibility(manga).url else manga.url
+        val url = if (manga.url.contains(mangaSubString)) tryCompatibility(manga).url else manga.url
         return GET("$apiUrl/dados/$url", headers)
     }
 
@@ -118,22 +117,40 @@ class Manhastro : HttpSource() {
     // ============================== Utilities =================================
 
     private fun tryCompatibility(manga: SManga): SManga {
-        val slug = manga.url.substringAfterLast("$oldMangaSubString/")
+        val substring = mangaSubStrings.first { manga.url.contains(it, ignoreCase = true) }
+        val slug = manga.url
+            .substringAfterLast("$substring/")
+            .substringBeforeLast("/")
         return database.values.firstOrNull { it.slug == slug }
             ?.toSManga()
             ?: throw IOException("Migrate a obra para a $name")
-    }
-
-    private fun String.normalize(): String {
-        return Normalizer.normalize(this, Normalizer.Form.NFD)
-            .replace(ACCENT_MARKS_REGEX, "")
     }
 
     private fun String.contains(other: String): Boolean {
         return normalize().contains(other.normalize(), ignoreCase = true)
     }
 
+    private fun loadFromCache(): ResponseWrapper<List<MangaDto>>? {
+        val jsonValue = preferences.getString(STORAGE_PREF, null) ?: return null
+        val storage = jsonValue.parseAs<Storage>()
+        return storage.takeIf { !it.isExpired() }?.mangas
+    }
+
+    private fun loadFromNetwork(): ResponseWrapper<List<MangaDto>> {
+        return client.newCall(GET("$apiUrl/dados"))
+            .execute()
+            .parseAs<ResponseWrapper<List<MangaDto>>>()
+            .also {
+                Storage().apply {
+                    update(it)
+                    preferences.edit()
+                        .putString(STORAGE_PREF, json.encodeToString(this))
+                        .apply()
+                }
+            }
+    }
+
     companion object {
-        val ACCENT_MARKS_REGEX = "\\p{M}+".toRegex()
+        private const val STORAGE_PREF = "storagePref"
     }
 }

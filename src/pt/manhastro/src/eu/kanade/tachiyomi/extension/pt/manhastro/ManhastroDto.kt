@@ -7,7 +7,10 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.text.Normalizer
 import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 @Serializable
@@ -37,7 +40,8 @@ class MangaDto(
     val genres: String?,
 ) {
 
-    val slug: String = title.replace(" ", "-")
+    val slug: String = title.normalize().replace(" ", "-").lowercase()
+
     fun toSManga(): SManga = SManga.create().apply {
         title = this@MangaDto.title
         description = """
@@ -98,4 +102,32 @@ class PageDto(
             }
         }
     }
+}
+
+@Serializable
+class Storage {
+    lateinit var updatedAt: String
+    lateinit var mangas: ResponseWrapper<List<MangaDto>>
+
+    fun update(value: ResponseWrapper<List<MangaDto>>) {
+        mangas = value
+        updatedAt = Calendar.getInstance().apply {
+            time = Date()
+            add(Calendar.DATE, EXPIRE_AT)
+        }.let { dateFormat.format(it.time) }
+    }
+
+    fun isExpired(): Boolean =
+        try { dateFormat.parse(updatedAt)!!.before(Date()) } catch (e: Exception) { true }
+
+    companion object {
+        private const val EXPIRE_AT = 7
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+    }
+}
+
+private val ACCENT_MARKS_REGEX = "\\p{M}+".toRegex()
+fun String.normalize(): String {
+    return Normalizer.normalize(this, Normalizer.Form.NFD)
+        .replace(ACCENT_MARKS_REGEX, "")
 }
