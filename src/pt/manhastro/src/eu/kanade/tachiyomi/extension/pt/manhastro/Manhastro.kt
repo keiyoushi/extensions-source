@@ -47,6 +47,8 @@ class Manhastro : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
+    // ============================== Popular ===================================
+
     override fun popularMangaRequest(page: Int) = GET("$apiUrl/rank/mensal", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -56,9 +58,13 @@ class Manhastro : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    // ============================== Latest ====================================
 
     override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/lancamentos", headers)
+
+    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+
+    // ============================== Search ====================================
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return Observable.fromCallable {
@@ -69,9 +75,11 @@ class Manhastro : HttpSource() {
         }
     }
 
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+
     override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
+    // ============================== Details ===================================
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl/$mangaSubString/${manga.url}"
 
@@ -85,6 +93,8 @@ class Manhastro : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
+
+    // ============================== Chapters ==================================
 
     override fun chapterListRequest(manga: SManga): Request {
         val url = if (manga.url.contains(mangaSubString)) tryCompatibility(manga).url else manga.url
@@ -102,6 +112,8 @@ class Manhastro : HttpSource() {
             .map { it.toSChapter(mangaId) }
             .sortedByDescending(SChapter::chapter_number)
     }
+
+    // ============================== Pages =====================================
 
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast(":")
