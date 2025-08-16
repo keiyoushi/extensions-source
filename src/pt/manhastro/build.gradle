@@ -1,14 +1,8 @@
 ext {
     extName = 'Manhastro'
     extClass = '.Manhastro'
-    themePkg = 'madara'
-    baseUrl = 'https://manhastro.net'
-    overrideVersionCode = 9
+    extVersionCode = 52
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(":lib:cookieinterceptor"))
-}
