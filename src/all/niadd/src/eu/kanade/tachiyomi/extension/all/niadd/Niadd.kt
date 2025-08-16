@@ -1,12 +1,8 @@
 package eu.kanade.tachiyomi.extension.all.niadd
 
-import eu.kanade.tachiyomi.source.SourceFactory
-import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.*
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -28,8 +24,7 @@ open class Niadd(
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/category/?page=$page", headers)
 
-    override fun popularMangaSelector(): String =
-        "div.manga-item:has(a[href*='/manga/'])"
+    override fun popularMangaSelector(): String = "div.manga-item:has(a[href*='/manga/'])"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
