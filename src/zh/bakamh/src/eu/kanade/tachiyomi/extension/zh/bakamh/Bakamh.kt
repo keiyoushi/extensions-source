@@ -13,6 +13,8 @@ class Bakamh : Madara(
 ) {
     override val mangaDetailsSelectorStatus = ".post-content_item:contains(状态) .summary-content"
 
+    override fun chapterListSelector() = "li.chapter-promotion"
+
     override fun headersBuilder(): Headers.Builder {
         return super.headersBuilder()
             .add("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")

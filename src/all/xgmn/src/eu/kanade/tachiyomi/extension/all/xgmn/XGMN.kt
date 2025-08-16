@@ -40,6 +40,7 @@ class XGMN : HttpSource() {
 
     override fun popularMangaParse(response: Response) = response.asJsoup().let { doc ->
         redirectUrl = redirectUrl ?: doc.location().toHttpUrl().let { "${it.scheme}://${it.host}" }
+        val cur = doc.selectFirst(".current")?.text()?.toInt()
         MangasPage(
             doc.select(".related_box").map {
                 SManga.create().apply {
@@ -50,7 +51,7 @@ class XGMN : HttpSource() {
                     }
                 }
             },
-            false,
+            cur != null && cur < doc.selectFirst(".pagination strong")!!.text().toInt(),
         )
     }
 
