@@ -4,12 +4,12 @@ import eu.kanade.tachiyomi.source.SourceFactory
 
 class NiaddFactory : SourceFactory {
     override fun createSources() = listOf(
-        NiaddEn(), 
-        NiaddPtBr(), 
-        NiaddDe(),  
-        NiaddEs(),  
-        NiaddFr(),  
-        NiaddIt(), 
-        NiaddRu(),
+        NiaddEn(),
+        NiaddPtBr(),
+        NiaddDe(),
+        NiaddEs(),
+        NiaddFr(),
+        NiaddIt(),
+        NiaddRu()
     )
 }
