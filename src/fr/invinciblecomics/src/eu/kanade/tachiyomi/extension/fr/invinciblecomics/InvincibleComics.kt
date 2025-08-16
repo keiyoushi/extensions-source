@@ -76,31 +76,50 @@ class InvincibleComics : HttpSource() {
     // Details
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-
-        return SManga.create()
+        return SManga.create().apply {
+            thumbnail_url = document.selectFirst("#main img")?.parseSrcset()
+            description = document.selectFirst("strong:contains(Résumé)")?.parent()?.ownText()
+            author = document.selectFirst("strong:contains(Auteur)")?.parent()?.ownText()
+            genre = document.selectFirst("strong:contains(Genres)")?.parent()?.ownText()
+            status = when (document.selectFirst("strong:contains(Statut)")?.parent()?.ownText()) {
+                "En cours" -> SManga.ONGOING // OK
+                "Terminé" -> SManga.COMPLETED // TODO: Check if this is correct
+                else -> SManga.UNKNOWN
+            }
+        }
     }
 
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return emptyList()
+        return document.select("a.tome-link").map { element ->
+            SChapter.create().apply {
+                name = element.text()
+                setUrlWithoutDomain(element.attr("href"))
+                date_upload = 0L
+                chapter_number = element.attr("data-tome").toFloatOrNull() ?: 0f
+            }
+        }.reversed()
     }
 
     // Pages
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return emptyList()
+
+        val script = document.selectFirst("script:containsData(imageBase)")?.data()
+            ?: error("No script with imageBase found")
+        val imageBaseUrl = Regex("""imageBase = "(.*)";""").find(script)?.groupValues?.get(1)
+            ?: error("Failed to extract imageBase URL from script")
+        val totalPages = Regex("""const totalPages = (\d+);""").find(script)?.groupValues?.get(1)
+            ?: error("Failed to extract total pages from script")
+
+        return (1..totalPages.toInt()).map { pageNumber ->
+            Page(pageNumber, imageUrl = "$imageBaseUrl${"%03d".format(pageNumber)}.png")
+        }
     }
 
     // Page
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-/*
-    override fun imageRequest(page: Page): Request {
-        return GET(page.imageUrl!!, headers)
-    }
-*/
-    // Filters
 
     // Utils
     private fun Element.parseSrcset(): String {
