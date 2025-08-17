@@ -615,6 +615,10 @@ abstract class Comick(
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterListResponse = response.parseAs<ChapterList>()
 
+
+        val preferredGroups = preferences.preferredGroups
+        val ignoredGroups = preferences.ignoredGroups
+
         val mangaUrl = response.request.url.toString()
             .substringBefore("/chapters")
             .substringAfter(apiUrl)
@@ -633,14 +637,14 @@ abstract class Comick(
                 val publishedChapter = publishTime <= currentTimestamp
 
                 val noGroupBlock = it.groups.map { g -> g.lowercase() }
-                    .intersect(preferences.ignoredGroups.map { it.lowercase() })
+                    .intersect(ignoredGroups.map { it.lowercase() })
                     .isEmpty()
 
                 publishedChapter && noGroupBlock
             }
 
         // Now apply the primary filtering logic based on user preferences
-        val finalChapters = if (preferences.preferredGroups.isEmpty()) {
+        val finalChapters = if (preferredGroups.isEmpty()) {
             // If preferredGroups is empty, fall back to the existing score filter
             filteredChapters.filterOnScore(preferences.chapterScoreFiltering)
         } else {
@@ -651,7 +655,7 @@ abstract class Comick(
             // Iterate through each chapter number's group of chapters
             chaptersByNumber.forEach { (_, chaptersForNumber) ->
                 // Find the chapter from the most preferred group
-                val preferredChapter = preferences.preferredGroups.firstNotNullOfOrNull { preferredGroup ->
+                val preferredChapter = preferredGroups.firstNotNullOfOrNull { preferredGroup ->
                     chaptersForNumber.find { chapter ->
                         chapter.groups.any { group ->
                             group.lowercase() == preferredGroup.lowercase()
@@ -739,24 +743,6 @@ abstract class Comick(
                     .joinToString("\n"),
             )
             .putBoolean(MIGRATED_IGNORED_GROUPS, true)
-            .apply()
-    }
-
-    private fun SharedPreferences.newLinePreferredGroups() {
-        if (getBoolean(MIGRATED_PREFERRED_GROUPS, false)) return
-
-        val preferredGroups = getString(PREFERRED_GROUPS_PREF, "").orEmpty()
-
-        edit()
-            .putString(
-                PREFERRED_GROUPS_PREF,
-                preferredGroups
-                    .split(",")
-                    .map(String::trim)
-                    .filter(String::isNotEmpty)
-                    .joinToString("\n"),
-            )
-            .putBoolean(MIGRATED_PREFERRED_GROUPS, true)
             .apply()
     }
 
