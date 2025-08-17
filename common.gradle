@@ -17,7 +17,7 @@ android {
     namespace "eu.kanade.tachiyomi.extension"
     sourceSets {
         main {
-            manifest.srcFile "AndroidManifest.xml"
+            manifest.srcFile layout.buildDirectory.file('tempAndroidManifest.xml')
             java.srcDirs = ['src']
             res.srcDirs = ['res']
             assets.srcDirs = ['assets']
@@ -80,6 +80,11 @@ android {
         resources.excludes.add("kotlin-tooling-metadata.json")
     }
 
+    // https://stackoverflow.com/a/77745844
+    tasks.withType(com.android.build.gradle.tasks.PackageAndroidArtifact).configureEach {
+        doFirst { appMetadata.asFile.getOrNull()?.write('') }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -105,17 +110,18 @@ dependencies {
     compileOnly(libs.bundles.common)
 }
 
+tasks.register("copyManifestFile", Copy) {
+    from 'AndroidManifest.xml'
+    rename { 'tempAndroidManifest.xml' }
+    into layout.buildDirectory
+}
+
 tasks.register("writeManifestFile") {
+    dependsOn(copyManifestFile)
     doLast {
-        def manifest = android.sourceSets.getByName("main").manifest
-        if (!manifest.srcFile.exists()) {
-            File tempFile = layout.buildDirectory.get().file("tempAndroidManifest.xml").getAsFile()
-            if (!tempFile.exists()) {
-                tempFile.withWriter {
-                    it.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
-                }
-            }
-            manifest.srcFile(tempFile.path)
+        File tempFile = android.sourceSets.getByName('main').manifest.srcFile
+        if (!tempFile.exists()) {
+            tempFile.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
         }
     }
 }

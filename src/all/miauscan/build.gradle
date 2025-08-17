@@ -2,8 +2,13 @@ ext {
     extName = 'Miau Scan'
     extClass = '.MiauScanFactory'
     themePkg = 'mangathemesia'
+<<<<<<< HEAD
     baseUrl = 'https://leemiau.com/'
     overrideVersionCode = 5
+=======
+    baseUrl = 'https://leemiau.com'
+    overrideVersionCode = 6
+>>>>>>> 92ab8f0124a4bed32da04566f7a5e956fb150bc0
     isNsfw = true
 }
 

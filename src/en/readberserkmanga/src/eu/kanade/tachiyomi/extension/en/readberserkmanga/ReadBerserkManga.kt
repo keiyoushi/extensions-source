@@ -14,11 +14,12 @@ class ReadBerserkManga : MangaCatalog("Read Berserk Manga", "https://readberserk
         Pair("Berserk", "$baseUrl/manga/berserk/"),
         Pair("Guidebook", "$baseUrl/manga/berserk-official-guidebook/"),
         Pair("Colored", "$baseUrl/manga/berserk-colored/"),
-        Pair("Motion Comic", "$baseUrl/manga/berserk-the-motion-comic/"),
+        // Pair("Motion Comic", "$baseUrl/manga/berserk-the-motion-comic/"), // Video
         Pair("Duranki", "$baseUrl/manga/duranki/"),
         Pair("Gigantomakhia", "$baseUrl/manga/gigantomakhia/"),
+        Pair("Futatabi", "$baseUrl/manga/futatabi/"),
         Pair("Berserk Spoilers & RAW", "$baseUrl/manga/berserk-spoilers-raw/"),
-    ).sortedBy { it.first }.distinctBy { it.second }
+    )
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         description = document.select("div.card-body > p").text()
