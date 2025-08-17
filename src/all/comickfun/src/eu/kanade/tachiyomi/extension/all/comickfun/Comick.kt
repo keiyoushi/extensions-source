@@ -758,7 +758,6 @@ abstract class Comick(
         private const val GROUP_TAGS_PREF = "GroupTags"
         const val GROUP_TAGS_DEFAULT = false
         private const val MIGRATED_IGNORED_GROUPS = "MigratedIgnoredGroups"
-        private const val MIGRATED_PREFERRED_GROUPS = "MigratedPreferredGroups"
         private const val FIRST_COVER_PREF = "DefaultCover"
         private const val FIRST_COVER_DEFAULT = true
         private const val COVER_QUALITY_PREF = "CoverQuality"
