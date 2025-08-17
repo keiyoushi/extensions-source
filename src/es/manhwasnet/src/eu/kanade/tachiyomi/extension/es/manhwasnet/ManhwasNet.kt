@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
 
 class ManhwasNet : ParsedHttpSource() {
 
-    override val baseUrl: String = "https://manhwas.net"
+    override val baseUrl: String = "https://manhwa-es.com/"
     override val lang: String = "es"
     override val name: String = "Manhwas.net"
     override val supportsLatest: Boolean = true
