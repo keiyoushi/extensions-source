@@ -615,7 +615,6 @@ abstract class Comick(
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterListResponse = response.parseAs<ChapterList>()
 
-
         val preferredGroups = preferences.preferredGroups
         val ignoredGroups = preferences.ignoredGroups
 
