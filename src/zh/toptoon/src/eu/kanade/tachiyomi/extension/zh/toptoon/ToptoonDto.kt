@@ -31,9 +31,9 @@ class MetaDto(val title: String, val author: AuthorDto)
 @Serializable
 class AuthorDto(val authorString: String)
 
-// "standard" in json can be either string or array, always decode as string
 @Serializable
 class ThumbnailDto(private val standard: JsonElement) {
+    // "standard" in json can be either string or array
     val url get() = when (standard) {
         is JsonPrimitive -> "https://tw-contents-image.toptoon.net${standard.content}"
         is JsonArray -> "https://tw-contents-image.toptoon.net${standard[0].jsonPrimitive.content}"
