@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.sakuramangas
 
+import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -14,10 +15,13 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import java.security.MessageDigest
 import java.util.Calendar
 import kotlin.concurrent.thread
 
@@ -41,9 +45,48 @@ class SakuraMangas : HttpSource() {
         "Lidos" to "3",
     )
 
+    private var csrfToken: String? = null
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(::csrfTokenInterceptor)
+        .build()
+
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
+        .set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
         .set("X-Requested-With", "XMLHttpRequest")
+
+    private fun csrfTokenInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        // Only process if it's GET and the URL contains '/obras/'
+        if (request.method != "GET" || !request.url.toString().contains("/obras/")) {
+            return chain.proceed(request)
+        }
+
+        val response = chain.proceed(request)
+
+        // Only process if it's an HTML response
+        if (response.header("Content-Type")?.contains("text/html") == true) {
+            try {
+                val document = response.peekBody(Long.MAX_VALUE).string()
+                val jsoupDoc = Jsoup.parse(document)
+
+                // Use Jsoup to find the csrf-token meta tag
+                val csrfMeta = jsoupDoc.selectFirst("meta[name=csrf-token]")
+                csrfMeta?.let { meta ->
+                    val token = meta.attr("content")
+                    if (token.isNotEmpty()) {
+                        csrfToken = token
+                    }
+                }
+            } catch (error: Exception) {
+                Log.e("SakuraMangas", "Failed to find csrf-token", error)
+            }
+        }
+
+        return response
+    }
 
     // ================================ Popular =======================================
 
@@ -55,7 +98,7 @@ class SakuraMangas : HttpSource() {
     // ================================ Latest =======================================
 
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/dist/sakura/models/home/home_ultimos.php", headers)
+        GET("$baseUrl/dist/sakura/models/home/__.home_ultimos.php", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.parseAs<List<String>>()
@@ -76,10 +119,10 @@ class SakuraMangas : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val form = FormBody.Builder()
-            .add("seach", query)
+            .add("search", query)
             .add("order", "3")
-            .add("offset", ((page - 1) * 15).toString())
-            .add("limit", "15")
+            .add("offset", ((page - 1) * DEFAULT_LIMIT).toString())
+            .add("limit", DEFAULT_LIMIT.toString())
 
         val inclGenres = mutableListOf<String>()
         val exclGenres = mutableListOf<String>()
@@ -112,7 +155,7 @@ class SakuraMangas : HttpSource() {
         classification?.let { form.add("classification", it) }
         orderBy?.let { form.add("order", it) }
 
-        return POST("$baseUrl/dist/sakura/models/obras/obras_buscar.php", headers, form.build())
+        return POST("$baseUrl/dist/sakura/models/obras/__.obras_buscar.php", headers, form.build())
     }
 
     fun searchMangaFromElement(element: Element) = SManga.create().apply {
@@ -134,42 +177,86 @@ class SakuraMangas : HttpSource() {
 
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
-    private fun mangaDetailsApiRequest(mangaId: String): Request {
+    private fun mangaDetailsApiRequest(
+        mangaId: String,
+        challenge: String?,
+    ): Request {
         val form = FormBody.Builder()
             .add("manga_id", mangaId)
             .add("dataType", "json")
 
-        return POST("$baseUrl/dist/sakura/models/manga/manga_info.php", headers, form.build())
+        val proof = this.generateHeaderProof(challenge, PROOF_INFO_SEED)
+        if (!challenge.isNullOrBlank() && !proof.isNullOrBlank()) {
+            form.add("challenge", challenge)
+            form.add("proof", proof)
+        }
+
+        val headers = headers.newBuilder().apply {
+            csrfToken?.let { set("X-CSRF-Token", it) }
+        }.build()
+
+        return POST(
+            "$baseUrl/dist/sakura/models/manga/__..obf__manga_info.php",
+            headers,
+            form.build(),
+        )
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         val mangaId = document.selectFirst("meta[manga-id]")!!.attr("manga-id")
+        val challenge = document.selectFirst("meta[name=header-challenge]")?.attr("content")
 
-        return client.newCall(mangaDetailsApiRequest(mangaId)).execute()
+        return client.newCall(mangaDetailsApiRequest(mangaId, challenge)).execute()
             .parseAs<SakuraMangaInfoDto>().toSManga(document.baseUri())
     }
 
     // ================================ Chapters =======================================
 
-    private fun chapterListApiRequest(mangaId: String, page: Int): Request {
+    private fun chapterListApiRequest(
+        mangaId: String,
+        page: Int,
+        challenge: String?,
+    ): Request {
         val form = FormBody.Builder()
             .add("manga_id", mangaId)
-            .add("offset", ((page - 1) * 90).toString())
+            .add("offset", ((page - 1) * CHAPTER_LIMIT).toString())
             .add("order", "desc")
-            .add("limit", "90")
+            .add("limit", CHAPTER_LIMIT.toString())
 
-        return POST("$baseUrl/dist/sakura/models/manga/manga_capitulos.php", headers, form.build())
+        val proof = this.generateHeaderProof(challenge, PROOF_INFO_SEED)
+        if (!challenge.isNullOrBlank() && !proof.isNullOrBlank()) {
+            form.add("challenge", challenge)
+            form.add("proof", proof)
+        }
+
+        val headers = headers.newBuilder().apply {
+            csrfToken?.let { set("X-CSRF-Token", it) }
+        }.build()
+
+        return POST(
+            "$baseUrl/dist/sakura/models/manga/__..obf__manga_capitulos.php",
+            headers,
+            form.build(),
+        )
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        Thread.sleep(1000)
+        return GET(baseUrl + manga.url, headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val mangaId = document.selectFirst("meta[manga-id]")!!.attr("manga-id")
+        val challenge = document.selectFirst("meta[name=header-challenge]")?.attr("content")
 
         var page = 1
         val chapters = mutableListOf<SChapter>()
         do {
-            val doc = client.newCall(chapterListApiRequest(mangaId, page++)).execute().asJsoup()
+            val doc = client.newCall(chapterListApiRequest(mangaId, page++, challenge))
+                .execute()
+                .asJsoup()
 
             val chapterGroup = doc.select(".capitulo-item").map(::chapterFromElement).also {
                 chapters += it
@@ -202,13 +289,27 @@ class SakuraMangas : HttpSource() {
 
     // ================================ Pages =======================================
 
-    private fun pageListApiRequest(chapterId: String, token: String): Request {
+    private fun pageListApiRequest(
+        chapterId: String,
+        token: String,
+        challenge: String?,
+    ): Request {
         val form = FormBody.Builder()
             .add("chapter_id", chapterId)
             .add("token", token)
 
+        val proof = this.generateHeaderProof(challenge, PROOF_CHAPTER_SEED)
+        if (!challenge.isNullOrBlank() && !proof.isNullOrBlank()) {
+            form.add("challenge", challenge)
+            form.add("proof", proof)
+        }
+
+        val headers = headers.newBuilder().apply {
+            csrfToken?.let { set("X-CSRF-Token", it) }
+        }.build()
+
         return POST(
-            "$baseUrl/dist/sakura/models/capitulo/capitulos_read.php",
+            "$baseUrl/dist/sakura/models/capitulo/__..obf__capitulos_read.php",
             headers,
             form.build(),
         )
@@ -219,13 +320,15 @@ class SakuraMangas : HttpSource() {
 
         val chapterId = document.selectFirst("meta[chapter-id]")!!.attr("chapter-id")
         val token = document.selectFirst("meta[token]")!!.attr("token")
+        val challenge = document.selectFirst("meta[name=header-challenge]")?.attr("content")
 
-        val response = client.newCall(pageListApiRequest(chapterId, token)).execute()
-            .parseAs<SakuraMangaChapterReadDto>()
+        val json =
+            client.newCall(pageListApiRequest(chapterId, token, challenge)).execute()
+                .parseAs<SakuraMangaChapterReadDto>()
 
         val baseUrl = document.baseUri().trimEnd('/')
 
-        return response.imageUrls.mapIndexed { index, url ->
+        return json.getUrls().mapIndexed { index, url ->
             Page(
                 index,
                 imageUrl = "$baseUrl/$url".toHttpUrl().toString(),
@@ -318,5 +421,54 @@ class SakuraMangas : HttpSource() {
         now.add(javaUnit, -number)
 
         return now.timeInMillis
+    }
+
+    /**
+     * Generates a header proof based on the provided challenge.
+     * Equivalent to the JavaScript generateHeaderProof method.
+     */
+    private fun generateHeaderProof(challenge: String?, seed: Int = PROOF_INFO_SEED): String? {
+        if (challenge.isNullOrEmpty()) {
+            return null
+        }
+
+        Log.d("SakuraMangas", "generating proof for challenge: $challenge")
+
+        try {
+            val decodedChallenge = String(Base64.decode(challenge, Base64.DEFAULT))
+            val parts = decodedChallenge.split("|")
+
+            if (parts.size != 2) {
+                return null
+            }
+
+            val ip = parts[0]
+            val userAgent = headers["User-Agent"]
+            val proof = ip + userAgent + seed
+
+            Log.d("SakuraMangas", "data for challenge: ip: '$ip', userAgent: '$userAgent'")
+
+            val proofBytes = proof.toByteArray(Charsets.UTF_8)
+            val digest = MessageDigest.getInstance("SHA-256")
+            val hashBytes = digest.digest(proofBytes)
+
+            val final = hashBytes.joinToString("") {
+                "%02x".format(it)
+            }
+
+            Log.d("SakuraMangas", "generated proof: $final")
+
+            return final
+        } catch (error: Exception) {
+            Log.e("SakuraMangas", "Failed to generate header proof", error)
+            return null
+        }
+    }
+
+    companion object {
+        private const val DEFAULT_LIMIT = 15
+        private const val CHAPTER_LIMIT = 90
+        private const val PROOF_INFO_SEED = 0x109e0
+        private const val PROOF_CHAPTER_SEED = 0x6068
     }
 }
