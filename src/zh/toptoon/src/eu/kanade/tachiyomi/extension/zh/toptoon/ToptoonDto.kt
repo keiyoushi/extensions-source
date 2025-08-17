@@ -13,27 +13,27 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
-data class PopularResponseDto(val adult: List<MangaDto>)
+class PopularResponseDto(val adult: List<MangaDto>)
 
 @Serializable
-data class MangaDto(val meta: MetaDto, val thumbnail: ThumbnailDto, val id: String, val lastUpdated: LastUpdatedDto) {
+class MangaDto(val meta: MetaDto, val thumbnail: ThumbnailDto, val id: String, val lastUpdated: LastUpdatedDto) {
     val url = "/comic/epList/$id"
 }
 
 @Serializable
-data class MetaDto(val title: String, val author: AuthorDto)
+class MetaDto(val title: String, val author: AuthorDto)
 
 @Serializable
-data class AuthorDto(val authorString: String)
+class AuthorDto(val authorString: String)
 
 @Serializable
 // "standard" in json can be either string or array, always decode as string
-data class ThumbnailDto(@Serializable(with = StringOrArraySerializer::class) val standard: String) {
+class ThumbnailDto(@Serializable(with = StringOrArraySerializer::class) val standard: String) {
     val url = "https://tw-contents-image.toptoon.net$standard"
 }
 
 @Serializable
-data class LastUpdatedDto(val pubDate: String)
+class LastUpdatedDto(val pubDate: String)
 
 object StringOrArraySerializer : KSerializer<String> {
     override val descriptor: SerialDescriptor =
