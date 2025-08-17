@@ -10,9 +10,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Response
 import rx.Observable
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -140,7 +140,7 @@ class Toptoon : HttpSource() {
                     ""
                 } + it.selectFirst("div.title")!!.text() + " " +
                     it.selectFirst("div.subTitle")!!.text()
-                date_upload = parseDate(it.selectFirst("div.pubDate")?.text() ?: "")
+                date_upload = dateFormat.tryParse(it.selectFirst("div.pubDate")?.text())
             }
         }.asReversed()
     }
@@ -162,14 +162,6 @@ class Toptoon : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private fun parseDate(dateStr: String): Long {
-        return try {
-            dateFormat.parse(dateStr)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
-    }
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
