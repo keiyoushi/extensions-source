@@ -9,11 +9,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
+import keiyoushi.utils.parseAs
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -23,7 +21,6 @@ class Toptoon : HttpSource() {
     override val lang: String = "zh"
     override val supportsLatest = true
     override val baseUrl = "https://www.toptoon.net"
-    private val json: Json by injectLazy()
 
     // Popular
 
@@ -165,10 +162,6 @@ class Toptoon : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream(it.body.byteStream())
-    }
 
     private fun parseDate(dateStr: String): Long {
         return try {
