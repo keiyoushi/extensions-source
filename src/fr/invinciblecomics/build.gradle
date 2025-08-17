@@ -1,8 +1,7 @@
 ext {
     extName = 'Invincible Comicsvf'
     extClass = '.InvincibleComics'
-    extVersionCode = 9
-    isNsfw = true
+    extVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
