@@ -1,5 +1,5 @@
 ext {
-    extName = 'Invincible Comicsvf'
+    extName = 'Invincible ComicsVF'
     extClass = '.InvincibleComics'
     extVersionCode = 1
 }

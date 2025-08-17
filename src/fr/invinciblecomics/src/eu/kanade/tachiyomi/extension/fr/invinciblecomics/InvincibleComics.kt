@@ -14,7 +14,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 
 class InvincibleComics : HttpSource() {
-    override val name = "Invincible Comicsvf"
+    override val name = "Invincible ComicsVF"
 
     override val baseUrl = "https://invinciblecomicsvf.fr"
 
