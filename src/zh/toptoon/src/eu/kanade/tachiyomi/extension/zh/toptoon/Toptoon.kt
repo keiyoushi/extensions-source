@@ -112,7 +112,7 @@ class Toptoon : HttpSource() {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.selectFirst("a")!!.absUrl("href"))
                 name = if (it.selectFirst("button.coin, button.gift, button.waitFree") != null) {
-                    "\uD83D\uDD12"
+                    "\uD83D\uDD12" // lock emoji
                 } else {
                     ""
                 } + it.selectFirst("div.title")!!.text() + " " +
