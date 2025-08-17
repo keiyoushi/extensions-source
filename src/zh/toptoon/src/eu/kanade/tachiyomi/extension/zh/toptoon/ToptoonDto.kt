@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.toptoon
 
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -16,8 +17,18 @@ import kotlinx.serialization.json.jsonPrimitive
 class PopularResponseDto(val adult: List<MangaDto>)
 
 @Serializable
-class MangaDto(val meta: MetaDto, val thumbnail: ThumbnailDto, val id: String, val lastUpdated: LastUpdatedDto) {
-    val url = "/comic/epList/$id"
+class MangaDto(
+    private val meta: MetaDto,
+    private val thumbnail: ThumbnailDto,
+    private val id: String,
+    val lastUpdated: LastUpdatedDto,
+) {
+    fun toSManga() = SManga.create().apply {
+        url = "/comic/epList/$id"
+        title = meta.title
+        author = meta.author.authorString
+        thumbnail_url = thumbnail.url
+    }
 }
 
 @Serializable

@@ -31,11 +31,7 @@ class Toptoon : HttpSource() {
             .replace("\\/", "/")
         val jsonResponse = client.newCall(GET("https:$jsonUrl", headers)).execute()
         val mangas = jsonResponse.parseAs<PopularResponseDto>().adult.map {
-            SManga.create().apply {
-                title = it.meta.title
-                url = it.url
-                thumbnail_url = it.thumbnail.url
-            }
+            it.toSManga()
         }
         return MangasPage(mangas, false)
     }
@@ -52,11 +48,7 @@ class Toptoon : HttpSource() {
         val mangas = jsonResponse.parseAs<Map<String, MangaDto>>().values
             .sortedByDescending { it.lastUpdated.pubDate }
             .map {
-                SManga.create().apply {
-                    title = it.meta.title
-                    url = it.url
-                    thumbnail_url = it.thumbnail.url
-                }
+                it.toSManga()
             }
         return MangasPage(mangas, false)
     }
@@ -72,14 +64,10 @@ class Toptoon : HttpSource() {
             .substringBefore("'")
         val jsonResponse = client.newCall(GET("https:$jsonUrl", headers)).execute()
         val mangas = jsonResponse.parseAs<Map<String, MangaDto>>().values
-            .filter { it.meta.title.contains(query, true) || it.meta.author.authorString.contains(query, true) }
             .map {
-                SManga.create().apply {
-                    title = it.meta.title
-                    url = it.url
-                    thumbnail_url = it.thumbnail.url
-                }
+                it.toSManga()
             }
+            .filter { it.title.contains(query, true) || it.author!!.contains(query, true) }
         return MangasPage(mangas, false)
     }
 
