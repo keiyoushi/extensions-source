@@ -53,7 +53,6 @@ class BiliManga : HttpSource(), ConfigurableSource {
     }
 
     companion object {
-        const val PAGE_SIZE = 50
         val META_REGEX = Regex("連載|完結|收藏|推薦|热度")
         val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
         val MANGA_ID_REGEX = Regex("/detail/(\\d+)\\.html")
@@ -72,8 +71,8 @@ class BiliManga : HttpSource(), ConfigurableSource {
         return GET(baseUrl + String.format(suffix, page), headers)
     }
 
-    override fun popularMangaParse(response: Response) = response.asJsoup().let {
-        val mangas = it.select(".book-layout").map {
+    override fun popularMangaParse(response: Response) = response.asJsoup().let { doc ->
+        val mangas = doc.select(".book-layout").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 val img = it.selectFirst("img")!!
@@ -81,12 +80,13 @@ class BiliManga : HttpSource(), ConfigurableSource {
                 title = img.attr("alt")
             }
         }
-        MangasPage(mangas, mangas.size >= PAGE_SIZE)
+        MangasPage(mangas, mangas.isNotEmpty())
     }
 
     // Latest Page
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/top/lastupdate/$page.html", headers)
+    override fun latestUpdatesRequest(page: Int) =
+        GET("$baseUrl/top/lastupdate/$page.html", headers)
 
     override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
 
@@ -94,13 +94,14 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     override fun getFilterList() = buildFilterList()
 
+    // https://www.bilimanga.net/filter/lastupdate_1_0_0_0_0_0_0_1_0.html
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
         if (query.isNotBlank()) {
             url.addPathSegment("search").addPathSegment("${query}_$page.html")
         } else {
-            url.addPathSegment("top").addPathSegment(filters[1].toString())
-                .addPathSegment("$page.html")
+            url.addPathSegment("filter")
+                .addPathSegment("${filters[4]}_${filters[1]}_${filters[7]}_${filters[5]}_${filters[3]}_${filters[2]}_${filters[8]}_${filters[6]}_${page}_0.html")
         }
         return GET(url.build(), headers)
     }
@@ -118,13 +119,11 @@ class BiliManga : HttpSource(), ConfigurableSource {
         val doc = response.asJsoup()
         val meta = doc.selectFirst(".book-meta")!!.text().split("|")
         val extra = meta.filterNot(META_REGEX::containsMatchIn)
-        val backupname = doc.selectFirst(".backupname")?.let {
-            "\n\n漫畫別名：\n• ${it.text().split("、").joinToString("\n• ")}"
-        }
+        val backupname = doc.selectFirst(".backupname")?.let { "【別名：${it.text()}】\n\n" } ?: ""
         setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
-        description = doc.selectFirst("#bookSummary")?.text() + backupname
+        description = backupname + doc.selectFirst("#bookSummary > content")?.wholeText()?.trim()
         artist = doc.selectFirst(".authorname")?.text()
         author = doc.selectFirst(".illname")?.text() ?: artist
         status = when (meta.firstOrNull()) {
@@ -138,7 +137,8 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     // Catalog Page
 
-    override fun chapterListRequest(manga: SManga) = GET("$baseUrl/read/${manga.id}/catalog", headers)
+    override fun chapterListRequest(manga: SManga) =
+        GET("$baseUrl/read/${manga.id}/catalog", headers)
 
     override fun chapterListParse(response: Response) = response.asJsoup().let {
         val info = it.selectFirst(".chapter-sub-title")!!.text()
@@ -162,7 +162,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response) = response.asJsoup().let {
         val images = it.select(".imagecontent")
-        check(images.size > 0) {
+        check(images.isNotEmpty()) {
             it.selectFirst("#acontentz")?.let { e ->
                 if ("電腦端" in e.text()) "不支持電腦端查看，請在高級設置中更換移動端UA標識" else "漫畫可能已下架或需要登錄查看"
             } ?: "章节鏈接错误"
