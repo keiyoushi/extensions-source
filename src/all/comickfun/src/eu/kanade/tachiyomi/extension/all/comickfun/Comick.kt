@@ -616,7 +616,7 @@ abstract class Comick(
         val chapterListResponse = response.parseAs<ChapterList>()
 
         val preferredGroups = preferences.preferredGroups
-        val ignoredGroups = preferences.ignoredGroups
+        val ignoredGroupsLowercase = preferences.ignoredGroups.map { it.lowercase() }
 
         val mangaUrl = response.request.url.toString()
             .substringBefore("/chapters")
@@ -636,7 +636,7 @@ abstract class Comick(
                 val publishedChapter = publishTime <= currentTimestamp
 
                 val noGroupBlock = it.groups.map { g -> g.lowercase() }
-                    .intersect(ignoredGroups.map { it.lowercase() })
+                    .intersect(ignoredGroupsLowercase)
                     .isEmpty()
 
                 publishedChapter && noGroupBlock
