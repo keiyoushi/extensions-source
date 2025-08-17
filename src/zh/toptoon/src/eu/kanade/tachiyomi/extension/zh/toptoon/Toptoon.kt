@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.toptoon
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,7 +11,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Response
-import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -65,31 +63,10 @@ class Toptoon : HttpSource() {
 
     // Search
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/search", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/search#$query", headers)
 
-    // Copied from Mihon, I only change parameter of searchMangaParse
-    override fun fetchSearchManga(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Observable<MangasPage> {
-        return Observable.defer {
-            try {
-                client.newCall(searchMangaRequest(page, query, filters)).asObservableSuccess()
-            } catch (e: NoClassDefFoundError) {
-                // RxJava doesn't handle Errors, which tends to happen during global searches
-                // if an old extension using non-existent classes is still around
-                throw RuntimeException(e)
-            }
-        }
-            .map { response ->
-                searchMangaParse(response, query)
-            }
-    }
-
-    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
-
-    private fun searchMangaParse(response: Response, query: String): MangasPage {
+    override fun searchMangaParse(response: Response): MangasPage {
+        val query = response.request.url.fragment!!
         val jsonUrl = response.body.string()
             .substringAfter("var jsonFileUrl = '")
             .substringBefore("'")
