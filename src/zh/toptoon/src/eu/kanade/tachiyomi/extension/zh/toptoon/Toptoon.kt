@@ -7,19 +7,18 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Response
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Toptoon : ParsedHttpSource() {
+class Toptoon : HttpSource() {
     override val name: String = "Toptoon頂通"
     override val lang: String = "zh"
     override val supportsLatest = true
@@ -29,9 +28,6 @@ class Toptoon : ParsedHttpSource() {
     // Popular
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/ranking", headers)
-    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-    override fun popularMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun popularMangaParse(response: Response): MangasPage {
         val jsonUrl = response.body.string()
@@ -52,9 +48,6 @@ class Toptoon : ParsedHttpSource() {
     // Latest
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/search", headers)
-    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesSelector() = throw UnsupportedOperationException()
-    override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val jsonUrl = response.body.string()
@@ -76,9 +69,6 @@ class Toptoon : ParsedHttpSource() {
     // Search
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = GET("$baseUrl/search", headers)
-    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
-    override fun searchMangaSelector() = throw UnsupportedOperationException()
-    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
 
     // Copied from Mihon, I only change parameter of searchMangaParse
     override fun fetchSearchManga(
@@ -100,6 +90,8 @@ class Toptoon : ParsedHttpSource() {
             }
     }
 
+    override fun searchMangaParse(response: Response) = throw UnsupportedOperationException()
+
     private fun searchMangaParse(response: Response, query: String): MangasPage {
         val jsonUrl = response.body.string()
             .substringAfter("var jsonFileUrl = '")
@@ -119,7 +111,8 @@ class Toptoon : ParsedHttpSource() {
 
     // Details
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val document = response.asJsoup()
         title = document.selectFirst("section.infoContent div.title")!!.text()
         thumbnail_url = document.selectFirst("div.comicThumb img")!!.absUrl("src")
         author = document.selectFirst("section.infoContent div.etc")!!.text()
@@ -136,22 +129,23 @@ class Toptoon : ParsedHttpSource() {
 
     // Chapters
 
-    override fun chapterListSelector(): String = "section.episode_area ul.list_area li.episodeBox"
-    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        name = if (element.selectFirst("button.coin, button.gift, button.waitFree") != null) {
-            "\uD83D\uDD12"
-        } else {
-            ""
-        } + element.selectFirst("div.title")!!.text() + " " +
-            element.selectFirst("div.subTitle")!!.text()
-        date_upload = parseDate(element.selectFirst("div.pubDate")?.text() ?: "")
-    }
     override fun chapterListParse(response: Response): List<SChapter> {
         if (response.request.url.pathSegments[0].isEmpty()) {
             throw Exception("请到WebView确认年满18岁")
         }
-        return super.chapterListParse(response).asReversed()
+        val document = response.asJsoup()
+        return document.select("section.episode_area ul.list_area li.episodeBox").map {
+            SChapter.create().apply {
+                setUrlWithoutDomain(it.selectFirst("a")!!.absUrl("href"))
+                name = if (it.selectFirst("button.coin, button.gift, button.waitFree") != null) {
+                    "\uD83D\uDD12"
+                } else {
+                    ""
+                } + it.selectFirst("div.title")!!.text() + " " +
+                    it.selectFirst("div.subTitle")!!.text()
+                date_upload = parseDate(it.selectFirst("div.pubDate")?.text() ?: "")
+            }
+        }.asReversed()
     }
 
     // Pages
@@ -163,17 +157,14 @@ class Toptoon : ParsedHttpSource() {
         } else if (pathSegments.size < 2 || pathSegments[1] != "epView") {
             throw Exception("请确认是否已登录解锁")
         }
-        return super.pageListParse(response)
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
+        val document = response.asJsoup()
         val images = document.select("article.epContent section.imgWrap div.cImg img")
         return images.mapIndexed { index, img ->
             Page(index, imageUrl = img.absUrl("data-src"))
         }
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     private inline fun <reified T> Response.parseAs(): T = use {
         json.decodeFromStream(it.body.byteStream())
