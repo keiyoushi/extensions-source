@@ -15,7 +15,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Toptoon : HttpSource() {
-    override val name: String = "Toptoon頂通"
+    override val name: String = "TOPTOON頂通"
     override val lang: String = "zh"
     override val supportsLatest = true
     override val baseUrl = "https://www.toptoon.net"
