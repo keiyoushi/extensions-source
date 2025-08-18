@@ -181,14 +181,36 @@ class NiaddEn : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        val scriptText = document.select("script").joinToString(" ") { it.html() }
 
-        // Regex para pegar todas as URLs dentro de all_imgs_url ou algo parecido
-        val regex = Regex("""["'](https?://.*?\.(?:jpg|jpeg|png|webp))["']""")
-        val urls = regex.findAll(scriptText).map { it.groupValues[1] }.toList()
+        document.select("img.manga_pic").forEachIndexed { index, img ->
+            val imageUrl = img.absUrl("src")
+                .ifBlank { img.absUrl("data-src") }
+                .ifBlank { img.absUrl("data-original") }
 
-        urls.forEachIndexed { index, url ->
-            pages.add(Page(index, "", url))
+            pages.add(Page(index, "", imageUrl))
+        }
+
+        val loadOptions = document.select("select.change_pic_no option")
+            .mapNotNull { it.attr("value").toIntOrNull() }
+            .sorted()
+
+        val maxLoad = loadOptions.lastOrNull() ?: 1
+        val chapterUrl = document.location()
+
+        val headersWithReferer = headersBuilder()
+            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
+            .add("Referer", chapterUrl)
+            .build()
+
+        for (i in 2..maxLoad) {
+            val url = "$chapterUrl-$i.html"
+            val pageDoc = client.newCall(GET(url, headersWithReferer)).execute().asJsoup()
+            pageDoc.select("img.manga_pic").forEach { img ->
+                val imageUrl = img.absUrl("src")
+                    .ifBlank { img.absUrl("data-src") }
+                    .ifBlank { img.absUrl("data-original") }
+                pages.add(Page(pages.size, "", imageUrl))
+            }
         }
 
         return pages
