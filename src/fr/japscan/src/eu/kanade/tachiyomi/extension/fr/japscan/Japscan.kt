@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -48,7 +49,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "Japscan"
 
-    override val baseUrl = "https://www.japscan.lol"
+    override val baseUrl = "https://www.japscan.si"
 
     override val lang = "fr"
 
@@ -91,7 +92,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         element.select("a").first()!!.let {
             manga.setUrlWithoutDomain(it.attr("href"))
             manga.title = it.text()
-            manga.thumbnail_url = "$baseUrl/imgs/${it.attr("href").replace(Regex("/$"),".jpg").replace("manga","mangas")}".lowercase(Locale.ROOT)
+            manga.thumbnail_url = it.selectFirst("img")?.attr("abs:data-src")
         }
         return manga
     }
@@ -131,7 +132,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 .add("X-Requested-With", "XMLHttpRequest")
                 .build()
 
-            return POST("$baseUrl/live-search/", searchHeaders, formBody)
+            return POST("$baseUrl/ls/", searchHeaders, formBody)
         }
     }
 
@@ -140,7 +141,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     override fun searchMangaSelector(): String = "div.card div.p-2"
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.first() == "live-search") {
+        if (response.request.url.pathSegments.first() == "ls") {
             val jsonResult = json.parseToJsonElement(response.body.string()).jsonArray
 
             val mangaList = jsonResult.map { jsonEl -> searchMangaFromJson(jsonEl.jsonObject) }
@@ -178,10 +179,9 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("#main .card-body")!!
-
         val manga = SManga.create()
-        val path = document.location().replaceFirst("$baseUrl/", "")
-        manga.thumbnail_url = "$baseUrl/imgs/${path.replace(Regex("/$"),".jpg").replace("manga","mangas")}".lowercase(Locale.ROOT)
+
+        manga.thumbnail_url = infoElement.selectFirst("img")?.attr("abs:src")
 
         val infoRows = infoElement.select(".row, .d-flex")
         infoRows.select("p").forEach { el ->
@@ -194,7 +194,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 }
             }
         }
-        manga.description = infoElement.select("div:contains(Synopsis) + p").text().orEmpty()
+        manga.description = infoElement.selectFirst("#synopsis")?.ownText().orEmpty()
 
         return manga
     }
@@ -205,7 +205,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListSelector() = "#chapters_list > div.collapse > div.chapters_list" +
+    override fun chapterListSelector() = "#list_chapters > div.collapse > div.list_chapters" +
         if (chapterListPref() == "hide") { ":not(:has(.badge:contains(SPOILER),.badge:contains(RAW),.badge:contains(VUS)))" } else { "" }
     // JapScan sometimes uploads some "spoiler preview" chapters, containing 2 or 3 untranslated pictures taken from a raw. Sometimes they also upload full RAWs/US versions and replace them with a translation as soon as available.
     // Those have a span.badge "SPOILER" or "RAW". The additional pseudo selector makes sure to exclude these from the chapter list.
@@ -231,12 +231,22 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         document.body().prepend(
             """
             <script>
-                const _atob = atob;
-                atob = function(arg) {
-                    let data = _atob(arg)
-                    window.$interfaceName.passPayload(data);
-                    return data;
-                };
+                Object.defineProperty(Object.prototype, 'imagesLink', {
+                    set: function(value) {
+                        window.$interfaceName.passPayload(JSON.stringify(value));
+                        Object.defineProperty(this, '_imagesLink', {
+                            value: value,
+                            writable: true,
+                            enumerable: false,
+                            configurable: true
+                        });
+                    },
+                    get: function() {
+                        return this._imagesLink;
+                    },
+                    enumerable: false,
+                    configurable: true
+                });
             </script>
             """.trimIndent(),
         )
@@ -281,11 +291,11 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             throw Exception("Timed out decrypting image links")
         }
 
-        val baseUrlHost = baseUrl.toHttpUrl().host
+        val baseUrlHost = baseUrl.toHttpUrl().host.substringAfter("www.")
 
         return jsInterface
             .images
-            .filterNot { it.toHttpUrl().host == baseUrlHost } // Pages not served through their CDN are probably ads
+            .filter { it.toHttpUrl().host.endsWith(baseUrlHost) } // Pages not served through their CDN are probably ads
             .mapIndexed { i, url ->
                 Page(i, imageUrl = url)
             }
@@ -323,8 +333,6 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     }
 
     internal class JsInterface(private val latch: CountDownLatch) {
-        private val json: Json by injectLazy()
-
         var images: List<String> = listOf()
             private set
 
@@ -332,9 +340,8 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         @Suppress("UNUSED")
         fun passPayload(rawData: String) {
             try {
-                val data = json.parseToJsonElement(rawData).jsonObject
-
-                images = data["imagesLink"]!!.jsonArray.map { it.jsonPrimitive.content }
+                images = rawData.parseAs<List<String>>()
+                    .map { "$it?y=1" }
                 latch.countDown()
             } catch (_: Exception) {
                 return
