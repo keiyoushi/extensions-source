@@ -22,8 +22,9 @@ class NiaddEn : ParsedHttpSource() {
     override val supportsLatest: Boolean = true
 
     // Headers padrão
-    private val headers = okhttp3.Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    override val headers: Headers = Headers.Builder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
+        .add("Referer", baseUrl)
         .build()
 
     // Popular
