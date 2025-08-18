@@ -181,45 +181,20 @@ class NiaddEn : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
+        val scriptText = document.select("script").joinToString(" ") { it.html() }
 
-        document.select("section.mangaread-img img.manga_pic").forEachIndexed { index, img ->
-            val imageUrl = img.absUrl("src")
-                .ifBlank { img.absUrl("data-src") }
-                .ifBlank { img.absUrl("data-original") }
-            pages.add(Page(index, "", imageUrl))
-        }
+        // Regex para pegar todas as URLs dentro de all_imgs_url ou algo parecido
+        val regex = Regex("""["'](https?://.*?\.(?:jpg|jpeg|png|webp))["']""")
+        val urls = regex.findAll(scriptText).map { it.groupValues[1] }.toList()
 
-        val chapterUrl = document.location()
-        val regex = Regex("""(.+)-(\d+)\.html""")
-        val match = regex.find(chapterUrl)
-
-        if (match != null) {
-            val base = match.groupValues[1]
-            val totalPages = match.groupValues[2].toIntOrNull() ?: pages.size
-
-            val headersWithReferer = headersBuilder()
-                .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
-                .add("Referer", chapterUrl)
-                .build()
-
-            for (i in 2..totalPages) {
-                val pageUrl = "$base-$i.html"
-                val pageDoc = client.newCall(GET(pageUrl, headersWithReferer)).execute().asJsoup()
-
-                pageDoc.select("section.mangaread-img img.manga_pic").forEach { img ->
-                    val imageUrl = img.absUrl("src")
-                        .ifBlank { img.absUrl("data-src") }
-                        .ifBlank { img.absUrl("data-original") }
-                    pages.add(Page(pages.size, "", imageUrl))
-                }
-            }
+        urls.forEachIndexed { index, url ->
+            pages.add(Page(index, "", url))
         }
 
         return pages
     }
 
-
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException("Not used")
+        override fun imageUrlParse(document: Document): String {
+            throw UnsupportedOperationException("Not used")
+        }
     }
-}
