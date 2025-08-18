@@ -25,7 +25,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int): Request =
         GET(
             "$baseUrl/category/?page=$page",
-            headers,
+            headers
         )
 
     override fun popularMangaSelector(): String =
@@ -62,7 +62,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun latestUpdatesRequest(page: Int): Request =
         GET(
             "$baseUrl/list/New-Update/?page=$page",
-            headers,
+            headers
         )
 
     override fun latestUpdatesSelector(): String =
@@ -79,7 +79,7 @@ class NiaddEn : ParsedHttpSource() {
         val q = URLEncoder.encode(query, "UTF-8")
         return GET(
             "$baseUrl/search/?name=$q&page=$page",
-            headers,
+            headers
         )
     }
 
@@ -106,7 +106,7 @@ class NiaddEn : ParsedHttpSource() {
             ?: img?.absUrl("data-original")
 
         val author = document.selectFirst(
-            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value",
+            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value"
         )?.text()?.trim()
         manga.author = author
         manga.artist = author
@@ -147,7 +147,7 @@ class NiaddEn : ParsedHttpSource() {
         }
         return GET(
             baseUrl + chaptersUrl,
-            headers,
+            headers
         )
     }
 
@@ -196,8 +196,8 @@ class NiaddEn : ParsedHttpSource() {
             val pageDoc = client.newCall(
                 GET(
                     url,
-                    headers,
-                ),
+                    headers
+                )
             ).execute().asJsoup()
 
             pageDoc.select("img.manga_pic").forEach { img ->
