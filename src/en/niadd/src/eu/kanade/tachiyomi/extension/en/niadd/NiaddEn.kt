@@ -123,7 +123,9 @@ class NiaddEn : ParsedHttpSource() {
         manga.description = buildString {
             append(synopsis)
             if (!alternatives.isNullOrBlank()) {
-                append("\n\nAlternative(s): $alternatives")
+                append(
+                    "\n\nAlternative(s): $alternatives",
+                )
             }
         }
 
