@@ -16,6 +16,7 @@ import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
@@ -55,8 +56,25 @@ class BiliManga : HttpSource(), ConfigurableSource {
     companion object {
         val META_REGEX = Regex("連載|完結|收藏|推薦|热度")
         val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
+        val PAGE_REGEX = Regex("第(\\d+)/(\\d+)页")
         val MANGA_ID_REGEX = Regex("/detail/(\\d+)\\.html")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
+    }
+
+    private fun hasNextPage(doc: Document, size: Int): Boolean {
+        val url = doc.location()
+        return when {
+            url.contains("filter") -> {
+                val total = doc.selectFirst("#pagelink > .last")!!.text().toInt()
+                val cur = doc.selectFirst("#pagelink > strong")!!.text().toInt()
+                cur < total
+            }
+            url.contains("search") -> {
+                val find = PAGE_REGEX.find(doc.selectFirst("#pagelink > span")!!.text())!!
+                find.groups[1]!!.value.toInt() < find.groups[1]!!.value.toInt()
+            }
+            else -> size == 50
+        }
     }
 
     private fun getChapterUrlByContext(i: Int, els: Elements) = when (i) {
@@ -80,7 +98,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
                 title = img.attr("alt")
             }
         }
-        MangasPage(mangas, mangas.isNotEmpty())
+        MangasPage(mangas, hasNextPage(doc, mangas.size))
     }
 
     // Latest Page
