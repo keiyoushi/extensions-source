@@ -181,31 +181,43 @@ class NiaddEn : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        val pageIndex = 0
 
-        val pageOptions = document.select("select.change_pic_page option")
-            .map { it.attr("value") }
-            .filter { it.isNotBlank() }
+        document.select("section.mangaread-img img.manga_pic").forEachIndexed { index, img ->
+            val imageUrl = img.absUrl("src")
+                .ifBlank { img.absUrl("data-src") }
+                .ifBlank { img.absUrl("data-original") }
+            pages.add(Page(index, "", imageUrl))
+        }
 
-        val headersWithReferer = headersBuilder()
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
-            .add("Referer", document.location())
-            .build()
+        val chapterUrl = document.location()
+        val regex = Regex("""(.+)-(\d+)\.html""")
+        val match = regex.find(chapterUrl)
 
-        var index = 0
-        pageOptions.forEach { url ->
-            val fullUrl = if (url.startsWith("http")) url else baseUrl + url
-            val pageDoc = client.newCall(GET(fullUrl, headersWithReferer)).execute().asJsoup()
-            pageDoc.select("section.mangaread-img img.manga_pic").forEach { img ->
-                val imageUrl = img.absUrl("src")
-                    .ifBlank { img.absUrl("data-src") }
-                    .ifBlank { img.absUrl("data-original") }
-                pages.add(Page(index++, "", imageUrl))
+        if (match != null) {
+            val base = match.groupValues[1]
+            val totalPages = match.groupValues[2].toIntOrNull() ?: pages.size
+
+            val headersWithReferer = headersBuilder()
+                .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
+                .add("Referer", chapterUrl)
+                .build()
+
+            for (i in 2..totalPages) {
+                val pageUrl = "$base-$i.html"
+                val pageDoc = client.newCall(GET(pageUrl, headersWithReferer)).execute().asJsoup()
+
+                pageDoc.select("section.mangaread-img img.manga_pic").forEach { img ->
+                    val imageUrl = img.absUrl("src")
+                        .ifBlank { img.absUrl("data-src") }
+                        .ifBlank { img.absUrl("data-original") }
+                    pages.add(Page(pages.size, "", imageUrl))
+                }
             }
         }
 
         return pages
     }
+
 
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException("Not used")
