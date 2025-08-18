@@ -182,12 +182,12 @@ class NiaddEn : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        document.select("img.manga_pic").forEachIndexed { index, img ->
-            val imageUrl = img.absUrl("src")
-                .ifBlank { img.absUrl("data-src") }
-                .ifBlank { img.absUrl("data-original") }
-
-            pages.add(Page(index, "", imageUrl))
+        val firstImg = document.selectFirst("section.mangaread-img img.manga_pic")
+        firstImg?.let {
+            val imageUrl = it.absUrl("src")
+                .ifBlank { it.absUrl("data-src") }
+                .ifBlank { it.absUrl("data-original") }
+            pages.add(Page(0, "", imageUrl))
         }
 
         val loadOptions = document.select("select.change_pic_no option")
@@ -195,21 +195,23 @@ class NiaddEn : ParsedHttpSource() {
             .sorted()
 
         val maxLoad = loadOptions.lastOrNull() ?: 1
-        val chapterUrl = document.location()
 
         val headersWithReferer = headersBuilder()
             .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
-            .add("Referer", chapterUrl)
+            .add("Referer", document.location())
             .build()
 
         for (i in 2..maxLoad) {
-            val url = "$chapterUrl-$i.html"
-            val pageDoc = client.newCall(GET(url, headersWithReferer)).execute().asJsoup()
-            pageDoc.select("img.manga_pic").forEach { img ->
-                val imageUrl = img.absUrl("src")
-                    .ifBlank { img.absUrl("data-src") }
-                    .ifBlank { img.absUrl("data-original") }
-                pages.add(Page(pages.size, "", imageUrl))
+            try {
+                val url = "${document.location().removeSuffix("/")}/$i.html"
+                val pageDoc = client.newCall(GET(url, headersWithReferer)).execute().asJsoup()
+                pageDoc.select("section.mangaread-img img.manga_pic").forEach { img ->
+                    val imageUrl = img.absUrl("src")
+                        .ifBlank { img.absUrl("data-src") }
+                        .ifBlank { img.absUrl("data-original") }
+                    pages.add(Page(pages.size, "", imageUrl))
+                }
+            } catch (_: Exception) {
             }
         }
 
