@@ -183,29 +183,25 @@ class NiaddEn : ParsedHttpSource() {
         val pages = mutableListOf<Page>()
         var pageIndex = 0
 
-        val loadCount = document.selectFirst("select.change_pic_no option[selected]")?.text()?.toIntOrNull() ?: 1
-
-        val imageElements = document.select("#viewer img.manga_pic")
-        imageElements.forEach { img ->
-            val imageUrl = img.absUrl("src")
-                .ifBlank { img.absUrl("data-src") }
-                .ifBlank { img.absUrl("data-original") }
-            pages.add(Page(pageIndex++, "", imageUrl))
-        }
-
         val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
+
         pageOptions.forEach { url ->
-            val pageDoc = client.newCall(GET(url, headers)).execute().asJsoup()
+            val fullUrl = if (url.startsWith("http")) url else baseUrl + url
+
+            val pageDoc = client.newCall(GET(fullUrl, headers)).execute().asJsoup()
+
             pageDoc.select("#viewer img.manga_pic").forEach { img ->
                 val imageUrl = img.absUrl("src")
                     .ifBlank { img.absUrl("data-src") }
                     .ifBlank { img.absUrl("data-original") }
+
                 pages.add(Page(pageIndex++, "", imageUrl))
             }
         }
 
         return pages
     }
+
 
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException("Not used")
