@@ -184,12 +184,14 @@ class NiaddEn : ParsedHttpSource() {
         val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
         val regex = Regex(""".*-(\d+)-(\d+)\.html""")
 
-        val sortedUrls = pageOptions.sortedWith(compareBy { url ->
-            val match = regex.find(url)
-            val lote = match?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            val page = match?.groupValues?.get(2)?.toIntOrNull() ?: 0
-            lote * 1000 + page
-        })
+        val sortedUrls = pageOptions.sortedWith(
+            compareBy { url ->
+                val match = regex.find(url)
+                val lote = match?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                val page = match?.groupValues?.get(2)?.toIntOrNull() ?: 0
+                lote * 1000 + page
+            },
+        )
 
         var pageIndex = 0
         sortedUrls.forEach { url ->
@@ -204,11 +206,13 @@ class NiaddEn : ParsedHttpSource() {
                 val imageUrl = img.absUrl("src")
                     .ifBlank { img.absUrl("data-src") }
                     .ifBlank { img.absUrl("data-original") }
-                pages.add(Page(
-                    index = pageIndex++,
-                    url = "",
-                    imageUrl = imageUrl,
-                ))
+                pages.add(
+                    Page(
+                        index = pageIndex++,
+                        url = "",
+                        imageUrl = imageUrl,
+                    ),
+                )
             }
         }
 
