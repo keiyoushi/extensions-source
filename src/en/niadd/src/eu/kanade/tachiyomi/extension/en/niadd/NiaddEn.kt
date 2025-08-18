@@ -23,7 +23,10 @@ class NiaddEn : ParsedHttpSource() {
 
     // Popular
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/category/?page=$page", headers)
+        GET(
+            "$baseUrl/category/?page=$page",
+            headers,
+        )
 
     override fun popularMangaSelector(): String =
         "div.manga-item:has(a[href*='/manga/'])"
@@ -57,7 +60,10 @@ class NiaddEn : ParsedHttpSource() {
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/list/New-Update/?page=$page", headers)
+        GET(
+            "$baseUrl/list/New-Update/?page=$page",
+            headers,
+        )
 
     override fun latestUpdatesSelector(): String =
         popularMangaSelector()
@@ -69,13 +75,12 @@ class NiaddEn : ParsedHttpSource() {
         popularMangaNextPageSelector()
 
     // Search
-    override fun searchMangaRequest(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Request {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val q = URLEncoder.encode(query, "UTF-8")
-        return GET("$baseUrl/search/?name=$q&page=$page", headers)
+        return GET(
+            "$baseUrl/search/?name=$q&page=$page",
+            headers,
+        )
     }
 
     override fun searchMangaSelector(): String =
@@ -101,7 +106,7 @@ class NiaddEn : ParsedHttpSource() {
             ?: img?.absUrl("data-original")
 
         val author = document.selectFirst(
-            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value"
+            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value",
         )?.text()?.trim()
         manga.author = author
         manga.artist = author
@@ -140,7 +145,10 @@ class NiaddEn : ParsedHttpSource() {
         } else {
             manga.url.removeSuffix("/") + "/chapters.html"
         }
-        return GET(baseUrl + chaptersUrl, headers)
+        return GET(
+            baseUrl + chaptersUrl,
+            headers,
+        )
     }
 
     override fun chapterListSelector(): String =
@@ -187,7 +195,9 @@ class NiaddEn : ParsedHttpSource() {
         sortedUrls.forEach { url ->
             val pageDoc = client.newCall(GET(url, headers)).execute().asJsoup()
             pageDoc.select("img.manga_pic").forEach { img ->
-                val imageUrl = img.absUrl("src").ifBlank({ img.absUrl("data-src") }).ifBlank({ img.absUrl("data-original") })
+                val imageUrl = img.absUrl("src")
+                    .ifBlank({ img.absUrl("data-src") })
+                    .ifBlank({ img.absUrl("data-original") })
                 pages.add(Page(pageIndex++, "", imageUrl))
             }
         }
