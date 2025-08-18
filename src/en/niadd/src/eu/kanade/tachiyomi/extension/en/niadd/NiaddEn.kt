@@ -23,10 +23,7 @@ class NiaddEn : ParsedHttpSource() {
 
     // Popular
     override fun popularMangaRequest(page: Int): Request =
-        GET(
-            "$baseUrl/category/?page=$page",
-            headers,
-        )
+        GET("$baseUrl/category/?page=$page", headers)
 
     override fun popularMangaSelector(): String =
         "div.manga-item:has(a[href*='/manga/'])"
@@ -35,9 +32,7 @@ class NiaddEn : ParsedHttpSource() {
         val manga = SManga.create()
         val link = element.selectFirst("a[href*='/manga/']") ?: return manga
 
-        manga.setUrlWithoutDomain(
-            link.attr("href"),
-        )
+        manga.setUrlWithoutDomain(link.attr("href"))
 
         manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
             ?: element.selectFirst("a[title]")?.attr("title")?.trim()
@@ -62,10 +57,7 @@ class NiaddEn : ParsedHttpSource() {
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request =
-        GET(
-            "$baseUrl/list/New-Update/?page=$page",
-            headers,
-        )
+        GET("$baseUrl/list/New-Update/?page=$page", headers)
 
     override fun latestUpdatesSelector(): String =
         popularMangaSelector()
@@ -83,10 +75,7 @@ class NiaddEn : ParsedHttpSource() {
         filters: FilterList,
     ): Request {
         val q = URLEncoder.encode(query, "UTF-8")
-        return GET(
-            "$baseUrl/search/?name=$q&page=$page",
-            headers,
-        )
+        return GET("$baseUrl/search/?name=$q&page=$page", headers)
     }
 
     override fun searchMangaSelector(): String =
@@ -112,7 +101,7 @@ class NiaddEn : ParsedHttpSource() {
             ?: img?.absUrl("data-original")
 
         val author = document.selectFirst(
-            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value",
+            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value"
         )?.text()?.trim()
         manga.author = author
         manga.artist = author
@@ -128,7 +117,9 @@ class NiaddEn : ParsedHttpSource() {
 
         manga.description = buildString {
             append(synopsis)
-            if (!alternatives.isNullOrBlank()) append("\n\nAlternative(s): $alternatives")
+            if (!alternatives.isNullOrBlank()) {
+                append("\n\nAlternative(s): $alternatives")
+            }
         }
 
         manga.genre = document.select("div.detail-section-box")
@@ -144,12 +135,12 @@ class NiaddEn : ParsedHttpSource() {
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        val chaptersUrl = if (manga.url.endsWith("/chapters.html")) manga.url
-        else manga.url.removeSuffix("/") + "/chapters.html"
-        return GET(
-            baseUrl + chaptersUrl,
-            headers,
-        )
+        val chaptersUrl = if (manga.url.endsWith("/chapters.html")) {
+            manga.url
+        } else {
+            manga.url.removeSuffix("/") + "/chapters.html"
+        }
+        return GET(baseUrl + chaptersUrl, headers)
     }
 
     override fun chapterListSelector(): String =
@@ -158,9 +149,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
 
-        chapter.setUrlWithoutDomain(
-            element.attr("href"),
-        )
+        chapter.setUrlWithoutDomain(element.attr("href"))
 
         chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
             ?: element.attr("title")?.trim()
@@ -198,9 +187,7 @@ class NiaddEn : ParsedHttpSource() {
         sortedUrls.forEach { url ->
             val pageDoc = client.newCall(GET(url, headers)).execute().asJsoup()
             pageDoc.select("img.manga_pic").forEach { img ->
-                val imageUrl = img.absUrl("src")
-                    .ifBlank { img.absUrl("data-src") }
-                    .ifBlank { img.absUrl("data-original") }
+                val imageUrl = img.absUrl("src").ifBlank({ img.absUrl("data-src") }).ifBlank({ img.absUrl("data-original") })
                 pages.add(Page(pageIndex++, "", imageUrl))
             }
         }
