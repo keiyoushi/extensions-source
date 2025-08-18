@@ -181,27 +181,26 @@ class NiaddEn : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        var pageIndex = 0
+        val pageIndex = 0
 
-        val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
+        val pageOptions = document.select("select.change_pic_page option")
+            .map { it.attr("value") }
+            .filter { it.isNotBlank() }
 
+        val headersWithReferer = headersBuilder()
+            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
+            .add("Referer", document.location())
+            .build()
+
+        var index = 0
         pageOptions.forEach { url ->
             val fullUrl = if (url.startsWith("http")) url else baseUrl + url
-
-            val pageDoc = client.newCall(GET(fullUrl, headers))
-                .execute()
-                .let { response ->
-                    val finalUrl = response.request.url.toString()
-                    response.close()
-                    client.newCall(GET(finalUrl, headers)).execute().asJsoup()
-                }
-
-            pageDoc.select("img.manga_pic, div.pic_box img").forEach { img ->
+            val pageDoc = client.newCall(GET(fullUrl, headersWithReferer)).execute().asJsoup()
+            pageDoc.select("section.mangaread-img img.manga_pic").forEach { img ->
                 val imageUrl = img.absUrl("src")
                     .ifBlank { img.absUrl("data-src") }
                     .ifBlank { img.absUrl("data-original") }
-
-                pages.add(Page(pageIndex++, "", imageUrl))
+                pages.add(Page(index++, "", imageUrl))
             }
         }
 
