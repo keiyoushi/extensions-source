@@ -22,10 +22,10 @@ class NiaddEn : ParsedHttpSource() {
     override val supportsLatest: Boolean = true
 
     // Headers padrão
-    override val headers: Headers = Headers.Builder()
+    override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
         .add("Referer", baseUrl)
-        .build()
+
 
     // Popular
     override fun popularMangaRequest(page: Int): Request =
