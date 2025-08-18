@@ -181,38 +181,26 @@ class NiaddEn : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
-        val regex = Regex(""".*-(\d+)-(\d+)\.html""")
-
-        val sortedUrls = pageOptions.sortedWith(
-            compareBy { url ->
-                val match = regex.find(url)
-                val lote = match?.groupValues?.get(1)?.toIntOrNull() ?: 0
-                val page = match?.groupValues?.get(2)?.toIntOrNull() ?: 0
-                lote * 1000 + page
-            },
-        )
-
         var pageIndex = 0
-        sortedUrls.forEach { url ->
-            val pageDoc = client.newCall(
-                GET(
-                    url,
-                    headers,
-                ),
-            ).execute().asJsoup()
 
-            pageDoc.select("img.manga_pic").forEach { img ->
+        val loadCount = document.selectFirst("select.change_pic_no option[selected]")?.text()?.toIntOrNull() ?: 1
+
+        val imageElements = document.select("#viewer img.manga_pic")
+        imageElements.forEach { img ->
+            val imageUrl = img.absUrl("src")
+                .ifBlank { img.absUrl("data-src") }
+                .ifBlank { img.absUrl("data-original") }
+            pages.add(Page(pageIndex++, "", imageUrl))
+        }
+
+        val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
+        pageOptions.forEach { url ->
+            val pageDoc = client.newCall(GET(url, headers)).execute().asJsoup()
+            pageDoc.select("#viewer img.manga_pic").forEach { img ->
                 val imageUrl = img.absUrl("src")
                     .ifBlank { img.absUrl("data-src") }
                     .ifBlank { img.absUrl("data-original") }
-                pages.add(
-                    Page(
-                        index = pageIndex++,
-                        url = "",
-                        imageUrl = imageUrl,
-                    ),
-                )
+                pages.add(Page(pageIndex++, "", imageUrl))
             }
         }
 
