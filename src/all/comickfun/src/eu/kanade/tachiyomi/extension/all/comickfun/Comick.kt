@@ -80,6 +80,18 @@ abstract class Comick(
         }.also(screen::addPreference)
 
         EditTextPreference(screen.context).apply {
+            key = PREFERRED_GROUPS_PREF
+            title = intl["preferred_groups_title"]
+            summary = intl["preferred_groups_summary"]
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putString(PREFERRED_GROUPS_PREF, newValue.toString())
+                    .commit()
+            }
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
             key = IGNORED_TAGS_PREF
             title = intl["ignored_tags_title"]
             summary = intl["ignored_tags_summary"]
@@ -137,6 +149,29 @@ abstract class Comick(
             setOnPreferenceChangeListener { _, newValue ->
                 preferences.edit()
                     .putBoolean(FIRST_COVER_PREF, newValue as Boolean)
+                    .commit()
+            }
+        }.also(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = COVER_QUALITY_PREF
+            title = intl["cover_quality_title"]
+            entries = arrayOf(
+                intl["cover_quality_original"],
+                intl["cover_quality_compressed"],
+                intl["cover_quality_web_default"],
+            )
+            entryValues = arrayOf(
+                "Original",
+                "Compressed",
+                COVER_QUALITY_DEFAULT,
+            )
+            setDefaultValue(COVER_QUALITY_DEFAULT)
+            summary = "%s"
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putString(COVER_QUALITY_PREF, newValue as String)
                     .commit()
             }
         }.also(screen::addPreference)
@@ -204,6 +239,16 @@ abstract class Comick(
             .orEmpty()
             .toSet()
 
+    private val SharedPreferences.preferredGroups: Set<String>
+        get() = getString(PREFERRED_GROUPS_PREF, "")
+            ?.lowercase()
+            ?.split("\n")
+            ?.map(String::trim)
+            ?.filter(String::isNotEmpty)
+            ?.sorted()
+            .orEmpty()
+            .toSet()
+
     private val SharedPreferences.ignoredTags: String
         get() = getString(IGNORED_TAGS_PREF, "")
             ?.split("\n")
@@ -223,6 +268,11 @@ abstract class Comick(
 
     private val SharedPreferences.updateCover: Boolean
         get() = getBoolean(FIRST_COVER_PREF, FIRST_COVER_DEFAULT)
+
+    private val coverQuality: CoverQuality
+        get() = CoverQuality.valueOf(
+            preferences.getString(COVER_QUALITY_PREF, COVER_QUALITY_DEFAULT) ?: COVER_QUALITY_DEFAULT,
+        )
 
     private val SharedPreferences.localTitle: String
         get() = if (getBoolean(
@@ -253,12 +303,20 @@ abstract class Comick(
         .build()
 
     private val imageClient = network.cloudflareClient.newBuilder()
-        .rateLimit(12, 8, TimeUnit.SECONDS) // == 1.5req/1sec == 3req/2sec == 90req/60sec
+        .rateLimit(7, 4, TimeUnit.SECONDS) // == 1.75req/1sec == 14req/8sec == 105req/60sec
+        .build()
+
+    private val smallThumbnailClient = network.cloudflareClient.newBuilder()
+        .rateLimit(14, 1, TimeUnit.SECONDS)
         .build()
 
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        return if (request.url.host.endsWith("comick.pictures")) {
+        val url = request.url.toString()
+
+        return if ("comick.pictures" in url && "-s." in url) {
+            smallThumbnailClient.newCall(request).execute()
+        } else if ("comick.pictures" in url) {
             imageClient.newCall(request).execute()
         } else {
             chain.proceed(request)
@@ -519,6 +577,7 @@ abstract class Comick(
                 covers = localCovers.ifEmpty { originalCovers }.ifEmpty { firstVol },
                 groupTags = preferences.groupTags,
                 titleLang = preferences.localTitle,
+                coverQuality = coverQuality,
             )
         }
         return mangaData.toSManga(
@@ -527,6 +586,7 @@ abstract class Comick(
             showAlternativeTitles = preferences.showAlternativeTitles,
             groupTags = preferences.groupTags,
             titleLang = preferences.localTitle,
+            coverQuality = coverQuality,
         )
     }
 
@@ -555,13 +615,17 @@ abstract class Comick(
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapterListResponse = response.parseAs<ChapterList>()
 
+        val preferredGroups = preferences.preferredGroups
+        val ignoredGroupsLowercase = preferences.ignoredGroups.map { it.lowercase() }
+
         val mangaUrl = response.request.url.toString()
             .substringBefore("/chapters")
             .substringAfter(apiUrl)
 
         val currentTimestamp = System.currentTimeMillis()
 
-        return chapterListResponse.chapters
+        // First, apply the ignored groups filter to remove chapters from blocked groups
+        val filteredChapters = chapterListResponse.chapters
             .filter {
                 val publishTime = try {
                     publishedDateFormat.parse(it.publishedAt)!!.time
@@ -572,13 +636,45 @@ abstract class Comick(
                 val publishedChapter = publishTime <= currentTimestamp
 
                 val noGroupBlock = it.groups.map { g -> g.lowercase() }
-                    .intersect(preferences.ignoredGroups)
+                    .intersect(ignoredGroupsLowercase)
                     .isEmpty()
 
                 publishedChapter && noGroupBlock
             }
-            .filterOnScore(preferences.chapterScoreFiltering)
-            .map { it.toSChapter(mangaUrl) }
+
+        // Now apply the primary filtering logic based on user preferences
+        val finalChapters = if (preferredGroups.isEmpty()) {
+            // If preferredGroups is empty, fall back to the existing score filter
+            filteredChapters.filterOnScore(preferences.chapterScoreFiltering)
+        } else {
+            // If preferredGroups is not empty, use the list to grab chapters from those groups in order of preference
+            val chaptersByNumber = filteredChapters.groupBy { it.chap }
+            val preferredFilteredChapters = mutableListOf<Chapter>()
+
+            // Iterate through each chapter number's group of chapters
+            chaptersByNumber.forEach { (_, chaptersForNumber) ->
+                // Find the chapter from the most preferred group
+                val preferredChapter = preferredGroups.firstNotNullOfOrNull { preferredGroup ->
+                    chaptersForNumber.find { chapter ->
+                        chapter.groups.any { group ->
+                            group.lowercase() == preferredGroup.lowercase()
+                        }
+                    }
+                }
+
+                if (preferredChapter != null) {
+                    preferredFilteredChapters.add(preferredChapter)
+                } else {
+                    // If no preferred group chapter was found, fall back to the score filter
+                    val fallbackChapter = chaptersForNumber.filterOnScore(preferences.chapterScoreFiltering)
+                    preferredFilteredChapters.addAll(fallbackChapter)
+                }
+            }
+            preferredFilteredChapters
+        }
+
+        // Finally, map the filtered chapters to the SChapter model
+        return finalChapters.map { it.toSChapter(mangaUrl) }
     }
 
     private fun List<Chapter>.filterOnScore(shouldFilter: Boolean): Collection<Chapter> {
@@ -653,6 +749,7 @@ abstract class Comick(
         const val SLUG_SEARCH_PREFIX = "id:"
         private val SPACE_AND_SLASH_REGEX = Regex("[ /]")
         private const val IGNORED_GROUPS_PREF = "IgnoredGroups"
+        private const val PREFERRED_GROUPS_PREF = "PreferredGroups"
         private const val IGNORED_TAGS_PREF = "IgnoredTags"
         private const val SHOW_ALTERNATIVE_TITLES_PREF = "ShowAlternativeTitles"
         const val SHOW_ALTERNATIVE_TITLES_DEFAULT = false
@@ -663,6 +760,8 @@ abstract class Comick(
         private const val MIGRATED_IGNORED_GROUPS = "MigratedIgnoredGroups"
         private const val FIRST_COVER_PREF = "DefaultCover"
         private const val FIRST_COVER_DEFAULT = true
+        private const val COVER_QUALITY_PREF = "CoverQuality"
+        const val COVER_QUALITY_DEFAULT = "WebDefault"
         private const val SCORE_POSITION_PREF = "ScorePosition"
         const val SCORE_POSITION_DEFAULT = "top"
         private const val LOCAL_TITLE_PREF = "LocalTitle"
