@@ -181,34 +181,27 @@ class NiaddEn : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        
-        document.select("section.mangaread-img img.manga_pic").forEachIndexed { index, img ->
-            val imageUrl = img.absUrl("src")
-                .ifBlank { img.absUrl("data-src") }
-                .ifBlank { img.absUrl("data-original") }
+        var pageIndex = 0
 
-            pages.add(Page(index, "", imageUrl))
-        }
+        val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
 
-        val loadOptions = document.select("select.change_pic_no option")
-            .mapNotNull { it.attr("value").toIntOrNull() }
-            .sorted()
+        pageOptions.forEach { url ->
+            val fullUrl = if (url.startsWith("http")) url else baseUrl + url
 
-        val maxLoad = loadOptions.lastOrNull() ?: 1
-        val chapterUrl = document.location()
-        val headersWithReferer = headersBuilder()
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
-            .add("Referer", chapterUrl)
-            .build()
+            val pageDoc = client.newCall(GET(fullUrl, headers))
+                .execute()
+                .let { response ->
+                    val finalUrl = response.request.url.toString()
+                    response.close()
+                    client.newCall(GET(finalUrl, headers)).execute().asJsoup()
+                }
 
-        for (i in 2..maxLoad) {
-            val url = "$chapterUrl?page=$i"
-            val pageDoc = client.newCall(GET(url, headersWithReferer)).execute().asJsoup()
-            pageDoc.select("section.mangaread-img img.manga_pic").forEach { img ->
+            pageDoc.select("img.manga_pic, div.pic_box img").forEach { img ->
                 val imageUrl = img.absUrl("src")
                     .ifBlank { img.absUrl("data-src") }
                     .ifBlank { img.absUrl("data-original") }
-                pages.add(Page(pages.size, "", imageUrl))
+
+                pages.add(Page(pageIndex++, "", imageUrl))
             }
         }
 
