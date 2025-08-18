@@ -196,8 +196,8 @@ class NiaddEn : ParsedHttpSource() {
             val pageDoc = client.newCall(GET(url, headers)).execute().asJsoup()
             pageDoc.select("img.manga_pic").forEach { img ->
                 val imageUrl = img.absUrl("src")
-                    .ifBlank({ img.absUrl("data-src") })
-                    .ifBlank({ img.absUrl("data-original") })
+                    .ifBlank { img.absUrl("data-src") }
+                    .ifBlank { img.absUrl("data-original") }
                 pages.add(Page(pageIndex++, "", imageUrl))
             }
         }
