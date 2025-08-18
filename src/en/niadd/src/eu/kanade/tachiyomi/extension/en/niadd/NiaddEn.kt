@@ -27,7 +27,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int): Request =
         GET(
             "$baseUrl/category/?page=$page",
-            headers,
+            headers
         )
 
     override fun popularMangaSelector(): String =
@@ -37,7 +37,7 @@ class NiaddEn : ParsedHttpSource() {
         val manga = SManga.create()
         val link = element.selectFirst("a[href*='/manga/']") ?: return manga
         manga.setUrlWithoutDomain(
-            link.attr("href"),
+            link.attr("href")
         )
 
         manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
@@ -64,7 +64,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun latestUpdatesRequest(page: Int): Request =
         GET(
             "$baseUrl/list/New-Update/?page=$page",
-            headers,
+            headers
         )
 
     override fun latestUpdatesSelector(): String =
@@ -80,12 +80,12 @@ class NiaddEn : ParsedHttpSource() {
     override fun searchMangaRequest(
         page: Int,
         query: String,
-        filters: FilterList,
+        filters: FilterList
     ): Request {
         val q = URLEncoder.encode(query, "UTF-8")
         return GET(
             "$baseUrl/search/?name=$q&page=$page",
-            headers,
+            headers
         )
     }
 
@@ -104,7 +104,7 @@ class NiaddEn : ParsedHttpSource() {
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
         val img = document.selectFirst(
-            "div.detail-cover img, .bookside-cover img",
+            "div.detail-cover img, .bookside-cover img"
         )
         manga.thumbnail_url = img?.absUrl("src")
             ?.takeIf { it.isNotBlank() }
@@ -113,7 +113,7 @@ class NiaddEn : ParsedHttpSource() {
             ?: img?.absUrl("data-original")
 
         val author = document.selectFirst(
-            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value",
+            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value"
         )?.text()?.trim()
         manga.author = author
         manga.artist = author
@@ -122,7 +122,7 @@ class NiaddEn : ParsedHttpSource() {
             .firstOrNull {
                 it.selectFirst(".detail-cate-title")?.text()?.contains(
                     "Synopsis",
-                    true,
+                    true
                 ) == true
             }
             ?.selectFirst("section.detail-synopsis")
@@ -130,7 +130,7 @@ class NiaddEn : ParsedHttpSource() {
             ?: ""
 
         val alternatives = document.selectFirst(
-            "div.bookside-general-cell:contains(Alternative(s):)",
+            "div.bookside-general-cell:contains(Alternative(s):)"
         )?.ownText()?.replace("Alternative(s):", "")?.trim()
 
         manga.description = buildString {
@@ -142,7 +142,7 @@ class NiaddEn : ParsedHttpSource() {
             .firstOrNull {
                 it.selectFirst(".detail-cate-title")?.text()?.contains(
                     "Genres",
-                    true,
+                    true
                 ) == true
             }
             ?.select("section.detail-synopsis a span[itemprop=genre]")
@@ -162,7 +162,7 @@ class NiaddEn : ParsedHttpSource() {
         }
         return GET(
             baseUrl + chaptersUrl,
-            headers,
+            headers
         )
     }
 
@@ -172,7 +172,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(
-            element.attr("href"),
+            element.attr("href")
         )
 
         chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
@@ -181,7 +181,7 @@ class NiaddEn : ParsedHttpSource() {
 
         val dateText = element.selectFirst("span.chp-time")?.text()
         chapter.date_upload = parseDate(
-            dateText,
+            dateText
         )
         return chapter
     }
@@ -191,7 +191,7 @@ class NiaddEn : ParsedHttpSource() {
         return try {
             val sdf = SimpleDateFormat(
                 "MMM dd, yyyy",
-                Locale.ENGLISH,
+                Locale.ENGLISH
             )
             sdf.parse(dateString)?.time ?: 0L
         } catch (_: Exception) {
@@ -219,8 +219,8 @@ class NiaddEn : ParsedHttpSource() {
             val pageDoc = client.newCall(
                 GET(
                     url,
-                    headers,
-                ),
+                    headers
+                )
             ).execute().asJsoup()
             pageDoc.select("img.manga_pic").forEach { img ->
                 val imageUrl = img.absUrl("src")
@@ -230,8 +230,8 @@ class NiaddEn : ParsedHttpSource() {
                     Page(
                         pageIndex++,
                         "",
-                        imageUrl,
-                    ),
+                        imageUrl
+                    )
                 )
             }
         }
