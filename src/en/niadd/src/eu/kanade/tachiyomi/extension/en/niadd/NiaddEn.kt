@@ -181,27 +181,39 @@ class NiaddEn : ParsedHttpSource() {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        var pageIndex = 0
+        
+        document.select("section.mangaread-img img.manga_pic").forEachIndexed { index, img ->
+            val imageUrl = img.absUrl("src")
+                .ifBlank { img.absUrl("data-src") }
+                .ifBlank { img.absUrl("data-original") }
 
-        val pageOptions = document.select("select.sl-page option").map { it.attr("value") }
+            pages.add(Page(index, "", imageUrl))
+        }
 
-        pageOptions.forEach { url ->
-            val fullUrl = if (url.startsWith("http")) url else baseUrl + url
+        val loadOptions = document.select("select.change_pic_no option")
+            .mapNotNull { it.attr("value").toIntOrNull() }
+            .sorted()
 
-            val pageDoc = client.newCall(GET(fullUrl, headers)).execute().asJsoup()
+        val maxLoad = loadOptions.lastOrNull() ?: 1
+        val chapterUrl = document.location()
+        val headersWithReferer = headersBuilder()
+            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
+            .add("Referer", chapterUrl)
+            .build()
 
-            pageDoc.select("#viewer img.manga_pic").forEach { img ->
+        for (i in 2..maxLoad) {
+            val url = "$chapterUrl?page=$i"
+            val pageDoc = client.newCall(GET(url, headersWithReferer)).execute().asJsoup()
+            pageDoc.select("section.mangaread-img img.manga_pic").forEach { img ->
                 val imageUrl = img.absUrl("src")
                     .ifBlank { img.absUrl("data-src") }
                     .ifBlank { img.absUrl("data-original") }
-
-                pages.add(Page(pageIndex++, "", imageUrl))
+                pages.add(Page(pages.size, "", imageUrl))
             }
         }
 
         return pages
     }
-
 
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException("Not used")
