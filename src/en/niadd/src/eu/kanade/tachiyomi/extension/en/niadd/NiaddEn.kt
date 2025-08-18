@@ -179,25 +179,44 @@ class NiaddEn : ParsedHttpSource() {
     }
 
     // Pages
+    override fun pageListRequest(chapter: SChapter): Request {
+        val chapterUrl = chapter.url
+        return GET("$baseUrl$chapterUrl?load=10&start=1", headers)
+    }
+
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-        val picBoxes = document.select("div.pic_box")
+        pages.addAll(parsePicBoxUrls(document))
 
-        picBoxes.forEachIndexed { index, picBox ->
-            val img = picBox.selectFirst("img.manga_pic")
-            val imageUrl = img?.absUrl("src")
-                ?.ifBlank { img.absUrl("data-src") }
-                ?.ifBlank { img.absUrl("data-original") }
+        var startIndex = pages.size + 1
+        val batchSize = 10
+        var hasMore = true
 
-            if (!imageUrl.isNullOrBlank()) {
-                pages.add(Page(index, "", imageUrl))
+        while (hasMore) {
+            val nextUrl = document.baseUri() + "?load=$batchSize&start=$startIndex"
+            val nextDoc = GET(nextUrl, headers).execute().asJsoup()
+            val batchPages = parsePicBoxUrls(nextDoc)
+            pages.addAll(batchPages)
+
+            if (batchPages.size < batchSize) {
+                hasMore = false
+            } else {
+                startIndex += batchSize
             }
         }
 
         return pages
     }
 
-    override fun imageUrlParse(document: Document): String {
-        throw UnsupportedOperationException("Not used")
+    private fun parsePicBoxUrls(document: Document): List<Page> {
+        val pages = mutableListOf<Page>()
+        val picBoxes = document.select("div.pic_box img.manga_pic")
+        for ((index, img) in picBoxes.withIndex()) {
+            val imgUrl = img.absUrl("src")
+            if (imgUrl.isNotBlank()) {
+                pages.add(Page(index, "", imgUrl))
+            }
+        }
+        return pages
     }
-    }
+}
