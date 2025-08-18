@@ -36,7 +36,9 @@ class NiaddEn : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         val link = element.selectFirst("a[href*='/manga/']") ?: return manga
-        manga.setUrlWithoutDomain(link.attr("href"))
+        manga.setUrlWithoutDomain(
+            link.attr("href"),
+        )
 
         manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
             ?: element.selectFirst("a[title]")?.attr("title")?.trim()
@@ -118,7 +120,10 @@ class NiaddEn : ParsedHttpSource() {
 
         val synopsis = document.select("div.detail-section-box")
             .firstOrNull {
-                it.selectFirst(".detail-cate-title")?.text()?.contains("Synopsis", true) == true
+                it.selectFirst(".detail-cate-title")?.text()?.contains(
+                    "Synopsis",
+                    true,
+                ) == true
             }
             ?.selectFirst("section.detail-synopsis")
             ?.text()?.trim()
@@ -135,7 +140,10 @@ class NiaddEn : ParsedHttpSource() {
 
         manga.genre = document.select("div.detail-section-box")
             .firstOrNull {
-                it.selectFirst(".detail-cate-title")?.text()?.contains("Genres", true) == true
+                it.selectFirst(".detail-cate-title")?.text()?.contains(
+                    "Genres",
+                    true,
+                ) == true
             }
             ?.select("section.detail-synopsis a span[itemprop=genre]")
             ?.joinToString(", ") { it.text().trim().trimStart(',') }
@@ -163,14 +171,18 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(element.attr("href"))
+        chapter.setUrlWithoutDomain(
+            element.attr("href"),
+        )
 
         chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
             ?: element.attr("title")?.trim()
             ?: element.text().trim()
 
         val dateText = element.selectFirst("span.chp-time")?.text()
-        chapter.date_upload = parseDate(dateText)
+        chapter.date_upload = parseDate(
+            dateText,
+        )
         return chapter
     }
 
@@ -204,10 +216,12 @@ class NiaddEn : ParsedHttpSource() {
 
         var pageIndex = 0
         sortedUrls.forEach { url ->
-            val pageDoc = client.newCall(GET(
-                url,
-                headers,
-            )).execute().asJsoup()
+            val pageDoc = client.newCall(
+                GET(
+                    url,
+                    headers,
+                ),
+            ).execute().asJsoup()
             pageDoc.select("img.manga_pic").forEach { img ->
                 val imageUrl = img.absUrl("src")
                     .ifBlank { img.absUrl("data-src") }
