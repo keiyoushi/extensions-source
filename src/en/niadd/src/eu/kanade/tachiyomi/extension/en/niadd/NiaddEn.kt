@@ -16,16 +16,19 @@ import java.util.Locale
 
 class NiaddEn : ParsedHttpSource() {
 
-    override val name = "Niadd"
-    override val baseUrl = "https://www.niadd.com"
-    override val lang = "en"
-    override val supportsLatest = true
+    override val name: String = "Niadd"
+    override val baseUrl: String = "https://www.niadd.com"
+    override val lang: String = "en"
+    override val supportsLatest: Boolean = true
 
+    // -------------------
     // Popular
+    // -------------------
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/category/?page=$page", headers)
 
-    override fun popularMangaSelector() = "div.manga-item:has(a[href*='/manga/'])"
+    override fun popularMangaSelector(): String =
+        "div.manga-item:has(a[href*='/manga/'])"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -49,30 +52,37 @@ class NiaddEn : ParsedHttpSource() {
         return manga
     }
 
-    override fun popularMangaNextPageSelector() = "a.next"
+    override fun popularMangaNextPageSelector(): String? = "a.next"
 
+    // -------------------
     // Latest
+    // -------------------
     override fun latestUpdatesRequest(page: Int): Request =
         GET("$baseUrl/list/New-Update/?page=$page", headers)
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
+    override fun latestUpdatesSelector(): String = popularMangaSelector()
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
+    // -------------------
     // Search
+    // -------------------
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val q = URLEncoder.encode(query, "UTF-8")
         return GET("$baseUrl/search/?name=$q&page=$page", headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaSelector(): String = popularMangaSelector()
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
+    // -------------------
     // Details
+    // -------------------
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
+
         val img = document.selectFirst("div.detail-cover img, .bookside-cover img")
         manga.thumbnail_url = img?.absUrl("src")
             ?.takeIf { it.isNotBlank() }
@@ -81,7 +91,7 @@ class NiaddEn : ParsedHttpSource() {
             ?: img?.absUrl("data-original")
 
         val author = document.selectFirst(
-            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value"
+            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value",
         )?.text()?.trim()
         manga.author = author
         manga.artist = author
@@ -110,13 +120,15 @@ class NiaddEn : ParsedHttpSource() {
         return manga
     }
 
+    // -------------------
     // Chapters
+    // -------------------
     override fun chapterListRequest(manga: SManga): Request {
         val chaptersUrl = if (manga.url.endsWith("/chapters.html")) manga.url else manga.url.removeSuffix("/") + "/chapters.html"
         return GET(baseUrl + chaptersUrl, headers)
     }
 
-    override fun chapterListSelector() = "ul.chapter-list a.hover-underline"
+    override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
@@ -124,8 +136,7 @@ class NiaddEn : ParsedHttpSource() {
         chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
             ?: element.attr("title")?.trim()
             ?: element.text().trim()
-        val dateText = element.selectFirst("span.chp-time")?.text()
-        chapter.date_upload = parseDate(dateText)
+        chapter.date_upload = parseDate(element.selectFirst("span.chp-time")?.text())
         return chapter
     }
 
@@ -138,18 +149,15 @@ class NiaddEn : ParsedHttpSource() {
         }
     }
 
-    // Pages
+    // -------------------
+    // Pages (batch loader)
+    // -------------------
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$baseUrl${chapter.url}?load=10&start=1", headers)
+        // URL do capítulo no NineAnime
+        return GET("https://www.nineanime.com${chapter.url}", headers)
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        pages.addAll(parsePicBoxUrls(document))
-        return pages
-    }
-
-    private fun parsePicBoxUrls(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
         val picBoxes = document.select("div.pic_box img.manga_pic")
         for ((index, img) in picBoxes.withIndex()) {
@@ -158,7 +166,4 @@ class NiaddEn : ParsedHttpSource() {
         }
         return pages
     }
-
-    // Implement required abstract method
-    override fun imageUrlParse(document: Document) = ""
 }
