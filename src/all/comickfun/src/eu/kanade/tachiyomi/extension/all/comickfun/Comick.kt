@@ -245,7 +245,6 @@ abstract class Comick(
             ?.split("\n")
             ?.map(String::trim)
             ?.filter(String::isNotEmpty)
-            ?.sorted()
             .orEmpty()
             .toSet()
 
