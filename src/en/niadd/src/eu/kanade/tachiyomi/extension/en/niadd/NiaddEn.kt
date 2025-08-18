@@ -19,10 +19,11 @@ class NiaddEn : ParsedHttpSource() {
     override val name: String = "Niadd"
     override val baseUrl: String = "https://www.niadd.com"
     private val altBaseUrl: String = "https://www.nineanime.com"
+
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
 
-    private fun defaultHeaders(): Headers = Headers.Builder()
+    override val headers: Headers = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
         .add("Referer", baseUrl)
         .build()
@@ -31,7 +32,7 @@ class NiaddEn : ParsedHttpSource() {
     // Popular
     // ===========================
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/category/?page=$page", headers = defaultHeaders())
+        GET("$baseUrl/category/?page=$page", headers)
 
     override fun popularMangaSelector(): String = "div.manga-item:has(a[href*='/manga/'])"
 
@@ -60,7 +61,7 @@ class NiaddEn : ParsedHttpSource() {
     // Latest
     // ===========================
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/list/New-Update/?page=$page", headers = defaultHeaders())
+        GET("$baseUrl/list/New-Update/?page=$page", headers)
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
@@ -71,7 +72,7 @@ class NiaddEn : ParsedHttpSource() {
     // ===========================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val q = URLEncoder.encode(query, "UTF-8")
-        return GET("$baseUrl/search/?name=$q&page=$page", headers = defaultHeaders())
+        return GET("$baseUrl/search/?name=$q&page=$page", headers)
     }
 
     override fun searchMangaSelector(): String = popularMangaSelector()
@@ -94,8 +95,11 @@ class NiaddEn : ParsedHttpSource() {
             ?.text()?.trim()
         manga.artist = manga.author
 
-        manga.description = document.select("div.detail-section-box section.detail-synopsis")
-            .text()?.trim()
+        // Pega somente a sinopse
+        val synopsis = document.select("div.detail-section-box")
+            .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Synopsis", true) == true }
+            ?.selectFirst("section.detail-synopsis")?.text()?.trim() ?: ""
+        manga.description = synopsis
 
         manga.genre = document.select("a span[itemprop=genre]").joinToString(", ") { it.text() }
         manga.status = SManga.UNKNOWN
@@ -108,7 +112,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun chapterListRequest(manga: SManga): Request {
         val chaptersUrl = if (manga.url.endsWith("/chapters.html")) manga.url
         else manga.url.removeSuffix("/") + "/chapters.html"
-        return GET(baseUrl + chaptersUrl, headers = defaultHeaders())
+        return GET(baseUrl + chaptersUrl, headers)
     }
 
     override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
@@ -139,34 +143,26 @@ class NiaddEn : ParsedHttpSource() {
     // Pages
     // ===========================
     override fun pageListRequest(chapter: SChapter): Request {
-        val fullUrl = if (chapter.url.startsWith("http")) chapter.url else baseUrl + chapter.url
-        val finalUrl = if (fullUrl.contains("nineanime.com")) fullUrl.replace("niadd.com", "nineanime.com") else fullUrl
-        return GET(finalUrl, headers = defaultHeaders())
+        val fullUrl = when {
+            chapter.url.startsWith("http") -> chapter.url
+            else -> baseUrl + chapter.url
+        }
+
+        val finalUrl = if (fullUrl.contains("nineanime.com")) fullUrl.replace("niadd.com", "nineanime.com")
+        else fullUrl
+
+        return GET(finalUrl, headers)
     }
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        // Niadd
-        val niaddImgs = document.select("div.pic_box img")
-        if (niaddImgs.isNotEmpty()) {
-            niaddImgs.forEachIndexed { i, img ->
-                pages.add(Page(i, "", img.absUrl("src")))
-            }
-            return pages
+        // Pega todas as imagens possíveis do Niadd
+        document.select("div.pic_box img, div.reader img[data-src]").forEachIndexed { i, img ->
+            val imgUrl = img.attr("data-src").ifEmpty { img.absUrl("src") }
+            if (imgUrl.isNotBlank()) pages.add(Page(i, "", imgUrl))
         }
 
-        // NineAnime
-        val nineImgs = document.select("div.reader img[data-src]")
-        if (nineImgs.isNotEmpty()) {
-            nineImgs.forEachIndexed { i, img ->
-                pages.add(Page(i, "", img.attr("data-src")))
-            }
-            return pages
-        }
-
-        // fallback: abre capítulo no navegador
-        pages.add(Page(0, "", document.location()))
         return pages
     }
 
