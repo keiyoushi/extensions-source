@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.niadd
+package eu.kanade.tachiyomi.extension.en.niadd
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -16,7 +16,7 @@ import java.util.Locale
 
 class NiaddEn : ParsedHttpSource() {
 
-    override val name: String = "Niadd English"
+    override val name: String = "Niadd"
     override val baseUrl: String = "https://www.niadd.com"
     private val langCode: String = "en"
 
