@@ -123,6 +123,11 @@ class NiaddEn : ParsedHttpSource() {
     // -------------------
     // Chapters
     // -------------------
+
+    override fun imageUrlParse(document: Document): String {
+        return ""
+    }
+
     override fun chapterListRequest(manga: SManga): Request {
         val chaptersUrl = if (manga.url.endsWith("/chapters.html")) manga.url else manga.url.removeSuffix("/") + "/chapters.html"
         return GET(baseUrl + chaptersUrl, headers)
