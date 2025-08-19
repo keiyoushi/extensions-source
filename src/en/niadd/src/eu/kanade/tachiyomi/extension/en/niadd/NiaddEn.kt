@@ -26,8 +26,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/category/?page=$page", headers)
 
-    override fun popularMangaSelector(): String =
-        "div.manga-item:has(a[href*='/manga/'])"
+    override fun popularMangaSelector(): String = "div.manga-item:has(a[href*='/manga/'])"
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -60,7 +59,10 @@ class NiaddEn : ParsedHttpSource() {
         GET("$baseUrl/list/New-Update/?page=$page", headers)
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
-    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        popularMangaFromElement(element)
+
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // Search
@@ -70,7 +72,10 @@ class NiaddEn : ParsedHttpSource() {
     }
 
     override fun searchMangaSelector(): String = popularMangaSelector()
-    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+
+    override fun searchMangaFromElement(element: Element): SManga =
+        popularMangaFromElement(element)
+
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // Details
@@ -133,16 +138,12 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-
         chapter.setUrlWithoutDomain(element.attr("href"))
-
         chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
             ?: element.attr("title")?.trim()
             ?: element.text().trim()
-
         val dateText = element.selectFirst("span.chp-time")?.text()
         chapter.date_upload = parseDate(dateText)
-
         return chapter
     }
 
@@ -157,32 +158,23 @@ class NiaddEn : ParsedHttpSource() {
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + chapter.url, headers)
+        val url = if (chapter.url.endsWith(".html")) chapter.url else chapter.url + "-1.html"
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val body = response.body.string()
+        val document = response.asJsoup()
+        val base = response.request.url.toString().substringBeforeLast("/")
+        val pages = mutableListOf<Page>()
 
-        // Primeiro tenta NineManga: regex no all_imgs_url
-        val regex = Regex("all_imgs_url\\s*:\\s*\\[(.*?)]", RegexOption.DOT_MATCHES_ALL)
-        val match = regex.find(body)
-
-        if (match != null) {
-            val urlsRaw = match.groupValues[1]
-            val urls = urlsRaw.split(",")
-                .map { it.trim().trim('"', '\'', ' ', '\n', '\r') }
-                .filter { it.isNotBlank() }
-
-            return urls.mapIndexed { index, imageUrl ->
-                Page(index, "", imageUrl)
+        val pageOptions = document.select("select option[value]")
+        pageOptions.forEachIndexed { i, option ->
+            val pageUrl = option.attr("value")
+            if (pageUrl.isNotBlank()) {
+                pages.add(Page(i, base + pageUrl))
             }
         }
 
-        // Fallback pro Niadd antigo
-        val document = response.asJsoup()
-        return document.select("div.pic_box img.manga_pic")
-            .mapIndexed { index, img ->
-                Page(index, "", img.absUrl("src"))
-            }
+        return pages
     }
 }
