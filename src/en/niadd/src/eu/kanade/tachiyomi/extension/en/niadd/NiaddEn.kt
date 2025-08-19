@@ -146,13 +146,12 @@ class NiaddEn : ParsedHttpSource() {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        val options = document.select("select option[value$='.html']")
-        for ((index, option) in options.withIndex()) {
-            val imgUrl = document.baseUri().removeSuffix("/") + option.attr("value")
-            pages.add(Page(index, "", imgUrl))
+        val baseUrl = "https://www.nineanime.com"
+        val pageOptions = document.select("select option")
+        return pageOptions.map { option ->
+            val url = baseUrl + option.attr("value")
+            Page(index = pageOptions.indexOf(option), url = url)
         }
-        return pages
     }
 
     override fun imageUrlParse(document: Document): String {
