@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -23,10 +24,7 @@ class NiaddEn : ParsedHttpSource() {
 
     // Popular
     override fun popularMangaRequest(page: Int): Request =
-        GET(
-            "$baseUrl/category/?page=$page",
-            headers,
-        )
+        GET("$baseUrl/category/?page=$page", headers)
 
     override fun popularMangaSelector(): String =
         "div.manga-item:has(a[href*='/manga/'])"
@@ -55,42 +53,25 @@ class NiaddEn : ParsedHttpSource() {
         return manga
     }
 
-    override fun popularMangaNextPageSelector(): String? =
-        "a.next"
+    override fun popularMangaNextPageSelector(): String? = "a.next"
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request =
-        GET(
-            "$baseUrl/list/New-Update/?page=$page",
-            headers,
-        )
+        GET("$baseUrl/list/New-Update/?page=$page", headers)
 
-    override fun latestUpdatesSelector(): String =
-        popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
-
-    override fun latestUpdatesNextPageSelector(): String? =
-        popularMangaNextPageSelector()
+    override fun latestUpdatesSelector(): String = popularMangaSelector()
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val q = URLEncoder.encode(query, "UTF-8")
-        return GET(
-            "$baseUrl/search/?name=$q&page=$page",
-            headers,
-        )
+        return GET("$baseUrl/search/?name=$q&page=$page", headers)
     }
 
-    override fun searchMangaSelector(): String =
-        popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
-
-    override fun searchMangaNextPageSelector(): String? =
-        popularMangaNextPageSelector()
+    override fun searchMangaSelector(): String = popularMangaSelector()
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
+    override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga {
@@ -145,14 +126,10 @@ class NiaddEn : ParsedHttpSource() {
         } else {
             manga.url.removeSuffix("/") + "/chapters.html"
         }
-        return GET(
-            baseUrl + chaptersUrl,
-            headers,
-        )
+        return GET(baseUrl + chaptersUrl, headers)
     }
 
-    override fun chapterListSelector(): String =
-        "ul.chapter-list a.hover-underline"
+    override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
@@ -180,43 +157,32 @@ class NiaddEn : ParsedHttpSource() {
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterUrl = chapter.url
-        return GET("$baseUrl$chapterUrl?load=10&start=1", headers)
+        return GET(baseUrl + chapter.url, headers)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        pages.addAll(parsePicBoxUrls(document))
+    override fun pageListParse(response: Response): List<Page> {
+        val body = response.body.string()
 
-        var startIndex = pages.size + 1
-        val batchSize = 10
-        var hasMore = true
+        // Primeiro tenta NineManga: regex no all_imgs_url
+        val regex = Regex("all_imgs_url\\s*:\\s*\\[(.*?)]", RegexOption.DOT_MATCHES_ALL)
+        val match = regex.find(body)
 
-        while (hasMore) {
-            val nextUrl = document.baseUri() + "?load=$batchSize&start=$startIndex"
-            val nextDoc = GET(nextUrl, headers).execute().asJsoup()
-            val batchPages = parsePicBoxUrls(nextDoc)
-            pages.addAll(batchPages)
+        if (match != null) {
+            val urlsRaw = match.groupValues[1]
+            val urls = urlsRaw.split(",")
+                .map { it.trim().trim('"', '\'', ' ', '\n', '\r') }
+                .filter { it.isNotBlank() }
 
-            if (batchPages.size < batchSize) {
-                hasMore = false
-            } else {
-                startIndex += batchSize
+            return urls.mapIndexed { index, imageUrl ->
+                Page(index, "", imageUrl)
             }
         }
 
-        return pages
-    }
-
-    private fun parsePicBoxUrls(document: Document): List<Page> {
-        val pages = mutableListOf<Page>()
-        val picBoxes = document.select("div.pic_box img.manga_pic")
-        for ((index, img) in picBoxes.withIndex()) {
-            val imgUrl = img.absUrl("src")
-            if (imgUrl.isNotBlank()) {
-                pages.add(Page(index, "", imgUrl))
+        // Fallback pro Niadd antigo
+        val document = response.asJsoup()
+        return document.select("div.pic_box img.manga_pic")
+            .mapIndexed { index, img ->
+                Page(index, "", img.absUrl("src"))
             }
-        }
-        return pages
     }
 }
