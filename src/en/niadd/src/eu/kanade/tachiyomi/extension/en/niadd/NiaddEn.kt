@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Headers
 import org.jsoup.nodes.Document
@@ -14,6 +15,8 @@ import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.random.Random
+import kotlinx.coroutines.delay
 
 class NiaddEn : ParsedHttpSource() {
 
@@ -140,18 +143,40 @@ class NiaddEn : ParsedHttpSource() {
         } catch (_: Exception) { 0L }
     }
 
+    // Rate-limited client
+    private val rateLimitedClient: OkHttpClient = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val delayMillis = Random.nextLong(2000L, 5000L)
+            Thread.sleep(delayMillis)
+            chain.proceed(chain.request())
+        }
+        .build()
+
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
         return GET(chapter.url, headers = customHeaders)
     }
 
-    override fun pageListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val chapters = multableListOf<SChapter>
+    override fun pageListParse(document: Document): List<Page> {
+        val scriptData = document.select("script:containsData(all_imgs_url)").first().data()
+        val urls = Regex("all_imgs_url: \\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL).find(scriptData)!!
+            .groupValues[1]
+            .split(",")
+            .map { it.trim().removeSurrounding("\"") }
+
+        return urls.mapIndexed { index, url ->
+            Page(index, "", url)
+        }
     }
 
+    override fun imageUrlParse(document: Document): String = ""
 
-    override fun imageUrlParse(document: Document): String {
-        return document.selectFirst("img#img-main")?.attr("src") ?: ""
+    // Override fetchImage to use rate-limited client
+    override fun fetchImage(page: Page): okhttp3.Response {
+        val request = Request.Builder()
+            .url(page.imageUrl)
+            .headers(customHeaders)
+            .build()
+        return rateLimitedClient.newCall(request).execute()
     }
 }
