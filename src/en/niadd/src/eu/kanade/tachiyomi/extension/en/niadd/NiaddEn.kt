@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -31,7 +30,6 @@ class NiaddEn : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         val link = element.selectFirst("a[href*='/manga/']") ?: return manga
-
         manga.setUrlWithoutDomain(link.attr("href"))
 
         manga.title = element.selectFirst("div.manga-name")?.text()?.trim()
@@ -48,7 +46,6 @@ class NiaddEn : ParsedHttpSource() {
             ?: img?.absUrl("data-original")
 
         manga.description = element.selectFirst("div.manga-intro")?.text()?.trim()
-
         return manga
     }
 
@@ -59,10 +56,7 @@ class NiaddEn : ParsedHttpSource() {
         GET("$baseUrl/list/New-Update/?page=$page", headers)
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
-
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
-
+    override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // Search
@@ -72,16 +66,12 @@ class NiaddEn : ParsedHttpSource() {
     }
 
     override fun searchMangaSelector(): String = popularMangaSelector()
-
-    override fun searchMangaFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
-
+    override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // Details
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
-
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
 
         val img = document.selectFirst("div.detail-cover img, .bookside-cover img")
@@ -92,7 +82,7 @@ class NiaddEn : ParsedHttpSource() {
             ?: img?.absUrl("data-original")
 
         val author = document.selectFirst(
-            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value",
+            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value"
         )?.text()?.trim()
         manga.author = author
         manga.artist = author
@@ -100,27 +90,22 @@ class NiaddEn : ParsedHttpSource() {
         val synopsis = document.select("div.detail-section-box")
             .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Synopsis", true) == true }
             ?.selectFirst("section.detail-synopsis")
-            ?.text()?.trim()
-            ?: ""
+            ?.text()?.trim() ?: ""
 
         val alternatives = document.selectFirst("div.bookside-general-cell:contains(Alternative(s):)")
             ?.ownText()?.replace("Alternative(s):", "")?.trim()
 
         manga.description = buildString {
             append(synopsis)
-            if (!alternatives.isNullOrBlank()) {
-                append("\n\nAlternative(s): $alternatives")
-            }
+            if (!alternatives.isNullOrBlank()) append("\n\nAlternative(s): $alternatives")
         }
 
         manga.genre = document.select("div.detail-section-box")
             .firstOrNull { it.selectFirst(".detail-cate-title")?.text()?.contains("Genres", true) == true }
             ?.select("section.detail-synopsis a span[itemprop=genre]")
-            ?.joinToString(", ") { it.text().trim().trimStart(',') }
-            ?: ""
+            ?.joinToString(", ") { it.text().trim().trimStart(',') } ?: ""
 
         manga.status = SManga.UNKNOWN
-
         return manga
     }
 
@@ -138,6 +123,7 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
+        // Pega o link direto do NineAnime
         chapter.setUrlWithoutDomain(element.attr("href"))
         chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
             ?: element.attr("title")?.trim()
@@ -151,30 +137,21 @@ class NiaddEn : ParsedHttpSource() {
         if (dateString.isNullOrBlank()) return 0L
         return try {
             SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH).parse(dateString)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
+        } catch (_: Exception) { 0L }
     }
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = if (chapter.url.endsWith(".html")) chapter.url else chapter.url + "-1.html"
-        return GET(url, headers)
+        return GET(chapter.url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val base = response.request.url.toString().substringBeforeLast("/")
+    override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
-
-        val pageOptions = document.select("select option[value]")
-        pageOptions.forEachIndexed { i, option ->
-            val pageUrl = option.attr("value")
-            if (pageUrl.isNotBlank()) {
-                pages.add(Page(i, base + pageUrl))
-            }
+        val options = document.select("select option[value$='.html']")
+        for ((index, option) in options.withIndex()) {
+            val imgUrl = document.baseUri().removeSuffix("/") + option.attr("value")
+            pages.add(Page(index, "", imgUrl))
         }
-
         return pages
     }
 }
