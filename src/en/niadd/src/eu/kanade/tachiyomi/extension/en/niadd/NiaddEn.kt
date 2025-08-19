@@ -22,12 +22,14 @@ class NiaddEn : ParsedHttpSource() {
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
 
-    // Headers renomeados
-    private val customHeaders = GET(url, headers = Headers.of(customHeaders))
+    // Headers
+    private val customHeaders: Headers = Headers.Builder()
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        .build()
 
     // Popular
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/category/?page=$page", headers = Headers.of(customHeaders))
+        GET("$baseUrl/category/?page=$page", headers = customHeaders)
 
     override fun popularMangaSelector(): String = "div.manga-item:has(a[href*='/manga/'])"
 
@@ -57,7 +59,7 @@ class NiaddEn : ParsedHttpSource() {
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/list/New-Update/?page=$page", headers = Headers.of(customHeaders))
+        GET("$baseUrl/list/New-Update/?page=$page", headers = customHeaders)
 
     override fun latestUpdatesSelector(): String = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
@@ -66,7 +68,7 @@ class NiaddEn : ParsedHttpSource() {
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val q = URLEncoder.encode(query, "UTF-8")
-        return GET("$baseUrl/search/?name=$q&page=$page", headers = Headers.of(customHeaders))
+        return GET("$baseUrl/search/?name=$q&page=$page", headers = customHeaders)
     }
 
     override fun searchMangaSelector(): String = popularMangaSelector()
@@ -120,7 +122,7 @@ class NiaddEn : ParsedHttpSource() {
         } else {
             manga.url.removeSuffix("/") + "/chapters.html"
         }
-        return GET(baseUrl + chaptersUrl, headers = Headers.of(customHeaders))
+        return GET(baseUrl + chaptersUrl, headers = customHeaders)
     }
 
     override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
@@ -145,7 +147,7 @@ class NiaddEn : ParsedHttpSource() {
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers = Headers.of(customHeaders))
+        return GET(chapter.url, headers = customHeaders)
     }
 
     override fun pageListParse(document: Document): List<Page> {
