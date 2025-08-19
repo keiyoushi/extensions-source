@@ -117,12 +117,7 @@ class NiaddEn : ParsedHttpSource() {
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        val chaptersUrl = if (manga.url.endsWith("/chapters.html")) {
-            manga.url
-        } else {
-            manga.url.removeSuffix("/") + "/chapters.html"
-        }
-        return GET(baseUrl + chaptersUrl, headers = customHeaders)
+        return GET(manga.url, headers)
     }
 
     override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
@@ -150,23 +145,11 @@ class NiaddEn : ParsedHttpSource() {
         return GET(chapter.url, headers = customHeaders)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val baseNine = "https://www.nineanime.com"
-        val pageSelect = document.select("select option")
-        val pages = mutableListOf<Page>()
-
-        pageSelect.forEachIndexed { index, option ->
-            val url = try {
-                baseNine + option.attr("value")
-            } catch (_: Exception) {
-                null
-            }
-            if (url != null && url.isNotBlank()) {
-                pages.add(Page(index = index, url = url))
-            }
-        }
-        return pages
+    override fun pageListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val chapters = multableListOf<SChapter>
     }
+
 
     override fun imageUrlParse(document: Document): String {
         return document.selectFirst("img#img-main")?.attr("src") ?: ""
