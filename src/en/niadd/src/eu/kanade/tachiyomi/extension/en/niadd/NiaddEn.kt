@@ -154,4 +154,8 @@ class NiaddEn : ParsedHttpSource() {
         }
         return pages
     }
+
+    override fun imageUrlParse(document: Document): String {
+        return ""
+    }
 }
