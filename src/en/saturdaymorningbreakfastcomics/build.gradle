@@ -1,0 +1,8 @@
+ext {
+    extName = 'SaturdayMorningBreakfastComics'
+    extClass = '.SaturdayMorningBreakfastComics'
+    extVersionCode = 3
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
