@@ -16,7 +16,6 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.random.Random
-import kotlinx.coroutines.delay
 
 class NiaddEn : ParsedHttpSource() {
 
@@ -25,7 +24,6 @@ class NiaddEn : ParsedHttpSource() {
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
 
-    // Headers
     private val customHeaders: Headers = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
         .build()
@@ -171,7 +169,7 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document): String = ""
 
-    // Override fetchImage to use rate-limited client
+    // Fetch image with delay
     override fun fetchImage(page: Page): okhttp3.Response {
         val request = Request.Builder()
             .url(page.imageUrl)
