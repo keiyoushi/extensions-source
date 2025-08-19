@@ -141,16 +141,18 @@ class NiaddEn : ParsedHttpSource() {
 
     // Pages - Lazy load
     override fun pageListRequest(chapter: SChapter): Request {
+        // Requisição apenas da página do capítulo, sem tentar pegar todas as imagens de uma vez
         return GET(baseUrl + chapter.url, headers)
     }
 
     override fun pageListParse(document: Document): List<Page> {
+        // Seleciona todas as imagens dentro do capítulo
         val pages = document.select("div.reading-content img")
         return pages.mapIndexed { index, img ->
             val imgUrl = img.absUrl("data-src")
                 .takeIf { it.isNotBlank() }
                 ?: img.absUrl("src")
-            Page(index, "", imgUrl)
+            Page(index, "", imgUrl) // URL do HTML fica vazio, imagem direto
         }
     }
 
