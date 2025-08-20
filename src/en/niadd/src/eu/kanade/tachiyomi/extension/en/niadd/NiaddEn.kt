@@ -23,7 +23,7 @@ class NiaddEn : ParsedHttpSource() {
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
 
-    // Client com delay 2–5s para evitar bloqueios
+    // Client com delay 2–5s para evitar bloqueios (vale para HTML e imagens)
     override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor { chain ->
             val delayMillis = Random.nextLong(2000L, 5000L)
@@ -127,15 +127,23 @@ class NiaddEn : ParsedHttpSource() {
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        // Usa URL absoluta para garantir (mantendo seus headers)
-        return GET("$baseUrl${manga.url}", headers = customHeaders)
+        return GET(toAbsolute(manga.url), headers = customHeaders)
     }
 
-    override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
+    // selector amplo para variações do site
+    override fun chapterListSelector(): String =
+        "ul.chapter-list a.hover-underline, " +
+            "ul#chapterlist a, ul.manga-chapter-list a, .chapter-list a, .detail-ch-list a, " +
+            "ul li a[href*='/chapter/']"
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(element.attr("href"))
+        val href = element.attr("href")
+        if (href.startsWith("http", ignoreCase = true)) {
+            chapter.url = href
+        } else {
+            chapter.setUrlWithoutDomain(href)
+        }
         chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
             ?: element.attr("title")?.trim()
             ?: element.text().trim()
@@ -153,11 +161,10 @@ class NiaddEn : ParsedHttpSource() {
 
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$baseUrl${chapter.url}", headers = customHeaders)
+        return GET(toAbsolute(chapter.url), headers = customHeaders)
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        // Pega o script com all_imgs_url (null-safe) ou cai no outerHtml
         val jsBlob = document.select("script:containsData(all_imgs_url)")
             .firstOrNull()
             ?.data()
@@ -168,17 +175,32 @@ class NiaddEn : ParsedHttpSource() {
             options = setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE),
         ).find(jsBlob) ?: throw Exception("all_imgs_url not found")
 
-        // Extrai somente as strings entre aspas (URLs completas)
         val urls = Regex(""""(https?://[^"]+)"""")
             .findAll(match.groupValues[1])
             .map { it.groupValues[1] }
             .toList()
 
-        return urls.mapIndexed { index, url ->
-            // Define diretamente a imageUrl (url da imagem real)
-            Page(index, "", url)
+        val referer = document.location().ifBlank { toAbsolute("") }
+        return urls.mapIndexed { index, imageUrl ->
+            // guarda o referer no Page.url e já define a imageUrl
+            Page(index, referer, imageUrl)
         }
     }
 
+    // Já definimos imageUrl na Page; manter vazio para não ser chamado
     override fun imageUrlParse(document: Document): String = ""
+
+    // Gera request de imagem com Referer correto
+    override fun imageRequest(page: Page): Request {
+        val referer = if (page.url.isNullOrBlank()) baseUrl else page.url
+        val headers = Headers.Builder()
+            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            .add("Referer", referer)
+            .build()
+        return GET(page.imageUrl!!, headers)
+    }
+
+    private fun toAbsolute(url: String): String {
+        return if (url.startsWith("http", ignoreCase = true)) url else "$baseUrl$url"
+    }
 }
