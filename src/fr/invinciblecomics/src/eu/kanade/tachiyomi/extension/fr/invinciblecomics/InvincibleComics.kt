@@ -83,9 +83,9 @@ class InvincibleComics : HttpSource() {
             description = document.selectFirst("strong:contains(Résumé)")?.parent()?.ownText()
             author = document.selectFirst("strong:contains(Auteur)")?.parent()?.ownText()
             genre = document.selectFirst("strong:contains(Genres)")?.parent()?.ownText()
-            status = when (document.selectFirst("strong:contains(Statut)")?.parent()?.ownText()) {
-                "En cours" -> SManga.ONGOING // OK
-                "Terminé" -> SManga.COMPLETED // TODO: Check if this is correct
+            status = when (document.selectFirst("strong:contains(Status)")?.parent()?.ownText()?.trim()) {
+                "En cours" -> SManga.ONGOING
+                "Términé" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
         }
