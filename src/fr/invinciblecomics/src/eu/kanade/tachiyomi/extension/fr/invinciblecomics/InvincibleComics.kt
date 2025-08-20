@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.fr.invinciblecomics
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,6 +13,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
+import rx.Observable
 
 class InvincibleComics : HttpSource() {
     override val name = "Invincible ComicsVF"
@@ -114,12 +116,32 @@ class InvincibleComics : HttpSource() {
             ?: error("Failed to extract total pages from script")
 
         return (1..totalPages.toInt()).map { pageNumber ->
-            Page(pageNumber, imageUrl = "$imageBaseUrl${"%03d".format(pageNumber)}.png")
+            Page(pageNumber, "$imageBaseUrl${"%03d".format(pageNumber)}.png")
         }
     }
 
     // Page
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+    override fun imageUrlRequest(page: Page): Request {
+        return Request.Builder()
+            .url(page.url)
+            .headers(headers)
+            .method("HEAD", null)
+            .build()
+    }
+
+    override fun fetchImageUrl(page: Page): Observable<String> {
+        return client.newCall(imageUrlRequest(page))
+            .asObservable()
+            .map { imageUrlParse(it) }
+    }
+
+    override fun imageUrlParse(response: Response): String {
+        val url = response.request.url.toString()
+
+        return if (response.code == 200) { url } else {
+            url.replace(".png", ".jpg")
+        }
+    }
 
     // Utils
     private fun Element.parseSrcset(): String {
