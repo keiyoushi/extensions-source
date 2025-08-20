@@ -6,10 +6,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Headers
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -24,6 +23,16 @@ class NiaddEn : ParsedHttpSource() {
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
 
+    // Client com delay 2–5s para evitar bloqueios
+    override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor { chain ->
+            val delayMillis = Random.nextLong(2000L, 5000L)
+            Thread.sleep(delayMillis)
+            chain.proceed(chain.request())
+        }
+        .build()
+
+    // Headers personalizados
     private val customHeaders: Headers = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
         .build()
@@ -89,7 +98,7 @@ class NiaddEn : ParsedHttpSource() {
             ?: img?.absUrl("data-original")
 
         val author = document.selectFirst(
-            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value"
+            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value",
         )?.text()?.trim()
         manga.author = author
         manga.artist = author
@@ -118,7 +127,8 @@ class NiaddEn : ParsedHttpSource() {
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        return GET(manga.url, headers)
+        // Usa URL absoluta para garantir (mantendo seus headers)
+        return GET("$baseUrl${manga.url}", headers = customHeaders)
     }
 
     override fun chapterListSelector(): String = "ul.chapter-list a.hover-underline"
@@ -141,40 +151,34 @@ class NiaddEn : ParsedHttpSource() {
         } catch (_: Exception) { 0L }
     }
 
-    // Rate-limited client
-    private val rateLimitedClient: OkHttpClient = network.client.newBuilder()
-        .addInterceptor { chain ->
-            val delayMillis = Random.nextLong(2000L, 5000L)
-            Thread.sleep(delayMillis)
-            chain.proceed(chain.request())
-        }
-        .build()
-
     // Pages
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url, headers = customHeaders)
+        return GET("$baseUrl${chapter.url}", headers = customHeaders)
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val scriptData = document.select("script:containsData(all_imgs_url)").first().data()
-        val urls = Regex("all_imgs_url: \\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL).find(scriptData)!!
-            .groupValues[1]
-            .split(",")
-            .map { it.trim().removeSurrounding("\"") }
+        // Pega o script com all_imgs_url (null-safe) ou cai no outerHtml
+        val jsBlob = document.select("script:containsData(all_imgs_url)")
+            .firstOrNull()
+            ?.data()
+            ?: document.outerHtml()
+
+        val match = Regex(
+            pattern = """all_imgs_url\s*:\s*\[(.*?)\]""",
+            options = setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE),
+        ).find(jsBlob) ?: throw Exception("all_imgs_url not found")
+
+        // Extrai somente as strings entre aspas (URLs completas)
+        val urls = Regex(""""(https?://[^"]+)"""")
+            .findAll(match.groupValues[1])
+            .map { it.groupValues[1] }
+            .toList()
 
         return urls.mapIndexed { index, url ->
+            // Define diretamente a imageUrl (url da imagem real)
             Page(index, "", url)
         }
     }
 
     override fun imageUrlParse(document: Document): String = ""
-
-    // Fetch image with delay
-    override fun fetchImage(page: Page): okhttp3.Response {
-        val request = Request.Builder()
-            .url(page.imageUrl)
-            .headers(customHeaders)
-            .build()
-        return rateLimitedClient.newCall(request).execute()
-    }
 }
