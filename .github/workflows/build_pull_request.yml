@@ -8,6 +8,8 @@ on:
       - '!.github/**'
       - '.github/workflows/build_pull_request.yml'
 
+permissions: {}
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -19,7 +21,8 @@ env:
 jobs:
   prepare:
     name: Prepare job
-    runs-on: 'ubuntu-24.04'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
       delete: ${{ steps.generate-matrices.outputs.delete }}
@@ -28,6 +31,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
@@ -48,13 +52,16 @@ jobs:
   build:
     name: Build extensions (${{ matrix.chunk.number }})
     needs: prepare
-    runs-on: 'ubuntu-24.04'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - name: Checkout PR
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
@@ -68,5 +75,7 @@ jobs:
           cache-read-only: true
 
       - name: Build extensions (${{ matrix.chunk.number }})
+        env:
+          MODULES: ${{ join(matrix.chunk.modules, ' ') }}
         run: |
-          ./gradlew $(echo '${{ toJson(matrix.chunk.modules) }}' | jq -r 'join(" ")')
+          ./gradlew $MODULES

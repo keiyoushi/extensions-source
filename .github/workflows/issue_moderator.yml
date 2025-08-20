@@ -6,14 +6,19 @@ on:
   issue_comment:
     types: [ created ]
 
+permissions:
+  issues: write
+
 jobs:
   autoclose:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Moderate issues
         uses: keiyoushi/issue-moderator-action@c1bae1cf6fd33c272b88505c8bfa0a97b7761eb3
         with:
-          repo-token: ${{ secrets.ISSUE_MODERATOR_PAT }}
+          repo-token: ${{ github.token }}
+          member-token: ${{ secrets.MEMBER_TOKEN }}
           duplicate-label: Duplicate
 
           blurbs: |
