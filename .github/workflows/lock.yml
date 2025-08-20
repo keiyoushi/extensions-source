@@ -6,15 +6,18 @@ on:
     - cron: '0 0 * * *'
   # Manual trigger
   workflow_dispatch:
-    inputs:
 
+permissions:
+  issues: write
+  pull-requests: write
 
 jobs:
   lock:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: dessant/lock-threads@1bf7ec25051fe7c00bdd17e6a7cf3d7bfb7dc771 # v5.0.1
         with:
-          github-token: ${{ github.token }}
           issue-inactive-days: '2'
           pr-inactive-days: '2'
+          process-only: 'issues, prs'
