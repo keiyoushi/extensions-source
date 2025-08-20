@@ -127,29 +127,27 @@ class NiaddEn : ParsedHttpSource() {
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        return GET(toAbsolute(manga.url), headers = customHeaders)
+        // força pegar a página de capítulos (com /chapters.html no final)
+        val url = toAbsolute(manga.url).removeSuffix("/") + "/chapters.html"
+        return GET(url, headers = customHeaders)
     }
 
-    // selector amplo para variações do site
-    override fun chapterListSelector(): String =
-        "ul.chapter-list a.hover-underline, " +
-            "ul#chapterlist a, ul.manga-chapter-list a, .chapter-list a, .detail-ch-list a, " +
-            "ul li a[href*='/chapter/']"
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-        val href = element.attr("href")
-        if (href.startsWith("http", ignoreCase = true)) {
-            chapter.url = href
-        } else {
-            chapter.setUrlWithoutDomain(href)
+    override fun chapterListParse(response: okhttp3.Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("ul.chapter-list a.hover-underline").map { element ->
+            SChapter.create().apply {
+                val href = element.attr("href")
+                if (href.startsWith("http", ignoreCase = true)) {
+                    url = href
+                } else {
+                    setUrlWithoutDomain(href)
+                }
+                name = element.selectFirst("span.chp-title")?.text()?.trim()
+                    ?: element.attr("title")?.trim()
+                    ?: element.text().trim()
+                date_upload = parseDate(element.selectFirst("span.chp-time")?.text())
+            }
         }
-        chapter.name = element.selectFirst("span.chp-title")?.text()?.trim()
-            ?: element.attr("title")?.trim()
-            ?: element.text().trim()
-        val dateText = element.selectFirst("span.chp-time")?.text()
-        chapter.date_upload = parseDate(dateText)
-        return chapter
     }
 
     private fun parseDate(dateString: String?): Long {
@@ -182,15 +180,12 @@ class NiaddEn : ParsedHttpSource() {
 
         val referer = document.location().ifBlank { toAbsolute("") }
         return urls.mapIndexed { index, imageUrl ->
-            // guarda o referer no Page.url e já define a imageUrl
             Page(index, referer, imageUrl)
         }
     }
 
-    // Já definimos imageUrl na Page; manter vazio para não ser chamado
     override fun imageUrlParse(document: Document): String = ""
 
-    // Gera request de imagem com Referer correto
     override fun imageRequest(page: Page): Request {
         val referer = if (page.url.isNullOrBlank()) baseUrl else page.url
         val headers = Headers.Builder()
