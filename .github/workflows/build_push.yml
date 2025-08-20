@@ -25,6 +25,7 @@ jobs:
   prepare:
     name: Prepare job
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       matrix: ${{ steps.generate-matrices.outputs.matrix }}
       delete: ${{ steps.generate-matrices.outputs.delete }}
@@ -60,6 +61,7 @@ jobs:
     name: Build extensions (${{ matrix.chunk.number }})
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: ${{ toJson(fromJson(needs.prepare.outputs.matrix).chunk) != '[]' }}
     strategy:
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
@@ -109,6 +111,7 @@ jobs:
     needs: [prepare, build]
     if: "github.repository == 'keiyoushi/extensions-source'"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Download APK artifacts
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0

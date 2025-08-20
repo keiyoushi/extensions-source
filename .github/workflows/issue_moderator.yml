@@ -12,6 +12,7 @@ permissions:
 jobs:
   autoclose:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Moderate issues
         uses: keiyoushi/issue-moderator-action@c1bae1cf6fd33c272b88505c8bfa0a97b7761eb3
