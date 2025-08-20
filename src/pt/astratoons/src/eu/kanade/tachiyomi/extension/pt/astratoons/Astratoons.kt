@@ -119,8 +119,8 @@ class Astratoons : ParsedHttpSource() {
     // ======================== Pages ===========================
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("img.chapter-image").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
+        return document.select(".chapter-image-canvas").mapIndexed { index, element ->
+            Page(index, imageUrl = element.absUrl("data-src-url"))
         }
     }
 
