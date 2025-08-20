@@ -57,7 +57,12 @@ class Mangafreak : ParsedHttpSource() {
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/Latest_Releases/$page", headers)
+        val url = if (page == 1) {
+            "$baseUrl/Latest_Releases"
+        } else {
+            "$baseUrl/Latest_Releases/$page"
+        }
+        return GET(url, headers)
     }
     override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
     override fun latestUpdatesSelector(): String = "div.latest_releases_item"
