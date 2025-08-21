@@ -25,12 +25,18 @@ class NiaddEn : ParsedHttpSource() {
     override val client: OkHttpClient = network.client.newBuilder().build()
 
     private val customHeaders: Headers = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
+        .add(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+        )
         .build()
 
     // Popular
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/category/?page=$page", headers = customHeaders)
+    override fun popularMangaRequest(page: Int) =
+        GET("$baseUrl/category/?page=$page", headers = customHeaders)
+
     override fun popularMangaSelector() = "div.manga-item:has(a[href*='/manga/'])"
+
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
         val link = element.selectFirst("a[href*='/manga/']") ?: return manga
@@ -48,19 +54,23 @@ class NiaddEn : ParsedHttpSource() {
         manga.description = element.selectFirst("div.manga-intro")?.text()?.trim()
         return manga
     }
+
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
     // Latest
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/list/New-Update/?page=$page", headers = customHeaders)
+    override fun latestUpdatesRequest(page: Int) =
+        GET("$baseUrl/list/New-Update/?page=$page", headers = customHeaders)
+
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) : okhttp3.Request {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): okhttp3.Request {
         val q = URLEncoder.encode(query, "UTF-8")
         return GET("$baseUrl/search/?name=$q&page=$page", headers = customHeaders)
     }
+
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
@@ -97,7 +107,8 @@ class NiaddEn : ParsedHttpSource() {
         return manga
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document): String =
+        throw UnsupportedOperationException("Not used.")
 
     // Chapters (NineAnime)
     override fun chapterListRequest(manga: SManga): okhttp3.Request {
@@ -105,7 +116,9 @@ class NiaddEn : ParsedHttpSource() {
         val nineUrl = "https://www.nineanime.com/manga/$slug.html?waring=1"
         return GET(nineUrl, headers = customHeaders)
     }
+
     override fun chapterListSelector() = "ul.detail-chlist li a"
+
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
         chapter.url = element.absUrl("href")
@@ -114,7 +127,8 @@ class NiaddEn : ParsedHttpSource() {
     }
 
     // Pages (NineAnime)
-    override fun pageListRequest(chapter: SChapter) = GET(chapter.url, headers = customHeaders)
+    override fun pageListRequest(chapter: SChapter) =
+        GET(chapter.url, headers = customHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
@@ -136,8 +150,8 @@ class NiaddEn : ParsedHttpSource() {
         if (match != null) {
             val jsonText = "[" + match.groupValues[1].replace("'", "\"") + "]"
             try {
-                val listType = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
-                val imgUrls: List<String> = com.google.gson.Gson().fromJson(jsonText, listType)
+                val listType = object : TypeToken<List<String>>() {}.type
+                val imgUrls: List<String> = Gson().fromJson(jsonText, listType)
                 imgUrls.forEachIndexed { i, url ->
                     if (url.isNotBlank()) pages.add(Page(i, "", url))
                 }
@@ -145,20 +159,22 @@ class NiaddEn : ParsedHttpSource() {
             } catch (_: Exception) { /* continua */ }
         }
 
-    // Meta refresh
-    val redirect = document.selectFirst("meta[http-equiv=refresh]")?.attr("content")?.substringAfter("url=")?.trim()
-    if (!redirect.isNullOrEmpty()) {
-        client.newCall(GET(redirect, headers = customHeaders)).execute().use { resp ->
-            val doc = resp.asJsoup(redirect)
-            val imgs = doc.select("div.reader-area img")
-            imgs.forEachIndexed { i, img ->
-                val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-                if (url.isNotBlank()) {
-                    pages.add(Page(i, "", url))
+        // Meta refresh
+        val redirect =
+            document.selectFirst("meta[http-equiv=refresh]")?.attr("content")?.substringAfter("url=")?.trim()
+        if (!redirect.isNullOrEmpty()) {
+            client.newCall(GET(redirect, headers = customHeaders)).execute().use { resp ->
+                val doc = resp.asJsoup(redirect)
+                val imgs = doc.select("div.reader-area img")
+                imgs.forEachIndexed { i, img ->
+                    val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
+                    if (url.isNotBlank()) pages.add(Page(i, "", url))
                 }
+                if (pages.isNotEmpty()) return pages
             }
-            if (pages.isNotEmpty()) return pages
         }
+
+        return pages
     }
 
     // Helpers
