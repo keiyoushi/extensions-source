@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl.translator.google
+package eu.kanade.tachiyomi.multisrc.machinetranslations.translator.google
 
 import okhttp3.Response
 

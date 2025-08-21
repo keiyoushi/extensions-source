@@ -1,6 +1,6 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl.translator.google
+package eu.kanade.tachiyomi.multisrc.machinetranslations.translator.google
 
-import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
+import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
 import eu.kanade.tachiyomi.network.GET
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement

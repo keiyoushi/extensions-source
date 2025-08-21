@@ -1,11 +1,11 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl.interceptors
+package eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors
 
 import android.os.Build
 import androidx.annotation.RequiresApi
-import eu.kanade.tachiyomi.extension.all.snowmtl.LanguageSetting
-import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
+import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
+import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -19,7 +19,7 @@ import uy.kohesive.injekt.injectLazy
 
 @RequiresApi(Build.VERSION_CODES.O)
 class TranslationInterceptor(
-    var language: LanguageSetting,
+    val language: Language,
     private val translator: TranslatorEngine,
 ) : Interceptor {
 

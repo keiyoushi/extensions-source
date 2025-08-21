@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl.translator
+package eu.kanade.tachiyomi.multisrc.machinetranslations.translator
 
 interface TranslatorEngine {
     val capacity: Int

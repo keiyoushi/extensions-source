@@ -1,6 +1,6 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl.translator.bing
+package eu.kanade.tachiyomi.multisrc.machinetranslations.translator.bing
 
-import eu.kanade.tachiyomi.extension.all.snowmtl.translator.TranslatorEngine
+import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.util.asJsoup
@@ -15,8 +15,7 @@ import okhttp3.Response
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 
-class BingTranslator(private val client: OkHttpClient, private val headers: Headers) :
-    TranslatorEngine {
+class BingTranslator(private val client: OkHttpClient, private val headers: Headers) : TranslatorEngine {
 
     private val baseUrl = "https://www.bing.com"
 

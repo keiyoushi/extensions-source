@@ -32,7 +32,7 @@ import java.io.InputStream
 @RequiresApi(Build.VERSION_CODES.O)
 class ComposedImageInterceptor(
     baseUrl: String,
-    var language: Language,
+    val language: Language,
 ) : Interceptor {
 
     private val json: Json by injectLazy()
@@ -231,8 +231,13 @@ class ComposedImageInterceptor(
 
         return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, dialog.width.toInt()).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
-            setIncludePad(false)
+            setIncludePad(language.disableSourceSettings)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (language.disableWordBreak) {
+                    setBreakStrategy(LineBreaker.BREAK_STRATEGY_SIMPLE)
+                    setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
+                    return@apply
+                }
                 setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
                 setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL)
             }
