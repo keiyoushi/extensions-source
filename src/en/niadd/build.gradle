@@ -9,5 +9,6 @@ apply from: "$rootDir/common.gradle"
 dependencies {
     implementation(project(":lib:cookieinterceptor"))
     implementation 'com.google.code.gson:gson:2.10.1'
+    implementation("me.marplex.cloudflarebypass:cloudflare-bypass:1.1")
 }
  
