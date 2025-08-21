@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.niadd
 
 import android.content.Context
 import android.content.Intent
-import android.webkit.WebView
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -14,9 +13,9 @@ import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import java.net.URLEncoder
 
 class NiaddEn : ParsedHttpSource() {
 
@@ -24,9 +23,9 @@ class NiaddEn : ParsedHttpSource() {
     override val baseUrl: String = "https://www.niadd.com"
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
+
     override val client: OkHttpClient = network.client.newBuilder().build()
 
-    // Headers customizados
     private val customHeaders: Headers = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
         .build()
@@ -34,9 +33,7 @@ class NiaddEn : ParsedHttpSource() {
     // Cloudflare Worker proxy
     private val proxyBase = "https://meu-worker.cloudflareworkers.com/?url="
 
-    // ===============================
-    // Popular
-    // ===============================
+    // --------------------- Popular ---------------------
     override fun popularMangaRequest(page: Int) =
         GET("$proxyBase${URLEncoder.encode("$baseUrl/category/?page=$page", "UTF-8")}", headers = customHeaders)
 
@@ -62,9 +59,7 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
-    // ===============================
-    // Latest
-    // ===============================
+    // --------------------- Latest ---------------------
     override fun latestUpdatesRequest(page: Int) =
         GET("$proxyBase${URLEncoder.encode("$baseUrl/list/New-Update/?page=$page", "UTF-8")}", headers = customHeaders)
 
@@ -72,9 +67,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    // ===============================
-    // Search
-    // ===============================
+    // --------------------- Search ---------------------
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): okhttp3.Request {
         val q = URLEncoder.encode(query, "UTF-8")
         return GET("$proxyBase${URLEncoder.encode("$baseUrl/search/?name=$q&page=$page", "UTF-8")}", headers = customHeaders)
@@ -84,9 +77,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    // ===============================
-    // Details
-    // ===============================
+    // --------------------- Details ---------------------
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
@@ -120,9 +111,7 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used.")
 
-    // ===============================
-    // Chapters (NineAnime)
-    // ===============================
+    // --------------------- Chapters ---------------------
     override fun chapterListRequest(manga: SManga): okhttp3.Request {
         val slug = manga.url.substringAfterLast("/").substringBefore(".html")
         val nineUrl = "https://www.nineanime.com/manga/$slug.html?waring=1"
@@ -138,9 +127,7 @@ class NiaddEn : ParsedHttpSource() {
         return chapter
     }
 
-    // ===============================
-    // Pages (NineAnime com fallback WebView)
-    // ===============================
+    // --------------------- Pages ---------------------
     override fun pageListRequest(chapter: SChapter) =
         GET("$proxyBase${URLEncoder.encode(chapter.url, "UTF-8")}", headers = customHeaders)
 
@@ -175,38 +162,20 @@ class NiaddEn : ParsedHttpSource() {
 
         // 3️⃣ Fallback WebView
         if (pages.isEmpty()) {
-            val fallback = Page(0, "", chapter.url)
-            fallback.imageUrl = chapter.url
-            pages.add(fallback)
+            pages.add(Page(0, "", chapter.url)) // será carregado via WebView
         }
 
         return pages
     }
 
-    // ===============================
-    // Fallback WebView
-    // ===============================
+    // --------------------- Fallback WebView ---------------------
     fun openChapterInWebView(context: Context, url: String) {
-        val intent = Intent(context, WebViewActivity::class.java).apply {
-            putExtra("url", url)
-        }
+        val intent = Intent(context, NiaddWebViewActivity::class.java)
+        intent.putExtra("url", url)
         context.startActivity(intent)
     }
 
-    class WebViewActivity : androidx.appcompat.app.AppCompatActivity() {
-        override fun onCreate(savedInstanceState: android.os.Bundle?) {
-            super.onCreate(savedInstanceState)
-            val webView = WebView(this)
-            setContentView(webView)
-            webView.settings.javaScriptEnabled = true
-            webView.settings.domStorageEnabled = true
-            webView.loadUrl(intent.getStringExtra("url") ?: "")
-        }
-    }
-
-    // ===============================
-    // Helpers
-    // ===============================
+    // --------------------- Helper ---------------------
     private fun okhttp3.Response.asJsoup(baseUrl: String? = null): Document {
         val html = this.body?.string().orEmpty()
         return if (baseUrl != null) Jsoup.parse(html, baseUrl) else Jsoup.parse(html)
