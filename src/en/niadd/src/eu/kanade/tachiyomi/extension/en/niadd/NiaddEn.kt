@@ -122,7 +122,6 @@ class NiaddEn : ParsedHttpSource() {
         val chapter = SChapter.create()
         chapter.url = element.absUrl("href")
         chapter.name = element.attr("title").ifBlank { element.text().trim() }
-        // pages
         return chapter
     }
 
@@ -130,9 +129,10 @@ class NiaddEn : ParsedHttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers = customHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
+        val pages = mutableListOf<Page>()
+
         val directImgs = document.select("div.reader-area img")
         if (directImgs.isNotEmpty()) {
-            val pages = mutableListOf<Page>()
             directImgs.forEachIndexed { i, img ->
                 val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
                 if (url.isNotBlank()) pages.add(Page(i, "", url))
@@ -140,14 +140,23 @@ class NiaddEn : ParsedHttpSource() {
             if (pages.isNotEmpty()) return pages
         }
 
-        val redirect = document.selectFirst("meta[http-equiv=refresh]")
-            ?.attr("content")?.substringAfter("url=")?.trim()
+        val scriptText = document.select("script").joinToString("\n") { it.html() }
+        val regex = Regex("all_imgs_url:\\s*\\[([^\\]]+)]")
+        val match = regex.find(scriptText)
+        if (match != null) {
+            val urlsText = match.groupValues[1]
+            val urls = urlsText.split(",").map { it.trim().removeSurrounding("\"") }
+            urls.forEachIndexed { i, url ->
+                if (url.isNotBlank()) pages.add(Page(i, "", url))
+            }
+            if (pages.isNotEmpty()) return pages
+        }
 
+        val redirect = document.selectFirst("meta[http-equiv=refresh]")?.attr("content")?.substringAfter("url=")?.trim()
         if (!redirect.isNullOrEmpty()) {
             client.newCall(GET(redirect, headers = customHeaders)).execute().use { resp ->
                 val doc = resp.asJsoup(redirect)
                 val imgs = doc.select("div.reader-area img")
-                val pages = mutableListOf<Page>()
                 imgs.forEachIndexed { i, img ->
                     val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
                     if (url.isNotBlank()) pages.add(Page(i, "", url))
