@@ -103,7 +103,7 @@ class NiaddEn : ParsedHttpSource() {
             ?.joinToString(", ") { it.text().trim().trimStart(',') } ?: ""
         manga.status = SManga.UNKNOWN
         return manga
-    }
+    } 
 
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException("Not used.")
