@@ -137,9 +137,9 @@ class BoyLove : HttpSource(), ConfigurableSource {
         }
 
     private fun Document.getPartsCount(): Int? {
-        return selectFirst("script:containsData(do_mergeImg):containsData(context0 =)")?.data()?.run {
-            substringBefore("canvas0.width")
-                .substringAfterLast("var ")
+        return selectFirst("script:containsData(firstMergeImg):containsData(imageData)")?.data()?.run {
+            substringBefore("var scrollTop")
+                .substringAfterLast("var randomClass = ")
                 .substringBefore(';')
                 .trim()
                 .substringAfterLast(" ")
@@ -169,6 +169,8 @@ class BoyLove : HttpSource(), ConfigurableSource {
             StatusFilter(),
             TypeFilter(),
             genreFilter,
+            Filter.Header("若要观看VIP漫画，请先在Webview中登录网站，并确认您的账户已达到Lv3"),
+            VipFilter(),
             // SortFilter(), // useless
         )
     }
@@ -179,7 +181,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
             try {
                 val request = client.newCall(GET("$baseUrl/home/book/cate.html", headers))
                 val document = request.execute().asJsoup()
-                genres = document.select("ul[data-str=tag] > li[class] > a")
+                genres = document.select("div[data-str=tag] > a.button")
                     .map { it.ownText() }.toTypedArray()
             } catch (e: Throwable) {
                 isFetchingGenres = false
