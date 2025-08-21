@@ -15,6 +15,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import kotlinx.coroutines.runBlocking
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 class NiaddEn : ParsedHttpSource() {
 
@@ -29,15 +30,15 @@ class NiaddEn : ParsedHttpSource() {
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
         .build()
 
-    // Cloudflare client
+    // Cloudflare bypass client
     private val cfClient by lazy { CloudflareHTTPClient() }
 
-    // ----------------------- POPULAR / LATEST / SEARCH -----------------------
+    // ----------------------- POPULAR / LATEST -----------------------
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/category/?page=$page", headers = customHeaders)
 
     override fun popularMangaSelector(): String = "div.manga-item:has(a[href*='/manga/'])"
-    override fun popularMangaFromElement(element: Element): SManga { /* ...mesmo código... */ }
+    override fun popularMangaFromElement(element: Element): SManga { /* ... same code ... */ }
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
     override fun latestUpdatesRequest(page: Int): Request =
@@ -46,38 +47,51 @@ class NiaddEn : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
+    // ----------------------- SEARCH -----------------------
+    // Using Cloudflare bypass for search pages
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val q = URLEncoder.encode(query, "UTF-8")
-        return GET("$baseUrl/search/?name=$q&page=$page", headers = customHeaders)
+        val searchUrl = "$baseUrl/search/?name=$q&page=$page"
+        runBlocking {
+            cfClient.get(searchUrl.toHttpUrlOrNull()!!) {
+                headers(customHeaders)
+            }
+        }
+        return GET(searchUrl, headers = customHeaders)
     }
+
     override fun searchMangaSelector(): String = popularMangaSelector()
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // ----------------------- DETAILS -----------------------
-    override fun mangaDetailsParse(document: Document): SManga { /* ...mesmo código... */ }
+    override fun mangaDetailsParse(document: Document): SManga { /* ... same code ... */ }
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used.")
 
     // ----------------------- CHAPTERS -----------------------
+    // Using Cloudflare bypass for chapter list
     override fun chapterListRequest(manga: SManga): Request {
         val slug = manga.url.substringAfterLast("/").substringBefore(".html")
         val nineUrl = "https://www.nineanime.com/manga/$slug.html?waring=1"
-        // Usando Cloudflare client
-        return runBlocking {
-            val resp = cfClient.get(nineUrl) { headers(customHeaders) }
-            GET(nineUrl, headers = customHeaders) // apenas retorna o request padrão pro ParsedHttpSource
+        runBlocking {
+            cfClient.get(nineUrl.toHttpUrlOrNull()!!) {
+                headers(customHeaders)
+            }
         }
+        return GET(nineUrl, headers = customHeaders)
     }
 
     override fun chapterListSelector(): String = "ul.detail-chlist li a"
-    override fun chapterFromElement(element: Element): SChapter { /* ...mesmo código... */ }
+    override fun chapterFromElement(element: Element): SChapter { /* ... same code ... */ }
 
     // ----------------------- PAGES -----------------------
+    // Using Cloudflare bypass for page images
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers = customHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
         val html = document.html()
 
+        // Try extracting images from JavaScript array first
         val arrayRegex = Regex("all_imgs_url:\\s*\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL)
         val urlRegex = Regex("\"(https?://[^\"]+)\"")
 
@@ -89,6 +103,7 @@ class NiaddEn : ParsedHttpSource() {
             }
         }
 
+        // Direct images in the HTML
         val directImgs = document.select("div.reader-area img")
         if (directImgs.isNotEmpty()) {
             return directImgs.mapIndexed { i, img ->
@@ -97,11 +112,13 @@ class NiaddEn : ParsedHttpSource() {
             }
         }
 
+        // Redirect pages
         val redirect = document.selectFirst("meta[http-equiv=refresh]")
             ?.attr("content")?.substringAfter("url=")?.trim()
 
         if (!redirect.isNullOrEmpty()) {
             return runBlocking {
+                // Cloudflare bypass for redirect
                 val resp = cfClient.get(redirect.toHttpUrlOrNull()!!) { headers(customHeaders) }
                 val doc = Jsoup.parse(resp.body?.string().orEmpty(), redirect)
                 val imgs = doc.select("div.reader-area img")
