@@ -9,4 +9,5 @@ apply from: "$rootDir/common.gradle"
 
 dependencies {
     implementation(project(":lib:cookieinterceptor"))
+    implementation 'com.google.code.gson:gson:2.10.1'
 }
