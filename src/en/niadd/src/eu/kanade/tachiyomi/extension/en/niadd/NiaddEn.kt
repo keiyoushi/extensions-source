@@ -21,10 +21,8 @@ class NiaddEn : ParsedHttpSource() {
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
 
-    // OkHttp client
     override val client: OkHttpClient = network.client.newBuilder().build()
 
-    // Custom headers
     private val customHeaders: Headers = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
         .build()
@@ -103,13 +101,13 @@ class NiaddEn : ParsedHttpSource() {
             ?.joinToString(", ") { it.text().trim().trimStart(',') } ?: ""
         manga.status = SManga.UNKNOWN
         return manga
-    } 
+    }
 
     override fun imageUrlParse(document: Document): String {
         throw UnsupportedOperationException("Not used.")
     }
 
-    // Chapters (from NineAnime)
+    // Chapters (NineAnime)
     override fun chapterListRequest(manga: SManga): Request {
         val slug = manga.url.substringAfterLast("/").substringBefore(".html")
         val nineUrl = "https://www.nineanime.com/manga/$slug.html?waring=1"
@@ -122,7 +120,6 @@ class NiaddEn : ParsedHttpSource() {
         val chapter = SChapter.create()
         chapter.url = element.absUrl("href")
         chapter.name = element.attr("title").ifBlank { element.text().trim() }
-        // pages
         return chapter
     }
 
@@ -130,14 +127,25 @@ class NiaddEn : ParsedHttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers = customHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
+        val html = document.html()
+
+        val arrayRegex = Regex("all_imgs_url:\\s*\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL)
+        val urlRegex = Regex("\"(https?://[^\"]+)\"")
+
+        arrayRegex.find(html)?.let { match ->
+            val urlsBlock = match.groupValues[1]
+            val urls = urlRegex.findAll(urlsBlock).map { it.groupValues[1] }.toList()
+            if (urls.isNotEmpty()) {
+                return urls.mapIndexed { i, url -> Page(i, "", url) }
+            }
+        }
+
         val directImgs = document.select("div.reader-area img")
         if (directImgs.isNotEmpty()) {
-            val pages = mutableListOf<Page>()
-            directImgs.forEachIndexed { i, img ->
+            return directImgs.mapIndexed { i, img ->
                 val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-                if (url.isNotBlank()) pages.add(Page(i, "", url))
+                Page(i, "", url)
             }
-            if (pages.isNotEmpty()) return pages
         }
 
         val redirect = document.selectFirst("meta[http-equiv=refresh]")
@@ -147,12 +155,10 @@ class NiaddEn : ParsedHttpSource() {
             client.newCall(GET(redirect, headers = customHeaders)).execute().use { resp ->
                 val doc = resp.asJsoup(redirect)
                 val imgs = doc.select("div.reader-area img")
-                val pages = mutableListOf<Page>()
-                imgs.forEachIndexed { i, img ->
+                return imgs.mapIndexed { i, img ->
                     val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-                    if (url.isNotBlank()) pages.add(Page(i, "", url))
+                    Page(i, "", url)
                 }
-                if (pages.isNotEmpty()) return pages
             }
         }
 
