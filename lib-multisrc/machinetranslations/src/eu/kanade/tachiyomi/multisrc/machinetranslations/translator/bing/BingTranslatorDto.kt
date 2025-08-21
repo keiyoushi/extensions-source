@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.snowmtl.translator.bing
+package eu.kanade.tachiyomi.multisrc.machinetranslations.translator.bing
 
 import kotlinx.serialization.Serializable
 
