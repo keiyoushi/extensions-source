@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.niadd
 
+import android.content.Context
+import android.content.Intent
+import android.webkit.WebView
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,6 +14,8 @@ import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import java.net.URLEncoder
 
 class NiaddEn : ParsedHttpSource() {
@@ -19,16 +24,21 @@ class NiaddEn : ParsedHttpSource() {
     override val baseUrl: String = "https://www.niadd.com"
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
-
     override val client: OkHttpClient = network.client.newBuilder().build()
 
+    // Headers customizados
     private val customHeaders: Headers = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
         .build()
 
-    // ------------------- POPULAR -------------------
+    // Cloudflare Worker proxy
+    private val proxyBase = "https://meu-worker.cloudflareworkers.com/?url="
+
+    // ===============================
+    // Popular
+    // ===============================
     override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/category/?page=$page", headers = customHeaders)
+        GET("$proxyBase${URLEncoder.encode("$baseUrl/category/?page=$page", "UTF-8")}", headers = customHeaders)
 
     override fun popularMangaSelector() = "div.manga-item:has(a[href*='/manga/'])"
 
@@ -52,25 +62,31 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
-    // ------------------- LATEST -------------------
+    // ===============================
+    // Latest
+    // ===============================
     override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/list/New-Update/?page=$page", headers = customHeaders)
+        GET("$proxyBase${URLEncoder.encode("$baseUrl/list/New-Update/?page=$page", "UTF-8")}", headers = customHeaders)
 
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    // ------------------- SEARCH -------------------
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) : okhttp3.Request {
+    // ===============================
+    // Search
+    // ===============================
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): okhttp3.Request {
         val q = URLEncoder.encode(query, "UTF-8")
-        return GET("$baseUrl/search/?name=$q&page=$page", headers = customHeaders)
+        return GET("$proxyBase${URLEncoder.encode("$baseUrl/search/?name=$q&page=$page", "UTF-8")}", headers = customHeaders)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    // ------------------- DETAILS -------------------
+    // ===============================
+    // Details
+    // ===============================
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
@@ -104,11 +120,13 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used.")
 
-    // ------------------- CHAPTERS (NineAnime como fonte principal) -------------------
+    // ===============================
+    // Chapters (NineAnime)
+    // ===============================
     override fun chapterListRequest(manga: SManga): okhttp3.Request {
         val slug = manga.url.substringAfterLast("/").substringBefore(".html")
         val nineUrl = "https://www.nineanime.com/manga/$slug.html?waring=1"
-        return GET(nineUrl, headers = customHeaders)
+        return GET("$proxyBase${URLEncoder.encode(nineUrl, "UTF-8")}", headers = customHeaders)
     }
 
     override fun chapterListSelector() = "ul.detail-chlist li a"
@@ -120,40 +138,75 @@ class NiaddEn : ParsedHttpSource() {
         return chapter
     }
 
-    // ------------------- PAGES -------------------
-    override fun pageListRequest(chapter: SChapter) = GET(chapter.url, headers = customHeaders)
+    // ===============================
+    // Pages (NineAnime com fallback WebView)
+    // ===============================
+    override fun pageListRequest(chapter: SChapter) =
+        GET("$proxyBase${URLEncoder.encode(chapter.url, "UTF-8")}", headers = customHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        // Pega imagens diretas do reader
-        val imgs = document.select("div.reader-area img")
-        imgs.forEachIndexed { i, img ->
-            val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-            if (url.isNotBlank()) pages.add(Page(i, "", url))
+        // 1️⃣ Tenta pegar imagens diretas
+        val directImgs = document.select("div.reader-area img")
+        if (directImgs.isNotEmpty()) {
+            directImgs.forEachIndexed { i, img ->
+                val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
+                if (url.isNotBlank()) pages.add(Page(i, "", url))
+            }
+            if (pages.isNotEmpty()) return pages
         }
 
-        // Tenta pegar via JSON escondido
+        // 2️⃣ Tenta JSON escondido
+        val scriptText = document.select("script").joinToString("\n") { it.html() }
+        val regex = Regex("all_imgs_url\\s*:\\s*\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL)
+        val match = regex.find(scriptText)
+        if (match != null) {
+            val jsonText = "[" + match.groupValues[1].replace("'", "\"") + "]"
+            try {
+                val listType = object : TypeToken<List<String>>() {}.type
+                val imgUrls: List<String> = Gson().fromJson(jsonText, listType)
+                imgUrls.forEachIndexed { i, url ->
+                    if (url.isNotBlank()) pages.add(Page(i, "", url))
+                }
+                if (pages.isNotEmpty()) return pages
+            } catch (_: Exception) { /* continua */ }
+        }
+
+        // 3️⃣ Fallback WebView
         if (pages.isEmpty()) {
-            val scriptText = document.select("script").joinToString("\n") { it.html() }
-            val regex = Regex("all_imgs_url\\s*:\\s*\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL)
-            val match = regex.find(scriptText)
-            if (match != null) {
-                val jsonText = "[" + match.groupValues[1].replace("'", "\"") + "]"
-                try {
-                    val listType = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
-                    val imgUrls: List<String> = com.google.gson.Gson().fromJson(jsonText, listType)
-                    imgUrls.forEachIndexed { i, url ->
-                        if (url.isNotBlank()) pages.add(Page(i, "", url))
-                    }
-                } catch (_: Exception) { /* ignora */ }
-            }
+            val fallback = Page(0, "", chapter.url)
+            fallback.imageUrl = chapter.url
+            pages.add(fallback)
         }
 
         return pages
     }
 
-    // ------------------- HELPERS -------------------
+    // ===============================
+    // Fallback WebView
+    // ===============================
+    fun openChapterInWebView(context: Context, url: String) {
+        val intent = Intent(context, WebViewActivity::class.java).apply {
+            putExtra("url", url)
+        }
+        context.startActivity(intent)
+    }
+
+    class WebViewActivity : androidx.appcompat.app.AppCompatActivity() {
+        override fun onCreate(savedInstanceState: android.os.Bundle?) {
+            super.onCreate(savedInstanceState)
+            val webView = WebView(this)
+            setContentView(webView)
+            webView.settings.javaScriptEnabled = true
+            webView.settings.domStorageEnabled = true
+            webView.loadUrl(intent.getStringExtra("url") ?: "")
+        }
+    }
+
+    // ===============================
+    // Helpers
+    // ===============================
     private fun okhttp3.Response.asJsoup(baseUrl: String? = null): Document {
         val html = this.body?.string().orEmpty()
         return if (baseUrl != null) Jsoup.parse(html, baseUrl) else Jsoup.parse(html)
