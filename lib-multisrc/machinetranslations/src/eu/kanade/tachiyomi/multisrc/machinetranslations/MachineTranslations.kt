@@ -74,8 +74,12 @@ abstract class MachineTranslations(
         set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
 
     protected var disableWordBreak: Boolean
-        get() = preferences.getBoolean(DISABLE_WORD_BREAK_PREF, false)
+        get() = preferences.getBoolean(DISABLE_WORD_BREAK_PREF, language.disableWordBreak)
         set(value) = preferences.edit().putBoolean(DISABLE_WORD_BREAK_PREF, value).apply()
+
+    protected var disableTranslator: Boolean
+        get() = preferences.getBoolean(DISABLE_TRANSLATOR_PREF, language.disableTranslator)
+        set(value) = preferences.edit().putBoolean(DISABLE_TRANSLATOR_PREF, value).apply()
 
     protected var disableSourceSettings: Boolean
         get() = preferences.getBoolean(DISABLE_SOURCE_SETTINGS_PREF, language.disableSourceSettings)
@@ -129,7 +133,7 @@ abstract class MachineTranslations(
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(2, TimeUnit.MINUTES)
             .rateLimit(3)
-            .addInterceptorIf(language.lang != language.origin, TranslationInterceptor(settings, translator))
+            .addInterceptorIf(!disableTranslator && language.lang != language.origin, TranslationInterceptor(settings, translator))
             .addInterceptor(ComposedImageInterceptor(baseUrl, settings))
     }
 
@@ -363,32 +367,47 @@ abstract class MachineTranslations(
             return
         }
 
-        ListPreference(screen.context).apply {
-            key = TRANSLATOR_PROVIDER_PREF
-            title = intl["translate_dialog_box_title"]
-            entries = translators
-            entryValues = translators
-            summary = buildString {
-                appendLine(intl["translate_dialog_box_summary"])
-                append("\t* %s")
-            }
+        if (language.supportNativeTranslation) {
+            SwitchPreferenceCompat(screen.context).apply {
+                key = DISABLE_TRANSLATOR_PREF
+                title = "⚠ ${intl["disable_translator_title"]}"
+                summary = intl["disable_translator_summary"]
+                setDefaultValue(language.disableTranslator)
+                setOnPreferenceChange { _, newValue ->
+                    disableTranslator = newValue as Boolean
+                    true
+                }
+            }.also(screen::addPreference)
+        }
 
-            setDefaultValue(translators.first())
+        if (!disableTranslator && language.supportNativeTranslation) {
+            ListPreference(screen.context).apply {
+                key = TRANSLATOR_PROVIDER_PREF
+                title = intl["translate_dialog_box_title"]
+                entries = translators
+                entryValues = translators
+                summary = buildString {
+                    appendLine(intl["translate_dialog_box_summary"])
+                    append("\t* %s")
+                }
 
-            setOnPreferenceChange { _, newValue ->
-                val selected = newValue as String
-                val index = this.findIndexOfValue(selected)
-                val entry = entries[index] as String
+                setDefaultValue(translators.first())
 
-                Toast.makeText(
-                    screen.context,
-                    "${intl["translate_dialog_box_toast"]} '$entry'",
-                    Toast.LENGTH_LONG,
-                ).show()
+                setOnPreferenceChange { _, newValue ->
+                    val selected = newValue as String
+                    val index = this.findIndexOfValue(selected)
+                    val entry = entries[index] as String
 
-                true
-            }
-        }.also(screen::addPreference)
+                    Toast.makeText(
+                        screen.context,
+                        "${intl["translate_dialog_box_toast"]} '$entry'",
+                        Toast.LENGTH_LONG,
+                    ).show()
+
+                    true
+                }
+            }.also(screen::addPreference)
+        }
     }
 
     /**
@@ -410,6 +429,7 @@ abstract class MachineTranslations(
         private const val FONT_SIZE_PREF = "fontSizePref"
         private const val DISABLE_SOURCE_SETTINGS_PREF = "disableSourceSettingsPref"
         private const val DISABLE_WORD_BREAK_PREF = "disableWordBreakPref"
+        private const val DISABLE_TRANSLATOR_PREF = "disableWordBreakPref"
         private const val TRANSLATOR_PROVIDER_PREF = "translatorProviderPref"
         private const val DEFAULT_FONT_SIZE = "24"
 

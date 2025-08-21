@@ -13,7 +13,7 @@ class SolarmtlFactory : SourceFactory {
 private val languageList = listOf(
     Language("ar", disableSourceSettings = true),
     Language("en"),
-    Language("fr"),
+    Language("fr", disableTranslator = true, supportNativeTranslation = true),
     Language("id"),
-    Language("pt-BR", "pt"),
+    Language("pt-BR", "pt", disableTranslator = true, supportNativeTranslation = true),
 )

@@ -9,4 +9,6 @@ class Language(
     var fontSize: Int = 24,
     var disableSourceSettings: Boolean = false,
     var disableWordBreak: Boolean = false,
+    var disableTranslator: Boolean = false,
+    var supportNativeTranslation: Boolean = false,
 )
