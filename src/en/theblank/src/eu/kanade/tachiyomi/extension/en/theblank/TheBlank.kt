@@ -68,7 +68,6 @@ class TheBlank :
 
             setOnPreferenceChangeListener { _, _ ->
                 val intent = Intent("com.android.webview.SHOW_DEV_UI").apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     putExtra("fragment-id", 2)
                 }
                 startActivity(intent)
@@ -87,7 +86,6 @@ class TheBlank :
                 val intent = Intent(Intent.ACTION_VIEW).apply {
                     data = Uri.parse("market://details?id=com.google.android.webview")
                     setPackage("com.android.vending")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 }
                 startActivity(intent)
                 false
@@ -98,6 +96,7 @@ class TheBlank :
 }
 
 private fun startActivity(intent: Intent) {
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
     val app = Injekt.get<Application>()
     try {
         app.startActivity(intent)
