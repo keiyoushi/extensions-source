@@ -19,6 +19,7 @@ import javax.crypto.spec.SecretKeySpec
 class WestManga : HttpSource() {
     override val name = "West Manga"
     override val baseUrl = "https://westmanga.me"
+    private val apiUrl = "https://data.westmanga.me"
     override val lang = "id"
     override val id = 8883916630998758688
     override val supportsLatest = true
@@ -41,7 +42,7 @@ class WestManga : HttpSource() {
         searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("api")
             addPathSegment("contents")
             if (query.isNotBlank()) {
@@ -94,7 +95,7 @@ class WestManga : HttpSource() {
         assert(path.size == 3) { "Migrate from $name to $name" }
         val slug = path[1]
 
-        val url = baseUrl.toHttpUrl().newBuilder()
+        val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("api")
             .addPathSegment("comic")
             .addPathSegment(slug)
@@ -185,7 +186,7 @@ class WestManga : HttpSource() {
         assert(path.size == 2) { "Refresh Chapter List" }
         val slug = path[0]
 
-        val url = baseUrl.toHttpUrl().newBuilder()
+        val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("api")
             .addPathSegment("v")
             .addPathSegment(slug)
