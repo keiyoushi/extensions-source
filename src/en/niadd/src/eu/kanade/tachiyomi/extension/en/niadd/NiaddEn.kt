@@ -7,8 +7,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Headers
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -25,13 +23,10 @@ class NiaddEn : ParsedHttpSource() {
     override val client: OkHttpClient = network.client.newBuilder().build()
 
     private val customHeaders: Headers = Headers.Builder()
-        .add(
-            "User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
-        )
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
         .build()
 
-    // Popular
+    // ------------------- POPULAR -------------------
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl/category/?page=$page", headers = customHeaders)
 
@@ -57,7 +52,7 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
-    // Latest
+    // ------------------- LATEST -------------------
     override fun latestUpdatesRequest(page: Int) =
         GET("$baseUrl/list/New-Update/?page=$page", headers = customHeaders)
 
@@ -65,8 +60,8 @@ class NiaddEn : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    // Search
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): okhttp3.Request {
+    // ------------------- SEARCH -------------------
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) : okhttp3.Request {
         val q = URLEncoder.encode(query, "UTF-8")
         return GET("$baseUrl/search/?name=$q&page=$page", headers = customHeaders)
     }
@@ -75,7 +70,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
-    // Details
+    // ------------------- DETAILS -------------------
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
@@ -85,7 +80,7 @@ class NiaddEn : ParsedHttpSource() {
             ?: img?.absUrl("data-src")
             ?: img?.absUrl("data-original")
         val author = document.selectFirst(
-            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value",
+            "div.bookside-bookinfo div[itemprop=author] span.bookside-bookinfo-value"
         )?.text()?.trim()
         manga.author = author
         manga.artist = author
@@ -107,10 +102,9 @@ class NiaddEn : ParsedHttpSource() {
         return manga
     }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used.")
 
-    // Chapters (NineAnime)
+    // ------------------- CHAPTERS (NineAnime como fonte principal) -------------------
     override fun chapterListRequest(manga: SManga): okhttp3.Request {
         val slug = manga.url.substringAfterLast("/").substringBefore(".html")
         val nineUrl = "https://www.nineanime.com/manga/$slug.html?waring=1"
@@ -126,58 +120,40 @@ class NiaddEn : ParsedHttpSource() {
         return chapter
     }
 
-    // Pages (NineAnime)
-    override fun pageListRequest(chapter: SChapter) =
-        GET(chapter.url, headers = customHeaders)
+    // ------------------- PAGES -------------------
+    override fun pageListRequest(chapter: SChapter) = GET(chapter.url, headers = customHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
-        // Tenta pegar imagens diretas
-        val directImgs = document.select("div.reader-area img")
-        if (directImgs.isNotEmpty()) {
-            directImgs.forEachIndexed { i, img ->
-                val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-                if (url.isNotBlank()) pages.add(Page(i, "", url))
-            }
-            if (pages.isNotEmpty()) return pages
+        // Pega imagens diretas do reader
+        val imgs = document.select("div.reader-area img")
+        imgs.forEachIndexed { i, img ->
+            val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
+            if (url.isNotBlank()) pages.add(Page(i, "", url))
         }
 
-        // JSON escondido
-        val scriptText = document.select("script").joinToString("\n") { it.html() }
-        val regex = Regex("all_imgs_url\\s*:\\s*\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL)
-        val match = regex.find(scriptText)
-        if (match != null) {
-            val jsonText = "[" + match.groupValues[1].replace("'", "\"") + "]"
-            try {
-                val listType = object : TypeToken<List<String>>() {}.type
-                val imgUrls: List<String> = Gson().fromJson(jsonText, listType)
-                imgUrls.forEachIndexed { i, url ->
-                    if (url.isNotBlank()) pages.add(Page(i, "", url))
-                }
-                if (pages.isNotEmpty()) return pages
-            } catch (_: Exception) { /* continua */ }
-        }
-
-        // Meta refresh
-        val redirect =
-            document.selectFirst("meta[http-equiv=refresh]")?.attr("content")?.substringAfter("url=")?.trim()
-        if (!redirect.isNullOrEmpty()) {
-            client.newCall(GET(redirect, headers = customHeaders)).execute().use { resp ->
-                val doc = resp.asJsoup(redirect)
-                val imgs = doc.select("div.reader-area img")
-                imgs.forEachIndexed { i, img ->
-                    val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-                    if (url.isNotBlank()) pages.add(Page(i, "", url))
-                }
-                if (pages.isNotEmpty()) return pages
+        // Tenta pegar via JSON escondido
+        if (pages.isEmpty()) {
+            val scriptText = document.select("script").joinToString("\n") { it.html() }
+            val regex = Regex("all_imgs_url\\s*:\\s*\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL)
+            val match = regex.find(scriptText)
+            if (match != null) {
+                val jsonText = "[" + match.groupValues[1].replace("'", "\"") + "]"
+                try {
+                    val listType = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
+                    val imgUrls: List<String> = com.google.gson.Gson().fromJson(jsonText, listType)
+                    imgUrls.forEachIndexed { i, url ->
+                        if (url.isNotBlank()) pages.add(Page(i, "", url))
+                    }
+                } catch (_: Exception) { /* ignora */ }
             }
         }
 
         return pages
     }
 
-    // Helpers
+    // ------------------- HELPERS -------------------
     private fun okhttp3.Response.asJsoup(baseUrl: String? = null): Document {
         val html = this.body?.string().orEmpty()
         return if (baseUrl != null) Jsoup.parse(html, baseUrl) else Jsoup.parse(html)
