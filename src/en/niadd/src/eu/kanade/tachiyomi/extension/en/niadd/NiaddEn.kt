@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Headers
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -143,21 +145,20 @@ class NiaddEn : ParsedHttpSource() {
             } catch (_: Exception) { /* continua */ }
         }
 
-        // Meta refresh
-        val redirect = document.selectFirst("meta[http-equiv=refresh]")?.attr("content")?.substringAfter("url=")?.trim()
-        if (!redirect.isNullOrEmpty()) {
-            client.newCall(GET(redirect, headers = customHeaders)).execute().use { resp ->
-                val doc = resp.asJsoup(redirect)
-                val imgs = doc.select("div.reader-area img")
-                imgs.forEachIndexed { i, img ->
-                    val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-                    if (url.isNotBlank()) pages.add(Page(i, "", url))
+    // Meta refresh
+    val redirect = document.selectFirst("meta[http-equiv=refresh]")?.attr("content")?.substringAfter("url=")?.trim()
+    if (!redirect.isNullOrEmpty()) {
+        client.newCall(GET(redirect, headers = customHeaders)).execute().use { resp ->
+            val doc = resp.asJsoup(redirect)
+            val imgs = doc.select("div.reader-area img")
+            imgs.forEachIndexed { i, img ->
+                val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
+                if (url.isNotBlank()) {
+                    pages.add(Page(i, "", url))
                 }
-                if (pages.isNotEmpty()) return pages
             }
+            if (pages.isNotEmpty()) return pages
         }
-
-        throw Exception("Não foi possível encontrar o array de imagens")
     }
 
     // Helpers
