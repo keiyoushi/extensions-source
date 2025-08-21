@@ -111,9 +111,9 @@ class NiaddEn : ParsedHttpSource() {
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        val slug = manga.url.substringAfterLast("/").substringBefore(".html")
-        val nineUrl = "https://www.nineanime.com/manga/$slug.html"
-        return GET(nineUrl, headers = customHeaders)
+        val mangaUrl = if (manga.url.contains("?")) "${baseUrl}${manga.url}&waring=1"
+                    else "${baseUrl}${manga.url}?waring=1"
+        return GET(mangaUrl, headers = customHeaders)
     }
 
     override fun chapterListSelector(): String = "ul.detail-chlist li a"
@@ -122,45 +122,19 @@ class NiaddEn : ParsedHttpSource() {
         val chapter = SChapter.create()
         chapter.url = element.absUrl("href")
         chapter.name = element.attr("title").ifBlank { element.text().trim() }
-        // pages
+
+        val dateText = element.parent()?.selectFirst("span.time")?.text()?.trim()
+        chapter.date_upload = dateText?.let { parseChapterDate(it) } ?: 0L
+
         return chapter
     }
 
-    // Pages
-    override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers = customHeaders)
-
-    override fun pageListParse(document: Document): List<Page> {
-        val directImgs = document.select("div.reader-area img")
-        if (directImgs.isNotEmpty()) {
-            val pages = mutableListOf<Page>()
-            directImgs.forEachIndexed { i, img ->
-                val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-                if (url.isNotBlank()) pages.add(Page(i, "", url))
-            }
-            if (pages.isNotEmpty()) return pages
+    private fun parseChapterDate(date: String): Long {
+        return try {
+            val formatter = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.ENGLISH)
+            formatter.parse(date)?.time ?: 0L
+        } catch (_: Exception) {
+            0L
         }
-
-        val redirect = document.selectFirst("meta[http-equiv=refresh]")
-            ?.attr("content")?.substringAfter("url=")?.trim()
-
-        if (!redirect.isNullOrEmpty()) {
-            client.newCall(GET(redirect, headers = customHeaders)).execute().use { resp ->
-                val doc = resp.asJsoup(redirect)
-                val imgs = doc.select("div.reader-area img")
-                val pages = mutableListOf<Page>()
-                imgs.forEachIndexed { i, img ->
-                    val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-                    if (url.isNotBlank()) pages.add(Page(i, "", url))
-                }
-                if (pages.isNotEmpty()) return pages
-            }
-        }
-
-        throw Exception("No images or redirect found for this chapter")
-    }
-
-    private fun okhttp3.Response.asJsoup(baseUrl: String? = null): Document {
-        val html = this.body?.string().orEmpty()
-        return if (baseUrl != null) Jsoup.parse(html, baseUrl) else Jsoup.parse(html)
     }
 }
