@@ -2,6 +2,9 @@ package eu.kanade.tachiyomi.extension.en.niadd
 
 import android.content.Context
 import android.content.Intent
+import androidx.appcompat.app.AppCompatActivity
+import android.os.Bundle
+import android.webkit.WebView
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -162,7 +165,7 @@ class NiaddEn : ParsedHttpSource() {
 
         // 3️⃣ Fallback WebView
         if (pages.isEmpty()) {
-            pages.add(Page(0, "", chapter.url)) // será carregado via WebView
+            pages.add(Page(0, "", url))
         }
 
         return pages
