@@ -21,10 +21,10 @@ class NiaddEn : ParsedHttpSource() {
     override val lang: String = "en"
     override val supportsLatest: Boolean = true
 
-    // OkHttp sem delay
+    // OkHttp client
     override val client: OkHttpClient = network.client.newBuilder().build()
 
-    // Headers custom
+    // Custom headers
     private val customHeaders: Headers = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
         .build()
@@ -109,11 +109,11 @@ class NiaddEn : ParsedHttpSource() {
         throw UnsupportedOperationException("Not used.")
     }
 
-    // Chapters
+    // Chapters (from NineAnime)
     override fun chapterListRequest(manga: SManga): Request {
-        val mangaUrl = if (manga.url.contains("?")) "${baseUrl}${manga.url}&waring=1"
-                       else "${baseUrl}${manga.url}?waring=1"
-        return GET(mangaUrl, headers = customHeaders)
+        val slug = manga.url.substringAfterLast("/").substringBefore(".html")
+        val nineUrl = "https://www.nineanime.com/manga/$slug.html?waring=1"
+        return GET(nineUrl, headers = customHeaders)
     }
 
     override fun chapterListSelector(): String = "ul.detail-chlist li a"
@@ -122,24 +122,11 @@ class NiaddEn : ParsedHttpSource() {
         val chapter = SChapter.create()
         chapter.url = element.absUrl("href")
         chapter.name = element.attr("title").ifBlank { element.text().trim() }
-
         // pages
-        val dateText = element.parent()?.selectFirst("span.time")?.text()?.trim()
-        chapter.date_upload = dateText?.let { parseChapterDate(it) } ?: 0L
-
         return chapter
     }
 
-    private fun parseChapterDate(date: String): Long {
-        return try {
-            val formatter = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.ENGLISH)
-            formatter.parse(date)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
-    }
-
-    // Pages
+    // Pages (NineAnime)
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers = customHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
