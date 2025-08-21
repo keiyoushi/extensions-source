@@ -45,22 +45,14 @@ class MGKomik : Madara(
 
     // ================================== Popular ======================================
 
-    // overriding to change title selector and manga url selector
     override fun popularMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-
-        with(element) {
-            selectFirst("div.item-thumb a")!!.let {
-                manga.setUrlWithoutDomain(it.attr("abs:href"))
-                manga.title = it.attr("title")
-            }
-
-            selectFirst("img")?.let {
-                manga.thumbnail_url = imageFromElement(it)
+        return SManga.create().apply {
+            element.select("div.item-thumb a").let {
+                setUrlWithoutDomain(it.attr("abs:href"))
+                title = it.attr("title")
+                thumbnail_url = it.select("img").attr("abs:src")
             }
         }
-
-        return manga
     }
 
     // ================================ Chapters ================================
