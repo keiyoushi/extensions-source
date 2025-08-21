@@ -9,10 +9,11 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
-import java.util.Locale
 import kotlin.random.Random
 
 class NiaddEn : ParsedHttpSource() {
@@ -31,10 +32,9 @@ class NiaddEn : ParsedHttpSource() {
         }
         .build()
 
-    // Headers personalizados
+    // Headers personalizados (UA apenas; evitar Referer fixo)
     private val customHeaders: Headers = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
-        .add("Referer", "https://www.niadd.com/")
         .build()
 
     // ======================
@@ -137,6 +137,11 @@ class NiaddEn : ParsedHttpSource() {
         return manga
     }
 
+    // A ParsedHttpSource exige esse método, mesmo sem usarmos (pois usamos pageListParse).
+    override fun imageUrlParse(document: Document): String {
+        throw UnsupportedOperationException("Not used.")
+    }
+
     // ======================
     // Chapters (NineAnime)
     // ======================
@@ -151,8 +156,9 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-        chapter.url = element.absUrl("href")
-        chapter.name = element.attr("title") ?: element.text().trim()
+        chapter.url = element.absUrl("href") // ex: https://www.nineanime.com/chapter/...
+        chapter.name = element.attr("title").ifBlank { element.text().trim() }
+        // Aqui poderíamos parsear a data relativa (".time"), mas deixei para depois.
         return chapter
     }
 
@@ -161,33 +167,50 @@ class NiaddEn : ParsedHttpSource() {
     // ======================
 
     override fun pageListRequest(chapter: SChapter): Request {
+        // Primeiro requisita o capítulo no NineAnime (pode ter a primeira imagem ou meta refresh)
         return GET(chapter.url, headers = customHeaders)
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        // 1. tenta pegar imagens diretas (primeira página)
-        val imgs = document.select("div.reader-area img")
-        if (imgs.isNotEmpty()) {
-            return imgs.mapIndexed { i, img ->
+        // 1) Tenta pegar imagens diretas (NineAnime às vezes mostra a 1ª página)
+        val directImgs = document.select("div.reader-area img")
+        if (directImgs.isNotEmpty()) {
+            val pages = mutableListOf<Page>()
+            directImgs.forEachIndexed { i, img ->
                 val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-                Page(i, "", url)
+                if (url.isNotBlank()) pages.add(Page(i, "", url))
             }
+            if (pages.isNotEmpty()) return pages
         }
 
-        // 2. tenta redirecionamento (meta refresh)
+        // 2) Tenta redirecionamento (meta refresh) para o host externo
         val redirect = document.selectFirst("meta[http-equiv=refresh]")
             ?.attr("content")
             ?.substringAfter("url=")
+            ?.trim()
 
-        if (!redirect.isNullOrBlank()) {
-            val resp = client.newCall(GET(redirect, headers = customHeaders)).execute()
-            val doc = resp.asJsoup()
-            return doc.select("div.reader-area img").mapIndexed { i, img ->
-                val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
-                Page(i, "", url)
+        if (!redirect.isNullOrEmpty()) {
+            client.newCall(GET(redirect, headers = customHeaders)).execute().use { resp ->
+                val doc = resp.asJsoup(redirect)
+                val imgs = doc.select("div.reader-area img")
+                val pages = mutableListOf<Page>()
+                imgs.forEachIndexed { i, img ->
+                    val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
+                    if (url.isNotBlank()) pages.add(Page(i, "", url))
+                }
+                if (pages.isNotEmpty()) return pages
             }
         }
 
         throw Exception("No images or redirect found for this chapter")
+    }
+
+    // ======================
+    // Helpers
+    // ======================
+
+    private fun Response.asJsoup(baseUrl: String? = null): Document {
+        val html = this.body?.string().orEmpty()
+        return if (baseUrl != null) Jsoup.parse(html, baseUrl) else Jsoup.parse(html)
     }
 }
