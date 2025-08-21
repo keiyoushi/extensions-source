@@ -380,7 +380,7 @@ abstract class MachineTranslations(
             }.also(screen::addPreference)
         }
 
-        if (!disableTranslator && language.supportNativeTranslation) {
+        if (!disableTranslator) {
             ListPreference(screen.context).apply {
                 key = TRANSLATOR_PROVIDER_PREF
                 title = intl["translate_dialog_box_title"]
