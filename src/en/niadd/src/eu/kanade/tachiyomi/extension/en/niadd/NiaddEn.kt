@@ -12,7 +12,6 @@ import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
-import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.random.Random
 
@@ -34,10 +33,14 @@ class NiaddEn : ParsedHttpSource() {
 
     // Headers personalizados
     private val customHeaders: Headers = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
+        .add("Referer", "https://www.niadd.com/")
         .build()
 
+    // ======================
     // Popular
+    // ======================
+
     override fun popularMangaRequest(page: Int): Request =
         GET("$baseUrl/category/?page=$page", headers = customHeaders)
 
@@ -67,7 +70,10 @@ class NiaddEn : ParsedHttpSource() {
 
     override fun popularMangaNextPageSelector(): String? = "a.next"
 
+    // ======================
     // Latest
+    // ======================
+
     override fun latestUpdatesRequest(page: Int): Request =
         GET("$baseUrl/list/New-Update/?page=$page", headers = customHeaders)
 
@@ -75,7 +81,10 @@ class NiaddEn : ParsedHttpSource() {
     override fun latestUpdatesFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
+    // ======================
     // Search
+    // ======================
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val q = URLEncoder.encode(query, "UTF-8")
         return GET("$baseUrl/search/?name=$q&page=$page", headers = customHeaders)
@@ -85,7 +94,10 @@ class NiaddEn : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element): SManga = popularMangaFromElement(element)
     override fun searchMangaNextPageSelector(): String? = popularMangaNextPageSelector()
 
+    // ======================
     // Details
+    // ======================
+
     override fun mangaDetailsParse(document: Document): SManga {
         val manga = SManga.create()
         manga.title = document.selectFirst("h1")?.text()?.trim() ?: ""
@@ -125,77 +137,57 @@ class NiaddEn : ParsedHttpSource() {
         return manga
     }
 
-    // Chapters
+    // ======================
+    // Chapters (NineAnime)
+    // ======================
+
     override fun chapterListRequest(manga: SManga): Request {
-        // força pegar a página de capítulos (com /chapters.html no final)
-        val url = toAbsolute(manga.url).removeSuffix("/") + "/chapters.html"
-        return GET(url, headers = customHeaders)
+        val slug = manga.url.substringAfterLast("/").substringBefore(".html")
+        val nineUrl = "https://www.nineanime.com/manga/$slug.html"
+        return GET(nineUrl, headers = customHeaders)
     }
 
-    override fun chapterListParse(response: okhttp3.Response): List<SChapter> {
-        val document = response.asJsoup()
-        return document.select("ul.chapter-list a.hover-underline").map { element ->
-            SChapter.create().apply {
-                val href = element.attr("href")
-                if (href.startsWith("http", ignoreCase = true)) {
-                    url = href
-                } else {
-                    setUrlWithoutDomain(href)
-                }
-                name = element.selectFirst("span.chp-title")?.text()?.trim()
-                    ?: element.attr("title")?.trim()
-                    ?: element.text().trim()
-                date_upload = parseDate(element.selectFirst("span.chp-time")?.text())
-            }
-        }
+    override fun chapterListSelector(): String = "ul.detail-chlist li a"
+
+    override fun chapterFromElement(element: Element): SChapter {
+        val chapter = SChapter.create()
+        chapter.url = element.absUrl("href")
+        chapter.name = element.attr("title") ?: element.text().trim()
+        return chapter
     }
 
-    private fun parseDate(dateString: String?): Long {
-        if (dateString.isNullOrBlank()) return 0L
-        return try {
-            SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH).parse(dateString)?.time ?: 0L
-        } catch (_: Exception) { 0L }
-    }
+    // ======================
+    // Pages (NineAnime -> host externo)
+    // ======================
 
-    // Pages
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET(toAbsolute(chapter.url), headers = customHeaders)
+        return GET(chapter.url, headers = customHeaders)
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val jsBlob = document.select("script:containsData(all_imgs_url)")
-            .firstOrNull()
-            ?.data()
-            ?: document.outerHtml()
-
-        val match = Regex(
-            pattern = """all_imgs_url\s*:\s*\[(.*?)\]""",
-            options = setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE),
-        ).find(jsBlob) ?: throw Exception("all_imgs_url not found")
-
-        val urls = Regex(""""(https?://[^"]+)"""")
-            .findAll(match.groupValues[1])
-            .map { it.groupValues[1] }
-            .toList()
-
-        val referer = document.location().ifBlank { toAbsolute("") }
-        return urls.mapIndexed { index, imageUrl ->
-            Page(index, referer, imageUrl)
+        // 1. tenta pegar imagens diretas (primeira página)
+        val imgs = document.select("div.reader-area img")
+        if (imgs.isNotEmpty()) {
+            return imgs.mapIndexed { i, img ->
+                val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
+                Page(i, "", url)
+            }
         }
-    }
 
-    override fun imageUrlParse(document: Document): String = ""
+        // 2. tenta redirecionamento (meta refresh)
+        val redirect = document.selectFirst("meta[http-equiv=refresh]")
+            ?.attr("content")
+            ?.substringAfter("url=")
 
-    override fun imageRequest(page: Page): Request {
-        val referer = if (page.url.isNullOrBlank()) baseUrl else page.url
-        val headers = Headers.Builder()
-            .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-            .add("Referer", referer)
-            .build()
-        return GET(page.imageUrl!!, headers)
-    }
+        if (!redirect.isNullOrBlank()) {
+            val resp = client.newCall(GET(redirect, headers = customHeaders)).execute()
+            val doc = resp.asJsoup()
+            return doc.select("div.reader-area img").mapIndexed { i, img ->
+                val url = img.absUrl("data-src").ifBlank { img.absUrl("src") }
+                Page(i, "", url)
+            }
+        }
 
-    private fun toAbsolute(url: String): String {
-        return if (url.startsWith("http", ignoreCase = true)) url else "$baseUrl$url"
+        throw Exception("No images or redirect found for this chapter")
     }
 }
