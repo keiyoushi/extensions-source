@@ -60,11 +60,13 @@ class TheBlank :
         addRandomUAPreferenceToScreen(screen)
 
         SwitchPreferenceCompat(screen.context).run {
-            title = "Open WebView flags"
-            summary = "To work around website restrictions, tap this to open WebView flags, " +
-                "search for “XReq” in the new screen, " +
-                "set “WebViewXRequestedWithHeaderControl” to “Enabled”, then restart the app. " +
-                "If it fails to open or there’s no such flag, try the steps below."
+            title = "[Workaround] Open WebView flags"
+            summary = "To work around website restrictions:\n" +
+                "1. Tap this to open WebView flags.\n" +
+                "2. Search for “XReq” in the new screen.\n" +
+                "3. Set this flag to “Enabled”: “WebViewXRequestedWithHeaderControl”.\n" +
+                "4. Restart the app.\n" +
+                "If the screen fails to open or there’s no such flag, try the steps below."
 
             setOnPreferenceChangeListener { _, _ ->
                 val intent = Intent("com.android.webview.SHOW_DEV_UI").apply {
