@@ -306,6 +306,9 @@ abstract class MachineTranslations(
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         // Some libreoffice font sizes
         val sizes = arrayOf(
+            "12", "13", "14",
+            "15", "16", "18",
+            "20", "21", "22",
             "24", "26", "28",
             "32", "36", "40",
             "42", "44", "48",
