@@ -14,8 +14,8 @@ private val languageList = listOf(
     Language("ar", disableSourceSettings = true),
     Language("en"),
     Language("es"),
-    Language("fr"),
-    Language("id"),
+    Language("fr", supportNativeTranslation = true),
+    Language("id", supportNativeTranslation = true),
     Language("it"),
-    Language("pt-BR", "pt"),
+    Language("pt-BR", "pt", supportNativeTranslation = true),
 )

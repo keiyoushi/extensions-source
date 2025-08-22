@@ -85,6 +85,10 @@ abstract class MachineTranslations(
         get() = preferences.getBoolean(DISABLE_SOURCE_SETTINGS_PREF, language.disableSourceSettings)
         set(value) = preferences.edit().putBoolean(DISABLE_SOURCE_SETTINGS_PREF, value).apply()
 
+    protected var enableMangaDetailsTranslation: Boolean
+        get() = preferences.getBoolean(ENABLE_MANGA_DETAILS_TRANSLATION_PREF, false)
+        set(value) = preferences.edit().putBoolean(ENABLE_MANGA_DETAILS_TRANSLATION_PREF, value).apply()
+
     private val intl = Intl(
         language = language.lang,
         baseLanguage = "en",
@@ -95,6 +99,7 @@ abstract class MachineTranslations(
     private val settings get() = language.apply {
         fontSize = this@MachineTranslations.fontSize
         disableWordBreak = this@MachineTranslations.disableWordBreak
+        disableSourceSettings = this@MachineTranslations.disableSourceSettings
     }
 
     override val client: OkHttpClient get() = clientInstance!!
@@ -123,8 +128,10 @@ abstract class MachineTranslations(
         .rateLimit(3, 2, TimeUnit.SECONDS)
         .build()
 
+    private lateinit var translator: TranslatorEngine
+
     protected fun clientBuilder(): OkHttpClient.Builder {
-        val translator: TranslatorEngine = when (provider) {
+        translator = when (provider) {
             "Google" -> GoogleTranslator(clientUtils, headers)
             else -> BingTranslator(clientUtils, headers)
         }
@@ -219,10 +226,10 @@ abstract class MachineTranslations(
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-        description = document.selectFirst("p:has(span:contains(Synopsis))")?.ownText()
+        title = document.selectFirst("h1")!!.text().i18n()
+        description = document.selectFirst("p:has(span:contains(Synopsis))")?.ownText()?.i18n()
         author = document.selectFirst("p:has(span:contains(Author))")?.ownText()
-        genre = document.select("h2:contains(Genres) + div span").joinToString { it.text() }
+        genre = document.select("h2:contains(Genres) + div span").joinToString { it.text() }.i18n()
         thumbnail_url = document.selectFirst("img.object-cover")?.absUrl("src")
         document.selectFirst("p:has(span:contains(Status))")?.ownText()?.let {
             status = when (it.lowercase()) {
@@ -291,6 +298,11 @@ abstract class MachineTranslations(
         return json.decodeFromString(this)
     }
 
+    private fun String.i18n(): String = when {
+        enableMangaDetailsTranslation -> translator.translate(language.origin, language.target, this)
+        else -> this
+    }
+
     // =============================== Filters ================================
 
     override fun getFilterList(): FilterList {
@@ -306,6 +318,9 @@ abstract class MachineTranslations(
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         // Some libreoffice font sizes
         val sizes = arrayOf(
+            "12", "13", "14",
+            "15", "16", "18",
+            "20", "21", "22",
             "24", "26", "28",
             "32", "36", "40",
             "42", "44", "48",
@@ -321,6 +336,8 @@ abstract class MachineTranslations(
             }.toTypedArray()
             entryValues = sizes
             summary = intl["font_size_summary"]
+
+            setDefaultValue(fontSize.toString())
 
             setOnPreferenceChange { _, newValue ->
                 val selected = newValue as String
@@ -339,7 +356,7 @@ abstract class MachineTranslations(
             }
         }.also(screen::addPreference)
 
-        if (language.disableSourceSettings.not()) {
+        if (!language.disableSourceSettings) {
             SwitchPreferenceCompat(screen.context).apply {
                 key = DISABLE_SOURCE_SETTINGS_PREF
                 title = "⚠ ${intl["disable_website_setting_title"]}"
@@ -367,6 +384,17 @@ abstract class MachineTranslations(
             return
         }
 
+        SwitchPreferenceCompat(screen.context).apply {
+            key = ENABLE_MANGA_DETAILS_TRANSLATION_PREF
+            title = "⚠ ${intl["enable_manga_details_translation_title"]}"
+            summary = intl["enable_manga_details_translation_summary"]
+            setDefaultValue(enableMangaDetailsTranslation)
+            setOnPreferenceChange { _, newValue ->
+                enableMangaDetailsTranslation = newValue as Boolean
+                true
+            }
+        }.also(screen::addPreference)
+
         if (language.supportNativeTranslation) {
             SwitchPreferenceCompat(screen.context).apply {
                 key = DISABLE_TRANSLATOR_PREF
@@ -380,7 +408,7 @@ abstract class MachineTranslations(
             }.also(screen::addPreference)
         }
 
-        if (!disableTranslator && language.supportNativeTranslation) {
+        if (!disableTranslator) {
             ListPreference(screen.context).apply {
                 key = TRANSLATOR_PROVIDER_PREF
                 title = intl["translate_dialog_box_title"]
@@ -429,7 +457,8 @@ abstract class MachineTranslations(
         private const val FONT_SIZE_PREF = "fontSizePref"
         private const val DISABLE_SOURCE_SETTINGS_PREF = "disableSourceSettingsPref"
         private const val DISABLE_WORD_BREAK_PREF = "disableWordBreakPref"
-        private const val DISABLE_TRANSLATOR_PREF = "disableWordBreakPref"
+        private const val DISABLE_TRANSLATOR_PREF = "disableTranslatorPref"
+        private const val ENABLE_MANGA_DETAILS_TRANSLATION_PREF = "enableMangaDetailsTranslationPref"
         private const val TRANSLATOR_PROVIDER_PREF = "translatorProviderPref"
         private const val DEFAULT_FONT_SIZE = "24"
 
