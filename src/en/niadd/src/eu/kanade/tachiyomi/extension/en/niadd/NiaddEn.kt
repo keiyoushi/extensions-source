@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.extension.en.niadd
 import android.content.Context
 import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
-import android.os.Bundle
-import android.webkit.WebView
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -17,8 +17,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 
 class NiaddEn : ParsedHttpSource() {
 
@@ -71,10 +69,8 @@ class NiaddEn : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // --------------------- Search ---------------------
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): okhttp3.Request {
-        val q = URLEncoder.encode(query, "UTF-8")
-        return GET("$proxyBase${URLEncoder.encode("$baseUrl/search/?name=$q&page=$page", "UTF-8")}", headers = customHeaders)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
+        GET("$proxyBase${URLEncoder.encode("$baseUrl/search/?name=${URLEncoder.encode(query, "UTF-8")}&page=$page", "UTF-8")}", headers = customHeaders)
 
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
@@ -134,7 +130,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun pageListRequest(chapter: SChapter) =
         GET("$proxyBase${URLEncoder.encode(chapter.url, "UTF-8")}", headers = customHeaders)
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(document: Document, chapter: SChapter): List<Page> {
         val pages = mutableListOf<Page>()
 
         // 1️⃣ Tenta pegar imagens diretas
@@ -165,7 +161,7 @@ class NiaddEn : ParsedHttpSource() {
 
         // 3️⃣ Fallback WebView
         if (pages.isEmpty()) {
-            pages.add(Page(0, "", url))
+            pages.add(Page(0, "", chapter.url))
         }
 
         return pages
