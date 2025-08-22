@@ -7,15 +7,12 @@ ext {
 
 apply from: "$rootDir/common.gradle"
 
-def kotlin_version = "1.6.21"
-def coroutines_version = "1.6.1"
-
 dependencies {
     implementation(project(":lib:cookieinterceptor"))
     implementation 'com.google.code.gson:gson:2.10.1'
     implementation "androidx.appcompat:appcompat:1.6.1"
-
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutines_version"
+    
+    implementation platform("org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.6.4")
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android"
 }
