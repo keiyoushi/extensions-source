@@ -1,12 +1,16 @@
 package eu.kanade.tachiyomi.extension.en.niadd
 
+import android.webkit.WebView
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import me.marplex.cloudflarebypass.CloudflareHTTPClient
+import me.marplex.cloudflarebypass.BypassClient
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,10 +27,10 @@ class NiaddEn : ParsedHttpSource() {
     override val supportsLatest: Boolean = true
 
     // Cloudflare bypass client
-    private val cfClient = CloudflareHTTPClient()
+    private val cfClient: OkHttpClient = BypassClient().okHttpClient
 
     override val client: OkHttpClient
-        get() = cfClient.okHttpClient
+        get() = cfClient
 
     private val customHeaders: Headers = Headers.Builder()
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
@@ -132,7 +136,6 @@ class NiaddEn : ParsedHttpSource() {
     override fun pageListRequest(chapter: SChapter): Request = GET(chapter.url, headers = customHeaders)
 
     override fun pageListParse(document: Document): List<Page> {
-        // Try extracting JavaScript images array
         val html = document.html()
         val arrayRegex = Regex("all_imgs_url:\\s*\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL)
         val urlRegex = Regex("\"(https?://[^\"]+)\"")
@@ -145,7 +148,6 @@ class NiaddEn : ParsedHttpSource() {
             }
         }
 
-        // Direct images
         val directImgs = document.select("div.reader-area img")
         if (directImgs.isNotEmpty()) {
             return directImgs.mapIndexed { i, img ->
@@ -154,7 +156,6 @@ class NiaddEn : ParsedHttpSource() {
             }
         }
 
-        // Meta redirect
         val redirect = document.selectFirst("meta[http-equiv=refresh]")
             ?.attr("content")?.substringAfter("url=")?.trim()
         if (!redirect.isNullOrEmpty()) {
@@ -171,9 +172,22 @@ class NiaddEn : ParsedHttpSource() {
         throw Exception("No images or redirect found for this chapter")
     }
 
-    // Helpers
     private fun okhttp3.Response.asJsoup(baseUrl: String? = null): Document {
         val html = this.body?.string().orEmpty()
         return if (baseUrl != null) Jsoup.parse(html, baseUrl) else Jsoup.parse(html)
+    }
+
+    // Composable WebView com bypass (para testes ou casos complexos de JS)
+    @Composable
+    fun ComposableWebView(modifier: Modifier = Modifier, url: String) {
+        AndroidView(
+            modifier = modifier,
+            factory = { context ->
+                WebView(context).apply {
+                    webViewClient = BypassClient()
+                    loadUrl(url)
+                }
+            }
+        )
     }
 }
