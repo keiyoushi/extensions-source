@@ -11,8 +11,16 @@ dependencies {
     implementation(project(":lib:cookieinterceptor"))
     implementation 'com.google.code.gson:gson:2.10.1'
     implementation "androidx.appcompat:appcompat:1.6.1"
-    
+
     implementation platform("org.jetbrains.kotlinx:kotlinx-coroutines-bom:1.6.4")
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android"
+}
+
+configurations.all {
+    resolutionStrategy {
+        force "org.jetbrains.kotlin:kotlin-stdlib:1.7.21"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.7.21"
+        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.7.21"
+    }
 }
