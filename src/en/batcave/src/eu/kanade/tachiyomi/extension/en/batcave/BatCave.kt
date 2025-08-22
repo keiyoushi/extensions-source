@@ -180,6 +180,9 @@ class BatCave : HttpSource() {
             thumbnail_url = document.selectFirst("div.page__poster img")?.absUrl("src")
             description = document.selectFirst("div.page__text")?.wholeText()
             author = document.selectFirst(".page__list > li:has(> div:contains(Publisher))")?.ownText()
+            genre = (
+                document.select("div.page__tags a").mapNotNull { it.text().takeIf { it.isNotBlank() } } + listOf("Comic")
+                ).joinToString(", ")
             status = when (document.selectFirst(".page__list > li:has(> div:contains(release type))")?.ownText()?.trim()) {
                 "Ongoing" -> SManga.ONGOING
                 "Complete" -> SManga.COMPLETED
