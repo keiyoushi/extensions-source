@@ -18,13 +18,16 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.select.Elements
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class CosmicScansID :
     MangaThemesia(
         "CosmicScans.id",
-        "https://novascans.id",
+        "https://lc3.cosmicscans.asia",
         "id",
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
     ),
     ConfigurableSource {
 
