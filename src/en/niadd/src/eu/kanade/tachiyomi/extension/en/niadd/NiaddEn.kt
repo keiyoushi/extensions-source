@@ -1,8 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.niadd
 
-import android.content.Context
-import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import eu.kanade.tachiyomi.network.GET
@@ -28,7 +25,10 @@ class NiaddEn : ParsedHttpSource() {
     override val client: OkHttpClient = network.client.newBuilder().build()
 
     private val customHeaders: Headers = Headers.Builder()
-        .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
+        .add(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
+        )
         .build()
 
     // Cloudflare Worker proxy
@@ -36,7 +36,10 @@ class NiaddEn : ParsedHttpSource() {
 
     // --------------------- Popular ---------------------
     override fun popularMangaRequest(page: Int) =
-        GET("$proxyBase${URLEncoder.encode("$baseUrl/category/?page=$page", "UTF-8")}", headers = customHeaders)
+        GET(
+            "$proxyBase${URLEncoder.encode("$baseUrl/category/?page=$page", "UTF-8")}",
+            headers = customHeaders
+        )
 
     override fun popularMangaSelector() = "div.manga-item:has(a[href*='/manga/'])"
 
@@ -62,7 +65,10 @@ class NiaddEn : ParsedHttpSource() {
 
     // --------------------- Latest ---------------------
     override fun latestUpdatesRequest(page: Int) =
-        GET("$proxyBase${URLEncoder.encode("$baseUrl/list/New-Update/?page=$page", "UTF-8")}", headers = customHeaders)
+        GET(
+            "$proxyBase${URLEncoder.encode("$baseUrl/list/New-Update/?page=$page", "UTF-8")}",
+            headers = customHeaders
+        )
 
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
@@ -70,7 +76,10 @@ class NiaddEn : ParsedHttpSource() {
 
     // --------------------- Search ---------------------
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
-        GET("$proxyBase${URLEncoder.encode("$baseUrl/search/?name=${URLEncoder.encode(query, "UTF-8")}&page=$page", "UTF-8")}", headers = customHeaders)
+        GET(
+            "$proxyBase${URLEncoder.encode("$baseUrl/search/?name=${URLEncoder.encode(query, "UTF-8")}&page=$page", "UTF-8")}",
+            headers = customHeaders
+        )
 
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
@@ -108,7 +117,8 @@ class NiaddEn : ParsedHttpSource() {
         return manga
     }
 
-    override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException("Not used.")
+    override fun imageUrlParse(document: Document): String =
+        throw UnsupportedOperationException("Not used.")
 
     // --------------------- Chapters ---------------------
     override fun chapterListRequest(manga: SManga): okhttp3.Request {
@@ -130,7 +140,7 @@ class NiaddEn : ParsedHttpSource() {
     override fun pageListRequest(chapter: SChapter) =
         GET("$proxyBase${URLEncoder.encode(chapter.url, "UTF-8")}", headers = customHeaders)
 
-    override fun pageListParse(document: Document, chapter: SChapter): List<Page> {
+    override fun pageListParse(document: Document): List<Page> {
         val pages = mutableListOf<Page>()
 
         // 1️⃣ Tenta pegar imagens diretas
@@ -156,22 +166,17 @@ class NiaddEn : ParsedHttpSource() {
                     if (url.isNotBlank()) pages.add(Page(i, "", url))
                 }
                 if (pages.isNotEmpty()) return pages
-            } catch (_: Exception) { /* continua */ }
+            } catch (_: Exception) {
+                // continua pro fallback
+            }
         }
 
-        // 3️⃣ Fallback WebView
+        // 3️⃣ Fallback: não conseguiu parsear nada
         if (pages.isEmpty()) {
-            pages.add(Page(0, "", chapter.url))
+            throw Exception("Falha ao extrair páginas. Abra no navegador.")
         }
 
         return pages
-    }
-
-    // --------------------- Fallback WebView ---------------------
-    fun openChapterInWebView(context: Context, url: String) {
-        val intent = Intent(context, NiaddWebViewActivity::class.java)
-        intent.putExtra("url", url)
-        context.startActivity(intent)
     }
 
     // --------------------- Helper ---------------------
