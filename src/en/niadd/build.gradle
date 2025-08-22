@@ -1,9 +1,5 @@
-plugins {
-    id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
-}
-
 android {
+    namespace "eu.kanade.tachiyomi.extension.en.niadd" // <— adicione isso
     compileSdk 33
 
     defaultConfig {
@@ -24,20 +20,4 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
-}
-
-ext {
-    extName = 'Niadd'
-    extClass = '.NiaddFactory'
-    isNsfw = true
-}
-
-dependencies {
-    implementation project(":lib:cookieinterceptor")
-    implementation "com.google.code.gson:gson:2.10.1"
-    implementation "androidx.appcompat:appcompat:1.6.1"
-
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.6.21"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.1"
 }
