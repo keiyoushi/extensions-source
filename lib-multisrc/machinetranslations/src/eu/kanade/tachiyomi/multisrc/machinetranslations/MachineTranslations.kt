@@ -95,6 +95,7 @@ abstract class MachineTranslations(
     private val settings get() = language.apply {
         fontSize = this@MachineTranslations.fontSize
         disableWordBreak = this@MachineTranslations.disableWordBreak
+        disableSourceSettings = this@MachineTranslations.disableSourceSettings
     }
 
     override val client: OkHttpClient get() = clientInstance!!
@@ -342,7 +343,7 @@ abstract class MachineTranslations(
             }
         }.also(screen::addPreference)
 
-        if (language.disableSourceSettings.not()) {
+        if (!language.disableSourceSettings) {
             SwitchPreferenceCompat(screen.context).apply {
                 key = DISABLE_SOURCE_SETTINGS_PREF
                 title = "⚠ ${intl["disable_website_setting_title"]}"
@@ -432,7 +433,7 @@ abstract class MachineTranslations(
         private const val FONT_SIZE_PREF = "fontSizePref"
         private const val DISABLE_SOURCE_SETTINGS_PREF = "disableSourceSettingsPref"
         private const val DISABLE_WORD_BREAK_PREF = "disableWordBreakPref"
-        private const val DISABLE_TRANSLATOR_PREF = "disableWordBreakPref"
+        private const val DISABLE_TRANSLATOR_PREF = "disableTranslatorPref"
         private const val TRANSLATOR_PROVIDER_PREF = "translatorProviderPref"
         private const val DEFAULT_FONT_SIZE = "24"
 
