@@ -50,71 +50,101 @@ class YellowNote(
         classLoader = this::class.java.classLoader!!,
     )
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val dateFormat = SimpleDateFormat("yyyy.MM.dd", Locale.US)
 
-    private val styleUrlRegex = """url\(['"]?([^'"]+)['"]?\)""".toRegex()
+    // yyyy.MM.dd
+    private val dateRegex = """\d{4}\.\d{2}\.\d{2}""".toRegex()
+
+    private val styleUrlRegex = """background-image\s*:\s*url\('([^']+)'\)""".toRegex()
+
+    // 100P + 2V
+    private val mediaCountRegex = """\d+P( \+ \d+V)?""".toRegex()
+
+    private val selectParts = listOf("photo", "amateur")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         YellowNotePreferences.buildPreferences(screen.context, intl)
             .forEach(screen::addPreference)
     }
 
-    override fun simpleMangaSelector() = "div.article > div.list > div.item:not([class*=item exoclick_300x500])"
+    override fun simpleMangaSelector() = selectParts.joinToString(",") { "div.list.$it-list > div.item.$it" }
 
-    override fun simpleMangaFromElement(element: Element): SManga {
-        if (element.hasClass("amateur")) {
-            return simpleMangaFromElementByAmateur(element)
-        }
+    override fun simpleMangaFromElement(element: Element) = SManga.create().apply {
+        val mangaEl = element.selectFirst("a")!!
+        setUrlWithoutDomain(mangaEl.absUrl("href"))
 
-        return SManga.create().apply {
-            val imgEl = element.selectFirst("img")!!
-            val titleAppend = element.selectFirst("div.tag > div")?.text()?.let { "($it)" }.orEmpty()
-            title = "${imgEl.attr("alt")}$titleAppend"
+        val mediaCount = element.select("div.tags > div")
+            .map { it.text() }
+            .firstOrNull { mediaCountRegex.matches(it) }
+            ?.let { "($this)" }
+            .orEmpty()
+        title = "${mangaEl.attr("title")}$mediaCount"
 
-            thumbnail_url = imgEl.absUrl("src")
-            update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-            setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        }
+        thumbnail_url = parseUrlFormStyle(mangaEl.selectFirst("div.img"))
+
+        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
     }
 
-    // /amateurs
-    private fun simpleMangaFromElementByAmateur(element: Element) = SManga.create().apply {
-        val titleAppend = element.selectFirst("div.tag > div")?.text()?.let { "($it)" }.orEmpty()
-        title = "${element.selectFirst("div:nth-child(3)")!!.text()}$titleAppend"
-
-        thumbnail_url = element.selectFirst(".img")?.attr("style")
+    fun parseUrlFormStyle(element: Element?): String? {
+        // <div role="img" class="img" style="background-image:url('https://img.xchina.io/photos/641aea8f589cb/0068_600x0.webp');"></div>
+        return element
+            ?.attr("style")
             ?.let { styleUrlRegex.find(it) }
             ?.groupValues
             ?.get(1)
-
-        update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
-        setUrlWithoutDomain(element.selectFirst("a[href]")!!.absUrl("href"))
     }
 
-    override fun simpleNextPageSelector() = "div.pager:first-of-type a[current] + a[href]"
+    override fun simpleNextPageSelector() = "div.pager:first-of-type > span.pager-num.current + a.pager-num"
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/photos/sort-hot/$page.html", headers)
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/photos/$page.html", headers)
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val tabEl = document.selectFirst("div#tab_1")!!
-        val titleAppend = tabEl.selectFirst("i.fa.fa-picture-o")?.parentText()?.let { "($it)" }.orEmpty()
-        title = "${tabEl.selectFirst("i.fa.fa-address-card-o")!!.parentText()!!}$titleAppend"
+        val infoCardElement = document.selectFirst("div.info-card.photo-detail")!!
+        val name = parseInfoByIcon(infoCardElement, "i.fa-address-card")!!
+        val mediaCount = parseInfoByIcon(infoCardElement, "i.fa-image")!!
+        val no = parseInfoByIcon(infoCardElement, "i.fa-file")?.let { " $it" }.orEmpty()
+        val categories = parseInfosByIcon(infoCardElement, "i.fa-video-camera")?.filter { it != "-" }
+        val filters = parseInfosByIcon(infoCardElement, "i.fa-filter")
+        val tags = parseInfosByIcon(infoCardElement, "i.fa-tags")
 
-        author = tabEl.select("div.models > a").joinToString { it.text() }
-        genre = tabEl.select("div.contentTag").joinToString { it.text() }
+        title = "$name$no($mediaCount)"
+        author = infoCardElement.selectFirst("div.item.floating")
+            ?.text()
+            ?: parseInfoByIcon(infoCardElement, "i.fa-circle-user")
+        genre = listOfNotNull(categories, filters, tags)
+            .flatten()
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(", ")
         status = SManga.COMPLETED
-        description = tabEl.selectFirst("i.fa.fa-calendar")?.text()
         update_strategy = UpdateStrategy.ONLY_FETCH_ONCE
+    }
+
+    private fun parseInfosByIcon(infoCardElement: Element, iconClass: String): List<String>? {
+        return infoCardElement
+            .selectFirst("div.item:has(.icon > $iconClass)")
+            ?.selectFirst("div.text")
+            ?.children()
+            ?.map { it.text() }
+    }
+
+    private fun parseInfoByIcon(infoCardElement: Element, iconClass: String): String? {
+        return infoCardElement
+            .selectFirst("div.item:has(.icon > $iconClass)")
+            ?.selectFirst("div.text")
+            ?.text()
     }
 
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
     override fun chapterListParse(response: Response): List<SChapter> {
         val doc = response.asJsoup()
-        val dateUploadStr = doc.selectFirst("i.fa.fa-calendar")?.text()
-        val dateUpload = dateFormat.tryParse(dateUploadStr)
-        val maxPage = doc.select("div.pager:first-of-type a:not([class])").last()?.text()?.toInt() ?: 1
+        val infoCardElement = doc.selectFirst("div.info-card.photo-detail")!!
+        val uploadAt = parseInfoByIcon(infoCardElement, "i.fa-calendar")
+            ?.let { dateFormat.tryParse(it) }
+            ?: parseUploadDateFromVersionInfo(doc)
+            ?: 0L
+        val maxPage = doc.select("div.pager:first-of-type a.pager-num").last()?.text()?.toInt() ?: 1
         val basePageUrl = response.request.url.toString()
             .removeSuffix(".html")
         return (maxPage downTo 1).map { page ->
@@ -122,14 +152,29 @@ class YellowNote(
                 chapter_number = 0F
                 setUrlWithoutDomain("$basePageUrl/$page.html")
                 name = "Page $page"
-                date_upload = dateUpload
+                date_upload = uploadAt
             }
         }
     }
 
+    private fun parseUploadDateFromVersionInfo(doc: Document): Long? {
+        val navsElement = doc.selectFirst("div.tab-navs")
+        val versionInfoElementIndex = navsElement
+            ?.select("div.tab-nav")
+            ?.indexOfFirst { it.attr("data-tab") == "tab_68a8963ddf8a5_5" }
+        if (versionInfoElementIndex == null || versionInfoElementIndex == -1) {
+            return null
+        }
+        return navsElement.select("div.info-card:nth-child(${versionInfoElementIndex + 1}) > div.text")
+            .map { it.text() }
+            .firstNotNullOfOrNull { dateRegex.find(it)?.value }
+            ?.let { dateFormat.tryParse(it) }
+    }
+
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div.article.mask .photos img.cr_only")
-            .mapIndexed { i, imgEl -> Page(i, imageUrl = imgEl!!.absUrl("src")) }
+        return document.select(simpleMangaSelector())
+            .map { imageElement -> parseUrlFormStyle(imageElement.selectFirst("div.img"))!! }
+            .mapIndexed { i, url -> Page(i, imageUrl = url) }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
