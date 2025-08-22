@@ -1,13 +1,12 @@
 ext {
-extName = 'Niadd' 
-extClass = '.NiaddFactory'
-extVersionCode = 1 
-isNsfw = true 
+    extName = 'Niadd' 
+    extClass = '.NiaddFactory'
+    extVersionCode = 1 
+    isNsfw = true 
 }
 
 apply from: "$rootDir/common.gradle"
-
 dependencies {
-implementation(project(":lib:cookieinterceptor"))
+    implementation(project(":lib:cookieinterceptor"))
     implementation 'com.google.code.gson:gson:2.10.1'
 }
