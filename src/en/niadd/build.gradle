@@ -1,37 +1,8 @@
-plugins {
-    id 'com.android.library'
-    id 'kotlin-android'
-}
-
-android {
-    namespace "eu.kanade.tachiyomi.extension.en.niadd"
-    compileSdk 33
-
-    defaultConfig {
-        minSdk 21
-        targetSdk 33
-
-        versionCode 1
-        versionName "1.0"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
-}
-
 ext {
-    extName = 'Niadd' 
+    extName = 'Niadd'
     extClass = '.NiaddFactory'
-    extVersionCode = 1 
-    isNsfw = true 
+    extVersionCode = 1
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
@@ -45,7 +16,6 @@ dependencies {
     implementation "androidx.appcompat:appcompat:1.6.1"
 
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutines_version"
 }
