@@ -16,7 +16,7 @@ import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
 import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
 import eu.kanade.tachiyomi.network.GET
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -242,10 +242,6 @@ class ComposedImageInterceptor(
                 setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL)
             }
         }.build()
-    }
-
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
     }
 
     private fun Canvas.draw(textPaint: TextPaint, layout: StaticLayout, dialog: Dialog, x: Float, y: Float) {
