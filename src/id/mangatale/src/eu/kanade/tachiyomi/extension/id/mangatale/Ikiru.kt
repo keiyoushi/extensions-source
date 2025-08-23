@@ -177,6 +177,7 @@ class Ikiru() : ParsedHttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
+    // Others
     private var _cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
         get() {
