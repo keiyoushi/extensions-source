@@ -99,6 +99,7 @@ abstract class MachineTranslations(
     private val settings get() = language.apply {
         fontSize = this@MachineTranslations.fontSize
         disableWordBreak = this@MachineTranslations.disableWordBreak
+        disableTranslator = this@MachineTranslations.disableTranslator
         disableSourceSettings = this@MachineTranslations.disableSourceSettings
     }
 
@@ -267,9 +268,12 @@ abstract class MachineTranslations(
             val fragment = json.encodeToString<List<Dialog>>(
                 dto.dialogues.filter { it.getTextBy(language).isNotBlank() },
             )
-            Page(index, imageUrl = "$imageUrl#$fragment")
+            Page(index, imageUrl = "$imageUrl${fragment.toFragment()}")
         }
     }
+
+    // Prevent bad fragments
+    fun String.toFragment(): String = "#${this.replace("#", "*")}"
 
     override fun imageUrlParse(document: Document): String = ""
 
