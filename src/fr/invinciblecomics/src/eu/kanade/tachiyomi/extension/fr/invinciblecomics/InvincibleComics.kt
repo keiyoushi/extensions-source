@@ -23,14 +23,13 @@ class InvincibleComics : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder().addInterceptor { chain ->
-        if (chain.request().url.toString().endsWith(".jpg").not()) return@addInterceptor chain.proceed(chain.request())
+        val req = chain.request()
+        val res = chain.proceed(req)
 
-        val res = chain.proceed(chain.request())
-
-        if (res.code != 404) return@addInterceptor res
+        if (req.url.fragment != "page" || res.code != 404) return@addInterceptor res
 
         res.close()
-        val newRequest = chain.request().newBuilder()
+        val newRequest = req.newBuilder()
             .url(chain.request().url.toString().replace(".jpg", ".png"))
             .build()
 
@@ -129,7 +128,7 @@ class InvincibleComics : HttpSource() {
             ?: error("Failed to extract total pages from script")
 
         return (1..totalPages.toInt()).map { pageNumber ->
-            Page(pageNumber, imageUrl = "$imageBaseUrl${"%03d".format(pageNumber)}.jpg")
+            Page(pageNumber, imageUrl = "$imageBaseUrl${"%03d".format(pageNumber)}.jpg#page")
         }
     }
 
