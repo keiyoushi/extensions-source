@@ -181,9 +181,7 @@ class BatCave : HttpSource() {
             description = document.selectFirst("div.page__text")?.wholeText()
             author = document.selectFirst(".page__list > li:has(> div:contains(Publisher))")?.ownText()
             genre = buildList {
-                document.select("div.page__tags a").forEach { tag ->
-                    add(tag.text())
-                }
+                document.select("div.page__tags a").mapTo(this) { it.text() }
                 add("Comic")
             }.joinToString()
             status = when (document.selectFirst(".page__list > li:has(> div:contains(release type))")?.ownText()?.trim()) {
