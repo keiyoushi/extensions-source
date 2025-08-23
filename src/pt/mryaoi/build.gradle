@@ -1,0 +1,10 @@
+ext {
+    extName = 'MR Yaoi'
+    extClass = '.MRYaoi'
+    themePkg = 'madara'
+    baseUrl = 'https://mrtenzus.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
