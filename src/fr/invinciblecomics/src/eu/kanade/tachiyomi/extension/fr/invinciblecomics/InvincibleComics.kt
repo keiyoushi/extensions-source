@@ -22,13 +22,14 @@ class InvincibleComics : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder().addNetworkInterceptor { chain ->
-        if (chain.request().url.toString().endsWith(".jpg").not()) return@addNetworkInterceptor chain.proceed(chain.request())
+    override val client = network.cloudflareClient.newBuilder().addInterceptor { chain ->
+        if (chain.request().url.toString().endsWith(".jpg").not()) return@addInterceptor chain.proceed(chain.request())
 
         val res = chain.proceed(chain.request())
 
-        if (res.code != 404) return@addNetworkInterceptor res
+        if (res.code != 404) return@addInterceptor res
 
+        res.close()
         val newRequest = chain.request().newBuilder()
             .url(chain.request().url.toString().replace(".jpg", ".png"))
             .build()
@@ -133,7 +134,7 @@ class InvincibleComics : HttpSource() {
     }
 
     // Page
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // Utils
     private fun Element.parseSrcset(): String {
