@@ -205,7 +205,7 @@ class Ikiru() : ParsedHttpSource(), ConfigurableSource {
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
             title = "Edit source URL"
-            summary = "$baseUrl \nFor temporary use, if the extension is updated the change will be lost."
+            summary = "$baseUrl.Restart aplikasi jika belum berubah \nFor temporary use, if the extension is updated the change will be lost."
             dialogTitle = title
             dialogMessage = "Default URL:\n$defaultBaseUrl"
             setDefaultValue(defaultBaseUrl)
