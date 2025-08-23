@@ -6,11 +6,11 @@ import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
 import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
 import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
+import keiyoushi.utils.parseAs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
@@ -58,8 +58,4 @@ class TranslationInterceptor(
             "text" to value,
         ),
     )
-
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
 }

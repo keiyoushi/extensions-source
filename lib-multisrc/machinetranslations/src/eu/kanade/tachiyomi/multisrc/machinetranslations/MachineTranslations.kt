@@ -25,7 +25,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -96,11 +96,12 @@ abstract class MachineTranslations(
         classLoader = this::class.java.classLoader!!,
     )
 
-    private val settings get() = language.apply {
-        fontSize = this@MachineTranslations.fontSize
-        disableWordBreak = this@MachineTranslations.disableWordBreak
-        disableSourceSettings = this@MachineTranslations.disableSourceSettings
-    }
+    private val settings get() = language.copy(
+        fontSize = this@MachineTranslations.fontSize,
+        disableWordBreak = this@MachineTranslations.disableWordBreak,
+        disableTranslator = this@MachineTranslations.disableTranslator,
+        disableSourceSettings = this@MachineTranslations.disableSourceSettings,
+    )
 
     override val client: OkHttpClient get() = clientInstance!!
 
@@ -267,7 +268,7 @@ abstract class MachineTranslations(
             val fragment = json.encodeToString<List<Dialog>>(
                 dto.dialogues.filter { it.getTextBy(language).isNotBlank() },
             )
-            Page(index, imageUrl = "$imageUrl#$fragment")
+            Page(index, imageUrl = "$imageUrl${fragment.toFragment()}")
         }
     }
 
@@ -294,9 +295,8 @@ abstract class MachineTranslations(
         }
     }
 
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
+    // Prevent bad fragments
+    fun String.toFragment(): String = "#${this.replace("#", "*")}"
 
     private fun String.i18n(): String = when {
         enableMangaDetailsTranslation -> translator.translate(language.origin, language.target, this)

@@ -43,7 +43,10 @@ data class Dialog(
     private val bgColor: List<Int> = emptyList(),
 ) {
     val text: String get() = textByLanguage["text"] ?: throw Exception("Dialog not found")
-    fun getTextBy(language: Language) = textByLanguage[language.target] ?: text
+    fun getTextBy(language: Language) = when {
+        !language.disableTranslator -> textByLanguage[language.origin]
+        else -> textByLanguage[language.target]
+    } ?: text
 
     val width get() = x2 - x1
     val height get() = y2 - y1
