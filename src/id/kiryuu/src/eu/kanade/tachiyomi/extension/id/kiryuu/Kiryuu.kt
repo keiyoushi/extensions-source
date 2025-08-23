@@ -24,8 +24,7 @@ class Kiryuu : MangaThemesia("Kiryuu", "https://kiryuu02.com", "id", dateFormat 
                 // Fix image content type
                 val type = IMG_CONTENT_TYPE.toMediaType()
                 val body = response.body.source().asResponseBody(type)
-                return@addInterceptor response.newBuilder().body(body)
-                    .header("Content-Type", IMG_CONTENT_TYPE).build()
+                return@addInterceptor response.newBuilder().body(body).build()
             }
             response
         }

@@ -41,8 +41,7 @@ class Tappytoon(override val lang: String) : HttpSource() {
             // Fix image content type
             val type = IMG_CONTENT_TYPE.toMediaType()
             val body = res.body.source().asResponseBody(type)
-            return@addInterceptor res.newBuilder().body(body)
-                .header("Content-Type", IMG_CONTENT_TYPE).build()
+            return@addInterceptor res.newBuilder().body(body).build()
         }
         // Throw JSON error if available
         if (mime == "application/json") {

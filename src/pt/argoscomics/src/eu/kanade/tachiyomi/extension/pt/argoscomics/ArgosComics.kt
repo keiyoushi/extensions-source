@@ -50,8 +50,7 @@ class ArgosComics : Madara(
                     // Fix image content type
                     val type = "image/jpeg".toMediaType()
                     val body = response.body.source().asResponseBody(type)
-                    return@addInterceptor response.newBuilder().body(body)
-                        .header("Content-Type", "image/jpeg").build()
+                    return@addInterceptor response.newBuilder().body(body).build()
                 }
             }
             response

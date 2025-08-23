@@ -25,8 +25,7 @@ class ArthurScan : Madara(
                 if (mime == "application/octet-stream" || mime == null) {
                     val type = "image/jpeg".toMediaType()
                     val body = response.body.source().asResponseBody(type)
-                    return@addInterceptor response.newBuilder().body(body)
-                        .header("Content-Type", "image/jpeg").build()
+                    return@addInterceptor response.newBuilder().body(body).build()
                 }
             }
             response
