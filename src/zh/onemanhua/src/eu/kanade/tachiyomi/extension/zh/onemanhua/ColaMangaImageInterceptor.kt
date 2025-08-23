@@ -11,9 +11,6 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 class ColaMangaImageInterceptor : Interceptor {
-    private val iv = "0000000000000000".toByteArray()
-    private val mediaType = "image/jpeg".toMediaType()
-
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
@@ -24,12 +21,13 @@ class ColaMangaImageInterceptor : Interceptor {
 
         val key = request.url.fragment!!.substringAfter(KEY_PREFIX).toByteArray()
         val output = Cipher.getInstance("AES/CBC/PKCS7Padding").let {
+            val iv = "0000000000000000".toByteArray()
             it.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(iv))
             response.body.source().cipherSource(it).buffer()
         }
 
         return response.newBuilder()
-            .body(output.asResponseBody(mediaType))
+            .body(output.asResponseBody("image/jpeg".toMediaType()))
             .build()
     }
 
