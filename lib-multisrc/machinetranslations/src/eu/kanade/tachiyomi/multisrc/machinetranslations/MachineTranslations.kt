@@ -96,12 +96,12 @@ abstract class MachineTranslations(
         classLoader = this::class.java.classLoader!!,
     )
 
-    private val settings get() = language.apply {
-        fontSize = this@MachineTranslations.fontSize
-        disableWordBreak = this@MachineTranslations.disableWordBreak
-        disableTranslator = this@MachineTranslations.disableTranslator
-        disableSourceSettings = this@MachineTranslations.disableSourceSettings
-    }
+    private val settings get() = language.copy(
+        fontSize = this@MachineTranslations.fontSize,
+        disableWordBreak = this@MachineTranslations.disableWordBreak,
+        disableTranslator = this@MachineTranslations.disableTranslator,
+        disableSourceSettings = this@MachineTranslations.disableSourceSettings,
+    )
 
     override val client: OkHttpClient get() = clientInstance!!
 
