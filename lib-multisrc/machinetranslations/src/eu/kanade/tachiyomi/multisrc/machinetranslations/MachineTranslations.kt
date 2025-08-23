@@ -25,7 +25,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -272,9 +272,6 @@ abstract class MachineTranslations(
         }
     }
 
-    // Prevent bad fragments
-    fun String.toFragment(): String = "#${this.replace("#", "*")}"
-
     override fun imageUrlParse(document: Document): String = ""
 
     // ============================= Utilities ==============================
@@ -298,9 +295,8 @@ abstract class MachineTranslations(
         }
     }
 
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
-    }
+    // Prevent bad fragments
+    fun String.toFragment(): String = "#${this.replace("#", "*")}"
 
     private fun String.i18n(): String = when {
         enableMangaDetailsTranslation -> translator.translate(language.origin, language.target, this)
