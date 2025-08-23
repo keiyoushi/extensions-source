@@ -12,23 +12,25 @@ import eu.kanade.tachiyomi.source.model.FilterList
  * [4] page, index from 1
  * [5] type, 0=all, 1=清水, 2=有肉
  * [6] 1=manga, 2=novel, else=manga
- * [7] vip, 0=default, useless
+ * [7] vip, 2=all, 0=without, 1=hasvip
  */
 internal fun parseFilters(page: Int, filters: FilterList): String {
     var status = '2'
     var type = '0'
     var genre = "0"
     var sort = '1'
+    var vip = '2'
     for (filter in filters) {
         when (filter) {
             is StatusFilter -> status = STATUS_KEYS[filter.state]
             is TypeFilter -> type = TYPE_KEYS[filter.state]
             is GenreFilter -> if (filter.state > 0) genre = filter.values[filter.state]
             is SortFilter -> sort = SORT_KEYS[filter.state]
+            is VipFilter -> vip = VIP_KEYS[filter.state]
             else -> {}
         }
     }
-    return "1-$genre-$status-$sort-$page-$type-1-0"
+    return "1-$genre-$status-$sort-$page-$type-1-$vip"
 }
 
 internal class StatusFilter : Filter.Select<String>("状态", STATUS_NAMES)
@@ -47,3 +49,8 @@ internal class SortFilter : Filter.Select<String>("排序", SORT_NAMES)
 
 private val SORT_NAMES = arrayOf("顺序", "类似排行榜")
 private val SORT_KEYS = arrayOf('1', '2')
+
+internal class VipFilter : Filter.Select<String>("漫画权限", VIP_NAMES)
+
+private val VIP_NAMES = arrayOf("全部", "非会员可观看", "VIP 漫画")
+private val VIP_KEYS = arrayOf('2', '0', '1')

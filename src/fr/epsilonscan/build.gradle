@@ -3,7 +3,7 @@ ext {
     extClass = '.EpsilonScan'
     themePkg = 'madara'
     baseUrl = 'https://epsilonscan.to'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 

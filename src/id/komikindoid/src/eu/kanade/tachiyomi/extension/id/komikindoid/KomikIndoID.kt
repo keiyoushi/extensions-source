@@ -18,7 +18,7 @@ import java.util.Locale
 
 class KomikIndoID : ParsedHttpSource() {
     override val name = "KomikIndoID"
-    override val baseUrl = "https://komikindo.rip"
+    override val baseUrl = "https://komikindo.ch"
     override val lang = "id"
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient
@@ -40,7 +40,7 @@ class KomikIndoID : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
     override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun popularMangaNextPageSelector() = "a.next.page-numbers"
+    override fun popularMangaNextPageSelector() = "#load-more-manga"
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
