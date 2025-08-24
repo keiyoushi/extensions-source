@@ -38,10 +38,7 @@ class Ikiru() : ParsedHttpSource(), ConfigurableSource {
     override val lang = "id"
     override val supportsLatest = true
 
-    override val baseUrl: String get() = when {
-        isCi -> defaultBaseUrl
-        else -> preferences.prefBaseUrl
-    }
+    override val baseUrl: String get() = preferences.prefBaseUrl
 
     private val isCi = System.getenv("CI") == "true"
 
