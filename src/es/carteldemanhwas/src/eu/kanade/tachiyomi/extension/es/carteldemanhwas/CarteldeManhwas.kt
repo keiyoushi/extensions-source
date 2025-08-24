@@ -10,7 +10,7 @@ class CarteldeManhwas : MangaThemesia(
     "Cartel de Manhwas",
     "https://carteldemanhwas.net",
     "es",
-    mangaUrlDirectory = "/proyectos",
+    mangaUrlDirectory = "/serie",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
 
