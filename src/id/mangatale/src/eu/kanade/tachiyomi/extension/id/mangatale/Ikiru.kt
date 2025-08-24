@@ -134,7 +134,7 @@ class Ikiru : ParsedHttpSource() {
 
         val response = client.newCall(GET(chapterListUrl, headers)).execute()
 
-        response.asJsoup().select("#chapter-list .cursor-pointer a").asReversed().map { element ->
+        response.asJsoup().select("#chapter-list .cursor-pointer a").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
                 name = element.select("span").text()
