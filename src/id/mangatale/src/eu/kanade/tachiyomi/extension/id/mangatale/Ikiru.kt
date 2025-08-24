@@ -29,7 +29,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Ikiru() : ParsedHttpSource(), ConfigurableSource {
+class Ikiru: ParsedHttpSource(), ConfigurableSource {
     // Formerly "MangaTale"
     override val id = 1532456597012176985
 
