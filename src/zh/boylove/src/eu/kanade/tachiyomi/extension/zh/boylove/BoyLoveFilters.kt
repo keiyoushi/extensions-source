@@ -33,7 +33,7 @@ internal fun parseFilters(page: Int, filters: FilterList): String {
         }
     }
 
-    var tags = when {
+    val tags = when {
         region == "0" && genre == "0" -> "0"
         region == "0" && genre != "0" -> genre
         region != "0" && genre == "0" -> region
