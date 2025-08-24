@@ -41,8 +41,9 @@ class ChapterDto(
     @SerialName("IsPurchased") private val isPurchased: Boolean,
     @SerialName("IsFree") private val isFree: Boolean,
 ) {
-    fun toSChapter() = SChapter.create().apply {
-        url = if (isUpcoming) "" else "/Comic/sas/$bookID"
+    fun toSChapter(): SChapter? = SChapter.create().apply {
+        if (isUpcoming) return null
+        url = "/Comic/sas/$bookID"
         // Append lock emoji to name if not readable
         name = if (isFree || isPurchased) vol else "\uD83D\uDD12$vol"
     }

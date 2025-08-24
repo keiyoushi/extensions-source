@@ -108,9 +108,9 @@ class Tongli : HttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<List<ChapterDto>>().map {
+        return response.parseAs<List<ChapterDto>>().mapNotNull {
             it.toSChapter()
-        }.reversed().filter { it.url.isNotEmpty() } // Do not display upcoming chapters
+        }.reversed()
     }
 
     override fun getMangaUrl(manga: SManga): String {
