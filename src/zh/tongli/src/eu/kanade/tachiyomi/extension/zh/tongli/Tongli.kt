@@ -168,15 +168,19 @@ class Tongli : HttpSource(), ConfigurableSource {
             ).execute().parseAs<TokenResponseDto>()
         } catch (e: SerializationException) {
             // Remove email/password after failed login
-            preferences.edit().putString("EMAIL", "").apply()
-            preferences.edit().putString("PASSWORD", "").apply()
+            preferences.edit()
+                .putString("EMAIL", "")
+                .putString("PASSWORD", "")
+                .apply()
             throw Exception("登录失败")
         }
-        preferences.edit().putString("TOKEN", response.idToken).apply()
-        preferences.edit().putString("REFRESHTOKEN", response.refreshToken).apply()
         val currentTimeMillis = System.currentTimeMillis()
-        // Token expires after one hour
-        preferences.edit().putLong("EXPIRES", currentTimeMillis + 3600000).apply()
+        preferences.edit()
+            .putString("TOKEN", response.idToken)
+            .putString("REFRESHTOKEN", response.refreshToken)
+            // Token expires after one hour
+            .putLong("EXPIRES", currentTimeMillis + 3600000)
+            .apply()
         return response.idToken
     }
 
@@ -191,10 +195,12 @@ class Tongli : HttpSource(), ConfigurableSource {
                 requestBody,
             ),
         ).execute().parseAs<TokenResponseDto>()
-        preferences.edit().putString("TOKEN", response.idToken).apply()
-        preferences.edit().putString("REFRESHTOKEN", response.refreshToken).apply()
         val currentTimeMillis = System.currentTimeMillis()
-        preferences.edit().putLong("EXPIRES", currentTimeMillis + 3600000).apply()
+        preferences.edit()
+            .putString("TOKEN", response.idToken)
+            .putString("REFRESHTOKEN", response.refreshToken)
+            .putLong("EXPIRES", currentTimeMillis + 3600000)
+            .apply()
         return response.idToken
     }
 
@@ -210,10 +216,12 @@ class Tongli : HttpSource(), ConfigurableSource {
                 requestBody,
             ),
         ).execute().parseAs<TokenResponseDto>()
-        preferences.edit().putString("TOKEN", response.idToken).apply()
-        preferences.edit().putString("REFRESHTOKEN", response.refreshToken).apply()
         val currentTimeMillis = System.currentTimeMillis()
-        preferences.edit().putLong("EXPIRES", currentTimeMillis + 3600000).apply()
+        preferences.edit()
+            .putString("TOKEN", response.idToken)
+            .putString("REFRESHTOKEN", response.refreshToken)
+            .putLong("EXPIRES", currentTimeMillis + 3600000)
+            .apply()
         return response.idToken
     }
 
