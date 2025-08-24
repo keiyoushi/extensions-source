@@ -123,7 +123,7 @@ class Tongli : HttpSource(), ConfigurableSource {
 
     override fun pageListRequest(chapter: SChapter): Request {
         val newHeaders = headersBuilder().add("Authorization: Bearer ${getToken()}").build()
-        return GET(apiUrl + chapter.url, newHeaders)
+        return GET("$apiUrl/Comic/sas/${chapter.url}", newHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
