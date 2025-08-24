@@ -85,17 +85,7 @@ class Tongli : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val manga = response.parseAs<DetailsDto>().toSManga()
-        if (manga.description.isNullOrEmpty()) {
-            // No description from manga, get description from first chapter
-            val bookGroupID = response.request.url.queryParameter("bookGroupID")
-            val isSerial = response.request.url.queryParameter("isSerial")
-            val bookID = client.newCall(GET("$apiUrl/Book/BookVol/$bookGroupID?isSerial=$isSerial", headers)).execute()
-                .parseAs<List<ChapterDto>>()[0].bookID
-            val newResponse = client.newCall(GET("$apiUrl/Book?bookID=$bookID", headers)).execute()
-            manga.description = newResponse.parseAs<DetailsDto>().introduction
-        }
-        return manga
+        return response.parseAs<DetailsDto>().toSManga()
     }
 
     // Chapters

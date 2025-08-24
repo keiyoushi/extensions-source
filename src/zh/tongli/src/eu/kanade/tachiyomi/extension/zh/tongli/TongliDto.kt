@@ -35,7 +35,7 @@ class LatestResponseDto(
 
 @Serializable
 class ChapterDto(
-    @SerialName("BookID") val bookID: String,
+    @SerialName("BookID") private val bookID: String,
     @SerialName("Vol") private val vol: String,
     @SerialName("IsUpcoming") private val isUpcoming: Boolean,
     @SerialName("IsPurchased") private val isPurchased: Boolean,
@@ -54,7 +54,7 @@ class DetailsDto(
     @SerialName("Title") private val title: String,
     @SerialName("CoverURL") private val coverURL: String,
     @SerialName("Authors") private val authors: List<AuthorDto>,
-    @SerialName("Introduction") val introduction: String,
+    @SerialName("Introduction") private val introduction: String,
 ) {
     fun toSManga() = SManga.create().apply {
         title = this@DetailsDto.title
