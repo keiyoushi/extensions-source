@@ -55,25 +55,25 @@ class YellowNote(
     // yyyy.MM.dd
     private val dateRegex = """\d{4}\.\d{2}\.\d{2}""".toRegex()
 
+    // <div role="img" class="img" style="background-image:url('https://img.xchina.io/photos/641aea8f589cb/0068_600x0.webp');"></div>
     private val styleUrlRegex = """background-image\s*:\s*url\('([^']+)'\)""".toRegex()
 
     // 100P + 2V
     private val mediaCountRegex = """\d+P( \+ \d+V)?""".toRegex()
-
-    private val selectParts = listOf("photo", "amateur")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         YellowNotePreferences.buildPreferences(screen.context, intl)
             .forEach(screen::addPreference)
     }
 
-    override fun simpleMangaSelector() = selectParts.joinToString(",") { "div.list.$it-list > div.item.$it" }
+    override fun simpleMangaSelector() = "div.list.photo-list > div.item.photo, div.list.amateur-list > div.item.amateur"
 
     override fun simpleMangaFromElement(element: Element) = SManga.create().apply {
         val mangaEl = element.selectFirst("a")!!
         setUrlWithoutDomain(mangaEl.absUrl("href"))
 
         val mediaCount = element.select("div.tags > div")
+            .asSequence()
             .map { it.text() }
             .firstOrNull { mediaCountRegex.matches(it) }
             ?.let { "($this)" }
@@ -86,7 +86,6 @@ class YellowNote(
     }
 
     fun parseUrlFormStyle(element: Element?): String? {
-        // <div role="img" class="img" style="background-image:url('https://img.xchina.io/photos/641aea8f589cb/0068_600x0.webp');"></div>
         return element
             ?.attr("style")
             ?.let { styleUrlRegex.find(it) }
@@ -158,14 +157,14 @@ class YellowNote(
     }
 
     private fun parseUploadDateFromVersionInfo(doc: Document): Long? {
-        val navsElement = doc.selectFirst("div.tab-navs")
-        val versionInfoElementIndex = navsElement
-            ?.select("div.tab-nav")
-            ?.indexOfFirst { it.attr("data-tab") == "tab_68a8963ddf8a5_5" }
-        if (versionInfoElementIndex == null || versionInfoElementIndex == -1) {
-            return null
-        }
-        return navsElement.select("div.info-card:nth-child(${versionInfoElementIndex + 1}) > div.text")
+        return doc.select("div.tab-contents")
+            .asSequence()
+            // info
+            .filter { it.id().endsWith("_5") }
+            // info items
+            .map { it.select("div.info-card > div.text") }
+            .flatten()
+            .filterNotNull()
             .map { it.text() }
             .firstNotNullOfOrNull { dateRegex.find(it)?.value }
             ?.let { dateFormat.tryParse(it) }
@@ -173,8 +172,11 @@ class YellowNote(
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select(simpleMangaSelector())
-            .map { imageElement -> parseUrlFormStyle(imageElement.selectFirst("div.img"))!! }
-            .mapIndexed { i, url -> Page(i, imageUrl = url) }
+            .mapIndexed { i, imageElement ->
+                val url = parseUrlFormStyle(imageElement.selectFirst("div.img"))!!
+                Page(i, imageUrl = url)
+            }
+            .toList()
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
