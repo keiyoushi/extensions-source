@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -23,9 +23,8 @@ class Kiryuu : MangaThemesia("Kiryuu", "https://kiryuu02.com", "id", dateFormat 
                 }
                 // Fix image content type
                 val type = IMG_CONTENT_TYPE.toMediaType()
-                val body = response.body.bytes().toResponseBody(type)
-                return@addInterceptor response.newBuilder().body(body)
-                    .header("Content-Type", IMG_CONTENT_TYPE).build()
+                val body = response.body.source().asResponseBody(type)
+                return@addInterceptor response.newBuilder().body(body).build()
             }
             response
         }

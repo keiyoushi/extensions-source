@@ -31,11 +31,11 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.util.Calendar
@@ -63,8 +63,8 @@ abstract class Luscious(
     private val rewriteOctetStream: Interceptor = Interceptor { chain ->
         val originalResponse: Response = chain.proceed(chain.request())
         if (originalResponse.headers("Content-Type").contains("application/octet-stream") && originalResponse.request.url.toString().contains(".webp")) {
-            val orgBody = originalResponse.body.bytes()
-            val newBody = orgBody.toResponseBody("image/webp".toMediaTypeOrNull())
+            val orgBody = originalResponse.body.source()
+            val newBody = orgBody.asResponseBody("image/webp".toMediaType())
             originalResponse.newBuilder()
                 .body(newBody)
                 .build()

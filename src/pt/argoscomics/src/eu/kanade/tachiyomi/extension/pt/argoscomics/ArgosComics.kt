@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
@@ -49,9 +49,8 @@ class ArgosComics : Madara(
                 if (mime == "application/octet-stream" || mime == null) {
                     // Fix image content type
                     val type = "image/jpeg".toMediaType()
-                    val body = response.body.bytes().toResponseBody(type)
-                    return@addInterceptor response.newBuilder().body(body)
-                        .header("Content-Type", "image/jpeg").build()
+                    val body = response.body.source().asResponseBody(type)
+                    return@addInterceptor response.newBuilder().body(body).build()
                 }
             }
             response

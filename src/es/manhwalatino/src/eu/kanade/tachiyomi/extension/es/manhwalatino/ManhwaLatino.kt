@@ -6,10 +6,10 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -30,8 +30,8 @@ class ManhwaLatino : Madara(
                 .build()
             val response = chain.proceed(request.newBuilder().headers(headers).build())
             if (response.headers("Content-Type").contains("application/octet-stream") && response.request.url.toString().endsWith(".jpg")) {
-                val orgBody = response.body.bytes()
-                val newBody = orgBody.toResponseBody("image/jpeg".toMediaTypeOrNull())
+                val orgBody = response.body.source()
+                val newBody = orgBody.asResponseBody("image/jpeg".toMediaType())
                 response.newBuilder()
                     .body(newBody)
                     .build()

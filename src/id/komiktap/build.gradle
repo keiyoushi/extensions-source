@@ -3,7 +3,7 @@ ext {
     extClass = '.Komiktap'
     themePkg = 'mangathemesia'
     baseUrl = 'https://komiktap.info'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = true
 }
 
