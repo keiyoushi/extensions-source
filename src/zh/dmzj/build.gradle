@@ -1,7 +1,0 @@
-ext {
-    extName = 'DMZJ'
-    extClass = '.Dmzj'
-    extVersionCode = 46
-}
-
-apply from: "$rootDir/common.gradle"
