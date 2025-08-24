@@ -157,17 +157,13 @@ class YellowNote(
     }
 
     private fun parseUploadDateFromVersionInfo(doc: Document): Long? {
-        return doc.select("div.tab-contents")
+        return doc.select("""div.tab-contents > div.tab-content[id^="tab_"][id$="_5"] div.text""")
             .asSequence()
-            // info
-            .filter { it.id().endsWith("_5") }
-            // info items
-            .map { it.select("div.info-card > div.text") }
-            .flatten()
-            .filterNotNull()
             .map { it.text() }
-            .firstNotNullOfOrNull { dateRegex.find(it)?.value }
-            ?.let { dateFormat.tryParse(it) }
+            .map { dateRegex.find(it)?.value }
+            .filterNotNull()
+            .map { dateFormat.tryParse(it) }
+            .find { it != 0L }
     }
 
     private val imageSelector = "div.list.photo-items > div.item.photo-image, div.list.amateur-items > div.item.amateur-image"
@@ -177,7 +173,6 @@ class YellowNote(
                 val url = parseUrlFormStyle(imageElement.selectFirst("div.img"))!!
                 Page(i, imageUrl = url)
             }
-            .toList()
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
