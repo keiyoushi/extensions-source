@@ -43,7 +43,7 @@ class Roumanwu : HttpSource(), ConfigurableSource {
             SManga.create().apply {
                 title = it.selectFirst("div.truncate")!!.text()
                 url = it.attr("href")
-                thumbnail_url = it.select("div.bg-cover").attr("style").substringAfter("background-image:url(\"").substringBefore("\")")
+                thumbnail_url = it.selectFirst("div.bg-cover")!!.attr("style").substringAfter("background-image:url(\"").substringBefore("\")")
             }
         }
     }
