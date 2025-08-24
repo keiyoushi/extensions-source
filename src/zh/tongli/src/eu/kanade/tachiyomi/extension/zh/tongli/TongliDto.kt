@@ -59,9 +59,9 @@ class DetailsDto(
     fun toSManga() = SManga.create().apply {
         title = this@DetailsDto.title
         thumbnail_url = coverURL
-        author = authors.joinToString(transform = {
+        author = authors.joinToString {
             if (it.title.isNullOrEmpty()) it.name else "${it.title}：${it.name}"
-        },)
+        }
         description = introduction
     }
 }
