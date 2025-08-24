@@ -1,19 +1,14 @@
 package eu.kanade.tachiyomi.extension.id.mangatale
 
-import android.content.SharedPreferences
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
@@ -26,16 +21,14 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Ikiru : ParsedHttpSource(), ConfigurableSource {
+class Ikiru : ParsedHttpSource() {
     // Formerly "MangaTale"
     override val id = 1532456597012176985
 
     override val name = "Ikiru"
-    private val defaultBaseUrl: String = "https://01.ikiru.wtf"
+    override val baseUrl = "https://01.ikiru.wtf"
     override val lang = "id"
     override val supportsLatest = true
-
-    override val baseUrl: String get() = preferences.prefBaseUrl
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(12, 3)
@@ -177,46 +170,7 @@ class Ikiru : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private var _cachedBaseUrl: String? = null
-    private val SharedPreferences.prefBaseUrl: String
-        get() {
-            if (_cachedBaseUrl == null) {
-                _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
-            }
-            return _cachedBaseUrl!!
-        }
-
-    private val preferences = getPreferences {
-        getString(BASE_URL_PREF_DEFAULT, defaultBaseUrl).let { domain ->
-            if (domain != defaultBaseUrl) {
-                edit()
-                    .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(BASE_URL_PREF_DEFAULT, defaultBaseUrl)
-                    .apply()
-            }
-        }
-    }
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = "Edit source URL"
-            summary = "$baseUrl $BASE_URL_PREF_SUMMARY"
-            dialogTitle = title
-            dialogMessage = "Default URL:\n$defaultBaseUrl"
-            setDefaultValue(defaultBaseUrl)
-            setOnPreferenceChangeListener { pref, newValue ->
-                _cachedBaseUrl = newValue as? String
-                pref.summary = "${newValue as String} $BASE_URL_PREF_SUMMARY"
-                true
-            }
-        }.also { screen.addPreference(it) }
-    }
-
     companion object {
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
-        private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_SUMMARY = "\nFor temporary use, if the extension is updated the change will be lost."
-        private const val BASE_URL_PREF_DEFAULT = "defaultBaseUrl"
     }
 }
