@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.tongli
 
 import android.content.SharedPreferences
+import android.text.InputType
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -232,6 +233,9 @@ class Tongli : HttpSource(), ConfigurableSource {
                 key = "PASSWORD"
                 title = "密码"
                 summary = "该配置被修改后，会清空令牌(Token)以便重新登录；如果登录失败，会清空该配置"
+                setOnBindEditTextListener {
+                    it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                }
                 setOnPreferenceChangeListener { _, _ ->
                     // clean token after email/password changed
                     preferences.edit().putString("TOKEN", "").apply()
