@@ -157,13 +157,11 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
     }
 
     private fun parseUploadDateFromVersionInfo(doc: Document): Long? {
-        return doc.select("""div.tab-contents > div.tab-content[id^="tab_"][id$="_5"] div.text""")
-            .asSequence()
-            .map { it.text() }
-            .map { dateRegex.find(it)?.value }
-            .filterNotNull()
-            .map { dateFormat.tryParse(it) }
-            .find { it != 0L }
+        for (info in doc.select("div.tab-content > div.info-card div.text")) {
+            val date = dateRegex.find(info.text()) ?: continue
+            return dateFormat.parse(date.value)!!.time
+        }
+        return null
     }
 
     private val imageSelector = "div.list.photo-items > div.item.photo-image, div.list.amateur-items > div.item.amateur-image"
