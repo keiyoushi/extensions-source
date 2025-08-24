@@ -20,7 +20,7 @@ class MangaDto(
     @SerialName("IsSerial") private val isSerial: Boolean,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = "/Book/BookVol/$bookGroupID?bookID=null&isSerial=$isSerial"
+        url = "$bookGroupID,$isSerial"
         title = bookTitle
         thumbnail_url = bookCoverURL
     }

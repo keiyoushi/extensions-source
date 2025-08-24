@@ -79,8 +79,8 @@ class Tongli : HttpSource(), ConfigurableSource {
     // Details
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val bookGroupID = manga.url.substringAfter("/Book/BookVol/").substringBefore("?")
-        val isSerial = manga.url.substringAfter("isSerial=")
+        val bookGroupID = manga.url.substringBefore(",")
+        val isSerial = manga.url.substringAfter(",")
         return GET("$apiUrl/Book?bookGroupID=$bookGroupID&isSerial=$isSerial", headers)
     }
 
@@ -102,7 +102,9 @@ class Tongli : HttpSource(), ConfigurableSource {
 
     override fun chapterListRequest(manga: SManga): Request {
         val newHeaders = headersBuilder().add("Authorization: Bearer ${getToken()}").build()
-        return GET(apiUrl + manga.url, newHeaders)
+        val bookGroupID = manga.url.substringBefore(",")
+        val isSerial = manga.url.substringAfter(",")
+        return GET("$apiUrl/Book/BookVol/$bookGroupID?bookID=null&isSerial=$isSerial", newHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -112,8 +114,8 @@ class Tongli : HttpSource(), ConfigurableSource {
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        val bookGroupID = manga.url.substringAfter("/Book/BookVol/").substringBefore("?")
-        val isSerial = manga.url.substringAfter("isSerial=")
+        val bookGroupID = manga.url.substringBefore(",")
+        val isSerial = manga.url.substringAfter(",")
         return "$baseUrl/book?id=$bookGroupID&isGroup=true&isSerials=$isSerial"
     }
 
