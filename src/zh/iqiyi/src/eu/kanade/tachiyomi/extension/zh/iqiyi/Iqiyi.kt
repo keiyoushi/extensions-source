@@ -20,7 +20,8 @@ import uy.kohesive.injekt.injectLazy
 
 class Iqiyi : ParsedHttpSource() {
     override val name: String = "爱奇艺叭嗒"
-    override val lang: String = "zh"
+    override val lang get() = "zh-Hans"
+    override val id get() = 2198877009406729694
     override val supportsLatest: Boolean = true
     override val baseUrl: String = "https://www.iqiyi.com/manhua"
     private val json: Json by injectLazy()
