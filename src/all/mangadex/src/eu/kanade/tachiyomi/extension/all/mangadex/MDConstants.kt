@@ -30,7 +30,6 @@ object MDConstants {
     const val apiMangaUrl = "$apiUrl/manga"
     const val apiChapterUrl = "$apiUrl/chapter"
     const val apiListUrl = "$apiUrl/list"
-    const val atHomePostUrl = "https://api.mangadex.network/report"
     val whitespaceRegex = "\\s".toRegex()
 
     val mdAtHomeTokenLifespan = 5.minutes.inWholeMilliseconds
