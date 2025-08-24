@@ -44,7 +44,7 @@ class ChapterDto(
     fun toSChapter(): SChapter? = SChapter.create().apply {
         if (isUpcoming) return null
         url = bookID
-        // Append lock emoji to name if not readable
+        // Prepend lock emoji to name if not readable
         name = if (isFree || isPurchased) vol else "\uD83D\uDD12$vol"
     }
 }
