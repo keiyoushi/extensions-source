@@ -147,7 +147,7 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
             .addQueryParameter("action", "chapter_list")
             .build()
 
-        val response = client.newCall(GET(chapterListUrl.toString(), headers)).execute()
+        val response = client.newCall(GET(chapterListUrl, headers)).execute()
 
         response.asJsoup().select("#chapter-list .cursor-pointer a").asReversed().map { element ->
             SChapter.create().apply {
