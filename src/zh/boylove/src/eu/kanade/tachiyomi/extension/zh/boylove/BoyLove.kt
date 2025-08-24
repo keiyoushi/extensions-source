@@ -168,6 +168,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
             Filter.Header("分类筛选（搜索文本时无效）"),
             StatusFilter(),
             TypeFilter(),
+            RegionFilter(),
             genreFilter,
             Filter.Header("若要观看VIP漫画，请先在Webview中登录网站，并确认您的账户已达到Lv3"),
             VipFilter(),

@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 /*
  * 1-0-2-1-1-0-1-0
  * [0] cate, useless
- * [1] tag(genre), 0=all
+ * [1] tag(genre and region), 0=all
  * [2] done(status), 2=all, 0=ongoing, 1=completed
  * [3] order(sort), 1=normal
  * [4] page, index from 1
@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 internal fun parseFilters(page: Int, filters: FilterList): String {
     var status = '2'
     var type = '0'
+    var region = "0"
     var genre = "0"
     var sort = '1'
     var vip = '2'
@@ -24,13 +25,22 @@ internal fun parseFilters(page: Int, filters: FilterList): String {
         when (filter) {
             is StatusFilter -> status = STATUS_KEYS[filter.state]
             is TypeFilter -> type = TYPE_KEYS[filter.state]
+            is RegionFilter -> region = REGION_KEYS[filter.state]
             is GenreFilter -> if (filter.state > 0) genre = filter.values[filter.state]
             is SortFilter -> sort = SORT_KEYS[filter.state]
             is VipFilter -> vip = VIP_KEYS[filter.state]
             else -> {}
         }
     }
-    return "1-$genre-$status-$sort-$page-$type-1-$vip"
+
+    val tags = when {
+        region == "0" && genre == "0" -> "0"
+        region == "0" && genre != "0" -> genre
+        region != "0" && genre == "0" -> region
+        else -> region + "+" + genre
+    }
+
+    return "1-$tags-$status-$sort-$page-$type-1-$vip"
 }
 
 internal class StatusFilter : Filter.Select<String>("状态", STATUS_NAMES)
@@ -42,6 +52,11 @@ internal class TypeFilter : Filter.Select<String>("类型", TYPE_NAMES)
 
 private val TYPE_NAMES = arrayOf("全部", "清水", "有肉")
 private val TYPE_KEYS = arrayOf('0', '1', '2')
+
+internal class RegionFilter : Filter.Select<String>("地区", REGION_NAMES)
+
+private val REGION_NAMES = arrayOf("全部", "日漫", "韩漫", "国漫", "台漫")
+private val REGION_KEYS = arrayOf("0", "日漫", "韩漫", "国漫", "台漫")
 
 internal class GenreFilter(names: Array<String>) : Filter.Select<String>("标签", names)
 
