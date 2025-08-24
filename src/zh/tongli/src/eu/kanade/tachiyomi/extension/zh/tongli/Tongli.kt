@@ -33,7 +33,7 @@ class Tongli : HttpSource(), ConfigurableSource {
     private val apiUrl = "https://api.tongli.tw"
 
     private val preferences: SharedPreferences = getPreferences()
-    val jsonMediaType = "application/json;charset=UTF-8".toMediaType()
+    private val jsonMediaType = "application/json;charset=UTF-8".toMediaType()
 
     // Popular
 
