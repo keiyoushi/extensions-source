@@ -92,7 +92,7 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
             .addFormDataPart("query", query)
             .addFormDataPart("page", "$page")
             .addFormDataPart("genre", query)
-            .addFormDataPart("nonce", searchNonce ?: "")
+            .addFormDataPart("nonce", searchNonce!!)
             .build()
 
         val requestHeaders: Headers = Headers.Builder()
