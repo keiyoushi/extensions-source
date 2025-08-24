@@ -1,7 +1,7 @@
 ext {
     extName = 'COLAMANGA'
     extClass = '.Onemanhua'
-    extVersionCode = 25
+    extVersionCode = 26
     isNsfw = true
 }
 
