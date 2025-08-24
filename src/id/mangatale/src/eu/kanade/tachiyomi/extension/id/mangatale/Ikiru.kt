@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.mangatale
 
 import android.content.SharedPreferences
-import android.util.Log
-import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -17,7 +15,6 @@ import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
-import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -29,7 +26,7 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Ikiru: ParsedHttpSource(), ConfigurableSource {
+class Ikiru : ParsedHttpSource(), ConfigurableSource {
     // Formerly "MangaTale"
     override val id = 1532456597012176985
 
@@ -39,8 +36,6 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
     override val baseUrl: String get() = preferences.prefBaseUrl
-
-    private val isCi = System.getenv("CI") == "true"
 
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(12, 3)
@@ -86,20 +81,18 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
             .setType(MultipartBody.FORM)
             .addFormDataPart("query", query)
             .addFormDataPart("page", "$page")
-            .addFormDataPart("genre", query)
             .addFormDataPart("nonce", searchNonce!!)
             .build()
 
-
-        return POST("$baseUrl/ajax-call?action=advanced_search", requestHeaders, requestBody)
+        return POST("$baseUrl/ajax-call?action=advanced_search", body = requestBody)
     }
 
     override fun searchMangaSelector() = "div.overflow-hidden:has(a.font-medium)"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.select("a").attr("href"))
-        thumbnail_url = element.select("img").attr("abs:src")
-        title = element.select("a.font-medium").text()
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        title = element.selectFirst("a.font-medium")!!.text()
         status = parseStatus(element.select("div span ~ p").text())
     }
 
@@ -110,18 +103,20 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
         ?.substringAfter("manga_id=")?.substringBefore("&")
 
     override fun mangaDetailsParse(document: Document): SManga {
-        document.select("article > section").let { element ->
+        document.selectFirst("article > section").let { element ->
             return SManga.create().apply {
-                thumbnail_url = element.select(".contents img").attr("abs:src")
-                title = element.select("h1.font-bold").text()
+                thumbnail_url = element!!.selectFirst(".contents img")!!.absUrl("src")
+                title = element.selectFirst("h1.font-bold")!!.text()
                 // TODO: prevent status value from browse change back to default
 
-                val altNames = element.select("h1 ~ .line-clamp-1").text()
-                val synopsis = element.select("#tabpanel-description div[data-show='false']").text()
-                val mangaId = "\n\nID: ${document.getMangaId()}" // for fetching chapter list
-                description = when (altNames) {
-                    null -> synopsis + mangaId
-                    else -> "$synopsis\n\nAlternative Title: $altNames$mangaId"
+                val altNames = element.selectFirst("h1 ~ .line-clamp-1")!!.text()
+                val synopsis = element.selectFirst("#tabpanel-description div[data-show='false']")!!.text()
+                description = buildString {
+                    append(synopsis)
+                    append("\n\nAlternative Title: ", altNames)
+                    document.getMangaId()?.also {
+                        append("\n\nID: ", it) // for fetching chapter list
+                    }
                 }
                 genre = element.select(".space-y-2 div:has(img) p, #tabpanel-description .flex-wrap span").joinToString { it.text() }
             }
@@ -146,7 +141,7 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
 
         response.asJsoup().select("#chapter-list .cursor-pointer a").asReversed().map { element ->
             SChapter.create().apply {
-                url = element.attr("href").substringAfter(baseUrl)
+                setUrlWithoutDomain(element.attr("href"))
                 name = element.select("span").text()
                 date_upload = dateFormat.tryParse(element.select("time").attr("datetime"))
             }
@@ -167,25 +162,34 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     // Others
+    private fun parseStatus(element: String?): Int {
+        if (element.isNullOrEmpty()) {
+            return SManga.UNKNOWN
+        }
+        return when (element.lowercase()) {
+            "ongoing" -> SManga.ONGOING
+            "completed" -> SManga.COMPLETED
+            "on hiatus" -> SManga.ON_HIATUS
+            "canceled" -> SManga.CANCELLED
+            else -> SManga.UNKNOWN
+        }
+    }
+
     private var _cachedBaseUrl: String? = null
-    private var SharedPreferences.prefBaseUrl: String
+    private val SharedPreferences.prefBaseUrl: String
         get() {
             if (_cachedBaseUrl == null) {
                 _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
             }
             return _cachedBaseUrl!!
         }
-        set(value) {
-            _cachedBaseUrl = value
-            edit().putString(BASE_URL_PREF, value).apply()
-        }
 
     private val preferences = getPreferences {
-        getString(DEFAULT_BASE_URL_PREF, defaultBaseUrl).let { domain ->
+        getString(BASE_URL_PREF_DEFAULT, defaultBaseUrl).let { domain ->
             if (domain != defaultBaseUrl) {
                 edit()
                     .putString(BASE_URL_PREF, defaultBaseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .putString(BASE_URL_PREF_DEFAULT, defaultBaseUrl)
                     .apply()
             }
         }
@@ -195,36 +199,22 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
             title = "Edit source URL"
-            summary = "$baseUrl Restart aplikasi jika belum berubah \nFor temporary use, if the extension is updated the change will be lost."
+            summary = "$baseUrl $BASE_URL_PREF_SUMMARY"
             dialogTitle = title
             dialogMessage = "Default URL:\n$defaultBaseUrl"
             setDefaultValue(defaultBaseUrl)
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart the application to apply the changes", Toast.LENGTH_LONG).show()
+            setOnPreferenceChangeListener { pref, newValue ->
+                _cachedBaseUrl = newValue as? String
+                pref.summary = "${newValue as String} $BASE_URL_PREF_SUMMARY"
                 true
             }
         }.also { screen.addPreference(it) }
     }
 
     companion object {
-        private fun parseStatus(element: String?): Int {
-            if (element.isNullOrEmpty()) {
-                return SManga.UNKNOWN
-            }
-            return when (element.lowercase()) {
-                "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                "on hiatus" -> SManga.ON_HIATUS
-                "canceled" -> SManga.CANCELLED
-                else -> SManga.UNKNOWN
-            }
-        }
-
-        private val dateFormat by lazy {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
-        }
-
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
         private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val BASE_URL_PREF_SUMMARY = "\nFor temporary use, if the extension is updated the change will be lost."
+        private const val BASE_URL_PREF_DEFAULT = "defaultBaseUrl"
     }
 }
