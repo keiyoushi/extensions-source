@@ -90,10 +90,10 @@ class Ikiru : ParsedHttpSource(), ConfigurableSource {
     override fun searchMangaSelector() = "div.overflow-hidden:has(a.font-medium)"
 
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
-        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
-        title = element.selectFirst("a.font-medium")!!.text()
-        status = parseStatus(element.select("div span ~ p").text())
+        setUrlWithoutDomain(element.selectFirst("a")?.absUrl("href") ?: "")
+        thumbnail_url = element.selectFirst("img")?.absUrl("src") ?: ""
+        title = element.selectFirst("a.font-medium")?.text() ?: ""
+        status = parseStatus(element.selectFirst("div span ~ p")?.text() ?: "")
     }
 
     override fun searchMangaNextPageSelector() = "div button:has(svg)"
@@ -105,15 +105,17 @@ class Ikiru : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document): SManga {
         document.selectFirst("article > section").let { element ->
             return SManga.create().apply {
-                thumbnail_url = element!!.selectFirst(".contents img")!!.absUrl("src")
-                title = element.selectFirst("h1.font-bold")!!.text()
+                thumbnail_url = element!!.selectFirst(".contents img")?.absUrl("src") ?: ""
+                title = element.selectFirst("h1.font-bold")?.text() ?: ""
                 // TODO: prevent status value from browse change back to default
 
-                val altNames = element.selectFirst("h1 ~ .line-clamp-1")!!.text()
-                val synopsis = element.selectFirst("#tabpanel-description div[data-show='false']")!!.text()
+                val altNames = element.selectFirst("h1 ~ .line-clamp-1")?.text() ?: ""
+                val synopsis = element.selectFirst("#tabpanel-description div[data-show='false']")?.text() ?: ""
                 description = buildString {
                     append(synopsis)
-                    append("\n\nAlternative Title: ", altNames)
+                    if (altNames.isNotEmpty()) {
+                        append("\n\nAlternative Title: ", altNames)
+                    }
                     document.getMangaId()?.also {
                         append("\n\nID: ", it) // for fetching chapter list
                     }
