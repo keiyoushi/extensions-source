@@ -1,14 +1,11 @@
 package eu.kanade.tachiyomi.extension.id.mangatale
 
 import android.content.SharedPreferences
-import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
@@ -20,6 +17,7 @@ import keiyoushi.utils.getPreferences
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import org.jsoup.nodes.Document
@@ -39,27 +37,9 @@ class Ikiru : ParsedHttpSource(), ConfigurableSource {
 
     override val baseUrl: String get() = preferences.prefBaseUrl
 
-    override val client by lazy {
-        network.cloudflareClient.newBuilder()
-            .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
-            .rateLimit(12, 3)
-            .build()
-    }
-
-    private val fetchedDomainUrl: String by lazy {
-        if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
-        try {
-            val initClient = network.cloudflareClient
-            val request = GET("https://ikiru.world", headers.newBuilder().removeAll("Referer").build()) // removing referer to act like their site. they use https://href.li/?https%3A%2F%2Fikiru.world
-            val response = initClient.newCall(request).execute()
-            val host = response.request.url.host
-            val newDomain = "https://$host"
-            preferences.prefBaseUrl = newDomain
-            newDomain
-        } catch (_: Exception) {
-            preferences.prefBaseUrl
-        }
-    }
+    override val client: OkHttpClient = super.client.newBuilder()
+        .rateLimit(12, 3)
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -198,20 +178,13 @@ class Ikiru : ParsedHttpSource(), ConfigurableSource {
     }
 
     private var _cachedBaseUrl: String? = null
-
-    private var SharedPreferences.prefBaseUrl: String
+    private val SharedPreferences.prefBaseUrl: String
         get() {
             if (_cachedBaseUrl == null) {
                 _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
             }
-            return _cachedBaseUrl ?: defaultBaseUrl
+            return _cachedBaseUrl!!
         }
-        set(value) {
-            _cachedBaseUrl = value
-            edit().putString(BASE_URL_PREF, value).apply()
-        }
-
-    private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, FETCH_DOMAIN_PREF_DEFAULT)
 
     private val preferences = getPreferences {
         getString(BASE_URL_PREF_DEFAULT, defaultBaseUrl).let { domain ->
@@ -225,14 +198,6 @@ class Ikiru : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
-            key = FETCH_DOMAIN_PREF
-            title = "Automatically fetch domain"
-            summary = "If enabled, the extension will try to find the current domain automatically." +
-                "\nDisable this if the domain is wrong and you want to change it manually."
-            setDefaultValue(FETCH_DOMAIN_PREF_DEFAULT)
-        }.also { screen.addPreference(it) }
-
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
             title = "Edit source URL"
@@ -240,8 +205,9 @@ class Ikiru : ParsedHttpSource(), ConfigurableSource {
             dialogTitle = title
             dialogMessage = "Default URL:\n$defaultBaseUrl"
             setDefaultValue(defaultBaseUrl)
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Restart the app to apply changes", Toast.LENGTH_LONG).show()
+            setOnPreferenceChangeListener { pref, newValue ->
+                _cachedBaseUrl = newValue as? String
+                pref.summary = "${newValue as String} $BASE_URL_PREF_SUMMARY"
                 true
             }
         }.also { screen.addPreference(it) }
@@ -250,9 +216,7 @@ class Ikiru : ParsedHttpSource(), ConfigurableSource {
     companion object {
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ENGLISH)
         private const val BASE_URL_PREF = "overrideBaseUrl"
-        private const val BASE_URL_PREF_DEFAULT = "defaultBaseUrl"
         private const val BASE_URL_PREF_SUMMARY = "\nFor temporary use, if the extension is updated the change will be lost."
-        private const val FETCH_DOMAIN_PREF = "fetchDomain"
-        private const val FETCH_DOMAIN_PREF_DEFAULT = true
+        private const val BASE_URL_PREF_DEFAULT = "defaultBaseUrl"
     }
 }
