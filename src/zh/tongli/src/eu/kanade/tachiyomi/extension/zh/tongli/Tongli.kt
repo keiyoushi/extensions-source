@@ -33,6 +33,7 @@ class Tongli : HttpSource(), ConfigurableSource {
     private val apiUrl = "https://api.tongli.tw"
 
     private val preferences: SharedPreferences = getPreferences()
+    val jsonMediaType = "application/json;charset=UTF-8".toMediaType()
 
     // Popular
 
@@ -155,7 +156,7 @@ class Tongli : HttpSource(), ConfigurableSource {
             put("email", email)
             put("password", password)
             put("returnSecureToken", true)
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
+        }.toString().toRequestBody(jsonMediaType)
         val response: TokenResponseDto
         try {
             response = client.newCall(
@@ -182,7 +183,7 @@ class Tongli : HttpSource(), ConfigurableSource {
     private fun loginAnonymous(): String {
         val requestBody = buildJsonObject {
             put("returnSecureToken", true)
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
+        }.toString().toRequestBody(jsonMediaType)
         val response = client.newCall(
             POST(
                 "https://www.googleapis.com/identitytoolkit/v3/relyingparty/signupNewUser?key=AIzaSyAJbYmo7KyhM_7CDXjjFXnp8bdRTNgbUIE",
@@ -201,7 +202,7 @@ class Tongli : HttpSource(), ConfigurableSource {
         val requestBody = buildJsonObject {
             put("grant_type", "refresh_token")
             put("refresh_token", refreshToken)
-        }.toString().toRequestBody(JSON_MEDIA_TYPE)
+        }.toString().toRequestBody(jsonMediaType)
         val response = client.newCall(
             POST(
                 "https://securetoken.googleapis.com/v1/token?key=AIzaSyAJbYmo7KyhM_7CDXjjFXnp8bdRTNgbUIE",
@@ -243,9 +244,5 @@ class Tongli : HttpSource(), ConfigurableSource {
                 }
             }.let(screen::addPreference)
         }
-    }
-
-    companion object {
-        val JSON_MEDIA_TYPE = "application/json;charset=UTF-8".toMediaType()
     }
 }
