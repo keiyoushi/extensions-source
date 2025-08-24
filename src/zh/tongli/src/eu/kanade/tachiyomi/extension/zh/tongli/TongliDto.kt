@@ -45,7 +45,7 @@ class ChapterDto(
         if (isUpcoming) return null
         url = bookID
         // Prepend lock emoji to name if not readable
-        name = if (isFree || isPurchased) vol else "\uD83D\uDD12$vol"
+        name = if (isFree || isPurchased) vol else "\uD83D\uDD12 $vol"
     }
 }
 
