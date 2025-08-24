@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.all.yellownote
 
+import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.all.yellownote.YellowNoteFilters.SortSelector
 import eu.kanade.tachiyomi.extension.all.yellownote.YellowNotePreferences.baseUrl
+import eu.kanade.tachiyomi.extension.all.yellownote.YellowNotePreferences.language
 import eu.kanade.tachiyomi.extension.all.yellownote.YellowNotePreferences.preferenceMigration
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.network.GET
@@ -25,12 +27,10 @@ import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class YellowNote(
-    override val lang: String,
-    private val subdomain: String? = null,
-) : SimpleParsedHttpSource(), ConfigurableSource {
+class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
 
-    override val baseUrl by lazy { preferences.baseUrl(subdomain) }
+    override val lang = "all"
+    override val baseUrl by lazy { preferences.baseUrl() }
 
     override val name = "小黄书"
 
@@ -44,9 +44,9 @@ class YellowNote(
         .add("Referer", "$baseUrl/")
 
     private val intl = Intl(
-        language = lang,
-        baseLanguage = YellowNoteSourceFactory.BASE_LANGUAGE,
-        availableLanguages = YellowNoteSourceFactory.SUPPORT_LANGUAGES,
+        language = preferences.language(),
+        baseLanguage = LanguageUtils.baseLocale.language,
+        availableLanguages = LanguageUtils.supportedLocaleTags.toSet(),
         classLoader = this::class.java.classLoader!!,
     )
 
@@ -72,13 +72,13 @@ class YellowNote(
         val mangaEl = element.selectFirst("a")!!
         setUrlWithoutDomain(mangaEl.absUrl("href"))
 
-        val mediaCount = element.select("div.tags > div")
-            .asSequence()
+        val formatMediaCount = element.select("div.tags > div")
             .map { it.text() }
             .firstOrNull { mediaCountRegex.matches(it) }
-            ?.let { "($this)" }
+            ?.let { "($it)" }
             .orEmpty()
-        title = "${mangaEl.attr("title")}$mediaCount"
+        title = "${mangaEl.attr("title")}$formatMediaCount"
+        Log.d("mario12", "title: ${mangaEl.attr("title")}, mediaCount: $formatMediaCount")
 
         thumbnail_url = parseUrlFormStyle(mangaEl.selectFirst("div.img"))
 
