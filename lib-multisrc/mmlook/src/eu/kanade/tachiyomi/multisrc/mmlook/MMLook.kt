@@ -95,10 +95,10 @@ open class MMLook(
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.method == "GET") return popularMangaParse(response)
 
-        val entries = response.asJsoup().select(".col-auto").map { element ->
+        val entries = response.asJsoup().select(".item-data > div").map { element ->
             SManga.create().apply {
                 url = element.selectFirst("a")!!.attr("href").mustRemoveSurrounding("/", "/")
-                title = element.selectFirst(".e-title")!!.text()
+                title = element.selectFirst(".e-title, .title")!!.text()
                 author = element.selectFirst(".tip")!!.text()
                 thumbnail_url = element.selectFirst("img")!!.attr("data-src")
             }.formatUrl()
