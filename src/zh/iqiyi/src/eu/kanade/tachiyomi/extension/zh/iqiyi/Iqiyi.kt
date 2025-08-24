@@ -25,6 +25,9 @@ class Iqiyi : ParsedHttpSource() {
     override val baseUrl: String = "https://www.iqiyi.com/manhua"
     private val json: Json by injectLazy()
 
+    override fun headersBuilder() = super.headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
+
     // Popular
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/category/全部_-1_-1_9_$page/", headers)
