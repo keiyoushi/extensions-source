@@ -165,7 +165,7 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
     // Pages
     override fun pageListParse(document: Document): List<Page> {
         return document.select("main .relative section > img").mapIndexed { i, element ->
-            Page(i, "", element.attr("abs:src"))
+            Page(i, imageUrl = element.attr("abs:src"))
         }
     }
 
