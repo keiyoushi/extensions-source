@@ -170,8 +170,9 @@ class YellowNote(
             ?.let { dateFormat.tryParse(it) }
     }
 
+    private val imageSelector = "div.list.photo-items > div.item.photo-image, div.list.amateur-items > div.item.amateur-image"
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(simpleMangaSelector())
+        return document.select(imageSelector)
             .mapIndexed { i, imageElement ->
                 val url = parseUrlFormStyle(imageElement.selectFirst("div.img"))!!
                 Page(i, imageUrl = url)
