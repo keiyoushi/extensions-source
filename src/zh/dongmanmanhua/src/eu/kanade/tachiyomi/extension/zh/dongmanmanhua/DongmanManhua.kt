@@ -19,7 +19,8 @@ import java.util.Locale
 
 class DongmanManhua : HttpSource() {
     override val name = "Dongman Manhua"
-    override val lang = "zh"
+    override val lang get() = "zh-Hans"
+    override val id get() = 4222375517460530289
     override val baseUrl = "https://www.dongmanmanhua.cn"
     override val supportsLatest = true
 

@@ -34,7 +34,7 @@ class TencentComics : ParsedHttpSource() {
 
     private val desktopUrl = "https://ac.qq.com"
 
-    override val lang = "zh"
+    override val lang = "zh-Hans"
 
     override val supportsLatest = true
 
@@ -43,6 +43,9 @@ class TencentComics : ParsedHttpSource() {
     override val client: OkHttpClient = network.cloudflareClient
 
     private val json: Json by injectLazy()
+
+    override fun headersBuilder() = super.headersBuilder()
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
 
     override fun chapterListRequest(manga: SManga): Request {
         return GET("$desktopUrl/Comic/comicInfo/" + manga.url.substringAfter("/index/"), headers)
