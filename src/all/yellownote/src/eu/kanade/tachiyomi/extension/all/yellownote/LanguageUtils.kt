@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.yellownote
 
 import android.os.Build
 import android.os.LocaleList
-import eu.kanade.tachiyomi.extension.all.yellownote.LanguageUtils.supportedLocaleTags
 import java.util.Locale
 
 object LanguageUtils {
@@ -66,10 +65,4 @@ object LanguageUtils {
     fun getSupportedLanguageDisplayNames(): Array<String> {
         return languageToDisplayNameMap.values.toTypedArray()
     }
-}
-
-fun main() {
-    supportedLocaleTags
-        .map { Locale.forLanguageTag(it) }
-        .forEach { println(it.displayName) }
 }

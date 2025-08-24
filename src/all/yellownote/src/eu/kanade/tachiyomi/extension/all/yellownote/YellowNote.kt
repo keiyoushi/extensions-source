@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.yellownote
 
-import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.all.yellownote.YellowNoteFilters.SortSelector
 import eu.kanade.tachiyomi.extension.all.yellownote.YellowNotePreferences.baseUrl
@@ -78,7 +77,6 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
             ?.let { "($it)" }
             .orEmpty()
         title = "${mangaEl.attr("title")}$formatMediaCount"
-        Log.d("mario12", "title: ${mangaEl.attr("title")}, mediaCount: $formatMediaCount")
 
         thumbnail_url = parseUrlFormStyle(mangaEl.selectFirst("div.img"))
 
