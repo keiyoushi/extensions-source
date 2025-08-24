@@ -1,7 +1,0 @@
-ext {
-    extName = 'BILIBILI MANGA'
-    extClass = '.BilibiliManga'
-    extVersionCode = 13
-}
-
-apply from: "$rootDir/common.gradle"
