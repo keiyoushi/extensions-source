@@ -28,7 +28,9 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.buffer
+import okio.cipherSource
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
@@ -57,13 +59,12 @@ class Manwa : ParsedHttpSource(), ConfigurableSource {
         val originalResponse: Response = chain.proceed(chain.request())
         if (originalResponse.request.url.toString().endsWith("?v=20220724")) {
             // Decrypt images in mangas
-            val orgBody = originalResponse.body.bytes()
             val key = "my2ecret782ecret".toByteArray()
             val aesKey = SecretKeySpec(key, "AES")
             val cipher = Cipher.getInstance("AES/CBC/NOPADDING")
             cipher.init(Cipher.DECRYPT_MODE, aesKey, IvParameterSpec(key))
-            val result = cipher.doFinal(orgBody)
-            val newBody = result.toResponseBody("image/webp".toMediaTypeOrNull())
+            val result = originalResponse.body.source().cipherSource(cipher).buffer()
+            val newBody = result.asResponseBody("image/webp".toMediaTypeOrNull())
             originalResponse.newBuilder()
                 .body(newBody)
                 .build()
