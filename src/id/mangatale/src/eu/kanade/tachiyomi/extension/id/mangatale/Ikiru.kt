@@ -95,9 +95,6 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
             .addFormDataPart("nonce", searchNonce!!)
             .build()
 
-        val requestHeaders: Headers = Headers.Builder()
-            .add("Content-Type", "multipart/form-data")
-            .build()
 
         return POST("$baseUrl/ajax-call?action=advanced_search", requestHeaders, requestBody)
     }
