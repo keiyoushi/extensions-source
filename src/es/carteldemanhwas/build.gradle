@@ -3,7 +3,7 @@ ext {
     extClass = '.CarteldeManhwas'
     themePkg = 'mangathemesia'
     baseUrl = 'https://carteldemanhwas.net'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 
