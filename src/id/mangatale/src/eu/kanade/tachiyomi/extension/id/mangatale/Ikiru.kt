@@ -76,15 +76,10 @@ class Ikiru: ParsedHttpSource(), ConfigurableSource {
         // TODO: Filter
 
         if (searchNonce.isNullOrEmpty()) {
-            try {
-                val response = client.newCall(
-                    GET("$baseUrl/ajax-call?type=search_form&action=get_nonce", headers),
-                ).execute()
-                val document = response.asJsoup()
-                searchNonce = document.select("input[name=search_nonce]").attr("value")
-            } catch (e: Exception) {
-                Log.e(name, "Error fetching nonce: ", e)
-            }
+            val document = client.newCall(
+                GET("$baseUrl/ajax-call?type=search_form&action=get_nonce", headers),
+            ).execute().asJsoup()
+            searchNonce = document.selectFirst("input[name=search_nonce]")!!.attr("value")
         }
 
         val requestBody: RequestBody = MultipartBody.Builder()
