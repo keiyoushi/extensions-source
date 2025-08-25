@@ -42,7 +42,11 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return GET(popularUrl, newHeaders)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    override fun popularMangaParse(response: Response): MangasPage = parseMangasPageFromElement(
+        response, "div.item-recent"
+    )
+
+    fun parseMangasPageFromElement(response: Response, selector: String): MangasPage {
         val result = response.asJsoup()
 
         val mangas = result.select("div.item-recent").map { element ->
@@ -96,7 +100,9 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return GET(searchUrl, headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage = parseMangasPageFromElement(
+        response, "item-search"
+    )
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.asJsoup()
