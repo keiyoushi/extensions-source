@@ -102,7 +102,7 @@ class MiMiHentai : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val res = response.parseAs<PageListDto>()
         return res.pages.mapIndexed { index, url ->
-            Page(index, imageUrl = url)
+            Page(index, imageUrl = url.imageUrl)
         }
     }
 
