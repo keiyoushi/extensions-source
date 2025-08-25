@@ -43,13 +43,23 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.asMpcResponse()
+        val result = response.asJsoup()
 
-        checkNotNull(result.titles) { EMPTY_RESPONSE_ERROR }
+        val mangas = result.select("div.item-recent").map { element ->
+            popularElementToSManga(element)
+        }
 
-        val titles = result.titles.titleList.orEmpty().map(MpcTitle::toSManga)
+        return MangasPage(mangas, false)
+    }
 
-        return MangasPage(titles, result.titles.pagination?.hasNextPage ?: false)
+    fun popularElementToSManga(element: org.jsoup.nodes.Element): SManga {
+        val titleThumbnailUrl = element.select(".image-area img").attr("src")
+        val titleContentId = titleThumbnailUrl.toHttpUrl().pathSegments[2]
+        return SManga.create().apply {
+            title = element.select(".title-area .title").text().toString()
+            thumbnail_url = titleThumbnailUrl
+            setUrlWithoutDomain("/titles/$titleContentId")
+        }
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
