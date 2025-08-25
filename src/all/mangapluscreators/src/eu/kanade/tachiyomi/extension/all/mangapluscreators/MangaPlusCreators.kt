@@ -21,12 +21,12 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     override val name = "MANGA Plus Creators by SHUEISHA"
 
-    override val baseUrl = "https://medibang.com/mpc"
+    override val baseUrl = BASE_URL
 
     override val supportsLatest = true
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-        .add("Origin", baseUrl.substringBeforeLast("/"))
+//        .add("Origin", baseUrl.substringBeforeLast("/"))
         .add("Referer", baseUrl)
         .add("User-Agent", USER_AGENT)
 
@@ -35,19 +35,11 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     override fun popularMangaRequest(page: Int): Request {
         val newHeaders = headersBuilder()
             .set("Referer", "$baseUrl/titles/popular/?p=m")
-            .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val apiUrl = "$API_URL/titles/popular/list".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("pageSize", POPULAR_PAGE_SIZE)
-            .addQueryParameter("l", lang)
-            .addQueryParameter("p", "m")
-            .addQueryParameter("isWebview", "false")
-            .addQueryParameter("_", System.currentTimeMillis().toString())
-            .toString()
+        val popularUrl = "$baseUrl/titles/popular/?p=m&l=$lang".toHttpUrl().toString()
 
-        return GET(apiUrl, newHeaders)
+        return GET(popularUrl, newHeaders)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -63,16 +55,12 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     override fun latestUpdatesRequest(page: Int): Request {
         val newHeaders = headersBuilder()
             .set("Referer", "$baseUrl/titles/recent/?t=episode")
-            .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val apiUrl = "$API_URL/titles/recent/list".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("pageSize", POPULAR_PAGE_SIZE)
+        val apiUrl = "$API_URL/titles/recent/".toHttpUrl().newBuilder()
+            .addQueryParameter("page", testLastPage)
             .addQueryParameter("l", lang)
-            .addQueryParameter("c", "episode")
-            .addQueryParameter("isWebview", "false")
-            .addQueryParameter("_", System.currentTimeMillis().toString())
+            .addQueryParameter("t", "episode")
             .toString()
 
         return GET(apiUrl, newHeaders)
@@ -90,16 +78,14 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        val apiUrl = "$API_URL/search/titles".toHttpUrl().newBuilder()
-            .addQueryParameter("keyword", query)
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("pageSize", POPULAR_PAGE_SIZE)
-            .addQueryParameter("sort", "newly")
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val searchUrl = "$baseUrl/keywords".toHttpUrl().newBuilder()
+            .addQueryParameter("q", query)
+            .addQueryParameter("s", "date")
             .addQueryParameter("lang", lang)
-            .addQueryParameter("_", System.currentTimeMillis().toString())
             .toString()
 
-        return GET(apiUrl, newHeaders)
+        return GET(searchUrl, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
@@ -125,20 +111,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val titleId = manga.url.substringAfterLast("/")
-
-        val newHeaders = headersBuilder()
-            .set("Referer", baseUrl + manga.url)
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
-        val apiUrl = "$API_URL/titles/$titleId/episodes/".toHttpUrl().newBuilder()
-            .addQueryParameter("page", "1")
-            .addQueryParameter("pageSize", CHAPTER_PAGE_SIZE)
-            .addQueryParameter("_", System.currentTimeMillis().toString())
-            .toString()
-
-        return GET(apiUrl, newHeaders)
+        return GET("${manga.url}/?page=1")
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -152,18 +125,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterId = chapter.url.substringAfterLast("/")
-
-        val newHeaders = headersBuilder()
-            .set("Referer", baseUrl + chapter.url)
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
-
-        val apiUrl = "$API_URL/episodes/pageList/$chapterId/".toHttpUrl().newBuilder()
-            .addQueryParameter("_", System.currentTimeMillis().toString())
-            .toString()
-
-        return GET(apiUrl, newHeaders)
+        return GET(chapter.url)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -196,7 +158,8 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     companion object {
-        private const val API_URL = "https://medibang.com/api/mpc"
+        private const val BASE_URL = "https://mangaplus-creators.jp"
+        private const val API_URL = "$BASE_URL/api"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
 
