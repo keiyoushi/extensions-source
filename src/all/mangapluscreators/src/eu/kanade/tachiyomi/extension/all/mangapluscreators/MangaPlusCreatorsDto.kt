@@ -7,46 +7,42 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class MpcResponse(
-    @SerialName("mpcEpisodesDto") val episodes: MpcEpisodesDto? = null,
+    val status: String,
     @SerialName("mpcTitlesDto") val titles: MpcTitlesDto? = null,
-    val pageList: List<MpcPage>? = emptyList(),
-)
-
-@Serializable
-data class MpcEpisodesDto(
-    val pagination: MpcPagination? = null,
-    val episodeList: List<MpcEpisode>? = emptyList(),
 )
 
 @Serializable
 data class MpcTitlesDto(
-    val pagination: MpcPagination? = null,
     val titleList: List<MpcTitle>? = emptyList(),
 )
-
-@Serializable
-data class MpcPagination(
-    val page: Int,
-    val maxPage: Int,
-) {
-
-    val hasNextPage: Boolean
-        get() = page < maxPage
-}
 
 @Serializable
 data class MpcTitle(
     @SerialName("titleId") val id: String,
     val title: String,
-    val thumbnailUrl: String,
-) {
+    val thumbnail: String,
+    @SerialName("is_one_shot") val isOneShot: Boolean,
+    val author: MpcAuthorDto,
+    @SerialName("latest_episode") val latestEpisode: MpcLatestEpisode,
+    ) {
 
     fun toSManga(): SManga = SManga.create().apply {
         title = this@MpcTitle.title
-        thumbnail_url = thumbnailUrl
-        url = "/titles/$id"
+        thumbnail_url = thumbnail
+        url = "/titles/${latestEpisode.titleConnectId}"
+        author = this@MpcTitle.author.name
     }
 }
+
+@Serializable
+data class MpcAuthorDto(
+    val name: String,
+)
+
+@Serializable
+data class MpcLatestEpisode(
+    @SerialName("title_connect_id") val titleConnectId: String,
+)
 
 @Serializable
 data class MpcEpisode(

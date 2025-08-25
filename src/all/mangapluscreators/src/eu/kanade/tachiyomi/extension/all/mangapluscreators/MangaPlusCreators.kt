@@ -76,17 +76,15 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return GET(apiUrl, newHeaders)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val result = json.decodeFromString<MpcResponse>(response.body.string())
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val refererUrl = "$baseUrl/keywords".toHttpUrl().newBuilder()
-            .addQueryParameter("q", query)
-            .toString()
+        checkNotNull(result.titles) { EMPTY_RESPONSE_ERROR }
 
-        val newHeaders = headersBuilder()
-            .set("Referer", refererUrl)
-            .add("X-Requested-With", "XMLHttpRequest")
-            .build()
+        val titles = result.titles.titleList.orEmpty().map(MpcTitle::toSManga)
+
+        return MangasPage(titles, result.status != "error")
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val searchUrl = "$baseUrl/keywords".toHttpUrl().newBuilder()
@@ -161,10 +159,6 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             .build()
 
         return GET(page.imageUrl!!, newHeaders)
-    }
-
-    private fun Response.asMpcResponse(): MpcResponse = use {
-        json.decodeFromString(body.string())
     }
 
     companion object {
