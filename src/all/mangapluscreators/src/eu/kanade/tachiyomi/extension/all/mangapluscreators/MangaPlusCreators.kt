@@ -113,7 +113,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
                 else -> SManga.UNKNOWN
             }
             genre = bookBox.select("div.genre-area div.tag-genre")
-                .joinToString { it.text() }
+                .joinToString(", ") { it.text() }
             thumbnail_url = bookBox.selectFirst("div.cover img")!!.attr("data-src")
         }
     }
