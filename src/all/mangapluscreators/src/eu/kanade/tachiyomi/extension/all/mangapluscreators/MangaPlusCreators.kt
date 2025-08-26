@@ -148,16 +148,18 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         var hasNextPage = chapterListResponse.hasNextPage
         val titleContentId = response.request.url.pathSegments[1]
         var page = 1
-        while (hasNextPage) {
+        run breaking@{
+            while (hasNextPage) {
                 page += 1
                 val nextPageRequest = chapterListPageRequest(page, titleContentId)
                 val nextPageResponse = client.newCall(nextPageRequest).execute()
                 val nextPageResult = chapterListPageParse(nextPageResponse)
                 if (nextPageResult.chapters.isEmpty()) {
-                    break
+                    return@breaking
                 }
                 chapterListResult.addAll(nextPageResult.chapters)
                 hasNextPage = nextPageResult.hasNextPage
+            }
         }
 
         return chapterListResult.asReversed()
