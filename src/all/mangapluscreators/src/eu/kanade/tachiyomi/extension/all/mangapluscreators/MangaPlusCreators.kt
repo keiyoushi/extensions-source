@@ -133,18 +133,47 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        return GET("${manga.url}/?page=1")
+        val titleContentId = (baseUrl + manga.url).toHttpUrl().pathSegments[1]
+        return chapterListPageRequest(1, titleContentId)
+    }
+
+    fun chapterListPageRequest(page: Int, titleContentId: String): Request {
+        return GET("$baseUrl/titles/$titleContentId/?page=$page")
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val result = response.asMpcResponse()
+        val chapterListResponse = chapterListPageParse(response)
+        val chapterListResult = chapterListResponse.chapters.toMutableList()
 
-        checkNotNull(result.episodes) { EMPTY_RESPONSE_ERROR }
+        var hasNextPage = chapterListResponse.hasNextPage
+        val titleContentId = response.request.url.pathSegments[1]
+        var page = 1
+        while (hasNextPage) {
+                page += 1
+                val nextPageRequest = chapterListPageRequest(page, titleContentId)
+                val nextPageResponse = client.newCall(nextPageRequest).execute()
+                val nextPageResult = chapterListPageParse(nextPageResponse)
+                if (nextPageResult.chapters.isEmpty()) {
+                    break
+                }
+                chapterListResult.addAll(nextPageResult.chapters)
+                hasNextPage = nextPageResult.hasNextPage
+        }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        return response.asJsoup().select(".mod-item-series").map {
-                element -> chapterElementToSChapter(element)
-        }.asReversed()
+        return chapterListResult.asReversed()
+    }
+
+    fun chapterListPageParse(response: Response): ChaptersPage {
+        val result = response.asJsoup()
+        val chapters = result.select(".mod-item-series").map {
+                element ->
+            chapterElementToSChapter(element)
+        }
+        val hasResult = result.select(".mod-pagination .next").isNotEmpty()
+        return ChaptersPage(
+            chapters,
+            hasResult,
+        )
     }
 
     fun chapterElementToSChapter(element: org.jsoup.nodes.Element): SChapter {
