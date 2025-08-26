@@ -38,6 +38,10 @@ index.sort(key=lambda x: x["pkg"])
 with REMOTE_REPO.joinpath("index.json").open("w", encoding="utf-8") as index_file:
     json.dump(index, index_file, ensure_ascii=False, indent=2)
 
+for item in index:
+    for source in item["sources"]:
+        source.pop("versionId", None)
+
 with REMOTE_REPO.joinpath("index.min.json").open("w", encoding="utf-8") as index_min_file:
     json.dump(index, index_min_file, ensure_ascii=False, separators=(",", ":"))
 
