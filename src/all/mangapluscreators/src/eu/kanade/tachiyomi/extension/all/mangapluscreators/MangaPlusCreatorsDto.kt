@@ -8,23 +8,17 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class MpcResponse(
     val status: String,
-    @SerialName("mpcTitlesDto") val titles: MpcTitlesDto? = null,
-)
-
-@Serializable
-data class MpcTitlesDto(
-    val titleList: List<MpcTitle>? = emptyList(),
+    val titles: List<MpcTitle>? = null,
 )
 
 @Serializable
 data class MpcTitle(
-    @SerialName("titleId") val id: String,
     val title: String,
     val thumbnail: String,
     @SerialName("is_one_shot") val isOneShot: Boolean,
     val author: MpcAuthorDto,
     @SerialName("latest_episode") val latestEpisode: MpcLatestEpisode,
-    ) {
+) {
 
     fun toSManga(): SManga = SManga.create().apply {
         title = this@MpcTitle.title
@@ -62,3 +56,18 @@ data class MpcEpisode(
 
 @Serializable
 data class MpcPage(val publicBgImage: String)
+
+@Serializable
+data class MpcReaderDataPages(
+    val pc: List<MpcReaderPage>,
+) {
+    fun getPages(): List<MpcReaderPage> {
+        return pc.sortedBy { (pageNo, _) -> pageNo }
+    }
+}
+
+@Serializable
+data class MpcReaderPage(
+    @SerialName("page_no") val pageNo: Int,
+    @SerialName("image_url") val imageUrl: String,
+)
