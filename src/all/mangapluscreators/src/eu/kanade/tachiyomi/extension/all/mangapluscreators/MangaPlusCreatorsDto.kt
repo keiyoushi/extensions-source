@@ -71,3 +71,5 @@ data class MpcReaderPage(
     @SerialName("page_no") val pageNo: Int,
     @SerialName("image_url") val imageUrl: String,
 )
+
+data class ChaptersPage(val chapters: List<SChapter>, val hasNextPage: Boolean)
