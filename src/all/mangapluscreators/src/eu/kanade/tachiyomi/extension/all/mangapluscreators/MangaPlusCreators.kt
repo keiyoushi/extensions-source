@@ -87,10 +87,12 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
         val titles = result.titles.orEmpty().map(MpcTitle::toSManga)
 
+        // TODO: handle last page of latest
         return MangasPage(titles, result.status != "error")
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        // TODO: maybe this needn't be a new builder and just similar to `popularUrl` above?
         val searchUrl = "$baseUrl/keywords".toHttpUrl().newBuilder()
             .addQueryParameter("q", query)
             .addQueryParameter("s", "date")
