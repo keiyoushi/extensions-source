@@ -28,7 +28,6 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
-//        .add("Origin", baseUrl.substringBeforeLast("/"))
         .add("Referer", baseUrl)
         .add("User-Agent", USER_AGENT)
 
@@ -74,14 +73,8 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             .set("Referer", "$baseUrl/titles/recent/?t=episode")
             .build()
 
-        val testLastPage = when (lang) {
-//            "en" -> 100
-            "es" -> 79 + page
-            else -> page
-        }
-
         val apiUrl = "$API_URL/titles/recent/".toHttpUrl().newBuilder()
-            .addQueryParameter("page", page)
+            .addQueryParameter("page", page.toString())
             .addQueryParameter("l", lang)
             .addQueryParameter("t", "episode")
             .toString()
@@ -195,10 +188,6 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         }
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + chapter.url)
-    }
-
     override fun pageListParse(response: Response): List<Page> {
         val result = response.asJsoup()
         val readerElement = result.select("div[react=viewer]")
@@ -232,15 +221,9 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         private val CHAPTER_DATE_FORMAT by lazy {
             SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
         }
-        private const val LTAG = "MPCCC"
         private const val BASE_URL = "https://mangaplus-creators.jp"
         private const val API_URL = "$BASE_URL/api"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
-
-        private const val POPULAR_PAGE_SIZE = "30"
-        private const val CHAPTER_PAGE_SIZE = "200"
-
-        private const val EMPTY_RESPONSE_ERROR = "Empty response from the API. Try again later."
     }
 }

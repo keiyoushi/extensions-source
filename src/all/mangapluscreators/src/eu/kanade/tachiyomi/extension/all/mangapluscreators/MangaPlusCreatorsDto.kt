@@ -39,32 +39,9 @@ data class MpcLatestEpisode(
 )
 
 @Serializable
-data class MpcEpisode(
-    @SerialName("episodeId") val id: String,
-    @SerialName("episodeTitle") val title: String,
-    val numbering: Int,
-    val oneshot: Boolean = false,
-    val publishDate: Long,
-) {
-
-    fun toSChapter(): SChapter = SChapter.create().apply {
-        name = if (oneshot) "One-shot" else title
-        date_upload = publishDate
-        url = "/episodes/$id"
-    }
-}
-
-@Serializable
-data class MpcPage(val publicBgImage: String)
-
-@Serializable
 data class MpcReaderDataPages(
     val pc: List<MpcReaderPage>,
-) {
-    fun getPages(): List<MpcReaderPage> {
-        return pc.sortedBy { (pageNo, _) -> pageNo }
-    }
-}
+)
 
 @Serializable
 data class MpcReaderPage(
