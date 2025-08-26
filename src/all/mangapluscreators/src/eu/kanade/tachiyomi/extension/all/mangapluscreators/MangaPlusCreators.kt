@@ -16,6 +16,8 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class MangaPlusCreators(override val lang: String) : HttpSource() {
 
@@ -72,8 +74,14 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             .set("Referer", "$baseUrl/titles/recent/?t=episode")
             .build()
 
+        val testLastPage = when (lang) {
+//            "en" -> 100
+            "es" -> 79 + page
+            else -> page
+        }
+
         val apiUrl = "$API_URL/titles/recent/".toHttpUrl().newBuilder()
-            .addQueryParameter("page", testLastPage)
+            .addQueryParameter("page", page)
             .addQueryParameter("l", lang)
             .addQueryParameter("t", "episode")
             .toString()
@@ -135,9 +143,27 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
         checkNotNull(result.episodes) { EMPTY_RESPONSE_ERROR }
 
-        return result.episodes.episodeList.orEmpty()
-            .sortedByDescending(MpcEpisode::numbering)
-            .map(MpcEpisode::toSChapter)
+    override fun chapterListParse(response: Response): List<SChapter> {
+        return response.asJsoup().select(".mod-item-series").map {
+                element -> chapterElementToSChapter(element)
+        }.asReversed()
+    }
+
+    fun chapterElementToSChapter(element: org.jsoup.nodes.Element): SChapter {
+        val episode = element.attr("href").substringAfterLast("/")
+        val latestUpdatedDate = element.select(".first-update").text()
+        val chapterNumberElement = element.select(".number").text()
+        val chapterNumber = chapterNumberElement.substringAfter("#").toFloatOrNull()
+        return SChapter.create().apply {
+            setUrlWithoutDomain("/episodes/$episode")
+            date_upload = parseChapterDate(latestUpdatedDate)
+            name = chapterNumberElement
+            chapter_number = if (chapterNumberElement == "One-shot") {
+                0F
+            } else {
+                chapterNumber ?: 1F
+            }
+        }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -145,14 +171,13 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val result = response.asMpcResponse()
-
-        checkNotNull(result.pageList) { EMPTY_RESPONSE_ERROR }
-
-        val referer = response.request.header("Referer")!!
-
-        return result.pageList.mapIndexed { i, page ->
-            Page(i, referer, page.publicBgImage)
+        val result = response.asJsoup()
+        val readerElement = result.select("div[react=viewer]")
+        val dataPages = readerElement.attr("data-pages")
+        val refererUrl = response.request.url.toString()
+        return json.decodeFromString<MpcReaderDataPages>(dataPages).pc.map {
+                (pageNo, imageUrl) ->
+            Page(pageNo, refererUrl, imageUrl)
         }
     }
 
@@ -169,7 +194,16 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
+    private fun parseChapterDate(dateStr: String): Long {
+        return runCatching { CHAPTER_DATE_FORMAT.parse(dateStr)?.time }
+            .getOrNull() ?: 0L
+    }
+
     companion object {
+        private val CHAPTER_DATE_FORMAT by lazy {
+            SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        }
+        private const val LTAG = "MPCCC"
         private const val BASE_URL = "https://mangaplus-creators.jp"
         private const val API_URL = "$BASE_URL/api"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
