@@ -92,9 +92,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = json.decodeFromString<MpcResponse>(response.body.string())
 
-        checkNotNull(result.titles) { EMPTY_RESPONSE_ERROR }
-
-        val titles = result.titles.titleList.orEmpty().map(MpcTitle::toSManga)
+        val titles = result.titles.orEmpty().map(MpcTitle::toSManga)
 
         return MangasPage(titles, result.status != "error")
     }
@@ -167,7 +165,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET(chapter.url)
+        return GET(baseUrl + chapter.url)
     }
 
     override fun pageListParse(response: Response): List<Page> {
