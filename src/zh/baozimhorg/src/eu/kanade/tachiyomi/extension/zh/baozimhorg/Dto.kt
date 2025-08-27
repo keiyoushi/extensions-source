@@ -40,13 +40,33 @@ class AttributesDto(
     fun toSChapter(mangaSlug: String, mangaId: String, chapterId: String) = SChapter.create().apply {
         url = "$mangaSlug/$slug#$mangaId/$chapterId"
         name = title
-        date_upload = dateFormat.parse(updatedAt)!!.time
+        date_upload = parseDate(updatedAt)
     }
 }
 
 // Static field, no need for lazy
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
+// private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+//    timeZone = TimeZone.getTimeZone("UTC")
+// }
+
+fun parseDate(dateString: String): Long {
+    val formats = listOf(
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        },
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        },
+    )
+
+    for (format in formats) {
+        try {
+            return format.parse(dateString)!!.time
+        } catch (e: Exception) {
+            // Continue to next format
+        }
+    }
+    throw IllegalArgumentException("Unable to parse date: $dateString")
 }
 
 @Serializable
