@@ -16,6 +16,9 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+/**
+ * Split from Hiveworks extension
+ */
 class SaturdayMorningBreakfastComics : HttpSource() {
 
     override val name = "Saturday Morning Breakfast Comics"
