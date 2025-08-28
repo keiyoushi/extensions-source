@@ -334,8 +334,10 @@ abstract class MachineTranslations(
         val fonts = arrayOf(
             intl["default_font_name_title"] to "",
             intl["font_name_device_title"] to DEVICE_FONT,
-            "Comic Soon" to "coming_soon_regular",
             "Anime Ace" to "animeace2_regular",
+            "Comic Neue" to "comic_neue_bold",
+            "Coming Soon" to "coming_soon_regular",
+
         )
 
         ListPreference(screen.context).apply {
