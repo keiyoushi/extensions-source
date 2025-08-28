@@ -23,6 +23,8 @@ class GoDaManhua : GoDa("GoDa漫画", "", "zh"), ConfigurableSource {
 
     override val baseUrl: String
 
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/").add("origin", "$baseUrl/")
+
     init {
         val mirrors = MIRRORS
         if (System.getenv("CI") == "true") {
