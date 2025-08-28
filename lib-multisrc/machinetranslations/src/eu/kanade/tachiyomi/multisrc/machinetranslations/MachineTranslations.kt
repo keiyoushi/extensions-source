@@ -345,7 +345,11 @@ abstract class MachineTranslations(
                 "${it}pt" + if (it == DEFAULT_FONT_SIZE) " - ${intl["default_font_size"]}" else ""
             }.toTypedArray()
             entryValues = sizes
-            summary = intl["font_size_summary"]
+
+            summary = buildString {
+                appendLine(intl["font_size_summary"])
+                append("\t* %s")
+            }
 
             setDefaultValue(fontSize.toString())
 
@@ -486,7 +490,7 @@ abstract class MachineTranslations(
         const val DEVICE_FONT = "device:"
         const val PREFIX_SEARCH = "id:"
         private const val FONT_SIZE_PREF = "fontSizePref"
-        private const val FONT_NAME_PREF = "fontPref"
+        private const val FONT_NAME_PREF = "fontNamePref"
         private const val DISABLE_WORD_BREAK_PREF = "disableWordBreakPref"
         private const val DISABLE_TRANSLATOR_PREF = "disableTranslatorPref"
         private const val ENABLE_MANGA_DETAILS_TRANSLATION_PREF = "enableMangaDetailsTranslationPref"
