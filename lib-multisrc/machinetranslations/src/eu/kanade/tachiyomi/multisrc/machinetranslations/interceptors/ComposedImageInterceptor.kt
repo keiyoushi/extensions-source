@@ -60,7 +60,7 @@ class ComposedImageInterceptor(
 
         // Load the fonts before opening the connection to load the image,
         // so there aren't two open connections inside the interceptor.
-        if (language.disableSourceSettings.not()) {
+        if (!language.disableFontSettings) {
             loadAllFont(chain)
         }
 
@@ -115,7 +115,7 @@ class ComposedImageInterceptor(
     }
 
     private fun selectFontFamily(type: String): Typeface? {
-        if (language.disableSourceSettings) {
+        if (language.disableFontSettings) {
             return null
         }
 
@@ -136,6 +136,11 @@ class ComposedImageInterceptor(
             if (font.second != null) {
                 return@forEach
             }
+            if (language.fontName.isNotBlank()) {
+                fontFamily[key] = key to loadFont("${language.fontName}.ttf")
+                return@forEach
+            }
+
             fontFamily[key] = key to (loadRemoteFont(font.first, chain) ?: fallback)
         }
     }
@@ -231,7 +236,7 @@ class ComposedImageInterceptor(
 
         return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, dialog.width.toInt()).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
-            setIncludePad(language.disableSourceSettings)
+            setIncludePad(language.disableFontSettings)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 if (language.disableWordBreak) {
                     setBreakStrategy(LineBreaker.BREAK_STRATEGY_SIMPLE)

@@ -7,8 +7,9 @@ data class Language(
     val target: String = lang,
     val origin: String = "en",
     val fontSize: Int = 24,
-    val disableSourceSettings: Boolean = false,
+    val disableFontSettings: Boolean = false,
     val disableWordBreak: Boolean = false,
     val disableTranslator: Boolean = false,
     val supportNativeTranslation: Boolean = false,
+    val fontName: String = "",
 )
