@@ -337,7 +337,6 @@ abstract class MachineTranslations(
             "Anime Ace" to "animeace2_regular",
             "Comic Neue" to "comic_neue_bold",
             "Coming Soon" to "coming_soon_regular",
-
         )
 
         ListPreference(screen.context).apply {
