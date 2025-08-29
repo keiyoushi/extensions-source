@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name=".all.mangapluscreators.MangaPlusCreatorsUrlActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="mangaplus-creators.jp"
+                    android:pathPattern="/episodes/.+"
+                    android:scheme="https" />
+                <data
+                    android:host="mangaplus-creators.jp"
+                    android:pathPattern="/titles/.+"
+                    android:scheme="https" />
+                <data
+                    android:host="mangaplus-creators.jp"
+                    android:pathPattern="/authors/.+"
+                    android:scheme="https" />
+
+                <data
+                    android:host="medibang.com"
+                    android:pathPattern="/mpc/episodes/.+"
+                    android:scheme="https" />
+                <data
+                    android:host="medibang.com"
+                    android:pathPattern="/mpc/titles/.+"
+                    android:scheme="https" />
+                <data
+                    android:host="medibang.com"
+                    android:pathPattern="/mpc/authors/.+"
+                    android:scheme="https" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
