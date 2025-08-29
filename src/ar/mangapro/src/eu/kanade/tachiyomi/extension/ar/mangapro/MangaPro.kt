@@ -6,6 +6,7 @@ class MangaPro : Iken(
     "Manga Pro",
     "ar",
     "https://promanga.net",
+    "https://api.promanga.net",
 ) {
-    override val versionId = 4
+    override val versionId = 5
 }
