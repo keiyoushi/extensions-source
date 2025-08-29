@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.mangapluscreators
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -89,6 +90,55 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
         // TODO: handle last page of latest
         return MangasPage(titles, result.status != "error")
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        // TODO: HTTPSource::fetchSearchManga is deprecated? super.getSearchManga
+        if (query.startsWith(PREFIX_TITLE_ID_SEARCH)) {
+            val titleContentId = query.removePrefix(PREFIX_TITLE_ID_SEARCH)
+            return client.newCall(GET("$baseUrl/titles/$titleContentId"))
+                .asObservableSuccess()
+                .map { response ->
+                    val titleAsSManga = mangaDetailsParse(response)
+                    MangasPage(listOf(titleAsSManga), false)
+                }
+        }
+        if (query.startsWith(PREFIX_EPISODE_ID_SEARCH)) {
+            val episodeId = query.removePrefix(PREFIX_EPISODE_ID_SEARCH)
+            return client.newCall(GET("$baseUrl/episodes/$episodeId"))
+                .asObservableSuccess().map { response ->
+                    val result = response.asJsoup()
+                    val readerElement = result.select("div[react=viewer]")
+                    val dataTitle = readerElement.attr("data-title")
+                    val dataTitleResult = json.decodeFromString<MpcReaderDataTitle>(dataTitle)
+                    val episodeAsSManga = SManga.create().apply {
+                        title = dataTitleResult.title
+                        thumbnail_url = dataTitleResult.thumbnail
+                        setUrlWithoutDomain("/titles/${dataTitleResult.contentsId}")
+                    }
+                    MangasPage(listOf(episodeAsSManga), false)
+                }
+        }
+        if (query.startsWith(PREFIX_AUTHOR_ID_SEARCH)) {
+            val authorId = query.removePrefix(PREFIX_AUTHOR_ID_SEARCH)
+            return client.newCall(GET("$baseUrl/authors/$authorId"))
+                .asObservableSuccess()
+                .map { response ->
+                    val result = response.asJsoup()
+                    val elements = result.select("#works .manga-list li .md\\:block")
+                    val smangas = elements.map { element ->
+                        val titleThumbnailUrl = element.select(".image-area img").attr("src")
+                        val titleContentId = titleThumbnailUrl.toHttpUrl().pathSegments[2]
+                        SManga.create().apply {
+                            title = element.select("p.text-white").text().toString()
+                            thumbnail_url = titleThumbnailUrl
+                            setUrlWithoutDomain("/titles/$titleContentId")
+                        }
+                    }
+                    MangasPage(smangas, false)
+                }
+        }
+        return super.fetchSearchManga(page, query, filters)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -227,5 +277,9 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         private const val API_URL = "$BASE_URL/api"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
+
+        const val PREFIX_TITLE_ID_SEARCH = "title:"
+        const val PREFIX_EPISODE_ID_SEARCH = "episode:"
+        const val PREFIX_AUTHOR_ID_SEARCH = "author:"
     }
 }
