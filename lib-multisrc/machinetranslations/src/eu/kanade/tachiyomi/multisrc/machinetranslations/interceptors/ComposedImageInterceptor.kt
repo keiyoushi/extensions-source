@@ -16,7 +16,7 @@ import eu.kanade.tachiyomi.multisrc.machinetranslations.Dialog
 import eu.kanade.tachiyomi.multisrc.machinetranslations.Language
 import eu.kanade.tachiyomi.multisrc.machinetranslations.MachineTranslations.Companion.PAGE_REGEX
 import eu.kanade.tachiyomi.network.GET
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -32,7 +32,7 @@ import java.io.InputStream
 @RequiresApi(Build.VERSION_CODES.O)
 class ComposedImageInterceptor(
     baseUrl: String,
-    var language: Language,
+    val language: Language,
 ) : Interceptor {
 
     private val json: Json by injectLazy()
@@ -231,16 +231,17 @@ class ComposedImageInterceptor(
 
         return StaticLayout.Builder.obtain(text, 0, text.length, textPaint, dialog.width.toInt()).apply {
             setAlignment(Layout.Alignment.ALIGN_CENTER)
-            setIncludePad(false)
+            setIncludePad(language.disableSourceSettings)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (language.disableWordBreak) {
+                    setBreakStrategy(LineBreaker.BREAK_STRATEGY_SIMPLE)
+                    setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
+                    return@apply
+                }
                 setBreakStrategy(LineBreaker.BREAK_STRATEGY_BALANCED)
                 setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL)
             }
         }.build()
-    }
-
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
     }
 
     private fun Canvas.draw(textPaint: TextPaint, layout: StaticLayout, dialog: Dialog, x: Float, y: Float) {

@@ -10,7 +10,12 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors.ComposedImageInterceptor
+import eu.kanade.tachiyomi.multisrc.machinetranslations.interceptors.TranslationInterceptor
+import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
+import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.bing.BingTranslator
+import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.google.GoogleTranslator
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -20,7 +25,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -68,9 +73,21 @@ abstract class MachineTranslations(
         get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()
         set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
 
+    protected var disableWordBreak: Boolean
+        get() = preferences.getBoolean(DISABLE_WORD_BREAK_PREF, language.disableWordBreak)
+        set(value) = preferences.edit().putBoolean(DISABLE_WORD_BREAK_PREF, value).apply()
+
+    protected var disableTranslator: Boolean
+        get() = preferences.getBoolean(DISABLE_TRANSLATOR_PREF, language.disableTranslator)
+        set(value) = preferences.edit().putBoolean(DISABLE_TRANSLATOR_PREF, value).apply()
+
     protected var disableSourceSettings: Boolean
         get() = preferences.getBoolean(DISABLE_SOURCE_SETTINGS_PREF, language.disableSourceSettings)
         set(value) = preferences.edit().putBoolean(DISABLE_SOURCE_SETTINGS_PREF, value).apply()
+
+    protected var enableMangaDetailsTranslation: Boolean
+        get() = preferences.getBoolean(ENABLE_MANGA_DETAILS_TRANSLATION_PREF, false)
+        set(value) = preferences.edit().putBoolean(ENABLE_MANGA_DETAILS_TRANSLATION_PREF, value).apply()
 
     private val intl = Intl(
         language = language.lang,
@@ -79,13 +96,22 @@ abstract class MachineTranslations(
         classLoader = this::class.java.classLoader!!,
     )
 
-    private val settings get() = language.apply {
-        fontSize = this@MachineTranslations.fontSize
-    }
-
-    open val useDefaultComposedImageInterceptor: Boolean = true
+    private val settings get() = language.copy(
+        fontSize = this@MachineTranslations.fontSize,
+        disableWordBreak = this@MachineTranslations.disableWordBreak,
+        disableTranslator = this@MachineTranslations.disableTranslator,
+        disableSourceSettings = this@MachineTranslations.disableSourceSettings,
+    )
 
     override val client: OkHttpClient get() = clientInstance!!
+
+    private val translators = arrayOf(
+        "Bing",
+        "Google",
+    )
+
+    private val provider: String get() =
+        preferences.getString(TRANSLATOR_PROVIDER_PREF, translators.first())!!
 
     /**
      * This ensures that the `OkHttpClient` instance is only created when required, and it is rebuilt
@@ -99,10 +125,25 @@ abstract class MachineTranslations(
             return field
         }
 
-    protected open fun clientBuilder() = network.cloudflareClient.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(2, TimeUnit.MINUTES)
-        .addInterceptorIf(useDefaultComposedImageInterceptor, ComposedImageInterceptor(baseUrl, settings))
+    private val clientUtils = network.cloudflareClient.newBuilder()
+        .rateLimit(3, 2, TimeUnit.SECONDS)
+        .build()
+
+    private lateinit var translator: TranslatorEngine
+
+    protected fun clientBuilder(): OkHttpClient.Builder {
+        translator = when (provider) {
+            "Google" -> GoogleTranslator(clientUtils, headers)
+            else -> BingTranslator(clientUtils, headers)
+        }
+
+        return network.cloudflareClient.newBuilder()
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(2, TimeUnit.MINUTES)
+            .rateLimit(3)
+            .addInterceptorIf(!disableTranslator && language.lang != language.origin, TranslationInterceptor(settings, translator))
+            .addInterceptor(ComposedImageInterceptor(baseUrl, settings))
+    }
 
     private fun OkHttpClient.Builder.addInterceptorIf(condition: Boolean, interceptor: Interceptor): OkHttpClient.Builder {
         return this.takeIf { condition.not() } ?: this.addInterceptor(interceptor)
@@ -186,10 +227,10 @@ abstract class MachineTranslations(
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-        description = document.selectFirst("p:has(span:contains(Synopsis))")?.ownText()
+        title = document.selectFirst("h1")!!.text().i18n()
+        description = document.selectFirst("p:has(span:contains(Synopsis))")?.ownText()?.i18n()
         author = document.selectFirst("p:has(span:contains(Author))")?.ownText()
-        genre = document.select("h2:contains(Genres) + div span").joinToString { it.text() }
+        genre = document.select("h2:contains(Genres) + div span").joinToString { it.text() }.i18n()
         thumbnail_url = document.selectFirst("img.object-cover")?.absUrl("src")
         document.selectFirst("p:has(span:contains(Status))")?.ownText()?.let {
             status = when (it.lowercase()) {
@@ -227,7 +268,7 @@ abstract class MachineTranslations(
             val fragment = json.encodeToString<List<Dialog>>(
                 dto.dialogues.filter { it.getTextBy(language).isNotBlank() },
             )
-            Page(index, imageUrl = "$imageUrl#$fragment")
+            Page(index, imageUrl = "$imageUrl${fragment.toFragment()}")
         }
     }
 
@@ -254,8 +295,12 @@ abstract class MachineTranslations(
         }
     }
 
-    private inline fun <reified T> String.parseAs(): T {
-        return json.decodeFromString(this)
+    // Prevent bad fragments
+    fun String.toFragment(): String = "#${this.replace("#", "*")}"
+
+    private fun String.i18n(): String = when {
+        enableMangaDetailsTranslation -> translator.translate(language.origin, language.target, this)
+        else -> this
     }
 
     // =============================== Filters ================================
@@ -273,6 +318,9 @@ abstract class MachineTranslations(
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         // Some libreoffice font sizes
         val sizes = arrayOf(
+            "12", "13", "14",
+            "15", "16", "18",
+            "20", "21", "22",
             "24", "26", "28",
             "32", "36", "40",
             "42", "44", "48",
@@ -288,6 +336,8 @@ abstract class MachineTranslations(
             }.toTypedArray()
             entryValues = sizes
             summary = intl["font_size_summary"]
+
+            setDefaultValue(fontSize.toString())
 
             setOnPreferenceChange { _, newValue ->
                 val selected = newValue as String
@@ -306,14 +356,82 @@ abstract class MachineTranslations(
             }
         }.also(screen::addPreference)
 
-        if (language.disableSourceSettings.not()) {
+        if (!language.disableSourceSettings) {
             SwitchPreferenceCompat(screen.context).apply {
                 key = DISABLE_SOURCE_SETTINGS_PREF
                 title = "⚠ ${intl["disable_website_setting_title"]}"
                 summary = intl["disable_website_setting_summary"]
-                setDefaultValue(false)
+                setDefaultValue(language.disableSourceSettings)
                 setOnPreferenceChange { _, newValue ->
                     disableSourceSettings = newValue as Boolean
+                    true
+                }
+            }.also(screen::addPreference)
+        }
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = DISABLE_WORD_BREAK_PREF
+            title = "⚠ ${intl["disable_word_break_title"]}"
+            summary = intl["disable_word_break_summary"]
+            setDefaultValue(language.disableWordBreak)
+            setOnPreferenceChange { _, newValue ->
+                disableWordBreak = newValue as Boolean
+                true
+            }
+        }.also(screen::addPreference)
+
+        if (language.target == language.origin) {
+            return
+        }
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = ENABLE_MANGA_DETAILS_TRANSLATION_PREF
+            title = "⚠ ${intl["enable_manga_details_translation_title"]}"
+            summary = intl["enable_manga_details_translation_summary"]
+            setDefaultValue(enableMangaDetailsTranslation)
+            setOnPreferenceChange { _, newValue ->
+                enableMangaDetailsTranslation = newValue as Boolean
+                true
+            }
+        }.also(screen::addPreference)
+
+        if (language.supportNativeTranslation) {
+            SwitchPreferenceCompat(screen.context).apply {
+                key = DISABLE_TRANSLATOR_PREF
+                title = "⚠ ${intl["disable_translator_title"]}"
+                summary = intl["disable_translator_summary"]
+                setDefaultValue(language.disableTranslator)
+                setOnPreferenceChange { _, newValue ->
+                    disableTranslator = newValue as Boolean
+                    true
+                }
+            }.also(screen::addPreference)
+        }
+
+        if (!disableTranslator) {
+            ListPreference(screen.context).apply {
+                key = TRANSLATOR_PROVIDER_PREF
+                title = intl["translate_dialog_box_title"]
+                entries = translators
+                entryValues = translators
+                summary = buildString {
+                    appendLine(intl["translate_dialog_box_summary"])
+                    append("\t* %s")
+                }
+
+                setDefaultValue(translators.first())
+
+                setOnPreferenceChange { _, newValue ->
+                    val selected = newValue as String
+                    val index = this.findIndexOfValue(selected)
+                    val entry = entries[index] as String
+
+                    Toast.makeText(
+                        screen.context,
+                        "${intl["translate_dialog_box_toast"]} '$entry'",
+                        Toast.LENGTH_LONG,
+                    ).show()
+
                     true
                 }
             }.also(screen::addPreference)
@@ -338,6 +456,10 @@ abstract class MachineTranslations(
         const val PREFIX_SEARCH = "id:"
         private const val FONT_SIZE_PREF = "fontSizePref"
         private const val DISABLE_SOURCE_SETTINGS_PREF = "disableSourceSettingsPref"
+        private const val DISABLE_WORD_BREAK_PREF = "disableWordBreakPref"
+        private const val DISABLE_TRANSLATOR_PREF = "disableTranslatorPref"
+        private const val ENABLE_MANGA_DETAILS_TRANSLATION_PREF = "enableMangaDetailsTranslationPref"
+        private const val TRANSLATOR_PROVIDER_PREF = "translatorProviderPref"
         private const val DEFAULT_FONT_SIZE = "24"
 
         private val dateFormat: SimpleDateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.US)

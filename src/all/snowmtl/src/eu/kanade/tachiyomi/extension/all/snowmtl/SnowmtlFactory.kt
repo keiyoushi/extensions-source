@@ -11,19 +11,11 @@ class SnowmtlFactory : SourceFactory {
 }
 
 private val languageList = listOf(
-    LanguageSetting("ar", disableSourceSettings = true),
-    LanguageSetting("en"),
-    LanguageSetting("es"),
-    LanguageSetting("fr"),
-    LanguageSetting("id"),
-    LanguageSetting("it"),
-    LanguageSetting("pt-BR", "pt"),
+    Language("ar", disableSourceSettings = true),
+    Language("en"),
+    Language("es"),
+    Language("fr", supportNativeTranslation = true),
+    Language("id", supportNativeTranslation = true),
+    Language("it"),
+    Language("pt-BR", "pt", supportNativeTranslation = true),
 )
-
-data class LanguageSetting(
-    override val lang: String,
-    override val target: String = lang,
-    override val origin: String = "en",
-    override var fontSize: Int = 24,
-    override var disableSourceSettings: Boolean = false,
-) : Language
