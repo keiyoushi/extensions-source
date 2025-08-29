@@ -267,9 +267,7 @@ abstract class MachineTranslations(
                 else -> "https://${dto.imageUrl}"
             }
             val fragment = json.encodeToString<List<Dialog>>(
-                dto.dialogues
-                    .filter { it.getTextBy(language).isNotBlank() }
-                    .distinctBy { it.getTextBy(language) }, // Fix duplicate dialogues
+                dto.dialogues.filter { it.getTextBy(language).isNotBlank() },
             )
             Page(index, imageUrl = "$imageUrl${fragment.toFragment()}")
         }
