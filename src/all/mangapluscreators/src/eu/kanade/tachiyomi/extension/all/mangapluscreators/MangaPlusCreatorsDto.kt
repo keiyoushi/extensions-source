@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.mangapluscreators
 
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -18,15 +17,7 @@ data class MpcTitle(
     @SerialName("is_one_shot") val isOneShot: Boolean,
     val author: MpcAuthorDto,
     @SerialName("latest_episode") val latestEpisode: MpcLatestEpisode,
-) {
-
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@MpcTitle.title
-        thumbnail_url = thumbnail
-        url = "/titles/${latestEpisode.titleConnectId}"
-        author = this@MpcTitle.author.name
-    }
-}
+)
 
 @Serializable
 data class MpcAuthorDto(

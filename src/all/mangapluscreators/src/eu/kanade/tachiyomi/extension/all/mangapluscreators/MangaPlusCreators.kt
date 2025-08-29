@@ -86,10 +86,21 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = json.decodeFromString<MpcResponse>(response.body.string())
 
-        val titles = result.titles.orEmpty().map(MpcTitle::toSManga)
+        val titles = result.titles.orEmpty().map { title -> title.toSManga() }
 
         // TODO: handle last page of latest
         return MangasPage(titles, result.status != "error")
+    }
+
+    fun MpcTitle.toSManga(): SManga {
+        val mTitle = this.title
+        val mAuthor = this.author.name // TODO: maybe not required
+        return SManga.create().apply {
+            title = mTitle
+            thumbnail_url = thumbnail
+            setUrlWithoutDomain("/titles/${latestEpisode.titleConnectId}")
+            author = mAuthor
+        }
     }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
@@ -111,11 +122,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
                     val readerElement = result.select("div[react=viewer]")
                     val dataTitle = readerElement.attr("data-title")
                     val dataTitleResult = json.decodeFromString<MpcReaderDataTitle>(dataTitle)
-                    val episodeAsSManga = SManga.create().apply {
-                        title = dataTitleResult.title
-                        thumbnail_url = dataTitleResult.thumbnail
-                        setUrlWithoutDomain("/titles/${dataTitleResult.contentsId}")
-                    }
+                    val episodeAsSManga = dataTitleResult.toSManga()
                     MangasPage(listOf(episodeAsSManga), false)
                 }
         }
@@ -139,6 +146,15 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
                 }
         }
         return super.fetchSearchManga(page, query, filters)
+    }
+
+    fun MpcReaderDataTitle.toSManga(): SManga {
+        val mTitle = title
+        return SManga.create().apply {
+            title = mTitle
+            thumbnail_url = thumbnail
+            setUrlWithoutDomain("/titles/${contentsId}")
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
