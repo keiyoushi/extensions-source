@@ -49,4 +49,12 @@ data class MpcReaderPage(
     @SerialName("image_url") val imageUrl: String,
 )
 
+@Serializable
+data class MpcReaderDataTitle(
+    val title: String,
+    val thumbnail: String,
+    @SerialName("is_one_shot") val isOneShot: Boolean,
+    @SerialName("contents_id") val contentsId: String,
+)
+
 data class ChaptersPage(val chapters: List<SChapter>, val hasNextPage: Boolean)
