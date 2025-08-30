@@ -67,18 +67,18 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         if (!request.headers["authorization"].isNullOrBlank() && response.peekBody(Long.MAX_VALUE).parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false) {
             return response
         }
-        var token: String = preferences.getString("TOKEN", "")!!
+        var token: String = preferences.getString(TOKEN_PREF, "")!!
         if (!isValid(token)) {
-            val username = preferences.getString("USERNAME", "")!!
-            val password = preferences.getString("PASSWORD", "")!!
+            val username = preferences.getString(USERNAME_PREF, "")!!
+            val password = preferences.getString(PASSWORD_PREF, "")!!
             token = getToken(username, password)
             if (token.isBlank()) {
-                preferences.edit().putString("TOKEN", "").apply()
-                preferences.edit().putString("USERNAME", "").apply()
-                preferences.edit().putString("PASSWORD", "").apply()
+                preferences.edit().putString(TOKEN_PREF, "").apply()
+                preferences.edit().putString(USERNAME_PREF, "").apply()
+                preferences.edit().putString(PASSWORD_PREF, "").apply()
                 return response
             } else {
-                preferences.edit().putString("TOKEN", token).apply()
+                preferences.edit().putString(TOKEN_PREF, token).apply()
                 apiHeaders = apiHeaders.newBuilder().setToken(token).build()
             }
         } else if (!request.headers["authorization"].isNullOrBlank() && request.headers["authorization"] == "Bearer $token") {
@@ -95,7 +95,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         if (token.isNotBlank()) set("authorization", "Bearer $token")
     }
 
-    private var apiHeaders = headersBuilder().setToken(preferences.getString("TOKEN", "")!!).build()
+    private var apiHeaders = headersBuilder().setToken(preferences.getString(TOKEN_PREF, "")!!).build()
 
     private fun isValid(token: String): Boolean {
         if (token.isBlank()) return false
@@ -268,37 +268,40 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     companion object {
         val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()
+        const val USERNAME_PREF = "USERNAME"
+        const val PASSWORD_PREF = "PASSWORD"
+        const val TOKEN_PREF = "TOKEN"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             EditTextPreference(screen.context).apply {
-                key = "USERNAME"
+                key = USERNAME_PREF
                 title = "用户名"
                 summary = "该配置被修改后，会清空令牌(Token)以便重新登录；如果登录失败，会清空该配置"
                 setOnPreferenceChangeListener { _, _ ->
                     // clean token after username/password changed
-                    preferences.edit().putString("TOKEN", "").apply()
+                    preferences.edit().putString(TOKEN_PREF, "").apply()
                     true
                 }
             }.let(screen::addPreference)
 
             EditTextPreference(screen.context).apply {
-                key = "PASSWORD"
+                key = PASSWORD_PREF
                 title = "密码"
                 summary = "该配置被修改后，会清空令牌(Token)以便重新登录；如果登录失败，会清空该配置"
                 setOnPreferenceChangeListener { _, _ ->
                     // clean token after username/password changed
-                    preferences.edit().putString("TOKEN", "").apply()
+                    preferences.edit().putString(TOKEN_PREF, "").apply()
                     true
                 }
             }.let(screen::addPreference)
 
             EditTextPreference(screen.context).apply {
-                key = "TOKEN"
+                key = TOKEN_PREF
                 title = "令牌(Token)"
                 summary = "当前登录状态：${
-                if (preferences.getString("TOKEN", "").isNullOrEmpty()) "未登录" else "已登录"
+                if (preferences.getString(TOKEN_PREF, "").isNullOrEmpty()) "未登录" else "已登录"
                 }\n填写用户名和密码后，不会立刻尝试登录，会在下次请求时自动尝试"
 
                 setEnabled(false)
