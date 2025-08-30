@@ -170,3 +170,8 @@ data class ImageRetryParamsDto(
     val url: String,
     val index: Int,
 )
+
+@Serializable
+data class CanReadDto(
+    val canRead: Boolean?,
+)

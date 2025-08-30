@@ -43,7 +43,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     private val mobileBaseUrl = "https://m.zaimanhua.com"
     private val apiUrl = "https://v4api.zaimanhua.com/app/v1"
     private val accountApiUrl = "https://account-api.zaimanhua.com/v1"
-    private val checkTokenRegex = Regex("""$apiUrl/comic/(detail|chapter)""")
+    private val checkTokenRegex = Regex("""$apiUrl/comic/chapter""")
 
     private val json by injectLazy<Json>()
 
@@ -64,7 +64,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         }
 
         val response = chain.proceed(request)
-        if (!request.headers["authorization"].isNullOrBlank() && response.peekBody(Long.MAX_VALUE).parseAs<SimpleResponseDto>().errno == 0) {
+        if (!request.headers["authorization"].isNullOrBlank() && response.peekBody(Long.MAX_VALUE).parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false) {
             return response
         }
         var token: String = preferences.getString("TOKEN", "")!!
