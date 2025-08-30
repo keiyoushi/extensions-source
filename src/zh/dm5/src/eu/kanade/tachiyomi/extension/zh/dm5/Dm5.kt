@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.dm5
 
 import android.content.SharedPreferences
+import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.unpacker.Unpacker
@@ -26,12 +27,12 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "动漫屋"
-    override val baseUrl = "https://www.dm5.cn"
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(CommentsInterceptor)
         .build()
 
     private val preferences: SharedPreferences = getPreferences()
+    override val baseUrl = preferences.getString(MIRROR_PREF, MIRROR_ENTRIES[0])!!
 
     // Some mangas are blocked without this
     override fun headersBuilder() = super.headersBuilder().set("Accept-Language", "zh-TW")
@@ -186,6 +187,13 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val mirrorPreference = ListPreference(screen.context).apply {
+            key = MIRROR_PREF
+            title = "使用镜像网址"
+            entries = MIRROR_ENTRIES
+            entryValues = MIRROR_ENTRIES
+            setDefaultValue(MIRROR_ENTRIES[0])
+        }
         val chapterCommentsPreference = SwitchPreferenceCompat(screen.context).apply {
             key = CHAPTER_COMMENTS_PREF
             title = "章末吐槽页"
@@ -197,11 +205,17 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
             title = "依照上傳時間排序章節"
             setDefaultValue(false)
         }
+        screen.addPreference(mirrorPreference)
         screen.addPreference(chapterCommentsPreference)
         screen.addPreference(sortChapterPreference)
     }
 
     companion object {
+        private val MIRROR_ENTRIES get() = arrayOf(
+            "https://www.dm5.cn",
+            "https://www.dm5.com",
+        )
+        private const val MIRROR_PREF = "mirror"
         private const val CHAPTER_COMMENTS_PREF = "chapterComments"
         private const val SORT_CHAPTER_PREF = "sortChapter"
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
