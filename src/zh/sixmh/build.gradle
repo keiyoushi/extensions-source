@@ -3,7 +3,7 @@ ext {
     extClass = '.SixMH'
     themePkg = 'mccms'
     baseUrl = 'https://www.liumanhua.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 
