@@ -32,7 +32,7 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
         .build()
 
     private val preferences: SharedPreferences = getPreferences()
-    override val baseUrl = preferences.getString("mirror", MIRROR_ENTRIES[0])!!
+    override val baseUrl = preferences.getString(MIRROR_PREF, MIRROR_ENTRIES[0])!!
 
     // Some mangas are blocked without this
     override fun headersBuilder() = super.headersBuilder().set("Accept-Language", "zh-TW")
@@ -188,7 +188,7 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mirrorPreference = ListPreference(screen.context).apply {
-            key = "mirror"
+            key = MIRROR_PREF
             title = "使用镜像网址"
             entries = MIRROR_ENTRIES
             entryValues = MIRROR_ENTRIES
@@ -215,6 +215,7 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
             "https://www.dm5.cn",
             "https://www.dm5.com",
         )
+        private const val MIRROR_PREF = "mirror"
         private const val CHAPTER_COMMENTS_PREF = "chapterComments"
         private const val SORT_CHAPTER_PREF = "sortChapter"
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
