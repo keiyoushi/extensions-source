@@ -26,6 +26,7 @@ class SixMH : MCCMSWeb("六漫画", "https://www.liumanhua.com") {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val request = super.searchMangaRequest(page, query, filters)
+        // Use mobile user agent
         return GET(request.url, headers)
     }
 
