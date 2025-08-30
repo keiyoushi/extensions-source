@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -53,6 +54,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         .rateLimit(5)
         .addInterceptor(::authIntercept)
         .addInterceptor(::imageRetryInterceptor)
+        .addInterceptor(CommentsInterceptor)
         .build()
 
     private fun authIntercept(chain: Interceptor.Chain): Response {
@@ -176,12 +178,18 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
             if (!result.data.data!!.canRead) {
                 throw Exception("用户权限不足，请提升用户等级")
             }
-            return Observable.just(
-                result.data.data.images.mapIndexed { index, it ->
+            return Observable.fromCallable {
+                val images = result.data.data.images
+                val pageList = images.mapIndexedTo(ArrayList(images.size + 1)) { index, it ->
                     val fragment = json.encodeToString(ImageRetryParamsDto(chapter.url, index))
                     Page(index, imageUrl = "$it#$fragment")
-                },
-            )
+                }
+                if (preferences.getBoolean(COMMENTS_PREF, false)) {
+                    val (mangaId, chapterId) = chapter.url.split("/", limit = 2)
+                    pageList.add(Page(pageList.size, COMMENTS_FLAG, chapterCommentsUrl(mangaId, chapterId)))
+                }
+                pageList
+            }
         }
     }
 
@@ -201,6 +209,15 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
             val imageUrl = result.data.data!!.images[params.index]
             return chain.proceed(GET(imageUrl, headers))
         }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        if (page.url == COMMENTS_FLAG) {
+            return GET(page.imageUrl!!, apiHeaders).newBuilder()
+                .tag(String::class, COMMENTS_FLAG)
+                .build()
+        }
+        return GET(page.imageUrl!!, headers)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -266,15 +283,26 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         RankingGroup(),
     )
 
+    private fun chapterCommentsUrl(comicId: String, chapterId: String) = "$apiUrl/viewpoint/list?comicId=$comicId&chapterId=$chapterId"
+
     companion object {
         val USE_CACHE = CacheControl.Builder().maxStale(170, TimeUnit.SECONDS).build()
         const val USERNAME_PREF = "USERNAME"
         const val PASSWORD_PREF = "PASSWORD"
         const val TOKEN_PREF = "TOKEN"
+        const val COMMENTS_PREF = "COMMENTS"
+        const val COMMENTS_FLAG = "COMMENTS"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
+            SwitchPreferenceCompat(screen.context).apply {
+                key = COMMENTS_PREF
+                title = "章末吐槽页"
+                summary = "修改后，已加载的章节需要清除章节缓存才能生效。"
+                setDefaultValue(false)
+            }.let(screen::addPreference)
+
             EditTextPreference(screen.context).apply {
                 key = USERNAME_PREF
                 title = "用户名"
