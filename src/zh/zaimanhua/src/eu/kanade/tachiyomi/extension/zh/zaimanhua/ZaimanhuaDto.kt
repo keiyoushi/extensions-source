@@ -5,7 +5,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 class MangaDto(
@@ -170,3 +172,23 @@ data class ImageRetryParamsDto(
     val url: String,
     val index: Int,
 )
+
+@Serializable
+class CanReadDto(
+    val canRead: Boolean?,
+)
+
+@Serializable
+class CommentDataDto(
+    val list: List<JsonArray>?,
+) {
+    fun toCommentList(): List<String> {
+        return if (list.isNullOrEmpty()) {
+            listOf("没有吐槽")
+        } else {
+            list.map { item ->
+                item.last().jsonPrimitive.content
+            }
+        }
+    }
+}
