@@ -197,7 +197,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         val request = chain.request()
         val response = chain.proceed(request)
         val fragment = request.url.fragment
-        if (response.isSuccessful || request.url.host != "images.zaimanhua.com" || fragment == null) return response
+        if (response.isSuccessful || request.tag(String::class) != IMAGE_RETRY_FLAG || fragment == null) return response
         response.close()
 
         val params = json.decodeFromString<ImageRetryParamsDto>(fragment)
@@ -212,12 +212,11 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     override fun imageRequest(page: Page): Request {
-        if (page.url == COMMENTS_FLAG) {
-            return GET(page.imageUrl!!, apiHeaders).newBuilder()
-                .tag(String::class, COMMENTS_FLAG)
-                .build()
-        }
-        return GET(page.imageUrl!!, headers)
+        val flag = if (page.url == COMMENTS_FLAG) COMMENTS_FLAG else IMAGE_RETRY_FLAG
+        val reqHeaders = if (page.url == COMMENTS_FLAG) apiHeaders else headers
+        return GET(page.imageUrl!!, reqHeaders).newBuilder()
+            .tag(String::class, flag)
+            .build()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -292,6 +291,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         const val TOKEN_PREF = "TOKEN"
         const val COMMENTS_PREF = "COMMENTS"
         const val COMMENTS_FLAG = "COMMENTS"
+        const val IMAGE_RETRY_FLAG = "IMAGE_RETRY"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
