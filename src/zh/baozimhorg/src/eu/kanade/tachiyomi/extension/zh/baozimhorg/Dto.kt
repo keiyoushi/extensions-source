@@ -44,22 +44,19 @@ class AttributesDto(
     }
 }
 
-fun parseDate(dateString: String): Long {
-    val formats = listOf(
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        },
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        },
-    )
+private val formats = listOf(
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    },
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    },
+)
 
+fun parseDate(dateString: String): Long {
     for (format in formats) {
-        try {
-            return format.parse(dateString)!!.time
-        } catch (e: Exception) {
-            // Continue to next format
-        }
+        val date = format.parse(dateString, ParsePosition(0)) ?: continue
+        return date.time
     }
     throw IllegalArgumentException("Unable to parse date: $dateString")
 }
