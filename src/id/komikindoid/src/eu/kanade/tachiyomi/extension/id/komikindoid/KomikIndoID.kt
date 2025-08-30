@@ -40,7 +40,7 @@ class KomikIndoID : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
     override fun latestUpdatesFromElement(element: Element): SManga = searchMangaFromElement(element)
 
-    override fun popularMangaNextPageSelector() = "#load-more-manga"
+    override fun popularMangaNextPageSelector() = "a.next.page-numbers"
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
