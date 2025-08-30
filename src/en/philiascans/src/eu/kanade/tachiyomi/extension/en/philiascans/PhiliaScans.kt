@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.philiascans
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,7 +14,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import rx.Observable
 
 class PhiliaScans : HttpSource() {
 
@@ -26,12 +24,6 @@ class PhiliaScans : HttpSource() {
     override val versionId: Int = 3
 
     override val client: OkHttpClient = network.cloudflareClient
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return client.newCall(popularMangaRequest(page))
-            .asObservableSuccess()
-            .map { response -> popularMangaParse(response) }
-    }
 
     override fun popularMangaRequest(page: Int): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -57,23 +49,11 @@ class PhiliaScans : HttpSource() {
         thumbnail_url = element.selectFirst("a.poster div.poster-image-wrapper > img")?.attr("abs:src")
     }
 
-    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        return client.newCall(latestUpdatesRequest(page))
-            .asObservableSuccess()
-            .map { response -> latestUpdatesParse(response) }
-    }
-
     override fun latestUpdatesRequest(page: Int): Request {
         return GET("$baseUrl/recently-updated/?page=$page", headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        return client.newCall(searchMangaRequest(page, query, filters))
-            .asObservableSuccess()
-            .map { response -> searchMangaParse(response) }
-    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -212,19 +192,43 @@ class PhiliaScans : HttpSource() {
     private class GenreInclusion : Filter.CheckBox("Must include all selected genres")
 
     private fun getGenreList() = listOf(
-        Genre("Action", "29"), Genre("Adventure", "38"), Genre("Comedy", "42"),
-        Genre("Crime", "30"), Genre("Drama", "34"), Genre("Ecchi", "39"),
-        Genre("Fantasy", "43"), Genre("Gore", "157"), Genre("Gourmet", "188"),
-        Genre("Harem", "46"), Genre("Historical", "40"), Genre("Horror", "44"),
-        Genre("Isekai", "31"), Genre("Josei", "173"),
-        Genre("Josei-None", "302"), Genre("Josei-Seinen", "174"),
-        Genre("Magic", "87"), Genre("Martial Arts", "61"), Genre("Medical", "32"),
-        Genre("Monsters", "99"), Genre("Music", "303"), Genre("Mystery", "35"),
-        Genre("Psychological", "62"), Genre("Regression", "122"), Genre("Romance", "33"),
-        Genre("School Life", "47"), Genre("Sci-Fi", "36"), Genre("Seinen", "48"),
-        Genre("Shoujo", "69"), Genre("Shounen", "55"), Genre("Slice of Life", "37"),
-        Genre("Sports", "45"), Genre("Supernatural", "49"), Genre("Survival", "121"),
-        Genre("Tragedy", "41"), Genre("Villainess", "253"), Genre("War", "120"),
+        Genre("Action", "29"),
+        Genre("Adventure", "38"),
+        Genre("Comedy", "42"),
+        Genre("Crime", "30"),
+        Genre("Drama", "34"),
+        Genre("Ecchi", "39"),
+        Genre("Fantasy", "43"),
+        Genre("Gore", "157"),
+        Genre("Gourmet", "188"),
+        Genre("Harem", "46"),
+        Genre("Historical", "40"),
+        Genre("Horror", "44"),
+        Genre("Isekai", "31"),
+        Genre("Josei", "173"),
+        Genre("Josei-None", "302"),
+        Genre("Josei-Seinen", "174"),
+        Genre("Magic", "87"),
+        Genre("Martial Arts", "61"),
+        Genre("Medical", "32"),
+        Genre("Monsters", "99"),
+        Genre("Music", "303"),
+        Genre("Mystery", "35"),
+        Genre("Psychological", "62"),
+        Genre("Regression", "122"),
+        Genre("Romance", "33"),
+        Genre("School Life", "47"),
+        Genre("Sci-Fi", "36"),
+        Genre("Seinen", "48"),
+        Genre("Shoujo", "69"),
+        Genre("Shounen", "55"),
+        Genre("Slice of Life", "37"),
+        Genre("Sports", "45"),
+        Genre("Supernatural", "49"),
+        Genre("Survival", "121"),
+        Genre("Tragedy", "41"),
+        Genre("Villainess", "253"),
+        Genre("War", "120"),
         Genre("Yuri", "195"),
     )
 
