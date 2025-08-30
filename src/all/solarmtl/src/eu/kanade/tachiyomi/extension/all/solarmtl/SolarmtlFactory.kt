@@ -11,7 +11,7 @@ class SolarmtlFactory : SourceFactory {
 }
 
 private val languageList = listOf(
-    Language("ar", disableSourceSettings = true),
+    Language("ar", disableFontSettings = true),
     Language("en"),
     Language("es"),
     Language("fr", supportNativeTranslation = true),

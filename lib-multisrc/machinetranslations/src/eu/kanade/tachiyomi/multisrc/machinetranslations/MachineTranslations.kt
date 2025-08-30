@@ -73,6 +73,10 @@ abstract class MachineTranslations(
         get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()
         set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
 
+    protected var fontName: String
+        get() = preferences.getString(FONT_NAME_PREF, language.fontName)!!
+        set(value) = preferences.edit().putString(FONT_NAME_PREF, value).apply()
+
     protected var disableWordBreak: Boolean
         get() = preferences.getBoolean(DISABLE_WORD_BREAK_PREF, language.disableWordBreak)
         set(value) = preferences.edit().putBoolean(DISABLE_WORD_BREAK_PREF, value).apply()
@@ -80,10 +84,6 @@ abstract class MachineTranslations(
     protected var disableTranslator: Boolean
         get() = preferences.getBoolean(DISABLE_TRANSLATOR_PREF, language.disableTranslator)
         set(value) = preferences.edit().putBoolean(DISABLE_TRANSLATOR_PREF, value).apply()
-
-    protected var disableSourceSettings: Boolean
-        get() = preferences.getBoolean(DISABLE_SOURCE_SETTINGS_PREF, language.disableSourceSettings)
-        set(value) = preferences.edit().putBoolean(DISABLE_SOURCE_SETTINGS_PREF, value).apply()
 
     protected var enableMangaDetailsTranslation: Boolean
         get() = preferences.getBoolean(ENABLE_MANGA_DETAILS_TRANSLATION_PREF, false)
@@ -98,9 +98,10 @@ abstract class MachineTranslations(
 
     private val settings get() = language.copy(
         fontSize = this@MachineTranslations.fontSize,
+        fontName = this@MachineTranslations.fontName,
         disableWordBreak = this@MachineTranslations.disableWordBreak,
         disableTranslator = this@MachineTranslations.disableTranslator,
-        disableSourceSettings = this@MachineTranslations.disableSourceSettings,
+        disableFontSettings = this@MachineTranslations.fontName == DEVICE_FONT,
     )
 
     override val client: OkHttpClient get() = clientInstance!!
@@ -328,6 +329,14 @@ abstract class MachineTranslations(
             "80", "88", "96",
         )
 
+        val fonts = arrayOf(
+            intl["default_font_name_title"] to "",
+            intl["font_name_device_title"] to DEVICE_FONT,
+            "Anime Ace" to "animeace2_regular",
+            "Comic Neue" to "comic_neue_bold",
+            "Coming Soon" to "coming_soon_regular",
+        )
+
         ListPreference(screen.context).apply {
             key = FONT_SIZE_PREF
             title = intl["font_size_title"]
@@ -335,7 +344,11 @@ abstract class MachineTranslations(
                 "${it}pt" + if (it == DEFAULT_FONT_SIZE) " - ${intl["default_font_size"]}" else ""
             }.toTypedArray()
             entryValues = sizes
-            summary = intl["font_size_summary"]
+
+            summary = buildString {
+                appendLine(intl["font_size_summary"])
+                append("\t* %s")
+            }
 
             setDefaultValue(fontSize.toString())
 
@@ -356,15 +369,35 @@ abstract class MachineTranslations(
             }
         }.also(screen::addPreference)
 
-        if (!language.disableSourceSettings) {
-            SwitchPreferenceCompat(screen.context).apply {
-                key = DISABLE_SOURCE_SETTINGS_PREF
-                title = "⚠ ${intl["disable_website_setting_title"]}"
-                summary = intl["disable_website_setting_summary"]
-                setDefaultValue(language.disableSourceSettings)
+        if (!language.disableFontSettings) {
+            ListPreference(screen.context).apply {
+                key = FONT_NAME_PREF
+                title = intl["font_name_title"]
+                entries = fonts.map {
+                    it.first + if (it.second.isBlank()) " - ${intl["default_font_name"]}" else ""
+                }.toTypedArray()
+                entryValues = fonts.map { it.second }.toTypedArray()
+                summary = buildString {
+                    appendLine(intl["font_name_summary"])
+                    append("\t* %s")
+                }
+
+                setDefaultValue(fontName)
+
                 setOnPreferenceChange { _, newValue ->
-                    disableSourceSettings = newValue as Boolean
-                    true
+                    val selected = newValue as String
+                    val index = this.findIndexOfValue(selected)
+                    val entry = entries[index] as String
+
+                    fontName = selected
+
+                    Toast.makeText(
+                        screen.context,
+                        intl["font_name_message"].format(entry),
+                        Toast.LENGTH_LONG,
+                    ).show()
+
+                    true // It's necessary to update the user interface
                 }
             }.also(screen::addPreference)
         }
@@ -453,9 +486,10 @@ abstract class MachineTranslations(
 
     companion object {
         val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
+        const val DEVICE_FONT = "device:"
         const val PREFIX_SEARCH = "id:"
         private const val FONT_SIZE_PREF = "fontSizePref"
-        private const val DISABLE_SOURCE_SETTINGS_PREF = "disableSourceSettingsPref"
+        private const val FONT_NAME_PREF = "fontNamePref"
         private const val DISABLE_WORD_BREAK_PREF = "disableWordBreakPref"
         private const val DISABLE_TRANSLATOR_PREF = "disableTranslatorPref"
         private const val ENABLE_MANGA_DETAILS_TRANSLATION_PREF = "enableMangaDetailsTranslationPref"
