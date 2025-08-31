@@ -15,7 +15,14 @@ class MPCUrlActivity : Activity() {
         val pathSegments = intent?.data?.pathSegments
         if (pathSegments != null && pathSegments.size > 1) {
             // {medibang.com/mpc,mangaplus-creators.jp}/{episodes,titles,authors}
-            val pathIndex = if (intent?.data?.host?.startsWith("medibang") == true) 1 else 0
+            // TODO: val pathIndex = if (intent?.data?.host?.startsWith("medibang") == true) 1 else 0
+            val host = intent?.data?.host ?: ""
+            val pathIndex = with(host) {
+                when {
+                    equals("medibang.com") -> 1
+                    else -> 0
+                }
+            }
             val idIndex = pathIndex + 1
             val query = when {
                 pathSegments[pathIndex].equals("episodes") -> {
@@ -31,7 +38,9 @@ class MPCUrlActivity : Activity() {
             }
 
             if (query != null) {
-                val mainIntent = Intent().setAction("eu.kanade.tachiyomi.SEARCH").apply {
+                // TODO: val mainIntent = Intent().setAction("eu.kanade.tachiyomi.SEARCH").apply {
+                val mainIntent = Intent().apply {
+                    setAction("eu.kanade.tachiyomi.SEARCH")
                     putExtra("query", query)
                     putExtra("filter", packageName)
                 }
