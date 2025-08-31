@@ -114,7 +114,7 @@ class FenixManhwas : HttpSource() {
     }
 
     private fun parseRelativeDate(date: String): Long {
-        val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0
+        val number = DATE_NUMBER_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
         val cal = Calendar.getInstance()
 
         return when {
@@ -138,5 +138,9 @@ class FenixManhwas : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String = ""
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    companion object {
+        private val DATE_NUMBER_REGEX = """(\d+)""".toRegex()
+    }
 }
