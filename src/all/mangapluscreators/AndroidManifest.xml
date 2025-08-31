@@ -3,7 +3,7 @@
 
     <application>
         <activity
-            android:name=".all.mangapluscreators.MangaPlusCreatorsUrlActivity"
+            android:name=".all.mangapluscreators.MPCUrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">
@@ -15,28 +15,28 @@
 
                 <data
                     android:host="mangaplus-creators.jp"
-                    android:pathPattern="/episodes/.+"
+                    android:pathAdvancedPattern="/episodes/.+"
                     android:scheme="https" />
                 <data
                     android:host="mangaplus-creators.jp"
-                    android:pathPattern="/titles/.+"
+                    android:pathPattern="/titles/..*"
                     android:scheme="https" />
                 <data
                     android:host="mangaplus-creators.jp"
-                    android:pathPattern="/authors/.+"
+                    android:pathAdvancedPattern="/authors/.+"
                     android:scheme="https" />
 
                 <data
                     android:host="medibang.com"
-                    android:pathPattern="/mpc/episodes/.+"
+                    android:pathAdvancedPattern="/mpc/episodes/.+"
                     android:scheme="https" />
                 <data
                     android:host="medibang.com"
-                    android:pathPattern="/mpc/titles/.+"
+                    android:pathAdvancedPattern="/mpc/titles/..+"
                     android:scheme="https" />
                 <data
                     android:host="medibang.com"
-                    android:pathPattern="/mpc/authors/.+"
+                    android:pathAdvancedPattern="/mpc/authors/[0-9]+"
                     android:scheme="https" />
             </intent-filter>
         </activity>
