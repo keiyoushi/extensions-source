@@ -39,6 +39,7 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
 
     // Some mangas are blocked without this
     override fun headersBuilder() = super.headersBuilder().set("Accept-Language", "zh-TW")
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manhua-list-p$page/", headers)
     override fun popularMangaNextPageSelector(): String = "div.page-pagination a:contains(>)"
