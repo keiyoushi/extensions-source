@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.mangapluscreators
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -145,7 +146,34 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
                     MangasPage(smangas, false)
                 }
         }
-        return super.fetchSearchManga(page, query, filters)
+        if (query.isNotBlank()) {
+            return super.fetchSearchManga(page, query, filters)
+        }
+
+        // nothing to search, filters active -> browsing /genres instead
+        // TODO: check if there's a better way (filters is independent of search but part of it)
+        val genreUrl = baseUrl.toHttpUrl().newBuilder()
+            .apply {
+                addPathSegment("genres")
+                addQueryParameter("l", lang)
+                filters.forEach { filter ->
+                    when (filter) {
+                        is SortFilter -> {
+                            if (filter.selected.isNotEmpty()) {
+                                addQueryParameter("s", filter.selected)
+                            }
+                        }
+                        is GenreFilter -> addPathSegment(filter.selected)
+                        else -> { /* Nothing else is supported for now */ }
+                    }
+                }
+            }.toString()
+
+        return client.newCall(GET(genreUrl))
+            .asObservableSuccess()
+            .map { response ->
+                popularMangaParse(response)
+            }
     }
 
     fun MpcReaderDataTitle.toSManga(): SManga {
@@ -293,9 +321,59 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         private const val API_URL = "$BASE_URL/api"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
-
         const val PREFIX_TITLE_ID_SEARCH = "title:"
         const val PREFIX_EPISODE_ID_SEARCH = "episode:"
         const val PREFIX_AUTHOR_ID_SEARCH = "author:"
     }
+
+    override fun getFilterList() = FilterList(
+        Filter.Separator(),
+        Filter.Header("NOTE: Ignored if using text search!"),
+        Filter.Separator(),
+        SortFilter(),
+        GenreFilter(),
+        Filter.Separator(),
+    )
+
+    class SortFilter() : SelectFilter(
+        "Sort",
+        listOf(
+            SelectFilterOption("Popularity", ""),
+            SelectFilterOption("Date", "latest_desc"),
+            SelectFilterOption("Likes", "like_desc"),
+        ),
+        0,
+    )
+
+    class GenreFilter() : SelectFilter(
+        "Genres",
+        listOf(
+            SelectFilterOption("Fantasy", "fantasy"),
+            SelectFilterOption("Action", "action"),
+            SelectFilterOption("Romance", "romance"),
+            SelectFilterOption("Horror", "horror"),
+            SelectFilterOption("Slice of Life", "slice_of_life"),
+            SelectFilterOption("Comedy", "comedy"),
+            SelectFilterOption("Sports", "sports"),
+            SelectFilterOption("Sci-Fi", "sf"),
+            SelectFilterOption("Mystery", "mystery"),
+            SelectFilterOption("Others", "others"),
+        ),
+        0,
+    )
+
+    abstract class SelectFilter(
+        name: String,
+        private val options: List<SelectFilterOption>,
+        default: Int = 0,
+    ) : Filter.Select<String>(
+        name,
+        options.map { it.name }.toTypedArray(),
+        default,
+    ) {
+        val selected: String
+            get() = options[state].value
+    }
+
+    data class SelectFilterOption(val name: String, val value: String)
 }
