@@ -35,6 +35,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     private val json: Json by injectLazy()
 
+    // POPULAR Section
     override fun popularMangaRequest(page: Int): Request {
         val newHeaders = headersBuilder()
             .set("Referer", "$baseUrl/titles/popular/?p=m")
@@ -70,6 +71,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         }
     }
 
+    // LATEST Section
     override fun latestUpdatesRequest(page: Int): Request {
         val newHeaders = headersBuilder()
             .set("Referer", "$baseUrl/titles/recent/?t=episode")
@@ -104,6 +106,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         }
     }
 
+    // SEARCH Section
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         // TODO: HTTPSource::fetchSearchManga is deprecated? super.getSearchManga
         if (query.startsWith(PREFIX_TITLE_ID_SEARCH)) {
@@ -208,6 +211,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         "div.item-search",
     )
 
+    // MANGA Section
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.asJsoup()
         val bookBox = result.selectFirst(".book-box")!!
@@ -228,6 +232,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         }
     }
 
+    // CHAPTER Section
     override fun chapterListRequest(manga: SManga): Request {
         val titleContentId = (baseUrl + manga.url).toHttpUrl().pathSegments[1]
         return chapterListPageRequest(1, titleContentId)
@@ -291,6 +296,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         }
     }
 
+    // PAGES & IMAGES Section
     override fun pageListParse(response: Response): List<Page> {
         val result = response.asJsoup()
         val readerElement = result.select("div[react=viewer]")
@@ -315,11 +321,6 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    private fun parseChapterDate(dateStr: String): Long {
-        return runCatching { CHAPTER_DATE_FORMAT.parse(dateStr)?.time }
-            .getOrNull() ?: 0L
-    }
-
     companion object {
         private val CHAPTER_DATE_FORMAT by lazy {
             SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
@@ -333,6 +334,12 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         const val PREFIX_AUTHOR_ID_SEARCH = "author:"
     }
 
+    private fun parseChapterDate(dateStr: String): Long {
+        return runCatching { CHAPTER_DATE_FORMAT.parse(dateStr)?.time }
+            .getOrNull() ?: 0L
+    }
+
+    // FILTERS Section
     override fun getFilterList() = FilterList(
         Filter.Separator(),
         Filter.Header("NOTE: Ignored if using text search!"),
