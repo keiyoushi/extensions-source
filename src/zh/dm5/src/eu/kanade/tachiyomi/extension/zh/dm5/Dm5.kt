@@ -228,11 +228,14 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
                         val cookies = manager.getCookie(mirror) ?: continue
                         val cookieList = cookies.split("; ")
                         before += cookieList.size
-                        val domain = mirror.toHttpUrl().topPrivateDomain()
+                        val url = mirror.toHttpUrl()
+                        val domain = url.host
+                        val topDomain = url.topPrivateDomain()
                         for (cookie in cookieList) {
                             val name = cookie.substringBefore('=')
                             manager.setCookie(mirror, "$name=; Max-Age=-1; Path=/")
                             manager.setCookie(mirror, "$name=; Max-Age=-1; Domain=$domain; Path=/")
+                            manager.setCookie(mirror, "$name=; Max-Age=-1; Domain=$topDomain; Path=/")
                         }
                         val cookiesAfter = manager.getCookie(mirror) ?: continue
                         after += cookiesAfter.split("; ").size
