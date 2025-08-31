@@ -44,7 +44,7 @@ data class MpcReaderPage(
 data class MpcReaderDataTitle(
     val title: String,
     val thumbnail: String,
-    @SerialName("is_one_shot") val isOneShot: Boolean,
+    @SerialName("is_oneshot") val isOneShot: Boolean,
     @SerialName("contents_id") val contentsId: String,
 )
 
