@@ -25,7 +25,7 @@ class FenixManhwas : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override val versionId: Int = 2
+    override val versionId: Int = 3
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
