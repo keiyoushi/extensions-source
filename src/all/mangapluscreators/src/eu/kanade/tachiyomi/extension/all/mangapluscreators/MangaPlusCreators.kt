@@ -108,11 +108,18 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         // TODO: HTTPSource::fetchSearchManga is deprecated? super.getSearchManga
         if (query.startsWith(PREFIX_TITLE_ID_SEARCH)) {
             val titleContentId = query.removePrefix(PREFIX_TITLE_ID_SEARCH)
-            return client.newCall(GET("$baseUrl/titles/$titleContentId"))
+            val titleUrl = "$baseUrl/titles/$titleContentId"
+            return client.newCall(GET(titleUrl))
                 .asObservableSuccess()
                 .map { response ->
-                    val titleAsSManga = mangaDetailsParse(response)
-                    MangasPage(listOf(titleAsSManga), false)
+                    val result = response.asJsoup()
+                    val bookBox = result.selectFirst(".book-box")!!
+                    val title = SManga.create().apply {
+                        title = bookBox.selectFirst("div.title")!!.text()
+                        thumbnail_url = bookBox.selectFirst("div.cover img")!!.attr("data-src")
+                        setUrlWithoutDomain(titleUrl)
+                    }
+                    MangasPage(listOf(title), false)
                 }
         }
         if (query.startsWith(PREFIX_EPISODE_ID_SEARCH)) {
@@ -181,7 +188,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return SManga.create().apply {
             title = mTitle
             thumbnail_url = thumbnail
-            setUrlWithoutDomain("/titles/${contentsId}")
+            setUrlWithoutDomain("/titles/$contentsId")
         }
     }
 
