@@ -332,7 +332,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         Filter.Separator(),
     )
 
-    class SortFilter() : SelectFilter(
+    private class SortFilter() : SelectFilter(
         "Sort",
         listOf(
             SelectFilterOption("Popularity", ""),
@@ -342,7 +342,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         0,
     )
 
-    class GenreFilter() : SelectFilter(
+    private class GenreFilter() : SelectFilter(
         "Genres",
         listOf(
             SelectFilterOption("Fantasy", "fantasy"),
@@ -359,7 +359,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         0,
     )
 
-    abstract class SelectFilter(
+    private abstract class SelectFilter(
         name: String,
         private val options: List<SelectFilterOption>,
         default: Int = 0,
@@ -372,5 +372,5 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             get() = options[state].value
     }
 
-    data class SelectFilterOption(val name: String, val value: String)
+    private data class SelectFilterOption(val name: String, val value: String)
 }
