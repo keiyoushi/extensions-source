@@ -46,7 +46,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         "div.item-recent",
     )
 
-    fun parseMangasPageFromElement(response: Response, selector: String): MangasPage {
+    private fun parseMangasPageFromElement(response: Response, selector: String): MangasPage {
         val result = response.asJsoup()
 
         val mangas = result.select(selector).map { element ->
@@ -56,7 +56,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    fun popularElementToSManga(element: Element): SManga {
+    private fun popularElementToSManga(element: Element): SManga {
         val titleThumbnailUrl = element.select(".image-area img").attr("src")
         val titleContentId = titleThumbnailUrl.toHttpUrl().pathSegments[2]
         return SManga.create().apply {
@@ -86,7 +86,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return MangasPage(titles, result.status != "error")
     }
 
-    fun MpcTitle.toSManga(): SManga {
+    private fun MpcTitle.toSManga(): SManga {
         val mTitle = this.title
         val mAuthor = this.author.name // TODO: maybe not required
         return SManga.create().apply {
@@ -177,7 +177,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             }
     }
 
-    fun MpcReaderDataTitle.toSManga(): SManga {
+    private fun MpcReaderDataTitle.toSManga(): SManga {
         val mTitle = title
         return SManga.create().apply {
             title = mTitle
@@ -229,7 +229,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return chapterListPageRequest(1, titleContentId)
     }
 
-    fun chapterListPageRequest(page: Int, titleContentId: String): Request {
+    private fun chapterListPageRequest(page: Int, titleContentId: String): Request {
         return GET("$baseUrl/titles/$titleContentId/?page=$page", headers)
     }
 
@@ -257,7 +257,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return chapterListResult.asReversed()
     }
 
-    fun chapterListPageParse(response: Response): ChaptersPage {
+    private fun chapterListPageParse(response: Response): ChaptersPage {
         val result = response.asJsoup()
         val chapters = result.select(".mod-item-series").map {
                 element ->
@@ -270,7 +270,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         )
     }
 
-    fun chapterElementToSChapter(element: Element): SChapter {
+    private fun chapterElementToSChapter(element: Element): SChapter {
         val episode = element.attr("href").substringAfterLast("/")
         val latestUpdatedDate = element.select(".first-update").text()
         val chapterNumberElement = element.select(".number").text()
