@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.zaimanhua
 
+import eu.kanade.tachiyomi.extension.zh.zaimanhua.Zaimanhua.Companion.DEFAULT_PAGE_SIZE
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -100,23 +101,29 @@ class ChapterImagesDto(
 
 @Serializable
 class PageDto(
+    @JsonNames("comicList")
     private val list: List<PageItemDto>?,
-    private val page: Int,
-    private val size: Int,
+    private val page: Int?,
+    private val size: Int?,
+    @JsonNames("totalNum")
     private val total: Int,
 ) {
-    fun toMangasPage(): MangasPage {
+    fun toMangasPage(page: Int): MangasPage {
+        val currentPage = this.page ?: page
+        val pageSize = this.size ?: DEFAULT_PAGE_SIZE
         if (list.isNullOrEmpty()) throw Exception("漫画结果为空，请检查输入")
-        val hasNextPage = page * size < total
+        val hasNextPage = currentPage * pageSize < total
         return MangasPage(list.map { it.toSManga() }, hasNextPage)
     }
 }
 
 @Serializable
 class PageItemDto(
+    // must have at least one of id and comicId
     private val id: Int?,
     @SerialName("comic_id")
-    private val comicId: Int,
+    private val comicId: Int?,
+    @JsonNames("name")
     private val title: String,
     private val authors: String?,
     private val status: String?,
@@ -124,7 +131,7 @@ class PageItemDto(
     private val types: String?,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = (this@PageItemDto.id?.takeIf { it != 0 } ?: this@PageItemDto.comicId).toString()
+        url = (this@PageItemDto.comicId ?: this@PageItemDto.id).toString()
         title = this@PageItemDto.title
         author = authors?.formatList()
         genre = types?.formatList()

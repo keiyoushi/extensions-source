@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -233,24 +234,32 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         apiHeaders,
     )
 
+    private fun genreApiUrl(): HttpUrl.Builder =
+        "$apiUrl/comic/filter/list".toHttpUrl().newBuilder()
+            .addQueryParameter("size", DEFAULT_PAGE_SIZE.toString())
+
     override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
     // Search
     private fun searchApiUrl(): HttpUrl.Builder =
         "$apiUrl/search/index".toHttpUrl().newBuilder().addQueryParameter("source", "0")
-            .addQueryParameter("size", "20")
+            .addQueryParameter("size", DEFAULT_PAGE_SIZE.toString())
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val ranking = filters.filterIsInstance<RankingGroup>().firstOrNull()
-        val url = if (query.isEmpty() && ranking != null) {
-            rankApiUrl().apply {
-                ranking.state.filterIsInstance<QueryFilter>().forEach {
-                    it.addQuery(this)
-                }
+        val genres = filters.filterIsInstance<GenreGroup>().firstOrNull()
+        val url = when {
+            query.isEmpty() && ranking != null && (ranking.state[0] as TimeFilter).state != 0 -> rankApiUrl().apply {
+                ranking.state.filterIsInstance<QueryFilter>().forEach { it.addQuery(this) }
                 addQueryParameter("page", page.toString())
             }.build()
-        } else {
-            searchApiUrl().apply {
+
+            query.isEmpty() && genres != null -> genreApiUrl().apply {
+                genres.state.filterIsInstance<QueryFilter>().forEach { it.addQuery(this) }
+                addQueryParameter("page", page.toString())
+            }.build()
+
+            else -> searchApiUrl().apply {
                 addQueryParameter("keyword", query)
                 addQueryParameter("page", page.toString())
             }.build()
@@ -258,12 +267,15 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         return GET(url, apiHeaders)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        if (response.request.url.toString().startsWith("$apiUrl/comic/rank/list")) {
+    override fun searchMangaParse(response: Response): MangasPage {
+        val url = response.request.url
+        return if (url.toString().startsWith("$apiUrl/comic/rank/list")) {
             latestUpdatesParse(response)
         } else {
-            response.parseAs<ResponseDto<PageDto>>().data.toMangasPage()
+            // "$apiUrl/comic/filter/list" or "$apiUrl/search/index"
+            response.parseAs<ResponseDto<PageDto>>().data.toMangasPage(url.queryParameter("page")!!.toInt())
         }
+    }
 
     // Latest
     // "$apiUrl/comic/update/list/1/$page" is same content
@@ -280,6 +292,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     override fun getFilterList() = FilterList(
         RankingGroup(),
+        Filter.Separator(),
+        Filter.Header("分类(搜索/查看排行榜时无效)"),
+        GenreGroup(),
     )
 
     private fun chapterCommentsUrl(comicId: String, chapterId: String) = "$apiUrl/viewpoint/list?comicId=$comicId&chapterId=$chapterId"
@@ -292,6 +307,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         const val COMMENTS_PREF = "COMMENTS"
         const val COMMENTS_FLAG = "COMMENTS"
         const val IMAGE_RETRY_FLAG = "IMAGE_RETRY"
+        const val DEFAULT_PAGE_SIZE = 20
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
