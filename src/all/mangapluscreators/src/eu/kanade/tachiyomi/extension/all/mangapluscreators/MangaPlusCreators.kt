@@ -57,10 +57,10 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     private fun popularElementToSManga(element: Element): SManga {
-        val titleThumbnailUrl = element.select(".image-area img").attr("src")
+        val titleThumbnailUrl = element.selectFirst(".image-area img")!!.attr("src")
         val titleContentId = titleThumbnailUrl.toHttpUrl().pathSegments[2]
         return SManga.create().apply {
-            title = element.select(".title-area .title").text().toString()
+            title = element.selectFirst(".title-area .title")!!.text().toString()
             thumbnail_url = titleThumbnailUrl
             setUrlWithoutDomain("/titles/$titleContentId")
         }
@@ -121,7 +121,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             return client.newCall(GET("$baseUrl/episodes/$episodeId", headers))
                 .asObservableSuccess().map { response ->
                     val result = response.asJsoup()
-                    val readerElement = result.select("div[react=viewer]")
+                    val readerElement = result.selectFirst("div[react=viewer]")!!
                     val dataTitle = readerElement.attr("data-title")
                     val dataTitleResult = dataTitle.parseAs<MpcReaderDataTitle>()
                     val episodeAsSManga = dataTitleResult.toSManga()
@@ -136,10 +136,10 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
                     val result = response.asJsoup()
                     val elements = result.select("#works .manga-list li .md\\:block")
                     val smangas = elements.map { element ->
-                        val titleThumbnailUrl = element.select(".image-area img").attr("src")
+                        val titleThumbnailUrl = element.selectFirst(".image-area img")!!.attr("src")
                         val titleContentId = titleThumbnailUrl.toHttpUrl().pathSegments[2]
                         SManga.create().apply {
-                            title = element.select("p.text-white").text().toString()
+                            title = element.selectFirst("p.text-white")!!.text().toString()
                             thumbnail_url = titleThumbnailUrl
                             setUrlWithoutDomain("/titles/$titleContentId")
                         }
@@ -272,8 +272,8 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     private fun chapterElementToSChapter(element: Element): SChapter {
         val episode = element.attr("href").substringAfterLast("/")
-        val latestUpdatedDate = element.select(".first-update").text()
-        val chapterNumberElement = element.select(".number").text()
+        val latestUpdatedDate = element.selectFirst(".first-update")!!.text()
+        val chapterNumberElement = element.selectFirst(".number")!!.text()
         val chapterNumber = chapterNumberElement.substringAfter("#").toFloatOrNull()
         return SChapter.create().apply {
             setUrlWithoutDomain("/episodes/$episode")
@@ -290,7 +290,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     // PAGES & IMAGES Section
     override fun pageListParse(response: Response): List<Page> {
         val result = response.asJsoup()
-        val readerElement = result.select("div[react=viewer]")
+        val readerElement = result.selectFirst("div[react=viewer]")!!
         val dataPages = readerElement.attr("data-pages")
         val refererUrl = response.request.url.toString()
         return dataPages.parseAs<MpcReaderDataPages>().pc.map {
