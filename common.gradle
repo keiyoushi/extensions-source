@@ -80,11 +80,6 @@ android {
         resources.excludes.add("kotlin-tooling-metadata.json")
     }
 
-    // https://stackoverflow.com/a/77745844
-    tasks.withType(com.android.build.gradle.tasks.PackageAndroidArtifact).configureEach {
-        doFirst { appMetadata.asFile.getOrNull()?.write('') }
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -123,6 +118,15 @@ tasks.register("writeManifestFile") {
         if (!tempFile.exists()) {
             tempFile.write('<?xml version="1.0" encoding="utf-8"?>\n<manifest />\n')
         }
+    }
+}
+
+afterEvaluate {
+    tasks.withType(com.android.build.gradle.tasks.PackageAndroidArtifact).configureEach {
+        // need to be in afterEvaluate to overwrite default value
+        createdBy = ""
+        // https://stackoverflow.com/a/77745844
+        doFirst { appMetadata.asFile.getOrNull()?.write('') }
     }
 }
 
