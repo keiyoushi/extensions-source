@@ -25,7 +25,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     override val name = "MANGA Plus Creators by SHUEISHA"
 
-    override val baseUrl = BASE_URL
+    override val baseUrl = "https://mangaplus-creators.jp"
 
     override val supportsLatest = true
 
@@ -322,7 +322,6 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         private val CHAPTER_DATE_FORMAT by lazy {
             SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
         }
-        private const val BASE_URL = "https://mangaplus-creators.jp"
         private const val API_URL = "$BASE_URL/api"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
