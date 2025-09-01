@@ -16,6 +16,7 @@ import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -58,7 +59,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         return MangasPage(mangas, false)
     }
 
-    fun popularElementToSManga(element: org.jsoup.nodes.Element): SManga {
+    fun popularElementToSManga(element: Element): SManga {
         val titleThumbnailUrl = element.select(".image-area img").attr("src")
         val titleContentId = titleThumbnailUrl.toHttpUrl().pathSegments[2]
         return SManga.create().apply {
@@ -276,7 +277,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         )
     }
 
-    fun chapterElementToSChapter(element: org.jsoup.nodes.Element): SChapter {
+    fun chapterElementToSChapter(element: Element): SChapter {
         val episode = element.attr("href").substringAfterLast("/")
         val latestUpdatedDate = element.select(".first-update").text()
         val chapterNumberElement = element.select(".number").text()
