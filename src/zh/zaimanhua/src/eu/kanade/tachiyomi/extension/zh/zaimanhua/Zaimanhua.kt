@@ -69,7 +69,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         }
 
         val response = chain.proceed(request)
-        if (!request.headers["authorization"].isNullOrBlank() && response.peekBody(Long.MAX_VALUE).parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false) {
+        if (!request.headers["authorization"].isNullOrBlank() && response.peekBody(Long.MAX_VALUE).string().parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false) {
             return response
         }
         var token: String = preferences.getString(TOKEN_PREF, "")!!
