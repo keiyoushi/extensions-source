@@ -60,7 +60,7 @@ object CommentsInterceptor : Interceptor {
             true,
         )
 
-        val comments = parseChapterComments(response).toMutableList()
+        val comments = parseChapterComments(response)
         val paintBody = TextPaint().apply {
             color = Color.BLACK
             textSize = BODY_FONT_SIZE
