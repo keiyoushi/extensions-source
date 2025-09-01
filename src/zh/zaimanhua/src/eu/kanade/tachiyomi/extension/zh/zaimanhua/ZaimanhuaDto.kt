@@ -199,3 +199,9 @@ class CommentDataDto(
         }
     }
 }
+
+@Serializable
+class JwtPayload(
+    @SerialName("exp")
+    val expirationTime: Long?,
+)

@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.zaimanhua
 
 import android.content.SharedPreferences
+import android.util.Base64
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -17,6 +18,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -102,6 +104,15 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     private fun isValid(token: String): Boolean {
         if (token.isBlank()) return false
+        val parts = token.split(".")
+        if (parts.size != 3) return false
+        try {
+            val payload = Base64.decode(parts[1], Base64.DEFAULT).toString(Charsets.UTF_8).parseAs<JwtPayload>()
+            if (payload.expirationTime == null || payload.expirationTime * 1000 < System.currentTimeMillis()) return false
+        } catch (_: Exception) {
+            return false
+        }
+
         val response = client.newCall(
             GET(
                 "$accountApiUrl/userInfo/get",
