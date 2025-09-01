@@ -23,6 +23,10 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+/**
+ * Code that used to handle Saturday Morning Breakfast Comics has been split to its
+ * own separate extension at eu.kanade.tachiyomi.extension.en.saturdaymorningbreakfastcomics
+ */
 class Hiveworks : ParsedHttpSource() {
 
     // Info
@@ -39,28 +43,6 @@ class Hiveworks : ParsedHttpSource() {
         .readTimeout(1, TimeUnit.MINUTES)
         .retryOnConnectionFailure(true)
         .followRedirects(true)
-        .addNetworkInterceptor { chain ->
-            val request = chain.request()
-            if (!request.url.toString().contains("smbc-comics")) {
-                return@addNetworkInterceptor chain.proceed(request)
-            }
-
-            val response = chain.proceed(request)
-            // As of March 2025, SMBC chapter list page returns status code 500 even
-            // though it still has correct data. Do not throw an error in this case.
-            //
-            // I reported this error to SMBC on 2025-05-28 and it was not fixed by
-            // 2025-06-11, but even if it is fixed eventually, the same problem might
-            // occur again in the future.
-            if (response.code == 500) {
-                val newResponse = response.newBuilder()
-                    .code(200)
-                    .build()
-                newResponse
-            } else {
-                response
-            }
-        }
         .build()
 
     // Popular
@@ -216,6 +198,7 @@ class Hiveworks : ParsedHttpSource() {
         when {
             "sssscomic" in uri.toString() -> uri.appendQueryParameter("id", "archive") // sssscomic uses query string in url
             "awkwardzombie" in uri.toString() -> uri.appendPath("awkward-zombie").appendPath("archive")
+            "smbc-comics" in uri.toString() -> throw Exception("Migrate to the Saturday Morning Breakfast Comics extension to read this comic")
             else -> {
                 uri.appendPath("comic")
                 uri.appendPath("archive")
@@ -268,10 +251,6 @@ class Hiveworks : ParsedHttpSource() {
 
         // Site specific pages can be added here
         when {
-            "smbc-comics" in url -> {
-                pages.add(Page(pages.size, "", document.select("div#aftercomic img").attr("src")))
-                pages.add(Page(pages.size, "", smbcTextHandler(document)))
-            }
             "sssscomic" in url -> {
                 val urlPath = document.select("img.comicnormal").attr("src")
                 val urlimg = response.request.url.resolve("../../$urlPath").toString()
@@ -495,40 +474,6 @@ class Hiveworks : ParsedHttpSource() {
         chapters.retainAll { it.url.contains("page") }
         chapters.reverse()
         return chapters
-    }
-
-    // Builds Image from mouse tooltip text
-    private fun smbcTextHandler(document: Document): String {
-        val title = document.select("title").text().trim()
-        val altText = document.select("div#cc-comicbody img").attr("title")
-
-        val titleWords: Sequence<String> = title.splitToSequence(" ")
-        val altTextWords: Sequence<String> = altText.splitToSequence(" ")
-
-        val builder = StringBuilder()
-        var count = 0
-
-        for (i in titleWords) {
-            if (count != 0 && count.rem(7) == 0) {
-                builder.append("%0A")
-            }
-            builder.append(i).append("+")
-            count++
-        }
-        builder.append("%0A%0A")
-
-        var charCount = 0
-
-        for (i in altTextWords) {
-            if (charCount > 25) {
-                builder.append("%0A")
-                charCount = 0
-            }
-            builder.append(i).append("+")
-            charCount += i.length + 1
-        }
-
-        return "https://fakeimg.ryd.tools/1500x2126/ffffff/000000/?text=$builder&font_size=42&font=museo"
     }
 
     // Used to throw custom error codes for http codes

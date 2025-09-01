@@ -202,12 +202,14 @@ class ScanManga : HttpSource() {
         val packedScript = document.selectFirst("script:containsData(h,u,n,t,e,r)")!!.data()
 
         val unpackedScript = decodeHunter(packedScript)
-        val parametersRegex = Regex("""sml = '([^']+)';\n.*var sme = '([^']+)'""")
+        val parametersRegex = Regex("""sml = '([^']+)';\n?.*var sme = '([^']+)'""")
 
-        val (sml, sme) = parametersRegex.find(unpackedScript)!!.destructured
+        val (sml, sme) = parametersRegex.find(unpackedScript)?.destructured
+            ?: error("Failed to extract parameters from script.")
 
         val chapterInfoRegex = Regex("""const idc = (\d+)""")
-        val (chapterId) = chapterInfoRegex.find(packedScript)!!.destructured
+        val (chapterId) = chapterInfoRegex.find(packedScript)?.destructured
+            ?: error("Failed to extract chapter ID.")
 
         val mediaType = "application/json; charset=UTF-8".toMediaType()
         val requestBody = """{"a":"$sme","b":"$sml"}"""
