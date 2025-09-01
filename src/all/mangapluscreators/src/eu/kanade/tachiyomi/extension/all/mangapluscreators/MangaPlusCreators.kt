@@ -27,6 +27,8 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     override val baseUrl = "https://mangaplus-creators.jp"
 
+    private val apiUrl = "$baseUrl/api"
+
     override val supportsLatest = true
 
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
@@ -75,7 +77,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             .set("Referer", "$baseUrl/titles/recent/?t=episode")
             .build()
 
-        val apiUrl = "$API_URL/titles/recent/".toHttpUrl().newBuilder()
+        val apiUrl = "$apiUrl/titles/recent/".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("l", lang)
             .addQueryParameter("t", "episode")
@@ -322,7 +324,6 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         private val CHAPTER_DATE_FORMAT by lazy {
             SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
         }
-        private const val API_URL = "$BASE_URL/api"
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
         const val PREFIX_TITLE_ID_SEARCH = "title:"
