@@ -10,14 +10,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -32,8 +31,6 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     override fun headersBuilder(): Headers.Builder = Headers.Builder()
         .add("Referer", baseUrl)
         .add("User-Agent", USER_AGENT)
-
-    private val json: Json by injectLazy()
 
     // POPULAR Section
     override fun popularMangaRequest(page: Int): Request {
@@ -87,7 +84,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val result = json.decodeFromString<MpcResponse>(response.body.string())
+        val result = response.parseAs<MpcResponse>()
 
         val titles = result.titles.orEmpty().map { title -> title.toSManga() }
 
@@ -132,7 +129,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
                     val result = response.asJsoup()
                     val readerElement = result.select("div[react=viewer]")
                     val dataTitle = readerElement.attr("data-title")
-                    val dataTitleResult = json.decodeFromString<MpcReaderDataTitle>(dataTitle)
+                    val dataTitleResult = dataTitle.parseAs<MpcReaderDataTitle>()
                     val episodeAsSManga = dataTitleResult.toSManga()
                     MangasPage(listOf(episodeAsSManga), false)
                 }
@@ -286,7 +283,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         val chapterNumber = chapterNumberElement.substringAfter("#").toFloatOrNull()
         return SChapter.create().apply {
             setUrlWithoutDomain("/episodes/$episode")
-            date_upload = parseChapterDate(latestUpdatedDate)
+            date_upload = CHAPTER_DATE_FORMAT.tryParse(latestUpdatedDate)
             name = chapterNumberElement
             chapter_number = if (chapterNumberElement == "One-shot") {
                 0F
@@ -302,9 +299,8 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         val readerElement = result.select("div[react=viewer]")
         val dataPages = readerElement.attr("data-pages")
         val refererUrl = response.request.url.toString()
-        return json.decodeFromString<MpcReaderDataPages>(dataPages).pc.map {
-                (pageNo, imageUrl) ->
-            Page(pageNo, refererUrl, imageUrl)
+        return dataPages.parseAs<MpcReaderDataPages>().pc.map {
+            (pageNo, imageUrl) -> Page(pageNo, refererUrl, imageUrl)
         }
     }
 
@@ -332,11 +328,6 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         const val PREFIX_TITLE_ID_SEARCH = "title:"
         const val PREFIX_EPISODE_ID_SEARCH = "episode:"
         const val PREFIX_AUTHOR_ID_SEARCH = "author:"
-    }
-
-    private fun parseChapterDate(dateStr: String): Long {
-        return runCatching { CHAPTER_DATE_FORMAT.parse(dateStr)?.time }
-            .getOrNull() ?: 0L
     }
 
     // FILTERS Section
