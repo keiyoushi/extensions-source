@@ -104,7 +104,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         if (query.startsWith(PREFIX_TITLE_ID_SEARCH)) {
             val titleContentId = query.removePrefix(PREFIX_TITLE_ID_SEARCH)
             val titleUrl = "$baseUrl/titles/$titleContentId"
-            return client.newCall(GET(titleUrl))
+            return client.newCall(GET(titleUrl, headers))
                 .asObservableSuccess()
                 .map { response ->
                     val result = response.asJsoup()
@@ -119,7 +119,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         }
         if (query.startsWith(PREFIX_EPISODE_ID_SEARCH)) {
             val episodeId = query.removePrefix(PREFIX_EPISODE_ID_SEARCH)
-            return client.newCall(GET("$baseUrl/episodes/$episodeId"))
+            return client.newCall(GET("$baseUrl/episodes/$episodeId", headers))
                 .asObservableSuccess().map { response ->
                     val result = response.asJsoup()
                     val readerElement = result.select("div[react=viewer]")
@@ -131,7 +131,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         }
         if (query.startsWith(PREFIX_AUTHOR_ID_SEARCH)) {
             val authorId = query.removePrefix(PREFIX_AUTHOR_ID_SEARCH)
-            return client.newCall(GET("$baseUrl/authors/$authorId"))
+            return client.newCall(GET("$baseUrl/authors/$authorId", headers))
                 .asObservableSuccess()
                 .map { response ->
                     val result = response.asJsoup()
@@ -171,7 +171,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
                 }
             }.toString()
 
-        return client.newCall(GET(genreUrl))
+        return client.newCall(GET(genreUrl, headers))
             .asObservableSuccess()
             .map { response ->
                 popularMangaParse(response)
@@ -231,7 +231,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
     }
 
     fun chapterListPageRequest(page: Int, titleContentId: String): Request {
-        return GET("$baseUrl/titles/$titleContentId/?page=$page")
+        return GET("$baseUrl/titles/$titleContentId/?page=$page", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
