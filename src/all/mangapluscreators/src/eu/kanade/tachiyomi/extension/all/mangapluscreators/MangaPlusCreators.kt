@@ -37,13 +37,9 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     // POPULAR Section
     override fun popularMangaRequest(page: Int): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", "$baseUrl/titles/popular/?p=m")
-            .build()
-
         val popularUrl = "$baseUrl/titles/popular/?p=m&l=$lang".toHttpUrl().toString()
 
-        return GET(popularUrl, newHeaders)
+        return GET(popularUrl, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage = parseMangasPageFromElement(
@@ -73,17 +69,13 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     // LATEST Section
     override fun latestUpdatesRequest(page: Int): Request {
-        val newHeaders = headersBuilder()
-            .set("Referer", "$baseUrl/titles/recent/?t=episode")
-            .build()
-
         val apiUrl = "$apiUrl/titles/recent/".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("l", lang)
             .addQueryParameter("t", "episode")
             .toString()
 
-        return GET(apiUrl, newHeaders)
+        return GET(apiUrl, headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
