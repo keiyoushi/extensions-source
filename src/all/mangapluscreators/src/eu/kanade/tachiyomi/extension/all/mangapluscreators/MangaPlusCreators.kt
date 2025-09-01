@@ -37,8 +37,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
 
     // POPULAR Section
     override fun popularMangaRequest(page: Int): Request {
-        val popularUrl = "$baseUrl/titles/popular/?p=m&l=$lang".toHttpUrl().toString()
-
+        val popularUrl = "$baseUrl/titles/popular/?p=m&l=$lang".toHttpUrl()
         return GET(popularUrl, headers)
     }
 
@@ -73,7 +72,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             .addQueryParameter("page", page.toString())
             .addQueryParameter("l", lang)
             .addQueryParameter("t", "episode")
-            .toString()
+            .build()
 
         return GET(apiUrl, headers)
     }
@@ -169,7 +168,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
                         else -> { /* Nothing else is supported for now */ }
                     }
                 }
-            }.toString()
+            }.build()
 
         return client.newCall(GET(genreUrl, headers))
             .asObservableSuccess()
@@ -193,7 +192,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             .addQueryParameter("q", query)
             .addQueryParameter("s", "date")
             .addQueryParameter("lang", lang)
-            .toString()
+            .build()
 
         return GET(searchUrl, headers)
     }
