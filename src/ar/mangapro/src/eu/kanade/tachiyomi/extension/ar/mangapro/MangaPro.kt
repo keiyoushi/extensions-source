@@ -1,18 +1,20 @@
 package eu.kanade.tachiyomi.extension.ar.mangapro
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.preference.PreferencesHelper
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.*
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Request
 import okhttp3.Response
 import org.json.JSONObject
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import eu.kanade.tachiyomi.preference.PreferencesHelper
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 
 class MangaPro : ParsedHttpSource(), ConfigurableSource {
 
@@ -20,9 +22,7 @@ class MangaPro : ParsedHttpSource(), ConfigurableSource {
     override val baseUrl = "https://promanga.net"
     override val lang = "ar"
     override val supportsLatest = true
-    
-    override val versionId = 4
-    
+
     private val preferences: PreferencesHelper by lazy { Injekt.get() }
 
     private val buildId by lazy { safeGetBuildId() }
@@ -35,7 +35,6 @@ class MangaPro : ParsedHttpSource(), ConfigurableSource {
             val regex = "\"buildId\":\"([^\"]+)\"".toRegex()
             regex.find(response)?.groupValues?.get(1) ?: throw Exception("BuildId not found")
         } catch (e: Exception) {
-            // في حال فشل نعيد قيمة فارغة
             ""
         }
     }
