@@ -2,7 +2,7 @@ ext {
     extName = 'Manga Pro'
     extClass = '.MangaPro'
     baseUrl = 'https://promanga.net'
-    overrideVersionCode = 30
+    extVersionCode = 30
     isNsfw = false
 }
 
