@@ -1,9 +1,9 @@
 ext {
-    extName = 'Quantum Scans'
+    extName = 'Quantum Toon'
     extClass = '.QuantumScans'
-    themePkg = 'heancms'
-    baseUrl = 'https://quantumscans.org'
-    overrideVersionCode = 9
+    themePkg = 'iken'
+    baseUrl = 'https://quantumtoon.com'
+    overrideVersionCode = 29
     isNsfw = false
 }
 
