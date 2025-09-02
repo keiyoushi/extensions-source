@@ -294,7 +294,8 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         val dataPages = readerElement.attr("data-pages")
         val refererUrl = response.request.url.toString()
         return dataPages.parseAs<MpcReaderDataPages>().pc.map {
-            (pageNo, imageUrl) -> Page(pageNo, refererUrl, imageUrl)
+                (pageNo, imageUrl) ->
+            Page(pageNo, refererUrl, imageUrl)
         }
     }
 
