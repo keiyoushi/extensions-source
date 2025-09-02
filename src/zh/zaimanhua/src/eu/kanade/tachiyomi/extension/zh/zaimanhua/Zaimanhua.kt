@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.zh.zaimanhua
 
 import android.content.SharedPreferences
+import android.util.Base64
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -9,13 +10,16 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -66,7 +70,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         }
 
         val response = chain.proceed(request)
-        if (!request.headers["authorization"].isNullOrBlank() && response.peekBody(Long.MAX_VALUE).parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false) {
+        if (!request.headers["authorization"].isNullOrBlank() && response.peekBody(Long.MAX_VALUE).string().parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false) {
             return response
         }
         var token: String = preferences.getString(TOKEN_PREF, "")!!
@@ -75,9 +79,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
             val password = preferences.getString(PASSWORD_PREF, "")!!
             token = getToken(username, password)
             if (token.isBlank()) {
-                preferences.edit().putString(TOKEN_PREF, "").apply()
-                preferences.edit().putString(USERNAME_PREF, "").apply()
-                preferences.edit().putString(PASSWORD_PREF, "").apply()
+                preferences.edit().putString(TOKEN_PREF, "")
+                    .putString(USERNAME_PREF, "")
+                    .putString(PASSWORD_PREF, "").apply()
                 return response
             } else {
                 preferences.edit().putString(TOKEN_PREF, token).apply()
@@ -101,6 +105,11 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     private fun isValid(token: String): Boolean {
         if (token.isBlank()) return false
+        val parts = token.split(".")
+        if (parts.size != 3) throw Exception("token格式错误，不符合JWT规范")
+        val payload = Base64.decode(parts[1], Base64.DEFAULT).toString(Charsets.UTF_8).parseAs<JwtPayload>()
+        if (payload.expirationTime * 1000 < System.currentTimeMillis()) return false
+
         val response = client.newCall(
             GET(
                 "$accountApiUrl/userInfo/get",
@@ -233,24 +242,32 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         apiHeaders,
     )
 
+    private fun genreApiUrl(): HttpUrl.Builder =
+        "$apiUrl/comic/filter/list".toHttpUrl().newBuilder()
+            .addQueryParameter("size", DEFAULT_PAGE_SIZE.toString())
+
     override fun popularMangaParse(response: Response): MangasPage = latestUpdatesParse(response)
 
     // Search
     private fun searchApiUrl(): HttpUrl.Builder =
         "$apiUrl/search/index".toHttpUrl().newBuilder().addQueryParameter("source", "0")
-            .addQueryParameter("size", "20")
+            .addQueryParameter("size", DEFAULT_PAGE_SIZE.toString())
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val ranking = filters.filterIsInstance<RankingGroup>().firstOrNull()
-        val url = if (query.isEmpty() && ranking != null) {
-            rankApiUrl().apply {
-                ranking.state.filterIsInstance<QueryFilter>().forEach {
-                    it.addQuery(this)
-                }
+        val ranking = filters.firstInstanceOrNull<RankingGroup>()
+        val genres = filters.firstInstanceOrNull<GenreGroup>()
+        val url = when {
+            query.isEmpty() && ranking != null && (ranking.state[0] as TimeFilter).state != 0 -> rankApiUrl().apply {
+                ranking.state.filterIsInstance<QueryFilter>().forEach { it.addQuery(this) }
                 addQueryParameter("page", page.toString())
             }.build()
-        } else {
-            searchApiUrl().apply {
+
+            query.isEmpty() && genres != null -> genreApiUrl().apply {
+                genres.state.filterIsInstance<QueryFilter>().forEach { it.addQuery(this) }
+                addQueryParameter("page", page.toString())
+            }.build()
+
+            else -> searchApiUrl().apply {
                 addQueryParameter("keyword", query)
                 addQueryParameter("page", page.toString())
             }.build()
@@ -258,12 +275,15 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         return GET(url, apiHeaders)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        if (response.request.url.toString().startsWith("$apiUrl/comic/rank/list")) {
+    override fun searchMangaParse(response: Response): MangasPage {
+        val url = response.request.url
+        return if (url.toString().startsWith("$apiUrl/comic/rank/list")) {
             latestUpdatesParse(response)
         } else {
-            response.parseAs<ResponseDto<PageDto>>().data.toMangasPage()
+            // "$apiUrl/comic/filter/list" or "$apiUrl/search/index"
+            response.parseAs<ResponseDto<PageDto>>().data.toMangasPage(url.queryParameter("page")!!.toInt())
         }
+    }
 
     // Latest
     // "$apiUrl/comic/update/list/1/$page" is same content
@@ -280,6 +300,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     override fun getFilterList() = FilterList(
         RankingGroup(),
+        Filter.Separator(),
+        Filter.Header("分类(搜索/查看排行榜时无效)"),
+        GenreGroup(),
     )
 
     private fun chapterCommentsUrl(comicId: String, chapterId: String) = "$apiUrl/viewpoint/list?comicId=$comicId&chapterId=$chapterId"
@@ -292,6 +315,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         const val COMMENTS_PREF = "COMMENTS"
         const val COMMENTS_FLAG = "COMMENTS"
         const val IMAGE_RETRY_FLAG = "IMAGE_RETRY"
+        const val DEFAULT_PAGE_SIZE = 20
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
