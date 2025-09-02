@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
@@ -78,9 +79,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
             val password = preferences.getString(PASSWORD_PREF, "")!!
             token = getToken(username, password)
             if (token.isBlank()) {
-                preferences.edit().putString(TOKEN_PREF, "").apply()
-                preferences.edit().putString(USERNAME_PREF, "").apply()
-                preferences.edit().putString(PASSWORD_PREF, "").apply()
+                preferences.edit().putString(TOKEN_PREF, "")
+                    .putString(USERNAME_PREF, "")
+                    .putString(PASSWORD_PREF, "").apply()
                 return response
             } else {
                 preferences.edit().putString(TOKEN_PREF, token).apply()
@@ -105,13 +106,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     private fun isValid(token: String): Boolean {
         if (token.isBlank()) return false
         val parts = token.split(".")
-        if (parts.size != 3) return false
-        try {
-            val payload = Base64.decode(parts[1], Base64.DEFAULT).toString(Charsets.UTF_8).parseAs<JwtPayload>()
-            if (payload.expirationTime == null || payload.expirationTime * 1000 < System.currentTimeMillis()) return false
-        } catch (_: Exception) {
-            return false
-        }
+        if (parts.size != 3) throw Exception("token格式错误，不符合JWT规范")
+        val payload = Base64.decode(parts[1], Base64.DEFAULT).toString(Charsets.UTF_8).parseAs<JwtPayload>()
+        if (payload.expirationTime * 1000 < System.currentTimeMillis()) return false
 
         val response = client.newCall(
             GET(
@@ -257,8 +254,8 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
             .addQueryParameter("size", DEFAULT_PAGE_SIZE.toString())
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val ranking = filters.filterIsInstance<RankingGroup>().firstOrNull()
-        val genres = filters.filterIsInstance<GenreGroup>().firstOrNull()
+        val ranking = filters.firstInstanceOrNull<RankingGroup>()
+        val genres = filters.firstInstanceOrNull<GenreGroup>()
         val url = when {
             query.isEmpty() && ranking != null && (ranking.state[0] as TimeFilter).state != 0 -> rankApiUrl().apply {
                 ranking.state.filterIsInstance<QueryFilter>().forEach { it.addQuery(this) }

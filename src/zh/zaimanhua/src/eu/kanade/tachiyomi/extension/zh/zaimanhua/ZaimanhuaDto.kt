@@ -101,10 +101,13 @@ class ChapterImagesDto(
 
 @Serializable
 class PageDto(
+    // Only genre(/comic/filter/list) use `comicList`, others use `list`
     @JsonNames("comicList")
     private val list: List<PageItemDto>?,
+    // Genre(/comic/filter/list) doesn't have `page` and `size`
     private val page: Int?,
     private val size: Int?,
+    // Only genre(/comic/filter/list) use `totalNum`, others use `total`
     @JsonNames("totalNum")
     private val total: Int,
 ) {
@@ -120,9 +123,14 @@ class PageDto(
 @Serializable
 class PageItemDto(
     // must have at least one of id and comicId
+    // Genre(/comic/filter/list) only have `id`
+    // Ranking(/comic/rank/list) only have `comic_id`
+    // latest(/comic/update/list) have both `id` (always 0) and `comic_id`
+    // Search(/search/index) have both `id` and `comic_id` (always 0)
     private val id: Int?,
     @SerialName("comic_id")
     private val comicId: Int?,
+    // Only genre(/comic/filter/list) use `name`, others use `title`
     @JsonNames("name")
     private val title: String,
     private val authors: String?,
@@ -131,7 +139,7 @@ class PageItemDto(
     private val types: String?,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = (this@PageItemDto.comicId ?: this@PageItemDto.id).toString()
+        url = (this@PageItemDto.comicId?.takeIf { it != 0 } ?: this@PageItemDto.id)!!.toString()
         title = this@PageItemDto.title
         author = authors?.formatList()
         genre = types?.formatList()
@@ -203,5 +211,5 @@ class CommentDataDto(
 @Serializable
 class JwtPayload(
     @SerialName("exp")
-    val expirationTime: Long?,
+    val expirationTime: Long,
 )
