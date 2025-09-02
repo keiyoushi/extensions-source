@@ -702,12 +702,11 @@ abstract class Madara(
                 }
             }
             val genres = select(mangaDetailsSelectorGenre)
-                .map { element -> element.text().lowercase(Locale.ROOT) }
-                .toMutableSet()
+                .mapTo(ArrayList()) { element -> element.text() }
 
             if (mangaDetailsSelectorTag.isNotEmpty()) {
                 select(mangaDetailsSelectorTag).forEach { element ->
-                    if (genres.contains(element.text()).not() &&
+                    if (
                         element.text().length <= 25 &&
                         element.text().contains("read", true).not() &&
                         element.text().contains(name, true).not() &&
@@ -715,29 +714,19 @@ abstract class Madara(
                         element.text().contains(manga.title, true).not() &&
                         element.text().contains(altName, true).not()
                     ) {
-                        genres.add(element.text().lowercase(Locale.ROOT))
+                        genres.add(element.text())
                     }
                 }
             }
 
             // add manga/manhwa/manhua thinggy to genre
             document.selectFirst(seriesTypeSelector)?.ownText()?.let {
-                if (it.isEmpty().not() && it.notUpdating() && it != "-" && genres.contains(it).not()) {
-                    genres.add(it.lowercase(Locale.ROOT))
+                if (it.isEmpty().not() && it.notUpdating() && it != "-") {
+                    genres.add(it)
                 }
             }
 
-            manga.genre = genres.toList().joinToString { genre ->
-                genre.replaceFirstChar {
-                    if (it.isLowerCase()) {
-                        it.titlecase(
-                            Locale.ROOT,
-                        )
-                    } else {
-                        it.toString()
-                    }
-                }
-            }
+            manga.genre = genres.distinctBy(String::lowercase).joinToString()
 
             // add alternative name to manga description
             document.selectFirst(altNameSelector)?.ownText()?.let {
