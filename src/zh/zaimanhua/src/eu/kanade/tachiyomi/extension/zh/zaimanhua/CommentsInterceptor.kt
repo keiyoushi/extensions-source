@@ -8,6 +8,7 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import eu.kanade.tachiyomi.extension.zh.zaimanhua.Zaimanhua.Companion.COMMENTS_FLAG
+import keiyoushi.utils.parseAs
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
@@ -60,7 +61,7 @@ object CommentsInterceptor : Interceptor {
             true,
         )
 
-        val comments = parseChapterComments(response).toMutableList()
+        val comments = parseChapterComments(response)
         val paintBody = TextPaint().apply {
             color = Color.BLACK
             textSize = BODY_FONT_SIZE
