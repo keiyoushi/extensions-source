@@ -1,89 +1,52 @@
 package eu.kanade.tachiyomi.extension.ar.mangapro
 
-import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.preference.PreferencesHelper
-import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Request
-import okhttp3.Response
 import org.json.JSONObject
-import org.jsoup.nodes.Document
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
-class MangaPro : ParsedHttpSource(), ConfigurableSource {
+class MangaPro : Iken(
+    "Manga Pro",
+    "ar",
+    "https://promanga.net"
+) {
 
-    override val name = "Manga Pro"
-    override val baseUrl = "https://promanga.net"
-    override val lang = "ar"
-    override val supportsLatest = true
-
-    private val preferences: PreferencesHelper by lazy { Injekt.get() }
-
-    private val buildId by lazy { safeGetBuildId() }
-
-    // ===================== BuildId =====================
-
-    private fun safeGetBuildId(): String {
-        return try {
-            val response = client.newCall(GET(baseUrl, headers)).execute().body.string()
-            val regex = "\"buildId\":\"([^\"]+)\"".toRegex()
-            regex.find(response)?.groupValues?.get(1) ?: throw Exception("BuildId not found")
-        } catch (e: Exception) {
-            ""
-        }
-    }
-
-    private fun ensureBuildId(): String {
-        if (buildId.isBlank()) throw Exception("تعذر جلب بيانات الموقع (BuildId غير موجود)")
-        return buildId
-    }
+    override val versionId = 4
 
     // ===================== Popular =====================
 
     override fun popularMangaRequest(page: Int): Request {
-        val id = ensureBuildId()
-        return GET("$baseUrl/_next/data/$id/series.json?page=$page", headers)
+        return GET("/_next/data/${safeBuildId()}/series.json?page=$page")
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
+    override fun popularMangaParse(response: String): MangasPage {
         return parseMangaList(response)
     }
 
     // ===================== Latest =====================
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val id = ensureBuildId()
-        return GET("$baseUrl/_next/data/$id/series.json?sort=latest&page=$page", headers)
+        return GET("/_next/data/${safeBuildId()}/series.json?sort=latest&page=$page")
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
+    override fun latestUpdatesParse(response: String): MangasPage {
         return parseMangaList(response)
     }
 
     // ===================== Search =====================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val id = ensureBuildId()
-        return GET("$baseUrl/_next/data/$id/series.json?searchTerm=$query&page=$page", headers)
+    override fun searchMangaRequest(page: Int, query: String): Request {
+        return GET("/_next/data/${safeBuildId()}/series.json?searchTerm=$query&page=$page")
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    override fun searchMangaParse(response: String): MangasPage {
         return parseMangaList(response)
     }
 
-    private fun parseMangaList(response: Response): MangasPage {
-        val body = response.body.string()
-        if (!body.trim().startsWith("{")) {
-            throw Exception("الاستجابة غير صحيحة من الموقع")
-        }
-
-        val json = JSONObject(body)
+    private fun parseMangaList(response: String): MangasPage {
+        val json = JSONObject(response)
         val data = json.getJSONObject("pageProps").optJSONArray("series") ?: return MangasPage(emptyList(), false)
 
         val mangas = (0 until data.length()).map { i ->
@@ -100,13 +63,11 @@ class MangaPro : ParsedHttpSource(), ConfigurableSource {
     // ===================== Manga details =====================
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = ensureBuildId()
-        return GET("$baseUrl/_next/data/$id${manga.url}.json", headers)
+        return GET("/_next/data/${safeBuildId()}${manga.url}.json")
     }
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val body = response.body.string()
-        val json = JSONObject(body)
+    override fun mangaDetailsParse(response: String): SManga {
+        val json = JSONObject(response)
         val obj = json.getJSONObject("pageProps").getJSONObject("series")
 
         return SManga.create().apply {
@@ -122,62 +83,31 @@ class MangaPro : ParsedHttpSource(), ConfigurableSource {
     // ===================== Chapters =====================
 
     override fun chapterListRequest(manga: SManga): Request {
-        val id = ensureBuildId()
-        return GET("$baseUrl/_next/data/$id${manga.url}.json", headers)
+        return GET("/_next/data/${safeBuildId()}${manga.url}.json")
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val body = response.body.string()
-        val json = JSONObject(body)
+    override fun chapterListParse(response: String): List<SChapter> {
+        val json = JSONObject(response)
         val arr = json.getJSONObject("pageProps").getJSONArray("chapters")
 
-        val showLocked = preferences.sharedPreferences
-            .getBoolean(PREF_SHOW_LOCKED, PREF_SHOW_LOCKED_DEFAULT)
-
-        return (0 until arr.length()).mapNotNull { i ->
+        return (0 until arr.length()).map { i ->
             val obj = arr.getJSONObject(i)
-
-            val locked = obj.optBoolean("locked", false)
-            if (!showLocked && locked) {
-                null
-            } else {
-                SChapter.create().apply {
-                    name = obj.getString("title") + if (locked) " 🔒" else ""
-                    url = "/read/${obj.getString("id")}"
-                }
+            SChapter.create().apply {
+                name = obj.getString("title") + if (obj.optBoolean("locked", false)) " 🔒" else ""
+                url = "/read/${obj.getString("id")}"
             }
         }
     }
 
-    // ===================== Pages =====================
+    // ===================== Helpers =====================
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$baseUrl${chapter.url}", headers)
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
-        val imgs = document.select("div.reader-area img")
-        return imgs.mapIndexed { i, el ->
-            Page(i, "", el.absUrl("src"))
+    private fun safeBuildId(): String {
+        return try {
+            val response = client.newCall(GET(baseUrl)).execute().body.string()
+            val regex = "\"buildId\":\"([^\"]+)\"".toRegex()
+            regex.find(response)?.groupValues?.get(1) ?: throw Exception("BuildId غير موجود")
+        } catch (e: Exception) {
+            throw Exception("تعذر جلب بيانات الموقع")
         }
-    }
-
-    override fun imageUrlParse(document: Document): String = ""
-
-    // ===================== Preferences =====================
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val showLockedPref = SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_SHOW_LOCKED
-            title = "عرض الفصول المقفلة"
-            summary = "إظهار الفصول المقفلة (قد لا تعمل إذا كان المحتوى محمي)"
-            setDefaultValue(PREF_SHOW_LOCKED_DEFAULT)
-        }
-        screen.addPreference(showLockedPref)
-    }
-
-    companion object {
-        private const val PREF_SHOW_LOCKED = "showLocked"
-        private const val PREF_SHOW_LOCKED_DEFAULT = false
     }
 }
