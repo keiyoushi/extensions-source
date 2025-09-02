@@ -1,7 +1,6 @@
 ext {
     extName = 'Manga Pro'
     extClass = '.MangaPro'
-    themePkg = 'other'
     baseUrl = 'https://promanga.net'
     overrideVersionCode = 30
     isNsfw = false
