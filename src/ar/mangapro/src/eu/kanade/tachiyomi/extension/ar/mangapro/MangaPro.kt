@@ -20,7 +20,9 @@ class MangaPro : ParsedHttpSource(), ConfigurableSource {
     override val baseUrl = "https://promanga.net"
     override val lang = "ar"
     override val supportsLatest = true
-
+    
+    override val versionId = 4
+    
     private val preferences: PreferencesHelper by lazy { Injekt.get() }
 
     private val buildId by lazy { safeGetBuildId() }
