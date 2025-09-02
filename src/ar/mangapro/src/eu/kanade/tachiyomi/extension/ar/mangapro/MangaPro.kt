@@ -1,18 +1,17 @@
 package eu.kanade.tachiyomi.extension.ar.mangapro
 
 import android.content.SharedPreferences
-import androidx.preference.PreferenceManager
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import androidx.preference.PreferenceManager
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.model.*
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.FilterList
 import okhttp3.Request
 import okhttp3.Response
 import org.json.JSONObject
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
 class MangaPro : ParsedHttpSource(), ConfigurableSource {
@@ -61,7 +60,7 @@ class MangaPro : ParsedHttpSource(), ConfigurableSource {
     override fun latestUpdatesParse(response: Response): MangasPage = parseMangaList(response)
 
     // ===================== Search =====================
-    override fun searchMangaRequest(page: Int, query: String, filters: List<Any>): Request {
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val id = ensureBuildId()
         return Request.Builder().url("$baseUrl/_next/data/$id/series.json?searchTerm=$query&page=$page").get().build()
     }
@@ -117,13 +116,10 @@ class MangaPro : ParsedHttpSource(), ConfigurableSource {
         return (0 until arr.length()).mapNotNull { i ->
             val obj = arr.getJSONObject(i)
             val locked = obj.optBoolean("locked", false)
-            return@mapNotNull if (!showLocked && locked) {
-                null
-            } else {
-                SChapter.create().apply {
-                    name = obj.getString("title") + if (locked) " 🔒" else ""
-                    url = "/read/${obj.getString("id")}"
-                }
+            if (!showLocked && locked) null
+            else SChapter.create().apply {
+                name = obj.getString("title") + if (locked) " 🔒" else ""
+                url = "/read/${obj.getString("id")}"
             }
         }
     }
