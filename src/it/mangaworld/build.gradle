@@ -2,8 +2,8 @@ ext {
     extName = 'Mangaworld'
     extClass = '.Mangaworld'
     themePkg = 'mangaworld'
-    baseUrl = 'https://www.mangaworld.cx'
-    overrideVersionCode = 8
+    baseUrl = 'https://www.mangaworld.ac'
+    overrideVersionCode = 9
     isNsfw = false
 }
 
