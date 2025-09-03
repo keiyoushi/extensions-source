@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -91,8 +90,6 @@ class QuantumScans : Iken(
         ).mapIndexed { index, url -> Page(index, imageUrl = url) }
     }
 
-    @Serializable
-    private data class GenreDto(val id: Int, val name: String)
     private var genresList: List<Pair<String, String>> = emptyList()
     private var fetchGenresAttempts = 0
 
