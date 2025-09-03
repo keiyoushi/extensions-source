@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit
 class SushiScan :
     MangaThemesia(
         "Sushi-Scan",
-        "https://sushiscan.net",
+        "https://sushiscan.fr",
         "fr",
         mangaUrlDirectory = "/catalogue",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.FRENCH),
