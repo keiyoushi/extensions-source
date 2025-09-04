@@ -9,7 +9,7 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.util.asJsoup
+import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -52,26 +52,17 @@ class QuantumScans : Iken(
         return GET(url, headers)
     }
 
+    override fun pageListRequest(chapter: SChapter): Request {
+        return GET(baseUrl + chapter.url, headersBuilder().add("rsc", "1").build())
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        val scriptContent = response.asJsoup()
-            .select("script:containsData(self.__next_f.push)")
-            .joinToString("") { it.data() }
-
-        val startIndex = scriptContent.indexOf("{\\\"API_Response\\\":")
-            .takeIf { it != -1 } ?: throw Exception("Could not find start of chapter JSON data")
-
-        var braces = 0
-        val endIndex = scriptContent.substring(startIndex).indexOfFirst {
-            when (it) { '{' -> braces++; '}' -> braces-- }
-            braces == 0
-        }.takeIf { it != -1 }?.plus(startIndex) ?: throw Exception("Could not find end of chapter JSON data")
-
-        val jsonString = scriptContent.substring(startIndex, endIndex + 1)
-            .replace("\\\"", "\"")
-            .replace("\\\\", "\\")
-
-        return jsonString.parseAs<ChapterImages>()
-            .API_Response.chapter.images
+        return response.body.string().lines()
+            .mapNotNull { line ->
+                val jsonStartIndex = line.indexOf('{').takeIf { it != -1 } ?: return@mapNotNull null
+                val jsonString = line.substring(jsonStartIndex)
+                runCatching { jsonString.parseAs<PageDto>().takeIf { it.url.isNotEmpty() } }.getOrNull()
+            }
             .sortedBy { it.order }
             .mapIndexed { i, p -> Page(i, imageUrl = p.url) }
     }
