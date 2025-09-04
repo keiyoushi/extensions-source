@@ -1,0 +1,10 @@
+ext {
+    extName = 'Kira Scans'
+    extClass = '.KiraScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://kirascans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
