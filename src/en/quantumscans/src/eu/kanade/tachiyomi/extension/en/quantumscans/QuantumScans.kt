@@ -53,61 +53,44 @@ class QuantumScans : Iken(
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val scriptContent = document.select("script:containsData(self.__next_f.push)")
-            .joinToString("\n") { it.data() }
+        val scriptContent = response.asJsoup()
+            .select("script:containsData(self.__next_f.push)")
+            .joinToString("") { it.data() }
 
-        if (scriptContent.isBlank()) {
-            throw Exception("Unable to find chapter data scripts.")
-        }
+        val startIndex = scriptContent.indexOf("{\\\"API_Response\\\":")
+            .takeIf { it != -1 } ?: throw Exception("Could not find start of chapter JSON data")
 
-        val urlRegex = Regex("""(https?://[^"]+?\.(?:jpg|jpeg|png|webp))""")
+        var braces = 0
+        val endIndex = scriptContent.substring(startIndex).indexOfFirst {
+            when (it) { '{' -> braces++; '}' -> braces-- }
+            braces == 0
+        }.takeIf { it != -1 }?.plus(startIndex) ?: throw Exception("Could not find end of chapter JSON data")
 
-        val imageUrls = urlRegex.findAll(scriptContent)
-            .map { it.groupValues[1].replace("\\\\", "") }
-            .filter { it.contains("/series/") || it.contains("/uploads/") }
-            .distinct()
-            .toList()
+        val jsonString = scriptContent.substring(startIndex, endIndex + 1)
+            .replace("\\\"", "\"")
+            .replace("\\\\", "\\")
 
-        if (imageUrls.isEmpty()) {
-            // Fallback for when the main regex fails for some reason
-            val fallbackRegex = Regex("""(https?://[^"]+?/upload/series/[^"]+\.(?:jpg|jpeg|png|webp))""")
-            val fallbackUrls = fallbackRegex.findAll(scriptContent)
-                .map { it.groupValues[1].replace("\\\\", "") }
-                .distinct()
-                .toList()
-
-            if (fallbackUrls.isEmpty()) {
-                throw Exception("Could not extract any image URLs.")
-            }
-            return fallbackUrls.sortedWith(
-                compareBy { url -> url.substringAfterLast('/').substringBeforeLast('.').toIntOrNull() ?: -1 },
-            ).mapIndexed { index, url -> Page(index, imageUrl = url) }
-        }
-
-        return imageUrls.sortedWith(
-            compareBy { url -> url.substringAfterLast('/').substringBeforeLast('.').toIntOrNull() ?: -1 },
-        ).mapIndexed { index, url -> Page(index, imageUrl = url) }
+        return jsonString.parseAs<ChapterImages>()
+            .API_Response.chapter.images
+            .sortedBy { it.order }
+            .mapIndexed { i, p -> Page(i, imageUrl = p.url) }
     }
 
     private var genresList: List<Pair<String, String>> = emptyList()
     private var fetchGenresAttempts = 0
 
     private fun fetchGenres() {
-        if (fetchGenresAttempts < 3 && genresList.isEmpty()) {
-            try {
-                val response = client.newCall(GET("$apiUrl/api/genres", headers)).execute()
-                genresList = response.parseAs<List<GenreDto>>()
-                    .map { Pair(it.name, it.id.toString()) }
-            } catch (e: Throwable) {
-            } finally {
-                fetchGenresAttempts++
-            }
+        try {
+            val response = client.newCall(GET("$apiUrl/api/genres", headers)).execute()
+            genresList = response.parseAs<List<GenreDto>>()
+                .map { Pair(it.name, it.id.toString()) }
+        } catch (e: Throwable) {} finally {
+            fetchGenresAttempts++
         }
     }
 
     override fun getFilterList(): FilterList {
-        if (genresList.isEmpty() && fetchGenresAttempts == 0) {
+        if (genresList.isEmpty() && fetchGenresAttempts < 3) {
             Observable.fromCallable { fetchGenres() }
                 .subscribeOn(rx.schedulers.Schedulers.io())
                 .subscribe()
@@ -123,7 +106,6 @@ class QuantumScans : Iken(
         } else {
             filters.add(Filter.Header("Press 'Reset' to attempt to load genres"))
         }
-
         return FilterList(filters)
     }
 
