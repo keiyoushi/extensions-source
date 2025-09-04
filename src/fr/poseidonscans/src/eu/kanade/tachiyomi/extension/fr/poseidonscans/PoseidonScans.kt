@@ -418,7 +418,7 @@ class PoseidonScans : HttpSource() {
                 val chapterNumberString = ch.number.toString().removeSuffix(".0")
                 SChapter.create().apply {
                     val isVolume = ch.isVolume == true || (
-                            ch.number == ch.number.toInt().toFloat() &&
+                        ch.number == ch.number.toInt().toFloat() &&
                             ch.title?.lowercase()?.contains("volume") == true
                         )
 
