@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.util.Log
 import kotlin.system.exitProcess
 
+const val PREFIX_ID_SEARCH = "id:"
+
 class UrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -15,7 +17,7 @@ class UrlActivity : Activity() {
             val id = pathSegments[1]
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${Komiic.PREFIX_ID_SEARCH}$id")
+                putExtra("query", "$PREFIX_ID_SEARCH$id")
                 putExtra("filter", packageName)
             }
 
