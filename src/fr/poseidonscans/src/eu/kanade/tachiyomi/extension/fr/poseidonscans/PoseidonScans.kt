@@ -388,11 +388,46 @@ class PoseidonScans : HttpSource() {
         }
 
         return mangaDto.chapters
-            ?.filter { it.isPremium != true }
+            ?.filter { ch ->
+                // If chapter is not premium, include it
+                if (ch.isPremium != true) return@filter true
+
+                // If chapter is premium, check if premium period has expired
+                ch.premiumUntil?.let { premiumUntilString ->
+                    val cleanedDateString = if (premiumUntilString.startsWith("\"\$D")) {
+                        premiumUntilString.removePrefix("\"\$D").removeSuffix("\"")
+                    } else if (premiumUntilString.startsWith("\$D")) {
+                        premiumUntilString.removePrefix("\$D")
+                    } else if (premiumUntilString.startsWith("\"") && premiumUntilString.endsWith("\"") && premiumUntilString.length > 2) {
+                        premiumUntilString.substring(1, premiumUntilString.length - 1)
+                    } else {
+                        premiumUntilString
+                    }
+
+                    val premiumUntilDate = isoDateFormatter.tryParse(cleanedDateString)
+                    if (premiumUntilDate > 0) {
+                        // Include if premium period has expired
+                        return@filter System.currentTimeMillis() > premiumUntilDate
+                    }
+                }
+
+                // If we can't parse the premium until date, exclude the chapter for safety
+                false
+            }
             ?.mapNotNull { ch ->
                 val chapterNumberString = ch.number.toString().removeSuffix(".0")
                 SChapter.create().apply {
-                    val baseName = "Chapitre $chapterNumberString"
+                    val isVolume = ch.isVolume == true || (
+                            ch.number == ch.number.toInt().toFloat() &&
+                            ch.title?.lowercase()?.contains("volume") == true
+                        )
+
+                    val baseName = if (isVolume) {
+                        "Volume $chapterNumberString"
+                    } else {
+                        "Chapitre $chapterNumberString"
+                    }
+
                     name = ch.title?.trim()?.takeIf { it.isNotBlank() }
                         ?.let { title -> "$baseName - $title" }
                         ?: baseName
