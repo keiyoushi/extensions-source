@@ -1,10 +1,9 @@
 ext {
     extName = 'Starbound Scans'
     extClass = '.StarboundScans'
-    extVersionCode = 1
     themePkg = 'madara'
     baseUrl = 'https://starboundscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

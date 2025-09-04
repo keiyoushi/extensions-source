@@ -1,14 +1,13 @@
 package eu.kanade.tachiyomi.extension.fr.starboundscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.Response
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -38,45 +37,36 @@ class StarboundScans : Madara(
     private val customDateFormat = SimpleDateFormat("d MMMM yyyy", Locale.FRENCH)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.body.string().let { org.jsoup.Jsoup.parse(it) }
+        val document = response.asJsoup()
         return document.select(".chapter-item").mapNotNull { element ->
-            try {
-                chapterFromElement(element)
-            } catch (e: Exception) {
-                null
+            val link = element.selectFirst("a.chapter-link")!!
+            val href = link.attr("abs:href")
+
+            if (href == "#" || href.isEmpty() || element.text().contains("VIP") || element.text().contains("Réservé")) {
+                return@mapNotNull null
+            }
+
+            SChapter.create().apply {
+                val urlWithSuffix = if (href.contains("?")) {
+                    "$href&style=list"
+                } else {
+                    "$href?style=list"
+                }
+                setUrlWithoutDomain(urlWithSuffix)
+
+                val rawName = link.select("h3").text().trim()
+                name = rawName.replace("NEW", "").trim()
+
+                val dateText = element.select(".chapter-meta").text().trim()
+                date_upload = customDateFormat.tryParse(dateText)
             }
         }
-    }
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-
-        val link = element.selectFirst("a.chapter-link")
-        val href = link?.attr("abs:href") ?: ""
-
-        if (href == "#" || href.isEmpty() || element.text().contains("VIP") || element.text().contains("Réservé")) {
-            throw Exception("VIP chapter - skip")
-        }
-
-        chapter.setUrlWithoutDomain(href)
-
-        val rawName = link?.select("h3")?.text()?.trim() ?: "Chapitre inconnu"
-        chapter.name = rawName.replace("NEW", "").trim()
-
-        val dateText = element.select(".chapter-meta").text().trim()
-        chapter.date_upload = customDateFormat.tryParse(dateText)
-
-        return chapter
     }
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("img.wp-manga-chapter-img").mapIndexed { index, element ->
             val imageUrl = element.attr("abs:src")
-            Page(index, "", imageUrl)
+            Page(index, url = document.location(), imageUrl = imageUrl)
         }
     }
-
-    override fun imageUrlParse(document: Document) = ""
-
-    override fun imageRequest(page: Page) = GET(page.imageUrl ?: "", headers)
 }
