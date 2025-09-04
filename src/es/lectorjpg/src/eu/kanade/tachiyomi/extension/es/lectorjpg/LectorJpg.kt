@@ -34,12 +34,20 @@ class LectorJpg : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
         .build()
 
-    private val latestMangaCursor = mutableMapOf<Int, String?>()
-    private val searchMangaCursor = mutableMapOf<Int, String?>()
+    class LimitedCache<K, V>() : LinkedHashMap<K, V>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>): Boolean {
+            return size > 8
+        }
+    }
+
+    data class SearchKey(val page: Int, val query: String, val filters: String?)
+
+    private val latestMangaCursor = LimitedCache<Int, String?>()
+    private val searchMangaCursor = LimitedCache<SearchKey, String?>()
 
     override fun popularMangaRequest(page: Int): Request {
         return GET(baseUrl, headers)
@@ -77,7 +85,15 @@ class LectorJpg : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val cursor = searchMangaCursor[page - 1] ?: ""
+        val genresParam = filters
+            .filterIsInstance<GenreFilter>()
+            .flatMap { filter -> filter.state.filter { it.state }.map { it.key } }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(",")
+
+        val searchKey = SearchKey(page - 1, query, genresParam)
+
+        val cursor = searchMangaCursor[searchKey] ?: ""
         val url = "$baseUrl/serie-query".toHttpUrl().newBuilder()
             .addQueryParameter("cursor", cursor)
             .addQueryParameter("perPage", "35")
@@ -85,17 +101,8 @@ class LectorJpg : HttpSource() {
             .addQueryParameter("name", query)
             .fragment(page.toString())
 
-        filters.forEach { filter ->
-            when (filter) {
-                is GenreFilter -> {
-                    val selectedGenres = filter.state.filter { it.state }.map { it.key }
-                    if (selectedGenres.isNotEmpty()) {
-                        url.addQueryParameter("genres", selectedGenres.joinToString(","))
-                    }
-                }
-
-                else -> {}
-            }
+        if (genresParam != null) {
+            url.addQueryParameter("genres", genresParam)
         }
 
         return GET(url.build(), headers)
@@ -103,8 +110,13 @@ class LectorJpg : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val page = response.request.url.fragment!!.toInt()
+        val query = response.request.url.queryParameter("name") ?: ""
+        val genresParam = response.request.url.queryParameter("genres")
+
+        val searchKey = SearchKey(page, query, genresParam)
+
         val result = response.parseAs<SeriesQueryDto>()
-        searchMangaCursor[page] = result.nextCursor
+        searchMangaCursor[searchKey] = result.nextCursor
         val mangas = result.data.map { it.toSManga() }
         return MangasPage(mangas, result.hasNextPage())
     }
