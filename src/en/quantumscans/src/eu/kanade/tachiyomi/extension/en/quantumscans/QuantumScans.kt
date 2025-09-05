@@ -61,7 +61,11 @@ class QuantumScans : Iken(
             .mapNotNull { line ->
                 val jsonStartIndex = line.indexOf('{').takeIf { it != -1 } ?: return@mapNotNull null
                 val jsonString = line.substring(jsonStartIndex)
-                runCatching { jsonString.parseAs<PageDto>().takeIf { it.url.isNotEmpty() } }.getOrNull()
+                try {
+                    jsonString.parseAs<PageDto>().takeIf { it.url.isNotEmpty() }
+                } catch (e: Exception) {
+                    null
+                }
             }
             .sortedBy { it.order }
             .mapIndexed { i, p -> Page(i, imageUrl = p.url) }
