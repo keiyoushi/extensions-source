@@ -54,10 +54,10 @@ class StarboundScans : Madara(
                 }
                 setUrlWithoutDomain(urlWithSuffix)
 
-                val rawName = link.select("h3").text().trim()
+                val rawName = link.selectFirst("h3")!!.text()
                 name = rawName.replace("NEW", "").trim()
 
-                val dateText = element.select(".chapter-meta").text().trim()
+                val dateText = element.selectFirst(".chapter-meta")!!.text()
                 date_upload = customDateFormat.tryParse(dateText)
             }
         }

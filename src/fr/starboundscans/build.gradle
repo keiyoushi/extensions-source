@@ -3,7 +3,7 @@ ext {
     extClass = '.StarboundScans'
     themePkg = 'madara'
     baseUrl = 'https://starboundscans.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = false
 }
 
