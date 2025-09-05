@@ -388,11 +388,35 @@ class PoseidonScans : HttpSource() {
         }
 
         return mangaDto.chapters
-            ?.filter { it.isPremium != true }
             ?.mapNotNull { ch ->
+                // If chapter is premium, check if premium period has expired
+                if (ch.isPremium == true) {
+                    ch.premiumUntil?.let { premiumUntilString ->
+                        val premiumUntilDate = parseIsoDate(premiumUntilString)
+                        if (premiumUntilDate > 0) {
+                            // Exclude if premium period is still active
+                            if (System.currentTimeMillis() <= premiumUntilDate) {
+                                return@mapNotNull null
+                            }
+                        } else {
+                            // If we can't parse the premium until date, exclude the chapter for safety
+                            return@mapNotNull null
+                        }
+                    } ?: return@mapNotNull null // If premiumUntil is null but isPremium is true, exclude
+                }
                 val chapterNumberString = ch.number.toString().removeSuffix(".0")
                 SChapter.create().apply {
-                    val baseName = "Chapitre $chapterNumberString"
+                    val isVolume = ch.isVolume == true || (
+                        ch.number == ch.number.toInt().toFloat() &&
+                            ch.title?.lowercase()?.contains("volume") == true
+                        )
+
+                    val baseName = if (isVolume) {
+                        "Volume $chapterNumberString"
+                    } else {
+                        "Chapitre $chapterNumberString"
+                    }
+
                     name = ch.title?.trim()?.takeIf { it.isNotBlank() }
                         ?.let { title -> "$baseName - $title" }
                         ?: baseName
