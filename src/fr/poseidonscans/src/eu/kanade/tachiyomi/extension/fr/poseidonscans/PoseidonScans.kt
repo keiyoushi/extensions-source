@@ -388,33 +388,22 @@ class PoseidonScans : HttpSource() {
         }
 
         return mangaDto.chapters
-            ?.filter { ch ->
-                // If chapter is not premium, include it
-                if (ch.isPremium != true) return@filter true
-
-                // If chapter is premium, check if premium period has expired
-                ch.premiumUntil?.let { premiumUntilString ->
-                    val cleanedDateString = if (premiumUntilString.startsWith("\"\$D")) {
-                        premiumUntilString.removePrefix("\"\$D").removeSuffix("\"")
-                    } else if (premiumUntilString.startsWith("\$D")) {
-                        premiumUntilString.removePrefix("\$D")
-                    } else if (premiumUntilString.startsWith("\"") && premiumUntilString.endsWith("\"") && premiumUntilString.length > 2) {
-                        premiumUntilString.substring(1, premiumUntilString.length - 1)
-                    } else {
-                        premiumUntilString
-                    }
-
-                    val premiumUntilDate = isoDateFormatter.tryParse(cleanedDateString)
-                    if (premiumUntilDate > 0) {
-                        // Include if premium period has expired
-                        return@filter System.currentTimeMillis() > premiumUntilDate
-                    }
-                }
-
-                // If we can't parse the premium until date, exclude the chapter for safety
-                false
-            }
             ?.mapNotNull { ch ->
+                // If chapter is premium, check if premium period has expired
+                if (ch.isPremium == true) {
+                    ch.premiumUntil?.let { premiumUntilString ->
+                        val premiumUntilDate = parseIsoDate(premiumUntilString)
+                        if (premiumUntilDate > 0) {
+                            // Exclude if premium period is still active
+                            if (System.currentTimeMillis() <= premiumUntilDate) {
+                                return@mapNotNull null
+                            }
+                        } else {
+                            // If we can't parse the premium until date, exclude the chapter for safety
+                            return@mapNotNull null
+                        }
+                    } ?: return@mapNotNull null // If premiumUntil is null but isPremium is true, exclude
+                }
                 val chapterNumberString = ch.number.toString().removeSuffix(".0")
                 SChapter.create().apply {
                     val isVolume = ch.isVolume == true || (
