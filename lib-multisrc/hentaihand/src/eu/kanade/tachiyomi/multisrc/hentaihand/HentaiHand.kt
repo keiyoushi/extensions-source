@@ -60,6 +60,9 @@ abstract class HentaiHand(
         }
     }
 
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+
     // Popular
 
     override fun popularMangaParse(response: Response): MangasPage {
