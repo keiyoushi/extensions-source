@@ -281,7 +281,10 @@ abstract class HentaiHand(
 
     protected fun authIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (username.isEmpty() or password.isEmpty()) {
+        if (username.isEmpty() or password.isEmpty()
+            // image request doesn't need token
+            or !request.url.toString().startsWith(baseUrl)
+        ) {
             return chain.proceed(request)
         }
 
