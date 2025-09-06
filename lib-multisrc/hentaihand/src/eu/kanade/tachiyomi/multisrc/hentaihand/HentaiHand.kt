@@ -304,7 +304,7 @@ abstract class HentaiHand(
         }
         try {
             // Returns access token as a string, unless unparseable
-            return json.parseToJsonElement(response.body.string()).jsonObject["auth"]!!.jsonObject["access-token"]!!.jsonPrimitive.content
+            return json.parseToJsonElement(response.body.string()).jsonObject["auth"]!!.jsonObject["access_token"]!!.jsonPrimitive.content
         } catch (e: IllegalArgumentException) {
             throw IOException("Cannot parse login response body")
         }
