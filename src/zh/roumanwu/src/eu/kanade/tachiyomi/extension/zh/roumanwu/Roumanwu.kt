@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -143,16 +144,16 @@ class Roumanwu : HttpSource(), ConfigurableSource {
         return chapters
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val images = response.asJsoup().selectFirst("script:containsData(imageUrl)")!!.data()
-            .let { content ->
-                """\\"imageUrl\\":\\"([^\\]+)""".toRegex()
-                    .findAll(content).map { it.groups[1]?.value }
-                    .toList()
-            }
+    override fun pageListRequest(chapter: SChapter): Request {
+        // Rendered HTML might have links sitting on the boundary of two scripts
+        return super.pageListRequest(chapter).newBuilder().addHeader("rsc", "1").build()
+    }
 
-        return images.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
+    override fun pageListParse(response: Response): List<Page> {
+        val html = response.body.string()
+        val regex = Regex(""""imageUrl":"([^"]+)""")
+        return regex.findAll(html).mapIndexedTo(ArrayList()) { index, match ->
+            Page(index, imageUrl = match.groupValues[1])
         }
     }
 
