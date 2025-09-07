@@ -27,6 +27,7 @@ import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 import rx.Observable
 import java.net.SocketException
+import java.text.DecimalFormat
 import java.util.Calendar
 
 open class Webtoons(
@@ -331,12 +332,17 @@ open class Webtoons(
             }
         }
 
+        val numberFormatter = DecimalFormat("#.##")
         return chapters.map { episode ->
             SChapter.create().apply {
                 url = episode.viewerLink
-                name = Parser.unescapeEntities(episode.episodeTitle, false)
-                if (episode.hasBgm) {
-                    name += " ♫"
+                name = buildString {
+                    Parser.unescapeEntities(episode.episodeTitle, false)
+                        .also(::append)
+                    append(" (ch. ", numberFormatter.format(episode.chapterNumber), ")")
+                    if (episode.hasBgm) {
+                        append(" ♫")
+                    }
                 }
                 date_upload = episode.exposureDateMillis
                 chapter_number = episode.chapterNumber
@@ -435,4 +441,5 @@ open class Webtoons(
 
 private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
 private const val USE_MAX_QUALITY_KEY = "useMaxQuality"
+private const val SHOW_CHAPTER_NUMBER = "showChapterNumber"
 const val ID_SEARCH_PREFIX = "id:"
