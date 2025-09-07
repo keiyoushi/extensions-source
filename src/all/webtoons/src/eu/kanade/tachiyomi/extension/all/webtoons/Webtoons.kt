@@ -337,8 +337,7 @@ open class Webtoons(
             SChapter.create().apply {
                 url = episode.viewerLink
                 name = buildString {
-                    Parser.unescapeEntities(episode.episodeTitle, false)
-                        .also(::append)
+                    append(Parser.unescapeEntities(episode.episodeTitle, false))
                     append(" (ch. ", numberFormatter.format(episode.chapterNumber), ")")
                     if (episode.hasBgm) {
                         append(" ♫")
