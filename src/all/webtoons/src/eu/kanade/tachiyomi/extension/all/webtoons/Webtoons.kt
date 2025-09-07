@@ -441,5 +441,4 @@ open class Webtoons(
 
 private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
 private const val USE_MAX_QUALITY_KEY = "useMaxQuality"
-private const val SHOW_CHAPTER_NUMBER = "showChapterNumber"
 const val ID_SEARCH_PREFIX = "id:"
