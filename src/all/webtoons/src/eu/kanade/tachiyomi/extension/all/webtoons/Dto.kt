@@ -20,10 +20,7 @@ class Episode(
     val viewerLink: String,
     val exposureDateMillis: Long,
     val hasBgm: Boolean = false,
-) {
-    var chapterNumber = -1f
-    var seasonNumber = 1
-}
+)
 
 @Serializable
 class MotionToonResponse(

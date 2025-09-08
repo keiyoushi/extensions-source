@@ -278,79 +278,24 @@ open class Webtoons(
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<EpisodeListResponse>()
 
-        var recognized = 0
-        var unrecognized = 0
+        val chapters = result.result.episodeList
 
-        val chapters = result.result.episodeList.onEach { episode ->
-            val match = episodeNoRegex
-                .find(episode.episodeTitle)
-                ?.groupValues
-                ?.takeIf { it[6].isEmpty() } // skip mini/bonus episodes
-
-            episode.chapterNumber = match?.get(11)?.toFloat() ?: -1f
-            episode.seasonNumber = match?.get(4)?.takeIf(String::isNotBlank)?.toInt() ?: 1
-
-            if (episode.chapterNumber == -1f) {
-                unrecognized++
-            } else {
-                recognized++
-            }
-        }
-
-        if (unrecognized > recognized) {
-            chapters.onEachIndexed { index, chapter ->
-                chapter.chapterNumber = (index + 1).toFloat()
-            }
-        } else {
-            var maxChapterNumber = 0f
-            var currentSeason = 1
-            var seasonOffset = 0f
-
-            chapters.forEachIndexed { idx, chapter ->
-                if (chapter.chapterNumber != -1f) {
-                    val originalNumber = chapter.chapterNumber
-
-                    // Check if we've moved to a new season
-                    if (chapter.seasonNumber > currentSeason) {
-                        currentSeason = chapter.seasonNumber
-                        if (originalNumber <= maxChapterNumber) {
-                            seasonOffset = maxChapterNumber
-                        }
-                    }
-
-                    chapter.chapterNumber = seasonOffset + originalNumber
-                    maxChapterNumber = maxOf(maxChapterNumber, chapter.chapterNumber)
-                } else {
-                    val previous = chapters.getOrNull(idx - 1)
-                    if (previous == null) {
-                        chapter.chapterNumber = 0f
-                    } else {
-                        chapter.chapterNumber = previous.chapterNumber + 0.01f
-                    }
-                }
-            }
-        }
-
-        return chapters.map { episode ->
+        return chapters.mapIndexed { index, episode ->
             SChapter.create().apply {
                 url = episode.viewerLink
-                name = Parser.unescapeEntities(episode.episodeTitle, false)
-                if (episode.hasBgm) {
-                    name += " ♫"
+                val globalChapterNumber = (index + 1).toFloat()
+                name = buildString {
+                    append(Parser.unescapeEntities(episode.episodeTitle, false))
+                    append(" (ch. ", globalChapterNumber.toInt(), ")")
+                    if (episode.hasBgm) {
+                        append(" ♫")
+                    }
                 }
                 date_upload = episode.exposureDateMillis
-                chapter_number = episode.chapterNumber
+                chapter_number = globalChapterNumber
             }
         }.asReversed()
     }
-
-    // season number - 4 capture group
-    // possible bonus/mini/special episode - 6 capture group
-    // episode number - 11 capture group
-    private val episodeNoRegex = Regex(
-        """(?:(s(eason)?|part|vol(ume)?)\s*\.?\s*(\d+).*?)?(.*?(mini|bonus|special).*?)?(e(p(isode)?)?|ch(apter)?)\s*\.?\s*(\d+(\.\d+)?)""",
-        RegexOption.IGNORE_CASE,
-    )
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
