@@ -333,7 +333,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         val vals: List<MrmFilter>,
     ) : Filter.Group<MrmFilter>(displayName, vals), UriFilter {
         override fun addToUri(uri: Uri.Builder) {
-            val checked = state.filter { it.state }.also { if (it.isEmpty()) return }
+            val checked = state.filter { it.state }.ifEmpty { return }
                 .joinToString(",") { it.value }
 
             uri.appendQueryParameter(uriParam, checked)
