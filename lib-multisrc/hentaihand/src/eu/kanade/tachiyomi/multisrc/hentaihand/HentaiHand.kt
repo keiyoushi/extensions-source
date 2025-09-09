@@ -19,6 +19,7 @@ import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -59,6 +60,9 @@ abstract class HentaiHand(
             it.jsonObject["name"]!!.jsonPrimitive.content
         }
     }
+
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // Popular
 
@@ -196,7 +200,7 @@ abstract class HentaiHand(
             description = listOf(
                 Pair("Alternative Title", obj["alternative_title"]!!.jsonPrimitive.content),
                 Pair("Groups", jsonArrayToString("groups", obj)),
-                Pair("Description", obj["description"]!!.jsonPrimitive.content),
+                Pair("Description", obj["description"]?.jsonPrimitive?.contentOrNull ?: ""),
                 Pair("Pages", obj["pages"]!!.jsonPrimitive.content),
                 Pair("Category", try { obj["category"]!!.jsonObject["name"]!!.jsonPrimitive.content } catch (_: Exception) { null }),
                 Pair("Language", try { obj["language"]!!.jsonObject["name"]!!.jsonPrimitive.content } catch (_: Exception) { null }),
@@ -278,7 +282,10 @@ abstract class HentaiHand(
 
     protected fun authIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (username.isEmpty() or password.isEmpty()) {
+        if (username.isEmpty() or password.isEmpty()
+            // image request doesn't need token
+            or !request.url.toString().startsWith(baseUrl)
+        ) {
             return chain.proceed(request)
         }
 
@@ -304,7 +311,7 @@ abstract class HentaiHand(
         }
         try {
             // Returns access token as a string, unless unparseable
-            return json.parseToJsonElement(response.body.string()).jsonObject["auth"]!!.jsonObject["access-token"]!!.jsonPrimitive.content
+            return json.parseToJsonElement(response.body.string()).jsonObject["auth"]!!.jsonObject["access_token"]!!.jsonPrimitive.content
         } catch (e: IllegalArgumentException) {
             throw IOException("Cannot parse login response body")
         }
