@@ -32,7 +32,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     final override val baseUrl = "https://myreadingmanga.info"
     override fun headersBuilder(): Headers.Builder =
         super.headersBuilder()
-            .set("User-Agent", USER_AGENT)
+            .set("User-Agent", "Mozilla/5.0 (Linux; Android 13; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.7258.159 Mobile Safari/537.36")
             .add("X-Requested-With", randomString((1..20).random()))
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
@@ -345,10 +345,6 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
      */
     private interface UriFilter {
         fun addToUri(uri: Uri.Builder)
-    }
-
-    companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.7258.159 Mobile Safari/537.36"
     }
 
     private fun randomString(length: Int): String {
