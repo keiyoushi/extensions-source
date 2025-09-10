@@ -374,7 +374,7 @@ abstract class GroupLe(
 
         val readerMark = when {
             html.contains("rm_h.readerDoInit([") -> "rm_h.readerDoInit(["
-            html.contains("rm_h.readerInit([") -> "rm_h.readerInit(["
+            html.contains("rm_h.readerInit(") -> "rm_h.readerInit("
             !response.request.url.toString().contains(baseUrl) -> {
                 throw Exception("Не удалось загрузить главу. Url: ${response.request.url}")
             }
