@@ -50,10 +50,10 @@ class ChapterDto(
     private val title: String,
     private val createdAt: String,
 ) {
-    fun toSChapter(mangaId: String): SChapter = SChapter.create().apply {
+    fun toSChapter(): SChapter = SChapter.create().apply {
         name = title
         date_upload = dateFormat.tryParse(createdAt)
-        url = "$mangaId/$id"
+        url = "$id"
     }
 }
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS", Locale.US)

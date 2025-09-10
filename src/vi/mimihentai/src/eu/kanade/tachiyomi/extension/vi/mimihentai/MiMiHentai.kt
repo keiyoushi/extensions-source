@@ -70,9 +70,8 @@ class MiMiHentai : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val segments = response.request.url.pathSegments
-        val mangaId = segments.last()
         val res = response.parseAs<List<ChapterDto>>()
-        return res.map { it.toSChapter(mangaId) }
+        return res.map { it.toSChapter() }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
