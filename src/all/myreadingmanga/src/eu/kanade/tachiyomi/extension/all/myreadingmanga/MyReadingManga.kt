@@ -141,8 +141,6 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     private val titleRegex = Regex("""\[[^]]*]""")
     private fun cleanTitle(title: String) = title.replace(titleRegex, "").substringBeforeLast("(").trim()
 
-    private fun cleanAuthor(author: String) = author.substringAfter("[").substringBefore("]").trim()
-
     // Manga Details
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
         val needCover = manga.thumbnail_url?.let { !client.newCall(GET(it, headers)).execute().isSuccessful } ?: true
@@ -287,7 +285,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     }
 
     // Parses search page for filters
-    private fun getFiltersFromSearchPage(filterTitle: String): List<MrmFilter> {
+    private fun getFiltersFromSearchPage(filterTitle: String, isSelectDropdown: Boolean = false): List<MrmFilter> {
         val document = if (searchPage == "") {
             filtersCached = false
             null
@@ -296,14 +294,21 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
             Jsoup.parse(searchPage)
         }
         val parent = document?.select(".ep-filter-title")?.first { it.text() == filterTitle }?.parent()
-        return parent?.select(".term")?.map { MrmFilter(it.text(), it.attr("data-term-slug")) }
-            ?: listOf(MrmFilter("Press 'Reset' to load filters", ""))
+
+        val filters: List<MrmFilter>? = if (isSelectDropdown) {
+            parent?.select("option")?.map { MrmFilter(it.text(), it.attr("value")) }
+        } else {
+            parent?.select(".term")?.map { MrmFilter(it.text(), it.attr("data-term-slug")) }
+        }
+
+        return filters ?: listOf(MrmFilter("Press 'Reset' to load filters", ""))
     }
 
     // Generates the filter lists for app
     override fun getFilterList(): FilterList {
         return FilterList(
             EnforceLanguageFilter(siteLang),
+            SearchSortTypeList(getFiltersFromSearchPage("Sort by", true)),
             GenreFilter(getFiltersFromMainPage("Genres")),
             CatFilter(getFiltersFromSearchPage("Category")),
             TagFilter(getFiltersFromSearchPage("Tag")),
@@ -319,6 +324,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         }
     }
 
+    private class SearchSortTypeList(SORT: List<MrmFilter>) : UriSelectOneFilter("Sort by", "ep_sort", SORT)
     private class GenreFilter(GENRES: List<MrmFilter>) : UriSelectFilter("Genre", "ep_filter_genre", GENRES)
     private class CatFilter(CATID: List<MrmFilter>) : UriSelectFilter("Popular Categories", "ep_filter_category", CATID)
     private class TagFilter(POPTAG: List<MrmFilter>) : UriSelectFilter("Popular Tags", "ep_filter_post_tag", POPTAG)
@@ -330,13 +336,26 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     private open class UriSelectFilter(
         displayName: String,
         val uriParam: String,
-        val vals: List<MrmFilter>,
+        vals: List<MrmFilter>,
     ) : Filter.Group<MrmFilter>(displayName, vals), UriFilter {
         override fun addToUri(uri: Uri.Builder) {
             val checked = state.filter { it.state }.ifEmpty { return }
                 .joinToString(",") { it.value }
 
             uri.appendQueryParameter(uriParam, checked)
+        }
+    }
+
+    private open class UriSelectOneFilter(
+        displayName: String,
+        val uriParam: String,
+        val vals: List<MrmFilter>,
+        defaultValue: Int = 0,
+    ) : Filter.Select<String>(displayName, vals.map { it.name }.toTypedArray(), defaultValue), UriFilter {
+        override fun addToUri(uri: Uri.Builder) {
+            if (state != 0) {
+                uri.appendQueryParameter(uriParam, vals[state].value)
+            }
         }
     }
 
