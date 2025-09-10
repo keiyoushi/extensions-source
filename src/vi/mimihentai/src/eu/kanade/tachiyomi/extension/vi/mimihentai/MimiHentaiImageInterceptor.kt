@@ -9,6 +9,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 
 class MimiHentaiImageInterceptor : Interceptor {
 
@@ -23,7 +24,7 @@ class MimiHentaiImageInterceptor : Interceptor {
         val gt = fragment.substringAfter(GT)
         val image = extractImage(response.body.byteStream(), gt)
         val body = image.toResponseBody("image/jpeg".toMediaTypeOrNull())
-        
+
         return response.newBuilder()
             .body(body)
             .build()
@@ -31,7 +32,7 @@ class MimiHentaiImageInterceptor : Interceptor {
 
     private fun extractImage(imageStream: InputStream, gt: String): ByteArray {
         val bitmap = BitmapFactory.decodeStream(imageStream)
-        
+
         var sw = 0
         var sh = 0
         val pos = mutableMapOf<String, String>()
@@ -60,7 +61,7 @@ class MimiHentaiImageInterceptor : Interceptor {
             Canvas(k).drawBitmap(bitmap, Rect(0, 0, sw, sh), Rect(0, 0, sw, sh), null)
         }
 
-        val keys = arrayOf("00","01","02","10","11","12","20","21","22")
+        val keys = arrayOf("00", "01", "02", "10", "11", "12", "20", "21", "22")
         val baseW = sw / 3
         val baseH = sh / 3
         val rw = sw % 3
@@ -76,7 +77,7 @@ class MimiHentaiImageInterceptor : Interceptor {
         }
 
         val finalDims = dims.ifEmpty { defaultDims }
-        
+
         val inv = mutableMapOf<String, String>().apply {
             pos.forEach { (a, b) -> put(b, a) }
         }
@@ -92,7 +93,7 @@ class MimiHentaiImageInterceptor : Interceptor {
                 working,
                 Rect(s[0], s[1], s[0] + s[2], s[1] + s[3]),
                 Rect(d[0], d[1], d[0] + d[2], d[1] + d[3]),
-                null
+                null,
             )
         }
 
@@ -101,7 +102,7 @@ class MimiHentaiImageInterceptor : Interceptor {
                 bitmap,
                 Rect(0, sh, fullW, fullH),
                 Rect(0, sh, fullW, fullH),
-                null
+                null,
             )
         }
         if (sw < fullW) {
@@ -109,7 +110,7 @@ class MimiHentaiImageInterceptor : Interceptor {
                 bitmap,
                 Rect(sw, 0, fullW, sh),
                 Rect(sw, 0, fullW, sh),
-                null
+                null,
             )
         }
 

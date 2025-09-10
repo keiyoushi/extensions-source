@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.vi.mimihentai
 
+import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.await
@@ -15,6 +16,7 @@ import keiyoushi.utils.parseAs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -32,7 +34,7 @@ class MiMiHentai : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override fun headersBuilder() = Headers.Builder = Headers.Builder()
+    override fun headersBuilder() = Headers.Builder()
         .add("User-Agent", "Kotatsu/6.8 (Android 13;;; en)")
         .add("Referer", "$baseUrl/")
 
@@ -69,7 +71,6 @@ class MiMiHentai : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val segments = response.request.url.pathSegments
         val res = response.parseAs<List<ChapterDto>>()
         return res.map { it.toSChapter() }
     }
@@ -97,10 +98,10 @@ class MiMiHentai : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val url = context.decodeBase64("AxsAEQdJWk4YDUkHDgcVEwxaBQoHShIXHwYbD1seHAwHOwAKCAYFFw==\n")
+        val url = Base64.decode("AxsAEQdJWk4YDUkHDgcVEwxaBQoHShIXHwYbD1seHAwHOwAKCAYFFw==\n", Base64.DEFAULT)
             .decodeXorCipher()
             .toString(Charsets.UTF_8) + "/" + chapter.url
-        return GET(url, headers)
+        return GET(url.toString(), headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
