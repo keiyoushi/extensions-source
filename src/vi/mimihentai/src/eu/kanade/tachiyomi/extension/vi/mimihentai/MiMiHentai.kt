@@ -71,8 +71,10 @@ class MiMiHentai : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        val segments = response.request.url.pathSegments
+        val mangaId = segments.last()
         val res = response.parseAs<List<ChapterDto>>()
-        return res.map { it.toSChapter() }
+        return res.map { it.toSChapter(mangaId) }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -100,8 +102,8 @@ class MiMiHentai : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val url = Base64.decode("AxsAEQdJWk4YDUkHDgcVEwxaBQoHShIXHwYbD1seHAwHOwAKCAYFFw==\n", Base64.DEFAULT)
             .decodeXorCipher()
-            .toString(Charsets.UTF_8) + "/" + chapter.url
-        return GET(url.toString(), headers)
+            .toString(Charsets.UTF_8) + "/" + chapter.url.substringAfterLast("/")
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
