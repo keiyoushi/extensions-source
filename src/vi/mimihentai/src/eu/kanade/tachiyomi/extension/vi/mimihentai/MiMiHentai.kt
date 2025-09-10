@@ -32,10 +32,12 @@ class MiMiHentai : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override fun headersBuilder() = super.headersBuilder()
+    override fun headersBuilder() = Headers.Builder = Headers.Builder()
+        .add("User-Agent", "Kotatsu/6.8 (Android 13;;; en)")
         .add("Referer", "$baseUrl/")
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .addInterceptor(MimiHentaiImageInterceptor())
         .rateLimit(3)
         .build()
 
@@ -96,13 +98,16 @@ class MiMiHentai : HttpSource() {
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$apiUrl/chapter?id=${chapter.url.substringAfterLast("/")}", headers)
+        val url = context.decodeBase64("AxsAEQdJWk4YDUkHDgcVEwxaBQoHShIXHwYbD1seHAwHOwAKCAYFFw==\n")
+            .decodeXorCipher()
+            .toString(Charsets.UTF_8) + "/" + chapter.url
+        return GET(url, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val res = response.parseAs<PageListDto>()
-        return res.pages.mapIndexed { index, url ->
-            Page(index, imageUrl = url.imageUrl)
+        return res.pages.mapIndexed { index, page ->
+            Page(index, imageUrl = if (page.drm != null) "${page.imageUrl}#gt=${page.drm}" else page.imageUrl)
         }
     }
 
@@ -234,6 +239,16 @@ class MiMiHentai : HttpSource() {
         SortBy("Lưu", "follows"),
         SortBy("Tên", "title"),
     )
+
+    private fun ByteArray.decodeXorCipher(): ByteArray {
+        val k = "kotatsuanddokiarethebest"
+            .toByteArray(Charsets.UTF_8)
+
+        return this.mapIndexed { i, b ->
+            (b.toInt() xor k[i % k.size].toInt()).toByte()
+        }.toByteArray()
+    }
+
     companion object {
         private const val PREFIX_ID_SEARCH = "id:"
     }
