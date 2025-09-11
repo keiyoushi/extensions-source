@@ -9,4 +9,6 @@ class ArvenComics : Madara(
 ) {
     // migrated from Keyoapp to Madara
     override val versionId = 2
+
+    override val mangaSubString = "comic"
 }
