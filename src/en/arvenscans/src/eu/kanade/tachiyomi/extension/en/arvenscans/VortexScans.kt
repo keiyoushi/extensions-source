@@ -16,10 +16,8 @@ class VortexScans : Iken(
         val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             addQueryParameter("perPage", perPage.toString())
-            if (apiUrl.startsWith("https://api.", true)) {
-                addQueryParameter("tag", "new")
-                addQueryParameter("isNovel", "false")
-            }
+            addQueryParameter("tag", "new")
+            addQueryParameter("isNovel", "false")
         }.build()
 
         return GET(url, headers)
