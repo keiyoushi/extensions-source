@@ -12,6 +12,19 @@ class VortexScans : Iken(
     "https://vortexscans.org",
     "https://api.vortexscans.org",
 ) {
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            addQueryParameter("perPage", perPage.toString())
+            if (apiUrl.startsWith("https://api.", true)) {
+                addQueryParameter("tag", "new")
+                addQueryParameter("isNovel", "false")
+            }
+        }.build()
+
+        return GET(url, headers)
+    }
+
     override fun popularMangaRequest(page: Int): Request {
         val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
