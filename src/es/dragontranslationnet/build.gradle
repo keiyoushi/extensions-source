@@ -1,0 +1,10 @@
+ext {
+    extName = 'DragonTranslation.net'
+    extClass = '.DragonTranslationNet'
+    overrideVersionCode = 41
+    isNsfw = true
+    themePkg = 'madara'
+    basePkg = 'eu.kanade.tachiyomi.multisrc'
+    baseUrl = 'https://dragontranslation.org'
+}
+apply from: "$rootDir/common.gradle"
