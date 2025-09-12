@@ -1,0 +1,22 @@
+package eu.kanade.tachiyomi.extension.es.dragontranslationorg
+
+import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import okhttp3.OkHttpClient
+import java.text.SimpleDateFormat
+import java.util.Locale
+
+class DragonTranslationOrg : Madara(
+    "DragonTranslation.org",
+    "https://dragontranslation.org",
+    "es",
+    SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("es")),
+) {
+    override val id: Long = 134021723502954003
+    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useNewChapterEndpoint = true
+
+    override val client: OkHttpClient = super.client.newBuilder()
+        .rateLimit(3)
+        .build()
+}
