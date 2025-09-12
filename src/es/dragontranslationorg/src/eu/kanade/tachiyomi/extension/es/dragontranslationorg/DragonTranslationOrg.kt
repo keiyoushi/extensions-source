@@ -13,7 +13,7 @@ class DragonTranslationOrg : Madara(
     SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
     override val id: Long = 134021723502954003
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
 
     override val client: OkHttpClient = super.client.newBuilder()
