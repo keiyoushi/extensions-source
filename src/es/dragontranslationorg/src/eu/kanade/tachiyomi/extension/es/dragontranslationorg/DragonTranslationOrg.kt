@@ -10,7 +10,7 @@ class DragonTranslationOrg : Madara(
     "DragonTranslation.org",
     "https://dragontranslation.org",
     "es",
-    SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("es")),
+    SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {
     override val id: Long = 134021723502954003
     override val useLoadMoreRequest = LoadMoreStrategy.Never
