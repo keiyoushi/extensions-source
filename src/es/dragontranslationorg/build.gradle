@@ -1,7 +1,7 @@
 ext {
     extName = 'DragonTranslation.org'
     extClass = '.DragonTranslationOrg'
-    overrideVersionCode = 1
+    overrideVersionCode = 0
     isNsfw = true
     themePkg = 'madara'
     baseUrl = 'https://dragontranslation.org'
