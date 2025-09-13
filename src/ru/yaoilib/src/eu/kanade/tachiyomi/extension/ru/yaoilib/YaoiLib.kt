@@ -6,7 +6,7 @@ import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.libgroup.LibGroup
 import keiyoushi.utils.getPreferencesLazy
 
-class YaoiLib : LibGroup("YaoiLib", "https://slashlib.me", "ru") {
+class YaoiLib : LibGroup("YaoiLib", "https://v2.shlib.life", "ru") {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
@@ -33,6 +33,6 @@ class YaoiLib : LibGroup("YaoiLib", "https://slashlib.me", "ru") {
 
     companion object {
         private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://test-front.slashlib.me"
+        private const val DOMAIN_DEFAULT = "https://v2.shlib.life"
     }
 }
