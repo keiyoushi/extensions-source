@@ -9,26 +9,23 @@ import kotlin.system.exitProcess
 
 class UzayMangaUrlActivity : Activity() {
 
-    private val tag = javaClass.simpleName
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pathSegments = intent?.data?.pathSegments
-        if (pathSegments != null && pathSegments.size > 2) {
-            val item = "${pathSegments[1]}/${pathSegments[2]}"
+
+        if (pathSegments != null && pathSegments.size >= 1) {
             val mainIntent = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                putExtra("query", "${UzayManga.URL_SEARCH_PREFIX}$item")
+                putExtra("query", "${UzayManga.URL_SEARCH_PREFIX}${intent?.data?.toString()}")
                 putExtra("filter", packageName)
             }
-
             try {
                 startActivity(mainIntent)
             } catch (e: ActivityNotFoundException) {
-                Log.e(tag, e.toString())
+                Log.e("UzaymangaUrlActivity", e.toString())
             }
         } else {
-            Log.e(tag, "could not parse uri from intent $intent")
+            Log.e("UzayMangaUrlActivity", "Could not parse uri from intent $intent")
         }
 
         finish()
