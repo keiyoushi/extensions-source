@@ -37,6 +37,7 @@ class ChapterWrapper(
 
 @Serializable
 class ChapterDto(
+    private val title: String,
     val slug: String,
     @SerialName("chapter_number")
     private val chapterNumber: Float,
@@ -45,7 +46,7 @@ class ChapterDto(
     val content: String,
 ) {
     fun toSChapter(postSlug: String) = SChapter.create().apply {
-        name = chapterNumber.toString()
+        name = title
         chapter_number = chapterNumber
         url = "/$postSlug/$slug.html"
         date_upload = dateFormat.tryParse(createdAt)
