@@ -1,10 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.kmanga
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
 class RankingApiResponse(
-    val ranking_title_list: List<RankingTitleId>,
+    @SerialName("ranking_title_list") val rankingTitleList: List<RankingTitleId>,
 )
 
 @Serializable
@@ -14,36 +15,50 @@ class RankingTitleId(
 
 @Serializable
 class TitleListResponse(
-    val title_list: List<TitleDetail>,
+    @SerialName("title_list") val titleList: List<TitleDetail>,
 )
 
 @Serializable
 class TitleDetail(
-    val title_id: Int,
-    val title_name: String,
-    val thumbnail_rect_image_url: String? = null,
-    val banner_image_url: String? = null,
+    @SerialName("title_id") val titleId: Int,
+    @SerialName("title_name") val titleName: String,
+    @SerialName("thumbnail_image_url") val thumbnailImageUrl: String? = null,
+    @SerialName("banner_image_url") val bannerImageUrl: String? = null,
 )
 
 @Serializable
 class BirthdayCookie(val value: String, val expires: Long)
 
 @Serializable
-class EpisodeListResponse(val episode_list: List<Episode>)
+class EpisodeListResponse(
+    @SerialName("episode_list") val episodeList: List<Episode>,
+)
 
 @Serializable
 class Episode(
-    val episode_id: Int,
-    val episode_name: String,
-    val start_time: String,
+    @SerialName("episode_id") val episodeId: Int,
+    @SerialName("episode_name") val episodeName: String,
+    @SerialName("start_time") val startTime: String,
     val point: Int,
-    val title_id: Int,
+    @SerialName("title_id") val titleId: Int,
     val badge: Int,
-    val rental_finish_time: String? = null,
+    @SerialName("rental_finish_time") val rentalFinishTime: String? = null,
 )
 
 @Serializable
 class ViewerApiResponse(
-    val page_list: List<String>,
-    val scramble_seed: Long,
+    @SerialName("page_list") val pageList: List<String>,
+    @SerialName("scramble_seed") val scrambleSeed: Long,
+)
+
+@Serializable
+class SearchApiResponse(
+    @SerialName("title_list") val titleList: List<SearchTitleDetail>,
+)
+
+@Serializable
+class SearchTitleDetail(
+    @SerialName("title_id") val titleId: Int,
+    @SerialName("title_name") val titleName: String,
+    @SerialName("thumbnail_image_url") val thumbnailImageUrl: String? = null,
 )

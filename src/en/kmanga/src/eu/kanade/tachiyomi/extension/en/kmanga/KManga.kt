@@ -12,8 +12,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.firstInstance
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -21,16 +22,13 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
-import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okio.ByteString.Companion.encodeUtf8
-import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.net.URLDecoder
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -44,9 +42,10 @@ class KManga : HttpSource() {
 
     private val apiUrl = "https://api.kmanga.kodansha.com"
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-    private val json: Json by injectLazy()
+    private val pageLimit = 25
+    private val searchLimit = 25
 
-    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+    override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("X-Requested-With", "XMLHttpRequest")
         .add("x-kmanga-platform", "3")
@@ -58,60 +57,49 @@ class KManga : HttpSource() {
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/ranking/all".toHttpUrl().newBuilder()
+        val offset = (page - 1) * pageLimit
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments("ranking/all")
             .addQueryParameter("ranking_id", "12")
-            .addQueryParameter("offset", "0")
-            .addQueryParameter("limit", "999") // 562 entries atm
+            .addQueryParameter("offset", offset.toString())
+            .addQueryParameter("limit", (pageLimit + 1).toString())
             .build()
 
-        val (birthday, expires) = getBirthdayCookie(url)
-
-        val queryParams = url.queryParameterNames.associateWith { url.queryParameter(it)!! }
-        val hash = generateHash(queryParams, birthday, expires)
-
-        val newHeaders = headersBuilder()
-            .add("x-kmanga-hash", hash)
-            .build()
-
-        return GET(url, newHeaders)
+        return hashedGet(url)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val rankingResult = json.decodeFromString<RankingApiResponse>(response.body.string())
-        val titleIds = rankingResult.ranking_title_list.map { it.id.toString() }
+        val rankingResult = response.parseAs<RankingApiResponse>()
+        val titleIds = rankingResult.rankingTitleList.map { it.id.toString() }
 
         if (titleIds.isEmpty()) {
             return MangasPage(emptyList(), false)
         }
 
-        val detailsUrl = "$apiUrl/title/list".toHttpUrl().newBuilder()
-            .addQueryParameter("title_id_list", titleIds.joinToString(","))
+        val hasNextPage = titleIds.size > pageLimit
+        val mangaIdsToFetch = if (hasNextPage) titleIds.dropLast(1) else titleIds
+
+        val detailsUrl = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments("title/list")
+            .addQueryParameter("title_id_list", mangaIdsToFetch.joinToString(","))
             .build()
 
-        val (birthday, expires) = getBirthdayCookie(detailsUrl)
-        val queryParams = detailsUrl.queryParameterNames.associateWith { detailsUrl.queryParameter(it)!! }
-        val hash = generateHash(queryParams, birthday, expires)
-
-        val detailsHeaders = headersBuilder()
-            .add("x-kmanga-hash", hash)
-            .build()
-
-        val detailsRequest = GET(detailsUrl, detailsHeaders)
+        val detailsRequest = hashedGet(detailsUrl)
         val detailsResponse = client.newCall(detailsRequest).execute()
 
         if (!detailsResponse.isSuccessful) {
             throw Exception("Failed to fetch title details: ${detailsResponse.code} - ${detailsResponse.body.string()}")
         }
 
-        val detailsResult = json.decodeFromString<TitleListResponse>(detailsResponse.body.string())
-        val mangas = detailsResult.title_list.map { manga ->
+        val detailsResult = detailsResponse.parseAs<TitleListResponse>()
+        val mangas = detailsResult.titleList.map { manga ->
             SManga.create().apply {
-                url = "/title/${manga.title_id}"
-                title = manga.title_name
-                thumbnail_url = manga.thumbnail_rect_image_url ?: manga.banner_image_url
+                url = "/title/${manga.titleId}"
+                title = manga.titleName
+                thumbnail_url = manga.thumbnailImageUrl ?: manga.bannerImageUrl
             }
         }
-        return MangasPage(mangas, false)
+        return MangasPage(mangas, hasNextPage)
     }
 
     // Search
@@ -131,30 +119,69 @@ class KManga : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val genreFilter = filters.filterIsInstance<GenreFilter>().first()
+        val genreFilter = filters.firstInstance<GenreFilter>()
 
-        return when {
-            query.isNotBlank() -> GET("$baseUrl/search/$query", headers)
-            genreFilter.state != 0 -> GET("$baseUrl${genreFilter.toUriPart()}", headers)
-            else -> popularMangaRequest(page)
+        if (query.isNotBlank()) {
+            val offset = (page - 1) * searchLimit
+            val url = apiUrl.toHttpUrl().newBuilder()
+                .addPathSegments("search/title")
+                .addQueryParameter("keyword", query)
+                .addQueryParameter("offset", offset.toString())
+                .addQueryParameter("limit", searchLimit.toString())
+                .build()
+            return hashedGet(url)
         }
+
+        if (genreFilter.state != 0) {
+            val url = baseUrl.toHttpUrl().newBuilder()
+                .addPathSegments(genreFilter.toUriPart().removePrefix("/"))
+                .build()
+            return GET(url, headers)
+        }
+        return popularMangaRequest(page)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val requestUrl = response.request.url.toString()
-        return if (requestUrl.contains("/search/") || requestUrl.contains("/search/genre/")) {
-            val document = response.asJsoup()
-            val mangas = document.select("ul.c-search-items li.c-search-items__item a.c-search-item").map(::searchMangaFromElement)
-            MangasPage(mangas, false)
-        } else {
-            popularMangaParse(response)
+        if (response.request.url.host.contains("api.")) {
+            return try {
+                val result = response.parseAs<SearchApiResponse>()
+                val mangas = result.titleList.map { manga ->
+                    SManga.create().apply {
+                        url = "/title/${manga.titleId}"
+                        title = manga.titleName
+                        thumbnail_url = manga.thumbnailImageUrl
+                    }
+                }
+                MangasPage(mangas, mangas.size >= searchLimit)
+            } catch (e: Exception) {
+                MangasPage(emptyList(), false)
+            }
         }
-    }
 
-    private fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.attr("href").substringBefore("/episode"))
-        title = element.selectFirst(".c-search-item__ttl")!!.text()
-        thumbnail_url = element.selectFirst("div.c-search-item__img img")?.attr("src")
+        if (response.request.url.toString().contains("/search/genre/")) {
+            val document = response.asJsoup()
+            val nuxtData = document.selectFirst("script#__NUXT_DATA__")?.data()
+                ?: return MangasPage(emptyList(), false)
+
+            val rootArray = nuxtData.parseAs<JsonArray>()
+            fun resolve(ref: JsonElement): JsonElement = rootArray[ref.jsonPrimitive.content.toInt()]
+
+            val genreResultObject = rootArray.firstOrNull { it is JsonObject && "title_list" in it.jsonObject }
+                ?: return MangasPage(emptyList(), false)
+
+            val mangaRefs = resolve(genreResultObject.jsonObject["title_list"]!!).jsonArray
+
+            val mangas = mangaRefs.map { ref ->
+                val mangaObject = resolve(ref).jsonObject
+                SManga.create().apply {
+                    url = "/title/${resolve(mangaObject["title_id"]!!).jsonPrimitive.content}"
+                    title = resolve(mangaObject["title_name"]!!).jsonPrimitive.content
+                    thumbnail_url = mangaObject["thumbnail_image_url"]?.let { resolve(it).jsonPrimitive.content }
+                }
+            }
+            return MangasPage(mangas, false)
+        }
+        return popularMangaParse(response)
     }
 
     // Details
@@ -163,7 +190,7 @@ class KManga : HttpSource() {
         val nuxtData = document.selectFirst("script#__NUXT_DATA__")?.data()
             ?: throw Exception("Could not find Nuxt data")
 
-        val rootArray = json.decodeFromString<JsonArray>(nuxtData)
+        val rootArray = nuxtData.parseAs<JsonArray>()
         fun resolve(ref: JsonElement): JsonElement = rootArray[ref.jsonPrimitive.content.toInt()]
 
         val titleDetailsObject = rootArray.first { it is JsonObject && it.jsonObject.containsKey("title_in_japanese") }.jsonObject
@@ -183,11 +210,10 @@ class KManga : HttpSource() {
             title = resolve(titleDetailsObject["title_name"]!!).jsonPrimitive.content
             author = resolve(titleDetailsObject["author_text"]!!).jsonPrimitive.content
             description = resolve(titleDetailsObject["introduction_text"]!!).jsonPrimitive.content
-            thumbnail_url = resolve(titleDetailsObject["banner_image_url"]!!).jsonPrimitive.content
+            thumbnail_url = titleDetailsObject["thumbnail_image_url"]?.let { resolve(it).jsonPrimitive.content }
             val genreIdRefs = resolve(titleDetailsObject["genre_id_list"]!!).jsonArray
             val genreIds = genreIdRefs.map { resolve(it).jsonPrimitive.content.toInt() }
             genre = genreIds.mapNotNull { genreMap[it] }.joinToString()
-            status = SManga.ONGOING
         }
     }
 
@@ -201,7 +227,7 @@ class KManga : HttpSource() {
         val nuxtData = document.selectFirst("script#__NUXT_DATA__")?.data()
             ?: throw Exception("Could not find Nuxt data")
 
-        val rootArray = json.decodeFromString<JsonArray>(nuxtData)
+        val rootArray = nuxtData.parseAs<JsonArray>()
         fun resolve(ref: JsonElement): JsonElement = rootArray[ref.jsonPrimitive.content.toInt()]
 
         val titleDetailsObject = rootArray.first { it is JsonObject && it.jsonObject.containsKey("episode_id_list") }.jsonObject
@@ -232,19 +258,17 @@ class KManga : HttpSource() {
             throw Exception("API request failed with code ${apiResponse.code}: ${apiResponse.body.string()}")
         }
 
-        val result = json.decodeFromString<EpisodeListResponse>(apiResponse.body.string())
+        val result = apiResponse.parseAs<EpisodeListResponse>()
 
-        return result.episode_list.map { chapter ->
+        return result.episodeList.map { chapter ->
             SChapter.create().apply {
-                url = "/title/${chapter.title_id}/episode/${chapter.episode_id}"
-                name = if (chapter.point > 0 && chapter.badge != 3 && chapter.rental_finish_time == null) {
-                    "🔒 ${chapter.episode_name}"
+                url = "/title/${chapter.titleId}/episode/${chapter.episodeId}"
+                name = if (chapter.point > 0 && chapter.badge != 3 && chapter.rentalFinishTime == null) {
+                    "🔒 ${chapter.episodeName}"
                 } else {
-                    chapter.episode_name
+                    chapter.episodeName
                 }
-                date_upload = runCatching {
-                    dateFormat.parse(chapter.start_time)!!.time
-                }.getOrDefault(0L)
+                date_upload = dateFormat.tryParse(chapter.startTime)
             }
         }.reversed()
     }
@@ -256,7 +280,7 @@ class KManga : HttpSource() {
         return if (birthdayCookie != null) {
             try {
                 val decoded = URLDecoder.decode(birthdayCookie, "UTF-8")
-                val cookieData = json.decodeFromString<BirthdayCookie>(decoded)
+                val cookieData = decoded.parseAs<BirthdayCookie>()
                 cookieData.value to cookieData.expires.toString()
             } catch (e: Exception) {
                 // Fallback to default if cookie is malformed
@@ -271,19 +295,19 @@ class KManga : HttpSource() {
     // https://kmanga.kodansha.com/_nuxt/vl9so/entry-CSwIbMdW.js
     private fun generateHash(params: Map<String, String>, birthday: String, expires: String): String {
         val paramStrings = params.toSortedMap().map { (key, value) ->
-            p(key, value)
+            getHashedParam(key, value)
         }
 
         val joinedParams = paramStrings.joinToString(",")
         val hash1 = joinedParams.encodeUtf8().sha256().hex()
 
-        val cookieHash = p(birthday, expires)
+        val cookieHash = getHashedParam(birthday, expires)
 
         val finalString = "$hash1$cookieHash"
         return finalString.encodeUtf8().sha512().hex()
     }
 
-    private fun p(key: String, value: String): String {
+    private fun getHashedParam(key: String, value: String): String {
         val keyHash = key.encodeUtf8().sha256().hex()
         val valueHash = value.encodeUtf8().sha512().hex()
         return "${keyHash}_$valueHash"
@@ -305,26 +329,29 @@ class KManga : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val apiResponse = json.decodeFromString<ViewerApiResponse>(response.body.string())
-        val seed = apiResponse.scramble_seed
-        return apiResponse.page_list.mapIndexed { index, imageUrl ->
+        val apiResponse = response.parseAs<ViewerApiResponse>()
+        val seed = apiResponse.scrambleSeed
+        return apiResponse.pageList.mapIndexed { index, imageUrl ->
             Page(index = index, imageUrl = "$imageUrl#scramble_seed=$seed")
         }
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val episodeId = chapter.url.substringAfter("episode/")
-        val url = "$apiUrl/web/episode/viewer?episode_id=$episodeId".toHttpUrl()
+        val url = "$apiUrl/web/episode/viewer".toHttpUrl().newBuilder()
+            .addQueryParameter("episode_id", episodeId)
+            .build()
 
+        return hashedGet(url)
+    }
+
+    private fun hashedGet(url: HttpUrl): Request {
         val (birthday, expires) = getBirthdayCookie(url)
-
         val queryParams = url.queryParameterNames.associateWith { url.queryParameter(it)!! }
         val hash = generateHash(queryParams, birthday, expires)
-
         val newHeaders = headersBuilder()
             .add("x-kmanga-hash", hash)
             .build()
-
         return GET(url, newHeaders)
     }
 
