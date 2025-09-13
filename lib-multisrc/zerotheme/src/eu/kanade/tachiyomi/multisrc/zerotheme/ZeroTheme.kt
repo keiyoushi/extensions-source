@@ -27,7 +27,7 @@ abstract class ZeroTheme(
 
     open val cdnUrl: String = "https://cdn.${baseUrl.substringAfterLast("/")}"
 
-    open val imageLocation: String = "images"
+    open val imageLocation: String = "/images"
 
     open val mangaSubString: String by lazy {
         val response = client.newCall(GET(baseUrl, headers)).execute()
@@ -42,7 +42,7 @@ abstract class ZeroTheme(
 
     open val chapterSubString: String = "chapter"
 
-    private val sourceLocation: String get() = "$cdnUrl/$imageLocation"
+    open val sourceLocation: String get() = "$cdnUrl$imageLocation"
 
     // =========================== Popular ================================
 
