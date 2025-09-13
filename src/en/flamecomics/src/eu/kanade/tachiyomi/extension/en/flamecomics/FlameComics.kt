@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -178,7 +177,6 @@ class FlameComics : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val seriesData =
             json.decodeFromString<MangaPageData>(response.body.string()).pageProps.series
-        Log.d("flame-mangaDetailsParse", "seriesData, $seriesData")
         title = seriesData.title
         thumbnail_url = thumbnailUrl(seriesData)
         description = Jsoup.parseBodyFragment(seriesData.description).wholeText()
@@ -200,7 +198,6 @@ class FlameComics : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaPageData = json.decodeFromString<MangaPageData>(response.body.string())
-        Log.d("flame- chapterListParse", "mangaPageData, $mangaPageData")
         return mangaPageData.pageProps.chapters.map { chapter ->
             SChapter.create().apply {
                 setUrlWithoutDomain(
