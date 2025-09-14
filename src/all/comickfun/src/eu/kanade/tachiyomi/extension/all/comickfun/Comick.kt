@@ -515,10 +515,11 @@ abstract class Comick(
                     else -> {}
                 }
             }
-            // Global user ignored tags — apply to BOTH buckets so Genre:Yaoi etc. are filtered too
-            addTagQueryParameters(this, preferences.ignoredTags, "excluded-tags")
-            addTagQueryParameters(this, preferences.ignoredTags, "excludes")
-
+            // ✅ WICHTIG: Nur senden, wenn wirklich etwas drin steht, sonst keine Param anhängen
+            val ignored = preferences.ignoredTags
+            if (ignored.isNotBlank()) {
+                addTagQueryParameters(this, ignored, "excluded-tags")
+            }
             addQueryParameter("tachiyomi", "true")
             addQueryParameter("limit", "$LIMIT")
             addQueryParameter("page", "$page")
