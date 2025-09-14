@@ -31,7 +31,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
-import kotlin.math.min
 
 abstract class Comick(
     override val lang: String,
@@ -46,14 +45,38 @@ abstract class Comick(
 
     override val supportsLatest = true
 
+    // === Ignored Tags helpers (dynamic, from preferences) ===
+    private fun String.normalizeTagSlug(): String = this.trim()
+        .substringAfter(":")
+        .lowercase()
+        .replace(Regex("[ /]"), "-")
+        .replace("'-", "-and-039-")
+        .replace("'", "-and-039-")
+
+    private fun parseIgnoredTagsSet(): Set<String> =
+        (preferences.ignoredTags)
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { it.normalizeTagSlug() }
+            .toSet()
+
+    private fun isUserBlacklisted(genres: List<String>?): Boolean {
+        if (genres.isNullOrEmpty()) return false
+        val blocked = parseIgnoredTagsSet()
+        if (blocked.isEmpty()) return false
+        return genres.any { it.normalizeTagSlug() in blocked }
+    }
+
+    private fun SManga.genresList(): List<String>? =
+        this.genre?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
+
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
         coerceInputValues = true
         explicitNulls = true
     }
-
-    private lateinit var searchResponse: List<SearchManga>
 
     private val intl by lazy {
         Intl(
@@ -356,10 +379,9 @@ abstract class Comick(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val result = response.parseAs<List<SearchManga>>()
-        return MangasPage(
-            result.map(SearchManga::toSManga),
-            hasNextPage = result.size >= LIMIT,
-        )
+        val entries = result.map(SearchManga::toSManga)
+        val filtered = entries.filter { !isUserBlacklisted(it.genresList()) }
+        return MangasPage(filtered, hasNextPage = result.size >= LIMIT)
     }
 
     /** Latest Manga **/
@@ -388,43 +410,11 @@ abstract class Comick(
             fetchMangaDetails(manga).map {
                 MangasPage(listOf(it), false)
             }
-        } else if (query.isEmpty()) {
-            // regular filtering without text search
+        } else {
             client.newCall(searchMangaRequest(page, query, filters))
                 .asObservableSuccess()
                 .map(::searchMangaParse)
-        } else {
-            // text search, no pagination in api
-            if (page == 1) {
-                client.newCall(querySearchRequest(query))
-                    .asObservableSuccess()
-                    .map(::querySearchParse)
-            } else {
-                Observable.just(paginatedSearchPage(page))
-            }
         }
-    }
-
-    private fun querySearchRequest(query: String): Request {
-        val url = "$apiUrl/v1.0/search?limit=300&page=1&tachiyomi=true"
-            .toHttpUrl().newBuilder()
-            .addQueryParameter("q", query.trim())
-            .build()
-
-        return GET(url, headers)
-    }
-
-    private fun querySearchParse(response: Response): MangasPage {
-        searchResponse = response.parseAs()
-
-        return paginatedSearchPage(1)
-    }
-
-    private fun paginatedSearchPage(page: Int): MangasPage {
-        val end = min(page * LIMIT, searchResponse.size)
-        val entries = searchResponse.subList((page - 1) * LIMIT, end)
-            .map(SearchManga::toSManga)
-        return MangasPage(entries, end < searchResponse.size)
     }
 
     private fun addTagQueryParameters(builder: Builder, tags: String, parameterName: String) {
@@ -439,6 +429,7 @@ abstract class Comick(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/v1.0/search".toHttpUrl().newBuilder().apply {
+            if (query.isNotBlank()) addQueryParameter("q", query.trim())
             filters.forEach { it ->
                 when (it) {
                     is CompletedFilter -> {
@@ -524,7 +515,10 @@ abstract class Comick(
                     else -> {}
                 }
             }
+            // Global user ignored tags — apply to BOTH buckets so Genre:Yaoi etc. are filtered too
             addTagQueryParameters(this, preferences.ignoredTags, "excluded-tags")
+            addTagQueryParameters(this, preferences.ignoredTags, "excludes")
+
             addQueryParameter("tachiyomi", "true")
             addQueryParameter("limit", "$LIMIT")
             addQueryParameter("page", "$page")
