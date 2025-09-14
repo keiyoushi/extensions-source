@@ -143,19 +143,15 @@ class KManga : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (response.request.url.host.contains("api.")) {
-            return try {
-                val result = response.parseAs<SearchApiResponse>()
-                val mangas = result.titleList.map { manga ->
-                    SManga.create().apply {
-                        url = "/title/${manga.titleId}"
-                        title = manga.titleName
-                        thumbnail_url = manga.thumbnailImageUrl
-                    }
+            val result = response.parseAs<SearchApiResponse>()
+            val mangas = result.titleList.map { manga ->
+                SManga.create().apply {
+                    url = "/title/${manga.titleId}"
+                    title = manga.titleName
+                    thumbnail_url = manga.thumbnailImageUrl
                 }
-                MangasPage(mangas, mangas.size >= searchLimit)
-            } catch (e: Exception) {
-                MangasPage(emptyList(), false)
             }
+            return MangasPage(mangas, mangas.size >= searchLimit)
         }
 
         if (response.request.url.toString().contains("/search/genre/")) {

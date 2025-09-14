@@ -21,8 +21,7 @@ class ImageInterceptor : Interceptor {
         }
 
         val seed = fragment.substringAfter("scramble_seed=").toLong()
-        val imageRequest = request.newBuilder().build()
-        val response = chain.proceed(imageRequest)
+        val response = chain.proceed(request)
         val descrambledBody = descrambleImage(response.body, seed)
 
         return response.newBuilder().body(descrambledBody).build()
