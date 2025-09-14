@@ -51,12 +51,12 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
      *  ========== Popular - Random ==========
      */
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/popular/", headers) // Random Manga as returned by search
+        return GET("$baseUrl/popular/", headers)
     }
 
     override fun popularMangaNextPageSelector() = null
     override fun popularMangaSelector() = ".wpp-list li"
-    override fun popularMangaFromElement(element: Element) = buildManga(element.select(".wpp-post-title").first()!!, element.select(".wpp-thumbnail").first())
+    override fun popularMangaFromElement(element: Element) = buildManga(element.selectFirst(".wpp-post-title")!!, element.select(".wpp-thumbnail"))
     override fun popularMangaParse(response: Response): MangasPage {
         cacheAssistant()
         return super.popularMangaParse(response)
@@ -72,7 +72,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
 
     override fun latestUpdatesNextPageSelector() = "li.pagination-next"
     override fun latestUpdatesSelector() = "article"
-    override fun latestUpdatesFromElement(element: Element) = buildManga(element.select("a.entry-title-link").first()!!, element.select("a.entry-image-link img").first())
+    override fun latestUpdatesFromElement(element: Element) = buildManga(element.selectFirst("a.entry-title-link")!!, element.selectFirst("a.entry-image-link img"))
     override fun latestUpdatesParse(response: Response): MangasPage {
         cacheAssistant()
         return super.latestUpdatesParse(response)
@@ -155,7 +155,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     private fun mangaDetailsParse(document: Document, needCover: Boolean = true): SManga {
         return SManga.create().apply {
             title = cleanTitle(document.select("h1").text())
-            author = document.select(".entry-terms a[href*=artist]").firstOrNull()?.text()
+            author = document.selectFirst(".entry-terms a[href*=artist]")?.text()
             artist = author
             genre = document.select(".entry-header p a[href*=genre], [href*=tag], span.entry-categories a").joinToString { it.text() }
             val basicDescription = document.select("h1").text()
