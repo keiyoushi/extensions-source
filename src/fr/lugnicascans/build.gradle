@@ -1,0 +1,8 @@
+ext {
+    extName = 'Lugnica Scans'
+    extClass = '.LugnicaScans'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
