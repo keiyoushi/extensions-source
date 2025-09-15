@@ -23,6 +23,7 @@ class ImageInterceptor : Interceptor {
             .body(decryptedBody)
             .build()
     }
+
 // https://www.azuki.co/assets/js/DecryptedImage.57631a1f.js
     private fun decryptImage(encryptedData: ByteArray): ByteArray {
         val keyByte = 174
