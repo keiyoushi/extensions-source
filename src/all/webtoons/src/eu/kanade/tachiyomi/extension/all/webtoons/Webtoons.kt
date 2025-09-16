@@ -436,7 +436,7 @@ open class Webtoons(
         SwitchPreferenceCompat(screen.context).apply {
             key = USE_SEQUENTIAL_NUMBERING_KEY
             title = "Use sequential chapter numbering"
-            summary = "Enable to use sequential numbering instead of official episode numbers. Useful for multilingual support."
+            summary = "Enable to use sequential numbering instead of official episode numbers."
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
