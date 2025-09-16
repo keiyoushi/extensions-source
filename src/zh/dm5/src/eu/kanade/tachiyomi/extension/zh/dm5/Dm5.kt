@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.zh.dm5
 
 import android.content.SharedPreferences
+import android.util.Log
+import android.webkit.CookieManager
+import android.widget.Toast
+import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.unpacker.Unpacker
@@ -26,15 +30,16 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = true
     override val name = "动漫屋"
-    override val baseUrl = "https://www.dm5.cn"
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(CommentsInterceptor)
         .build()
 
     private val preferences: SharedPreferences = getPreferences()
+    override val baseUrl = preferences.getString(MIRROR_PREF, MIRROR_ENTRIES[0])!!
 
     // Some mangas are blocked without this
     override fun headersBuilder() = super.headersBuilder().set("Accept-Language", "zh-TW")
+        .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36")
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/manhua-list-p$page/", headers)
     override fun popularMangaNextPageSelector(): String = "div.page-pagination a:contains(>)"
@@ -82,8 +87,9 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         // May need to click button on website to read
-        document.selectFirst("div#chapterlistload") ?: throw Exception("請到webview確認")
-        val li = document.select("div#chapterlistload li > a").map {
+        val container = document.selectFirst("div#chapterlistload")
+            ?: throw Exception("请到 WebView 确认；切换网络环境后可尝试扩展设置里面的“（动漫屋专用）清除 Cookie”")
+        val li = container.select("li > a").map {
             SChapter.create().apply {
                 url = it.attr("href")
                 name = if (it.selectFirst("span.detail-lock, span.view-lock") != null) {
@@ -181,11 +187,20 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
-        val header = headers.newBuilder().add("Referer", baseUrl).build()
-        return GET(page.imageUrl!!, header)
+        val url = page.imageUrl!!.toHttpUrl()
+        val cid = url.queryParameter("cid")!!
+        val headers = headers.newBuilder().add("Referer", "$baseUrl/m$cid").build()
+        return GET(url, headers)
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val mirrorPreference = ListPreference(screen.context).apply {
+            key = MIRROR_PREF
+            title = "使用镜像网址"
+            entries = MIRROR_ENTRIES
+            entryValues = MIRROR_ENTRIES
+            setDefaultValue(MIRROR_ENTRIES[0])
+        }
         val chapterCommentsPreference = SwitchPreferenceCompat(screen.context).apply {
             key = CHAPTER_COMMENTS_PREF
             title = "章末吐槽页"
@@ -197,11 +212,52 @@ class Dm5 : ParsedHttpSource(), ConfigurableSource {
             title = "依照上傳時間排序章節"
             setDefaultValue(false)
         }
+        screen.addPreference(mirrorPreference)
         screen.addPreference(chapterCommentsPreference)
         screen.addPreference(sortChapterPreference)
+
+        SwitchPreferenceCompat(screen.context).run {
+            title = "（动漫屋专用）清除 Cookie"
+            summary = "切换网络环境后可尝试清除（app 自带的清除 Cookie 无效）"
+            setOnPreferenceChangeListener { _, _ ->
+                val message = try {
+                    val manager = CookieManager.getInstance()
+                    var before = 0
+                    var after = 0
+                    for (mirror in MIRROR_ENTRIES) {
+                        val cookies = manager.getCookie(mirror) ?: continue
+                        val cookieList = cookies.split("; ")
+                        before += cookieList.size
+                        val url = mirror.toHttpUrl()
+                        val domain = url.host
+                        val topDomain = url.topPrivateDomain()
+                        for (cookie in cookieList) {
+                            val name = cookie.substringBefore('=')
+                            manager.setCookie(mirror, "$name=; Max-Age=-1; Path=/")
+                            manager.setCookie(mirror, "$name=; Max-Age=-1; Domain=$domain; Path=/")
+                            manager.setCookie(mirror, "$name=; Max-Age=-1; Domain=$topDomain; Path=/")
+                        }
+                        val cookiesAfter = manager.getCookie(mirror) ?: continue
+                        after += cookiesAfter.split("; ").size
+                    }
+                    "一共 $before 条 Cookie，清除了 ${before - after} 条"
+                } catch (e: Exception) {
+                    Log.e("Dm5", "failed to clear cookies", e)
+                    "清除失败：$e"
+                }
+                Toast.makeText(screen.context, message, Toast.LENGTH_LONG).show()
+                false
+            }
+            screen.addPreference(this)
+        }
     }
 
     companion object {
+        private val MIRROR_ENTRIES get() = arrayOf(
+            "https://www.dm5.cn",
+            "https://www.dm5.com",
+        )
+        private const val MIRROR_PREF = "mirror"
         private const val CHAPTER_COMMENTS_PREF = "chapterComments"
         private const val SORT_CHAPTER_PREF = "sortChapter"
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)

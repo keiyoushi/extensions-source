@@ -31,8 +31,8 @@ class ScanManga : HttpSource() {
     override val supportsLatest = true
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept-Language", "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3")
-        .set("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36")
+        .add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
+        .set("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
@@ -202,12 +202,14 @@ class ScanManga : HttpSource() {
         val packedScript = document.selectFirst("script:containsData(h,u,n,t,e,r)")!!.data()
 
         val unpackedScript = decodeHunter(packedScript)
-        val parametersRegex = Regex("""sml = '([^']+)';\n.*var sme = '([^']+)'""")
+        val parametersRegex = Regex("""sml = '([^']+)';\n?.*var sme = '([^']+)'""")
 
-        val (sml, sme) = parametersRegex.find(unpackedScript)!!.destructured
+        val (sml, sme) = parametersRegex.find(unpackedScript)?.destructured
+            ?: error("Failed to extract parameters from script.")
 
         val chapterInfoRegex = Regex("""const idc = (\d+)""")
-        val (chapterId) = chapterInfoRegex.find(packedScript)!!.destructured
+        val (chapterId) = chapterInfoRegex.find(packedScript)?.destructured
+            ?: error("Failed to extract chapter ID.")
 
         val mediaType = "application/json; charset=UTF-8".toMediaType()
         val requestBody = """{"a":"$sme","b":"$sml"}"""

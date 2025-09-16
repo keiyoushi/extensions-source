@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.fr.japscan
 
-import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.view.View
@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -34,6 +35,7 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
@@ -48,7 +50,10 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     override val name = "Japscan"
 
-    override val baseUrl = "https://www.japscan.lol"
+    // Sometimes an adblock blocker will pop up, preventing the user from opening
+    // a cloudflare protected page
+    private val internalBaseUrl = "https://www.japscan.si"
+    override val baseUrl = "$internalBaseUrl/mangas/?sort=popular&p=1"
 
     override val lang = "fr"
 
@@ -75,11 +80,11 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     private fun chapterListPref() = preferences.getString(SHOW_SPOILER_CHAPTERS, "hide")
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("referer", "$baseUrl/")
+        .add("referer", "$internalBaseUrl/")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/mangas/?sort=popular&p=$page", headers)
+        return GET("$internalBaseUrl/mangas/?sort=popular&p=$page", headers)
     }
 
     override fun popularMangaNextPageSelector() = ".pagination > li:last-child:not(.disabled)"
@@ -91,14 +96,14 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         element.select("a").first()!!.let {
             manga.setUrlWithoutDomain(it.attr("href"))
             manga.title = it.text()
-            manga.thumbnail_url = "$baseUrl/imgs/${it.attr("href").replace(Regex("/$"),".jpg").replace("manga","mangas")}".lowercase(Locale.ROOT)
+            manga.thumbnail_url = it.selectFirst("img")?.attr("abs:data-src")
         }
         return manga
     }
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/mangas/?sort=updated&p=$page", headers)
+        return GET("$internalBaseUrl/mangas/?sort=updated&p=$page", headers)
     }
 
     override fun latestUpdatesSelector() = popularMangaSelector()
@@ -110,7 +115,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isEmpty()) {
-            val url = baseUrl.toHttpUrl().newBuilder().apply {
+            val url = internalBaseUrl.toHttpUrl().newBuilder().apply {
                 addPathSegment("mangas")
 
                 filters.forEach { filter ->
@@ -131,7 +136,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 .add("X-Requested-With", "XMLHttpRequest")
                 .build()
 
-            return POST("$baseUrl/live-search/", searchHeaders, formBody)
+            return POST("$internalBaseUrl/ls/", searchHeaders, formBody)
         }
     }
 
@@ -140,7 +145,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     override fun searchMangaSelector(): String = "div.card div.p-2"
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.pathSegments.first() == "live-search") {
+        if (response.request.url.pathSegments.first() == "ls") {
             val jsonResult = json.parseToJsonElement(response.body.string()).jsonArray
 
             val mangaList = jsonResult.map { jsonEl -> searchMangaFromJson(jsonEl.jsonObject) }
@@ -148,7 +153,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             return MangasPage(mangaList, hasNextPage = false)
         }
 
-        val baseUrlHost = baseUrl.toHttpUrl().host
+        val baseUrlHost = internalBaseUrl.toHttpUrl().host
         val document = response.asJsoup()
         val manga = document
             .select(searchMangaSelector())
@@ -173,15 +178,18 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     private fun searchMangaFromJson(jsonObj: JsonObject): SManga = SManga.create().apply {
         url = jsonObj["url"]!!.jsonPrimitive.content
         title = jsonObj["name"]!!.jsonPrimitive.content
-        thumbnail_url = baseUrl + jsonObj["image"]!!.jsonPrimitive.content
+        thumbnail_url = internalBaseUrl + jsonObj["image"]!!.jsonPrimitive.content
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return GET(internalBaseUrl + manga.url, headers)
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("#main .card-body")!!
-
         val manga = SManga.create()
-        val path = document.location().replaceFirst("$baseUrl/", "")
-        manga.thumbnail_url = "$baseUrl/imgs/${path.replace(Regex("/$"),".jpg").replace("manga","mangas")}".lowercase(Locale.ROOT)
+
+        manga.thumbnail_url = infoElement.selectFirst("img")?.attr("abs:src")
 
         val infoRows = infoElement.select(".row, .d-flex")
         infoRows.select("p").forEach { el ->
@@ -194,7 +202,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 }
             }
         }
-        manga.description = infoElement.select("div:contains(Synopsis) + p").text().orEmpty()
+        manga.description = infoElement.selectFirst("div:contains(Synopsis) + p")?.ownText().orEmpty()
 
         return manga
     }
@@ -205,13 +213,21 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    override fun chapterListSelector() = "#chapters_list > div.collapse > div.chapters_list" +
+    override fun getChapterUrl(chapter: SChapter): String {
+        return internalBaseUrl + chapter.url
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        return GET(internalBaseUrl + manga.url, headers)
+    }
+
+    override fun chapterListSelector() = "#list_chapters > div.collapse > div.list_chapters" +
         if (chapterListPref() == "hide") { ":not(:has(.badge:contains(SPOILER),.badge:contains(RAW),.badge:contains(VUS)))" } else { "" }
     // JapScan sometimes uploads some "spoiler preview" chapters, containing 2 or 3 untranslated pictures taken from a raw. Sometimes they also upload full RAWs/US versions and replace them with a translation as soon as available.
     // Those have a span.badge "SPOILER" or "RAW". The additional pseudo selector makes sure to exclude these from the chapter list.
 
     override fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.selectFirst("a")!!
+        val urlElement = element.selectFirst("*[href~=manga]")!!
 
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(urlElement.attr("href"))
@@ -225,21 +241,8 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         dateFormat.parse(date)!!.time
     }.getOrDefault(0L)
 
-    @SuppressLint("SetJavaScriptEnabled")
-    override fun pageListParse(document: Document): List<Page> {
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val interfaceName = randomString()
-        document.body().prepend(
-            """
-            <script>
-                const _atob = atob;
-                atob = function(arg) {
-                    let data = _atob(arg)
-                    window.$interfaceName.passPayload(data);
-                    return data;
-                };
-            </script>
-            """.trimIndent(),
-        )
 
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
@@ -250,27 +253,42 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             val innerWv = WebView(Injekt.get<Application>())
 
             webView = innerWv
+            innerWv.settings.domStorageEnabled = true
             innerWv.settings.javaScriptEnabled = true
             innerWv.settings.blockNetworkImage = true
+            innerWv.settings.userAgentString = headers["User-Agent"]
             innerWv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
             innerWv.addJavascriptInterface(jsInterface, interfaceName)
 
             innerWv.webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(
-                    view: WebView?,
-                    url: String?,
-                ): Boolean {
-                    url ?: return true
-                    return !url.contains("/zjs/")
+                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    view?.evaluateJavascript(
+                        """
+                            Object.defineProperty(Object.prototype, 'imagesLink', {
+                                set: function(value) {
+                                    window.$interfaceName.passPayload(JSON.stringify(value));
+                                    Object.defineProperty(this, '_imagesLink', {
+                                        value: value,
+                                        writable: true,
+                                        enumerable: false,
+                                        configurable: true
+                                    });
+                                },
+                                get: function() {
+                                    return this._imagesLink;
+                                },
+                                enumerable: false,
+                                configurable: true
+                            });
+                        """.trimIndent(),
+                    ) {}
                 }
             }
 
-            innerWv.loadDataWithBaseURL(
-                document.location(),
-                document.outerHtml(),
-                "text/html",
-                "UTF-8",
-                null,
+            innerWv.loadUrl(
+                "$internalBaseUrl${chapter.url}",
+                headers.toMap(),
             )
         }
 
@@ -281,15 +299,18 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
             throw Exception("Timed out decrypting image links")
         }
 
-        val baseUrlHost = baseUrl.toHttpUrl().host
-
-        return jsInterface
+        val baseUrlHost = internalBaseUrl.toHttpUrl().host.substringAfter("www.")
+        val images = jsInterface
             .images
-            .filterNot { it.toHttpUrl().host == baseUrlHost } // Pages not served through their CDN are probably ads
+            .filter { it.toHttpUrl().host.endsWith(baseUrlHost) } // Pages not served through their CDN are probably ads
             .mapIndexed { i, url ->
                 Page(i, imageUrl = url)
             }
+
+        return Observable.just(images)
     }
+
+    override fun pageListParse(document: Document) = throw Exception("Not used")
 
     override fun imageUrlParse(document: Document): String = ""
 
@@ -323,8 +344,6 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     }
 
     internal class JsInterface(private val latch: CountDownLatch) {
-        private val json: Json by injectLazy()
-
         var images: List<String> = listOf()
             private set
 
@@ -332,9 +351,8 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         @Suppress("UNUSED")
         fun passPayload(rawData: String) {
             try {
-                val data = json.parseToJsonElement(rawData).jsonObject
-
-                images = data["imagesLink"]!!.jsonArray.map { it.jsonPrimitive.content }
+                images = rawData.parseAs<List<String>>()
+                    .map { "$it?y=1" }
                 latch.countDown()
             } catch (_: Exception) {
                 return

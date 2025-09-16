@@ -25,11 +25,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
@@ -49,8 +49,8 @@ class Tsumino : HttpSource() {
         if (originalResponse.headers("Content-Type").contains("application/octet-stream") &&
             originalResponse.request.url.pathSegments.any { it == "parts" }
         ) {
-            val orgBody = originalResponse.body.bytes()
-            val newBody = orgBody.toResponseBody("image/jpeg".toMediaTypeOrNull())
+            val orgBody = originalResponse.body.source()
+            val newBody = orgBody.asResponseBody("image/jpeg".toMediaType())
             originalResponse.newBuilder()
                 .body(newBody)
                 .build()
