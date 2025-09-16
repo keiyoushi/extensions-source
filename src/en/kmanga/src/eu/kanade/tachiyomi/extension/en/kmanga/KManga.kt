@@ -104,10 +104,8 @@ class KManga : HttpSource() {
 
     // Search
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val prefix = "id:"
-
-        return if (query.startsWith(prefix)) {
-            val titleId = query.removePrefix(prefix)
+        return if (query.startsWith(PREFIX_SEARCH)) {
+            val titleId = query.removePrefix(PREFIX_SEARCH)
             fetchMangaDetails(
                 SManga.create().apply { url = "/title/$titleId" },
             ).map { manga ->
@@ -383,6 +381,10 @@ class KManga : HttpSource() {
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         fun toUriPart() = vals[state].second
+    }
+
+    companion object {
+        const val PREFIX_SEARCH = "id:"
     }
 
     // Unsupported
