@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.sakuramangas
 
+import android.util.Base64
 import android.util.Log
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
@@ -61,30 +62,78 @@ class SakuraMangaInfoDto(
 class SakuraMangaChapterReadDto(
     private val imageUrls: String,
 ) {
-    fun getUrls(): List<String> {
+    fun getUrls(key: String): List<String> {
         try {
-            val decrypted = this.decryptImages(imageUrls, "Ch4v3-SuP3r-S3cr3t4-P4r4-0-L3it0r-2023!")
+            val decrypted = this.decryptImages(imageUrls, key)
             return Json.decodeFromString<List<String>>(decrypted)
         } catch (error: Exception) {
             Log.e("SakuraMangas", "Failed to decrypt images", error)
-            // In case of decryption error, returns an empty list
-            return emptyList()
+            throw Exception("Failed to decrypt images")
         }
     }
 
     /**
      * Decrypts the content using XOR with a specific key.
      * Equivalent to the JavaScript decryptImages method.
+     *
+     * ```javascript
+     * function decryptImages(contentBase64, key) {
+     *   const decoded = atob(contentBase64);
+     *   let keyAccumulator = 0;
+     *   for (let i = 0; i < key.length; i++) {
+     *     keyAccumulator += key.charCodeAt(i) * (i + 1);
+     *   }
+     *   let transformedKey = "";
+     *   for (let j = 0; j < key.length; j++) {
+     *     const mask = ((keyAccumulator >> 8) & 0xff) >>> 0;
+     *     const transformedCharCode = key.charCodeAt(j) ^ mask ^ (j % 256);
+     *     transformedKey += String.fromCharCode(transformedCharCode);
+     *   }
+     *   const transformedLen = transformedKey.length;
+     *   let output = "";
+     *   let prevInput = 0;
+     *   for (let i = 0; i < decoded.length; i++) {
+     *     const kByte = transformedKey.charCodeAt(i % transformedLen) ^ prevInput;
+     *     const inputByte = decoded.charCodeAt(i);
+     *     const outByte = inputByte ^ kByte;
+     *     output += String.fromCharCode(outByte);
+     *     prevInput = inputByte;
+     *   }
+     *   return output;
+     * }
+     * ```
      */
     private fun decryptImages(content: String, key: String): String {
-        val decodedContent = String(android.util.Base64.decode(content, android.util.Base64.DEFAULT))
-        val result = StringBuilder()
+        // Step 1: base64 decode to raw bytes (equivalent to atob -> Latin1 bytes)
+        val decodedBytes = Base64.decode(content, Base64.DEFAULT)
 
-        for (i in decodedContent.indices) {
-            val charCode = decodedContent[i].code xor key[i % key.length].code
-            result.append(charCode.toChar())
+        // Step 2: accumulate a rolling sum based on the key and index (i + 1)
+        var acc = 0
+        for (i in key.indices) {
+            acc += key[i].code * (i + 1)
         }
 
-        return result.toString()
+        // Step 3: transform the key into an intermediate key using acc and index
+        val transformedKey = CharArray(key.length)
+        for (j in key.indices) {
+            val keyCode = key[j].code
+            val mask = (acc ushr 8) and 0xFF
+            val transformed = keyCode xor mask xor (j % 256)
+            transformedKey[j] = transformed.toChar()
+        }
+
+        // Step 4: stream-decrypt using XOR with previous input byte state
+        val transformedLen = transformedKey.size
+        val output = StringBuilder(decodedBytes.size)
+        var prevInput = 0
+        for (i in decodedBytes.indices) {
+            val k = transformedKey[i % transformedLen].code xor prevInput
+            val inputByte = decodedBytes[i].toInt() and 0xFF
+            val outByte = inputByte xor k
+            output.append(outByte.toChar())
+            prevInput = inputByte
+        }
+
+        return output.toString()
     }
 }

@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -52,8 +53,10 @@ class SakuraMangas : HttpSource() {
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
+        .set("Origin", baseUrl)
         .set("Referer", "$baseUrl/")
-        .set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+        .set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7,fr;q=0.6,zh-CN;q=0.5,zh-TW;q=0.4,zh;q=0.3")
+        .set("Connection", "keep-alive")
         .set("X-Requested-With", "XMLHttpRequest")
 
     private fun csrfTokenInterceptor(chain: Interceptor.Chain): Response {
@@ -191,12 +194,10 @@ class SakuraMangas : HttpSource() {
             form.add("proof", proof)
         }
 
-        val headers = headers.newBuilder().apply {
-            csrfToken?.let { set("X-CSRF-Token", it) }
-        }.build()
+        val headers = generateRequestHeaders()
 
         return POST(
-            "$baseUrl/dist/sakura/models/manga/__..obf__manga_info.php",
+            "$baseUrl/dist/sakura/models/manga/__obf__manga_info.php",
             headers,
             form.build(),
         )
@@ -230,18 +231,21 @@ class SakuraMangas : HttpSource() {
             form.add("proof", proof)
         }
 
-        val headers = headers.newBuilder().apply {
-            csrfToken?.let { set("X-CSRF-Token", it) }
-        }.build()
+        val headers = generateRequestHeaders()
 
         return POST(
-            "$baseUrl/dist/sakura/models/manga/__..obf__manga_capitulos.php",
+            "$baseUrl/dist/sakura/models/manga/__obf__manga_capitulos.php",
             headers,
             form.build(),
         )
     }
 
     override fun chapterListRequest(manga: SManga): Request {
+        // Small delay to avoid CSRF token race conditions.
+        // Reason: manga info and chapter list can be fetched in parallel, and the HTML
+        // request that parses the CSRF may update the token between requests. This short
+        // pause helps ensure the interceptor has already captured and updated the latest
+        // CSRF token before we proceed with the next request.
         Thread.sleep(1000)
         return GET(baseUrl + manga.url, headers)
     }
@@ -304,12 +308,10 @@ class SakuraMangas : HttpSource() {
             form.add("proof", proof)
         }
 
-        val headers = headers.newBuilder().apply {
-            csrfToken?.let { set("X-CSRF-Token", it) }
-        }.build()
+        val headers = generateRequestHeaders()
 
         return POST(
-            "$baseUrl/dist/sakura/models/capitulo/__..obf__capitulos_read.php",
+            "$baseUrl/dist/sakura/models/capitulo/__obf__capltulos_read.php",
             headers,
             form.build(),
         )
@@ -320,6 +322,7 @@ class SakuraMangas : HttpSource() {
 
         val chapterId = document.selectFirst("meta[chapter-id]")!!.attr("chapter-id")
         val token = document.selectFirst("meta[token]")!!.attr("token")
+        val subtoken = document.selectFirst("meta[subtoken]")!!.attr("subtoken")
         val challenge = document.selectFirst("meta[name=header-challenge]")?.attr("content")
 
         val json =
@@ -328,7 +331,7 @@ class SakuraMangas : HttpSource() {
 
         val baseUrl = document.baseUri().trimEnd('/')
 
-        return json.getUrls().mapIndexed { index, url ->
+        return json.getUrls(subtoken).mapIndexed { index, url ->
             Page(
                 index,
                 imageUrl = "$baseUrl/$url".toHttpUrl().toString(),
@@ -423,11 +426,19 @@ class SakuraMangas : HttpSource() {
         return now.timeInMillis
     }
 
+    private fun generateRequestHeaders(): Headers {
+        return headers.newBuilder().apply {
+            csrfToken?.let { set("X-CSRF-Token", it) }
+            set("X-Verification-Key-1", REQUEST_HEADER_KEY1)
+            set("X-Verification-Key-2", REQUEST_HEADER_KEY2)
+        }.build()
+    }
+
     /**
      * Generates a header proof based on the provided challenge.
      * Equivalent to the JavaScript generateHeaderProof method.
      */
-    private fun generateHeaderProof(challenge: String?, seed: Int = PROOF_INFO_SEED): String? {
+    private fun generateHeaderProof(challenge: String?, seed: Long): String? {
         if (challenge.isNullOrEmpty()) {
             return null
         }
@@ -436,29 +447,43 @@ class SakuraMangas : HttpSource() {
 
         try {
             val decodedChallenge = String(Base64.decode(challenge, Base64.DEFAULT))
-            val parts = decodedChallenge.split("|")
+            Log.d("SakuraMangas", "decoded challenge: $decodedChallenge")
+            val parts = decodedChallenge.split('/')
 
-            if (parts.size != 2) {
+            if (parts.size != 3) {
+                Log.e("SakuraMangas", "Invalid challenge format")
                 return null
             }
 
             val ip = parts[0]
+            val hash = parts[2]
             val userAgent = headers["User-Agent"]
-            val proof = ip + userAgent + seed
+            // Concatenate input similarly to the JS reference implementation
+            val initial = (ip + userAgent + seed + hash)
 
             Log.d("SakuraMangas", "data for challenge: ip: '$ip', userAgent: '$userAgent'")
 
-            val proofBytes = proof.toByteArray(Charsets.UTF_8)
+            // Iteratively hash the UTF-8 bytes of the previous output 29 times (SHA-256)
+            // JS reference:
+            // let out = proof;
+            // for (let i = 0; i < 29; i++) {
+            //   const bytes = encoder.encode(out);
+            //   const digest = await crypto.subtle.digest('SHA-256', bytes);
+            //   out = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+            // }
             val digest = MessageDigest.getInstance("SHA-256")
-            val hashBytes = digest.digest(proofBytes)
-
-            val final = hashBytes.joinToString("") {
-                "%02x".format(it)
+            var out = initial
+            repeat(29) {
+                val bytes = out.toByteArray(Charsets.UTF_8)
+                val hashed = digest.digest(bytes)
+                // Convert to lowercase hex string
+                out = hashed.joinToString("") { byte -> "%02x".format(byte) }
+                digest.reset()
             }
 
-            Log.d("SakuraMangas", "generated proof: $final")
+            Log.d("SakuraMangas", "generated proof: $out")
 
-            return final
+            return out
         } catch (error: Exception) {
             Log.e("SakuraMangas", "Failed to generate header proof", error)
             return null
@@ -468,7 +493,9 @@ class SakuraMangas : HttpSource() {
     companion object {
         private const val DEFAULT_LIMIT = 15
         private const val CHAPTER_LIMIT = 90
-        private const val PROOF_INFO_SEED = 0x109e0
-        private const val PROOF_CHAPTER_SEED = 0x6068
+        private const val REQUEST_HEADER_KEY1 = "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8"
+        private const val REQUEST_HEADER_KEY2 = "z9y8x7w6-v5u4-3210-t9s8-r7q6p5o4n3m2"
+        private const val PROOF_INFO_SEED = 8007199254740981
+        private const val PROOF_CHAPTER_SEED = 9007199254740991
     }
 }
