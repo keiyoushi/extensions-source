@@ -65,7 +65,7 @@ class StarboundScans : Madara(
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("img.wp-manga-chapter-img").mapIndexed { index, element ->
-            val imageUrl = element.attr("abs:src")
+            val imageUrl = element.attr("abs:data-src")
             Page(index, url = document.location(), imageUrl = imageUrl)
         }
     }
