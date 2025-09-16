@@ -1,12 +1,24 @@
 package eu.kanade.tachiyomi.extension.fr.lugnicascans
 
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 class HomePageManga(
-    val manga_title: String,
-    val manga_slug: String,
-    val manga_image: String,
+    @SerialName("manga_title")
+    val mangaTitle: String,
+    @SerialName("manga_slug")
+    val mangaSlug: String,
+    @SerialName("manga_image")
+    val mangaImage: String,
 )
 
 @Serializable
@@ -44,10 +56,29 @@ class PageListManga(
     val id: Int,
 )
 
+object NumberAsJsonDeserializer : KSerializer<Number> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleNumber", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: Number) = throw UnsupportedOperationException()
+
+    override fun deserialize(decoder: Decoder): Number {
+        val input = decoder as? JsonDecoder ?: error("Only supports JSON")
+        val element = input.decodeJsonElement().jsonPrimitive
+        val raw = element.content
+
+        return if (raw.contains('.')) {
+            raw.toDouble()
+        } else {
+            raw.toInt()
+        }
+    }
+}
+
 @Serializable
 class PageListChapter(
     val files: List<String>,
-    val chapter: Float,
+    @Serializable(with = NumberAsJsonDeserializer::class)
+    val chapter: Number, // Sometimes Int, sometimes Float
 )
 
 val GENRES = mapOf(
