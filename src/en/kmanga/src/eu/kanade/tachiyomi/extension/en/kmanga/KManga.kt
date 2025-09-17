@@ -314,7 +314,7 @@ class KManga : HttpSource() {
             .map { response ->
                 if (!response.isSuccessful) {
                     if (response.code == 400) {
-                        throw Exception("This chapter is locked. Log in and rent or purchase the chapter to view.")
+                        throw Exception("This chapter is locked. Log in via WebView and rent or purchase the chapter to read.")
                     }
                     throw Exception("HTTP error ${response.code}")
                 }
