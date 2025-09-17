@@ -91,7 +91,7 @@ class FlameComics : HttpSource() {
             seriesList.filter { series ->
                 val titles = mutableListOf(series.title)
                 if (series.altTitles != null) {
-                    titles += json.decodeFromString<List<String>>(series.altTitles)
+                    titles += series.altTitles
                 }
                 titles.any { title ->
                     removeSpecialCharsRegex.replace(
