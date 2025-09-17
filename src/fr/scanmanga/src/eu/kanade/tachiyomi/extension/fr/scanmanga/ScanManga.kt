@@ -40,8 +40,8 @@ class ScanManga : HttpSource(), ConfigurableSource {
         Injekt.get<android.app.Application>().getSharedPreferences("source_$id", 0x0000)
     }
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
+    override fun headersBuilder(): Headers.Builder =
+        super.headersBuilder().add("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
 
     // Configuration des préférences
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -49,7 +49,8 @@ class ScanManga : HttpSource(), ConfigurableSource {
             key = "pref_cache_mode"
             title = "Mode de cache des covers"
             summary = "Cache hybride recommandé pour de meilleures performances"
-            entries = arrayOf("Cache hybride (recommandé)", "Mémoire uniquement", "Persistant uniquement")
+            entries =
+                arrayOf("Cache hybride (recommandé)", "Mémoire uniquement", "Persistant uniquement")
             entryValues = arrayOf("hybrid", "memory", "persistent")
             setDefaultValue("hybrid")
         }
@@ -76,9 +77,14 @@ class ScanManga : HttpSource(), ConfigurableSource {
         screen.addPreference(batchSizePref)
     }
 
-    private fun getCacheMode(): String = preferences.getString("pref_cache_mode", "hybrid") ?: "hybrid"
-    private fun getBatchSize(): Int = preferences.getString("pref_batch_size", "15")?.toIntOrNull() ?: 15
-    private fun getLoadingMode(): String = preferences.getString("pref_loading_mode", "fast") ?: "fast"
+    private fun getCacheMode(): String =
+        preferences.getString("pref_cache_mode", "hybrid") ?: "hybrid"
+
+    private fun getBatchSize(): Int =
+        preferences.getString("pref_batch_size", "15")?.toIntOrNull() ?: 15
+
+    private fun getLoadingMode(): String =
+        preferences.getString("pref_loading_mode", "fast") ?: "fast"
 
     // Cache mémoire - utilisation de ConcurrentHashMap pour thread safety
     companion object {
@@ -271,6 +277,7 @@ class ScanManga : HttpSource(), ConfigurableSource {
                             }
                         }
                 }
+
                 "memory" -> {
                     memoryCache[manga.url]?.let { cached ->
                         if (now - cached.second < MEMORY_CACHE_DURATION) {
@@ -281,6 +288,7 @@ class ScanManga : HttpSource(), ConfigurableSource {
                         }
                     }
                 }
+
                 "persistent" -> {
                     persistentCache[manga.url]?.let { cached ->
                         if (now - cached.second < persistentCacheDuration) {
@@ -291,6 +299,7 @@ class ScanManga : HttpSource(), ConfigurableSource {
                         }
                     }
                 }
+
                 else -> null
             }
 
@@ -310,6 +319,7 @@ class ScanManga : HttpSource(), ConfigurableSource {
                         loadMissingCoversInBackground(mangasNeedingCovers)
                     }.start()
                 }
+
                 "complete" -> {
                     // Mode complet : attendre le chargement de toutes les covers
                     loadMissingCoversInBackground(mangasNeedingCovers)
@@ -338,7 +348,11 @@ class ScanManga : HttpSource(), ConfigurableSource {
             threads.forEach { it.start() }
             // Attendre la fin du batch
             threads.forEach {
-                try { it.join() } catch (e: InterruptedException) { return }
+                try {
+                    it.join()
+                } catch (e: InterruptedException) {
+                    return
+                }
             }
 
             // Délai entre batches pour éviter la surcharge serveur
@@ -397,15 +411,11 @@ class ScanManga : HttpSource(), ConfigurableSource {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/api/search/quick.json"
-            .toHttpUrl().newBuilder()
-            .addQueryParameter("term", query)
-            .build()
-            .toString()
+        val url = "$baseUrl/api/search/quick.json".toHttpUrl().newBuilder()
+            .addQueryParameter("term", query).build().toString()
 
-        val newHeaders = headers.newBuilder()
-            .add("Content-type", "application/json; charset=UTF-8")
-            .build()
+        val newHeaders =
+            headers.newBuilder().add("Content-type", "application/json; charset=UTF-8").build()
 
         return GET(url, newHeaders)
     }
@@ -458,7 +468,8 @@ class ScanManga : HttpSource(), ConfigurableSource {
             val extraTitle = titleEl?.text()
 
             SChapter.create().apply {
-                name = if (!extraTitle.isNullOrEmpty()) "$chapterName - $extraTitle" else chapterName
+                name =
+                    if (!extraTitle.isNullOrEmpty()) "$chapterName - $extraTitle" else chapterName
                 setUrlWithoutDomain(linkEl.absUrl("href"))
             }
         }
@@ -466,7 +477,8 @@ class ScanManga : HttpSource(), ConfigurableSource {
 
     // Pages
     private fun decodeHunter(obfuscatedJs: String): String {
-        val regex = Regex("""eval\(function\(h,u,n,t,e,r\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
+        val regex =
+            Regex("""eval\(function\(h,u,n,t,e,r\)\{.*?\}\("([^"]+)",\d+,"([^"]+)",(\d+),(\d+),\d+\)\)""")
         val (encoded, mask, intervalStr, optionStr) = regex.find(obfuscatedJs)?.destructured
             ?: error("Failed to match obfuscation pattern: $obfuscatedJs")
 
@@ -531,19 +543,19 @@ class ScanManga : HttpSource(), ConfigurableSource {
 
         val pageListRequest = POST(
             "$baseUrl/api/lel/$chapterId.json",
-            headers.newBuilder()
-                .add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
-                .add("Referer", documentUrl.toString())
-                .add("Token", "yf")
-                .build(),
+            headers.newBuilder().add("Origin", "${documentUrl.scheme}://${documentUrl.host}")
+                .add("Referer", documentUrl.toString()).add("Token", "yf").build(),
             requestBody.toRequestBody(mediaType),
         )
 
-        val lelResponse = client.newBuilder().cookieJar(CookieJar.NO_COOKIES).build()
-            .newCall(pageListRequest).execute().use { response ->
-                if (!response.isSuccessful) { error("Unexpected error while fetching lel.") }
-                dataAPI(response.body.string(), chapterId.toInt())
-            }
+        val lelResponse =
+            client.newBuilder().cookieJar(CookieJar.NO_COOKIES).build().newCall(pageListRequest)
+                .execute().use { response ->
+                    if (!response.isSuccessful) {
+                        error("Unexpected error while fetching lel.")
+                    }
+                    dataAPI(response.body.string(), chapterId.toInt())
+                }
 
         return lelResponse.generateImageUrls().map { Page(it.first, imageUrl = it.second) }
     }
@@ -551,9 +563,7 @@ class ScanManga : HttpSource(), ConfigurableSource {
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     override fun imageRequest(page: Page): Request {
-        val imgHeaders = headers.newBuilder()
-            .add("Origin", baseUrl)
-            .build()
+        val imgHeaders = headers.newBuilder().add("Origin", baseUrl).build()
 
         return GET(page.imageUrl!!, imgHeaders)
     }
