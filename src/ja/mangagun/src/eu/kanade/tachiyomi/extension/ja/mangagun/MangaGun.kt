@@ -117,6 +117,7 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
     }
 
     override fun pageListParse(document: Document): List<Page> {
+        // I haven't encountered this DDoS protection page in a long time. We can consider removing this logic in the future.
         val isDdosProtect = document.select("title").first()?.text()
             ?.contains("Manga Gun - DDoS protection") ?: false
         val doc = if (isDdosProtect) {
