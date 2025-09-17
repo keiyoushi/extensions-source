@@ -20,8 +20,8 @@ class PageDto(
 
 @Serializable
 class ImageDto(
-    val webp: List<ImageUrlDto>? = null,
-    val jpg: List<ImageUrlDto>? = null,
+    val webp: List<ImageUrlDto>?,
+    val jpg: List<ImageUrlDto>?,
 )
 
 @Serializable
