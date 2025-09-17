@@ -56,7 +56,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
 
     override fun popularMangaNextPageSelector() = null
     override fun popularMangaSelector() = ".wpp-list li"
-    override fun popularMangaFromElement(element: Element) = buildManga(element.selectFirst(".wpp-post-title")!!, element.select(".wpp-thumbnail"))
+    override fun popularMangaFromElement(element: Element) = buildManga(element.selectFirst(".wpp-post-title")!!, element.selectFirst(".wpp-thumbnail"))
     override fun popularMangaParse(response: Response): MangasPage {
         cacheAssistant()
         return super.popularMangaParse(response)
@@ -99,7 +99,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
 
     override fun searchMangaNextPageSelector(): String? = "li.pagination-next"
     override fun searchMangaSelector() = "article"
-    override fun searchMangaFromElement(element: Element) = buildManga(element.select("a.entry-title-link").first()!!, element.select("a.entry-image-link img").first())
+    override fun searchMangaFromElement(element: Element) = buildManga(element.selectFirst("a.entry-title-link")!!, element.selectFirst("a.entry-image-link img"))
     override fun searchMangaParse(response: Response): MangasPage {
         cacheAssistant()
         return super.searchMangaParse(response)
@@ -164,7 +164,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
                 ?.select("a[href*=group]")?.joinToString(prefix = "Scanlated by: ") { it.text() }
             val extendedDescription = document.select(".entry-content p:not(p:containsOwn(|)):not(.chapter-class + p)").joinToString("\n") { it.text() }
             description = listOfNotNull(basicDescription, scanlatedBy, extendedDescription).joinToString("\n").trim()
-            status = when (document.select("a[href*=status]").first()?.text()) {
+            status = when (document.selectFirst("a[href*=status]")?.text()) {
                 "Completed" -> SManga.COMPLETED
                 "Ongoing" -> SManga.ONGOING
                 "Licensed" -> SManga.LICENSED
@@ -178,7 +178,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
                 thumbnail_url = getThumbnail(
                     getImage(
                         client.newCall(GET("$baseUrl/search/?search=${document.location()}", headers))
-                            .execute().asJsoup().select("div.wdm_results div.p_content img").first()!!,
+                            .execute().asJsoup().selectFirst("div.wdm_results div.p_content img")!!,
                     ),
                 )
             }
