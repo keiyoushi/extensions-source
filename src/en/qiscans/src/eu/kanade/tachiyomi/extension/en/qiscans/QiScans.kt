@@ -18,7 +18,6 @@ import rx.Observable
 import rx.schedulers.Schedulers
 import java.util.concurrent.TimeUnit
 
-// Moved from HeanCms to Iken
 class QiScans : Iken(
     "Qi Scans",
     "en",
