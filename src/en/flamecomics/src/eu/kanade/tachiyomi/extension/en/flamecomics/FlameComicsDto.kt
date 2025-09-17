@@ -67,7 +67,7 @@ class ChapterPageData(
 @Serializable
 class Series(
     val title: String,
-    val altTitles: String?,
+    val altTitles: List<String>?,
     val description: String,
     val cover: String,
     val type: String,

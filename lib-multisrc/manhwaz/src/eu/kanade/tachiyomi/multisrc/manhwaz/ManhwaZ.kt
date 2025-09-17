@@ -113,7 +113,7 @@ abstract class ManhwaZ(
     override fun searchMangaNextPageSelector(): String? = latestUpdatesNextPageSelector()
 
     private val ongoingStatusList = listOf("ongoing", "đang ra")
-    private val completedStatusList = listOf("completed", "hoàn thành")
+    private val completedStatusList = listOf("completed", "hoàn thành", "Truyện Full")
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         val statusText = document.selectFirst("div.summary-heading:contains($mangaDetailsStatusHeading) + div.summary-content")

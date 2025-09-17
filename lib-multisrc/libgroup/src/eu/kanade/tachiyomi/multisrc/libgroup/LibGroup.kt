@@ -589,7 +589,7 @@ abstract class LibGroup(
 
         private const val API_DOMAIN_PREF = "MangaLibApiDomain"
         private const val API_DOMAIN_TITLE = "Выбор домена API"
-        private const val API_DOMAIN_DEFAULT = "https://api.imglib.info"
+        private const val API_DOMAIN_DEFAULT = "https://api.cdnlibs.org"
 
         private const val TOKEN_STORE = "TokenStore"
 
@@ -652,8 +652,8 @@ abstract class LibGroup(
         val domainApiPref = ListPreference(screen.context).apply {
             key = API_DOMAIN_PREF
             title = API_DOMAIN_TITLE
-            entries = arrayOf("Официальное приложение (api.imglib.info)", "Основной (api.lib.social)", "Резервный (api.mangalib.me)", "Резервный 2 (api2.mangalib.me)")
-            entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api.lib.social", "https://api.mangalib.me", "https://api2.mangalib.me")
+            entries = arrayOf("Основной (api.cdnlibs.org)", "Резервный (api2.mangalib.me)", "Резервный (hapi.hentaicdn.org)", "Резервный (api.imglib.info)")
+            entryValues = arrayOf(API_DOMAIN_DEFAULT, "https://api2.mangalib.me", "https://hapi.hentaicdn.org", "https://api.imglib.info")
             summary = "%s" +
                 "\n\nВыбор домена API, используемого для работы приложения." +
                 "\n\nПо умолчанию «Официальное приложение»" +

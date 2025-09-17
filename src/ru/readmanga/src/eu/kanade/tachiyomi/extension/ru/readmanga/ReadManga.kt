@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.utils.getPreferences
 
-class ReadManga : GroupLe("ReadManga", "https://zz.readmanga.io", "ru") {
+class ReadManga : GroupLe("ReadManga", "https://a.zazaza.me", "ru") {
 
     override val id: Long = 5
 

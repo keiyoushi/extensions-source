@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.multisrc.grouple.GroupLe
 import eu.kanade.tachiyomi.source.model.FilterList
 import keiyoushi.utils.getPreferences
 
-class SelfManga : GroupLe("SelfManga", "https://selfmanga.live", "ru") {
+class SelfManga : GroupLe("SelfManga", "https://1.selfmanga.live", "ru") {
 
     override val id: Long = 5227602742162454547
 
