@@ -121,12 +121,13 @@ class Azuki : HttpSource() {
         return document.select(".m-chapter-row-list .m-chapter-row").mapNotNull { chapterRow ->
             val link = chapterRow.selectFirst("a.a-card-link") ?: return@mapNotNull null
             val href = link.attr("href")
-            var chapterId: String? = null
+            var chapterId: String?
 
             if (href.startsWith("/checkout/")) {
-                chapterId = href.substringAfter("chapter_uuids%5B%5D=").substringBefore("&")
-            } else if (href.contains("/read/")) {
-                chapterId = href.substringAfter("/read/")
+                val fullUrl = baseUrl.toHttpUrl().newBuilder(href)!!.build()
+                chapterId = fullUrl.queryParameter("chapter_uuids[]")
+            } else {
+                chapterId = href.substringAfterLast("/")
             }
 
             if (chapterId.isNullOrEmpty()) return@mapNotNull null
@@ -134,8 +135,7 @@ class Azuki : HttpSource() {
             SChapter.create().apply {
                 url = "/series/$seriesSlug/read/$chapterId"
                 name = link.selectFirst(".m-chapter-row__title-cluster span")?.text() ?: link.text()
-                date_upload = chapterRow.selectFirst(".m-chapter-row__date time")?.attr("datetime")
-                    ?.let { dateFormat.tryParse(it) } ?: 0L
+                date_upload = dateFormat.tryParse(chapterRow.selectFirst(".m-chapter-row__date time")?.attr("datetime"))
 
                 val isPremium = chapterRow.selectFirst(".m-chapter-row__premium-badge") != null ||
                     chapterRow.parent()?.hasClass("m-chapter-card--secondary") == true
@@ -160,7 +160,7 @@ class Azuki : HttpSource() {
             .map { response ->
                 if (!response.isSuccessful) {
                     if (response.code == 401 || response.code == 403) {
-                        throw Exception("This chapter is locked. Log in and unlock the chapter to view.")
+                        throw Exception("This chapter is locked. Log in via WebView and unlock the chapter to read.")
                     }
                     throw Exception("HTTP error ${response.code}")
                 }
@@ -170,23 +170,17 @@ class Azuki : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<PageListDto>()
-        return result.data!!.pages.mapIndexed { i, page ->
-            val imageList = page.image!!.webp ?: page.image.jpg ?: throw Exception("No images found for page ${i + 1}")
+        return result.data.pages.mapIndexed { i, page ->
+            val imageList = page.image.webp ?: page.image.jpg
+                ?: throw Exception("No images found for page ${i + 1}")
 
             val bestAvailableUrl = imageList.maxByOrNull { it.width }?.url
                 ?: throw Exception("No image URL found for page ${i + 1}")
 
             val resolutionRegex = Regex("""/(\d+)\.(webp|jpg)$""")
-            val match = resolutionRegex.find(bestAvailableUrl)
+            val highResUrl = resolutionRegex.replace(bestAvailableUrl, "/2000.$2")
 
-            val imageUrl: String
-            if (match != null && match.groupValues[1].toInt() < 1600) {
-                val highResUrl = resolutionRegex.replace(bestAvailableUrl, "/1600.${match.groupValues[2]}")
-                imageUrl = "$highResUrl?drm=1, $bestAvailableUrl?drm=1"
-            } else {
-                imageUrl = "$bestAvailableUrl?drm=1"
-            }
-            Page(i, imageUrl = imageUrl)
+            Page(i, imageUrl = "$highResUrl?drm=1")
         }
     }
 

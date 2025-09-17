@@ -4,37 +4,36 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class PageListDto {
-    val data: PageDataDto? = null
-}
+class PageListDto(
+    val data: PageDataDto,
+)
 
 @Serializable
-class PageDataDto {
-    val pages: List<PageDto> = emptyList()
-}
+class PageDataDto(
+    val pages: List<PageDto>,
+)
 
 @Serializable
-class PageDto {
-    val image: ImageDto? = null
-}
+class PageDto(
+    val image: ImageDto,
+)
 
 @Serializable
-class ImageDto {
-    val webp: List<ImageUrlDto>? = null
-    val jpg: List<ImageUrlDto>? = null
-}
+class ImageDto(
+    val webp: List<ImageUrlDto>? = null,
+    val jpg: List<ImageUrlDto>? = null,
+)
 
 @Serializable
-class ImageUrlDto {
-    val url: String = ""
-    val width: Int = 0
-}
+class ImageUrlDto(
+    val url: String,
+    val width: Int,
+)
 
 @Serializable
-class UserMangaStatusDto {
+class UserMangaStatusDto(
     @SerialName("purchased_chapter_uuids")
-    val purchasedChapterUuids: List<String> = emptyList()
-
+    val purchasedChapterUuids: List<String> = emptyList(),
     @SerialName("unlocked_chapter_uuids")
-    val unlockedChapterUuids: List<String> = emptyList()
-}
+    val unlockedChapterUuids: List<String> = emptyList(),
+)

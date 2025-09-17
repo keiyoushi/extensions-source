@@ -13,7 +13,9 @@ class ImageInterceptor : Interceptor {
         }
 
         val response = chain.proceed(request)
-        if (!response.isSuccessful) return response
+        if (!response.isSuccessful) {
+            return response
+        }
 
         val encryptedBytes = response.body.bytes()
         val decryptedBytes = decryptImage(encryptedBytes)
@@ -27,10 +29,6 @@ class ImageInterceptor : Interceptor {
 // https://www.azuki.co/assets/js/DecryptedImage.57631a1f.js
     private fun decryptImage(encryptedData: ByteArray): ByteArray {
         val keyByte = 174
-        val decryptedArray = encryptedData.clone()
-        for (i in decryptedArray.indices) {
-            decryptedArray[i] = (decryptedArray[i].toInt() xor keyByte).toByte()
-        }
-        return decryptedArray
+        return encryptedData.map { (it.toInt() xor keyByte).toByte() }.toByteArray()
     }
 }
