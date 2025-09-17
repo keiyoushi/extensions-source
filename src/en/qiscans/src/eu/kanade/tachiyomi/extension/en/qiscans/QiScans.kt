@@ -24,7 +24,6 @@ class QiScans : Iken(
     "https://qiscans.org",
     "https:///api.qiscans.org",
 ) {
-    override val versionId = 4
 
     override val client = super.client.newBuilder()
         .rateLimit(3, 1, TimeUnit.SECONDS)
