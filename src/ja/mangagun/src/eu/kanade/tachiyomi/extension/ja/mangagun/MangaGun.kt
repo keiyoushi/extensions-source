@@ -22,6 +22,10 @@ private const val DOMAIN = "nihonkuni.com"
  * This plugin is for the website originally named MangaGun(漫画軍), which was later renamed to NihonKuni(日本国). Please do not be confused by the names.
  */
 class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
+
+    // Formerly "MangaGun(漫画軍)"
+    override val id = 3811800324362294701
+
     override val infoElementSelector = "div.row div.row"
 
     // source is picky about URL format
