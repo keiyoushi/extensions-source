@@ -6,7 +6,7 @@ import java.util.Locale
 
 class PlutoScans : Madara(
     "Pluto Scans",
-    "https://plutoscans.com",
+    "https://flamescans.lol",
     "en",
     dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
