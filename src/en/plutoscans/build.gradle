@@ -2,7 +2,7 @@ ext {
     extName = 'Pluto Scans'
     extClass = '.PlutoScans'
     themePkg = 'madara'
-    baseUrl = 'https://plutoscans.com'
+    baseUrl = 'https://flamescans.lol'
     overrideVersionCode = 1
     isNsfw = false
 }
