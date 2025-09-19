@@ -40,9 +40,9 @@ abstract class Comick(
 
     override val name = "Comick"
 
-    override val baseUrl = "https://comick.io"
+    override val baseUrl = "https://comick.live"
 
-    private val apiUrl = "https://api.comick.fun"
+    private val apiUrl = "https://comick.live/api"
 
     override val supportsLatest = true
 
@@ -406,7 +406,7 @@ abstract class Comick(
     }
 
     private fun querySearchRequest(query: String): Request {
-        val url = "$apiUrl/v1.0/search?limit=300&page=1&tachiyomi=true"
+        val url = "$apiUrl/search?limit=300&page=1&tachiyomi=true"
             .toHttpUrl().newBuilder()
             .addQueryParameter("q", query.trim())
             .build()
@@ -438,7 +438,7 @@ abstract class Comick(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/v1.0/search".toHttpUrl().newBuilder().apply {
+        val url = "$apiUrl/search".toHttpUrl().newBuilder().apply {
             filters.forEach { it ->
                 when (it) {
                     is CompletedFilter -> {
