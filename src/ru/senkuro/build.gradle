@@ -1,9 +1,0 @@
-ext {
-    extName = 'Senkuro'
-    extClass = '.Senkuro'
-    themePkg = 'senkuro'
-    baseUrl = 'https://senkuro.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"
