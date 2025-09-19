@@ -30,7 +30,7 @@ class Randomizer(seedInput: BigInteger, t: Int) {
     }
 
     private fun hashSeed(e: BigInteger): BigInteger {
-        val md = MessageDigest.getInstance("SHA-256").digest(e.toString().toByteArray(StandardCharsets.UTF_8))
+        val md = e.toString().sha256()
         return readBigUInt64BE(md, 0).xor(readBigUInt64BE(md, 8))
     }
 

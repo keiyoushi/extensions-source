@@ -6,7 +6,6 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.IOException
 import java.math.BigInteger
-import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
@@ -40,7 +39,7 @@ class ImageInterceptor : Interceptor {
 
     data class WordArray(val words: IntArray, val sigBytes: Int)
 
-    fun wordArrayToBytes(e: WordArray): ByteArray {
+    private fun wordArrayToBytes(e: WordArray): ByteArray {
         val result = ByteArray(e.sigBytes)
         for (i in 0 until e.sigBytes) {
             val word = e.words[i ushr 2]
@@ -50,7 +49,7 @@ class ImageInterceptor : Interceptor {
         return result
     }
 
-    fun aesGcmDecrypt(keyWordArray: WordArray, ivWordArray: WordArray, cipherWordArray: WordArray): ByteArray? {
+    private fun aesGcmDecrypt(keyWordArray: WordArray, ivWordArray: WordArray, cipherWordArray: WordArray): ByteArray? {
         return try {
             val keyBytes = wordArrayToBytes(keyWordArray)
             val iv = wordArrayToBytes(ivWordArray)
@@ -67,26 +66,24 @@ class ImageInterceptor : Interceptor {
         }
     }
 
-    fun decryptImage(payload: ByteArray, keyPart1: String, keyPart2: String): ByteArray? {
+    private fun toWordArray(bytes: ByteArray): WordArray {
+        val words = IntArray((bytes.size + 3) / 4)
+        for (i in bytes.indices) {
+            val wordIndex = i / 4
+            val shift = 24 - (i % 4) * 8
+            words[wordIndex] = words[wordIndex] or ((bytes[i].toInt() and 0xFF) shl shift)
+        }
+        return WordArray(words, bytes.size)
+    }
+
+    private fun decryptImage(payload: ByteArray, keyPart1: String, keyPart2: String): ByteArray? {
         return try {
             if (payload.size < 140) return null
 
             val iv = payload.sliceArray(128 until 140)
             val ciphertext = payload.sliceArray(140 until payload.size)
 
-            val keyString = "$keyPart1:$keyPart2"
-            val sha256 = MessageDigest.getInstance("SHA-256")
-            val keyHash = sha256.digest(keyString.toByteArray())
-
-            fun toWordArray(bytes: ByteArray): WordArray {
-                val words = IntArray((bytes.size + 3) / 4)
-                for (i in bytes.indices) {
-                    val wordIndex = i / 4
-                    val shift = 24 - (i % 4) * 8
-                    words[wordIndex] = words[wordIndex] or ((bytes[i].toInt() and 0xFF) shl shift)
-                }
-                return WordArray(words, bytes.size)
-            }
+            val keyHash = "$keyPart1:$keyPart2".sha256()
 
             val keyWA = toWordArray(keyHash)
             val ivWA = toWordArray(iv)
@@ -98,7 +95,7 @@ class ImageInterceptor : Interceptor {
         }
     }
 
-    fun processData(input: ByteArray, index: Int, seriesId: String, chapterId: String): ByteArray? {
+    private fun processData(input: ByteArray, index: Int, seriesId: String, chapterId: String): ByteArray? {
         fun isValidImage(data: ByteArray): Boolean {
             return when {
                 data.size >= 2 && data[0] == 0xFF.toByte() && data[1] == 0xD8.toByte() -> true
@@ -141,8 +138,7 @@ class ImageInterceptor : Interceptor {
     }
 
     private fun generateSeed(t: String, n: String, e: String): BigInteger {
-        val r = "$t:$n:$e"
-        val sha256 = MessageDigest.getInstance("SHA-256").digest(r.toByteArray())
+        val sha256 = "$t:$n:$e".sha256()
         var a = BigInteger.ZERO
         for (i in 0 until 8) {
             a = a.shiftLeft(8).or(BigInteger.valueOf((sha256[i].toInt() and 0xFF).toLong()))
