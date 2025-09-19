@@ -120,14 +120,12 @@ class Azuki : HttpSource() {
 
         return document.select(".m-chapter-row-list .m-chapter-row").mapNotNull { chapterRow ->
             val link = chapterRow.selectFirst("a.a-card-link") ?: return@mapNotNull null
-            val href = link.attr("href")
-            var chapterId: String?
+            val href = link.absUrl("href").toHttpUrl()
 
-            if (href.startsWith("/checkout/")) {
-                val fullUrl = baseUrl.toHttpUrl().newBuilder(href)!!.build()
-                chapterId = fullUrl.queryParameter("chapter_uuids[]")
+            val chapterId = if ("/checkout/" in href.encodedPath) {
+                href.queryParameter("chapter_uuids[]")
             } else {
-                chapterId = href.substringAfterLast("/")
+                href.pathSegments.lastOrNull()
             }
 
             if (chapterId.isNullOrEmpty()) return@mapNotNull null
