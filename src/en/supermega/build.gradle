@@ -1,7 +1,0 @@
-ext {
-    extName = 'SUPER MEGA'
-    extClass = '.Supermega'
-    extVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'HeyToon'
-    extClass = '.HeyToon'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

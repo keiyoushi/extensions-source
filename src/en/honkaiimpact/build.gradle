@@ -1,7 +1,0 @@
-ext {
-    extName = 'HonkaiImpact3'
-    extClass = '.Honkaiimpact'
-    extVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"

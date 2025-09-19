@@ -1,8 +1,0 @@
-ext {
-    extName = 'SpyFakku'
-    extClass = '.SpyFakku'
-    extVersionCode = 11
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

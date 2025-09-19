@@ -1,7 +1,0 @@
-ext {
-    extName = 'The Property of Hate'
-    extClass = '.ThePropertyOfHate'
-    extVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

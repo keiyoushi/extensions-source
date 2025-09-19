@@ -1,7 +1,0 @@
-ext {
-    extName = 'Clone Manga'
-    extClass = '.CloneManga'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

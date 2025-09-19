@@ -1,7 +1,0 @@
-ext {
-    extName = 'Dark Legacy Comics'
-    extClass = '.DarkLegacyComics'
-    extVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

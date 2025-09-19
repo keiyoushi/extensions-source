@@ -1,8 +1,0 @@
-ext {
-    extName = 'Hentai2Read'
-    extClass = '.Hentai2Read'
-    extVersionCode = 17
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

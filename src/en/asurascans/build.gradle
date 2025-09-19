@@ -1,7 +1,0 @@
-ext {
-    extName = 'Asura Scans'
-    extClass = '.AsuraScans'
-    extVersionCode = 47
-}
-
-apply from: "$rootDir/common.gradle"

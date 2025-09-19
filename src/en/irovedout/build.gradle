@@ -1,8 +1,0 @@
-ext {
-    extName = 'I Roved Out'
-    extClass = '.IRovedOut'
-    extVersionCode = 5
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

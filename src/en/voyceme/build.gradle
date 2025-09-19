@@ -1,8 +1,0 @@
-ext {
-    extName = 'Voyce.Me'
-    extClass = '.VoyceMe'
-    extVersionCode = 4
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

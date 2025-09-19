@@ -1,7 +1,0 @@
-ext {
-    extName = 'Cyanide & Happiness'
-    extClass = '.Explosm'
-    extVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"

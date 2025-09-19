@@ -1,7 +1,0 @@
-ext {
-    extName = 'Zero Scans'
-    extClass = '.ZeroScans'
-    extVersionCode = 7
-}
-
-apply from: "$rootDir/common.gradle"

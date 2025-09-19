@@ -1,7 +1,0 @@
-ext {
-    extName = 'Hiveworks Comics'
-    extClass = '.Hiveworks'
-    extVersionCode = 11
-}
-
-apply from: "$rootDir/common.gradle"

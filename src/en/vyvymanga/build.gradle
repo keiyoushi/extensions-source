@@ -1,8 +1,0 @@
-ext {
-    extName = 'VyvyManga'
-    extClass = '.VyvyManga'
-    extVersionCode = 38
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

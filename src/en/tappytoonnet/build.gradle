@@ -1,9 +1,0 @@
-ext {
-    extName = 'TappyToon.Net'
-    extClass = '.Tappytoonnet'
-    themePkg = 'madara'
-    baseUrl = 'https://tappytoon.net'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,8 +1,0 @@
-ext {
-    extName = 'Philia Scans'
-    extClass = '.PhiliaScans'
-    extVersionCode = 44
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

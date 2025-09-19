@@ -1,8 +1,0 @@
-ext {
-    extName = 'Dynasty'
-    extClass = '.DynastyFactory'
-    extVersionCode = 27
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

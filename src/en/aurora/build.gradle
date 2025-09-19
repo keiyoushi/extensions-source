@@ -1,7 +1,0 @@
-ext {
-    extName = 'aurora'
-    extClass = '.Aurora'
-    extVersionCode = 4
-}
-
-apply from: "$rootDir/common.gradle"
