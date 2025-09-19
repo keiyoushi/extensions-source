@@ -1,8 +1,0 @@
-ext {
-    extName = 'Hattori Manga'
-    extClass = '.HattoriManga'
-    extVersionCode = 41
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
