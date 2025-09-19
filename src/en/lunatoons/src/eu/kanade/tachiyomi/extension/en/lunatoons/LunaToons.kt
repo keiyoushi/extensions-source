@@ -14,7 +14,7 @@ class LunaToons : Keyoapp(
             .map { it.attr("title") }
             .takeIf { it.isNotEmpty() }
             ?.let {
-                genre = genre?.plus(", $it") ?: $it
+                genre = genre?.plus(", $it") ?: it
             }
     }
 }
