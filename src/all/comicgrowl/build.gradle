@@ -1,9 +1,0 @@
-ext {
-    extName = 'Comic Growl'
-    extClass = '.ComicGrowl'
-    baseUrl = 'https://comic-growl.com'
-    extVersionCode = 7
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"
