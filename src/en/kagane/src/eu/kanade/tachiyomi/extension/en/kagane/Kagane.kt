@@ -33,10 +33,12 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.IOException
 import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -100,8 +102,42 @@ class Kagane : HttpSource(), ConfigurableSource {
             },
         )
         .addInterceptor(ImageInterceptor())
+        .addInterceptor(::refreshTokenInterceptor)
         .rateLimit(2)
         .build()
+
+    private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val url = request.url
+        if (!url.queryParameterNames.contains("token")) {
+            return chain.proceed(request)
+        }
+
+        val seriesId = url.pathSegments[3]
+        val chapterId = url.pathSegments[5]
+
+        var response = chain.proceed(
+            request.newBuilder()
+                .url(url.newBuilder().setQueryParameter("token", accessToken).build())
+                .build(),
+        )
+        if (response.code == 401) {
+            response.close()
+            val challenge = try {
+                getChallenge(seriesId, chapterId)
+            } catch (_: Exception) {
+                throw IOException("Failed to retrieve token")
+            }
+            accessToken = challenge.accessToken
+            response = chain.proceed(
+                request.newBuilder()
+                    .url(url.newBuilder().setQueryParameter("token", accessToken).build())
+                    .build(),
+            )
+        }
+
+        return response
+    }
 
     // ============================== Popular ===============================
 
@@ -193,18 +229,15 @@ class Kagane : HttpSource(), ConfigurableSource {
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val (seriesId, chapterId) = chapter.url.split(";")
 
-        val challenge = getChallenge(seriesId, chapterId)
-        val challengeUrl = "$apiUrl/api/v1/books/$seriesId/file/$chapterId"
-        val challengeBody = buildJsonObject {
-            put("challenge", challenge)
-        }.toJsonString().toRequestBody("application/json".toMediaType())
-        val challengeResp = client.newCall(POST(challengeUrl, apiHeaders, challengeBody)).execute()
-            .parseAs<ChallengeDto>()
-
+        val challengeResp = getChallenge(seriesId, chapterId)
+        accessToken = challengeResp.accessToken
         val pages = (0 until challengeResp.pageCount).map { page ->
-            val pageUrl = challengeUrl.toHttpUrl().newBuilder().apply {
+            val pageUrl = "$apiUrl/api/v1/books".toHttpUrl().newBuilder().apply {
+                addPathSegment(seriesId)
+                addPathSegment("file")
+                addPathSegment(chapterId)
                 addPathSegment((page + 1).toString())
-                addQueryParameter("token", challengeResp.accessToken)
+                addQueryParameter("token", accessToken)
             }.build().toString()
 
             Page(page, imageUrl = pageUrl)
@@ -213,7 +246,8 @@ class Kagane : HttpSource(), ConfigurableSource {
         return Observable.just(pages)
     }
 
-    private fun getChallenge(seriesId: String, chapterId: String): String {
+    private var accessToken: String = ""
+    private fun getChallenge(seriesId: String, chapterId: String): ChallengeDto {
         val f = "$seriesId:$chapterId".sha256().sliceArray(0 until 16)
 
         val interfaceName = "jsInterface"
@@ -312,9 +346,17 @@ class Kagane : HttpSource(), ConfigurableSource {
             throw Exception("Timed out getting drm challenge")
         }
 
-        return jsInterface.challenge.ifEmpty {
+        if (jsInterface.challenge.isEmpty()) {
             throw Exception("Failed to get drm challenge")
         }
+
+        val challengeUrl = "$apiUrl/api/v1/books/$seriesId/file/$chapterId"
+        val challengeBody = buildJsonObject {
+            put("challenge", jsInterface.challenge)
+        }.toJsonString().toRequestBody("application/json".toMediaType())
+
+        return client.newCall(POST(challengeUrl, apiHeaders, challengeBody)).execute()
+            .parseAs<ChallengeDto>()
     }
 
     private fun concat(vararg arrays: ByteArray): ByteArray =
