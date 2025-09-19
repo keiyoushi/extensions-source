@@ -63,18 +63,18 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
 
     private fun authIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (request.url.host != "v4api.zaimanhua.com" ||
-            (!request.headers["authorization"].isNullOrBlank() && !request.url.toString().contains(checkTokenRegex))
-        ) {
-            return chain.proceed(request)
-        }
-
         val response = chain.proceed(request)
-        if (!request.headers["authorization"].isNullOrBlank() && response.peekBody(Long.MAX_VALUE).string().parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false) {
+        // Only intercept chapter api requests that need token
+        if (!request.url.toString().contains(checkTokenRegex)) return response
+
+        // If chapter can read, return directly
+        if (response.peekBody(Long.MAX_VALUE).string().parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false) {
             return response
         }
+        // If can not read, need login or user permission is not enough
         var token: String = preferences.getString(TOKEN_PREF, "")!!
         if (!isValid(token)) {
+            // Token is invalid, need login
             val username = preferences.getString(USERNAME_PREF, "")!!
             val password = preferences.getString(PASSWORD_PREF, "")!!
             token = getToken(username, password)
@@ -87,12 +87,15 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
                 preferences.edit().putString(TOKEN_PREF, token).apply()
                 apiHeaders = apiHeaders.newBuilder().setToken(token).build()
             }
-        } else if (!request.headers["authorization"].isNullOrBlank() && request.headers["authorization"] == "Bearer $token") {
+        } else if (request.header("authorization") == "Bearer $token") {
+            // The request has already used a valid token, return directly
             return response
         }
 
+        response.close()
         val authRequest = request.newBuilder().apply {
             header("authorization", "Bearer $token")
+            cacheControl(CacheControl.FORCE_NETWORK)
         }.build()
         return chain.proceed(authRequest)
     }
@@ -334,6 +337,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
                 setOnPreferenceChangeListener { _, _ ->
                     // clean token after username/password changed
                     preferences.edit().putString(TOKEN_PREF, "").apply()
+                    apiHeaders = apiHeaders.newBuilder().setToken("").build()
                     true
                 }
             }.let(screen::addPreference)
@@ -345,6 +349,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
                 setOnPreferenceChangeListener { _, _ ->
                     // clean token after username/password changed
                     preferences.edit().putString(TOKEN_PREF, "").apply()
+                    apiHeaders = apiHeaders.newBuilder().setToken("").build()
                     true
                 }
             }.let(screen::addPreference)
