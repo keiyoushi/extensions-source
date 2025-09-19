@@ -1,9 +1,9 @@
 package eu.kanade.tachiyomi.extension.pt.galinhasamuraiscan
 
-import eu.kanade.tachiyomi.multisrc.yuyu.YuYu
+import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class GalinhaSamuraiScan : YuYu(
+class GalinhaSamuraiScan : Madara(
     "Galinha Samurai Scan",
     "https://galinhasamurai.com",
     "pt-BR",
@@ -12,6 +12,8 @@ class GalinhaSamuraiScan : YuYu(
         .rateLimit(2)
         .build()
 
-    // Moved from Madara to YuYu
-    override val versionId = 2
+    override val useNewChapterEndpoint = true
+
+    // Moved from YuYu to Madara
+    override val versionId = 3
 }
