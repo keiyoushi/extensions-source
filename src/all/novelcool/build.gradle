@@ -1,8 +1,0 @@
-ext {
-    extName = 'NovelCool'
-    extClass = '.NovelCoolFactory'
-    extVersionCode = 4
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
