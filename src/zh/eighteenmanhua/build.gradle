@@ -1,9 +1,0 @@
-ext {
-    extName = '18Manhua'
-    extClass = '.EighteenManhua'
-    themePkg = 'goda'
-    overrideVersionCode = 0
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
