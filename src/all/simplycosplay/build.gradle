@@ -1,8 +1,0 @@
-ext {
-    extName = 'Simply Cosplay'
-    extClass = '.SimplyCosplay'
-    extVersionCode = 2
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
