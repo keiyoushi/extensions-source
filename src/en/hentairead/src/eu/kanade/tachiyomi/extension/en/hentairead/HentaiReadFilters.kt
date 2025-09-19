@@ -41,6 +41,7 @@ internal class TypeFilter(name: String) :
             "Doujinshi" to "4",
             "Manga" to "52",
             "Artist CG" to "4798",
+            "Western" to "36278",
         ).map { CheckBoxFilter(it.first, it.second, true) },
     )
 internal open class CheckBoxFilter(name: String, val value: String, state: Boolean) : Filter.CheckBox(name, state)
