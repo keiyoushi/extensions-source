@@ -118,7 +118,6 @@ abstract class ManhwaZ(
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         val statusText = document.selectFirst("div.summary-heading:contains($mangaDetailsStatusHeading) + div.summary-content")
             ?.text()
-            ?.lowercase()
             ?: ""
 
         title = document.selectFirst("div.post-title h1")!!.text()
@@ -126,8 +125,8 @@ abstract class ManhwaZ(
         description = document.selectFirst("div.summary__content")?.text()
         genre = document.select("div.genres-content a[rel=tag]").joinToString { it.text() }
         status = when {
-            ongoingStatusList.contains(statusText) -> SManga.ONGOING
-            completedStatusList.contains(statusText) -> SManga.COMPLETED
+            ongoingStatusList.any { it.contains(statusText, ignoreCase = true) } -> SManga.ONGOING
+            completedStatusList.any { it.contains(statusText, ignoreCase = true) } -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
         thumbnail_url = document.selectFirst("div.summary_image img")?.imgAttr()
