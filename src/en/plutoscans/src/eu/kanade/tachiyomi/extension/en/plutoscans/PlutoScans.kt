@@ -3,10 +3,12 @@ package eu.kanade.tachiyomi.extension.en.plutoscans
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class PlutoScans : Madara(
-    "Pluto Scans",
+    "FlameScans.lol",
     "https://flamescans.lol",
     "en",
 ) {
+    override val id = 1001157238479601077
+
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
 
