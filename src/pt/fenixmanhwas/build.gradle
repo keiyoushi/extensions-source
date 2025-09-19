@@ -1,8 +1,0 @@
-ext {
-    extName = 'Fênix Manhwas'
-    extClass = '.FenixManhwas'
-    extVersionCode = 45
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

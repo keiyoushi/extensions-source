@@ -1,8 +1,0 @@
-ext {
-    extName = 'Geass Comics'
-    extClass = '.GeassComics'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
