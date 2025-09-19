@@ -1,7 +1,0 @@
-ext {
-    extName = 'GANMA!'
-    extClass = '.Ganma'
-    extVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"
