@@ -77,7 +77,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
                 override fun loadForRequest(url: HttpUrl): List<Cookie> {
                     val cookies = cookieManager.getCookie(url.toString()).orEmpty()
-                    val cookieList = mutableListOf<Cookie?>()
+                    val cookieList = mutableListOf<Cookie>()
                     var hasNsfwCookie = false
 
                     cookies.split(";").mapNotNullTo(cookieList) { c ->
@@ -92,12 +92,12 @@ class Kagane : HttpSource(), ConfigurableSource {
                     }
 
                     if (!hasNsfwCookie && url.host == domain) {
-                        cookieList.add(
-                            Cookie.parse(url, "kagane_mature_content=${preferences.showNsfw}"),
-                        )
+                        Cookie.parse(url, "kagane_mature_content=${preferences.showNsfw}")?.let {
+                            cookieList.add(it)
+                        }
                     }
 
-                    return cookieList.filterNotNull()
+                    return cookieList
                 }
             },
         )
@@ -124,7 +124,7 @@ class Kagane : HttpSource(), ConfigurableSource {
         if (response.code == 401) {
             response.close()
             val challenge = try {
-                getChallenge(seriesId, chapterId)
+                getChallengeResponse(seriesId, chapterId)
             } catch (_: Exception) {
                 throw IOException("Failed to retrieve token")
             }
@@ -229,7 +229,7 @@ class Kagane : HttpSource(), ConfigurableSource {
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val (seriesId, chapterId) = chapter.url.split(";")
 
-        val challengeResp = getChallenge(seriesId, chapterId)
+        val challengeResp = getChallengeResponse(seriesId, chapterId)
         accessToken = challengeResp.accessToken
         val pages = (0 until challengeResp.pageCount).map { page ->
             val pageUrl = "$apiUrl/api/v1/books".toHttpUrl().newBuilder().apply {
@@ -247,7 +247,7 @@ class Kagane : HttpSource(), ConfigurableSource {
     }
 
     private var accessToken: String = ""
-    private fun getChallenge(seriesId: String, chapterId: String): ChallengeDto {
+    private fun getChallengeResponse(seriesId: String, chapterId: String): ChallengeDto {
         val f = "$seriesId:$chapterId".sha256().sliceArray(0 until 16)
 
         val interfaceName = "jsInterface"
@@ -270,8 +270,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                     }
 
                     async function getData() {
-                        let basedata = "${getCertificate()}";
-                        const g = base64ToArrayBuffer(basedata);
+                        const g = base64ToArrayBuffer("${getCertificate()}");
                         let t = await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
                           initDataTypes: ["cenc"],
                           audioCapabilities: [],
