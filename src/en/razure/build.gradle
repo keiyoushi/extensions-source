@@ -2,7 +2,7 @@ ext {
     extName = 'Razure'
     extClass = '.Razure'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://noxenscan.com'
+    baseUrl = 'https://razure.org'
     overrideVersionCode = 0
     isNsfw = false
 }
