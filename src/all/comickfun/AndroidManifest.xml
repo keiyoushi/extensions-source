@@ -19,6 +19,9 @@
                 <data android:host="comick.ink" />
                 <data android:host="comick.app" />
                 <data android:host="comick.fun" />
+                <data android:host="comick.art" />
+                <data android:host="comick.ai" />
+                <data android:host="comick.live" />
                 <data android:pathPattern="/comic/.*/..*" />
                 <data android:pathPattern="/comic/..*" />
             </intent-filter>
