@@ -1,7 +1,0 @@
-ext {
-    extName = 'The Library of Ohara'
-    extClass = '.TheLibraryOfOharaFactory'
-    extVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"
