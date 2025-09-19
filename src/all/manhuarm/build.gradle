@@ -1,9 +1,9 @@
 ext {
     extName = 'Manhuarm'
-    extClass = '.Manhuarm'
+    extClass = '.ManhuarmFactory'
     themePkg = 'madara'
     baseUrl = 'https://manhuarm.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
