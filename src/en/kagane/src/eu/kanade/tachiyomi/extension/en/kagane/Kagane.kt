@@ -47,7 +47,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.collections.forEach
 import kotlin.getValue
-import kotlin.text.isNotEmpty
 import kotlin.text.split
 
 class Kagane : HttpSource(), ConfigurableSource {
@@ -75,21 +74,28 @@ class Kagane : HttpSource(), ConfigurableSource {
                 }
 
                 override fun loadForRequest(url: HttpUrl): List<Cookie> {
-                    val cookies = cookieManager.getCookie(url.toString())
+                    val cookies = cookieManager.getCookie(url.toString()).orEmpty()
+                    val cookieList = mutableListOf<Cookie?>()
+                    var hasNsfwCookie = false
 
-                    return if (cookies != null && cookies.isNotEmpty()) {
-                        cookies.split(";").mapNotNull {
-                            var cookieValue = it
-                            if (it.contains("kagane_mature_content")) {
-                                val (key, _) = it.split("=")
-                                cookieValue = "$key=${preferences.showNsfw}"
-                            }
-
-                            Cookie.parse(url, cookieValue)
+                    cookies.split(";").mapNotNullTo(cookieList) { c ->
+                        var cookieValue = c
+                        if (url.host == domain && c.contains("kagane_mature_content")) {
+                            hasNsfwCookie = true
+                            val (key, _) = c.split("=")
+                            cookieValue = "$key=${preferences.showNsfw}"
                         }
-                    } else {
-                        emptyList()
+
+                        Cookie.parse(url, cookieValue)
                     }
+
+                    if (!hasNsfwCookie && url.host == domain) {
+                        cookieList.add(
+                            Cookie.parse(url, "kagane_mature_content=${preferences.showNsfw}"),
+                        )
+                    }
+
+                    return cookieList.filterNotNull()
                 }
             },
         )
