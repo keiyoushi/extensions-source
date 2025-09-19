@@ -1,8 +1,0 @@
-ext {
-    extName = 'ManhwaWeb'
-    extClass = '.ManhwaWeb'
-    extVersionCode = 8
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

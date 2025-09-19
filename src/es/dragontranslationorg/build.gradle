@@ -1,9 +1,0 @@
-ext {
-    extName = 'DragonTranslation.org'
-    extClass = '.DragonTranslationOrg'
-    overrideVersionCode = 0
-    isNsfw = true
-    themePkg = 'madara'
-    baseUrl = 'https://dragontranslation.org'
-}
-apply from: "$rootDir/common.gradle"
