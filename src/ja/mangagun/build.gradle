@@ -1,5 +1,5 @@
 ext {
-    extName = 'MangaGun'
+    extName = 'NihonKuni'
     extClass = '.MangaGun'
     themePkg = 'fmreader'
     baseUrl = 'https://nihonkuni.com'
