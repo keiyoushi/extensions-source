@@ -1,6 +1,6 @@
 ext {
-    extName = 'Pluto Scans'
-    extClass = '.PlutoScans'
+    extName = 'FlameScans.lol'
+    extClass = '.FlameScanslol'
     themePkg = 'madara'
     baseUrl = 'https://flamescans.lol'
     overrideVersionCode = 1

@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.en.plutoscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 
-class PlutoScans : Madara(
+class FlameScanslol : Madara(
     "FlameScans.lol",
     "https://flamescans.lol",
     "en",
