@@ -11,13 +11,10 @@ class LunaToons : Keyoapp(
 ) {
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         document.select("div:has(h1) a[href*='?genre=']")
-            .map { it.text().trim().removeSuffix(",") }
+            .map { it.attr("title") }
             .takeIf { it.isNotEmpty() }
             ?.let {
-                genre = listOfNotNull(genre)
-                    .plus(it)
-                    .distinct()
-                    .joinToString(", ")
+                genre = genre?.plus(", $it") ?: $it
             }
     }
 }
