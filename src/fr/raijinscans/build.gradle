@@ -1,9 +1,0 @@
-ext {
-    extName = 'Raijin Scans'
-    extClass = '.RaijinScans'
-    baseUrl = 'https://raijinscan.co'
-    extVersionCode = 48
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

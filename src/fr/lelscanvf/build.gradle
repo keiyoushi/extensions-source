@@ -1,8 +1,0 @@
-ext {
-    extName = 'Lelscan-VF'
-    extClass = '.LelscanVF'
-    themePkg = 'fuzzydoodle'
-    overrideVersionCode = 13
-}
-
-apply from: "$rootDir/common.gradle"
