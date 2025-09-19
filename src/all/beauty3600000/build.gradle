@@ -1,8 +1,0 @@
-ext {
-    extName = '3600000 Beauty'
-    extClass = '.Beauty3600000'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
