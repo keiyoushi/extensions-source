@@ -1,14 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.plutoscans
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class PlutoScans : Madara(
     "Pluto Scans",
     "https://flamescans.lol",
     "en",
-    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val useNewChapterEndpoint = true
