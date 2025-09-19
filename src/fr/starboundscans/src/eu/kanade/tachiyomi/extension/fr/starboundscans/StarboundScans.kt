@@ -8,6 +8,7 @@ import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -63,9 +64,16 @@ class StarboundScans : Madara(
         }
     }
 
+    private fun Element.imgAttr(): String {
+        return when {
+            hasAttr("data-src") -> attr("abs:data-src")
+            else -> attr("abs:src")
+        }
+    }
+
     override fun pageListParse(document: Document): List<Page> {
         return document.select("img.wp-manga-chapter-img").mapIndexed { index, element ->
-            val imageUrl = element.attr("abs:src")
+            val imageUrl = element.imgAttr()
             Page(index, url = document.location(), imageUrl = imageUrl)
         }
     }
