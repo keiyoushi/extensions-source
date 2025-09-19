@@ -11,7 +11,7 @@ class LunaToons : Keyoapp(
 ) {
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         document.select("div:has(h1) a[href*='?genre=']")
-            .map { it.attr("title") }
+            .joinToString { it.attr("title") }
             .takeIf { it.isNotEmpty() }
             ?.let {
                 genre = genre?.plus(", $it") ?: it
