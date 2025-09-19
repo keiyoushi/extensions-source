@@ -1,8 +1,0 @@
-ext {
-    extName = 'BacaKomik'
-    extClass = '.BacaKomik'
-    extVersionCode = 12
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"
