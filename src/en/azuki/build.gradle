@@ -1,0 +1,8 @@
+ext {
+    extName = 'Azuki'
+    extClass = '.Azuki'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
