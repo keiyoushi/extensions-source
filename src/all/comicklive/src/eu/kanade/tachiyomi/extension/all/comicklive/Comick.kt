@@ -349,7 +349,7 @@ abstract class Comick(
         }
 
         error?.run {
-            throw Exception("$name error $statusCode: $message")
+            throw Exception("Comick API error $statusCode: $message")
         } ?: throw Exception("HTTP error ${response.code}")
     }
 
@@ -798,15 +798,14 @@ abstract class Comick(
 
     /** Chapter Pages **/
     override fun pageListRequest(chapter: SChapter): Request {
-        val chapterPart = chapter.url.substringAfterLast("/")
-        // Extract HID from pattern: {hid}-chapter-{chap}-{lang}
-        val chapterHid = if (chapterPart.contains("-chapter-")) {
-            chapterPart.substringBefore("-chapter-")
-        } else {
-            // Fallback to original logic
-            chapterPart.substringBefore("-")
-        }
-        return GET("$apiUrl/chapter/$chapterHid?tachiyomi=true", headers)
+        val chapterUrl = chapter.url
+        // Extract manga slug and full chapter identifier from URL
+        // URL format: /comic/{slug}/{hid}-chapter-{chap}-{lang}
+        val mangaSlug = chapterUrl.substringAfterLast("/comic/").substringBefore("/")
+        val chapterPart = chapterUrl.substringAfterLast("/")
+
+        // Use the correct API endpoint: /api/comics/{slug}/{full-chapter-id}
+        return GET("$apiUrl/comics/$mangaSlug/$chapterPart?tachiyomi=true", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
