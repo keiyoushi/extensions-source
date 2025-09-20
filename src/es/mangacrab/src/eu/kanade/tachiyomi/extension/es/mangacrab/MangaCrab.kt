@@ -17,7 +17,7 @@ import java.util.Locale
 class MangaCrab :
     Madara(
         "Manga Crab",
-        "https://mangacrab.topmanhuas.org",
+        "https://mangacrab.org",
         "es",
         SimpleDateFormat("dd/MM/yyyy", Locale("es")),
     ),
@@ -47,10 +47,10 @@ class MangaCrab :
         addRandomUAPreferenceToScreen(screen)
     }
 
-    override val pageListParseSelector = "div.page-break:not([style*='display:none'])"
+    override val pageListParseSelector = "div.page-break:not([style*='display:none']) img"
 
     override fun imageFromElement(element: Element): String? {
-        val imageAbsUrl = element.attributes().find { it.key.startsWith("data-img-") }?.value
+        val imageAbsUrl = element.attributes().firstOrNull { URL_REGEX.containsMatchIn(it.value) }?.value
 
         return when {
             element.hasAttr("data-src") -> element.attr("abs:data-src")
@@ -61,5 +61,9 @@ class MangaCrab :
             imageAbsUrl != null -> imageAbsUrl
             else -> element.attr("abs:src")
         }
+    }
+
+    companion object {
+        val URL_REGEX = """^https?://(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?(?:/[^\s?#]*)?(?:\?[^\s#]*)?(?:#\S*)?$""".toRegex()
     }
 }
