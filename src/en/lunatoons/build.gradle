@@ -1,0 +1,10 @@
+ext {
+    extName = 'Luna Toons'
+    extClass = '.LunaToons'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://lunatoons.org'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
