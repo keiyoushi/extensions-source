@@ -31,16 +31,16 @@ class PageDto(
 data class Dialog(
     val x: Float,
     val y: Float,
-    val width: Float,
-    val height: Float,
+    private val _width: Float,
+    private val _height: Float,
     val angle: Float = 0f,
-    val isBold: Boolean = false,
-    val isNewApi: Boolean = false,
     val textByLanguage: Map<String, String> = emptyMap(),
-    val type: String = "normal",
-    private val fbColor: List<Int> = emptyList(),
-    private val bgColor: List<Int> = emptyList(),
 ) {
+    var scale: Float = 1F
+
+    val height: Float get() = scale * _height
+    val width: Float get() = scale * _width
+
     val text: String get() = textByLanguage["text"] ?: throw Exception("Dialog not found")
     fun getTextBy(language: Language) = when {
         !language.disableTranslator -> textByLanguage[language.origin]
@@ -61,8 +61,8 @@ private object DialogListSerializer :
                 buildJsonObject {
                     put("x", coordinates[0])
                     put("y", coordinates[1])
-                    put("width", coordinates[2])
-                    put("height", coordinates[3])
+                    put("_width", coordinates[2])
+                    put("_height", coordinates[3])
                     put("textByLanguage", textByLanguage)
                 }
             },

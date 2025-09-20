@@ -58,6 +58,7 @@ class ComposedImageInterceptor(
         val canvas = Canvas(bitmap)
 
         dialogues.forEach { dialog ->
+            dialog.scale = language.dialogBoxScale
             val textPaint = createTextPaint(selectFontFamily())
             val dialogBox = createDialogBox(dialog, textPaint)
             val y = getYAxis(textPaint, dialog, dialogBox)

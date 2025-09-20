@@ -62,6 +62,10 @@ class Manhuarm(
         get() = preferences.getString(FONT_SIZE_PREF, DEFAULT_FONT_SIZE)!!.toInt()
         set(value) = preferences.edit().putString(FONT_SIZE_PREF, value.toString()).apply()
 
+    private var dialogBoxScale: Float
+        get() = preferences.getString(DIALOG_BOX_SCALE_PREF, language.dialogBoxScale.toString())!!.toFloat()
+        set(value) = preferences.edit().putString(DIALOG_BOX_SCALE_PREF, value.toString()).apply()
+
     private var fontName: String
         get() = preferences.getString(FONT_NAME_PREF, language.fontName)!!
         set(value) = preferences.edit().putString(FONT_NAME_PREF, value).apply()
@@ -79,12 +83,13 @@ class Manhuarm(
         baseLanguage = "en",
         availableLanguages = setOf("en", "es", "fr", "id", "it", "pt-BR"),
         classLoader = this::class.java.classLoader!!,
-        createMessageFileName = { createDefaultMessageFileName("${name.lowercase()}_${language.lang}") },
+        createMessageFileName = { createDefaultMessageFileName("${name.lowercase()}_$it") },
     )
 
     private val settings get() = language.copy(
         fontSize = this@Manhuarm.fontSize,
         fontName = this@Manhuarm.fontName,
+        dialogBoxScale = this@Manhuarm.dialogBoxScale,
         disableWordBreak = this@Manhuarm.disableWordBreak,
         disableTranslator = this@Manhuarm.disableTranslator,
         disableFontSettings = this@Manhuarm.fontName == DEVICE_FONT,
@@ -195,6 +200,8 @@ class Manhuarm(
             "80", "88", "96",
         )
 
+        val scale = (0..10).map { 1f + it / 10f }.toTypedArray()
+
         val fonts = arrayOf(
             i18n["font_name_device_title"] to DEVICE_FONT,
             "Anime Ace" to "animeace2_regular",
@@ -227,6 +234,38 @@ class Manhuarm(
                 Toast.makeText(
                     screen.context,
                     i18n["font_size_message"].format(entry),
+                    Toast.LENGTH_LONG,
+                ).show()
+
+                true // It's necessary to update the user interface
+            }
+        }.also(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = DIALOG_BOX_SCALE_PREF
+            title = i18n["dialog_box_scale_title"]
+            entries = scale.map {
+                "${it}x" + if (it == 1f) " - ${i18n["dialog_box_scale_default"]}" else ""
+            }.toTypedArray()
+            entryValues = scale.map(Float::toString).toTypedArray()
+
+            summary = buildString {
+                appendLine(i18n["dialog_box_scale_summary"])
+                append("\t* %s")
+            }
+
+            setDefaultValue(dialogBoxScale.toString())
+
+            setOnPreferenceChange { _, newValue ->
+                val selected = newValue as String
+                val index = this.findIndexOfValue(selected)
+                val entry = entries[index] as String
+
+                dialogBoxScale = selected.toFloat()
+
+                Toast.makeText(
+                    screen.context,
+                    i18n["dialog_box_scale_message"].format(entry),
                     Toast.LENGTH_LONG,
                 ).show()
 
@@ -345,6 +384,7 @@ class Manhuarm(
         const val DEVICE_FONT = "device:"
         private const val FONT_SIZE_PREF = "fontSizePref"
         private const val FONT_NAME_PREF = "fontNamePref"
+        private const val DIALOG_BOX_SCALE_PREF = "dialogBoxScalePref"
         private const val DISABLE_WORD_BREAK_PREF = "disableWordBreakPref"
         private const val DISABLE_TRANSLATOR_PREF = "disableTranslatorPref"
         private const val TRANSLATOR_PROVIDER_PREF = "translatorProviderPref"
