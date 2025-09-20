@@ -9,4 +9,6 @@ class Razure : MangaThemesia(
     "/series",
 ) {
     override fun chapterListSelector() = "#chapterlist li:not([data-num*='🔒'])"
+
+    override fun searchMangaSelector() = ".listupd .bs .bsx:not(:has(.novelabel))"
 }
