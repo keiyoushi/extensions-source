@@ -679,36 +679,53 @@ abstract class Comick(
         val mangaUrl = manga.url.removeSuffix("#")
         val slug = mangaUrl.substringAfterLast("/")
 
-        return Observable.fromCallable {
-            val allChapters = mutableListOf<Chapter>()
-            var currentPage = 1
-            var hasMorePages = true
+        // Use the standard request-based approach to ensure proper loading state
+        val initialRequest = buildChapterListRequest(manga, 1)
 
-            while (hasMorePages) {
-                val url = "$apiUrl/comics/$slug/chapter-list".toHttpUrl().newBuilder().apply {
-                    if (comickLang != "all") addQueryParameter("lang", comickLang)
-                    addQueryParameter("tachiyomi", "true")
-                    addQueryParameter("page", "$currentPage")
-                }.build()
+        return client.newCall(initialRequest)
+            .asObservableSuccess()
+            .flatMap { response ->
+                Observable.fromCallable {
+                    val allChapters = mutableListOf<Chapter>()
+                    val firstPageResponse = response.parseAs<ChapterList>()
+                    allChapters.addAll(firstPageResponse.data)
 
-                val response = client.newCall(GET(url, headers)).execute()
-                val chapterListResponse = response.parseAs<ChapterList>()
+                    // Get pagination info to determine if there are more pages
+                    val pagination = firstPageResponse.pagination
+                    val totalPages = pagination?.lastPage ?: 1
 
-                allChapters.addAll(chapterListResponse.data)
+                    // Fetch remaining pages if any
+                    if (totalPages > 1) {
+                        for (page in 2..totalPages) {
+                            val pageRequest = buildChapterListRequest(manga, page)
+                            val pageResponse = client.newCall(pageRequest).execute()
+                            val pageChapterList = pageResponse.parseAs<ChapterList>()
+                            allChapters.addAll(pageChapterList.data)
+                        }
+                    }
 
-                // Check if there are more pages
-                val pagination = chapterListResponse.pagination
-                hasMorePages = pagination != null && currentPage < pagination.lastPage
-                currentPage++
+                    // Parse and return the complete chapter list
+                    parseChapterList(allChapters, mangaUrl)
+                }
             }
+    }
 
-            parseChapterList(allChapters, mangaUrl)
-        }
+    private fun buildChapterListRequest(manga: SManga, page: Int): Request {
+        val mangaUrl = manga.url.removeSuffix("#")
+        val slug = mangaUrl.substringAfterLast("/")
+
+        val url = "$apiUrl/comics/$slug/chapter-list".toHttpUrl().newBuilder().apply {
+            if (comickLang != "all") addQueryParameter("lang", comickLang)
+            addQueryParameter("tachiyomi", "true")
+            addQueryParameter("page", "$page")
+        }.build()
+
+        return GET(url, headers)
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        // This method is kept for compatibility but won't be used since we override fetchChapterList
-        throw UnsupportedOperationException("Use fetchChapterList instead")
+        // Use the first page request as the default
+        return buildChapterListRequest(manga, 1)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
