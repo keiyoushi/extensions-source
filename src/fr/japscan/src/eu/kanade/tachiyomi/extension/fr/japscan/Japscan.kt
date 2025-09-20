@@ -227,13 +227,16 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     // Those have a span.badge "SPOILER" or "RAW". The additional pseudo selector makes sure to exclude these from the chapter list.
 
     override fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.selectFirst("*[href~=manga]")!!
+        val urlElement = element.selectFirst("*[href~=manga|manhua|manhwa]")
+        if (urlElement == null) {
+            throw Exception("Impossible de trouver l'URL du chapitre")
+        }
 
         val chapter = SChapter.create()
         chapter.setUrlWithoutDomain(urlElement.attr("href"))
         chapter.name = urlElement.ownText()
-        // Using ownText() doesn't include childs' text, like "VUS" or "RAW" badges, in the chapter name.
-        chapter.date_upload = element.selectFirst("span")!!.text().trim().let { parseChapterDate(it) }
+        // Using ownText() doesn't include child's text, like "VUS" or "RAW" badges, in the chapter name.
+        chapter.date_upload = element.selectFirst("span")?.text()?.trim()?.let { parseChapterDate(it) } ?: 0L
         return chapter
     }
 
