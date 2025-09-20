@@ -1,0 +1,10 @@
+ext {
+    extName = 'Qi Scans'
+    extClass = '.QiScans'
+    themePkg = 'iken'
+    baseUrl = 'https://qiscans.org'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
