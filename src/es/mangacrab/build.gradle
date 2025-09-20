@@ -2,8 +2,8 @@ ext {
     extName = 'Manga Crab'
     extClass = '.MangaCrab'
     themePkg = 'madara'
-    baseUrl = 'https://mangacrab.topmanhuas.org'
-    overrideVersionCode = 14
+    baseUrl = 'https://mangacrab.org'
+    overrideVersionCode = 15
     isNsfw = false
 }
 

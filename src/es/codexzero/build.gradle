@@ -2,8 +2,8 @@ ext {
     extName = 'Codex Zero'
     extClass = '.CodexZero'
     themePkg = 'madara'
-    baseUrl = 'https://codexzero.me'
-    overrideVersionCode = 0
+    baseUrl = 'https://codex.readkisho.me'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
