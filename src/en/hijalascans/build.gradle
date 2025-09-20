@@ -1,0 +1,10 @@
+ext {
+    extName = 'Hijala Scans'
+    extClass = '.HijalaScans'
+    themePkg = 'iken'
+    baseUrl = 'https://en-hijala.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
