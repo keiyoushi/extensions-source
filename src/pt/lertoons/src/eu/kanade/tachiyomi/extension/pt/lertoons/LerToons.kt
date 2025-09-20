@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class LerToons : ZeroTheme(
     "Ler Toons",
-    "https://www.unionmangas.com",
+    "https://www.readmangas.org",
     "pt-BR",
 ) {
     override val versionId = 3
