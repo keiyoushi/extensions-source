@@ -1,34 +1,56 @@
 package eu.kanade.tachiyomi.extension.ar.arabshentai
 
-import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class StatusFilter :
-    Filter.Group<FilterCheckbox>(
-        "الحالة",
-        arrayOf(
-            Pair("مستمرة", "on-going"),
-            Pair("مكتملة", "end"),
-            Pair("ملغية", "canceled"),
-            Pair("متوقفة حالياً", "on-hold"),
-        ).map { FilterCheckbox(it.first, it.second) },
-    )
+class ArabsHentai : ParsedHttpSource() {
+    override val name = "هنتاي العرب"
 
-internal var genreList: List<Pair<String, String>> = emptyList()
+    override val baseUrl = "https://arabshentai.com"
 
-class FilterCheckbox(name: String, val uriPart: String) : Filter.CheckBox(name)
+    override val lang = "ar"
 
-class GenresFilter :
-    Filter.Group<FilterCheckbox>("التصنيفات", genreList.map { FilterCheckbox(it.first, it.second) })
+    private val dateFormat = SimpleDateFormat("d MMM\u060c yyy", Locale("ar"))
 
-class GenresOpFilter : UriPartFilter(
-    "شرط التصنيفات",
-    arrayOf(
-        Pair("يحتوي على إحدى التصنيفات المدرجة", ""),
-        Pair("يحتوي على جميع التصنيفات المدرجة", "1"),
-    ),
-)
+    override val supportsLatest = true
 
-open class UriPartFilter(displayName: String, private val pairs: Array<Pair<String, String>>) :
-    Filter.Select<String>(displayName, pairs.map { it.first }.toTypedArray()) {
-    fun toUriPart() = pairs[state].second
-}
+    override val client =
+        network.cloudflareClient.newBuilder()
+            .rateLimit(2)
+            .build()
+
+    override fun headersBuilder() =
+        super.headersBuilder()
+            .set("Referer", "$baseUrl/")
+            .set("Origin", baseUrl)
+
+    // ============================== Popular ===============================
+    override fun popularMangaRequest(page: Int) = GET("$baseUrl/manga/page/$page/?orderby=new-manga", headers)
+
+    override fun popularMangaSelector() = "#archive-content .wp-manga"
+
+    override fun popularMangaFromElement(element: Element) =
+        SManga.create().apply {
+            element.selectFirst(".data h3 a")!!.run {
+                setUrlWithoutDomain(absUrl("href"))
+                title = text()
+            }
+            thumbnail_url = element.selectFirst("a .poster img")?.imgAttr()
+        }
+
