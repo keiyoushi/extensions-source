@@ -1,17 +1,17 @@
 package eu.kanade.tachiyomi.extension.pt.plumacomics
 
-import eu.kanade.tachiyomi.multisrc.yuyu.YuYu
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class PlumaComics : YuYu(
+class PlumaComics : MangaThemesia(
     "Pluma Comics",
-    "https://new.plumacomics.cloud",
+    "https://plumacomics.cloud",
     "pt-BR",
 ) {
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .build()
 
-    // Moved from Madara to YuYu
-    override val versionId = 3
+    // Moved from YuYu to Madara
+    override val versionId = 4
 }
