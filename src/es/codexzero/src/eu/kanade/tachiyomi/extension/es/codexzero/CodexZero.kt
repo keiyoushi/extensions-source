@@ -7,7 +7,7 @@ import java.util.Locale
 
 class CodexZero : Madara(
     "Codex Zero",
-    "https://codexzero.me",
+    "https://codex.readkisho.me",
     "es",
     SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {

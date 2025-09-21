@@ -2,8 +2,8 @@ ext {
     extName = 'LumosKomik'
     extClass = '.LumosKomik'
     themePkg = 'madara'
-    baseUrl = 'https://lumos01.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://go.lumos01.com'
+    overrideVersionCode = 2
     isNsfw = false
 }
 
