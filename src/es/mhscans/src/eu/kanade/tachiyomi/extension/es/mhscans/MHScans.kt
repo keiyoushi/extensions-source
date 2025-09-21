@@ -9,10 +9,12 @@ import java.util.concurrent.TimeUnit
 
 class MHScans : Madara(
     "MHScans",
-    "https://twobluescans.com",
+    "https://curiosidadtop.com",
     "es",
     dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
 ) {
+    override val mangaSubString = "series"
+
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 3, TimeUnit.SECONDS)
         .build()
