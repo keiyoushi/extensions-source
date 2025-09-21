@@ -44,9 +44,17 @@ abstract class Comick(
 
     override val name = "Comick"
 
-    override val baseUrl = "https://comick.live"
+    override var baseUrl: String = "https://comick.live"
+        get() {
+            val current = field
+            if (current.isNotEmpty()) {
+                return current
+            }
+            field = getMirrorPref()
+            return field
+        }
 
-    private val apiUrl = "https://comick.live/api"
+    private val apiUrl = "$baseUrl/api"
 
     override val supportsLatest = true
 
@@ -71,6 +79,19 @@ abstract class Comick(
     private val preferences by getPreferencesLazy { newLineIgnoredGroups() }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = MIRROR_PREF_KEY
+            title = "Mirror"
+            entries = MIRROR_PREF_ENTRIES
+            entryValues = MIRROR_PREF_ENTRY_VALUES
+            setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
+            summary = "%s"
+            setOnPreferenceChangeListener { _, newValue ->
+                baseUrl = newValue as String
+                true
+            }
+        }.also(screen::addPreference)
+
         EditTextPreference(screen.context).apply {
             key = IGNORED_GROUPS_PREF
             title = intl["ignored_groups_title"]
@@ -599,8 +620,28 @@ abstract class Comick(
             // Extract title
             title = jsonObject["title"]?.jsonPrimitive?.content ?: "Unknown Title"
 
-            // Extract description
-            description = jsonObject["desc"]?.jsonPrimitive?.content ?: ""
+            // Extract description with alternative titles if preference is enabled
+            description = buildString {
+                // Main description
+                val desc = jsonObject["desc"]?.jsonPrimitive?.content
+                if (!desc.isNullOrEmpty()) {
+                    append(desc)
+                }
+
+                // Add alternative titles if preference is enabled
+                if (preferences.showAlternativeTitles) {
+                    val altTitlesArray = jsonObject["md_titles"]?.jsonArray
+                    val altTitles = altTitlesArray?.mapNotNull { element ->
+                        element.jsonObject["title"]?.jsonPrimitive?.content
+                    }?.filter { it != title && it.isNotBlank() }
+
+                    if (!altTitles.isNullOrEmpty()) {
+                        if (this.isNotEmpty()) append("\n\n")
+                        append("Alternative Titles:\n")
+                        append(altTitles.joinToString("\n") { "• $it" })
+                    }
+                }
+            }
 
             // Extract thumbnail
             thumbnail_url = jsonObject["default_thumbnail"]?.jsonPrimitive?.content
@@ -869,6 +910,11 @@ abstract class Comick(
             .apply()
     }
 
+    private fun getMirrorPref(): String {
+        return preferences.getString(MIRROR_PREF_KEY, MIRROR_PREF_DEFAULT_VALUE)
+            ?: MIRROR_PREF_DEFAULT_VALUE
+    }
+
     companion object {
         const val SLUG_SEARCH_PREFIX = "id:"
         private val SPACE_AND_SLASH_REGEX = Regex("[ /]")
@@ -894,5 +940,13 @@ abstract class Comick(
         private const val CHAPTER_SCORE_FILTERING_DEFAULT = false
         private const val LIMIT = 20
         private const val CHAPTERS_LIMIT = 99999
+        private const val MIRROR_PREF_KEY = "MIRROR"
+        private val MIRROR_PREF_ENTRIES = arrayOf(
+            "comick.live",
+            "comick.art",
+            "comick.so",
+        )
+        private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
+        private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
     }
 }
