@@ -48,7 +48,7 @@ class MangaCrab :
         addRandomUAPreferenceToScreen(screen)
     }
 
-    override val pageListParseSelector = "div.page-break:not([style*='display:none']) img"
+    override val pageListParseSelector = "div.page-break:not([style*='display:none']) img:not([src])"
 
     override fun imageFromElement(element: Element): String? {
         val imageAbsUrl = element.attributes().firstOrNull { it.value.toHttpUrlOrNull() != null }?.value
