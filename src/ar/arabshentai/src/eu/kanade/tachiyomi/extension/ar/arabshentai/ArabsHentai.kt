@@ -54,7 +54,7 @@ class ArabsHentai : ParsedHttpSource() {
             thumbnail_url = element.selectFirst("a .poster img")?.imgAttr()
         }
 
-    override fun popularMangaNextPageSelector() = ".pagination a#nextpagination"
+    override fun popularMangaNextPageSelector() = ".pagination > .current + .inactive"
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga/page/$page/?orderby=new_chapter", headers)
