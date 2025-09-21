@@ -26,7 +26,7 @@ class ArabsHentai : ParsedHttpSource() {
 
     override val lang = "ar"
 
-    private val dateFormat = SimpleDateFormat("d MMM\u060c yyy", Locale("ar"))
+    private val dateFormat = SimpleDateFormat("d MMM\u060c yyyy", Locale("ar"))
 
     override val supportsLatest = true
 
@@ -54,7 +54,7 @@ class ArabsHentai : ParsedHttpSource() {
             thumbnail_url = element.selectFirst("a .poster img")?.imgAttr()
         }
 
-    override fun popularMangaNextPageSelector() = ".pagination a.arrow_pag i#nextpagination"
+    override fun popularMangaNextPageSelector() = ".pagination a#nextpagination"
 
     // =============================== Latest ===============================
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/manga/page/$page/?orderby=new_chapter", headers)
@@ -91,9 +91,10 @@ class ArabsHentai : ParsedHttpSource() {
 
     override fun searchMangaFromElement(element: Element) =
         SManga.create().apply {
-            element.selectFirst(".details .title")!!.run {
-                setUrlWithoutDomain(selectFirst("a")!!.absUrl("href"))
-                title = text()
+            val titleElement = element.selectFirst(".details .title a")
+            if (titleElement != null) {
+                setUrlWithoutDomain(titleElement.absUrl("href"))
+                title = titleElement.text()
             }
             thumbnail_url = element.selectFirst(".image .thumbnail a img")?.imgAttr()
         }
@@ -131,20 +132,16 @@ class ArabsHentai : ParsedHttpSource() {
         }
 
     // ============================== Chapters ==============================
-    override fun chapterListSelector() = "#chapter-list a[href*='/manga/'], .oneshot-reader .images .image-item a[href$='manga-paged=1']"
+    override fun chapterListSelector() = "#chapter-list a[href*='/manga/']"
 
     override fun chapterFromElement(element: Element) =
         SChapter.create().apply {
             val url = element.attr("href")
-            if (url.contains("style=paged")) {
-                setUrlWithoutDomain(url.substringBeforeLast("?"))
-                name = "ونشوت"
-                date_upload = 0L
-            } else {
-                name = element.select(".chapternum").text()
-                date_upload = element.select(".chapterdate").text().parseChapterDate()
-                setUrlWithoutDomain(url)
-            }
+            setUrlWithoutDomain(url)
+
+            name = element.selectFirst(".chapternum")?.text() ?: url.substringAfterLast("/").removeSuffix("/")
+
+            date_upload = element.selectFirst(".chapterdate")?.text().parseChapterDate() ?: 0L
         }
 
     private fun String?.parseChapterDate(): Long {
