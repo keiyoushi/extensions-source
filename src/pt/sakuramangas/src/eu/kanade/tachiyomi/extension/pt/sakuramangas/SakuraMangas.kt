@@ -1,8 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.sakuramangas
 
-import android.os.Build
+import android.util.Base64
 import android.util.Log
-import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -26,11 +25,9 @@ import org.jsoup.nodes.Element
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
-import java.util.Base64
 import java.util.Calendar
 import kotlin.concurrent.thread
 
-@RequiresApi(Build.VERSION_CODES.O)
 class SakuraMangas : HttpSource() {
     override val lang = "pt-BR"
 
@@ -407,7 +404,7 @@ class SakuraMangas : HttpSource() {
         }
 
         return try {
-            val decoded = String(Base64.getDecoder().decode(base64))
+            val decoded = String(Base64.decode(base64, Base64.DEFAULT), Charsets.UTF_8)
 
             val parts = decoded.split('/')
             if (parts.size != 3) {
@@ -447,7 +444,7 @@ class SakuraMangas : HttpSource() {
             val c1 = buffer.int.toUInt()
             val c2 = buffer.int.toUInt()
 
-            val decoded = Base64.getDecoder().decode(dataBase64)
+            val decoded = Base64.decode(dataBase64, Base64.DEFAULT)
 
             val output = ByteArray(decoded.size)
 
