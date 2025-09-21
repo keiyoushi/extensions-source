@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferences
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -50,7 +51,7 @@ class MangaCrab :
     override val pageListParseSelector = "div.page-break:not([style*='display:none']) img"
 
     override fun imageFromElement(element: Element): String? {
-        val imageAbsUrl = element.attributes().firstOrNull { URL_REGEX.containsMatchIn(it.value) }?.value
+        val imageAbsUrl = element.attributes().firstOrNull { it.value.toHttpUrlOrNull() != null }?.value
 
         return when {
             element.hasAttr("data-src") -> element.attr("abs:data-src")
@@ -61,9 +62,5 @@ class MangaCrab :
             imageAbsUrl != null -> imageAbsUrl
             else -> element.attr("abs:src")
         }
-    }
-
-    companion object {
-        val URL_REGEX = """^https?://(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?(?:/[^\s?#]*)?(?:\?[^\s#]*)?(?:#\S*)?$""".toRegex()
     }
 }
