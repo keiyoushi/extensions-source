@@ -944,7 +944,6 @@ abstract class Comick(
         private val MIRROR_PREF_ENTRIES = arrayOf(
             "comick.live",
             "comick.art",
-            "comick.so",
         )
         private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
