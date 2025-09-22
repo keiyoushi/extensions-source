@@ -41,7 +41,7 @@ class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://manhuarock.site"
+    private val defaultBaseUrl = "https://manhuarock4.site"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 

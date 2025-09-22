@@ -3,7 +3,7 @@ ext {
     extClass = '.KiraScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://kirascans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
