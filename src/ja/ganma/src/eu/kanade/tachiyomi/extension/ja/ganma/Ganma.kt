@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.ja.ganma
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservable
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,10 +10,21 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.Buffer
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
 
@@ -23,91 +34,318 @@ class Ganma : HttpSource() {
     override val baseUrl = "https://ganma.jp"
     override val supportsLatest = true
 
-    override fun headersBuilder() = super.headersBuilder().add("X-From", baseUrl)
+    override fun headersBuilder() = super.headersBuilder()
+        .add("X-From", "$baseUrl/web")
+        .add("Content-Type", "application/json;charset=UTF-8")
+        .add("Accept", "application/json, text/plain, */*")
 
-    override fun popularMangaRequest(page: Int) =
-        when (page) {
-            1 -> GET("$baseUrl/api/1.0/ranking", headers)
-            else -> GET("$baseUrl/api/1.1/ranking?flag=Finish", headers)
+    private val json: Json by injectLazy()
+    private val apiUrl = "$baseUrl/api/graphql"
+
+    private var operationsMap: Map<String, String>? = null
+    private var lastSearchCursor: String? = null
+    private var lastFilterCursor: String? = null
+
+    // https://ganma.jp/web/_next/static/chunks/app/layout-98772c0967d4bfb7.js
+    // Hashes to bypass OnlyPersistedQueryIsAllowed
+    private fun fetchAndParseHashes(): Map<String, String> {
+        val mainPage = client.newCall(GET("$baseUrl/web", headers)).execute()
+        val document = mainPage.asJsoup()
+
+        val mainScriptUrl = document.select("script[src*=/app/layout-]")
+            .attr("abs:src")
+            .ifEmpty { throw Exception("Could not find layout script") }
+
+        val scriptContent = client.newCall(GET(mainScriptUrl, headers)).execute().body.string()
+
+        val manifestRegex = """operations:(\[.+?])\};""".toRegex()
+        val manifestMatch = manifestRegex.find(scriptContent)
+            ?: throw Exception("Could not find operations manifest in script")
+
+        val manifestJson = manifestMatch.groupValues[1]
+
+        val operationRegex = """id:"([a-f0-9]{64})",body:".*?",name:"(\w+)"""".toRegex()
+        return operationRegex.findAll(manifestJson).associate {
+            val (hash, name) = it.destructured
+            name to hash
+        }.also { operationsMap = it }
+    }
+
+    private fun graphQlRequest(operationName: String, variables: Map<String, Any>, useAppHeaders: Boolean = true): Request {
+        val hashes = operationsMap ?: fetchAndParseHashes()
+        val hash = hashes[operationName] ?: throw Exception("Could not find hash for operation: $operationName")
+
+        val sessionCookie = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+            .firstOrNull { it.name == "PLAY_SESSION" }
+
+        val finalHeaders = headersBuilder().apply {
+            if (useAppHeaders) {
+                set("User-Agent", "GanmaReader/9.9.1 Android")
+            }
+            if (sessionCookie != null) {
+                add("Cookie", sessionCookie.toString())
+            }
+        }.build()
+
+        val payload = buildJsonObject {
+            put("operationName", operationName)
+            putJsonObject("variables") {
+                variables.forEach { (key, value) ->
+                    when (value) {
+                        is Int -> put(key, value)
+                        else -> put(key, value.toString())
+                    }
+                }
+            }
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("version", 1)
+                    put("sha256Hash", hash)
+                }
+            }
         }
+        val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        return POST(apiUrl, finalHeaders, requestBody)
+    }
+
+    private fun updateImageUrlWidth(url: String?, width: Int = 4999): String? {
+        return url?.toHttpUrlOrNull()
+            ?.newBuilder()
+            ?.setQueryParameter("w", width.toString())
+            ?.build()
+            ?.toString()
+    }
+
+    override fun popularMangaRequest(page: Int): Request {
+        return graphQlRequest("home", emptyMap(), useAppHeaders = true)
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val list: List<Magazine> = response.parseAs()
-        return MangasPage(list.map { it.toSManga() }, false)
+        val data = response.parseAs<GraphQLResponse<HomeDto>>().data
+        val mangas = data.ranking.totalRanking
+            .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
+            .map { it.toSManga() }
+        return MangasPage(mangas, false)
     }
 
-    override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/api/2.2/top", headers)
+    override fun latestUpdatesRequest(page: Int): Request {
+        return graphQlRequest("home", emptyMap(), useAppHeaders = true)
+    }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val list = response.parseAs<Top>().boxes.flatMap { it.panels }
-            .filter { it.newestStoryItem != null }
-            .sortedByDescending { it.newestStoryItem!!.release }
-        return MangasPage(list.map { it.toSManga() }, false)
+        val data = response.parseAs<GraphQLResponse<HomeDto>>().data
+        val mangas = data.latestTotalRanking10
+            .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
+            .map { it.toSManga() }
+        return MangasPage(mangas, false)
     }
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        val pageNumber = when (filters.size) {
-            0 -> 1
-            else -> (filters[0] as TypeFilter).state + 1
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.isNotBlank()) {
+            if (page == 1) {
+                lastSearchCursor = null
+            }
+            val variables = mutableMapOf<String, Any>("keyword" to query, "first" to 20)
+            lastSearchCursor?.let { variables["after"] = it }
+            return graphQlRequest("magazinesByKeywordSearch", variables, useAppHeaders = false)
         }
-        return fetchPopularManga(pageNumber).map { mangasPage ->
-            MangasPage(mangasPage.mangas.filter { it.title.contains(query) }, false)
+
+        if (page == 1) {
+            lastFilterCursor = null
+        }
+        val category = filters.filterIsInstance<CategoryFilter>().first().selected
+        val variables = mutableMapOf<String, Any>("first" to 20)
+        lastFilterCursor?.let { variables["after"] = it }
+
+        val operationName = when (category.type) {
+            "day" -> {
+                variables["dayOfWeek"] = category.id
+                "serialMagazinesByDayOfWeek"
+            }
+            "finished" -> "finishedMagazines"
+            else -> "home"
+        }
+        return graphQlRequest(operationName, variables, useAppHeaders = true)
+    }
+
+    override fun searchMangaParse(response: Response): MangasPage {
+        val requestBody = response.request.body
+        val requestBodyString = Buffer().use { requestBody?.writeTo(it); it.readUtf8() }
+        val operationName = json.parseToJsonElement(requestBodyString).jsonObject["operationName"]?.jsonPrimitive?.content
+
+        if (operationName == "magazinesByKeywordSearch") {
+            val data = response.parseAs<GraphQLResponse<SearchDto>>().data
+            lastSearchCursor = data.searchComic.pageInfo.endCursor
+            val mangas = data.searchComic.edges
+                .mapNotNull { it.node }
+                .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
+                .map { it.toSManga() }
+            return MangasPage(mangas, data.searchComic.pageInfo.hasNextPage)
+        }
+
+        return when (operationName) {
+            "serialMagazinesByDayOfWeek" -> {
+                val data = response.parseAs<GraphQLResponse<SerialResponseDto>>().data.serialPerDayOfWeek.panels
+                lastFilterCursor = data.pageInfo.endCursor
+                val mangas = data.edges
+                    .map { it.node.storyInfo.magazine }
+                    .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
+                    .map { it.toSManga() }
+                MangasPage(mangas, data.pageInfo.hasNextPage)
+            }
+            "finishedMagazines" -> {
+                val data = response.parseAs<GraphQLResponse<FinishedResponseDto>>().data.magazinesByCategory.magazines
+                lastFilterCursor = data.pageInfo.endCursor
+                val mangas = data.edges
+                    .map { it.node }
+                    .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
+                    .map { it.toSManga() }
+                MangasPage(mangas, data.pageInfo.hasNextPage)
+            }
+            "home" -> {
+                val data = response.parseAs<GraphQLResponse<HomeDto>>().data
+                val mangas = data.ranking.totalRanking
+                    .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
+                    .map { it.toSManga() }
+                MangasPage(mangas, false)
+            }
+            else -> MangasPage(emptyList(), false)
         }
     }
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
-        throw UnsupportedOperationException()
-
-    override fun searchMangaParse(response: Response): MangasPage =
-        throw UnsupportedOperationException()
-
-    // navigate Webview to web page
-    override fun mangaDetailsRequest(manga: SManga) =
-        GET("$baseUrl/${manga.url.alias()}", headers)
-
-    protected open fun realMangaDetailsRequest(manga: SManga) =
-        GET("$baseUrl/api/1.0/magazines/web/${manga.url.alias()}", headers)
-
-    override fun chapterListRequest(manga: SManga) = realMangaDetailsRequest(manga)
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> =
-        client.newCall(realMangaDetailsRequest(manga)).asObservableSuccess()
-            .map { mangaDetailsParse(it) }
-
-    override fun mangaDetailsParse(response: Response): SManga =
-        response.parseAs<Magazine>().toSMangaDetails()
-
-    protected open fun List<SChapter>.sortedDescending() = this.asReversed()
-
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<Magazine>().getSChapterList().sortedDescending()
-
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> =
-        client.newCall(pageListRequest(chapter)).asObservable()
-            .map { pageListParse(chapter, it) }
-
-    override fun pageListRequest(chapter: SChapter) =
-        GET("$baseUrl/api/1.0/magazines/web/${chapter.url.alias()}", headers)
-
-    protected open fun pageListParse(chapter: SChapter, response: Response): List<Page> {
-        val manga: Magazine = response.parseAs()
-        val chapterId = chapter.url.substringAfter('/')
-        return manga.items.find { it.id == chapterId }!!.toPageList()
+    private fun MangaItemDto.toSManga(): SManga = SManga.create().apply {
+        url = this@toSManga.alias
+        title = this@toSManga.title
+        thumbnail_url = updateImageUrlWidth(this@toSManga.todaysJacketImageURL ?: this@toSManga.rectangleWithLogoImageURL)
     }
 
-    final override fun pageListParse(response: Response): List<Page> =
-        throw UnsupportedOperationException()
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/web/magazine/${manga.url}", headers)
 
-    override fun imageUrlParse(response: Response): String =
-        throw UnsupportedOperationException()
-
-    protected open class TypeFilter : Filter.Select<String>("Type", arrayOf("Popular", "Completed"))
-
-    override fun getFilterList() = FilterList(TypeFilter())
-
-    protected inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromStream<Result<T>>(it.body.byteStream()).root
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+        val variables = mapOf("magazineIdOrAlias" to manga.url)
+        val apiRequest = graphQlRequest("magazineDetail", variables)
+        return client.newCall(apiRequest).asObservableSuccess().map { response ->
+            mangaDetailsParse(response)
+        }
     }
 
-    val json: Json by injectLazy()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val magazine = response.parseAs<GraphQLResponse<MagazineDetailDto>>().data.magazine
+        val manga = SManga.create().apply {
+            url = magazine.alias
+            title = magazine.title
+            author = magazine.authorName
+            description = magazine.description
+            status = if (magazine.isFinished) SManga.COMPLETED else SManga.ONGOING
+            thumbnail_url = updateImageUrlWidth(magazine.todaysJacketImageURL)
+        }
+
+        if (magazine.todaysJacketImageURL == null) {
+            try {
+                val searchResponse = client.newCall(searchMangaRequest(1, manga.title, FilterList())).execute()
+                if (searchResponse.isSuccessful) {
+                    val searchData = searchResponse.parseAs<GraphQLResponse<SearchDto>>().data
+                    val searchResultUrl = searchData.searchComic.edges
+                        .firstOrNull { it.node?.alias == manga.url }
+                        ?.node?.todaysJacketImageURL
+
+                    if (searchResultUrl != null) {
+                        manga.thumbnail_url = updateImageUrlWidth(searchResultUrl)
+                    }
+                }
+            } catch (e: Exception) {
+            }
+        }
+        return manga
+    }
+
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return Observable.fromCallable {
+            val chapters = mutableListOf<StoryInfoNode>()
+            var hasNextPage = true
+            var cursor: String? = null
+
+            while (hasNextPage) {
+                val variables = mutableMapOf<String, Any>("magazineIdOrAlias" to manga.url, "first" to 100)
+                cursor?.let { variables["after"] = it }
+
+                val response = client.newCall(graphQlRequest("storyInfoList", variables, useAppHeaders = true)).execute()
+                val data = response.parseAs<GraphQLResponse<ChapterListDto>>().data.magazine.storyInfos
+
+                chapters.addAll(data.edges.map { it.node })
+                hasNextPage = data.pageInfo.hasNextPage
+                cursor = data.pageInfo.endCursor
+            }
+
+            chapters.mapIndexed { index, chapter ->
+                SChapter.create().apply {
+                    url = "${manga.url}/${chapter.storyId}"
+                    name = (chapter.title + chapter.subtitle?.let { " $it" }.orEmpty()).trim()
+                    date_upload = chapter.contentsRelease
+                    chapter_number = (chapters.size - index).toFloat()
+                    if (chapter.contentsAccessCondition.typename != "FreeStoryContentsAccessCondition" && !chapter.isPurchased) {
+                        name = "\uD83E\uDE99 $name"
+                    }
+                }
+            }.reversed()
+        }
+    }
+
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        val (alias, storyId) = chapter.url.split("/")
+        val variables = mapOf("magazineIdOrAlias" to alias, "storyId" to storyId)
+        val apiRequest = graphQlRequest("magazineStoryForReader", variables, useAppHeaders = true)
+
+        return client.newCall(apiRequest).asObservableSuccess().map { response ->
+            val data = response.parseAs<GraphQLResponse<PageListDto>>().data
+            if (data.magazine.storyContents.error != null) {
+                throw Exception("This chapter is locked. Log in via WebView to read if you have premium.")
+            }
+            val pageImages = data.magazine.storyContents.pageImages
+                ?: throw Exception("Could not find page images")
+
+            (1..pageImages.pageCount).map { i ->
+                val imageUrl = "${pageImages.pageImageBaseURL}$i.jpg?${pageImages.pageImageSign}"
+                Page(i - 1, imageUrl = updateImageUrlWidth(imageUrl))
+            }
+        }
+    }
+
+    // Filter
+    override fun getFilterList(): FilterList {
+        val filters = mutableListOf<Filter<*>>(Filter.Header("NOTE: Search query ignores filters"))
+        if (operationsMap != null) {
+            filters.add(CategoryFilter(getCategoryList()))
+        } else {
+            filters.add(Filter.Header("Press 'Reset' to load filters"))
+        }
+        return FilterList(filters)
+    }
+
+    private class Category(val name: String, val id: String, val type: String) {
+        override fun toString(): String = name
+    }
+
+    private fun getCategoryList() = listOf(
+        Category("人気", "popular", "popular"),
+        Category("完結", "finished", "finished"),
+        Category("月曜日", "MONDAY", "day"),
+        Category("火曜日", "TUESDAY", "day"),
+        Category("水曜日", "WEDNESDAY", "day"),
+        Category("木曜日", "THURSDAY", "day"),
+        Category("金曜日", "FRIDAY", "day"),
+        Category("土曜日", "SATURDAY", "day"),
+        Category("日曜日", "SUNDAY", "day"),
+    )
+
+    private class CategoryFilter(categories: List<Category>) : Filter.Select<Category>("カテゴリー", categories.toTypedArray()) {
+        val selected: Category
+            get() = values[state]
+    }
+
+    // Unsupported
+    override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> = throw UnsupportedOperationException()
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
