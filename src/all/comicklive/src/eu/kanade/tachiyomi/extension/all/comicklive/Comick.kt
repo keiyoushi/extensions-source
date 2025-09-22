@@ -399,7 +399,7 @@ abstract class Comick(
             page = page,
             query = "",
             filters = FilterList(
-                SortFilter("uploaded"),
+                SortFilter("created_at"),
             ),
         )
     }
