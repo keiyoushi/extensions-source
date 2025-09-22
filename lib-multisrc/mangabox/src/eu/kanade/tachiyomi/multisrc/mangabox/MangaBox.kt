@@ -155,7 +155,7 @@ abstract class MangaBox(
 
     open val simpleQueryPath = "search/story/"
 
-    override fun popularMangaSelector() = "div.truyen-list > div.list-truyen-item-wrap"
+    override fun popularMangaSelector() = "div.truyen-list > div.list-truyen-item-wrap, div.comic-list > .list-comic-item-wrap"
 
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/$popularUrlPath$page", headers)
@@ -211,7 +211,7 @@ abstract class MangaBox(
         }
     }
 
-    override fun searchMangaSelector() = ".panel_story_list .story_item, div.list-truyen-item-wrap"
+    override fun searchMangaSelector() = ".panel_story_list .story_item, div.list-truyen-item-wrap, .list-comic-item-wrap .list-story-item"
 
     override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
