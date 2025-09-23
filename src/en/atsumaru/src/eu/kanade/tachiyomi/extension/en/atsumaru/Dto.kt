@@ -75,8 +75,8 @@ class MangaDto(
         thumbnail_url = getImagePath().let { it -> baseUrl + it }
         description = synopsis
         genre = buildList {
-            tags?.forEach { add(it.name) }
             type?.let { add(it) }
+            tags?.forEach { add(it.name) }
         }.joinToString()
         authors?.let {
             author = it.joinToString { author -> author.name }
