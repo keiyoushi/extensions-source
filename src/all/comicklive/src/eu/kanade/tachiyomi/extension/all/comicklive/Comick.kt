@@ -726,7 +726,7 @@ abstract class Comick(
         }
 
         val mangaUrl = manga.url.removeSuffix("#")
-        val slug = mangaUrl.substringAfterLast("/")
+        // val slug = mangaUrl.substringAfterLast("/")
 
         // Use the standard request-based approach to ensure proper loading state
         val initialRequest = buildChapterListRequest(manga, 1)
