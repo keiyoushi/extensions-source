@@ -253,6 +253,27 @@ class Page(
 )
 
 @Serializable
+class LatestChapterData(
+    @SerialName("default_thumbnail") val defaultThumbnail: String? = null,
+    val slug: String,
+    val title: String,
+    @SerialName("is_ended") val isEnded: Boolean = false,
+    val genres: List<Genre> = emptyList(),
+) {
+    fun toSManga() = SManga.create().apply {
+        url = "/comic/$slug#"
+        title = this@LatestChapterData.title
+        thumbnail_url = defaultThumbnail
+        status = if (isEnded) SManga.COMPLETED else SManga.ONGOING
+    }
+}
+
+@Serializable
+class LatestChaptersResponse(
+    val data: List<LatestChapterData>,
+)
+
+@Serializable
 class Error(
     val statusCode: Int,
     val message: String,

@@ -395,16 +395,24 @@ abstract class Comick(
 
     /** Latest Manga **/
     override fun latestUpdatesRequest(page: Int): Request {
-        return searchMangaRequest(
-            page = page,
-            query = "",
-            filters = FilterList(
-                SortFilter("created_at"),
-            ),
-        )
+        val url = "$apiUrl/chapters/latest".toHttpUrl().newBuilder().apply {
+            addQueryParameter("order", "new")
+            addQueryParameter("page", page.toString())
+            if (comickLang != "all") addQueryParameter("lang", comickLang)
+            addQueryParameter("tachiyomi", "true")
+        }.build()
+
+        return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response) = popularMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val result = response.parseAs<LatestChaptersResponse>()
+        val uniqueMangas = result.data.distinctBy { it.slug }
+        return MangasPage(
+            uniqueMangas.map(LatestChapterData::toSManga),
+            hasNextPage = result.data.isNotEmpty(),
+        )
+    }
 
     /** Manga Search **/
     override fun fetchSearchManga(
