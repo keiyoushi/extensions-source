@@ -58,7 +58,7 @@ class MangaDto(
     private val synopsis: String? = null,
     private val tags: List<TagDto>? = null,
     private val status: String? = null,
-    private val type: String,
+    private val type: String? = null,
 
     // Chapters
     val chapters: List<ChapterDto>? = null,
@@ -74,9 +74,10 @@ class MangaDto(
         title = this@MangaDto.title
         thumbnail_url = getImagePath().let { it -> baseUrl + it }
         description = synopsis
-        genre = (tags?.map { it.name } ?: emptyList())
-            .plus(type)
-            .joinToString()
+        genre = buildList {
+            tags?.forEach { add(it.name) }
+            type?.let { add(it) }
+        }.joinToString()
         authors?.let {
             author = it.joinToString { author -> author.name }
         }
