@@ -106,12 +106,6 @@ class MagazineDetail(
     val description: String,
     val isFinished: Boolean,
     val todaysJacketImageURL: String? = null,
-    val magazineTags: List<MagazineTag>,
-)
-
-@Serializable
-class MagazineTag(
-    val name: String,
 )
 
 @Serializable
@@ -143,12 +137,19 @@ class StoryInfoNode(
     val contentsRelease: Long,
     val isPurchased: Boolean,
     val contentsAccessCondition: ContentsAccessCondition,
+    val isSellByStory: Boolean,
 )
 
 @Serializable
 class ContentsAccessCondition(
     @SerialName("__typename")
     val typename: String,
+    val info: PurchaseInfo? = null,
+)
+
+@Serializable
+class PurchaseInfo(
+    val coins: Int,
 )
 
 @Serializable

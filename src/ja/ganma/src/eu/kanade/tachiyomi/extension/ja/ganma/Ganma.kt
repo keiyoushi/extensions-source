@@ -81,6 +81,8 @@ class Ganma : HttpSource() {
         val finalHeaders = headersBuilder().apply {
             if (useAppHeaders) {
                 set("User-Agent", "GanmaReader/9.9.1 Android")
+            } else {
+                set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
             }
             if (sessionCookie != null) {
                 add("Cookie", sessionCookie.toString())
@@ -116,15 +118,21 @@ class Ganma : HttpSource() {
             ?.toString()
     }
 
+    private fun fetchWebOnlyAliases(): Set<String> {
+        val response = client.newCall(GET("$baseUrl/web/magazineCategory/webOnly", headers)).execute()
+        val document = response.asJsoup()
+        return document.select("a[href*=/web/magazine/]")
+            .map { it.attr("href").substringAfterLast("/") }
+            .toSet()
+    }
+
     override fun popularMangaRequest(page: Int): Request {
         return graphQlRequest("home", emptyMap(), useAppHeaders = true)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.parseAs<GraphQLResponse<HomeDto>>().data
-        val mangas = data.ranking.totalRanking
-            .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
-            .map { it.toSManga() }
+        val mangas = data.ranking.totalRanking.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -134,9 +142,7 @@ class Ganma : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val data = response.parseAs<GraphQLResponse<HomeDto>>().data
-        val mangas = data.latestTotalRanking10
-            .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
-            .map { it.toSManga() }
+        val mangas = data.latestTotalRanking10.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -178,7 +184,6 @@ class Ganma : HttpSource() {
             lastSearchCursor = data.searchComic.pageInfo.endCursor
             val mangas = data.searchComic.edges
                 .mapNotNull { it.node }
-                .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
                 .map { it.toSManga() }
             return MangasPage(mangas, data.searchComic.pageInfo.hasNextPage)
         }
@@ -189,7 +194,6 @@ class Ganma : HttpSource() {
                 lastFilterCursor = data.pageInfo.endCursor
                 val mangas = data.edges
                     .map { it.node.storyInfo.magazine }
-                    .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
                     .map { it.toSManga() }
                 MangasPage(mangas, data.pageInfo.hasNextPage)
             }
@@ -198,14 +202,12 @@ class Ganma : HttpSource() {
                 lastFilterCursor = data.pageInfo.endCursor
                 val mangas = data.edges
                     .map { it.node }
-                    .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
                     .map { it.toSManga() }
                 MangasPage(mangas, data.pageInfo.hasNextPage)
             }
             "home" -> {
                 val data = response.parseAs<GraphQLResponse<HomeDto>>().data
                 val mangas = data.ranking.totalRanking
-                    .filterNot { it.alias.endsWith("_web", ignoreCase = true) }
                     .map { it.toSManga() }
                 MangasPage(mangas, false)
             }
@@ -269,7 +271,7 @@ class Ganma : HttpSource() {
                 val variables = mutableMapOf<String, Any>("magazineIdOrAlias" to manga.url, "first" to 100)
                 cursor?.let { variables["after"] = it }
 
-                val response = client.newCall(graphQlRequest("storyInfoList", variables, useAppHeaders = true)).execute()
+                val response = client.newCall(graphQlRequest("storyInfoList", variables, useAppHeaders = false)).execute()
                 val data = response.parseAs<GraphQLResponse<ChapterListDto>>().data.magazine.storyInfos
 
                 chapters.addAll(data.edges.map { it.node })
@@ -283,7 +285,11 @@ class Ganma : HttpSource() {
                     name = (chapter.title + chapter.subtitle?.let { " $it" }.orEmpty()).trim()
                     date_upload = chapter.contentsRelease
                     chapter_number = (chapters.size - index).toFloat()
-                    if (chapter.contentsAccessCondition.typename != "FreeStoryContentsAccessCondition" && !chapter.isPurchased) {
+                    val accessCondition = chapter.contentsAccessCondition
+                    val isPremiumType = accessCondition.typename != "FreeStoryContentsAccessCondition"
+                    val isPurchasable = chapter.isSellByStory && (accessCondition.info?.coins ?: 0) > 0
+
+                    if ((isPremiumType || isPurchasable) && !chapter.isPurchased) {
                         name = "\uD83E\uDE99 $name"
                     }
                 }
@@ -293,8 +299,9 @@ class Ganma : HttpSource() {
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val (alias, storyId) = chapter.url.split("/")
+        val isWebSeries = alias in fetchWebOnlyAliases()
         val variables = mapOf("magazineIdOrAlias" to alias, "storyId" to storyId)
-        val apiRequest = graphQlRequest("magazineStoryForReader", variables, useAppHeaders = true)
+        val apiRequest = graphQlRequest("magazineStoryForReader", variables, useAppHeaders = !isWebSeries)
 
         return client.newCall(apiRequest).asObservableSuccess().map { response ->
             val data = response.parseAs<GraphQLResponse<PageListDto>>().data
