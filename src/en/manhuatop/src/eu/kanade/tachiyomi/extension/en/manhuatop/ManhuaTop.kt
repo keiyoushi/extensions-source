@@ -11,7 +11,7 @@ class ManhuaTop : Madara(
     dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
 ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = false
+    override val useNewChapterEndpoint = true
 
     override val mangaSubString = "manhua"
     override val filterNonMangaItems = false
