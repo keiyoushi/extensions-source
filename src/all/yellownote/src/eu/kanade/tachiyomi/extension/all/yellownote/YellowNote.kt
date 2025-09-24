@@ -28,6 +28,8 @@ import java.util.Locale
 
 class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
 
+    override val id get() = 170542391855030753
+
     override val lang = "all"
     override val baseUrl by lazy { preferences.baseUrl() }
 
@@ -65,7 +67,8 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
             .forEach(screen::addPreference)
     }
 
-    override fun simpleMangaSelector() = "div.list.photo-list > div.item.photo, div.list.amateur-list > div.item.amateur"
+    override fun simpleMangaSelector() =
+        "div.list.photo-list > div.item.photo, div.list.amateur-list > div.item.amateur"
 
     override fun simpleMangaFromElement(element: Element) = SManga.create().apply {
         val mangaEl = element.selectFirst("a")!!
@@ -91,9 +94,11 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
             ?.get(1)
     }
 
-    override fun simpleNextPageSelector() = "div.pager:first-of-type > span.pager-num.current + a.pager-num"
+    override fun simpleNextPageSelector() =
+        "div.pager:first-of-type > span.pager-num.current + a.pager-num"
 
-    override fun popularMangaRequest(page: Int) = GET("$baseUrl/photos/sort-hot/$page.html", headers)
+    override fun popularMangaRequest(page: Int) =
+        GET("$baseUrl/photos/sort-hot/$page.html", headers)
 
     override fun latestUpdatesRequest(page: Int) = GET("$baseUrl/photos/$page.html", headers)
 
@@ -102,7 +107,8 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
         val name = parseInfoByIcon(infoCardElement, "i.fa-address-card")!!
         val mediaCount = parseInfoByIcon(infoCardElement, "i.fa-image")!!
         val no = parseInfoByIcon(infoCardElement, "i.fa-file")?.let { " $it" }.orEmpty()
-        val categories = parseInfosByIcon(infoCardElement, "i.fa-video-camera")?.filter { it != "-" }
+        val categories =
+            parseInfosByIcon(infoCardElement, "i.fa-video-camera")?.filter { it != "-" }
         val filters = parseInfosByIcon(infoCardElement, "i.fa-filter")
         val tags = parseInfosByIcon(infoCardElement, "i.fa-tags")
 
@@ -162,7 +168,9 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
         return null
     }
 
-    private val imageSelector = "div.list.photo-items > div.item.photo-image, div.list.amateur-items > div.item.amateur-image"
+    private val imageSelector =
+        "div.list.photo-items > div.item.photo-image, div.list.amateur-items > div.item.amateur-image"
+
     override fun pageListParse(document: Document): List<Page> {
         return document.select(imageSelector)
             .mapIndexed { i, imageElement ->
