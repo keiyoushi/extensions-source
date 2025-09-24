@@ -18,19 +18,10 @@ object YellowNotePreferences {
     private const val PS_KEY_LANGUAGE = "$PS_KEY_ROOT::LANGUAGE"
 
     private const val DEFAULT_DOMAIN = "https://xchina.co"
-    private fun SharedPreferences.getStringOrDefault(key: String, defValue: String): String {
-        val value = getString(key, defValue) ?: defValue
-        return value.ifBlank { defValue }
-    }
-
-    private fun SharedPreferences.getStringOrDefault(key: String, defValueSupplier: () -> String): String {
-        val value = getString(key, "") ?: defValueSupplier.invoke()
-        return value.ifBlank { defValueSupplier.invoke() }
-    }
 
     internal fun SharedPreferences.preferenceMigration() {
         // refresh when DEFAULT_DOMAIN update
-        val defaultDomain = getStringOrDefault(PS_KEY_DOMAIN_DEFAULT, DEFAULT_DOMAIN)
+        val defaultDomain = getString(PS_KEY_DOMAIN_DEFAULT, DEFAULT_DOMAIN)!!
         if (DEFAULT_DOMAIN != defaultDomain) {
             edit()
                 .putString(PS_KEY_DOMAIN_DEFAULT, DEFAULT_DOMAIN)
@@ -42,7 +33,7 @@ object YellowNotePreferences {
     internal fun SharedPreferences.baseUrl(): String {
         val lang = language()
         val subdomain = LanguageUtils.getSubdomainByLanguage(lang)
-        val httpUrl = getStringOrDefault(PS_KEY_DOMAIN_OVERRIDE, DEFAULT_DOMAIN).toHttpUrl()
+        val httpUrl = getString(PS_KEY_DOMAIN_OVERRIDE, DEFAULT_DOMAIN)!!.toHttpUrl()
         val newHost = when {
             httpUrl.host.split('.').size > 2 || subdomain == null -> httpUrl.host
             else -> "$subdomain.${httpUrl.host}"
@@ -57,7 +48,7 @@ object YellowNotePreferences {
     }
 
     internal fun SharedPreferences.language(): String {
-        return getStringOrDefault(PS_KEY_LANGUAGE) { LanguageUtils.getDefaultLanguage() }
+        return getString(PS_KEY_LANGUAGE, "")!!.ifBlank { LanguageUtils.getDefaultLanguage() }
     }
 
     internal fun buildPreferences(context: Context, intl: Intl): List<Preference> {
@@ -79,12 +70,20 @@ object YellowNotePreferences {
             setOnPreferenceChangeListener { _, newValue ->
                 try {
                     (newValue as String).toHttpUrl()
-                } catch (e: IllegalArgumentException) {
-                    Toast.makeText(context, intl["config.domain.toast.changed-failed"], Toast.LENGTH_LONG).show()
+                } catch (_: IllegalArgumentException) {
+                    Toast.makeText(
+                        context,
+                        intl["config.domain.toast.changed-failed"],
+                        Toast.LENGTH_LONG,
+                    ).show()
                     return@setOnPreferenceChangeListener false
                 }
 
-                Toast.makeText(context, intl["config.domain.toast.changed-success"], Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    intl["config.domain.toast.changed-success"],
+                    Toast.LENGTH_LONG,
+                ).show()
                 true
             }
         }
@@ -98,6 +97,14 @@ object YellowNotePreferences {
             entries = LanguageUtils.getSupportedLanguageDisplayNames()
             entryValues = LanguageUtils.getSupportedLanguageKeys()
             setDefaultValue("")
+            setOnPreferenceChangeListener { _, newValue ->
+                Toast.makeText(
+                    context,
+                    intl["config.language.changed-success"],
+                    Toast.LENGTH_LONG,
+                ).show()
+                true
+            }
         }
     }
 }
