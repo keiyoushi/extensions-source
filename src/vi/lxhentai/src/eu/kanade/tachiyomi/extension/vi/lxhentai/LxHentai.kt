@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -38,7 +39,9 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(3)
+        .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", baseUrl)
 
@@ -92,8 +95,8 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
                 when (it) {
                     is GenreList -> it.state.forEach { genre ->
                         when (genre.state) {
-                            Filter.TriState.STATE_INCLUDE -> addQueryParameter("filter[accept_genres]", genre.id.toString())
-                            Filter.TriState.STATE_EXCLUDE -> addQueryParameter("filter[reject_genres]", genre.id.toString())
+                            Filter.TriState.STATE_INCLUDE -> addQueryParameter("filter[accept_genres]", genre.id)
+                            Filter.TriState.STATE_EXCLUDE -> addQueryParameter("filter[reject_genres]", genre.id)
                         }
                     }
                     is Author -> if (canAddTextFilter && it.state.isNotEmpty()) {
@@ -185,97 +188,142 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
         state,
     )
 
-    private class Status : UriPartFilter(
+    private class Status() : UriPartFilter(
         "Trạng thái",
         arrayOf(
-            Pair("Tất cả", "1,2"),
-            Pair("Đang tiến hành", "2"),
-            Pair("Đã hoàn thành", "1"),
+            Pair("Tất cả", "ongoing,completed,paused"),
+            Pair("Đang tiến hành", "ongoing"),
+            Pair("Đã hoàn thành", "completed"),
+            Pair("Tạm ngưng", "paused"),
         ),
     )
 
-    private class Genre(name: String, val id: Int) : Filter.TriState(name)
+    private class Genre(name: String, val id: String) : Filter.TriState(name)
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Thể loại", genres)
 
     private class Author : Filter.Text("Tác giả", "")
     private class Doujinshi : Filter.Text("Doujinshi", "")
 
     override fun getFilterList(): FilterList = FilterList(
-        SortBy(3),
+        SortBy(),
         GenreList(getGenreList()),
         Filter.Header("Không dùng được với nhau và với tìm tựa đề"),
+        Status(),
         Author(),
         Doujinshi(),
     )
 
     // console.log([...document.querySelectorAll("label.ml-3.inline-flex.items-center.cursor-pointer")].map(e => `Genre("${e.querySelector(".truncate").innerText}", ${e.getAttribute("@click").replace('toggleGenre(\'', '').replace('\')', '')}),`).join("\n"))
     private fun getGenreList(): List<Genre> = listOf(
-        Genre("Mature", 1),
-        Genre("Manhwa", 2),
-        Genre("Group", 3),
-        Genre("Housewife", 4),
-        Genre("NTR", 5),
-        Genre("Adult", 6),
-        Genre("Series", 7),
-        Genre("Complete", 8),
-        Genre("Ngực Lớn", 9),
-        Genre("Lãng Mạn", 10),
-        Genre("Truyện Màu", 11),
-        Genre("Mind Break", 12),
-        Genre("Mắt Kính", 13),
-        Genre("Ngực Nhỏ", 14),
-        Genre("Fantasy", 15),
-        Genre("Ecchi", 16),
-        Genre("Bạo Dâm", 17),
-        Genre("Harem", 18),
-        Genre("Hài Hước", 19),
-        Genre("Cosplay", 20),
-        Genre("Hầu Gái", 21),
-        Genre("Loli", 22),
-        Genre("Shota", 23),
-        Genre("Gangbang", 24),
-        Genre("Doujinshi", 25),
-        Genre("Guro", 26),
-        Genre("Virgin", 27),
-        Genre("OneShot", 28),
-        Genre("Chơi Hai Lỗ", 29),
-        Genre("Hậu Môn", 30),
-        Genre("Nữ Sinh", 31),
-        Genre("Mang Thai", 32),
-        Genre("Giáo Viên", 33),
-        Genre("Loạn Luân", 34),
-        Genre("Truyện Không Che", 35),
-        Genre("Futanari", 36),
-        Genre("Yuri", 37),
-        Genre("Nô Lệ", 38),
-        Genre("Đồ Bơi", 39),
-        Genre("Thể Thao", 40),
-        Genre("Truyện Ngắn", 41),
-        Genre("Lão Gìa Dâm", 42),
-        Genre("Hãm Hiếp", 43),
-        Genre("Monster Girl", 44),
-        Genre("Y Tá", 45),
-        Genre("Supernatural", 46),
-        Genre("3D", 47),
-        Genre("Truyện Comic", 48),
-        Genre("Animal girl", 49),
-        Genre("Thú Vật", 50),
-        Genre("Kinh Dị", 51),
-        Genre("Quái Vật", 52),
-        Genre("Xúc Tua", 53),
-        Genre("Gender Bender", 54),
-        Genre("Yaoi", 55),
-        Genre("CG", 56),
-        Genre("Trap", 57),
-        Genre("Furry", 58),
-        Genre("Mind Control", 59),
-        Genre("Elf", 60),
-        Genre("Côn Trùng", 61),
-        Genre("Kogal", 62),
-        Genre("Artist", 63),
-        Genre("Scat", 64),
-        Genre("Milf", 65),
-        Genre("LXHENTAI", 66),
+        Genre("3D", "3d"),
+        Genre("Adult", "adult"),
+        Genre("Ahegao", "ahegao"),
+        Genre("Anal", "anal"),
+        Genre("Animal ", "animal-girl"),
+        Genre("Art Book", "art-book"),
+        Genre("Artist", "artist"),
+        Genre("Bbm", "bbm"),
+        Genre("BDSM", "bdsm"),
+        Genre("Beach", "beach"),
+        Genre("Beast", "beast"),
+        Genre("Big breasts ", "big-breasts"),
+        Genre("Big dick", "big-dick"),
+        Genre("Big vagina", "big-vagina"),
+        Genre("Blowjob", "blowjob"),
+        Genre("Body modifications", "body-modifications"),
+        Genre("Breast Sucking", "breast-sucking"),
+        Genre("Bukkake", "bukkake"),
+        Genre("CG", "cg"),
+        Genre("Chikan", "chikan"),
+        Genre("Comic 18+", "comic-18+"),
+        Genre("Condom", "condom"),
+        Genre("Cosplay", "cosplay"),
+        Genre("Creampie", "creampie"),
+        Genre("Đam mỹ", "dam-my"),
+        Genre("Defloration", "defloration"),
+        Genre("Dirty old man", "dirty-old-man"),
+        Genre("Double", "double-penetration"),
+        Genre("Doujinshi", "doujinshi"),
+        Genre("Drama", "drama"),
+        Genre("Elf", "elf"),
+        Genre("Fantasy", "fantasy"),
+        Genre("Femdom", "femdom"),
+        Genre("Fingering", "fingering"),
+        Genre("First time", "first-time"),
+        Genre("Footjob", "footjob"),
+        Genre("Foursome", "foursome"),
+        Genre("Full color", "full-color"),
+        Genre("Funny", "funny"),
+        Genre("Furry", "furry"),
+        Genre("Futanari", "futanari"),
+        Genre("Gangbang", "gangbang"),
+        Genre("Gender bender", "gender-bender"),
+        Genre("Girl love", "girl-love"),
+        Genre("glasses", "glasses"),
+        Genre("Group", "group"),
+        Genre("Handjob", "handjob"),
+        Genre("Harem", "harem"),
+        Genre("Housewife", "housewife"),
+        Genre("Incest", "incest"),
+        Genre("Incomplete", "incomplete"),
+        Genre("Insect", "insect"),
+        Genre("Inseki", "inseki"),
+        Genre("Kinh dị", "kinh dị"),
+        Genre("Kogal", "kogal"),
+        Genre("Lãng mãn", "lang-man"),
+        Genre("Lếu lều", "leu-leu"),
+        Genre("Lingerie", "lingerie"),
+        Genre("Loạn luân chị em", "loan-luan-chi-em"),
+        Genre("Loli", "loli"),
+        Genre("LXHENTAI", "lxhentai"),
+        Genre("Maid", "maid"),
+        Genre("Manhwa", "manhwa"),
+        Genre("Masturbation", "masturbation"),
+        Genre("Mature", "mature"),
+        Genre("Milf", "milf"),
+        Genre("Mind break", "mind-break"),
+        Genre("Mind control", "mind-control"),
+        Genre("Monster", "monster"),
+        Genre("Monster Girl", "monster-girl"),
+        Genre("mother", "mother"),
+        Genre("No sex ", "no-sex"),
+        Genre("NTR", "ntr"),
+        Genre("NUN", "nun"),
+        Genre("Nurse", "nurse"),
+        Genre("Office", "office-lady"),
+        Genre("OneShot", "oneshot"),
+        Genre("Orgasm denial", "orgasm-denial"),
+        Genre("Pregnant", "pregnant"),
+        Genre("Rape", "rape"),
+        Genre("SCAT", "scat"),
+        Genre("Schoolboy outfit", "schoolboy-outfit"),
+        Genre("Schoolgirl outfit", "schoolgirl-outfit"),
+        Genre("Series", "series"),
+        Genre("Shota", "shota"),
+        Genre("Slave", "slave"),
+        Genre("Small", "small-breasts"),
+        Genre("Socks", "socks"),
+        Genre("Sole female", "sole-female"),
+        Genre("Sole male", "sole-male"),
+        Genre("Sport", "sport"),
+        Genre("Squirting", "squirting"),
+        Genre("Story arc", "story-arc"),
+        Genre("Succubus", "succubus"),
+        Genre("Supernatural", "supernatural"),
+        Genre("swimsuit", "swimsuit"),
+        Genre("Swinging", "swinging"),
+        Genre("Teacher", "teacher"),
+        Genre("Three some", "three-some"),
+        Genre("Toys", "toys"),
+        Genre("Trap", "trap"),
+        Genre("Truyện ngắn", "truyen-ngan"),
+        Genre("Tự sướng", "tu-suong"),
+        Genre("Uncensored", "uncensored"),
+        Genre("Vanilla", "vanilla"),
+        Genre("virginity", "virginity"),
+        Genre("Xúc tua", "xuc-tua"),
+        Genre("Yaoi", "yaoi"),
+        Genre("Yuri", "yuri"),
     )
 
     private val preferences: SharedPreferences = getPreferences()

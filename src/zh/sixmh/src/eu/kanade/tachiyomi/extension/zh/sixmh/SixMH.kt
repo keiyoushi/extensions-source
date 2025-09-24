@@ -1,12 +1,15 @@
 package eu.kanade.tachiyomi.extension.zh.sixmh
 
 import eu.kanade.tachiyomi.multisrc.mccms.MCCMSWeb
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 
@@ -19,6 +22,12 @@ class SixMH : MCCMSWeb("六漫画", "https://www.liumanhua.com") {
         title = element.selectFirst("li.title > a")!!.text()
         setUrlWithoutDomain(element.selectFirst("li.title > a")!!.absUrl("href"))
         thumbnail_url = element.selectFirst("img")?.absUrl("src")
+    }
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val request = super.searchMangaRequest(page, query, filters)
+        // Use mobile user agent
+        return GET(request.url, headers)
     }
 
     // Details

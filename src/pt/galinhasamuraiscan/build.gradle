@@ -1,9 +1,9 @@
 ext {
     extName = 'Galinha Samurai Scan'
     extClass = '.GalinhaSamuraiScan'
-    themePkg = 'yuyu'
+    themePkg = 'madara'
     baseUrl = 'https://galinhasamurai.com'
-    overrideVersionCode = 41
+    overrideVersionCode = 0
     isNsfw = false
 }
 

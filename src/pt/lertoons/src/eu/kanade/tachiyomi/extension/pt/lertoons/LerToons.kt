@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class LerToons : ZeroTheme(
     "Ler Toons",
-    "https://lertoons.com",
+    "https://www.readmangas.org",
     "pt-BR",
 ) {
     override val versionId = 3
@@ -13,4 +13,8 @@ class LerToons : ZeroTheme(
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
+
+    override val cdnUrl: String = "https://fullmangas.one"
+
+    override val imageLocation = ""
 }

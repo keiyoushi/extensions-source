@@ -1,9 +1,9 @@
 ext {
     extName = 'Starbound Scans'
     extClass = '.StarboundScans'
-    themePkg = 'keyoapp'
+    themePkg = 'madara'
     baseUrl = 'https://starboundscans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 2
     isNsfw = false
 }
 
