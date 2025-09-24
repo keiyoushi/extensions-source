@@ -172,6 +172,7 @@ class MagazinePages(
 class StoryContents(
     val pageImages: PageImages? = null,
     val error: String? = null,
+    val afterword: Afterword? = null,
 )
 
 @Serializable
@@ -179,4 +180,9 @@ class PageImages(
     val pageCount: Int,
     val pageImageBaseURL: String,
     val pageImageSign: String,
+)
+
+@Serializable
+class Afterword(
+    val imageURL: String? = null,
 )

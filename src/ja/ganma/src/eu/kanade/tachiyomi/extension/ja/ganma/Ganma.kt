@@ -118,6 +118,14 @@ class Ganma : HttpSource() {
             ?.toString()
     }
 
+    private val cacheWebOnlyAliases: Set<String> by lazy {
+        try {
+            fetchWebOnlyAliases()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
     private fun fetchWebOnlyAliases(): Set<String> {
         val response = client.newCall(GET("$baseUrl/web/magazineCategory/webOnly", headers)).execute()
         val document = response.asJsoup()
@@ -299,22 +307,27 @@ class Ganma : HttpSource() {
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val (alias, storyId) = chapter.url.split("/")
-        val isWebSeries = alias in fetchWebOnlyAliases()
+        val isWebSeries = alias in cacheWebOnlyAliases
         val variables = mapOf("magazineIdOrAlias" to alias, "storyId" to storyId)
         val apiRequest = graphQlRequest("magazineStoryForReader", variables, useAppHeaders = !isWebSeries)
 
         return client.newCall(apiRequest).asObservableSuccess().map { response ->
             val data = response.parseAs<GraphQLResponse<PageListDto>>().data
             if (data.magazine.storyContents.error != null) {
-                throw Exception("This chapter is locked. Log in via WebView to read if you have premium.")
+                throw Exception("This chapter is locked. Log in via WebView to read if you have premium or have purchased this chapter.")
             }
             val pageImages = data.magazine.storyContents.pageImages
                 ?: throw Exception("Could not find page images")
 
-            (1..pageImages.pageCount).map { i ->
+            val pages = (1..pageImages.pageCount).map { i ->
                 val imageUrl = "${pageImages.pageImageBaseURL}$i.jpg?${pageImages.pageImageSign}"
                 Page(i - 1, imageUrl = updateImageUrlWidth(imageUrl))
+            }.toMutableList()
+
+            data.magazine.storyContents.afterword?.imageURL?.let {
+                pages.add(Page(pages.size, imageUrl = updateImageUrlWidth(it)))
             }
+            pages
         }
     }
 
