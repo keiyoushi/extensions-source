@@ -1,9 +1,7 @@
 ext {
     extName = 'LectorJPG'
     extClass = '.LectorJpg'
-    themePkg = 'madara'
-    baseUrl = 'https://lectorjpg.com'
-    overrideVersionCode = 0
+    extVersionCode = 44
     isNsfw = true
 }
 

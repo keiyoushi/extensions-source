@@ -8,25 +8,25 @@ import android.util.Base64
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import java.security.MessageDigest
 
-object ScrambledImageInterceptor : Interceptor {
+class ScrambledImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        val url = request.url.toString()
-        if ("sr:1" !in url) return response
-        val image = BitmapFactory.decodeStream(response.body.byteStream())
+        val url = request.url
+        if ("sr:1" !in url.pathSegments) return response
+        val image = response.body.use { BitmapFactory.decodeStream(it.byteStream()) }
         val width = image.width
         val height = image.height
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
 
-        // /_next/static/chunks/pages/books/%5Bbookid%5D/%5Bid%5D-6f60a589e82dc8db.js
+        // /_next/static/chunks/app/books/[bookId]/[ind]/page-eaacab94dbec1fa4.js
         // Scrambled images are reversed by blocks. Remainder is included in the bottom (scrambled) block.
-        val blocks = url.removeSuffix(SCRAMBLED_SUFFIX).substringAfterLast('/').removeSuffix(".jpg")
+        val blocks = url.pathSegments.last().substringBeforeLast('.')
             .let { Base64.decode(it, Base64.DEFAULT) }
             .let { MessageDigest.getInstance("MD5").digest(it) } // thread-safe
             .let { it.last().toPositiveInt() % 10 + 5 }
@@ -42,13 +42,12 @@ object ScrambledImageInterceptor : Interceptor {
             cy += h
         }
 
-        val output = ByteArrayOutputStream()
-        result.compress(Bitmap.CompressFormat.JPEG, 90, output)
-        val responseBody = output.toByteArray().toResponseBody(jpegMediaType)
+        val responseBody = Buffer().run {
+            result.compress(Bitmap.CompressFormat.JPEG, 90, outputStream())
+            asResponseBody("image/jpeg".toMediaType())
+        }
         return response.newBuilder().body(responseBody).build()
     }
 
-    private val jpegMediaType = "image/jpeg".toMediaType()
     private fun Byte.toPositiveInt() = toInt() and 0xFF
-    const val SCRAMBLED_SUFFIX = "#scrambled"
 }

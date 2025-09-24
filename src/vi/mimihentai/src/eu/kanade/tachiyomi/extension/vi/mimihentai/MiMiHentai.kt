@@ -44,6 +44,7 @@ class MiMiHentai : HttpSource() {
             addPathSegments("tatcatruyen")
             addQueryParameter("page", (page - 1).toString())
             addQueryParameter("sort", "updated_at")
+            addQueryParameter("ex", "196")
         }.build(),
         headers,
     )
@@ -101,7 +102,7 @@ class MiMiHentai : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val res = response.parseAs<PageListDto>()
         return res.pages.mapIndexed { index, url ->
-            Page(index, imageUrl = url)
+            Page(index, imageUrl = url.imageUrl)
         }
     }
 
@@ -112,6 +113,7 @@ class MiMiHentai : HttpSource() {
             addPathSegments("tatcatruyen")
             addQueryParameter("page", (page - 1).toString())
             addQueryParameter("sort", "views")
+            addQueryParameter("ex", "196")
         }.build(),
         headers,
     )
@@ -156,8 +158,11 @@ class MiMiHentai : HttpSource() {
                             val sort = getSortByList()[filters.state]
                             addQueryParameter("sort", sort.id)
                         }
-                    is GenreList -> {
-                        filters.state.forEach { genre -> if (genre.state) addQueryParameter("genre", genre.id) }
+                    is GenreList -> filters.state.forEach {
+                        when (it.state) {
+                            Filter.TriState.STATE_INCLUDE -> addQueryParameter("genre", it.id)
+                            Filter.TriState.STATE_EXCLUDE -> addQueryParameter("ex", it.id)
+                        }
                     }
                     is TextField -> setQueryParameter(filters.key, filters.state)
                     else -> {}
@@ -197,7 +202,7 @@ class MiMiHentai : HttpSource() {
     private class GenreList(name: String, pairs: List<Pair<Long, String>>) : GenresFilter(name, pairs)
     private open class GenresFilter(title: String, pairs: List<Pair<Long, String>>) :
         Filter.Group<GenreCheckBox>(title, pairs.map { GenreCheckBox(it.second, it.first.toString()) })
-    class GenreCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
+    class GenreCheckBox(name: String, val id: String = name) : Filter.TriState(name)
 
     private class SortByList(sort: Array<SortBy>) : Filter.Select<SortBy>("Sắp xếp", sort)
     private class SortBy(name: String, val id: String) : Filter.CheckBox(name) {

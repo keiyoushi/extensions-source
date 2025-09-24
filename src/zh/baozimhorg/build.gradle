@@ -2,7 +2,7 @@ ext {
     extName = 'GoDa'
     extClass = '.GoDaManhua'
     themePkg = 'goda'
-    overrideVersionCode = 31
+    overrideVersionCode = 32
 }
 
 apply from: "$rootDir/common.gradle"

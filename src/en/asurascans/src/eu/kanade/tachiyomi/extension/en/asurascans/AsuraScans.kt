@@ -66,7 +66,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::forceHighQualityInterceptor)
-        .rateLimit(1, 3)
+        .rateLimit(2, 2)
         .build()
 
     private var failedHighQuality = false
