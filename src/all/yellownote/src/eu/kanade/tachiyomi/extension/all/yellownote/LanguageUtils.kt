@@ -31,26 +31,15 @@ object LanguageUtils {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 LocaleList.getDefault().getFirstMatch(supportedLocaleTags) ?: baseLocale
             } else {
-                Locale.getDefault() ?: baseLocale
+                Locale.getDefault()
             }
 
-        // Handle Chinese locale specifically
         return when {
-            // Primary: Determine by script attribute
-            !defaultLocale.script.isNullOrBlank() -> {
-                when (defaultLocale.script) {
-                    "Hant" -> "zh-Hant"
-                    "Hans" -> "zh-Hans"
-                    else -> "zh-Hans" // 默认简体中文
-                }
-            }
-            // Secondary: Determine by country code
-            else -> {
-                when (defaultLocale.country) {
-                    "TW", "HK", "MO" -> "zh-Hant"
-                    else -> "zh-Hans"
-                }
-            }
+            defaultLocale.script == "Hant" -> "zh-Hant"
+            defaultLocale.script == "Hans" -> "zh-Hans"
+            defaultLocale.country in listOf("TW", "HK", "MO") -> "zh-Hant"
+            defaultLocale.country in listOf("CN", "SG") -> "zh-Hans"
+            else -> baseLocale.language
         }
     }
 
