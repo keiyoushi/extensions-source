@@ -6,7 +6,7 @@ import java.util.Locale
 
 class ArabToons : Madara(
     "عرب تونز",
-    "https://arabtoons.me",
+    "https://arabtoons.net",
     "ar",
     dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale("ar")),
 ) {
