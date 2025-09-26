@@ -11,7 +11,9 @@ class ManhuaTop : Madara(
     dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.ROOT),
 ) {
     override val useLoadMoreRequest = LoadMoreStrategy.Never
-    override val useNewChapterEndpoint = false
+    override fun popularMangaSelector() = ".comic_post__item"
+    override val popularMangaUrlSelector = ".comic_post__title a"
+    override val useNewChapterEndpoint = true
 
     override val mangaSubString = "manhua"
     override val filterNonMangaItems = false
