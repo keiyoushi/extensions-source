@@ -163,7 +163,7 @@ class YellowNote : SimpleParsedHttpSource(), ConfigurableSource {
     private fun parseUploadDateFromVersionInfo(doc: Document): Long? {
         for (info in doc.select("div.tab-content > div.info-card div.text")) {
             val date = dateRegex.find(info.text()) ?: continue
-            return dateFormat.parse(date.value)!!.time
+            return dateFormat.tryParse(date.value)
         }
         return null
     }
