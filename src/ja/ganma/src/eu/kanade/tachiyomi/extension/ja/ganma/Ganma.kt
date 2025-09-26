@@ -12,13 +12,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.toJsonString
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -26,7 +25,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.Buffer
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 
 class Ganma : HttpSource() {
     override val name = "GANMA!"
@@ -39,7 +37,6 @@ class Ganma : HttpSource() {
         .add("Content-Type", "application/json;charset=UTF-8")
         .add("Accept", "application/json, text/plain, */*")
 
-    private val json: Json by injectLazy()
     private val apiUrl = "$baseUrl/api/graphql"
 
     private var operationsMap: Map<String, String>? = null
@@ -52,9 +49,10 @@ class Ganma : HttpSource() {
         val mainPage = client.newCall(GET("$baseUrl/web", headers)).execute()
         val document = mainPage.asJsoup()
 
-        val mainScriptUrl = document.select("script[src*=/app/layout-]")
-            .attr("abs:src")
-            .ifEmpty { throw Exception("Could not find layout script") }
+        val mainScriptUrl = document.selectFirst("script[src*=/app/layout-]")
+            ?.attr("abs:src")
+            ?.ifEmpty { null }
+            ?: throw Exception("Could not find layout script")
 
         val scriptContent = client.newCall(GET(mainScriptUrl, headers)).execute().body.string()
 
@@ -75,17 +73,11 @@ class Ganma : HttpSource() {
         val hashes = operationsMap ?: fetchAndParseHashes()
         val hash = hashes[operationName] ?: throw Exception("Could not find hash for operation: $operationName")
 
-        val sessionCookie = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
-            .firstOrNull { it.name == "PLAY_SESSION" }
-
         val finalHeaders = headersBuilder().apply {
             if (useAppHeaders) {
                 set("User-Agent", "GanmaReader/9.9.1 Android")
             } else {
                 set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
-            }
-            if (sessionCookie != null) {
-                add("Cookie", sessionCookie.toString())
             }
         }.build()
 
@@ -106,7 +98,7 @@ class Ganma : HttpSource() {
                 }
             }
         }
-        val requestBody = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val requestBody = payload.toJsonString().toRequestBody("application/json; charset=utf-8".toMediaType())
         return POST(apiUrl, finalHeaders, requestBody)
     }
 
@@ -183,9 +175,10 @@ class Ganma : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val requestBody = response.request.body
-        val requestBodyString = Buffer().use { requestBody?.writeTo(it); it.readUtf8() }
-        val operationName = json.parseToJsonElement(requestBodyString).jsonObject["operationName"]?.jsonPrimitive?.content
+        val operationName = Buffer().use {
+            response.request.body?.writeTo(it)
+            it.readUtf8().parseAs<JsonObject>()["operationName"]?.jsonPrimitive?.content
+        }
 
         if (operationName == "magazinesByKeywordSearch") {
             val data = response.parseAs<GraphQLResponse<SearchDto>>().data
@@ -229,15 +222,12 @@ class Ganma : HttpSource() {
         thumbnail_url = updateImageUrlWidth(this@toSManga.todaysJacketImageURL ?: this@toSManga.rectangleWithLogoImageURL)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$baseUrl/web/magazine/${manga.url}", headers)
-
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+    override fun mangaDetailsRequest(manga: SManga): Request {
         val variables = mapOf("magazineIdOrAlias" to manga.url)
-        val apiRequest = graphQlRequest("magazineDetail", variables)
-        return client.newCall(apiRequest).asObservableSuccess().map { response ->
-            mangaDetailsParse(response)
-        }
+        return graphQlRequest("magazineDetail", variables)
     }
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl/web/magazine/${manga.url}"
 
     override fun mangaDetailsParse(response: Response): SManga {
         val magazine = response.parseAs<GraphQLResponse<MagazineDetailDto>>().data.magazine
