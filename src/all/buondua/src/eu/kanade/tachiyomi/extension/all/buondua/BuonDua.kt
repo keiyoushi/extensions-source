@@ -96,6 +96,7 @@ class BuonDua() : ParsedHttpSource() {
         // /xiuren-no-10051---10065-1127-photos-467c89d5b3e204eebe33ddbc54d905b1-47452?page=57
         val maxPage = doc.select("nav.pagination:first-of-type a.pagination-next").last()
             ?.absUrl("href")
+            ?.takeIf { it.startsWith("http") }
             ?.toHttpUrl()
             ?.queryParameter("page")?.toInt() ?: 1
         val basePageUrl = response.request.url
