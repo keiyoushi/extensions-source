@@ -8,8 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.toJsonString
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -141,7 +140,7 @@ class Yabai : HttpSource() {
         return POST(
             "$baseUrl/g",
             headers,
-            Json.encodeToString(queryBody).toRequestBody(),
+            queryBody.toJsonString().toRequestBody(),
         )
     }
 
@@ -169,7 +168,7 @@ class Yabai : HttpSource() {
         return POST(
             "$baseUrl/g",
             headers,
-            Json.encodeToString(queryBody).toRequestBody(),
+            queryBody.toJsonString().toRequestBody(),
         )
     }
 
