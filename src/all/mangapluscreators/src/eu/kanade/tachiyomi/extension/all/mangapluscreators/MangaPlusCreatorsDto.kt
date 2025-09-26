@@ -5,13 +5,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MpcResponse(
+class MpcResponse(
     val status: String,
     val titles: List<MpcTitle>? = null,
 )
 
 @Serializable
-data class MpcTitle(
+class MpcTitle(
     val title: String,
     val thumbnail: String,
     @SerialName("is_one_shot") val isOneShot: Boolean,
@@ -20,32 +20,32 @@ data class MpcTitle(
 )
 
 @Serializable
-data class MpcAuthorDto(
+class MpcAuthorDto(
     val name: String,
 )
 
 @Serializable
-data class MpcLatestEpisode(
+class MpcLatestEpisode(
     @SerialName("title_connect_id") val titleConnectId: String,
 )
 
 @Serializable
-data class MpcReaderDataPages(
+class MpcReaderDataPages(
     val pc: List<MpcReaderPage>,
 )
 
 @Serializable
-data class MpcReaderPage(
+class MpcReaderPage(
     @SerialName("page_no") val pageNo: Int,
     @SerialName("image_url") val imageUrl: String,
 )
 
 @Serializable
-data class MpcReaderDataTitle(
+class MpcReaderDataTitle(
     val title: String,
     val thumbnail: String,
     @SerialName("is_oneshot") val isOneShot: Boolean,
     @SerialName("contents_id") val contentsId: String,
 )
 
-data class ChaptersPage(val chapters: List<SChapter>, val hasNextPage: Boolean)
+class ChaptersPage(val chapters: List<SChapter>, val hasNextPage: Boolean)
