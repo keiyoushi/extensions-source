@@ -294,8 +294,8 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         val dataPages = readerElement.attr("data-pages")
         val refererUrl = response.request.url.toString()
         return dataPages.parseAs<MpcReaderDataPages>().pc.map {
-                (pageNo, imageUrl) ->
-            Page(pageNo, refererUrl, imageUrl)
+                page ->
+            Page(page.pageNo, refererUrl, page.imageUrl)
         }
     }
 
@@ -373,5 +373,5 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             get() = options[state].value
     }
 
-    private data class SelectFilterOption(val name: String, val value: String)
+    private class SelectFilterOption(val name: String, val value: String)
 }
