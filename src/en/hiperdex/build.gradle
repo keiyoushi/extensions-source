@@ -2,7 +2,7 @@ ext {
     extName = 'Hiperdex'
     extClass = '.Hiperdex'
     themePkg = 'madara'
-    baseUrl = 'https://hiperdex.tv'
+    baseUrl = 'https://hiperdex.com'
     overrideVersionCode = 20
     isNsfw = true
 }
