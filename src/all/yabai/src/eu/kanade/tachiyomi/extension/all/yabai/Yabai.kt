@@ -102,17 +102,7 @@ class Yabai : HttpSource() {
         return storedToken!!
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.parseAs<DataResponse<IndexProps>>()
-
-        val galleries = data.props.postList.data.map {
-            it.toSManga()
-        }
-
-        searchNextHash = data.props.postList.meta.nextCursor
-
-        return MangasPage(galleries, searchNextHash != null)
-    }
+    override fun getFilterList() = getFilters()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (page == 1) {
@@ -155,7 +145,17 @@ class Yabai : HttpSource() {
         )
     }
 
-    override fun getFilterList() = getFilters()
+    override fun searchMangaParse(response: Response): MangasPage {
+        val data = response.parseAs<DataResponse<IndexProps>>()
+
+        val galleries = data.props.postList.data.map {
+            it.toSManga()
+        }
+
+        searchNextHash = data.props.postList.meta.nextCursor
+
+        return MangasPage(galleries, searchNextHash != null)
+    }
 
     override fun popularMangaRequest(page: Int): Request {
         if (page == 1) {
