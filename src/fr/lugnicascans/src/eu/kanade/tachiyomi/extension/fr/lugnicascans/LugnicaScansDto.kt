@@ -25,6 +25,7 @@ class HomePageManga(
 class MangaDetailsChapter(
     val chapter: Float,
     val date: String,
+    val title: String? = null,
 )
 
 @Serializable

@@ -11,6 +11,7 @@ import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Entities
 import java.text.DecimalFormat
 
 class LugnicaScans : HttpSource() {
@@ -67,7 +68,7 @@ class LugnicaScans : HttpSource() {
                 "4" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
-            description = mangaDetails.description
+            description = mangaDetails.description.unescapeHtml()
 
             val genres = mangaDetails.theme + mangaDetails.genre
             if (genres.isNotEmpty()) {
@@ -90,12 +91,17 @@ class LugnicaScans : HttpSource() {
 
         return details.chapters.values.flatten().map { chapterDetail ->
             SChapter.create().apply {
+                name = "Chapitre "
+                name += DecimalFormat("0.#").format(chapterDetail.chapter)
+                if (!chapterDetail.title.isNullOrBlank()) {
+                    name += " - ${chapterDetail.title.unescapeHtml().trim()}"
+                }
+
                 url = "/api/get/chapter/$slug/${chapterDetail.chapter}"
-                name = "Chapitre " + DecimalFormat("0.#").format(chapterDetail.chapter)
                 date_upload = chapterDetail.date.trim('\r', '\n').toLong() * 1000
                 chapter_number = chapterDetail.chapter
             }
-        }
+        }.sortedByDescending { it.chapter_number }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -112,3 +118,5 @@ class LugnicaScans : HttpSource() {
     // Page
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
+
+fun String.unescapeHtml(): String = Entities.unescape(this)
