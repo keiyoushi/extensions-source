@@ -15,11 +15,13 @@ import keiyoushi.source.KeiSource
 import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParseDateTime
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.time.format.DateTimeFormatterBuilder
 import java.util.Locale
 
 @Source
@@ -138,6 +140,11 @@ abstract class Hentairead : KeiSource() {
         }
     }
 
+    private val dateFormat = DateTimeFormatterBuilder()
+        .parseCaseInsensitive()
+        .appendPattern("MMMM d, yyyy h:mm a")
+        .toFormatter(Locale.ENGLISH)
+
     override suspend fun fetchMangaUpdate(
         manga: SManga,
         chapters: List<SChapter>,
@@ -155,6 +162,9 @@ abstract class Hentairead : KeiSource() {
             url = chapUrl.ifEmpty { manga.url }
             if (details.description?.contains("Scanlators") == true) {
                 scanlator = details.description?.substringAfter("Scanlators: ")?.substringBefore("\n")
+            }
+            if (details.description?.contains("Uploaded") == true) {
+                date_upload = dateFormat.tryParseDateTime(details.description?.substringAfter("Uploaded: ")?.substringBefore("\n"))
             }
         }
 
@@ -214,6 +224,9 @@ abstract class Hentairead : KeiSource() {
                 document.selectFirst(".manga-titles h2")?.text()?.ifEmpty { null }?.let {
                     val titles = it.split("|").joinToString("\n") { "- ${it.trim()}" }
                     append("Alternative Titles: ", "\n", titles, "\n\n")
+                }
+                document.selectFirst(".text-primary:contains(uploaded:) + div")?.text()?.ifEmpty { null }?.let {
+                    append("Uploaded: ", it, "\n\n")
                 }
                 append(document.select(".items-center:contains(pages:)").text(), "\n")
             }
