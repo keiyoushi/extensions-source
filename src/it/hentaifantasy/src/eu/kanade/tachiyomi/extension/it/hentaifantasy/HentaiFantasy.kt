@@ -22,7 +22,7 @@ import java.util.regex.Pattern
 class HentaiFantasy : ParsedHttpSource() {
     override val name = "HentaiFantasy"
 
-    override val baseUrl = "https://www.hentaifantasy.it/index.php"
+    override val baseUrl = "https://hentaifantasy.it/index.php"
 
     override val lang = "it"
 
@@ -204,9 +204,9 @@ class HentaiFantasy : ParsedHttpSource() {
         TagList("Generi", getTagList()),
     )
 
-    // Tags: 47
+    // Tags: 46
     // $("select[name='tag[]']:eq(0) > option").map((i, el) => `Tag("${$(el).text().trim()}", ${$(el).attr("value")})`).get().sort().join(",\n")
-    // on https://www.hentaifantasy.it/search/
+    // on https://hentaifantasy.it/tag/ahegao/
     private fun getTagList() = listOf(
         Tag("Ahegao", 56),
         Tag("Anal", 28),
