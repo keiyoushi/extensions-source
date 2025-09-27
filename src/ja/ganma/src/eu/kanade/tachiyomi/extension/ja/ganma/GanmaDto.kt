@@ -7,6 +7,65 @@ import kotlinx.serialization.Serializable
 class GraphQLResponse<T>(val data: T)
 
 @Serializable
+class Payload<T>(
+    val operationName: String,
+    val variables: T,
+    val extensions: Extensions,
+) {
+    @Serializable
+    class Extensions(
+        val persistedQuery: PersistedQuery,
+    ) {
+        @Serializable
+        class PersistedQuery(
+            val version: Int,
+            val sha256Hash: String,
+        )
+    }
+}
+
+@Serializable
+object EmptyVariables
+
+@Serializable
+class SearchVariables(
+    val keyword: String,
+    val first: Int,
+    val after: String? = null,
+)
+
+@Serializable
+class DayOfWeekVariables(
+    val dayOfWeek: String,
+    val first: Int,
+    val after: String? = null,
+)
+
+@Serializable
+class FinishedVariables(
+    val first: Int,
+    val after: String? = null,
+)
+
+@Serializable
+class MagazineDetailVariables(
+    val magazineIdOrAlias: String,
+)
+
+@Serializable
+class StoryInfoListVariables(
+    val magazineIdOrAlias: String,
+    val first: Int,
+    val after: String? = null,
+)
+
+@Serializable
+class StoryReaderVariables(
+    val magazineIdOrAlias: String,
+    val storyId: String,
+)
+
+@Serializable
 class MangaItemDto(
     val alias: String,
     val title: String,

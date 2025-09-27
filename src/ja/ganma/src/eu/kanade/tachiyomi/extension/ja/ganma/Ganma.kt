@@ -11,13 +11,11 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
+import kotlinx.serialization.serializer
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -69,7 +67,7 @@ class Ganma : HttpSource() {
         }.also { operationsMap = it }
     }
 
-    private fun graphQlRequest(operationName: String, variables: Map<String, Any>, useAppHeaders: Boolean = true): Request {
+    private inline fun <reified T> graphQlRequest(operationName: String, variables: T, useAppHeaders: Boolean = true): Request {
         val hashes = operationsMap ?: fetchAndParseHashes()
         val hash = hashes[operationName] ?: throw Exception("Could not find hash for operation: $operationName")
 
@@ -81,24 +79,11 @@ class Ganma : HttpSource() {
             }
         }.build()
 
-        val payload = buildJsonObject {
-            put("operationName", operationName)
-            putJsonObject("variables") {
-                variables.forEach { (key, value) ->
-                    when (value) {
-                        is Int -> put(key, value)
-                        else -> put(key, value.toString())
-                    }
-                }
-            }
-            putJsonObject("extensions") {
-                putJsonObject("persistedQuery") {
-                    put("version", 1)
-                    put("sha256Hash", hash)
-                }
-            }
-        }
-        val requestBody = payload.toJsonString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val extensions = Payload.Extensions(Payload.Extensions.PersistedQuery(version = 1, sha256Hash = hash))
+        val payload = Payload(operationName, variables, extensions)
+        val payloadSerializer = Payload.serializer(serializer<T>())
+
+        val requestBody = jsonInstance.encodeToString(payloadSerializer, payload).toRequestBody("application/json; charset=utf-8".toMediaType())
         return POST(apiUrl, finalHeaders, requestBody)
     }
 
@@ -127,7 +112,7 @@ class Ganma : HttpSource() {
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        return graphQlRequest("home", emptyMap(), useAppHeaders = true)
+        return graphQlRequest("home", EmptyVariables, useAppHeaders = true)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -137,7 +122,7 @@ class Ganma : HttpSource() {
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return graphQlRequest("home", emptyMap(), useAppHeaders = true)
+        return graphQlRequest("home", EmptyVariables, useAppHeaders = true)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -151,8 +136,7 @@ class Ganma : HttpSource() {
             if (page == 1) {
                 lastSearchCursor = null
             }
-            val variables = mutableMapOf<String, Any>("keyword" to query, "first" to 20)
-            lastSearchCursor?.let { variables["after"] = it }
+            val variables = SearchVariables(keyword = query, first = 20, after = lastSearchCursor)
             return graphQlRequest("magazinesByKeywordSearch", variables, useAppHeaders = false)
         }
 
@@ -160,18 +144,18 @@ class Ganma : HttpSource() {
             lastFilterCursor = null
         }
         val category = filters.filterIsInstance<CategoryFilter>().first().selected
-        val variables = mutableMapOf<String, Any>("first" to 20)
-        lastFilterCursor?.let { variables["after"] = it }
 
-        val operationName = when (category.type) {
+        return when (category.type) {
             "day" -> {
-                variables["dayOfWeek"] = category.id
-                "serialMagazinesByDayOfWeek"
+                val variables = DayOfWeekVariables(dayOfWeek = category.id, first = 20, after = lastFilterCursor)
+                graphQlRequest("serialMagazinesByDayOfWeek", variables)
             }
-            "finished" -> "finishedMagazines"
-            else -> "home"
+            "finished" -> {
+                val variables = FinishedVariables(first = 20, after = lastFilterCursor)
+                graphQlRequest("finishedMagazines", variables)
+            }
+            else -> graphQlRequest("home", EmptyVariables)
         }
-        return graphQlRequest(operationName, variables, useAppHeaders = true)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -223,7 +207,7 @@ class Ganma : HttpSource() {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val variables = mapOf("magazineIdOrAlias" to manga.url)
+        val variables = MagazineDetailVariables(magazineIdOrAlias = manga.url)
         return graphQlRequest("magazineDetail", variables)
     }
 
@@ -266,9 +250,7 @@ class Ganma : HttpSource() {
             var cursor: String? = null
 
             while (hasNextPage) {
-                val variables = mutableMapOf<String, Any>("magazineIdOrAlias" to manga.url, "first" to 100)
-                cursor?.let { variables["after"] = it }
-
+                val variables = StoryInfoListVariables(magazineIdOrAlias = manga.url, first = 100, after = cursor)
                 val response = client.newCall(graphQlRequest("storyInfoList", variables, useAppHeaders = false)).execute()
                 val data = response.parseAs<GraphQLResponse<ChapterListDto>>().data.magazine.storyInfos
 
@@ -298,7 +280,7 @@ class Ganma : HttpSource() {
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val (alias, storyId) = chapter.url.split("/")
         val isWebSeries = alias in cacheWebOnlyAliases
-        val variables = mapOf("magazineIdOrAlias" to alias, "storyId" to storyId)
+        val variables = StoryReaderVariables(magazineIdOrAlias = alias, storyId = storyId)
         val apiRequest = graphQlRequest("magazineStoryForReader", variables, useAppHeaders = !isWebSeries)
 
         return client.newCall(apiRequest).asObservableSuccess().map { response ->
