@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.hentainexus
 
+import android.os.Build
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -11,16 +12,21 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class HentaiNexus : ParsedHttpSource() {
 
@@ -126,16 +132,30 @@ class HentaiNexus : ParsedHttpSource() {
         thumbnail_url = document.selectFirst("figure.image img")?.attr("src")
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val id = manga.url.split("/").last()
+    private val dateFormat by lazy {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            SimpleDateFormat("dd MMMM yyyy", Locale.getDefault())
+        } else {
+            SimpleDateFormat("dd MMMM yyyy", Locale.getDefault())
+        }
+    }
 
-        return Observable.just(
-            listOf(
-                SChapter.create().apply {
-                    url = "/read/$id"
-                    name = "Chapter"
-                },
-            ),
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val table = document.selectFirst(".view-page-details")!!
+        val date_upload_str = table.select("td.viewcolumn:contains(Published) + td").joinToString { it.ownText() }
+
+        val id = response.request.url.toString().split("/").last()
+        return listOf(
+            SChapter.create().apply {
+                url = "/read/$id"
+                name = "Chapter"
+                date_upload = try {
+                    dateFormat.parse(date_upload_str)!!.time
+                } catch (e: ParseException) {
+                    0L
+                }
+            },
         )
     }
 
