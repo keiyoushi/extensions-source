@@ -1,7 +1,7 @@
 ext {
     extName = 'Poseidon Scans'
     extClass = '.PoseidonScans'
-    extVersionCode = 46
+    extVersionCode = 47
     isNsfw = false
 }
 
