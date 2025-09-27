@@ -19,6 +19,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import java.net.URLDecoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -506,7 +507,7 @@ class PoseidonScans : HttpSource() {
                     ?.attr("srcset")
                     ?.substringBefore(" ")
                     ?.let {
-                        java.net.URLDecoder.decode(it, "UTF-8")
+                        URLDecoder.decode(it, "UTF-8")
                             .substringAfter("url=")
                             .substringBefore("&")
                     }
