@@ -1,68 +1,51 @@
 package eu.kanade.tachiyomi.extension.all.mangapluscreators
 
 import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MpcResponse(
-    @SerialName("mpcEpisodesDto") val episodes: MpcEpisodesDto? = null,
-    @SerialName("mpcTitlesDto") val titles: MpcTitlesDto? = null,
-    val pageList: List<MpcPage>? = emptyList(),
+class MpcResponse(
+    val status: String,
+    val titles: List<MpcTitle>? = null,
 )
 
 @Serializable
-data class MpcEpisodesDto(
-    val pagination: MpcPagination? = null,
-    val episodeList: List<MpcEpisode>? = emptyList(),
-)
-
-@Serializable
-data class MpcTitlesDto(
-    val pagination: MpcPagination? = null,
-    val titleList: List<MpcTitle>? = emptyList(),
-)
-
-@Serializable
-data class MpcPagination(
-    val page: Int,
-    val maxPage: Int,
-) {
-
-    val hasNextPage: Boolean
-        get() = page < maxPage
-}
-
-@Serializable
-data class MpcTitle(
-    @SerialName("titleId") val id: String,
+class MpcTitle(
     val title: String,
-    val thumbnailUrl: String,
-) {
-
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@MpcTitle.title
-        thumbnail_url = thumbnailUrl
-        url = "/titles/$id"
-    }
-}
+    val thumbnail: String,
+    @SerialName("is_one_shot") val isOneShot: Boolean,
+    val author: MpcAuthorDto,
+    @SerialName("latest_episode") val latestEpisode: MpcLatestEpisode,
+)
 
 @Serializable
-data class MpcEpisode(
-    @SerialName("episodeId") val id: String,
-    @SerialName("episodeTitle") val title: String,
-    val numbering: Int,
-    val oneshot: Boolean = false,
-    val publishDate: Long,
-) {
-
-    fun toSChapter(): SChapter = SChapter.create().apply {
-        name = if (oneshot) "One-shot" else title
-        date_upload = publishDate
-        url = "/episodes/$id"
-    }
-}
+class MpcAuthorDto(
+    val name: String,
+)
 
 @Serializable
-data class MpcPage(val publicBgImage: String)
+class MpcLatestEpisode(
+    @SerialName("title_connect_id") val titleConnectId: String,
+)
+
+@Serializable
+class MpcReaderDataPages(
+    val pc: List<MpcReaderPage>,
+)
+
+@Serializable
+class MpcReaderPage(
+    @SerialName("page_no") val pageNo: Int,
+    @SerialName("image_url") val imageUrl: String,
+)
+
+@Serializable
+class MpcReaderDataTitle(
+    val title: String,
+    val thumbnail: String,
+    @SerialName("is_oneshot") val isOneShot: Boolean,
+    @SerialName("contents_id") val contentsId: String,
+)
+
+class ChaptersPage(val chapters: List<SChapter>, val hasNextPage: Boolean)
