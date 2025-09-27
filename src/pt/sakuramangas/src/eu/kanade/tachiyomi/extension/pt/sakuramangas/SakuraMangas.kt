@@ -2,10 +2,16 @@ package eu.kanade.tachiyomi.extension.pt.sakuramangas
 
 import android.util.Base64
 import android.util.Log
+import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,7 +20,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -22,13 +30,15 @@ import okhttp3.Response
 import okio.IOException
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import uy.kohesive.injekt.injectLazy
 import java.security.MessageDigest
 import java.util.Calendar
 import kotlin.concurrent.thread
+// import java.security.MessageDigest
+// import java.util.Base64
+// import java.nio.ByteBuffer
 
-class SakuraMangas : HttpSource() {
+class SakuraMangas : HttpSource(), ConfigurableSource {
     override val lang = "pt-BR"
 
     override val supportsLatest = true
@@ -37,7 +47,15 @@ class SakuraMangas : HttpSource() {
 
     override val baseUrl = "https://sakuramangas.org"
 
+    private val preferences = getPreferences()
+
+    private val json: Json by injectLazy()
+
     override val client = network.cloudflareClient.newBuilder()
+        .setRandomUserAgent(
+            preferences.getPrefUAType(),
+            preferences.getPrefCustomUA(),
+        )
         .rateLimit(3, 2)
         .build()
 
@@ -55,6 +73,12 @@ class SakuraMangas : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("X-Requested-With", "XMLHttpRequest")
+        .set("Connection", "keep-alive")
+        .apply {
+            if (!preferences.getPrefCustomUA().isNullOrEmpty()) {
+                set("User-Agent", preferences.getPrefCustomUA()!!)
+            }
+        }
 
     // ================================ Popular =======================================
 
@@ -176,10 +200,10 @@ class SakuraMangas : HttpSource() {
     private val keys: Keys by lazy {
         val mangaInfoRegex = """(?:manga_info:\s+)(\d+)""".toRegex()
         val chapterReadRegex = """(?:chapter_read:\s+)(\d+)""".toRegex()
-        val key1Regex = """(?:key1:\s+')([^']+)""".toRegex()
-        val key2Regex = """(?:key2:\s+')([^']+)""".toRegex()
+        val key1Regex = """(?:.Key-1.]\s?=\s+?.)([^']+)""".toRegex()
+        val key2Regex = """(?:.Key-2.]\s?=\s+?.)([^']+)""".toRegex()
 
-        val script = client.newCall(GET("$baseUrl/dist/sakura/global/security.obf.js", headers))
+        val script = client.newCall(GET("$baseUrl/dist/sakura/global/security.oby.js", headers))
             .execute().body.string()
 
         val deobfuscated = Deobfuscator.deobfuscateScript(script)!!
@@ -282,7 +306,7 @@ class SakuraMangas : HttpSource() {
             .build()
 
         return POST(
-            "$baseUrl/dist/sakura/models/capitulo/__obf.__capltulos_read.php",
+            "$baseUrl/dist/sakura/models/capitulo/__obf__capitulos_read.php",
             pageHeaders,
             form.build(),
         )
@@ -302,7 +326,7 @@ class SakuraMangas : HttpSource() {
 
         val baseUrl = document.baseUri().trimEnd('/')
 
-        return vortexDecipherV2(response.imageUrls, subtoken)
+        return AetherCipher.decrypt(response.imageUrls, subtoken)
             .parseAs<List<String>>()
             .mapIndexed { index, url ->
                 Page(index, imageUrl = "$baseUrl/$url".toHttpUrl().toString())
@@ -431,48 +455,7 @@ class SakuraMangas : HttpSource() {
         }
     }
 
-    // Function extracted from https://sakuramangas.org/dist/sakura/pages/capitulo/capitulo.v100w.obs.js
-    private fun vortexDecipherV2(dataBase64: String, key: String): String {
-        try {
-            val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray(Charsets.UTF_8))
-            val buffer = ByteBuffer.wrap(digest).order(ByteOrder.LITTLE_ENDIAN)
-
-            var v1 = buffer.int.toUInt()
-            var v2 = buffer.int.toUInt()
-            var v3 = buffer.int.toUInt()
-            var v4 = buffer.int.toUInt()
-            val c1 = buffer.int.toUInt()
-            val c2 = buffer.int.toUInt()
-
-            val decoded = Base64.decode(dataBase64, Base64.DEFAULT)
-
-            val output = ByteArray(decoded.size)
-
-            for (i in decoded.indices) {
-                if (i % 2 == 0) {
-                    v1 = (v1 + 2654435769u)
-                    v2 = (v2 xor c1)
-                    v3 = (v3 + v2)
-                    val shift = (v1 and 31u).toInt()
-                    v4 = (((v4 xor v3).rotateLeft(shift)))
-                } else {
-                    v3 = (v3 + 1640531527u)
-                    v4 = (v4 xor c2)
-                    v1 = (v1 + v4)
-                    val shift = (v3 and 31u).toInt()
-                    v2 = (((v2 xor v1).rotateLeft(shift)))
-                }
-                val mask = (v1 xor v2 xor v3 xor v4).toInt() and 0xFF
-                output[i] = (decoded[i].toInt() xor mask).toByte()
-            }
-
-            return output.toString(Charsets.UTF_8)
-        } catch (e: Exception) {
-            throw IOException("Não foi possível descriptografar os dados do capítulo.", e)
-        }
-    }
-
-    private fun UInt.rotateLeft(bits: Int): UInt {
-        return (this shl bits) or (this shr (32 - bits))
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
     }
 }
