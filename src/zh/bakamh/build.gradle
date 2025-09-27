@@ -3,7 +3,7 @@ ext {
     extClass = '.Bakamh'
     themePkg = 'madara'
     baseUrl = 'https://bakamh.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 
