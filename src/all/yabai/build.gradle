@@ -1,0 +1,8 @@
+ext {
+    extName = 'Yabai'
+    extClass = '.Yabai'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
