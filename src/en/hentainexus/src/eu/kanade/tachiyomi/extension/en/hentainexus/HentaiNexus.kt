@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.hentainexus
 
-import android.os.Build
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
@@ -13,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -24,7 +24,6 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -133,28 +132,20 @@ class HentaiNexus : ParsedHttpSource() {
     }
 
     private val dateFormat by lazy {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            SimpleDateFormat("dd MMMM yyyy", Locale.getDefault())
-        } else {
-            SimpleDateFormat("dd MMMM yyyy", Locale.getDefault())
-        }
+        SimpleDateFormat("dd MMMM yyyy", Locale.US)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val table = document.selectFirst(".view-page-details")!!
-        val date_upload_str = table.select("td.viewcolumn:contains(Published) + td").joinToString { it.ownText() }
+        val date_upload_str = table.selectFirst("td.viewcolumn:contains(Published) + td")!!.text()
 
         val id = response.request.url.toString().split("/").last()
         return listOf(
             SChapter.create().apply {
                 url = "/read/$id"
                 name = "Chapter"
-                date_upload = try {
-                    dateFormat.parse(date_upload_str)!!.time
-                } catch (e: ParseException) {
-                    0L
-                }
+                date_upload = dateFormat.tryParse(date_upload_str)
             },
         )
     }
