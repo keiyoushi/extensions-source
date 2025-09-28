@@ -280,7 +280,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
             chapter_number = if (chapterNumberElement == "One-shot") {
                 0F
             } else {
-                chapterNumber ?: 1F
+                chapterNumber ?: -1F
             }
         }
     }
