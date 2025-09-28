@@ -3,7 +3,7 @@ ext {
     extClass = '.RezoScans'
     themePkg = 'keyoapp'
     baseUrl = 'https://rezoscan.org'
-    overrideVersionCode = 3
+    overrideVersionCode = 4
     isNsfw = false
 }
 
