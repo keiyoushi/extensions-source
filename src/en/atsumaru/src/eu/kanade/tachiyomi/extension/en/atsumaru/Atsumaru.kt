@@ -97,14 +97,27 @@ class Atsumaru : HttpSource() {
 
     // ============================== Chapters ==============================
 
+    private fun fetchChaptersRequest(mangaId: String, page: Int): Request {
+        return GET("$baseUrl/api/manga/chapters?id=$mangaId&filter=all&sort=desc&page=$page", apiHeaders)
+    }
+
     override fun chapterListRequest(manga: SManga): Request {
-        return mangaDetailsRequest(manga)
+        return fetchChaptersRequest(manga.url, 0)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        return response.parseAs<MangaObjectDto>().mangaPage.chapters!!.map {
-            it.toSChapter(response.request.url.pathSegments.last())
+        val mangaId = response.request.url.queryParameter("id")!!
+        val chapterList = mutableListOf<ChapterDto>()
+
+        var result = response.parseAs<ChapterListDto>()
+        chapterList.addAll(result.chapters)
+
+        while (result.hasNextPage()) {
+            result = client.newCall(fetchChaptersRequest(mangaId, result.page + 1)).execute().parseAs()
+            chapterList.addAll(result.chapters)
         }
+
+        return chapterList.map { it.toSChapter(mangaId) }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
