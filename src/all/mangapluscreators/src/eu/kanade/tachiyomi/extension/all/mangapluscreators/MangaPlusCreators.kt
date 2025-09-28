@@ -60,7 +60,7 @@ class MangaPlusCreators(override val lang: String) : HttpSource() {
         val titleThumbnailUrl = element.selectFirst(".image-area img")!!.attr("src")
         val titleContentId = titleThumbnailUrl.toHttpUrl().pathSegments[2]
         return SManga.create().apply {
-            title = element.selectFirst(".title-area .title")!!.text().toString()
+            title = element.selectFirst(".title-area .title")!!.text()
             thumbnail_url = titleThumbnailUrl
             setUrlWithoutDomain("/titles/$titleContentId")
         }
