@@ -76,6 +76,8 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     private val password by lazy { preferences.getString(PREF_PASSWORD, "")!! }
 
+    private val apiKey by lazy { preferences.getString(PREF_API_KEY, "")!! }
+
     private val defaultLibraries
         get() = preferences.getStringSet(PREF_DEFAULT_LIBRARIES, emptySet())!!
 
@@ -83,12 +85,17 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun headersBuilder() = super.headersBuilder()
         .set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
+        .also { builder ->
+            if (apiKey.isNotBlank()) {
+                builder.set("X-API-Key", apiKey)
+            }
+        }
 
     override val client: OkHttpClient =
         network.cloudflareClient.newBuilder()
             .authenticator { _, response ->
-                if (response.request.header("Authorization") != null) {
-                    null // Give up, we've already failed to authenticate.
+                if (apiKey.isNotBlank() || response.request.header("Authorization") != null) {
+                    null // Give up if API key is set or we've already failed to authenticate.
                 } else {
                     response.request.newBuilder()
                         .addHeader("Authorization", Credentials.basic(username, password))
@@ -377,21 +384,33 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             key = PREF_ADDRESS,
             restartRequired = true,
         )
+        // API key preference (takes precedence over username/password)
         screen.addEditTextPreference(
-            title = "Username",
+            title = "API key",
             default = "",
-            summary = username.ifBlank { "The user account email" },
-            key = PREF_USERNAME,
-            restartRequired = true,
-        )
-        screen.addEditTextPreference(
-            title = "Password",
-            default = "",
-            summary = if (password.isBlank()) "The user account password" else "*".repeat(password.length),
+            summary = if (apiKey.isBlank()) "Optional: Use an API key for authentication" else "*".repeat(apiKey.length),
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
-            key = PREF_PASSWORD,
+            key = PREF_API_KEY,
             restartRequired = true,
         )
+        // Only show username/password if API key is not set
+        if (apiKey.isBlank()) {
+            screen.addEditTextPreference(
+                title = "Username",
+                default = "",
+                summary = username.ifBlank { "The user account email" },
+                key = PREF_USERNAME,
+                restartRequired = true,
+            )
+            screen.addEditTextPreference(
+                title = "Password",
+                default = "",
+                summary = if (password.isBlank()) "The user account password" else "*".repeat(password.length),
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
+                key = PREF_PASSWORD,
+                restartRequired = true,
+            )
+        }
 
         MultiSelectListPreference(screen.context).apply {
             key = PREF_DEFAULT_LIBRARIES
@@ -529,6 +548,7 @@ private const val PREF_DISPLAY_NAME = "Source display name"
 private const val PREF_ADDRESS = "Address"
 private const val PREF_USERNAME = "Username"
 private const val PREF_PASSWORD = "Password"
+private const val PREF_API_KEY = "API key"
 private const val PREF_DEFAULT_LIBRARIES = "Default libraries"
 private const val PREF_CHAPTER_NAME_TEMPLATE = "Chapter name template"
 private const val PREF_CHAPTER_NAME_TEMPLATE_DEFAULT = "{number} - {title} ({size})"
