@@ -35,8 +35,7 @@ object AetherCipher {
                 decryptedBytes[i] = reversedXORBytes[i] xor keystream[i]
             }
             String(decryptedBytes, Charsets.UTF_8)
-        } catch (e: Exception) {
-            System.err.println("Aether Decipher failed: $e")
+        } catch (_: Exception) {
             throw Error("Could not decrypt chapter data.")
         }
     }

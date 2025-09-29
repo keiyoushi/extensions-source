@@ -22,7 +22,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -30,13 +29,9 @@ import okhttp3.Response
 import okio.IOException
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.injectLazy
 import java.security.MessageDigest
 import java.util.Calendar
 import kotlin.concurrent.thread
-// import java.security.MessageDigest
-// import java.util.Base64
-// import java.nio.ByteBuffer
 
 class SakuraMangas : HttpSource(), ConfigurableSource {
     override val lang = "pt-BR"
@@ -48,8 +43,6 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
     override val baseUrl = "https://sakuramangas.org"
 
     private val preferences = getPreferences()
-
-    private val json: Json by injectLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .setRandomUserAgent(
@@ -74,6 +67,7 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
         .set("Referer", "$baseUrl/")
         .set("X-Requested-With", "XMLHttpRequest")
         .set("Connection", "keep-alive")
+        .set("Cache-Control", "no-cache")
         .apply {
             if (!preferences.getPrefCustomUA().isNullOrEmpty()) {
                 set("User-Agent", preferences.getPrefCustomUA()!!)
