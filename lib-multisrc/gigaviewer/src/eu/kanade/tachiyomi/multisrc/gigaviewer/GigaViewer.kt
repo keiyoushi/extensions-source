@@ -275,9 +275,9 @@ abstract class GigaViewer(
             .filter { it.type == "main" }
             .mapIndexed { i, page ->
                 val imageUrl = page.src.toHttpUrl().newBuilder().apply {
+                    addQueryParameter("width", page.width.toString())
+                    addQueryParameter("height", page.height.toString())
                     if (isScrambled) {
-                        addQueryParameter("width", page.width.toString())
-                        addQueryParameter("height", page.height.toString())
                         addQueryParameter("baku", "true")
                     }
                 }.toString()
