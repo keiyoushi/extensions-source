@@ -1,20 +1,20 @@
 package eu.kanade.tachiyomi.extension.ja.ichicomi
 
+import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewerPage
 import kotlinx.serialization.Serializable
 
 @Serializable
-class LatestUpdateDto(
-    val episode: LatestUpdateEpisodeDto,
+class PageListDto(
+    val readableProduct: ReadableProductDto,
 )
 
 @Serializable
-class LatestUpdateEpisodeDto(
-    val permalink: String,
-    val series: LatestUpdateSeriesDto,
+class ReadableProductDto(
+    val pageStructure: PageStructureDto,
 )
 
 @Serializable
-class LatestUpdateSeriesDto(
-    val title: String,
-    val subThumbnailUriTemplate: String,
+class PageStructureDto(
+    val pages: List<GigaViewerPage>,
+    val choJuGiga: String? = null,
 )

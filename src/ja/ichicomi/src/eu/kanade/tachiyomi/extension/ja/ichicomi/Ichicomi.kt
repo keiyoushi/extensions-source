@@ -4,14 +4,16 @@ import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.SerializationException
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class Ichicomi : GigaViewer(
@@ -21,7 +23,13 @@ class Ichicomi : GigaViewer(
     "https://cdn-img.ichicomi.com",
     isPaginated = true,
 ) {
+    override val supportsLatest = false
+
     override val publisher: String = "一迅社"
+
+    override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(::imageIntercept)
+        .build()
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series", headers)
 
@@ -32,39 +40,6 @@ class Ichicomi : GigaViewer(
         setUrlWithoutDomain(link.attr("href"))
         title = link.selectFirst("h4[class^=Series_title__]")!!.text()
         thumbnail_url = link.selectFirst("img[class^=Series_thumbnail__]")?.attr("src")
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        val newHeaders = headers.newBuilder()
-            .add("rsc", "1")
-            .build()
-        return GET(baseUrl, newHeaders)
-    }
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val seriesListLine = response.body.string().lines().find { it.contains("\"seriesList\":[") }
-            ?: return MangasPage(emptyList(), false)
-
-        val jsonArrayString = seriesListLine.substringAfter(":")
-        val lineJsonArray = jsonArrayString.parseAs<JsonElement>().jsonArray
-
-        val seriesListObject = lineJsonArray.getOrNull(3)?.jsonObject
-            ?.get("children")?.jsonArray
-            ?.getOrNull(4)?.jsonArray
-            ?.getOrNull(3)?.jsonObject
-
-        val seriesListJson = seriesListObject?.get("seriesList")?.toString()
-            ?: return MangasPage(emptyList(), false)
-
-        val result = seriesListJson.parseAs<List<LatestUpdateDto>>()
-        val manga = result.map { item ->
-            SManga.create().apply {
-                title = item.episode.series.title
-                thumbnail_url = item.episode.series.subThumbnailUriTemplate.replace("{height}", "2400").replace("{width}", "1680")
-                url = item.episode.permalink.substringAfter(baseUrl)
-            }
-        }
-        return MangasPage(manga, hasNextPage = false)
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -89,6 +64,41 @@ class Ichicomi : GigaViewer(
         setUrlWithoutDomain(link.attr("href"))
         title = element.selectFirst("p[class^=SearchResultItem_series_title__]")!!.text()
         thumbnail_url = link.selectFirst("img")?.attr("src")
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        val episodeJson = document.selectFirst("script#episode-json")?.attr("data-value")
+            ?: return emptyList()
+
+        val episode = try {
+            episodeJson.parseAs<PageListDto>()
+        } catch (e: SerializationException) {
+            throw Exception("このチャプターは非公開です\nChapter is not available!")
+        }
+        val isScrambled = episode.readableProduct.pageStructure.choJuGiga == "baku"
+
+        return episode.readableProduct.pageStructure.pages
+            .filter { it.type == "main" }
+            .mapIndexed { i, page ->
+                val imageUrl = page.src.toHttpUrl().newBuilder().apply {
+                    if (isScrambled) {
+                        addQueryParameter("width", page.width.toString())
+                        addQueryParameter("height", page.height.toString())
+                        addQueryParameter("descramble", "true")
+                    }
+                }.toString()
+                Page(i, document.location(), imageUrl)
+            }
+    }
+
+    override fun imageIntercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val isScrambled = request.url.queryParameter("descramble") == "true"
+
+        if (!isScrambled) {
+            return chain.proceed(request)
+        }
+        return super.imageIntercept(chain)
     }
 
     private class CollectionFilter(filters: List<Pair<String, String>>) :
