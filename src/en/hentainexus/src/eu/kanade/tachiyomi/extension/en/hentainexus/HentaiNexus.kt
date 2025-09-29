@@ -138,7 +138,7 @@ class HentaiNexus : ParsedHttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val table = document.selectFirst(".view-page-details")!!
-        val date_upload_str = table.selectFirst("td.viewcolumn:contains(Published) + td")!!.text()
+        val date_upload_str = table.selectFirst("td.viewcolumn:contains(Published) + td")?.text()
 
         val id = response.request.url.toString().split("/").last()
         return listOf(
