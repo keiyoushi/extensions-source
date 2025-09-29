@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -20,6 +19,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import java.net.URLDecoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -481,63 +481,51 @@ class PoseidonScans : HttpSource() {
         return GET(page.imageUrl!!, imageHeaders)
     }
 
-    /**
-     * Tachiyomi's `page` parameter is not directly used as /series does not paginate via URL params.
-     * We fetch all series and filter client-side based on the query.
-     * The query is passed as `app_query` URL parameter for retrieval in `searchMangaParse`.
-     */
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("series")
             if (query.isNotBlank()) {
-                fragment(query)
+                addQueryParameter("search", query)
+            }
+            if (page > 1) {
+                addQueryParameter("page", page.toString())
             }
         }.build()
 
         return GET(url, headers)
     }
+
     override fun searchMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val requestUrl = response.request.url
-        val searchQuery = requestUrl.fragment?.takeIf { it.isNotBlank() } ?: ""
 
-        val pageDataJson = extractNextJsPageData(document)
-            ?: return MangasPage(emptyList(), false)
-
-        val mangaListJsonArray = pageDataJson["mangas"]?.jsonArray
-            ?: pageDataJson["series"]?.jsonArray
-            ?: pageDataJson["initialData"]?.jsonObject?.get("mangas")?.jsonArray
-            ?: pageDataJson["initialData"]?.jsonObject?.get("series")?.jsonArray
-            ?: return MangasPage(emptyList(), false)
-
-        val allMangas = mangaListJsonArray.mapNotNull { mangaElement ->
+        val mangas = document.select("div.grid a.block.group").mapNotNull { element ->
             try {
-                val mangaObject = mangaElement.jsonObject
-                val title = mangaObject["title"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                val slug = mangaObject["slug"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                val cover = mangaObject["coverImage"]?.jsonPrimitive?.content
+                val url = element.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val title = element.selectFirst("h2")?.text()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+
+                val thumbnailUrlPath = element.selectFirst("img[alt]")
+                    ?.attr("srcset")
+                    ?.substringBefore(" ")
+                    ?.let {
+                        URLDecoder.decode(it, "UTF-8")
+                            .substringAfter("url=")
+                            .substringBefore("&")
+                    }
 
                 SManga.create().apply {
+                    this.setUrlWithoutDomain(url)
                     this.title = title
-                    setUrlWithoutDomain("/serie/$slug")
-                    this.thumbnail_url = cover?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
+                    this.thumbnail_url = thumbnailUrlPath?.takeIf { it.isNotBlank() }?.toApiCoverUrl()
                 }
             } catch (e: Exception) {
+                Log.e("PoseidonScans", "Error parsing manga from HTML element", e)
                 null
             }
         }
 
-        val filteredMangas = if (searchQuery.isNotBlank()) {
-            allMangas.filter { manga ->
-                manga.title.contains(searchQuery, ignoreCase = true)
-            }
-        } else {
-            allMangas
-        }
+        val hasNextPage = document.select("nav[aria-label=Pagination] a:contains(Suivant)").isNotEmpty()
 
-        // /series loads all items at once (client-side 'load more'), so no next page from this specific request.
-        val hasNextPage = false
-        return MangasPage(filteredMangas, hasNextPage)
+        return MangasPage(mangas, hasNextPage)
     }
 
     override fun imageUrlParse(response: Response): String { throw UnsupportedOperationException("Not used.") }
