@@ -4,16 +4,9 @@ import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.SerializationException
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class Ichicomi : GigaViewer(
@@ -64,41 +57,6 @@ class Ichicomi : GigaViewer(
         setUrlWithoutDomain(link.attr("href"))
         title = element.selectFirst("p[class^=SearchResultItem_series_title__]")!!.text()
         thumbnail_url = link.selectFirst("img")?.attr("src")
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
-        val episodeJson = document.selectFirst("script#episode-json")?.attr("data-value")
-            ?: return emptyList()
-
-        val episode = try {
-            episodeJson.parseAs<PageListDto>()
-        } catch (e: SerializationException) {
-            throw Exception("このチャプターは非公開です\nChapter is not available!")
-        }
-        val isScrambled = episode.readableProduct.pageStructure.choJuGiga == "baku"
-
-        return episode.readableProduct.pageStructure.pages
-            .filter { it.type == "main" }
-            .mapIndexed { i, page ->
-                val imageUrl = page.src.toHttpUrl().newBuilder().apply {
-                    if (isScrambled) {
-                        addQueryParameter("width", page.width.toString())
-                        addQueryParameter("height", page.height.toString())
-                        addQueryParameter("descramble", "true")
-                    }
-                }.toString()
-                Page(i, document.location(), imageUrl)
-            }
-    }
-
-    override fun imageIntercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val isScrambled = request.url.queryParameter("descramble") == "true"
-
-        if (!isScrambled) {
-            return chain.proceed(request)
-        }
-        return super.imageIntercept(chain)
     }
 
     private class CollectionFilter(filters: List<Pair<String, String>>) :

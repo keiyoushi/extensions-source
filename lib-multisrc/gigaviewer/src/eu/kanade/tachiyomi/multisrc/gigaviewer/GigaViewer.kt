@@ -269,13 +269,18 @@ abstract class GigaViewer(
                 }
             }
 
+        val isScrambled = episode.readableProduct.pageStructure.choJuGiga == "baku"
+
         return episode.readableProduct.pageStructure.pages
             .filter { it.type == "main" }
             .mapIndexed { i, page ->
-                val imageUrl = page.src.toHttpUrl().newBuilder()
-                    .addQueryParameter("width", page.width.toString())
-                    .addQueryParameter("height", page.height.toString())
-                    .toString()
+                val imageUrl = page.src.toHttpUrl().newBuilder().apply {
+                    if (isScrambled) {
+                        addQueryParameter("width", page.width.toString())
+                        addQueryParameter("height", page.height.toString())
+                        addQueryParameter("baku", "true")
+                    }
+                }.toString()
                 Page(i, document.location(), imageUrl)
             }
     }
@@ -313,12 +318,17 @@ abstract class GigaViewer(
             return chain.proceed(request)
         }
 
+        if (request.url.queryParameter("baku") != "true") {
+            return chain.proceed(request)
+        }
+
         val width = request.url.queryParameter("width")!!.toInt()
         val height = request.url.queryParameter("height")!!.toInt()
 
         val newUrl = request.url.newBuilder()
             .removeAllQueryParameters("width")
             .removeAllQueryParameters("height")
+            .removeAllQueryParameters("baku")
             .build()
         request = request.newBuilder().url(newUrl).build()
 
