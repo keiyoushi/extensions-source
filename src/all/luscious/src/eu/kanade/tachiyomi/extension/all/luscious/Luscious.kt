@@ -845,7 +845,7 @@ abstract class Luscious(
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
         private val MIRROR_PREF_ENTRIES = arrayOf("Guest", "API", "Members")
-        private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://www.luscious.net", "https://api.luscious.net", "https://members.luscious.net")
+        private val MIRROR_PREF_ENTRY_VALUES = arrayOf("https://www.luscious.net", "https://apicdn.luscious.net", "https://members.luscious.net")
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
     }
 
