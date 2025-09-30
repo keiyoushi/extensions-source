@@ -314,11 +314,7 @@ abstract class GigaViewer(
     protected open fun imageIntercept(chain: Interceptor.Chain): Response {
         var request = chain.request()
 
-        if (!request.url.toString().startsWith(cdnUrl)) {
-            return chain.proceed(request)
-        }
-
-        if (request.url.queryParameter("baku") != "true") {
+        if (!request.url.toString().startsWith(cdnUrl) || request.url.queryParameter("baku") != "true") {
             return chain.proceed(request)
         }
 
