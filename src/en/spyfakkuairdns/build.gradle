@@ -1,0 +1,8 @@
+ext {
+    extName = 'SpyFakku (AirDNS)'
+    extClass = '.SpyFakkuAirDNS'
+    extVersionCode = 11
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
