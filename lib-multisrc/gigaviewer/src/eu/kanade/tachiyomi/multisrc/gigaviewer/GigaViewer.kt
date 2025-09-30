@@ -269,18 +269,13 @@ abstract class GigaViewer(
                 }
             }
 
-        val isScrambled = episode.readableProduct.pageStructure.choJuGiga == "baku"
-
         return episode.readableProduct.pageStructure.pages
             .filter { it.type == "main" }
             .mapIndexed { i, page ->
-                val imageUrl = page.src.toHttpUrl().newBuilder().apply {
-                    addQueryParameter("width", page.width.toString())
-                    addQueryParameter("height", page.height.toString())
-                    if (isScrambled) {
-                        addQueryParameter("baku", "true")
-                    }
-                }.toString()
+                val imageUrl = page.src.toHttpUrl().newBuilder()
+                    .addQueryParameter("width", page.width.toString())
+                    .addQueryParameter("height", page.height.toString())
+                    .toString()
                 Page(i, document.location(), imageUrl)
             }
     }
@@ -314,7 +309,7 @@ abstract class GigaViewer(
     protected open fun imageIntercept(chain: Interceptor.Chain): Response {
         var request = chain.request()
 
-        if (!request.url.toString().startsWith(cdnUrl) || request.url.queryParameter("baku") != "true") {
+        if (!request.url.toString().startsWith(cdnUrl)) {
             return chain.proceed(request)
         }
 
@@ -324,7 +319,6 @@ abstract class GigaViewer(
         val newUrl = request.url.newBuilder()
             .removeAllQueryParameters("width")
             .removeAllQueryParameters("height")
-            .removeAllQueryParameters("baku")
             .build()
         request = request.newBuilder().url(newUrl).build()
 

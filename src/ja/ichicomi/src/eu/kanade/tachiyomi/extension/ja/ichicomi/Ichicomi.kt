@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Element
@@ -37,7 +38,9 @@ class Ichicomi : GigaViewer(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            return GET("$baseUrl/search?q=$query", headers)
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+                .addQueryParameter("q", query)
+            return GET(url.build(), headers)
         }
 
         val filter = filters.firstOrNull() as? CollectionFilter
