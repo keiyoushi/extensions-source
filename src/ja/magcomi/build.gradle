@@ -3,7 +3,7 @@ ext {
     extClass = '.MagComi'
     themePkg = 'gigaviewer'
     baseUrl = 'https://magcomi.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 

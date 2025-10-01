@@ -29,7 +29,19 @@ class MagComi : GigaViewer(
         setUrlWithoutDomain(element.attr("href"))
     }
 
+    override fun searchMangaSelector(): String = "li[class^=SearchResultItem_li__]"
+
+    override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
+        val link = element.selectFirst("a")!!
+        setUrlWithoutDomain(link.attr("href"))
+        title = element.selectFirst("p[class^=SearchResultItem_series_title__]")!!.text()
+        thumbnail_url = link.selectFirst("img")?.attr("src")
+    }
+
     override fun getCollections(): List<Collection> = listOf(
-        Collection("連載・読切", ""),
+        Collection("連載中", ""),
+        Collection("読切", "oneshot"),
+        Collection("漫画賞・他", "award_other"),
+        Collection("完結・休止", "finished"),
     )
 }
