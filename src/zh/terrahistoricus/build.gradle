@@ -1,7 +1,0 @@
-ext {
-    extName = 'Terra Historicus'
-    extClass = '.TerraHistoricus'
-    extVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"

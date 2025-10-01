@@ -1,8 +1,0 @@
-ext {
-    extName = 'Komiic'
-    extClass = '.Komiic'
-    extVersionCode = 4
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

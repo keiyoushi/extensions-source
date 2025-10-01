@@ -1,7 +1,0 @@
-ext {
-    extName = 'Happymh'
-    extClass = '.Happymh'
-    extVersionCode = 18
-}
-
-apply from: "$rootDir/common.gradle"
