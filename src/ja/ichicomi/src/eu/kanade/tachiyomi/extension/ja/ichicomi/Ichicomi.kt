@@ -25,8 +25,6 @@ class Ichicomi : GigaViewer(
         .addInterceptor(::imageIntercept)
         .build()
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series", headers)
-
     override fun popularMangaSelector(): String = "div[class^=Series_series__]"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
