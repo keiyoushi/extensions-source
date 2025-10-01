@@ -1,7 +1,0 @@
-ext {
-    extName = 'BH3'
-    extClass = '.BH3'
-    extVersionCode = 3
-}
-
-apply from: "$rootDir/common.gradle"

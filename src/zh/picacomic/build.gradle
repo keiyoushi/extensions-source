@@ -1,8 +1,0 @@
-ext {
-    extName = 'Picacomic'
-    extClass = '.Picacomic'
-    extVersionCode = 7
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
