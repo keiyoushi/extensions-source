@@ -23,6 +23,7 @@ data class GigaViewerReadableProduct(
 @Serializable
 data class GigaViewerPageStructure(
     val pages: List<GigaViewerPage> = emptyList(),
+    val choJuGiga: String,
 )
 
 @Serializable
