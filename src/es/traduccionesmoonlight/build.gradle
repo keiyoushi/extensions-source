@@ -3,7 +3,7 @@ ext {
     extClass = '.TraduccionesMoonlight'
     themePkg = 'mangaesp'
     baseUrl = 'https://traduccionesmoonlight.com'
-    overrideVersionCode = 39
+    overrideVersionCode = 40
     isNsfw = true
 }
 
