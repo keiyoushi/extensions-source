@@ -1,5 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.arcanescans
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
-class Arcanescans : Madara("Arcanescans", "https://arcanescans.com", "en")
+class Arcanescans : MangaThemesia("Arcanescans", "https://arcanescans.com", "en")
