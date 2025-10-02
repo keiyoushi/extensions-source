@@ -6,7 +6,6 @@ import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSearchSummaryList
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSummaryList
 import eu.kanade.tachiyomi.extension.th.nekopost.model.SearchRequest
-import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -186,7 +185,7 @@ class Nekopost : HttpSource() {
 
         val pagingData = PagingRequest(
             pageNo = page,
-            pageSize = 20,
+            pageSize = 100,
         )
         val searchData = SearchRequest(
             keyword = query,
@@ -199,17 +198,17 @@ class Nekopost : HttpSource() {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val responseBody = response.body.string()
-        val decrypted = CryptoAES.decrypt(responseBody, "AeyTest")
 
-        val projectList: RawProjectSearchSummaryList = json.decodeFromString(decrypted)
+        val projectList: RawProjectSearchSummaryList = json.decodeFromString(responseBody)
+
         val mangaList: List<SManga> = projectList.listProject
             .filter { it.projectType == "m" }
             .map {
                 SManga.create().apply {
-                    url = it.projectId.toString()
+                    url = it.pid.toString()
                     title = it.projectName
                     status = it.status
-                    thumbnail_url = "$fileHost/collectManga/${it.projectId}/${it.projectId}_cover.jpg?ver=${it.coverVersion}"
+                    thumbnail_url = "$fileHost/collectManga/${it.pid}/${it.pid}_cover.jpg?ver=${it.coverVersion}"
                 }
             }
 
