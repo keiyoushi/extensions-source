@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.th.nekopost
 
+import eu.kanade.tachiyomi.extension.th.nekopost.model.PagingRequest
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawChapterInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSearchSummaryList
@@ -178,9 +179,22 @@ class Nekopost : HttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val headers = Headers.headersOf("accept", "*/*", "content-type", "text/plain;charset=UTF-8", "origin", baseUrl)
-        val requestBody = Json.encodeToString(SearchRequest(query, page)).toRequestBody()
-        return POST("$baseUrl/api/explore/search", headers, requestBody)
+        val searchHeaders = headersBuilder()
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .build()
+
+        val pagingData = PagingRequest(
+            pageNo = page,
+            pageSize = 20,
+        )
+        val searchData = SearchRequest(
+            keyword = query,
+            status = 0,
+            paging = pagingData,
+        )
+        val requestBody = Json.encodeToString(searchData).toRequestBody()
+        return POST("$baseUrl/api/project/search", searchHeaders, requestBody)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
