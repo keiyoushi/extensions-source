@@ -122,7 +122,7 @@ class MangaRawClub : ParsedHttpSource() {
         author = document.selectFirst(".author a")?.attr("title")?.trim()?.takeIf { it.lowercase() != "updating" }
 
         description = buildString {
-            document.selectFirst(".description")?.ownText()?.substringAfter("Summary is")?.trim()?.let {
+            document.selectFirst(".description")?.text()?.substringAfter("Summary is")?.trim()?.let {
                 append(it)
             }
             document.selectFirst(".alternative-title")?.ownText()?.trim()?.takeIf { it.isNotEmpty() && it.lowercase() != "updating" }?.let {
