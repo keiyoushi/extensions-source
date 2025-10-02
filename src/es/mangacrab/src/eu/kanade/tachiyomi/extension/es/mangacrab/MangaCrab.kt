@@ -51,6 +51,15 @@ class MangaCrab :
     override val pageListParseSelector = "div.page-break:not([style*='display:none']) img:not([src])"
 
     override fun imageFromElement(element: Element): String? {
+        val validateAttrValue = element.attributes().firstOrNull { it.value.contains("validate.php") }?.value
+        if (!validateAttrValue.isNullOrBlank()) {
+            val fileUrl = "$baseUrl/${validateAttrValue.removePrefix("/")}".toHttpUrlOrNull()
+                ?.queryParameter("file")
+            if (!fileUrl.isNullOrBlank()) {
+                return "$baseUrl/${fileUrl.removePrefix("/")}"
+            }
+        }
+
         val imageAbsUrl = element.attributes().firstOrNull { it.value.toHttpUrlOrNull() != null }?.value
 
         return when {
