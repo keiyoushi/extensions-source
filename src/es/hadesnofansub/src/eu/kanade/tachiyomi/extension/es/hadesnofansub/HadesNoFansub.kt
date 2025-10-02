@@ -6,11 +6,13 @@ import java.util.Locale
 
 class HadesNoFansub : Madara(
     "Hades no Fansub",
-    "https://hadesnofansub.com",
+    "https://lectorhades.latamtoon.com",
     "es",
     dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale("es")),
 ) {
     override val useNewChapterEndpoint = true
+
+    override val mangaSubString = "tmo"
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
