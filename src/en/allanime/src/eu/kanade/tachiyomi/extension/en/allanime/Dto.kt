@@ -146,5 +146,5 @@ class Servers(
 
 @Serializable
 class PageUrl(
-    val url: String,
+    val url: String?,
 )
