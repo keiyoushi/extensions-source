@@ -57,10 +57,12 @@ abstract class Iken(
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
 
+    protected open val popularMangaSelector = "aside a:has(img), .splide:has(.card) li a:has(img)"
+
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val entries = document.select("aside a:has(img)").mapNotNull {
+        val entries = document.select(popularMangaSelector).mapNotNull {
             titleCache[it.absUrl("href").substringAfter("series/")]?.toSManga()
         }
 
