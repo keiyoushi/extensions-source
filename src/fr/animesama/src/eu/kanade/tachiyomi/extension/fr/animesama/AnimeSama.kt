@@ -248,10 +248,10 @@ class AnimeSama : ParsedHttpSource() {
                         }
                     }
                     specialRegex.find(command) != null -> {
-                        val title = specialRegex.find(command)!!.groupValues[1]
+                        val chapterTitle = specialRegex.find(command)!!.groupValues[1]
                         parsedChapterList.add(
                             SChapter.create().apply {
-                                name = "Chapitre $title"
+                                name = "Chapitre $chapterTitle"
                                 setUrlWithoutDomain(chapterUrl.newBuilder().addQueryParameter("id", (parsedChapterList.size + 1).toString()).addQueryParameter("title", title).build().toString())
                                 scanlator = translationName
                             },
