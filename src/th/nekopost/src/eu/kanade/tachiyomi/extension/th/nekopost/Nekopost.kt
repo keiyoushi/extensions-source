@@ -158,7 +158,7 @@ class Nekopost : HttpSource() {
         val projectList: RawProjectSummaryList = json.decodeFromString(responseBody.string())
 
         val mangaList: List<SManga> = if (projectList.listChapter != null) {
-            projectList.listChapter.filter { !existingProject.contains(it.projectId) }.map {
+            projectList.listChapter.filterNot { existingProject.contains(it.projectId) }.map {
                 SManga.create().apply {
                     url = it.projectId
                     title = it.projectName
