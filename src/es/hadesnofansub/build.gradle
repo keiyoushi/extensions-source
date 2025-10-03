@@ -2,8 +2,8 @@ ext {
     extName = 'Hades no Fansub'
     extClass = '.HadesNoFansub'
     themePkg = 'madara'
-    baseUrl = 'https://hadesnofansub.com'
-    overrideVersionCode = 4
+    baseUrl = 'https://lectorhades.latamtoon.com'
+    overrideVersionCode = 5
     isNsfw = true
 }
 
