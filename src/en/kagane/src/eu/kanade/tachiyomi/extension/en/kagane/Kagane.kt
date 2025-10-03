@@ -155,8 +155,7 @@ class Kagane : HttpSource(), ConfigurableSource {
             .toJsonString()
             .toRequestBody("application/json".toMediaType())
 
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("api/v1/search")
+        val url = "$apiUrl/api/v1/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", (page - 1).toString())
             addQueryParameter("mature", preferences.showNsfw.toString())
             addQueryParameter("size", 35.toString()) // Default items per request
