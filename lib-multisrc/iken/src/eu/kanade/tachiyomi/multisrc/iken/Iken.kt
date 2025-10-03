@@ -171,7 +171,7 @@ abstract class Iken(
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = showLockedChapterPrefKey
-            title = "Show locked chapters"
+            title = "Show inaccessible chapters"
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
