@@ -1,11 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.kenscans
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.parseAs
 import okhttp3.Request
 import okhttp3.Response
 
