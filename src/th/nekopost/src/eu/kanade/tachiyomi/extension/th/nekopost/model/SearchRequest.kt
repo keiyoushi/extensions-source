@@ -11,6 +11,6 @@ data class PagingInfo(
 @Serializable
 data class SearchRequest(
     val keyword: String,
-    val status: Int = 0,
+    val status: Int,
     val paging: PagingInfo,
 )

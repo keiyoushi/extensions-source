@@ -189,7 +189,7 @@ class Nekopost : HttpSource() {
         )
         val searchData = SearchRequest(
             keyword = query,
-            status,
+            status = 0,
             paging = pagingData,
         )
         val requestBody = Json.encodeToString(searchData).toRequestBody()
