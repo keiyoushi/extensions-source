@@ -9,77 +9,100 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
-class BookDto(
-    val id: String,
-    val name: String,
-    val source: String,
-    val metadata: MetadataDto,
-    val booksMetadata: BooksMetadataDto,
+class SearchDto(
+    val content: List<Book>,
+    val last: Boolean,
+) {
+    fun hasNextPage() = !last
+
+    @Serializable
+    class Book(
+        val name: String,
+        val id: String,
+    ) {
+
+        fun toSManga(domain: String): SManga = SManga.create().apply {
+            title = name
+            url = id
+            thumbnail_url = "$domain/api/v1/series/$id/thumbnail"
+        }
+    }
+}
+
+@Serializable
+class DetailsDto(
+    val data: Data,
 ) {
     @Serializable
-    class MetadataDto(
-        val genres: List<String>,
-        val status: String,
-        val summary: String,
-    )
-
-    @Serializable
-    class BooksMetadataDto(
-        val authors: List<AuthorDto>,
+    class Data(
+        val metadata: Metadata,
+        val source: String,
     ) {
         @Serializable
-        class AuthorDto(
-            val name: String,
-            val role: String,
-        )
-    }
-
-    fun toSManga(domain: String): SManga = SManga.create().apply {
-        title = name
-        url = "/series/$id"
-        description = buildString {
-            append(metadata.summary)
-            append("\n\n")
-            append("Source: ")
-            append(source)
+        class Metadata(
+            val genres: List<String>,
+            val status: String,
+            val summary: String,
+            val alternateTitles: List<Title>,
+        ) {
+            @Serializable
+            class Title(
+                val title: String,
+            )
         }
-        thumbnail_url = "https://api.$domain/api/v1/series/$id/thumbnail"
-        author = getRoles(listOf("writer"))
-        artist = getRoles(listOf("inker", "colorist", "penciller"))
-        genre = metadata.genres.joinToString()
-        status = metadata.status.toStatus()
-    }
 
-    private fun String.toStatus(): Int {
-        return when (this) {
-            "ONGOING" -> SManga.ONGOING
-            "ENDED" -> SManga.COMPLETED
-            else -> SManga.COMPLETED
+        fun toSManga(): SManga = SManga.create().apply {
+            val summary = StringBuilder()
+            summary.append(metadata.summary)
+                .append("\n\n")
+                .append("Source: ")
+                .append(source)
+
+            if (metadata.alternateTitles.isNotEmpty()) {
+                summary.append("\n\nAssociated Name(s):")
+                metadata.alternateTitles.forEach { summary.append("\n").append("• ${it.title}") }
+            }
+
+            description = summary.toString()
+            genre = metadata.genres.joinToString()
+            status = metadata.status.toStatus()
         }
-    }
 
-    private fun getRoles(roles: List<String>): String {
-        return booksMetadata.authors
-            .filter { roles.contains(it.role) }
-            .joinToString { it.name }
+        private fun String.toStatus(): Int {
+            return when (this) {
+                "ONGOING" -> SManga.ONGOING
+                else -> SManga.COMPLETED
+            }
+        }
     }
 }
 
 @Serializable
 class ChapterDto(
-    val id: String,
-    val metadata: MetadataDto,
+    val data: Data,
 ) {
     @Serializable
-    class MetadataDto(
-        val releaseDate: String? = null,
-        val title: String,
-    )
+    class Data(
+        val content: List<Book>,
+    ) {
+        @Serializable
+        class Book(
+            val metadata: Metadata,
+            val id: String,
+            val seriesId: String,
+            val created: String,
+        ) {
+            @Serializable
+            class Metadata(
+                val title: String,
+            )
 
-    fun toSChapter(seriesId: String): SChapter = SChapter.create().apply {
-        url = "$seriesId;$id"
-        name = metadata.title
-        date_upload = dateFormat.tryParse(metadata.releaseDate)
+            fun toSChapter(): SChapter = SChapter.create().apply {
+                url = "$seriesId;$id"
+                name = metadata.title
+                date_upload = dateFormat.tryParse(created)
+            }
+        }
     }
 
     companion object {
@@ -93,11 +116,20 @@ class ChapterDto(
 class ChallengeDto(
     @SerialName("access_token")
     val accessToken: String,
-    @SerialName("page_count")
-    val pageCount: Int,
 )
 
 @Serializable
-class PaginationDto(
-    val hasNext: Boolean,
-)
+class PagesCountDto(
+    val data: Data,
+) {
+    @Serializable
+    class Data(
+        val media: PagesCount,
+    ) {
+        @Serializable
+        class PagesCount(
+            @SerialName("pagesCount")
+            val pagesCount: Int,
+        )
+    }
+}

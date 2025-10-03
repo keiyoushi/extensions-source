@@ -17,13 +17,13 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -47,9 +47,6 @@ import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.collections.forEach
-import kotlin.getValue
-import kotlin.text.split
 
 class Kagane : HttpSource(), ConfigurableSource {
 
@@ -61,7 +58,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     override val lang = "en"
 
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()
 
@@ -141,76 +138,70 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/?page=$page", headers)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        return pageListParse(response, "initialSeriesData")
-    }
-
-    private fun pageListParse(response: Response, key: String): MangasPage {
-        val data = response.asJsoup().selectFirst("script:containsData($key)")!!.data()
-
-        val mangaList = data.getNextData(key)
-            .parseAs<List<BookDto>>()
-            .map { it.toSManga(domain) }
-
-        val pagination = data.getNextData("pagination", isList = false, selectFirst = false)
-            .parseAs<PaginationDto>()
-
-        return MangasPage(mangaList, pagination.hasNext)
-    }
+    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList())
+    override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     // =============================== Latest ===============================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesRequest(page: Int) =
+        searchMangaRequest(page, "", FilterList(SortFilter(0)))
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
-            addQueryParameter("name", query)
-            addQueryParameter("page", page.toString())
-        }.build()
+        val body = buildJsonObject { }
+            .toJsonString()
+            .toRequestBody("application/json".toMediaType())
 
-        return GET(url, headers)
+        val url = "$apiUrl/api/v1/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", (page - 1).toString())
+            addQueryParameter("mature", preferences.showNsfw.toString())
+            addQueryParameter("size", 35.toString()) // Default items per request
+            if (query.isNotBlank()) {
+                addQueryParameter("name", query)
+            }
+            filters.forEach { filter ->
+                when (filter) {
+                    is SortFilter -> {
+                        addQueryParameter("sort", filter.toUriPart())
+                    }
+
+                    else -> {}
+                }
+            }
+        }
+
+        return POST(url.toString(), headers, body)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        return pageListParse(response, "ssrData")
+        val dto = response.parseAs<SearchDto>()
+        val mangas = dto.content.map { it.toSManga(apiUrl) }
+        return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
 
     // =========================== Manga Details ============================
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.asJsoup().selectFirst("script:containsData(initialSeriesData)")!!.data()
-            .getNextData("initialSeriesData", isList = false)
+        val dto = response.parseAs<DetailsDto>()
+        return dto.data.toSManga()
+    }
 
-        return data.parseAs<BookDto>().toSManga(domain)
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return GET("$apiUrl/api/v1/series/${manga.url}", apiHeaders)
     }
 
     // ============================== Chapters ==============================
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val seriesId = response.request.url.pathSegments.last()
-        val data = response.asJsoup().selectFirst("script:containsData(initialBooksData)")!!.data()
-            .getNextData("initialBooksData")
-            .parseAs<List<ChapterDto>>()
-            .reversed()
-
-        return data.map { it.toSChapter(seriesId) }
+        val dto = response.parseAs<ChapterDto>()
+        return dto.data.content.map { it.toSChapter() }.reversed()
     }
 
-    override fun getChapterUrl(chapter: SChapter): String {
-        val (seriesId, chapterId) = chapter.url.split(";")
-        return "$baseUrl/series/$seriesId/reader/$chapterId"
+    override fun chapterListRequest(manga: SManga): Request {
+        return GET("$apiUrl/api/v1/books/${manga.url}", apiHeaders)
     }
 
     // =============================== Pages ================================
@@ -231,7 +222,8 @@ class Kagane : HttpSource(), ConfigurableSource {
 
         val challengeResp = getChallengeResponse(seriesId, chapterId)
         accessToken = challengeResp.accessToken
-        val pages = (0 until challengeResp.pageCount).map { page ->
+        val pageCount = getPageCountResponse(seriesId, chapterId)
+        val pages = (0 until pageCount).map { page ->
             val pageUrl = "$apiUrl/api/v1/books".toHttpUrl().newBuilder().apply {
                 addPathSegment(seriesId)
                 addPathSegment("file")
@@ -358,6 +350,15 @@ class Kagane : HttpSource(), ConfigurableSource {
             .parseAs<ChallengeDto>()
     }
 
+    private fun getPageCountResponse(seriesId: String, chapterId: String): Int {
+        val challengeUrl = "$apiUrl/api/v1/books/$seriesId/metadata/$chapterId"
+
+        val dto = client.newCall(GET(challengeUrl, apiHeaders)).execute()
+            .parseAs<PagesCountDto>()
+
+        return dto.data.media.pagesCount
+    }
+
     private fun concat(vararg arrays: ByteArray): ByteArray =
         arrays.reduce { acc, bytes -> acc + bytes }
 
@@ -413,27 +414,36 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     // ============================= Utilities ==============================
 
-    private fun String.getNextData(key: String, isList: Boolean = true, selectFirst: Boolean = true): String {
-        val (startDel, endDel) = if (isList) '[' to ']' else '{' to '}'
-
-        val keyIndex = if (selectFirst) this.indexOf(key) else this.lastIndexOf(key)
-        val start = this.indexOf(startDel, keyIndex)
-
-        var depth = 1
-        var i = start + 1
-
-        while (i < this.length && depth > 0) {
-            when (this[i]) {
-                startDel -> depth++
-                endDel -> depth--
-            }
-            i++
-        }
-
-        return "\"${this.substring(start, i)}\"".parseAs<String>()
-    }
-
     companion object {
         private const val SHOW_NSFW_KEY = "pref_show_nsfw"
+    }
+
+    // ============================= Filters ==============================
+
+    override fun getFilterList() = FilterList(
+        SortFilter(),
+    )
+
+    class SortFilter(state: Int = 0) : UriPartFilter(
+        "Sort By",
+        arrayOf(
+            Pair("Latest", "updated_at"),
+            Pair("Latest Descending", "updated_at,desc"),
+            Pair("By Name", "series_name"),
+            Pair("By Name Descending", "series_name,desc"),
+            Pair("Books count", "books_count"),
+            Pair("Books count Descending", "books_count,desc"),
+            Pair("Created at", "created_at"),
+            Pair("Created at Descending", "created_at,desc"),
+        ),
+        state,
+    )
+
+    open class UriPartFilter(
+        displayName: String,
+        private val vals: Array<Pair<String, String>>,
+        state: Int = 0,
+    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+        fun toUriPart() = vals[state].second
     }
 }
