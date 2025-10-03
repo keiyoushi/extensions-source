@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.th.nekopost
 
-import eu.kanade.tachiyomi.extension.th.nekopost.model.PagingRequest
+import eu.kanade.tachiyomi.extension.th.nekopost.model.PagingInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawChapterInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectInfo
 import eu.kanade.tachiyomi.extension.th.nekopost.model.RawProjectSearchSummaryList
@@ -164,7 +164,7 @@ class Nekopost : HttpSource() {
                     title = it.projectName
                     thumbnail_url = "$fileHost/collectManga/${it.projectId}/${it.projectId}_cover.jpg"
                     initialized = false
-                    status = 0
+                    status
                 }
             }
         } else {
@@ -183,13 +183,13 @@ class Nekopost : HttpSource() {
             .set("Content-Type", "application/json")
             .build()
 
-        val pagingData = PagingRequest(
+        val pagingData = PagingInfo(
             pageNo = page,
             pageSize = 100,
         )
         val searchData = SearchRequest(
             keyword = query,
-            status = 0,
+            status,
             paging = pagingData,
         )
         val requestBody = Json.encodeToString(searchData).toRequestBody()
