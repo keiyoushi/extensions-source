@@ -159,7 +159,7 @@ class MangaRawClub : ParsedHttpSource() {
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.select("a").attr("href"))
 
-        val name = element.select(".chapter-title").text().removeSuffix("-eng-li")
+        val name = element.selectFirst(".chapter-title,.chapter-number")!!.ownText().removeSuffix("-eng-li")
         this.name = "Chapter $name"
 
         date_upload = parseChapterDate(element.select(".chapter-update").attr("datetime"))
