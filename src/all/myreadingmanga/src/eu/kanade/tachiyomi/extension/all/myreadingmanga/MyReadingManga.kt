@@ -144,7 +144,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
 
     // Manga Details
     override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        val needCover = manga.thumbnail_url?.let { !client.newCall(GET(it, headers)).execute().isSuccessful } ?: true
+        val needCover = manga.thumbnail_url?.let { url -> client.newCall(GET(url, headers)).execute().use { !it.isSuccessful } } ?: true
 
         return client.newCall(mangaDetailsRequest(manga))
             .asObservableSuccess()
@@ -172,12 +172,12 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
             }
 
             if (needCover) {
-                thumbnail_url = getThumbnail(
-                    getImage(
-                        client.newCall(GET("$baseUrl/search/?search=${document.location()}", headers))
-                            .execute().asJsoup().select("div.wdm_results div.p_content img").first()!!,
-                    ),
-                )
+                thumbnail_url = client.newCall(GET("$baseUrl/search/?search=${document.location()}", headers))
+                    .execute().use {
+                        it.asJsoup().select("div.wdm_results div.p_content img").firstOrNull()
+                    }?.let {
+                        getThumbnail(getImage(it))
+                    }
             }
         }
     }
@@ -193,16 +193,15 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         val chapters = mutableListOf<SChapter>()
 
         val date = parseDate(document.select(".entry-time").text())
-        val mangaUrl = document.baseUri()
         // create first chapter since its on main manga page
         chapters.add(createChapter("1", document.baseUri(), date, "Part 1"))
         // see if there are multiple chapters or not
-        val lastChapterNumber = document.select(chapterListSelector()).last()?.text()
+        val lastChapterNumber = document.select(chapterListSelector()).last()?.text()?.toIntOrNull()
         if (lastChapterNumber != null) {
             // There are entries with more chapters but those never show up,
             // so we take the last one and loop it to get all hidden ones.
             // Example: 1 2 3 4 .. 7 8 9 Next
-            for (i in 2..lastChapterNumber.toInt()) {
+            for (i in 2..lastChapterNumber) {
                 chapters.add(createChapter(i.toString(), document.baseUri(), date, "Part $i"))
             }
         }
@@ -241,8 +240,9 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
 
     // Grabs page containing filters and puts it into cache
     private fun filterAssist(url: String) {
-        val response = client.newCall(GET(url, headers)).execute()
-        filterMap[url] = response.body.string()
+        filterMap[url] = client.newCall(GET(url, headers)).execute().use {
+            it.body.string()
+        }
     }
 
     private fun cacheAssistant() {
@@ -254,7 +254,7 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
 
     // Parses cached page for filters
     private fun returnFilter(url: String, css: String): Array<String> {
-        val document = if (filterMap.isNullOrEmpty()) {
+        val document = if (filterMap.isEmpty()) {
             filtersCached = false
             null
         } else {
@@ -294,11 +294,11 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         }
     }
 
-    private class GenreFilter(GENRES: Array<String>) : UriSelectFilter("Genre", "genre_str", arrayOf("Any", *GENRES))
-    private class TagFilter(POPTAG: Array<String>) : UriSelectFilter("Popular Tags", "tags", arrayOf("Any", *POPTAG))
-    private class CatFilter(CATID: Array<String>) : UriSelectFilter("Categories", "categories", arrayOf("Any", *CATID))
-    private class PairingFilter(PAIR: Array<String>) : UriSelectFilter("Pairing", "pairing_str", arrayOf("Any", *PAIR))
-    private class ScanGroupFilter(GROUP: Array<String>) : UriSelectFilter("Scanlation Group", "group_str", arrayOf("Any", *GROUP))
+    private class GenreFilter(genres: Array<String>) : UriSelectFilter("Genre", "genre_str", arrayOf("Any", *genres))
+    private class TagFilter(popTags: Array<String>) : UriSelectFilter("Popular Tags", "tags", arrayOf("Any", *popTags))
+    private class CatFilter(catIds: Array<String>) : UriSelectFilter("Categories", "categories", arrayOf("Any", *catIds))
+    private class PairingFilter(pairs: Array<String>) : UriSelectFilter("Pairing", "pairing_str", arrayOf("Any", *pairs))
+    private class ScanGroupFilter(groups: Array<String>) : UriSelectFilter("Scanlation Group", "group_str", arrayOf("Any", *groups))
     private class SearchSortTypeList : Filter.Select<String>("Sort by", arrayOf("Newest", "Oldest", "Random", "More relevant"))
 
     /**
