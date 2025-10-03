@@ -245,8 +245,10 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
                 }
             }
             .distinctBy { it.second }
-            .sortedWith(compareByDescending<Triple<String, String, Boolean>> { it.third }
-            .thenBy { it.second.length }) // Prefer non-href first, then shorter URLs
+            .sortedWith(
+                compareByDescending<Triple<String, String, Boolean>> { it.third }
+                    .thenBy { it.second.length },
+            ) // Prefer non-href first, then shorter URLs
             .map { Pair(it.first, it.second) }
 
         var foundPair: Pair<String, String>? = urlPairs.firstOrNull()
