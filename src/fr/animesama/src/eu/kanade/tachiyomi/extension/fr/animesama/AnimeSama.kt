@@ -101,7 +101,7 @@ class AnimeSama : ParsedHttpSource() {
         return SManga.create().apply {
             title = element.select("h1").text()
             setUrlWithoutDomain(element.select("a").attr("href"))
-            thumbnail_url = element.select("img").attr("src")
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
     }
 
@@ -118,7 +118,7 @@ class AnimeSama : ParsedHttpSource() {
         return SManga.create().apply {
             title = element.select("h1").text()
             setUrlWithoutDomain(element.select("a").attr("href").removeSuffix("scan/vf/"))
-            thumbnail_url = element.select("img").attr("src")
+            thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
     }
 
@@ -140,7 +140,7 @@ class AnimeSama : ParsedHttpSource() {
         return GET(url, headers)
     }
 
-    private fun detailsParse(response: Response, id: String): SManga? {
+    private fun detailsParse(response: Response): SManga? {
         val document = response.asJsoup()
 
         val scriptContent = document.select("script:containsData(panneauScan(\"nom\", \"url\"))").toString()
@@ -148,9 +148,8 @@ class AnimeSama : ParsedHttpSource() {
         // Remove exemple
         splitedContent.removeAt(0)
 
-        val parsedChapterList: MutableList<SChapter> = mutableListOf()
+        val pattern = """panneauScan\("(.+?)", "(.+?)"\)""".toRegex()
         val numberOfScans = splitedContent.count { line ->
-            val pattern = """panneauScan\("(.+?)", "(.+?)"\)""".toRegex()
             val matchResult = pattern.find(line)
             matchResult != null && !matchResult.groupValues[2].contains("va")
         }
@@ -161,7 +160,7 @@ class AnimeSama : ParsedHttpSource() {
         manga.description = document.select("#sousBlocMiddle > div h2:contains(Synopsis)+p").text()
         manga.genre = document.select("#sousBlocMiddle > div h2:contains(Genres)+a").text()
         manga.title = document.select("#titreOeuvre").text()
-        manga.thumbnail_url = document.select("#coverOeuvre").attr("src")
+        manga.thumbnail_url = document.selectFirst("#coverOeuvre")?.absUrl("src")
         manga.setUrlWithoutDomain(document.baseUri())
         return manga
     }
@@ -170,16 +169,14 @@ class AnimeSama : ParsedHttpSource() {
         return if (query.startsWith("ID:")) {
             val id = query.substringAfterLast("ID:")
 
-            val mangaUrl = baseUrl.toHttpUrl()
+            val mangaUrl = "$baseUrl/catalogue".toHttpUrl()
                 .newBuilder()
-                .query(null)
-                .addPathSegment("catalogue")
                 .addPathSegment(id)
                 .build()
             val requestToCheckManga = GET(mangaUrl, headers)
             client.newCall(requestToCheckManga).asObservableSuccess().map {
                 MangasPage(
-                    listOfNotNull(detailsParse(it, id)),
+                    listOfNotNull(detailsParse(it)),
                     false,
                 )
             }
@@ -197,7 +194,7 @@ class AnimeSama : ParsedHttpSource() {
         description = document.select("#sousBlocMiddle > div h2:contains(Synopsis)+p").text()
         genre = document.select("#sousBlocMiddle > div h2:contains(Genres)+a").text()
         title = document.select("#titreOeuvre").text()
-        thumbnail_url = document.select("#coverOeuvre").attr("src")
+        thumbnail_url = document.selectFirst("#coverOeuvre")?.absUrl("src")
     }
 
     // Chapters
@@ -216,12 +213,8 @@ class AnimeSama : ParsedHttpSource() {
         val document = response.asJsoup()
 
         val title = document.select("#titreOeuvre").text()
-        val chapterUrl = baseUrl.toHttpUrl()
+        val chapterUrl = "$baseUrl/s2/scans/get_nb_chap_et_img.php".toHttpUrl()
             .newBuilder()
-            .query(null)
-            .addPathSegment("s2")
-            .addPathSegment("scans")
-            .addPathSegment("get_nb_chap_et_img.php")
             .addQueryParameter("oeuvre", title)
             .build()
         val requestToFetchChapters = GET(chapterUrl, headers)
@@ -269,7 +262,7 @@ class AnimeSama : ParsedHttpSource() {
                 }
             }
         }
-        for (index in parsedChapterList.size until apiNbChapImgJson.size) {
+        (parsedChapterList.size until apiNbChapImgJson.size).forEach { index ->
             parsedChapterList.add(
                 SChapter.create().apply {
                     name = "Chapitre " + (parsedChapterList.size + 1 - chapterDelay)
@@ -290,14 +283,14 @@ class AnimeSama : ParsedHttpSource() {
         splitedContent.removeAt(0)
 
         val parsedChapterList: MutableList<SChapter> = mutableListOf()
-
+        val pattern = """panneauScan\("(.+?)", "(.+?)"\)""".toRegex()
+        val scanPattern = Regex("""(Scans|\(|\))""")
         splitedContent.forEach { line ->
-            val pattern = """panneauScan\("(.+?)", "(.+?)"\)""".toRegex()
             val matchResult = pattern.find(line)
             if (matchResult != null) {
                 val (scanTitle, scanUrl) = matchResult.destructured
                 if (!scanUrl.contains("va")) {
-                    val scanlatorGroup = scanTitle.replace(Regex("""(Scans|\(|\))"""), "").trim()
+                    val scanlatorGroup = scanTitle.replace(scanPattern, "").trim()
                     val fetchExistentSubMangas = GET(
                         url.newBuilder()
                             .addPathSegments(
@@ -311,7 +304,7 @@ class AnimeSama : ParsedHttpSource() {
             }
         }
 
-        parsedChapterList.sortBy { chapter -> ("$baseUrl${chapter.url}").toHttpUrl().queryParameter("id")?.toIntOrNull() }
+        parsedChapterList.sortBy { chapter -> "$baseUrl${chapter.url}".toHttpUrl().queryParameter("id")?.toIntOrNull() }
 
         return parsedChapterList.asReversed()
     }
@@ -323,12 +316,8 @@ class AnimeSama : ParsedHttpSource() {
         val title = url.queryParameter("title")
         val chapter = url.queryParameter("id")
 
-        val chapterUrl = baseUrl.toHttpUrl()
+        val chapterUrl = "$baseUrl/s2/scans/get_nb_chap_et_img.php".toHttpUrl()
             .newBuilder()
-            .query(null)
-            .addPathSegment("s2")
-            .addPathSegment("scans")
-            .addPathSegment("get_nb_chap_et_img.php")
             .addQueryParameter("oeuvre", title)
             .build()
         val requestToFetchChapters = GET(chapterUrl, headers)
