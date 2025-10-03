@@ -12,6 +12,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
 import okhttp3.Headers
+import java.net.URLEncoder
 
 class MangamoHelper(headers: Headers) {
 
@@ -45,7 +46,7 @@ class MangamoHelper(headers: Headers) {
 
     private fun getCatalogUrl(series: SeriesDto): String {
         val lowercaseHyphenated = series.name_lowercase!!.replace(' ', '-')
-        return "/catalog/$lowercaseHyphenated"
+        return "/catalog/${URLEncoder.encode(lowercaseHyphenated, "utf-8")}"
     }
 
     fun getSeriesUrl(series: SeriesDto): String {
