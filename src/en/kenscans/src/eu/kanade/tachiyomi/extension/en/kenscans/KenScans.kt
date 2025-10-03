@@ -20,7 +20,7 @@ class KenScans : Iken(
         if (manga.url.startsWith("/series/")) {
             throw Exception("Migrate from $name to $name (same extension)")
         }
-        return GET("$baseUrl/series/${manga.url}", headers)
+        return super.chapterListRequest(manga)
     }
 
     override fun pageListParse(response: Response): List<Page> {
