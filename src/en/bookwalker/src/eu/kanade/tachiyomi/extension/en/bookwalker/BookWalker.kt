@@ -95,6 +95,9 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
     override val shouldValidateLogin
         get() = preferences.getBoolean(PREF_VALIDATE_LOGGED_IN, true)
 
+    override val shouldTryOpenLoginWebview
+        get() = preferences.getBoolean(PREF_TRY_OPEN_LOGIN_WEBVIEW, false)
+
     override val imageQuality
         get() = ImageQualityPref.fromKey(
             preferences.getString(ImageQualityPref.PREF_KEY, ImageQualityPref.defaultOption.key)!!,
@@ -162,7 +165,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             }
         }
 
-        SwitchPreferenceCompat(screen.context).apply {
+        val validateLoginPref = SwitchPreferenceCompat(screen.context).apply {
             key = PREF_VALIDATE_LOGGED_IN
             title = "Validate Login"
             summary = "Validate that you are logged in before allowing certain actions. This is " +
@@ -170,6 +173,21 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                 "If you are using this extension as an anonymous user, disable this option."
 
             setDefaultValue(true)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_TRY_OPEN_LOGIN_WEBVIEW
+            title = "Automatically Open Login Page"
+            summary = "Attempts to open a WebView for the login page when you perform certain " +
+                "actions while logged out. This feature may not work on all clients."
+
+            setDefaultValue(false)
+
+            setVisible(shouldValidateLogin)
+            validateLoginPref.setOnPreferenceChangeListener { _, newValue ->
+                setVisible(newValue as Boolean)
+                true
+            }
         }.also(screen::addPreference)
 
         ListPreference(screen.context).apply {
@@ -651,7 +669,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             // and fail to load the image at that point.
             tryCooperativeRedirect(
                 readerUrl,
-                openAuthInWebview = true,
+                openAuthInWebview = shouldTryOpenLoginWebview,
             )
 
             IntRange(0, pagesCount - 1).map {
