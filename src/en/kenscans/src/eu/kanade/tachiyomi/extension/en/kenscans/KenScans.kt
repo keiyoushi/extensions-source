@@ -30,14 +30,6 @@ class KenScans : Iken(
             throw Exception("Migrate from $name to $name (same extension)")
         }
 
-        val document = response.asJsoup()
-
-        if (document.selectFirst("svg.lucide-lock") != null) {
-            throw Exception("Unlock chapter in webview")
-        }
-
-        return document.getNextJson("images").parseAs<List<PageParseDto>>().mapIndexed { idx, p ->
-            Page(idx, imageUrl = p.url)
-        }
+        return super.pageListParse(response)
     }
 }
