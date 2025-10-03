@@ -51,18 +51,26 @@ class MangaCrab :
     override val pageListParseSelector = "div.page-break:not([style*='display:none']) img:not([src])"
 
     override fun imageFromElement(element: Element): String? {
-        val validateAttrValue = element.attributes().firstOrNull { it.value.contains("validate.php") }?.value
-        if (!validateAttrValue.isNullOrBlank()) {
-            val fileUrl = "$baseUrl/${validateAttrValue.removePrefix("/")}".toHttpUrlOrNull()
-                ?.queryParameter("file")
-            if (!fileUrl.isNullOrBlank()) {
-                return "$baseUrl/${fileUrl.removePrefix("/")}"
+        val url = element.attributes()
+            .firstNotNullOfOrNull { attr ->
+                element.absUrl(attr.key).toHttpUrlOrNull()
+                    ?.takeIf { it.encodedPath == "/validate.php" }
             }
-        }
+
+        val fileUrl = url
+            ?.queryParameter("file")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { file ->
+                url.newBuilder()
+                    .encodedPath("/$file")
+                    .query(null)
+                    .build()
+            }
 
         val imageAbsUrl = element.attributes().firstOrNull { it.value.toHttpUrlOrNull() != null }?.value
 
         return when {
+            fileUrl != null -> fileUrl.toString()
             element.hasAttr("data-src") -> element.attr("abs:data-src")
             element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
             element.hasAttr("srcset") -> element.attr("abs:srcset").getSrcSetImage()
