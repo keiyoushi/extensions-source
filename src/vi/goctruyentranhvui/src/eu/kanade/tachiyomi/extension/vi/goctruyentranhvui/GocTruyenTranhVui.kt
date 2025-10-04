@@ -1,5 +1,11 @@
 package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -17,6 +23,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class GocTruyenTranhVui : HttpSource() {
     override val lang = "vi"
@@ -76,12 +86,12 @@ class GocTruyenTranhVui : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val document = response.asJsoup()
-        title = document.selectFirst(".v-card-title")!!.text()
+        title = document.select(".v-card-title").text()
         genre = document.select(".group-content > .v-chip-link").joinToString { it.text() }
-        thumbnail_url = document.selectFirst("img.image")!!.absUrl("src")
-        status = parseStatus(document.selectFirst(".mb-1:contains(Trạng thái:) span")!!.text())
-        author = document.selectFirst(".mb-1:contains(Tác giả:) span")!!.text()
-        description = document.selectFirst(".v-card-text")!!.text()
+        thumbnail_url = document.selectFirst("img.image")?.absUrl("src")
+        status = parseStatus(document.selectFirst(".mb-1:contains(Trạng thái:) span")?.text())
+        author = document.selectFirst(".mb-1:contains(Tác giả:) span")?.text()
+        description = document.select(".v-card-text").joinToString { it.wholeText() }
     }
 
     private fun parseStatus(status: String?) = when {
@@ -91,6 +101,7 @@ class GocTruyenTranhVui : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(response: Response): List<Page> {
         val html = response.body.string()
         val pattern = Regex("chapterJson:\\s*`(.*?)`")
@@ -103,8 +114,40 @@ class GocTruyenTranhVui : HttpSource() {
             val mangaId = matchId.groups[1]!!.value
             val nameEn = response.request.url.toString().substringAfter("/truyen/").substringBefore("/")
             val chapterNumber = response.request.url.toString().substringAfterLast("chuong-")
-            val body = FormBody.Builder().add("comicId", mangaId)
-                .add("chapterNumber", chapterNumber).add("nameEn", nameEn).build()
+
+            val handler = Handler(Looper.getMainLooper())
+            val latch = CountDownLatch(1)
+            handler.post {
+                val webview = WebView(Injekt.get<Application>())
+                with(webview.settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    databaseEnabled = true
+                    blockNetworkImage = true
+                }
+                webview.webViewClient = object : WebViewClient() {
+
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        handler.postDelayed({
+                            // Get token
+                            view!!.evaluateJavascript("window.localStorage.getItem('Authorization')") { token ->
+                                _token = token.takeUnless { it == "null" }?.removeSurrounding("\"")
+                                latch.countDown()
+                                webview.destroy()
+                            }
+                        }, 2000,)
+                    }
+                }
+                webview.loadDataWithBaseURL(response.request.url.toString(), " ", "text/html", "UTF-8", null)
+            }
+            latch.await(10, TimeUnit.SECONDS)
+            if (getToken() == null) throw Exception("Vui lòng đăng nhập trong WebView")
+
+            val body = FormBody.Builder()
+                .add("comicId", mangaId)
+                .add("chapterNumber", chapterNumber)
+                .add("nameEn", nameEn)
+                .build()
             val request = POST("$baseUrl/api/chapter/auth", pageHeaders, body)
             client.newCall(request).execute().parseAs<ResultDto<ImageListDto>>().result.data
         } else {
@@ -116,10 +159,16 @@ class GocTruyenTranhVui : HttpSource() {
         }
     }
     private val pageHeaders by lazy {
-        headersBuilder()
-            .add("X-Requested-With", "XMLHttpRequest")
-            .add("Authorization", TOKEN_KEY)
+        getToken()?.let {
+            headersBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .add("Authorization", it)
+        }!!
             .build()
+    }
+    private var _token: String? = null
+    private fun getToken(): String? {
+        _token.also { return it }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
@@ -151,4 +200,3 @@ class GocTruyenTranhVui : HttpSource() {
         GenreList(getGenreList()),
     )
 }
-private const val TOKEN_KEY = "Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJEcmFrZW4iLCJjb21pY0lkcyI6W10sInJvbGVJZCI6bnVsbCwiZ3JvdXBJZCI6bnVsbCwiYWRtaW4iOmZhbHNlLCJyYW5rIjowLCJwZXJtaXNzaW9uIjpbXSwiaWQiOiIwMDAxMTE1OTg2IiwidGVhbSI6ZmFsc2UsImlhdCI6MTc1NzU5NjQxMSwiZW1haWwiOiJudWxsIn0.VcGDaVQvyowtvja04CTUpfCP5XiC5qIdPmANZL0Gjz2kjz__PJ8LATQ9s44FpNohMpgLgPQO0TVs67D_YFlLNw"
