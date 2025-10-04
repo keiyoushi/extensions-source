@@ -16,13 +16,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -32,10 +27,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
 import rx.schedulers.Schedulers
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 
 abstract class HentaiHand(
@@ -48,32 +41,15 @@ abstract class HentaiHand(
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
-
-    private fun slugToUrl(json: JsonObject) = json["slug"]!!.jsonPrimitive.content.prependIndent("/en/comic/")
-
-    private fun jsonArrayToString(arrayKey: String, obj: JsonObject): String? {
-        val array = obj[arrayKey]!!.jsonArray
-        if (array.isEmpty()) return null
-        return array.joinToString(", ") {
-            it.jsonObject["name"]!!.jsonPrimitive.content
-        }
-    }
+    override fun headersBuilder() = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
 
     // Popular
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val jsonResponse = json.parseToJsonElement(response.body.string())
-        val mangaList = jsonResponse.jsonObject["data"]!!.jsonArray.map {
-            val obj = it.jsonObject
-            SManga.create().apply {
-                url = slugToUrl(obj)
-                title = obj["title"]!!.jsonPrimitive.content
-                thumbnail_url = obj["image_url"]!!.jsonPrimitive.content
-            }
-        }
-        val hasNextPage = jsonResponse.jsonObject["next_page_url"]!!.jsonPrimitive.content.isNotEmpty()
-        return MangasPage(mangaList, hasNextPage)
+        val resp = response.parseAs<ResponseDto<List<MangaDto>>>()
+        val hasNextPage = !resp.next_page_url.isNullOrEmpty()
+        return MangasPage(resp.data.map { it.toSManga() }, hasNextPage)
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -116,9 +92,7 @@ abstract class HentaiHand(
             .subscribeOn(Schedulers.io())
             .map { response ->
                 // Returns the first matched id, or null if there are no results
-                val idList = json.parseToJsonElement(response.body.string()).jsonObject["data"]!!.jsonArray.map {
-                    it.jsonObject["id"]!!.jsonPrimitive.content
-                }
+                val idList = response.parseAs<ResponseDto<List<IdDto>>>().data.map { it.id }
                 if (idList.isEmpty()) {
                     return@map null
                 } else {
@@ -177,33 +151,7 @@ abstract class HentaiHand(
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val obj = json.parseToJsonElement(response.body.string()).jsonObject
-        return SManga.create().apply {
-            url = slugToUrl(obj)
-            title = obj["title"]!!.jsonPrimitive.content
-            thumbnail_url = obj["image_url"]!!.jsonPrimitive.content
-            artist = jsonArrayToString("artists", obj)
-            author = jsonArrayToString("authors", obj) ?: artist
-            genre = listOfNotNull(jsonArrayToString("tags", obj), jsonArrayToString("relationships", obj)).joinToString(", ")
-            status = when (obj["status"]!!.jsonPrimitive.content) {
-                "complete" -> SManga.COMPLETED
-                "ongoing" -> SManga.ONGOING
-                "onhold" -> SManga.ONGOING
-                "canceled" -> SManga.COMPLETED
-                else -> SManga.COMPLETED
-            }
-
-            description = listOf(
-                Pair("Alternative Title", obj["alternative_title"]!!.jsonPrimitive.content),
-                Pair("Groups", jsonArrayToString("groups", obj)),
-                Pair("Description", obj["description"]!!.jsonPrimitive.content),
-                Pair("Pages", obj["pages"]!!.jsonPrimitive.content),
-                Pair("Category", try { obj["category"]!!.jsonObject["name"]!!.jsonPrimitive.content } catch (_: Exception) { null }),
-                Pair("Language", try { obj["language"]!!.jsonObject["name"]!!.jsonPrimitive.content } catch (_: Exception) { null }),
-                Pair("Parodies", jsonArrayToString("parodies", obj)),
-                Pair("Characters", jsonArrayToString("characters", obj)),
-            ).filter { !it.second.isNullOrEmpty() }.joinToString("\n\n") { "${it.first}: ${it.second}" }
-        }
+        return response.parseAs<MangaDetailsResponseDto>().toSMangaDetails()
     }
 
     // Chapters
@@ -220,40 +168,13 @@ abstract class HentaiHand(
     override fun chapterListRequest(manga: SManga): Request = chapterListApiRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val slug = response.request.url.toString().substringAfter("/api/comics/").removeSuffix("/chapters")
-        return if (chapters) {
-            val array = json.parseToJsonElement(response.body.string()).jsonArray
-            array.map {
-                SChapter.create().apply {
-                    url = "$slug/${it.jsonObject["slug"]!!.jsonPrimitive.content}"
-                    name = it.jsonObject["name"]!!.jsonPrimitive.content
-                    val date = it.jsonObject["added_at"]!!.jsonPrimitive.content
-                    date_upload = if (date.contains("day")) {
-                        Calendar.getInstance().apply {
-                            add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
-                        }.timeInMillis
-                    } else {
-                        DATE_FORMAT.parse(it.jsonObject["added_at"]!!.jsonPrimitive.content)?.time ?: 0
-                    }
-                }
-            }
+        return if (this.chapters) {
+            val slug = response.request.url.toString()
+                .substringAfter("/api/comics/")
+                .removeSuffix("/chapters")
+            response.parseAs<ChapterListResponseDto>().map { it.toSChapter(slug) }
         } else {
-            val obj = json.parseToJsonElement(response.body.string()).jsonObject
-            listOf(
-                SChapter.create().apply {
-                    url = obj["slug"]!!.jsonPrimitive.content
-                    name = "Chapter"
-                    val date = obj.jsonObject["uploaded_at"]!!.jsonPrimitive.content
-                    date_upload = if (date.contains("day")) {
-                        Calendar.getInstance().apply {
-                            add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
-                        }.timeInMillis
-                    } else {
-                        DATE_FORMAT.parse(obj.jsonObject["uploaded_at"]!!.jsonPrimitive.content)?.time ?: 0
-                    }
-                    chapter_number = 1f
-                },
-            )
+            listOf(response.parseAs<ChapterResponseDto>().toSChapter())
         }
     }
 
@@ -264,13 +185,7 @@ abstract class HentaiHand(
         return GET("$baseUrl/api/comics/$slug/images")
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        json.parseToJsonElement(response.body.string()).jsonObject["images"]!!.jsonArray.map {
-            val imgObj = it.jsonObject
-            val index = imgObj["page"]!!.jsonPrimitive.int
-            val imgUrl = imgObj["source_url"]!!.jsonPrimitive.content
-            Page(index, "", imgUrl)
-        }
+    override fun pageListParse(response: Response): List<Page> = response.parseAs<PageListResponseDto>().toPageList()
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
@@ -278,7 +193,10 @@ abstract class HentaiHand(
 
     protected fun authIntercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        if (username.isEmpty() or password.isEmpty()) {
+        if (username.isEmpty() or password.isEmpty()
+            // image request doesn't need token
+            or !request.url.toString().startsWith(baseUrl)
+        ) {
             return chain.proceed(request)
         }
 
@@ -304,7 +222,7 @@ abstract class HentaiHand(
         }
         try {
             // Returns access token as a string, unless unparseable
-            return json.parseToJsonElement(response.body.string()).jsonObject["auth"]!!.jsonObject["access-token"]!!.jsonPrimitive.content
+            return response.parseAs<LoginResponseDto>().auth.access_token
         } catch (e: IllegalArgumentException) {
             throw IOException("Cannot parse login response body")
         }
