@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.manhuarm
 
 import android.os.Build
+import android.util.Base64
 import androidx.annotation.RequiresApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -25,6 +26,15 @@ class PageDto(
     @Serializable(with = DialogListSerializer::class)
     val dialogues: List<Dialog> = emptyList(),
 )
+
+@Serializable
+class DialogDto(
+    private val data: String,
+) {
+    val content: String by lazy {
+        Base64.decode(data, Base64.DEFAULT).toString(Charsets.UTF_8)
+    }
+}
 
 @Serializable
 @RequiresApi(Build.VERSION_CODES.O)
