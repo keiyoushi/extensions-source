@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -50,6 +51,9 @@ abstract class HentaiHand(
     override val supportsLatest = true
 
     private val json: Json by injectLazy()
+
+    private inline fun <reified T> Response.parseAs(): T =
+        json.decodeFromString<ResponseDto<T>>(body.string()).data
 
     private fun slugToUrl(json: JsonObject) = json["slug"]!!.jsonPrimitive.content.prependIndent("/en/comic/")
 
@@ -181,6 +185,7 @@ abstract class HentaiHand(
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
+        // return response.parseAs<MangaDto>().toSMangaDetails()
         val obj = json.parseToJsonElement(response.body.string()).jsonObject
         return SManga.create().apply {
             url = slugToUrl(obj)
