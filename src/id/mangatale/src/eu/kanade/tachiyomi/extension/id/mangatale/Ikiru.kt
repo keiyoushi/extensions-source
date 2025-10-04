@@ -20,6 +20,7 @@ import org.jsoup.nodes.Element
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.random.Random
 
 class Ikiru : ParsedHttpSource() {
     // Formerly "MangaTale"
@@ -128,13 +129,13 @@ class Ikiru : ParsedHttpSource() {
 
         val chapterListUrl = "$baseUrl/ajax-call".toHttpUrl().newBuilder()
             .addQueryParameter("manga_id", mangaId)
-            .addQueryParameter("page", "") // keep empty for loading hidden chapter
+            .addQueryParameter("page", "${Random.nextInt(5, 99)}") // keep above 3 for loading hidden chapter
             .addQueryParameter("action", "chapter_list")
             .build()
 
         val response = client.newCall(GET(chapterListUrl, headers)).execute()
 
-        response.asJsoup().select("#chapter-list .cursor-pointer a").map { element ->
+        response.asJsoup().select("div a").map { element ->
             SChapter.create().apply {
                 setUrlWithoutDomain(element.attr("href"))
                 name = element.select("span").text()
