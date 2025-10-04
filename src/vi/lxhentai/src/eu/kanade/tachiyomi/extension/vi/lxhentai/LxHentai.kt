@@ -43,7 +43,9 @@ class LxHentai : ParsedHttpSource(), ConfigurableSource {
         .rateLimit(3)
         .build()
 
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder().add("Referer", baseUrl)
+    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
+        .add("Referer", "$baseUrl/")
+        .add("Origin", baseUrl)
 
     override fun popularMangaRequest(page: Int) =
         searchMangaRequest(page, "", FilterList(SortBy(3)))
