@@ -66,7 +66,7 @@ class RitharScans : Keyoapp("RitharScans", "https://ritharscans.com", "en") {
 
     override val descriptionSelector = "#expand_content"
     override val statusSelector = "[alt=Status]"
-    override val genreSelector = "[alt=Type]"
+    override val typeSelector = "[alt=Type]"
 
     override fun pageListParse(document: Document): List<Page> {
         val (pages, baseLink) = document.selectFirst("[x-data*=pages]")!!.attr("x-data")
