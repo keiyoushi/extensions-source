@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.lib.i18n.Intl.Companion.createDefaultMessageFileName
 import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
@@ -23,6 +24,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
+import okhttp3.FormBody
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -156,12 +158,22 @@ class Manhuarm(
 
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
-        val content = document.selectFirst("meta[name=description]")
-            ?.attr("content")
-            ?.fixJsonFormat()
-            ?: return pages.takeIf { language.target == language.origin } ?: throw Exception(i18n["chapter_unavailable_message"])
+        val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
+        val nonce = document.selectFirst("#manga-ocr-display-script-js-extra")!!.data().let {
+            NONCE_REGEX.find(it)!!.groupValues.last()
+        }
 
-        val dialog = content.parseAs<List<PageDto>>()
+        val form = FormBody.Builder()
+            .add("action", "get_ocr_data")
+            .add("chapter_id", chapterId)
+            .add("nonce", nonce)
+            .build()
+
+        val dialogDto = client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", headers, form))
+            .execute()
+            .parseAs<DialogDto>()
+
+        val dialog = dialogDto.content.parseAs<List<PageDto>>()
 
         return dialog.mapIndexed { index, dto ->
             val page = pages.first { it.imageUrl?.contains(dto.imageUrl, true)!! }
@@ -380,6 +392,7 @@ class Manhuarm(
     companion object {
         val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
         val JSON_FORMAT_REGEX = """(?:"text":\s+?".*?)([\s\S]*?)(?:",\s+?"box")""".toRegex()
+        val NONCE_REGEX = """(?:nonce":")([^"]+)""".toRegex()
 
         const val DEVICE_FONT = "device:"
         private const val FONT_SIZE_PREF = "fontSizePref"
