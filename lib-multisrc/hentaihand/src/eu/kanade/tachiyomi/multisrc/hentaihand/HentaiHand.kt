@@ -31,7 +31,6 @@ import rx.schedulers.Schedulers
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 
 abstract class HentaiHand(
@@ -158,7 +157,7 @@ abstract class HentaiHand(
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-         return response.parseAs<ResponseDto<MangaDto>>().data.toSMangaDetails()
+        return response.parseAs<MangaDetailsResponseDto>().toSMangaDetails()
     }
 
     // Chapters
@@ -175,14 +174,13 @@ abstract class HentaiHand(
     override fun chapterListRequest(manga: SManga): Request = chapterListApiRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = response.parseAs<ChapterListResponseDto>()
         return if (this.chapters) {
             val slug = response.request.url.toString()
                 .substringAfter("/api/comics/")
                 .removeSuffix("/chapters")
-            chapters.map { it.toSChapter(slug) }
+            response.parseAs<ChapterListResponseDto>().map { it.toSChapter(slug) }
         } else {
-            chapters.map { it.toSChapter() }
+            listOf(response.parseAs<ChapterResponseDto>().toSChapter())
         }
     }
 

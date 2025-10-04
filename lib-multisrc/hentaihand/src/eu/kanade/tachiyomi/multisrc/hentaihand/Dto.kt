@@ -36,8 +36,8 @@ class PageListResponseDto(val images: List<PageDto>) {
     )
 }
 
-
 typealias ChapterListResponseDto = List<ChapterDto>
+typealias ChapterResponseDto = ChapterDto
 
 @Serializable
 class ChapterDto(
@@ -51,8 +51,9 @@ class ChapterDto(
     }
 
     private fun parseDate(date: String?): Long =
-        if (date == null) 0
-        else if (date.contains("day")) {
+        if (date == null) {
+            0
+        } else if (date.contains("day")) {
             Calendar.getInstance().apply {
                 add(Calendar.DATE, -date.filter { it.isDigit() }.toInt())
             }.timeInMillis
@@ -74,6 +75,8 @@ class ChapterDto(
     }
 }
 
+typealias MangaDetailsResponseDto = MangaDto
+
 @Serializable
 class MangaDto(
     private val slug: String,
@@ -87,7 +90,7 @@ class MangaDto(
     private val alternative_title: String?,
     private val groups: List<NameDto>?,
     private val description: String?,
-    private val pages: String?,
+    private val pages: Int?,
     private val category: NameDto?,
     private val language: NameDto?,
     private val parodies: List<NameDto>?,
@@ -100,9 +103,9 @@ class MangaDto(
     }
 
     fun toSMangaDetails() = toSManga().also { manga ->
-        manga.artist = artists?.joinToString { it.name }
-        manga.author = authors?.joinToString { it.name } ?: manga.artist
-        manga.genre = listOfNotNull(tags, relationships).flatten().joinToString { it.name }
+        manga.artist = artists?.toNames()
+        manga.author = authors?.toNames() ?: manga.artist
+        manga.genre = listOfNotNull(tags, relationships).flatten().toNames()
         manga.status = when (status) {
             "complete" -> SManga.COMPLETED
             "ongoing" -> SManga.ONGOING
@@ -112,21 +115,21 @@ class MangaDto(
         }
         manga.description = listOf(
             Pair("Alternative Title", alternative_title),
-            Pair("Groups", groups?.joinToString { it.name }),
+            Pair("Groups", groups?.toNames()),
             Pair("Description", description),
-            Pair("Pages", pages),
+            Pair("Pages", pages?.toString()),
             Pair("Category", category?.name),
             Pair("Language", language?.name),
-            Pair("Parodies", parodies?.joinToString { it.name }),
-            Pair("Characters", characters?.joinToString { it.name }),
+            Pair("Parodies", parodies?.toNames()),
+            Pair("Characters", characters?.toNames()),
         ).filter { !it.second.isNullOrEmpty() }.joinToString("\n\n") { "${it.first}: ${it.second}" }
     }
 }
 
-
 @Serializable
 class NameDto(val name: String)
 
+fun List<NameDto>.toNames() = if (this.isEmpty()) null else this.joinToString { it.name }
+
 @Serializable
 class IdDto(val id: String)
-
