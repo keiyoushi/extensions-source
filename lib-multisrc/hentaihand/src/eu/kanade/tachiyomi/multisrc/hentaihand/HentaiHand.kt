@@ -16,8 +16,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -28,7 +27,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import rx.Observable
 import rx.schedulers.Schedulers
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -42,10 +40,6 @@ abstract class HentaiHand(
 ) : ConfigurableSource, HttpSource() {
 
     override val supportsLatest = true
-
-    private val json: Json by injectLazy()
-
-    private inline fun <reified T> Response.parseAs(): T = json.decodeFromString<T>(body.string())
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
