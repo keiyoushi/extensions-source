@@ -195,6 +195,10 @@ class Kagane : HttpSource(), ConfigurableSource {
         return GET("$apiUrl/api/v1/series/${manga.url}", apiHeaders)
     }
 
+    override fun getMangaUrl(manga: SManga): String {
+        return "$baseUrl/series/${manga.url}"
+    }
+
     // ============================== Chapters ==============================
 
     override fun chapterListParse(response: Response): List<SChapter> {
