@@ -17,13 +17,13 @@ class Asmotoon : Keyoapp(
 
     override val genreSelector: String = ".gap-3 .gap-1 a"
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
+    override fun mangaDetailsParse(document: Document): SManga {
         return super.mangaDetailsParse(document).apply {
             genre = buildList {
                 document.selectFirst(typeSelector)?.text()?.replaceFirstChar {
                     if (it.isLowerCase()) {
                         it.titlecase(
-                            Locale.getDefault(),
+                            Locale.ENGLISH,
                         )
                     } else {
                         it.toString()

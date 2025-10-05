@@ -231,7 +231,7 @@ abstract class Keyoapp(
             document.selectFirst(typeSelector)?.text()?.replaceFirstChar {
                 if (it.isLowerCase()) {
                     it.titlecase(
-                        Locale.getDefault(),
+                        Locale.ENGLISH,
                     )
                 } else {
                     it.toString()
