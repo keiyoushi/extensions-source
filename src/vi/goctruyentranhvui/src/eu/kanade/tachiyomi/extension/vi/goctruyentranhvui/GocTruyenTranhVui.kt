@@ -101,7 +101,6 @@ class GocTruyenTranhVui : HttpSource() {
         else -> SManga.UNKNOWN
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(response: Response): List<Page> {
         val html = response.body.string()
         val pattern = Regex("chapterJson:\\s*`(.*?)`")
@@ -114,35 +113,6 @@ class GocTruyenTranhVui : HttpSource() {
             val mangaId = matchId.groups[1]!!.value
             val nameEn = response.request.url.toString().substringAfter("/truyen/").substringBefore("/")
             val chapterNumber = response.request.url.toString().substringAfterLast("chuong-")
-
-            val handler = Handler(Looper.getMainLooper())
-            val latch = CountDownLatch(1)
-            handler.post {
-                val webview = WebView(Injekt.get<Application>())
-                with(webview.settings) {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    databaseEnabled = true
-                    blockNetworkImage = true
-                }
-                webview.webViewClient = object : WebViewClient() {
-
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        handler.postDelayed({
-                            // Get token
-                            view!!.evaluateJavascript("window.localStorage.getItem('Authorization')") { token ->
-                                _token = token.takeUnless { it == "null" }?.removeSurrounding("\"")
-                                latch.countDown()
-                                webview.destroy()
-                            }
-                        }, 2000,)
-                    }
-                }
-                webview.loadDataWithBaseURL(response.request.url.toString(), " ", "text/html", "UTF-8", null)
-            }
-            latch.await(10, TimeUnit.SECONDS)
-            if (getToken() == null) throw Exception("Vui lòng đăng nhập trong WebView")
-
             val body = FormBody.Builder()
                 .add("comicId", mangaId)
                 .add("chapterNumber", chapterNumber)
@@ -163,12 +133,40 @@ class GocTruyenTranhVui : HttpSource() {
             headersBuilder()
                 .add("X-Requested-With", "XMLHttpRequest")
                 .add("Authorization", it)
-        }!!
-            .build()
+                .build()
+        } ?: throw Exception("Vui lòng đăng nhập trong WebView")
     }
     private var _token: String? = null
+
+    @SuppressLint("SetJavaScriptEnabled")
     private fun getToken(): String? {
-        _token.also { return it }
+        _token?.also { return it }
+        val handler = Handler(Looper.getMainLooper())
+        val latch = CountDownLatch(1)
+
+        handler.post {
+            val webview = WebView(Injekt.get<Application>())
+            with(webview.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                blockNetworkImage = true
+            }
+            webview.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    // Get token
+                    view!!.evaluateJavascript("window.localStorage.getItem('Authorization')") { token ->
+                        _token = token.takeUnless { it == "null" }?.removeSurrounding("\"")
+                        latch.countDown()
+                        webview.destroy()
+                    }
+                }
+            }
+            webview.loadDataWithBaseURL(baseUrl, " ", "text/html", "UTF-8", null)
+        }
+
+        latch.await(10, TimeUnit.SECONDS)
+        return _token
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
