@@ -919,7 +919,7 @@ abstract class Madara(
             WordSet("ago", "atrás", "önce", "قبل").endsWith(date) -> {
                 parseRelativeDate(date)
             }
-            WordSet("hace").startsWith(date) -> {
+            WordSet("hace", "giờ", "phút", "giây").startsWith(date) -> {
                 parseRelativeDate(date)
             }
             // Handle "jour" with a number before it
