@@ -165,7 +165,9 @@ class Kagane : HttpSource(), ConfigurableSource {
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> {
-                        addQueryParameter("sort", filter.toUriPart())
+                        filter.selected?.let {
+                            addQueryParameter("sort", filter.toUriPart())
+                        }
                     }
 
                     else -> {}
@@ -427,6 +429,7 @@ class Kagane : HttpSource(), ConfigurableSource {
     class SortFilter(state: Int = 0) : UriPartFilter(
         "Sort By",
         arrayOf(
+            Pair("Relevance", ""),
             Pair("Latest", "updated_at"),
             Pair("Latest Descending", "updated_at,desc"),
             Pair("By Name", "series_name"),
@@ -445,5 +448,6 @@ class Kagane : HttpSource(), ConfigurableSource {
         state: Int = 0,
     ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
         fun toUriPart() = vals[state].second
+        val selected get() = vals[state].second.takeUnless { it.isEmpty() }
     }
 }
