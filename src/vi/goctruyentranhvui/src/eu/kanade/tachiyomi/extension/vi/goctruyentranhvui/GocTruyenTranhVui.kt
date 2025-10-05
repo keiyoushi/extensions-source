@@ -2,13 +2,17 @@ package eu.kanade.tachiyomi.extension.vi.goctruyentranhvui
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -16,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import okhttp3.FormBody
 import okhttp3.Headers
@@ -28,7 +33,7 @@ import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class GocTruyenTranhVui : HttpSource() {
+class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
     override val lang = "vi"
 
     override val baseUrl = "https://goctruyentranhvui17.com"
@@ -38,6 +43,8 @@ class GocTruyenTranhVui : HttpSource() {
     private val apiUrl = "$baseUrl/api/v2"
 
     override val supportsLatest: Boolean = true
+
+    private val preferences: SharedPreferences = getPreferences()
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
@@ -143,6 +150,11 @@ class GocTruyenTranhVui : HttpSource() {
         _token?.also { return it }
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
+        val customToken = preferences.getString("custom_token", null)
+        if (!customToken.isNullOrBlank()) {
+            return customToken
+        }
+        if (_token != null) return _token
 
         handler.post {
             val webview = WebView(Injekt.get<Application>())
@@ -197,4 +209,15 @@ class GocTruyenTranhVui : HttpSource() {
         SortByList(getSortByList()),
         GenreList(getGenreList()),
     )
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val tokenPref = EditTextPreference(screen.context).apply {
+            key = "custom_token"
+            title = "Authorization Token"
+            summary = "Enter token manually"
+            dialogTitle = "Authorization Token"
+            dialogMessage = "Token: ${getToken()}"
+        }
+        screen.addPreference(tokenPref)
+    }
 }
