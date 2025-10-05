@@ -15,6 +15,7 @@ class Asmotoon : Keyoapp(
     override fun latestUpdatesSelector() = "div.grid > div.group:not(:has(.capitalize:contains(Novel)))"
     override fun searchMangaSelector() = "#searched_series_page > button:not(:has(.capitalize:contains(Novel)))"
 
+    override val descriptionSelector: String = "#expand_content"
     override val genreSelector: String = ".gap-3 .gap-1 a"
 
     override fun mangaDetailsParse(document: Document): SManga {
