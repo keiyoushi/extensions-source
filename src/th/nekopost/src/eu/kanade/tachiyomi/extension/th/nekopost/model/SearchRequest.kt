@@ -3,7 +3,7 @@ package eu.kanade.tachiyomi.extension.th.nekopost.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class PagingRequest(
+data class PagingInfo(
     val pageNo: Int,
     val pageSize: Int,
 )
@@ -11,6 +11,6 @@ data class PagingRequest(
 @Serializable
 data class SearchRequest(
     val keyword: String,
-    val status: Int = 0,
-    val paging: PagingRequest,
+    val status: Int,
+    val paging: PagingInfo,
 )
