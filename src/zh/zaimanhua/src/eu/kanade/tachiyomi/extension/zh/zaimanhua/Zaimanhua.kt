@@ -62,33 +62,50 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         .build()
 
     private fun authIntercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
+        var request = chain.request()
+        val username = preferences.getString(USERNAME_PREF, "")!!
+        val password = preferences.getString(PASSWORD_PREF, "")!!
+        var token = preferences.getString(TOKEN_PREF, "")!!
+        var hasTriedLogin = false
+
+        if (request.url.toString().startsWith(apiUrl) && request.header("authorization") == null && username.isNotBlank() && password.isNotBlank()) {
+            token = getToken(username, password)
+            apiHeaders = apiHeaders.newBuilder().setToken(token).build()
+            hasTriedLogin = true
+            preferences.edit().apply {
+                if (token.isBlank()) {
+                    putString(TOKEN_PREF, "")
+                    putString(USERNAME_PREF, "")
+                    putString(PASSWORD_PREF, "").apply()
+                } else {
+                    putString(TOKEN_PREF, token).apply()
+                    request = request.newBuilder().headers(apiHeaders).build()
+                }
+            }
+        }
         val response = chain.proceed(request)
         // Only intercept chapter api requests that need token
         if (!request.url.toString().contains(checkTokenRegex)) return response
 
         // If chapter can read, return directly
-        if (response.peekBody(Long.MAX_VALUE).string().parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false) {
-            return response
-        }
-        // If can not read, need login or user permission is not enough
-        var token: String = preferences.getString(TOKEN_PREF, "")!!
-        if (!isValid(token)) {
-            // Token is invalid, need login
-            val username = preferences.getString(USERNAME_PREF, "")!!
-            val password = preferences.getString(PASSWORD_PREF, "")!!
+        val canRead = response.peekBody(Long.MAX_VALUE).string()
+            .parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false
+        if (canRead) return response
+
+        if (!isValid(token) && !hasTriedLogin) {
             token = getToken(username, password)
-            if (token.isBlank()) {
-                preferences.edit().putString(TOKEN_PREF, "")
-                    .putString(USERNAME_PREF, "")
-                    .putString(PASSWORD_PREF, "").apply()
-                return response
-            } else {
-                preferences.edit().putString(TOKEN_PREF, token).apply()
-                apiHeaders = apiHeaders.newBuilder().setToken(token).build()
-            }
+            apiHeaders = apiHeaders.newBuilder().setToken(token).build()
+            preferences.edit().apply {
+                if (token.isBlank()) {
+                    putString(TOKEN_PREF, "")
+                    putString(USERNAME_PREF, "")
+                    putString(PASSWORD_PREF, "")
+                } else {
+                    putString(TOKEN_PREF, token)
+                }
+            }.apply()
+            if (token.isBlank()) return response
         } else if (request.header("authorization") == "Bearer $token") {
-            // The request has already used a valid token, return directly
             return response
         }
 
