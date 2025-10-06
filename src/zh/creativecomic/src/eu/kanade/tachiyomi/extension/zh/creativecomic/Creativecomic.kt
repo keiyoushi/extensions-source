@@ -1,6 +1,12 @@
 package eu.kanade.tachiyomi.extension.zh.creativecomic
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -10,6 +16,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -17,6 +26,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import uy.kohesive.injekt.injectLazy
+import java.security.MessageDigest
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -27,13 +40,72 @@ class Creativecomic : HttpSource() {
     override val supportsLatest: Boolean = true
     override val baseUrl: String = "https://www.creative-comic.tw"
     private val apiUrl = "https://api.creative-comic.tw"
-    private val pageKey = "8134f84a8dbde288125cf50029c1992cb7e197b42290404a1efe7ab0dfe16aee".hexStringToByteArray()
-    private val pageIv = "2cb7e197b42290404a1efe7ab0dfe16a".hexStringToByteArray()
+    private var _pageKey: ByteArray? = null
+    private var _pageIv: ByteArray? = null
+    private var _token: String? = null
+    private val context: Application by injectLazy()
+    private val handler by lazy { Handler(Looper.getMainLooper()) }
+    private val json: Json by injectLazy()
 
-    private val apiHeaders = headersBuilder()
-        .add("device: web_desktop")
-        .add("uuid: null")
-        .build()
+    @SuppressLint("SetJavaScriptEnabled")
+    fun getToken(): String? {
+        _token?.also { return it }
+        val latch = CountDownLatch(1)
+        handler.post {
+            val webview = WebView(context)
+            with(webview.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                blockNetworkImage = true
+            }
+            webview.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    view!!.evaluateJavascript("window.localStorage.getItem('accessToken')") { token ->
+                        webview.stopLoading()
+                        webview.destroy()
+                        _token = token.removeSurrounding("\"")
+                        latch.countDown()
+                    }
+                }
+            }
+            webview.loadDataWithBaseURL("$baseUrl/", " ", "text/html", null, null)
+        }
+        latch.await(10, TimeUnit.SECONDS)
+        return _token
+    }
+
+    private fun getApiHeaders(): Headers {
+        val token = getToken()
+        if (token == "null") {
+            return headersBuilder()
+                .add("device: web_desktop")
+                .add("uuid: null")
+                .build()
+        }
+
+        // Check token expiration
+        val claims = token!!.substringAfter(".").substringBefore(".")
+        val decoded = Base64.decode(claims, Base64.DEFAULT).decodeToString()
+        val expiration = json.decodeFromString<JWTClaims>(decoded).exp
+        val now = System.currentTimeMillis() / 1000
+        if (now > expiration) throw Exception("token过期，请到WebView重新登录")
+
+        return headersBuilder()
+            .add("device: web_desktop")
+            .add("Authorization: Bearer $token")
+            .build()
+    }
+
+    private fun getPageKeyIv(): Pair<ByteArray, ByteArray> {
+        _pageIv?.also { return Pair(_pageKey!!, _pageIv!!) }
+        val token = (getToken().takeUnless { it == "null" } ?: "freeforccc2020reading").toByteArray()
+        val md = MessageDigest.getInstance("SHA-512")
+        val digest = md.digest(token)
+        _pageKey = digest.sliceArray(0..31)
+        _pageIv = _pageKey!!.sliceArray(15..30)
+        return Pair(_pageKey!!, _pageIv!!)
+    }
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::authIntercept)
@@ -65,7 +137,7 @@ class Creativecomic : HttpSource() {
     // Popular
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/book?page=$page&rows_per_page=24&sort_by=like_count&class=2", apiHeaders)
+        return GET("$apiUrl/book?page=$page&rows_per_page=24&sort_by=like_count&class=2", getApiHeaders())
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -83,7 +155,7 @@ class Creativecomic : HttpSource() {
     // Latest
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiUrl/book?page=$page&rows_per_page=24&sort_by=updated_at&class=2", apiHeaders)
+        return GET("$apiUrl/book?page=$page&rows_per_page=24&sort_by=updated_at&class=2", getApiHeaders())
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
@@ -100,7 +172,7 @@ class Creativecomic : HttpSource() {
             addQueryParameter("sort_by", "updated_at")
             addQueryParameter("class", "2")
         }.build()
-        return GET(url, apiHeaders)
+        return GET(url, getApiHeaders())
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
@@ -108,7 +180,7 @@ class Creativecomic : HttpSource() {
     // Details
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiUrl/book/${manga.url}/info", apiHeaders)
+        return GET("$apiUrl/book/${manga.url}/info", getApiHeaders())
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -118,7 +190,7 @@ class Creativecomic : HttpSource() {
     // Chapters
 
     override fun chapterListRequest(manga: SManga): Request {
-        return GET("$apiUrl/book/${manga.url}/chapter", apiHeaders)
+        return GET("$apiUrl/book/${manga.url}/chapter", getApiHeaders())
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -130,7 +202,7 @@ class Creativecomic : HttpSource() {
     // Pages
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$apiUrl/book/chapter/${chapter.url}", apiHeaders)
+        return GET("$apiUrl/book/chapter/${chapter.url}", getApiHeaders())
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -140,11 +212,12 @@ class Creativecomic : HttpSource() {
     }
 
     override fun imageUrlRequest(page: Page): Request {
-        return GET("$apiUrl/book/chapter/image/${page.url}", apiHeaders)
+        return GET("$apiUrl/book/chapter/image/${page.url}", getApiHeaders())
     }
 
     override fun imageUrlParse(response: Response): String {
         val encryptedKey = response.parseAs<ImageUrlResponseDto>().data.key
+        val (pageKey, pageIv) = getPageKeyIv()
         val decryptedKey = CryptoAES.decrypt(encryptedKey, pageKey, pageIv)
         val id = response.request.url.encodedPathSegments.last()
         return "https://storage.googleapis.com/ccc-www/fs/chapter_content/encrypt/$id/2#$decryptedKey"

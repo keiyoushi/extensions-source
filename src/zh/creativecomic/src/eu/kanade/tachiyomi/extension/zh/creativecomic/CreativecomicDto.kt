@@ -68,13 +68,16 @@ class ChapterDto(
     private val name: String,
     @SerialName("vol_name") private val volName: String,
     @SerialName("is_free") private val isFree: Int,
+    @SerialName("is_buy") private val isBuy: Int,
+    @SerialName("is_rent") private val isRent: Int,
     @SerialName("sales_plan") private val salesPlan: Int,
     @SerialName("online_at") private val onlineAt: String,
 ) {
     fun toSChapter() = SChapter.create().apply {
         url = id.toString()
-        // Prepend lock emoji to name if not free
-        name = (if (isFree == 1 || salesPlan == 0) "" else "\uD83D\uDD12") + "$volName ${this@ChapterDto.name}"
+        // Prepend lock emoji to name if locked
+        val isReadable = isFree == 1 || isBuy == 1 || isRent == 1 || salesPlan == 0
+        name = (if (isReadable) "" else "\uD83D\uDD12") + "$volName ${this@ChapterDto.name}"
         date_upload = dateFormat.tryParse(onlineAt)
     }
 }
@@ -100,3 +103,6 @@ class ImageUrlDto(val key: String)
 private val dateFormat by lazy {
     SimpleDateFormat("yyyy-MM-dd hh:mm:ss", Locale.ENGLISH)
 }
+
+@Serializable
+class JWTClaims(val exp: Int)
