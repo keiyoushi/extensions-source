@@ -145,8 +145,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     // path: "/comic/detail/mangaId"
+    private fun getMangaUrl(id: String): HttpUrl = "$apiUrl/comic/detail/$id?_v=2.2.5".toHttpUrl()
     override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$apiUrl/comic/detail/${manga.url}?_v=2.2.5", apiHeaders)
+        GET(getMangaUrl(manga.url), apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ResponseDto<DataWrapperDto<MangaDto>>>()
@@ -259,6 +260,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val ranking = filters.firstInstanceOrNull<RankingGroup>()
         val genres = filters.firstInstanceOrNull<GenreGroup>()
+        val searchById = filters.firstInstanceOrNull<SearchByIdFilter>()?.state ?: false
         val url = when {
             query.isEmpty() && ranking != null && (ranking.state[0] as TimeFilter).state != 0 -> rankApiUrl().apply {
                 ranking.state.filterIsInstance<QueryFilter>().forEach { it.addQuery(this) }
@@ -269,6 +271,8 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
                 genres.state.filterIsInstance<QueryFilter>().forEach { it.addQuery(this) }
                 addQueryParameter("page", page.toString())
             }.build()
+
+            query.isNotBlank() && searchById && query.toIntOrNull()?.let { it > 0 } ?: false -> getMangaUrl(query)
 
             else -> searchApiUrl().apply {
                 addQueryParameter("keyword", query)
@@ -282,6 +286,8 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         val url = response.request.url
         return if (url.toString().startsWith("$apiUrl/comic/rank/list")) {
             latestUpdatesParse(response)
+        } else if (url.toString().startsWith("$apiUrl/comic/detail")) {
+            MangasPage(listOf(mangaDetailsParse(response)), false)
         } else {
             // "$apiUrl/comic/filter/list" or "$apiUrl/search/index"
             response.parseAs<ResponseDto<PageDto>>().data.toMangasPage(url.queryParameter("page")!!.toInt())
@@ -302,6 +308,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     override fun getFilterList() = FilterList(
+        SearchByIdFilter(),
         RankingGroup(),
         Filter.Separator(),
         Filter.Header("分类(搜索/查看排行榜时无效)"),
