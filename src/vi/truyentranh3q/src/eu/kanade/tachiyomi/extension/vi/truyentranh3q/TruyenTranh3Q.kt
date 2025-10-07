@@ -74,15 +74,14 @@ class TruyenTranh3Q : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String? = popularMangaNextPageSelector()
 
     // search
-    private val searchPath = "tim-kiem-nang-cao"
-    private val queryParam = "keyword"
+    private val searchUrl = "$baseUrl/tim-kiem-nang-cao"
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
+        val url = searchUrl.toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
 
         // always add search query if present
         if (query.isNotBlank()) {
-            url.addQueryParameter(queryParam, query)
+            url.addQueryParameter("keyword", query)
         }
 
         // process filters regardless of search query
@@ -248,7 +247,7 @@ class TruyenTranh3Q : ParsedHttpSource() {
     private var genreList: List<Genre> = emptyList()
     private var fetchGenreAttempts: Int = 0
 
-    private fun genresRequest() = GET("$baseUrl/$searchPath", headers)
+    private fun genresRequest() = GET(searchUrl, headers)
 
     private fun parseGenres(document: Document): List<Genre> {
         return document.select(".genre-item").mapIndexed { index, element ->
