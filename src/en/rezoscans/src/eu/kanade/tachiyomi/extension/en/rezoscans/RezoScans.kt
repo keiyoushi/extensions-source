@@ -10,7 +10,7 @@ class RezoScans : Iken(
     "Rezo Scans",
     "en",
     "https://rezoscan.org",
-    "https://api.rezoscan.org"
+    "https://api.rezoscan.org",
 ) {
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
