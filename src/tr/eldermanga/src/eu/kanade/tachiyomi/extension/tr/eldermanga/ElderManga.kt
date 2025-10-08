@@ -28,7 +28,7 @@ class ElderManga : HttpSource() {
     override val baseUrl = "https://eldermanga.com"
 
     // CDN used for search API responses and images
-    private val CDN_URL = "https://cdn1.eldermanga.com"
+    private val CDN_URL = "https://manga3.efsaneler.can.re"
 
     override val lang = "tr"
 
@@ -153,7 +153,7 @@ class ElderManga : HttpSource() {
         val results = pageRegex.findAll(script).toList()
         return results.mapIndexed { index, result ->
             val url = result.groups.get(1)!!.value
-            Page(index, imageUrl = "$CDN_URL/upload/series/$url")
+            Page(index, imageUrl = "$CDN_URL/$url")
         }
     }
 
