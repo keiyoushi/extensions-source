@@ -9,4 +9,3 @@ class RageScans : MangaThemesia(
 ) {
     override fun chapterListSelector() = "li:has(.chbox .eph-num):not(:has([data-bs-target='#lockedChapterModal']))"
 }
-
