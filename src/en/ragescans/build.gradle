@@ -3,7 +3,7 @@ ext {
     extClass = '.RageScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://ragescans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
