@@ -62,33 +62,50 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         .build()
 
     private fun authIntercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
+        var request = chain.request()
+        val username = preferences.getString(USERNAME_PREF, "")!!
+        val password = preferences.getString(PASSWORD_PREF, "")!!
+        var token = preferences.getString(TOKEN_PREF, "")!!
+        var hasTriedLogin = false
+
+        if (request.url.toString().startsWith(apiUrl) && request.header("authorization") == null && username.isNotBlank() && password.isNotBlank()) {
+            token = getToken(username, password)
+            apiHeaders = apiHeaders.newBuilder().setToken(token).build()
+            hasTriedLogin = true
+            preferences.edit().apply {
+                if (token.isBlank()) {
+                    putString(TOKEN_PREF, "")
+                    putString(USERNAME_PREF, "")
+                    putString(PASSWORD_PREF, "").apply()
+                } else {
+                    putString(TOKEN_PREF, token).apply()
+                    request = request.newBuilder().headers(apiHeaders).build()
+                }
+            }
+        }
         val response = chain.proceed(request)
         // Only intercept chapter api requests that need token
         if (!request.url.toString().contains(checkTokenRegex)) return response
 
         // If chapter can read, return directly
-        if (response.peekBody(Long.MAX_VALUE).string().parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false) {
-            return response
-        }
-        // If can not read, need login or user permission is not enough
-        var token: String = preferences.getString(TOKEN_PREF, "")!!
-        if (!isValid(token)) {
-            // Token is invalid, need login
-            val username = preferences.getString(USERNAME_PREF, "")!!
-            val password = preferences.getString(PASSWORD_PREF, "")!!
+        val canRead = response.peekBody(Long.MAX_VALUE).string()
+            .parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false
+        if (canRead) return response
+
+        if (!isValid(token) && !hasTriedLogin) {
             token = getToken(username, password)
-            if (token.isBlank()) {
-                preferences.edit().putString(TOKEN_PREF, "")
-                    .putString(USERNAME_PREF, "")
-                    .putString(PASSWORD_PREF, "").apply()
-                return response
-            } else {
-                preferences.edit().putString(TOKEN_PREF, token).apply()
-                apiHeaders = apiHeaders.newBuilder().setToken(token).build()
-            }
+            apiHeaders = apiHeaders.newBuilder().setToken(token).build()
+            preferences.edit().apply {
+                if (token.isBlank()) {
+                    putString(TOKEN_PREF, "")
+                    putString(USERNAME_PREF, "")
+                    putString(PASSWORD_PREF, "")
+                } else {
+                    putString(TOKEN_PREF, token)
+                }
+            }.apply()
+            if (token.isBlank()) return response
         } else if (request.header("authorization") == "Bearer $token") {
-            // The request has already used a valid token, return directly
             return response
         }
 
@@ -145,8 +162,9 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     // path: "/comic/detail/mangaId"
+    private fun getMangaUrl(id: String): HttpUrl = "$apiUrl/comic/detail/$id?_v=2.2.5".toHttpUrl()
     override fun mangaDetailsRequest(manga: SManga): Request =
-        GET("$apiUrl/comic/detail/${manga.url}?_v=2.2.5", apiHeaders)
+        GET(getMangaUrl(manga.url), apiHeaders)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val result = response.parseAs<ResponseDto<DataWrapperDto<MangaDto>>>()
@@ -259,6 +277,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val ranking = filters.firstInstanceOrNull<RankingGroup>()
         val genres = filters.firstInstanceOrNull<GenreGroup>()
+        val searchById = filters.firstInstanceOrNull<SearchByIdFilter>()?.state ?: false
         val url = when {
             query.isEmpty() && ranking != null && (ranking.state[0] as TimeFilter).state != 0 -> rankApiUrl().apply {
                 ranking.state.filterIsInstance<QueryFilter>().forEach { it.addQuery(this) }
@@ -269,6 +288,8 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
                 genres.state.filterIsInstance<QueryFilter>().forEach { it.addQuery(this) }
                 addQueryParameter("page", page.toString())
             }.build()
+
+            query.isNotBlank() && searchById && query.toIntOrNull()?.let { it > 0 } ?: false -> getMangaUrl(query)
 
             else -> searchApiUrl().apply {
                 addQueryParameter("keyword", query)
@@ -282,6 +303,8 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         val url = response.request.url
         return if (url.toString().startsWith("$apiUrl/comic/rank/list")) {
             latestUpdatesParse(response)
+        } else if (url.toString().startsWith("$apiUrl/comic/detail")) {
+            MangasPage(listOf(mangaDetailsParse(response)), false)
         } else {
             // "$apiUrl/comic/filter/list" or "$apiUrl/search/index"
             response.parseAs<ResponseDto<PageDto>>().data.toMangasPage(url.queryParameter("page")!!.toInt())
@@ -302,6 +325,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
     }
 
     override fun getFilterList() = FilterList(
+        SearchByIdFilter(),
         RankingGroup(),
         Filter.Separator(),
         Filter.Header("分类(搜索/查看排行榜时无效)"),

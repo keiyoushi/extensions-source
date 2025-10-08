@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.extension.zh.zaimanhua
 import eu.kanade.tachiyomi.source.model.Filter
 import okhttp3.HttpUrl
 
+class SearchByIdFilter : Filter.CheckBox("启用ID跳转（搜索纯数字时）")
+
 open class QueryFilter(name: String, private val key: String, private val params: Array<Pair<String, String>>) :
     Filter.Select<String>(name, params.map { it.first }.toTypedArray()) {
     fun addQuery(builder: HttpUrl.Builder) {
@@ -13,7 +15,7 @@ open class QueryFilter(name: String, private val key: String, private val params
     }
 }
 class RankingGroup : Filter.Group<Filter<*>>(
-    "排行榜（搜索文本时无效）",
+    "排行榜（搜索时无效）",
     listOf<Filter<*>>(
         TimeFilter(),
         SortFilter(),
