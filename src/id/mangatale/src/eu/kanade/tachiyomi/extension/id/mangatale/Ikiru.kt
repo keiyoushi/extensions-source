@@ -27,7 +27,7 @@ class Ikiru : ParsedHttpSource() {
     override val id = 1532456597012176985
 
     override val name = "Ikiru"
-    override val baseUrl = "https://01.ikiru.wtf"
+    override val baseUrl = "https://02.ikiru.wtf"
     override val lang = "id"
     override val supportsLatest = true
 
@@ -129,7 +129,7 @@ class Ikiru : ParsedHttpSource() {
 
         val chapterListUrl = "$baseUrl/ajax-call".toHttpUrl().newBuilder()
             .addQueryParameter("manga_id", mangaId)
-            .addQueryParameter("page", "${Random.nextInt(5, 99)}") // keep above 3 for loading hidden chapter
+            .addQueryParameter("page", "${Random.nextInt(5, 9999)}") // keep above 3 for loading hidden chapter
             .addQueryParameter("action", "chapter_list")
             .build()
 
