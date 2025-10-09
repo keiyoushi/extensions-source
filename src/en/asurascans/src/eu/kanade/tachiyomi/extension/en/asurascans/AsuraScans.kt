@@ -297,16 +297,18 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             .joinToString("") { it.data().substringAfter("\"").substringBeforeLast("\"") }
         val pagesData = PAGES_REGEX.find(scriptData)?.groupValues?.get(1) ?: throw Exception("Failed to find chapter pages")
         val pageList = json.decodeFromString<List<PageDto>>(pagesData.unescape()).sortedBy { it.order }
-        return pageList.mapIndexed { i, page ->
-            val newUrl = page.url.toHttpUrlOrNull()?.run {
-                newBuilder()
-                    .fragment("pageListParse")
-                    .build()
-                    .toString()
-            }
+        return pageList
+            .filterIndexed { i, _ -> !(preferences.hideCoverPages() && i == 0) }
+            .mapIndexed { i, page ->
+                val newUrl = page.url.toHttpUrlOrNull()?.run {
+                    newBuilder()
+                        .fragment("pageListParse")
+                        .build()
+                        .toString()
+                }
 
-            Page(i, imageUrl = newUrl ?: page.url)
-        }
+                Page(i, imageUrl = newUrl ?: page.url)
+            }
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
@@ -329,6 +331,13 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             title = "Hide premium chapters"
             summary = "Hides the chapters that require a subscription to view"
             setDefaultValue(true)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_HIDE_COVER_PAGES
+            title = "Hide cover pages"
+            summary = "Hides the the first and last page\nNote: This setting may require clearing cache"
+            setDefaultValue(false)
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -362,6 +371,10 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         PREF_HIDE_PREMIUM_CHAPTERS,
         true,
     )
+    private fun SharedPreferences.hideCoverPages(): Boolean = getBoolean(
+        PREF_HIDE_COVER_PAGES,
+        false,
+    )
     private fun SharedPreferences.forceHighQuality(): Boolean = getBoolean(
         PREF_FORCE_HIGH_QUALITY,
         false,
@@ -390,6 +403,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         private const val PREF_SLUG_MAP = "pref_slug_map_2"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
         private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
+        private const val PREF_HIDE_COVER_PAGES = "pref_hide_cover_pages"
         private const val PREF_FORCE_HIGH_QUALITY = "pref_force_high_quality"
     }
 }
