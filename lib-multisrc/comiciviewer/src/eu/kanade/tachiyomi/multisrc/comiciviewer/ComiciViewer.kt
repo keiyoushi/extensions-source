@@ -5,6 +5,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -67,24 +68,45 @@ abstract class ComiciViewer(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl/search".toHttpUrl().newBuilder()
-            .addQueryParameter("keyword", query)
-            .addQueryParameter("page", page.toString())
-            .build()
+        if (query.isNotBlank()) {
+            val url = "$baseUrl/search".toHttpUrl().newBuilder()
+                .addQueryParameter("keyword", query)
+                .addQueryParameter("page", page.toString())
+                .build()
+            return GET(url, headers)
+        }
+        val filterList = if (filters.isEmpty()) getFilterList() else filters
+        val browseFilter = filterList.find { it is BrowseFilter } as BrowseFilter
+        val pathAndQuery = getFilterOptions()[browseFilter.state].second
+        val url = (baseUrl + pathAndQuery).toHttpUrl().newBuilder().build()
+
         return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.manga-store-item").map { element ->
-            SManga.create().apply {
-                setUrlWithoutDomain(element.selectFirst("a.c-ms-clk-article")!!.attr("href"))
-                title = element.selectFirst("h2.manga-title")!!.text()
-                thumbnail_url = element.selectFirst("source")?.attr("data-srcset")?.substringBefore(" ")?.let { "https:$it" }
+        val url = response.request.url.toString()
+
+        return when {
+            url.contains("/ranking/") -> popularMangaParse(response)
+            url.contains("/category/") -> latestUpdatesParse(response)
+
+            else -> {
+                val document = response.asJsoup()
+                val mangas = document.select("div.manga-store-item").map { element ->
+                    SManga.create().apply {
+                        setUrlWithoutDomain(
+                            element.selectFirst("a.c-ms-clk-article")!!.attr("href"),
+                        )
+                        title = element.selectFirst("h2.manga-title")!!.text()
+                        thumbnail_url =
+                            element.selectFirst("source")?.attr("data-srcset")?.substringBefore(" ")
+                                ?.let { "https:$it" }
+                    }
+                }
+                val hasNextPage = document.selectFirst("li.mode-paging-active + li > a") != null
+                return MangasPage(mangas, hasNextPage)
             }
         }
-        val hasNextPage = document.selectFirst("li.mode-paging-active + li > a") != null
-        return MangasPage(mangas, hasNextPage)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -105,28 +127,33 @@ abstract class ComiciViewer(
         val listResponse = client.newCall(GET(listUrl, headers)).execute()
         val document = listResponse.asJsoup()
 
-        val link = document.select(".article-ep-list-item-img-link")
-        if (link.isEmpty()) {
-            return link.mapIndexed { index, element ->
-                val hasLockElement = element.selectFirst(".g-payment-article.wait-free-enabled")
-                if (!showLocked && hasLockElement != null) {
-                    null
+        return document.select("div.series-ep-list-item").mapNotNull { element ->
+            val link = element.selectFirst("a.g-episode-link-wrapper")!!
+
+            val isFree = element.selectFirst("span.free-icon-new") != null
+            val isTicketLocked = element.selectFirst("img[data-src*='free_charge_ja.svg']") != null
+            val isCoinLocked = element.selectFirst("img[data-src*='coin.svg']") != null
+            val isLocked = !isFree
+
+            if (!showLocked && isLocked) {
+                return@mapNotNull null
+            }
+
+            SChapter.create().apply {
+                val chapterUrl = link.attr("data-href")
+                if (chapterUrl.isNotEmpty()) {
+                    setUrlWithoutDomain(chapterUrl)
                 } else {
-                    SChapter.create().apply {
-                        chapter_number = index.toFloat()
-                        url = response.request.url.newBuilder().fragment("$index-$DUMMY_URL_SUFFIX").build().toString()
-                        name = (if (hasLockElement != null) "🔒 " else "\uD83E\uDE99 ") + name
-                    }
+                    url = response.request.url.toString() + "#" + link.attr("data-article") + DUMMY_URL_SUFFIX
                 }
-            }.filterNotNull()
-        } else {
-            return document.select("div.series-ep-list a[data-href]").mapIndexed { index, element ->
-                SChapter.create().apply {
-                    chapter_number = index.toFloat()
-                    setUrlWithoutDomain(element.attr("data-href"))
-                    name = element.selectFirst("span.series-ep-list-item-h-text")!!.text()
-                    date_upload = dateFormat.tryParse(element.selectFirst("time")?.attr("datetime"))
+
+                name = link.selectFirst("span.series-ep-list-item-h-text")!!.text()
+                when {
+                    isTicketLocked -> name = "🔒 $name"
+                    isCoinLocked -> name = "\uD83E\uDE99 $name"
                 }
+
+                date_upload = dateFormat.tryParse(element.selectFirst("time")?.attr("datetime"))
             }
         }
     }
@@ -140,8 +167,7 @@ abstract class ComiciViewer(
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val pageList = mutableListOf<Page>()
-        val viewer = document.selectFirst("#comici-viewer")!!
+        val viewer = document.selectFirst("#comici-viewer") ?: throw Exception("You need to log in via WebView to read this chapter")
         val comiciViewerId = viewer.attr("comici-viewer-id")
         val memberJwt = viewer.attr("data-member-jwt")
         val requestUrl = "$baseUrl/book/contentsInfo".toHttpUrl().newBuilder()
@@ -156,25 +182,24 @@ abstract class ComiciViewer(
                 }
                 initialResponse.parseAs<ViewerResponse>().totalPages.toString()
             }
+
         val getAllPagesUrl = requestUrl.setQueryParameter("page-to", pageTo).build()
-        client.newCall(GET(getAllPagesUrl, headers)).execute().use { allPagesResponse ->
-            if (!allPagesResponse.isSuccessful) {
+        return client.newCall(GET(getAllPagesUrl, headers)).execute().use { allPagesResponse ->
+            if (allPagesResponse.isSuccessful) {
+                allPagesResponse.parseAs<ViewerResponse>().result.map { resultItem ->
+                    val urlBuilder = resultItem.imageUrl.toHttpUrl().newBuilder()
+                    if (resultItem.scramble.isNotEmpty()) {
+                        urlBuilder.addQueryParameter("scramble", resultItem.scramble)
+                    }
+                    Page(
+                        index = resultItem.sort,
+                        imageUrl = urlBuilder.build().toString(),
+                    )
+                }
+            } else {
                 throw Exception("Failed to get full page list")
             }
-
-            allPagesResponse.parseAs<ViewerResponse>().result.forEach { resultItem ->
-                val urlBuilder = resultItem.imageUrl.toHttpUrl().newBuilder()
-                if (resultItem.scramble.isNotEmpty()) {
-                    urlBuilder.addQueryParameter("scramble", resultItem.scramble)
-                }
-
-                pageList.add(
-                    Page(index = resultItem.sort, imageUrl = urlBuilder.build().toString()),
-                )
-            }
         }
-
-        return pageList
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -184,6 +209,26 @@ abstract class ComiciViewer(
             setDefaultValue(true)
         }.also(screen::addPreference)
     }
+
+    protected open class BrowseFilter(vals: Array<String>) : Filter.Select<String>("Filter by", vals)
+
+    protected open fun getFilterOptions(): List<Pair<String, String>> = listOf(
+        Pair("ランキング", "/ranking/manga"),
+        Pair("読み切り", "/category/manga?type=読み切り"),
+        Pair("完結", "/category/manga?type=完結"),
+        Pair("月曜日", "/category/manga?type=連載中&day=月"),
+        Pair("火曜日", "/category/manga?type=連載中&day=火"),
+        Pair("水曜日", "/category/manga?type=連載中&day=水"),
+        Pair("木曜日", "/category/manga?type=連載中&day=木"),
+        Pair("金曜日", "/category/manga?type=連載中&day=金"),
+        Pair("土曜日", "/category/manga?type=連載中&day=土"),
+        Pair("日曜日", "/category/manga?type=連載中&day=日"),
+        Pair("その他", "/category/manga?type=連載中&day=その他"),
+    )
+
+    override fun getFilterList() = FilterList(
+        BrowseFilter(getFilterOptions().map { it.first }.toTypedArray()),
+    )
 
     // Unsupported
     override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
