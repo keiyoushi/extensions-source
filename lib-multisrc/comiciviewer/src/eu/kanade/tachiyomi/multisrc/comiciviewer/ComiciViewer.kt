@@ -71,7 +71,8 @@ abstract class ComiciViewer(
         if (query.isNotBlank()) {
             val url = "$baseUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("keyword", query)
-                .addQueryParameter("page", page.toString())
+                .addQueryParameter("page", (page - 1).toString())
+                .addQueryParameter("filter", "series")
                 .build()
             return GET(url, headers)
         }
