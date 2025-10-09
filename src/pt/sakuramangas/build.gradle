@@ -1,8 +1,13 @@
 ext {
     extName = 'Sakura Mangás'
     extClass = '.SakuraMangas'
-    extVersionCode = 1
+    extVersionCode = 3
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation project(":lib:synchrony")
+    implementation project(':lib:randomua')
+}

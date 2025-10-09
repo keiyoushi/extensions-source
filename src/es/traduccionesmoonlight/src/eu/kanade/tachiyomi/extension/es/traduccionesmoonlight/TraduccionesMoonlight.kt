@@ -27,8 +27,8 @@ class TraduccionesMoonlight : MangaEsp(
             }
             doc = client.newCall(POST(url, headers, body.build())).execute().asJsoup()
         }
-        return doc.select("main.contenedor.read img, main > img[src]").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
+        return doc.select("main.contenedor.read img, main > img").mapIndexed { i, element ->
+            Page(i, imageUrl = element.imgAttr())
         }
     }
 }

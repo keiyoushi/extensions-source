@@ -32,7 +32,7 @@ class TeamLanhLung : ParsedHttpSource() {
 
     override val name: String = "Team Lạnh Lùng"
 
-    override val baseUrl: String = "https://teamlanhlung11.shop"
+    override val baseUrl: String = "https://teamlanhlungday3.xyz"
 
     override val lang: String = "vi"
 

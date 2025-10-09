@@ -8,7 +8,9 @@ class ArabToons : Madara(
     "عرب تونز",
     "https://arabtoons.net",
     "ar",
-    dateFormat = SimpleDateFormat("MMM d", Locale("ar")),
+    dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale("ar")),
 ) {
-    override val useNewChapterEndpoint = true
+    override val mangaDetailsSelectorStatus = "div.summary_image span.status"
+    override val mangaDetailsSelectorDescription = "div.summary-text"
+    override val altNameSelector = ".post-content_item:contains(أسماء أخرى) .summary-content"
 }
