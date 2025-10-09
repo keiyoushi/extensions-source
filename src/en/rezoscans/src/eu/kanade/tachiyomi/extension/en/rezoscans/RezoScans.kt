@@ -12,6 +12,8 @@ class RezoScans : Iken(
     "https://rezoscan.org",
     "https://api.rezoscan.org",
 ) {
+    override val versionId = 2
+
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())

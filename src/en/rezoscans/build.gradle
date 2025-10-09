@@ -3,7 +3,7 @@ ext {
     extClass = '.RezoScans'
     themePkg = 'iken'
     baseUrl = 'https://rezoscan.org'
-    overrideVersionCode = 4
+    overrideVersionCode = 11
     isNsfw = false
 }
 
