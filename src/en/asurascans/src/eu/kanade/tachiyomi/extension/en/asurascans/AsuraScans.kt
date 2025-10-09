@@ -336,7 +336,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_HIDE_COVER_PAGES
             title = "Hide cover pages"
-            summary = "Hides the the first and last page\nNote: This setting may require clearing cache"
+            summary = "Hides the the first page\nNote: This setting may require clearing cache"
             setDefaultValue(false)
         }.let(screen::addPreference)
 
