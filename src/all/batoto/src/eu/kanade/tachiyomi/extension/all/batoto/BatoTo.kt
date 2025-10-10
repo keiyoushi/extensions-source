@@ -379,17 +379,28 @@ open class BatoTo(
             }
         }.trim()
 
-        val cleanedTitle = originalTitle
-            .replace(Regex(customRemoveTitle()), "")
-            .replace(if (isRemoveTitleVersion()) titleRegex else Regex(""), "")
-            .trim()
+        val cleanedTitle = originalTitle.let {
+            var tempTitle = it
+            if (customRemoveTitle().isNotEmpty()) {
+                tempTitle = tempTitle.replace(Regex(customRemoveTitle()), "")
+            }
+            if (isRemoveTitleVersion()) {
+                tempTitle = tempTitle.replace(titleRegex, "")
+            }
+            tempTitle.trim()
+        }
 
         manga.title = cleanedTitle
         manga.author = infoElement.select("div.attr-item:contains(author) span").text()
         manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
         manga.status = parseStatus(workStatus, uploadStatus)
         manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
-        manga.description = description
+        manga.description = if (originalTitle.trim() != cleanedTitle) {
+            listOf(originalTitle, description)
+                .joinToString("\n\n")
+        } else {
+            description
+        }
         manga.thumbnail_url = document.select("div.attr-cover img").attr("abs:src")
         return manga
     }
