@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.en.mangadistrict
 
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -48,13 +49,13 @@ class MangaDistrict :
     }
 
     override fun popularMangaFromElement(element: Element): SManga {
-        return super.popularMangaFromElement(element).cleanTitleIfNeeded()
+        return super.popularMangaFromElement(element)
     }
 
     override fun popularMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
 
     override fun latestUpdatesFromElement(element: Element): SManga {
-        return super.latestUpdatesFromElement(element).cleanTitleIfNeeded()
+        return super.latestUpdatesFromElement(element)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()
@@ -171,11 +172,21 @@ class MangaDistrict :
         }
     }
 
-    private val titleVersion = Regex("\\(.*\\)")
+    private var titleRegex: Regex =
+        Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)
 
     private fun SManga.cleanTitleIfNeeded() = apply {
         if (isRemoveTitleVersion()) {
-            title = title.replace(titleVersion, "").trim()
+            title = title.let {
+                var tempTitle = it
+                if (customRemoveTitle().isNotEmpty()) {
+                    tempTitle = tempTitle.replace(Regex(customRemoveTitle()), "")
+                }
+                if (isRemoveTitleVersion()) {
+                    tempTitle = tempTitle.replace(titleRegex, "")
+                }
+                tempTitle.trim()
+            }
         }
     }
 
@@ -280,6 +291,8 @@ class MangaDistrict :
     )
 
     private fun isRemoveTitleVersion() = preferences.getBoolean(REMOVE_TITLE_VERSION_PREF, false)
+    private fun customRemoveTitle(): String =
+        preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "") ?: ""
     private fun getImgRes() = preferences.getString(IMG_RES_PREF, IMG_RES_DEFAULT)!!
 
     private var SharedPreferences.dates: MutableMap<String, Long>
@@ -305,6 +318,13 @@ class MangaDistrict :
             setDefaultValue(false)
         }.let(screen::addPreference)
 
+        EditTextPreference(screen.context).apply {
+            key = "${REMOVE_TITLE_CUSTOM_PREF}_$lang"
+            title = "Custom regex to be removed from title"
+            summary = preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "") ?: ""
+            setDefaultValue("")
+        }.also { screen.addPreference(it) }
+
         ListPreference(screen.context).apply {
             key = IMG_RES_PREF
             title = "Image quality"
@@ -324,6 +344,7 @@ class MangaDistrict :
 
     companion object {
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
+        private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
         private const val TAG_LIST_PREF = "TAG_LIST"
 
         private const val IMG_RES_PREF = "IMG_RES"
