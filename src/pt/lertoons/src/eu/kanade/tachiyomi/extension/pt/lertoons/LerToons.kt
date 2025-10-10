@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class LerToons : ZeroTheme(
     "Ler Toons",
-    "https://www.readmangas.org",
+    "https://lertoons.com/",
     "pt-BR",
 ) {
     override val versionId = 3
