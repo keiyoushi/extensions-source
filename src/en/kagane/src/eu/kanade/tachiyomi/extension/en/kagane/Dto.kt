@@ -54,7 +54,7 @@ class DetailsDto(
             alternateTitles.forEach { desc.append("• ${it.title}\n") }
         }
 
-        author = authors.joinToString { it }
+        author = authors.joinToString()
         description = desc.toString()
         genre = genres.joinToString()
         status = this@DetailsDto.status.toStatus()
