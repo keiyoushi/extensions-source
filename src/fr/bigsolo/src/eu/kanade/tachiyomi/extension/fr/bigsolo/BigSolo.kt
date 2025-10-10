@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.bigsolo
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,6 +17,16 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class BigSolo : ParsedHttpSource() {
+
+    companion object {
+        private const val TAG = "BigSolo"
+        private const val CONFIG_ENDPOINT = "/data/config.json"
+        private const val SERIES_DATA_ENDPOINT = "/data/series/"
+        private const val CHAPTER_PAGES_API = "/api/imgchest-chapter-pages"
+        private const val SERIES_DATA_SELECTOR = "#series-data-placeholder"
+        private const val READER_DATA_SELECTOR = "#reader-data-placeholder"
+    }
+
     override val name = "BigSolo"
     override val baseUrl = "https://bigsolo.org"
     override val lang = "fr"
@@ -30,9 +41,10 @@ class BigSolo : ParsedHttpSource() {
             "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36",
         )
 
+    // Popular
     override fun popularMangaRequest(page: Int): Request {
         currentSearchQuery = ""
-        return GET("$baseUrl/data/config.json", headers)
+        return GET("$baseUrl$CONFIG_ENDPOINT", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -49,6 +61,7 @@ class BigSolo : ParsedHttpSource() {
         throw UnsupportedOperationException()
     }
 
+    // Latest
     override fun latestUpdatesRequest(page: Int): Request {
         throw UnsupportedOperationException()
     }
@@ -65,59 +78,30 @@ class BigSolo : ParsedHttpSource() {
         throw UnsupportedOperationException()
     }
 
+    // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         currentSearchQuery = query
-        return GET("$baseUrl/data/config.json", headers)
+        return GET("$baseUrl$CONFIG_ENDPOINT", headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val configJson = response.body.string()
-        val jsonObject = try {
-            JSONObject(configJson)
-        } catch (e: org.json.JSONException) {
-            throw IllegalStateException("Failed to parse config.json: ${e.message}", e)
-        }
-        val seriesFiles = try {
-            jsonObject.getJSONArray("LOCAL_SERIES_FILES")
-        } catch (e: org.json.JSONException) {
-            throw IllegalStateException("Missing LOCAL_SERIES_FILES in config.json", e)
-        }
-
+        val config = parseConfigResponse(response.body.string())
         val mangaList = mutableListOf<SManga>()
 
-        // Filter series files according to the stored query
-        for (i in 0 until seriesFiles.length()) {
-            val fileName = seriesFiles.getString(i)
-            val fileUrl = "$baseUrl/data/series/$fileName"
-
+        for (fileName in config.localSeriesFiles) {
             try {
-                val fileResponse = client.newCall(GET(fileUrl, headers)).execute()
-                val fileContent = fileResponse.body.string()
-                val seriesJson = JSONObject(fileContent)
-
-                val title = seriesJson.optString("title")
+                val seriesData = fetchSeriesData(fileName)
 
                 // Filter by title if a query is provided
-                if (currentSearchQuery.isBlank() || title.contains(
+                if (currentSearchQuery.isBlank() || seriesData.title.contains(
                         currentSearchQuery,
                         ignoreCase = true,
                     )
                 ) {
-                    val manga = SManga.create().apply {
-                        this.title = title
-                        artist = seriesJson.optString("artist")
-                        author = seriesJson.optString("author")
-                        thumbnail_url = seriesJson.optString("cover_low")
-                        url = "/${toSlug(title)}"
-                    }
-                    mangaList.add(manga)
+                    mangaList.add(seriesData.toSManga())
                 }
-            } catch (e: java.io.IOException) {
-                // Could not load the file, skip and continue
-                // throw or log if needed, here we skip silently
-                continue
-            } catch (e: org.json.JSONException) {
-                // Malformed JSON, skip and continue
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load series data for $fileName", e)
                 continue
             }
         }
@@ -138,83 +122,17 @@ class BigSolo : ParsedHttpSource() {
     }
 
     // Details
+    override fun mangaDetailsParse(document: Document): SManga {
+        val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)?.html()
+            ?: throw IllegalStateException("Series data not found")
 
-    override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val jsonData = document.selectFirst("#series-data-placeholder")?.html()
-        if (jsonData != null) {
-            val seriesJson = try {
-                JSONObject(jsonData)
-            } catch (e: org.json.JSONException) {
-                throw IllegalStateException("Failed to parse manga details JSON", e)
-            }
-            title = seriesJson.optString("title")
-            description = seriesJson.optString("description")
-            artist = seriesJson.optString("artist")
-            author = seriesJson.optString("author")
-            genre = seriesJson.optJSONArray("tags")?.let { tagsArray ->
-                List(tagsArray.length()) { index -> tagsArray.getString(index) }.joinToString(", ")
-            } ?: ""
-            status = when (seriesJson.optString("release_status")) {
-                "En cours" -> SManga.ONGOING
-                "Finis", "Fini" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-            thumbnail_url = seriesJson.optString("cover_hq")
-        } else {
-            throw IllegalStateException("JSON data not found for manga details")
-        }
+        return parseSeriesData(jsonData).toDetailedSManga()
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val currentUrl = document.location()
-        val chapterNumber = currentUrl.substringAfterLast("/")
-
-        // Extract the ID from the chapter URL
-        val jsonData = document.selectFirst("#reader-data-placeholder")?.html()
-        val seriesJson = try {
-            JSONObject(jsonData).optJSONObject("series")
-        } catch (e: Exception) {
-            throw IllegalStateException("Failed to parse reader data JSON", e)
-        }
-        val chaptersJson = seriesJson?.optJSONObject("chapters")
-        val currentChapter = chaptersJson?.optJSONObject(chapterNumber)
-        val groups = currentChapter?.optJSONObject("groups")
-
-        var chapterId = ""
-        if (groups != null) {
-            val keys = groups.keys()
-            if (keys.hasNext()) {
-                val firstGroupKey = keys.next()
-                val firstGroup = groups.optString(firstGroupKey)
-                chapterId = firstGroup.substringAfterLast("/")
-            }
-        }
-
-        // Request the API with the ID
-        val pagesResponse =
-            try {
-                client.newCall(GET("$baseUrl/api/imgchest-chapter-pages?id=$chapterId", headers)).execute()
-            } catch (e: java.io.IOException) {
-                throw IllegalStateException("Failed to fetch chapter pages", e)
-            }
-        val pagesJson = try {
-            org.json.JSONArray(pagesResponse.body.string())
-        } catch (e: org.json.JSONException) {
-            throw IllegalStateException("Failed to parse chapter pages JSON", e)
-        }
-        val pages = mutableListOf<Page>()
-
-        // Parse the JSON response to create the pages
-        for (i in 0 until pagesJson.length()) {
-            pages.add(
-                Page(
-                    i,
-                    imageUrl = pagesJson.getJSONObject(i).optString("link"),
-                ),
-            )
-        }
-
-        return pages
+        val chapterNumber = document.location().substringAfterLast("/")
+        val chapterId = extractChapterId(document, chapterNumber)
+        return fetchChapterPages(chapterId)
     }
 
     override fun imageUrlParse(document: Document): String {
@@ -222,77 +140,127 @@ class BigSolo : ParsedHttpSource() {
     }
 
     // Chapters
-    override fun chapterListSelector() = "#series-data-placeholder"
+    override fun chapterListSelector() = SERIES_DATA_SELECTOR
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val jsonData = document.selectFirst("#series-data-placeholder")?.html()
-        if (jsonData != null) {
-            val seriesJson = try {
-                JSONObject(jsonData)
-            } catch (e: org.json.JSONException) {
-                throw IllegalStateException("Failed to parse series data JSON", e)
-            }
-            val chaptersJson = seriesJson.optJSONObject("chapters")
-            val chapterList = mutableListOf<SChapter>()
+        val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)?.html()
+            ?: throw IllegalStateException("Series data not found")
 
-            if (chaptersJson != null) {
-                val keys = chaptersJson.keys().asSequence().toList()
-                val multipleChapters = keys.size > 1
-
-                for (chapterNumber in keys) {
-                    val chapterData = chaptersJson.getJSONObject(chapterNumber)
-                    if (chapterData.optBoolean("licencied", false)) continue
-
-                    val title = chapterData.optString("title")
-                    val volumeNumber = chapterData.optString("volume")
-                    val baseName = if (multipleChapters) {
-                        volumeNumber.takeIf { it.isNotBlank() }?.let { "Vol. $it " }.orEmpty() +
-                            "Ch. $chapterNumber" +
-                            title.takeIf { it.isNotBlank() }?.let { " – $it" }.orEmpty()
-                    } else {
-                        // If only one chapter: just the title, otherwise fallback
-                        if (title.isNotBlank()) "One Shot – $title" else "One Shot"
-                    }
-
-                    val chapter = SChapter.create().apply {
-                        name = baseName
-                        url = "/${toSlug(seriesJson.optString("title"))}/$chapterNumber"
-                        chapter_number = chapterNumber.toFloatOrNull() ?: -1f
-                        date_upload = chapterData.optLong("last_updated") * 1000L
-                    }
-                    chapterList.add(chapter)
-                }
-            }
-
-            return chapterList.sortedByDescending { it.chapter_number }
-        } else {
-        }
+        val seriesData = parseSeriesData(jsonData)
+        return buildChapterList(seriesData)
     }
 
     override fun chapterFromElement(element: Element): SChapter {
         throw UnsupportedOperationException()
     }
 
-    fun toSlug(input: String?): String {
-        if (input == null) return ""
+    // Helper methods for better code organization
+    private fun parseConfigResponse(json: String): ConfigResponse {
+        return try {
+            JSONObject(json).toConfigResponse()
+        } catch (e: org.json.JSONException) {
+            throw IllegalStateException("Failed to parse config JSON: ${e.message}", e)
+        }
+    }
 
-        val accentsMap = mapOf(
-            'à' to 'a', 'á' to 'a', 'â' to 'a', 'ä' to 'a', 'ã' to 'a',
-            'è' to 'e', 'é' to 'e', 'ê' to 'e', 'ë' to 'e',
-            'ì' to 'i', 'í' to 'i', 'î' to 'i', 'ï' to 'i',
-            'ò' to 'o', 'ó' to 'o', 'ô' to 'o', 'ö' to 'o', 'õ' to 'o',
-            'ù' to 'u', 'ú' to 'u', 'û' to 'u', 'ü' to 'u',
-            'ç' to 'c', 'ñ' to 'n',
-        )
+    private fun fetchSeriesData(fileName: String): SeriesData {
+        val fileUrl = "$baseUrl$SERIES_DATA_ENDPOINT$fileName"
+        val response = try {
+            client.newCall(GET(fileUrl, headers)).execute()
+        } catch (e: java.io.IOException) {
+            throw IllegalStateException("Failed to fetch series data", e)
+        }
 
-        return input
-            .lowercase()
-            .map { accentsMap[it] ?: it }
-            .joinToString("")
-            .replace("[^a-z0-9\\s-]".toRegex(), "")
-            .replace("\\s+".toRegex(), "-")
-            .replace("-+".toRegex(), "-")
-            .trim('-')
+        return parseSeriesData(response.body.string())
+    }
+
+    private fun parseSeriesData(json: String): SeriesData {
+        return try {
+            JSONObject(json).toSeriesData()
+        } catch (e: org.json.JSONException) {
+            throw IllegalStateException("Failed to parse series JSON: ${e.message}", e)
+        }
+    }
+
+    private fun extractChapterId(document: Document, chapterNumber: String): String {
+        val jsonData = document.selectFirst(READER_DATA_SELECTOR)?.html()
+            ?: throw IllegalStateException("Reader data not found")
+
+        val seriesJson = try {
+            JSONObject(jsonData).optJSONObject("series")
+        } catch (e: Exception) {
+            throw IllegalStateException("Failed to parse reader data JSON", e)
+        }
+
+        val currentChapter = seriesJson?.optJSONObject("chapters")?.optJSONObject(chapterNumber)
+        val groups = currentChapter?.optJSONObject("groups")
+
+        return if (groups != null) {
+            val keys = groups.keys()
+            if (keys.hasNext()) {
+                val firstGroupKey = keys.next()
+                val firstGroup = groups.optString(firstGroupKey)
+                firstGroup.substringAfterLast("/")
+            } else {
+                ""
+            }
+        } else {
+            ""
+        }
+    }
+
+    private fun buildChapterList(seriesData: SeriesData): List<SChapter> {
+        val chapters = seriesData.chapters ?: return emptyList()
+        val chapterList = mutableListOf<SChapter>()
+        val multipleChapters = chapters.size > 1
+
+        for ((chapterNumber, chapterData) in chapters) {
+            if (chapterData.licencied) continue
+
+            val title = chapterData.title ?: ""
+            val volumeNumber = chapterData.volume ?: ""
+
+            val baseName = if (multipleChapters) {
+                buildString {
+                    if (volumeNumber.isNotBlank()) append("Vol. $volumeNumber ")
+                    append("Ch. $chapterNumber")
+                    if (title.isNotBlank()) append(" – $title")
+                }
+            } else {
+                if (title.isNotBlank()) "One Shot – $title" else "One Shot"
+            }
+
+            val chapter = SChapter.create().apply {
+                name = baseName
+                url = "/${toSlug(seriesData.title)}/$chapterNumber"
+                chapter_number = chapterNumber.toFloatOrNull() ?: -1f
+                date_upload = (chapterData.lastUpdated ?: 0) * 1000L
+            }
+            chapterList.add(chapter)
+        }
+
+        return chapterList.sortedByDescending { it.chapter_number }
+    }
+
+    private fun fetchChapterPages(chapterId: String): List<Page> {
+        val pagesResponse = try {
+            client.newCall(GET("$baseUrl$CHAPTER_PAGES_API?id=$chapterId", headers)).execute()
+        } catch (e: java.io.IOException) {
+            throw IllegalStateException("Failed to fetch chapter pages", e)
+        }
+
+        val pagesJson = try {
+            org.json.JSONArray(pagesResponse.body.string())
+        } catch (e: org.json.JSONException) {
+            throw IllegalStateException("Failed to parse chapter pages JSON", e)
+        }
+
+        return List(pagesJson.length()) { index ->
+            Page(
+                index,
+                imageUrl = pagesJson.getJSONObject(index).optString("link"),
+            )
+        }
     }
 }
