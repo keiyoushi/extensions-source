@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.bookwalker
 
 const val PREF_VALIDATE_LOGGED_IN = "validateLoggedIn"
-const val PREF_TRY_OPEN_LOGIN_WEBVIEW = "tryOpenLoginWebview"
 const val PREF_SHOW_LIBRARY_IN_POPULAR = "showLibraryInPopular"
 const val PREF_ATTEMPT_READ_PREVIEWS = "attemptReadPreviews"
 const val PREF_CATEGORY_EXCLUDE_REGEX = "categoryExcludeRegex"

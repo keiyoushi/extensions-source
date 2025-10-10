@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.bookwalker
 
 import android.app.Application
-import android.content.ComponentName
-import android.content.Intent
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
@@ -25,13 +23,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
@@ -85,18 +84,13 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
 
     val app by injectLazy<Application>()
 
-    private val preferences by lazy {
-        app.getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences by getPreferencesLazy()
 
     override val showLibraryInPopular
         get() = preferences.getBoolean(PREF_SHOW_LIBRARY_IN_POPULAR, false)
 
     override val shouldValidateLogin
         get() = preferences.getBoolean(PREF_VALIDATE_LOGGED_IN, true)
-
-    override val shouldTryOpenLoginWebview
-        get() = preferences.getBoolean(PREF_TRY_OPEN_LOGIN_WEBVIEW, false)
 
     override val imageQuality
         get() = ImageQualityPref.fromKey(
@@ -165,7 +159,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             }
         }
 
-        val validateLoginPref = SwitchPreferenceCompat(screen.context).apply {
+        SwitchPreferenceCompat(screen.context).apply {
             key = PREF_VALIDATE_LOGGED_IN
             title = "Validate Login"
             summary = "Validate that you are logged in before allowing certain actions. This is " +
@@ -173,21 +167,6 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                 "If you are using this extension as an anonymous user, disable this option."
 
             setDefaultValue(true)
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = PREF_TRY_OPEN_LOGIN_WEBVIEW
-            title = "Automatically Open Login Page"
-            summary = "Attempts to open a WebView for the login page when you perform certain " +
-                "actions while logged out. This feature may not work on all clients."
-
-            setDefaultValue(false)
-
-            setVisible(shouldValidateLogin)
-            validateLoginPref.setOnPreferenceChangeListener { _, newValue ->
-                setVisible(newValue as Boolean)
-                true
-            }
         }.also(screen::addPreference)
 
         ListPreference(screen.context).apply {
@@ -493,7 +472,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             .select(".o-tile:not(:has(.a-ribbon-pre-order)) .a-tile-thumb-img > img")
             .attr("data-srcset")
             .getHighestQualitySrcset()
-        title = document.selectFirst(".title-main-inner")?.ownText()?.cleanTitle().orEmpty()
+        title = document.selectFirst(".title-main-inner")!!.ownText().cleanTitle()
         author = getAvailableFilterNames(document, "side-author").joinToString()
         genre = getAvailableFilterNames(document, "side-genre").joinToString()
 
@@ -667,19 +646,16 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             // Note that this is not fool-proof since the app may cache the page list, so sometimes
             // the best we can do is detect that the user is not logged in when loading the page
             // and fail to load the image at that point.
-            tryCooperativeRedirect(
-                readerUrl,
-                openAuthInWebview = shouldTryOpenLoginWebview,
-            )
+            tryCooperativeRedirect(readerUrl, "You must log in again. Open in WebView and click the shopping cart.")
 
             IntRange(0, pagesCount - 1).map {
-                // The "cache-busting" query parameter exists only to prevent the app from trying to
+                // The page index query parameter exists only to prevent the app from trying to
                 // be smart about caching by page URLs, since the URL is the same for all the pages.
                 // It doesn't do anything, and in fact gets stripped back out in imageRequest.
                 Page(
                     it,
                     imageUrl = readerUrl.toHttpUrl().newBuilder()
-                        .setQueryParameter(CACHE_BUSTING_QUERY_PARAMETER, it.toString())
+                        .setQueryParameter(PAGE_INDEX_QUERY_PARAM, it.toString())
                         .build()
                         .toString(),
                 )
@@ -696,14 +672,15 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
     override fun imageRequest(page: Page): Request {
         // This URL doesn't actually contain the image. It will be intercepted, and the actual image
         // will be extracted from a webview of the URL being sent here.
+        val imageUrl = page.imageUrl!!.toHttpUrl()
         return GET(
-            page.imageUrl!!.toHttpUrl().newBuilder()
-                .removeAllQueryParameters(CACHE_BUSTING_QUERY_PARAMETER)
+            imageUrl.newBuilder()
+                .removeAllQueryParameters(PAGE_INDEX_QUERY_PARAM)
                 .build()
                 .toString(),
             callHeaders.newBuilder()
                 .set(HEADER_IS_REQUEST_FROM_EXTENSION, "true")
-                .set(HEADER_PAGE_INDEX, page.index.toString())
+                .set(HEADER_PAGE_INDEX, imageUrl.queryParameter(PAGE_INDEX_QUERY_PARAM)!!)
                 .build(),
         )
     }
@@ -723,40 +700,16 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         return document
     }
 
-    private suspend fun tryCooperativeRedirect(
-        url: String,
-        openAuthInWebview: Boolean = false,
-    ): HttpUrl {
+    private suspend fun tryCooperativeRedirect(url: String, message: String = "Logged out, check website in WebView"): HttpUrl {
         return client.newCall(GET(url, callHeaders)).await().use {
             val redirectUrl = it.request.url
 
             if (redirectUrl.host == "member.bookwalker.jp" && redirectUrl.pathSegments.contains("login")) {
-                if (openAuthInWebview) {
-                    openUrlInWebview(redirectUrl.toString())
-                    throw Exception("You must log in again to access this content")
-                } else {
-                    throw Exception("Logged out, check website in WebView")
-                }
+                throw Exception(message)
             }
 
             Log.d("bookwalker", "Successfully redirected to $redirectUrl")
             redirectUrl
-        }
-    }
-
-    private fun openUrlInWebview(url: String) {
-        try {
-            val intent = Intent().apply {
-                component = ComponentName(app, "eu.kanade.tachiyomi.ui.webview.WebViewActivity")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra("url_key", url)
-                putExtra("source_key", id)
-            }
-            app.startActivity(intent)
-        } catch (e: Exception) {
-            // This client most likely either doesn't supply WebViewActivity, or doesn't support
-            // starting activities at all.
-            Log.e("bookwalker", "Failed to start WebViewActivity: ${e.message}")
         }
     }
 
@@ -811,10 +764,6 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         return null
     }
 
-    private inline fun <reified T> Response.parseAs(): T = use {
-        json.decodeFromString(it.body.string())
-    }
-
     companion object {
 
         private val allFilter = FilterInfo("All", "")
@@ -867,6 +816,6 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         private const val FREE_ICON = "\uD83C\uDF81" // wrapped present emoji
         private const val UNKNOWN_ICON = "\u2753" // question mark emoji
 
-        private const val CACHE_BUSTING_QUERY_PARAMETER = "nocache_pagenum"
+        private const val PAGE_INDEX_QUERY_PARAM = "nocache_pagenum"
     }
 }

@@ -3,19 +3,10 @@ package eu.kanade.tachiyomi.extension.en.bookwalker
 import android.annotation.SuppressLint
 import android.app.Application
 import android.graphics.Bitmap
-import android.net.http.SslError
-import android.os.Build
 import android.util.Log
-import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
-import android.webkit.SslErrorHandler
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.annotation.RequiresApi
 import eu.kanade.tachiyomi.extension.en.bookwalker.BookWalkerChapterReader.ImageResult.NotReady.get
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -136,44 +127,6 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
                 settings.userAgentString = USER_AGENT_MOBILE
 
                 webViewClient = object : WebViewClient() {
-                    override fun onLoadResource(view: WebView?, url: String?) {
-                        Log.d("bookwalker", "loading resource $url")
-                        super.onLoadResource(view, url)
-                    }
-
-                    @RequiresApi(Build.VERSION_CODES.M)
-                    override fun onReceivedError(
-                        view: WebView,
-                        request: WebResourceRequest,
-                        error: WebResourceError,
-                    ) {
-                        super.onReceivedError(view, request, error)
-                        Log.e("bookwalker", "onReceivedError, ${request.url}, $error")
-                    }
-
-                    override fun onReceivedHttpError(
-                        view: WebView,
-                        request: WebResourceRequest,
-                        errorResponse: WebResourceResponse,
-                    ) {
-                        super.onReceivedHttpError(view, request, errorResponse)
-                        Log.e("bookwalker", "onReceivedHttpError, ${request.url}, ${errorResponse.statusCode}")
-                    }
-
-                    override fun onReceivedSslError(
-                        view: WebView,
-                        handler: SslErrorHandler,
-                        error: SslError,
-                    ) {
-                        super.onReceivedSslError(view, handler, error)
-                        Log.e("bookwalker", "onReceivedSslError, ${error.url}")
-                    }
-
-                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                        Log.d("bookwalker", "page starting $url")
-                        super.onPageStarted(view, url, favicon)
-                    }
-
                     override fun onPageFinished(view: WebView, url: String) {
                         super.onPageFinished(view, url)
 
@@ -195,23 +148,23 @@ class BookWalkerChapterReader(val readerUrl: String, private val prefs: BookWalk
                     }
                 }
 
-                webChromeClient = object : WebChromeClient() {
-                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                        Log.println(
-                            when (consoleMessage.messageLevel()!!) {
-                                ConsoleMessage.MessageLevel.TIP -> Log.VERBOSE
-                                ConsoleMessage.MessageLevel.DEBUG -> Log.DEBUG
-                                ConsoleMessage.MessageLevel.LOG -> Log.INFO
-                                ConsoleMessage.MessageLevel.WARNING -> Log.WARN
-                                ConsoleMessage.MessageLevel.ERROR -> Log.ERROR
-                            },
-                            "bookwalker.console",
-                            "${consoleMessage.sourceId()}:${consoleMessage.lineNumber()} ${consoleMessage.message()}",
-                        )
-
-                        return super.onConsoleMessage(consoleMessage)
-                    }
-                }
+//                webChromeClient = object : WebChromeClient() {
+//                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+//                        Log.println(
+//                            when (consoleMessage.messageLevel()!!) {
+//                                ConsoleMessage.MessageLevel.TIP -> Log.VERBOSE
+//                                ConsoleMessage.MessageLevel.DEBUG -> Log.DEBUG
+//                                ConsoleMessage.MessageLevel.LOG -> Log.INFO
+//                                ConsoleMessage.MessageLevel.WARNING -> Log.WARN
+//                                ConsoleMessage.MessageLevel.ERROR -> Log.ERROR
+//                            },
+//                            "bookwalker.console",
+//                            "${consoleMessage.sourceId()}:${consoleMessage.lineNumber()} ${consoleMessage.message()}",
+//                        )
+//
+//                        return super.onConsoleMessage(consoleMessage)
+//                    }
+//                }
 
                 this.addJavascriptInterface(jsInterface, INTERFACE_NAME)
 
