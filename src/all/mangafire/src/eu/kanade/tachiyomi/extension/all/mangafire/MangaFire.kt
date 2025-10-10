@@ -5,6 +5,7 @@ import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.KeyEvent
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -39,6 +40,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 class MangaFire(
     override val lang: String,
@@ -55,6 +57,10 @@ class MangaFire(
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+
+    private val context = Injekt.get<Application>()
+    private val handler = Handler(Looper.getMainLooper())
+    private val emptyWebViewResponse = WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(" ".toByteArray()))
 
     // ============================== Popular ===============================
 
@@ -82,6 +88,11 @@ class MangaFire(
 
     // =============================== Search ===============================
 
+    private val vrfCache = object : LinkedHashMap<String, String>() {
+        // limit cache to 20
+        override fun removeEldestEntry(eldest: Map.Entry<String?, String?>?): Boolean = size > 20
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("filter")
@@ -97,9 +108,120 @@ class MangaFire(
 
             addQueryParameter("language[]", langCode)
             addQueryParameter("page", page.toString())
+
+            if (query.isNotBlank()) {
+                addQueryParameter("vrf", getVrfForQuery(query))
+            }
         }.build()
 
         return GET(url, headers)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun getVrfForQuery(query: String): String {
+        vrfCache[query]?.also { return it }
+
+        val response = client.newCall(GET("$baseUrl/filter", headers)).execute()
+        if (!response.isSuccessful) {
+            response.close()
+            throw Exception("Http error ${response.code}")
+        }
+        val document = response.asJsoup()
+
+        val latch = CountDownLatch(1)
+        var webView: WebView? = null
+
+        var vrf: String? = null
+
+        handler.post {
+            val webview = WebView(context)
+                .also { webView = it }
+            with(webview.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                blockNetworkImage = true
+                userAgentString = headers["User-Agent"]
+            }
+
+            webview.webViewClient = object : WebViewClient() {
+
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest,
+                ): WebResourceResponse? {
+                    val url = request.url
+
+                    // allow script from their cdn
+                    if (url.host.orEmpty().contains("mfcdn.cc") && url.pathSegments.lastOrNull().orEmpty().contains("js")) {
+                        Log.d(name, "allowed: $url")
+                        return super.shouldInterceptRequest(view, request)
+                    }
+
+                    // allow jquery script
+                    if (url.host.orEmpty().contains("cloudflare.com") && url.encodedPath.orEmpty().contains("jquery")) {
+                        Log.d(name, "allowed: $url")
+                        return super.shouldInterceptRequest(view, request)
+                    }
+
+                    // intercept vrf from /ajax/manga/search
+                    if (url.host == baseUrl.toHttpUrl().host && url.encodedPath.orEmpty().contains("ajax/manga/search")) {
+                        Log.d(name, "found: $url")
+                        url.getQueryParameter("vrf")?.let {
+                            vrf = it
+                        }
+                        latch.countDown()
+                    }
+
+                    Log.d(name, "denied: $url")
+                    return emptyWebViewResponse
+                }
+            }
+
+            webview.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", "")
+        }
+
+        // write the query in the search bar then trigger a key event
+        // this triggers the drop down suggestions request
+        // which is caught in `shouldInterceptRequest`
+        handler.postDelayed({
+            Log.d(name, "triggering search")
+            webView?.evaluateJavascript(
+                """
+                    (() => {
+                        const searchInput = document.querySelector('.search-inner input');
+                        searchInput.value = '$query';
+                        searchInput.focus();
+                    })();
+                """.trimIndent(),
+            ) {}
+            webView?.dispatchKeyEvent(
+                KeyEvent(
+                    KeyEvent.ACTION_DOWN,
+                    KeyEvent.KEYCODE_SPACE,
+                ),
+            )
+            webView?.dispatchKeyEvent(
+                KeyEvent(
+                    KeyEvent.ACTION_UP,
+                    KeyEvent.KEYCODE_SPACE,
+                ),
+            )
+        }, 10.seconds.inWholeMilliseconds,)
+
+        latch.await(20, TimeUnit.SECONDS)
+        handler.post {
+            webView?.stopLoading()
+            webView?.destroy()
+        }
+
+        if (latch.count == 1L) {
+            throw Exception("timeout getting vrf token")
+        } else if (vrf == null) {
+            throw Exception("Unable to find vrf token")
+        }
+
+        return vrf!!.also { vrfCache[query] = it }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -239,8 +361,6 @@ class MangaFire(
         var ajaxUrl: String? = null
         var errorMessage: String? = null
 
-        val context = Injekt.get<Application>()
-        val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         var webView: WebView? = null
 
@@ -256,7 +376,6 @@ class MangaFire(
             }
 
             webview.webViewClient = object : WebViewClient() {
-                private val emptyResponse = WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(" ".toByteArray()))
                 private val ajaxCalls = setOf("ajax/read/chapter", "ajax/read/volume")
 
                 override fun shouldInterceptRequest(
@@ -299,7 +418,7 @@ class MangaFire(
                     }
 
                     Log.d(name, "denied: $url")
-                    return emptyResponse
+                    return emptyWebViewResponse
                 }
             }
 
