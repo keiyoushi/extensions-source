@@ -211,7 +211,7 @@ abstract class MangaBox(
         }
     }
 
-    override fun searchMangaSelector() = ".panel_story_list .story_item, div.list-truyen-item-wrap, .list-comic-item-wrap .list-story-item"
+    override fun searchMangaSelector() = ".panel_story_list .story_item, div.list-truyen-item-wrap, div.list-comic-item-wrap"
 
     override fun searchMangaFromElement(element: Element) = mangaFromElement(element)
 
