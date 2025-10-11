@@ -1,0 +1,10 @@
+ext {
+    extName = "Comic Pash"
+    extClass = ".ComicPash"
+    themePkg = 'comiciviewer'
+    baseUrl = "https://comicpash.jp"
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

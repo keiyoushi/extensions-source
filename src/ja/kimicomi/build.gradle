@@ -1,0 +1,10 @@
+ext {
+    extName = "KimiComi"
+    extClass = ".KimiComi"
+    themePkg = 'comiciviewer'
+    baseUrl = "https://kimicomi.com"
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

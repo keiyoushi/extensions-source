@@ -1,0 +1,10 @@
+ext {
+    extName = "J-N Books"
+    extClass = ".JNBooks"
+    themePkg = 'comiciviewer'
+    baseUrl = "https://comic.j-nbooks.jp"
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
