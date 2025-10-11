@@ -224,7 +224,7 @@ class Kagane : HttpSource(), ConfigurableSource {
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        if (chapter.url.count{it == ';'} == 2) throw Exception("Chapter url error, please refresh chapter list.")
+        if (chapter.url.count{ it == ';' } == 2) throw Exception("Chapter url error, please refresh chapter list.")
         var (seriesId, chapterId, pageCount) = chapter.url.split(";")
 
         val challengeResp = getChallengeResponse(seriesId, chapterId)
