@@ -21,12 +21,7 @@ class CatharsisWorld :
     ),
     ConfigurableSource {
 
-    private val isCi = System.getenv("CI") == "true"
-
-    override val baseUrl get() = when {
-        isCi -> super.baseUrl
-        else -> preferences.prefBaseUrl
-    }
+    reemplazar  val  baseUrl get()  =  preferencias.prefBaseUrl 
 
     override val versionId = 2
 
