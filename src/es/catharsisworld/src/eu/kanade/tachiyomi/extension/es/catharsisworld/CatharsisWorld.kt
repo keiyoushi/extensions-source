@@ -21,7 +21,7 @@ class CatharsisWorld :
     ),
     ConfigurableSource {
 
-    reemplazar  val  baseUrl get()  =  preferencias.prefBaseUrl 
+    val  baseUrl get()  =  preferencias.prefBaseUrl 
 
     override val versionId = 2
 
