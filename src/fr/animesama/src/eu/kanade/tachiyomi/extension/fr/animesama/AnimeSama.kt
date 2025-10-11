@@ -212,7 +212,7 @@ class AnimeSama : ParsedHttpSource() {
     private fun parseChapterFromResponse(response: Response, translationName: String): List<SChapter> {
         val document = response.asJsoup()
 
-        val title = document.select("#titreOeuvre").text()
+        val title = document.select("#titreOeuvre").textNodes()[0]?.wholeText
         val chapterUrl = "$baseUrl/s2/scans/get_nb_chap_et_img.php".toHttpUrl()
             .newBuilder()
             .addQueryParameter("oeuvre", title)
@@ -313,7 +313,7 @@ class AnimeSama : ParsedHttpSource() {
     override fun pageListParse(document: Document): List<Page> {
         val url = document.baseUri().toHttpUrl()
 
-        val title = url.queryParameter("title")
+        val title = url.queryParameter("oeuvre")
         val chapter = url.queryParameter("id")
 
         val chapterUrl = "$baseUrl/s2/scans/get_nb_chap_et_img.php".toHttpUrl()
