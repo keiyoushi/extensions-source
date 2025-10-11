@@ -86,12 +86,6 @@ class MangaFire(
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // =============================== Search ===============================
-
-    private val vrfCache = object : LinkedHashMap<String, String>() {
-        // limit cache to 20
-        override fun removeEldestEntry(eldest: Map.Entry<String?, String?>?): Boolean = size > 20
-    }
-
     private val vrfScript by lazy {
         val vrf = this::class.java.getResourceAsStream("/assets/vrf.js")!!
             .bufferedReader()
