@@ -57,10 +57,6 @@ class MangaFire(
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val context = Injekt.get<Application>()
-    private val handler = Handler(Looper.getMainLooper())
-    private val emptyWebViewResponse = WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(" ".toByteArray()))
-
     // ============================== Popular ===============================
 
     override fun popularMangaRequest(page: Int): Request {
@@ -261,6 +257,8 @@ class MangaFire(
         var ajaxUrl: String? = null
         var errorMessage: String? = null
 
+        val context = Injekt.get<Application>()
+        val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
         var webView: WebView? = null
 
@@ -277,6 +275,7 @@ class MangaFire(
 
             webview.webViewClient = object : WebViewClient() {
                 private val ajaxCalls = setOf("ajax/read/chapter", "ajax/read/volume")
+                private val emptyWebViewResponse = WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(" ".toByteArray()))
 
                 override fun shouldInterceptRequest(
                     view: WebView,
