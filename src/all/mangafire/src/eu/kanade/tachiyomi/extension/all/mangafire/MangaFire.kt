@@ -5,13 +5,13 @@ import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.view.KeyEvent
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -40,7 +40,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.time.Duration.Companion.seconds
 
 class MangaFire(
     override val lang: String,
@@ -93,12 +92,22 @@ class MangaFire(
         override fun removeEldestEntry(eldest: Map.Entry<String?, String?>?): Boolean = size > 20
     }
 
+    private val vrfScript by lazy {
+        val vrf = this::class.java.getResourceAsStream("/assets/vrf.js")!!
+            .bufferedReader()
+            .readText()
+
+        QuickJs.create().use {
+            it.compile(vrf, "vrf")
+        }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegment("filter")
 
             if (query.isNotBlank()) {
-                addQueryParameter("keyword", query)
+                addQueryParameter("keyword", query.trim())
             }
 
             val filterList = filters.ifEmpty { getFilterList() }
@@ -110,123 +119,15 @@ class MangaFire(
             addQueryParameter("page", page.toString())
 
             if (query.isNotBlank()) {
-                addQueryParameter("vrf", getVrfForQuery(query))
+                val vrf = QuickJs.create().use {
+                    it.execute(vrfScript)
+                    it.evaluate("crc_vrf(\"${query.trim()}\")") as String
+                }
+                addQueryParameter("vrf", vrf)
             }
         }.build()
 
         return GET(url, headers)
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun getVrfForQuery(query: String): String {
-        vrfCache[query]?.also { return it }
-
-        val response = client.newCall(GET("$baseUrl/filter", headers)).execute()
-        if (!response.isSuccessful) {
-            response.close()
-            throw Exception("Http error ${response.code}")
-        }
-        val document = response.asJsoup()
-
-        val latch = CountDownLatch(1)
-        var webView: WebView? = null
-
-        var vrf: String? = null
-
-        handler.post {
-            val webview = WebView(context)
-                .also { webView = it }
-            with(webview.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
-                userAgentString = headers["User-Agent"]
-            }
-
-            webview.webViewClient = object : WebViewClient() {
-
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest,
-                ): WebResourceResponse? {
-                    val url = request.url
-
-                    // allow script from their cdn
-                    if (url.host.orEmpty().contains("mfcdn.cc") && url.pathSegments.lastOrNull().orEmpty().contains("js")) {
-                        Log.d(name, "allowed: $url")
-                        return super.shouldInterceptRequest(view, request).also {
-                            // trigger after main script loads
-
-                            // write the query in the search bar then trigger a key event
-                            // this triggers the drop down suggestions request
-                            // which is caught in `shouldInterceptRequest`
-                            handler.postDelayed(
-                                {
-                                    Log.d(name, "triggering search")
-                                    webView?.evaluateJavascript(
-                                        """
-                                        (() => {
-                                            const searchInput = document.querySelector('.search-inner input');
-                                            searchInput.value = '$query';
-                                            searchInput.focus();
-                                        })();
-                                        """.trimIndent(),
-                                    ) {}
-                                    webView?.dispatchKeyEvent(
-                                        KeyEvent(
-                                            KeyEvent.ACTION_DOWN,
-                                            KeyEvent.KEYCODE_SPACE,
-                                        ),
-                                    )
-                                    webView?.dispatchKeyEvent(
-                                        KeyEvent(
-                                            KeyEvent.ACTION_UP,
-                                            KeyEvent.KEYCODE_SPACE,
-                                        ),
-                                    )
-                                },
-                                2.seconds.inWholeMilliseconds,
-                            )
-                        }
-                    }
-
-                    // allow jquery script
-                    if (url.host.orEmpty().contains("cloudflare.com") && url.encodedPath.orEmpty().contains("jquery")) {
-                        Log.d(name, "allowed: $url")
-                        return super.shouldInterceptRequest(view, request)
-                    }
-
-                    // intercept vrf from /ajax/manga/search
-                    if (url.host == baseUrl.toHttpUrl().host && url.encodedPath.orEmpty().contains("ajax/manga/search")) {
-                        Log.d(name, "found: $url")
-                        url.getQueryParameter("vrf")?.let {
-                            vrf = it
-                        }
-                        latch.countDown()
-                    }
-
-                    Log.d(name, "denied: $url")
-                    return emptyWebViewResponse
-                }
-            }
-
-            webview.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", "")
-        }
-
-        latch.await(20, TimeUnit.SECONDS)
-        handler.post {
-            webView?.stopLoading()
-            webView?.destroy()
-        }
-
-        if (latch.count == 1L) {
-            throw Exception("timeout getting vrf token")
-        } else if (vrf == null) {
-            throw Exception("Unable to find vrf token")
-        }
-
-        return vrf!!.also { vrfCache[query] = it }
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
