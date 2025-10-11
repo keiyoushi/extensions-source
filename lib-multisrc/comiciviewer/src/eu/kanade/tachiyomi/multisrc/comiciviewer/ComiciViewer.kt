@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -77,7 +78,7 @@ abstract class ComiciViewer(
             return GET(url, headers)
         }
         val filterList = if (filters.isEmpty()) getFilterList() else filters
-        val browseFilter = filterList.find { it is BrowseFilter } as BrowseFilter
+        val browseFilter = filterList.firstInstance<BrowseFilter>()
         val pathAndQuery = getFilterOptions()[browseFilter.state].second
         val url = (baseUrl + pathAndQuery).toHttpUrl().newBuilder().build()
 
@@ -122,11 +123,13 @@ abstract class ComiciViewer(
         }
     }
 
+    override fun chapterListRequest(manga: SManga): Request {
+        return GET(baseUrl + manga.url + "/list?s=1", headers)
+    }
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val showLocked = preferences.getBoolean(SHOW_LOCKED_PREF_KEY, true)
-        val listUrl = response.request.url.toString() + "/list?s=1"
-        val listResponse = client.newCall(GET(listUrl, headers)).execute()
-        val document = listResponse.asJsoup()
+        val document = response.asJsoup()
 
         return document.select("div.series-ep-list-item").mapNotNull { element ->
             val link = element.selectFirst("a.g-episode-link-wrapper")!!
@@ -161,14 +164,14 @@ abstract class ComiciViewer(
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (chapter.url.endsWith(DUMMY_URL_SUFFIX)) {
-            throw Exception("This chapter is locked. Log in via WebView to read if you have purchased this chapter.")
+            throw Exception("Log in via WebView to read purchased chapters and refresh the entry")
         }
         return super.pageListRequest(chapter)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val viewer = document.selectFirst("#comici-viewer") ?: throw Exception("You need to log in via WebView to read this chapter")
+        val viewer = document.selectFirst("#comici-viewer") ?: throw Exception("You need to log in via WebView to read this chapter or purchase this chapter")
         val comiciViewerId = viewer.attr("comici-viewer-id")
         val memberJwt = viewer.attr("data-member-jwt")
         val requestUrl = "$baseUrl/book/contentsInfo".toHttpUrl().newBuilder()
@@ -196,7 +199,7 @@ abstract class ComiciViewer(
                         index = resultItem.sort,
                         imageUrl = urlBuilder.build().toString(),
                     )
-                }
+                }.sortedBy { it.index }
             } else {
                 throw Exception("Failed to get full page list")
             }
