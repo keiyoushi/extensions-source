@@ -1,145 +1,71 @@
 package eu.kanade.tachiyomi.extension.fr.bigsolo
 
 import eu.kanade.tachiyomi.source.model.SManga
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 /**
  * Data Transfer Objects for BigSolo extension
  */
 
+@Serializable
 data class ConfigResponse(
+    @SerialName("ENV")
     val env: String?,
+    @SerialName("URL_GIT_CUBARI")
     val urlGitCubari: String?,
+    @SerialName("URL_RAW_JSON_GITHUB")
     val urlRawJsonGithub: String?,
+    @SerialName("URL_API_IMGCHEST")
     val urlApiImgchest: String?,
+    @SerialName("LOCAL_SERIES_FILES")
     val localSeriesFiles: List<String>,
 )
 
+@Serializable
 data class SeriesData(
     val title: String,
     val description: String?,
     val artist: String?,
     val author: String?,
+    @SerialName("cover_low")
     val coverLow: String?,
+    @SerialName("cover_hq")
     val coverHq: String?,
+    @SerialName("manga_type")
     val mangaType: String?,
     val magazine: String?,
-    val releaseYear: Number?,
+    @SerialName("release_year")
+    val releaseYear: Int?,
     val tags: List<String>?,
+    @SerialName("jp_title")
     val jpTitle: String?,
+    @SerialName("alternative_titles")
     val alternativeTitles: List<String>?,
+    @SerialName("release_status")
     val releaseStatus: String?,
-    val coversGallery: List<CoversGalleryData>?,
-    val episodes: JSONArray?,
-    val anime: JSONArray?,
     val chapters: Map<String, ChapterData>?,
 )
 
-data class CoversGalleryData(
-    val coverLow: String,
-    val coverHq: String,
-    val volume: String,
+@Serializable
+data class ReaderData(
+    val series: SeriesData,
 )
 
+@Serializable
 data class ChapterData(
     val title: String?,
     val volume: String?,
+    @SerialName("last_updated")
     val lastUpdated: Long?,
-    val licencied: Boolean,
+    val licencied: Boolean = false,
     val groups: Map<String, String>?,
 )
 
+@Serializable
 data class PageData(
     val link: String,
 )
-
-// JSON to DTO extension functions
-fun JSONObject.toConfigResponse(): ConfigResponse {
-    val filesArray = this.getJSONArray("LOCAL_SERIES_FILES")
-    val files = List(filesArray.length()) { filesArray.getString(it) }
-
-    return ConfigResponse(
-        env = this.optString("ENV"),
-        urlGitCubari = this.optString("URL_GIT_CUBARI"),
-        urlRawJsonGithub = this.optString("URL_RAW_JSON_GITHUB"),
-        urlApiImgchest = this.optString("URL_API_IMGCHEST"),
-        localSeriesFiles = files,
-    )
-}
-
-fun JSONObject.toSeriesData(): SeriesData {
-    val tags = this.optJSONArray("tags")?.let { tagsArray ->
-        List(tagsArray.length()) { tagsArray.getString(it) }
-    }
-
-    val chapters = this.optJSONObject("chapters")?.let { chaptersObj ->
-        val chaptersMap = mutableMapOf<String, ChapterData>()
-        chaptersObj.keys().forEach { key ->
-            val chapterObj = chaptersObj.getJSONObject(key)
-            chaptersMap[key] = chapterObj.toChapterData()
-        }
-        chaptersMap
-    }
-
-    return SeriesData(
-        title = this.optString("title"),
-        description = this.optString("description"),
-        artist = this.optString("artist"),
-        author = this.optString("author"),
-        coverLow = this.optString("cover_low"),
-        coverHq = this.optString("cover_hq"),
-        mangaType = this.optString("manga_type"),
-        magazine = this.optString("magazine"),
-        releaseYear = this.optInt("release_year"),
-        tags = tags,
-        jpTitle = this.optString("jp_title"),
-        alternativeTitles = this.optJSONArray("alternative_titles")?.let { altArray ->
-            List(altArray.length()) { altArray.getString(it) }
-        },
-        releaseStatus = this.optString("release_status"),
-        coversGallery = this.optJSONArray("covers_gallery")?.let { coversArray ->
-            List(coversArray.length()) {
-                coversArray.getJSONObject(it).toCoversGalleryData()
-            }
-        },
-        episodes = this.optJSONArray("episodes"),
-        anime = this.optJSONArray("anime"),
-        chapters = chapters,
-    )
-}
-
-fun JSONObject.toChapterData(): ChapterData {
-    val groups = this.optJSONObject("groups")?.let { groupsObj ->
-        val groupsMap = mutableMapOf<String, String>()
-        groupsObj.keys().forEach { groupKey ->
-            groupsMap[groupKey] = groupsObj.getString(groupKey)
-        }
-        groupsMap
-    }
-
-    return ChapterData(
-        title = this.optString("title"),
-        volume = this.optString("volume"),
-        lastUpdated = this.optLong("last_updated"),
-        licencied = this.optBoolean("licencied", false),
-        groups = groups,
-    )
-}
-
-fun JSONObject.toCoversGalleryData(): CoversGalleryData {
-    return CoversGalleryData(
-        coverLow = this.optString("cover_low"),
-        coverHq = this.optString("cover_hq"),
-        volume = this.optString("volume"),
-    )
-}
-
-fun JSONObject.toPageData(): PageData {
-    return PageData(
-        link = this.optString("link"),
-    )
-}
 
 // DTO to SManga extension functions
 fun SeriesData.toSManga(): SManga = SManga.create().apply {

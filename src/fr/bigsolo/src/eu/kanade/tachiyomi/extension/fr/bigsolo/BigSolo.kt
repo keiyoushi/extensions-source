@@ -1,30 +1,22 @@
 package eu.kanade.tachiyomi.extension.fr.bigsolo
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Headers
+import keiyoushi.utils.parseAs
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 
-class BigSolo : ParsedHttpSource() {
+class BigSolo : HttpSource() {
 
     companion object {
-        private const val TAG = "BigSolo"
-        private const val CONFIG_ENDPOINT = "/data/config.json"
-        private const val SERIES_DATA_ENDPOINT = "/data/series/"
-        private const val CHAPTER_PAGES_API = "/api/imgchest-chapter-pages"
         private const val SERIES_DATA_SELECTOR = "#series-data-placeholder"
-        private const val READER_DATA_SELECTOR = "#reader-data-placeholder"
     }
 
     override val name = "BigSolo"
@@ -32,33 +24,15 @@ class BigSolo : ParsedHttpSource() {
     override val lang = "fr"
     override val supportsLatest = false
 
-    private var currentSearchQuery = ""
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Accept-Language", "fr-FR")
-        .set(
-            "User-Agent",
-            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36",
-        )
+    private val seriesDataCache = mutableMapOf<String, SeriesData>()
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        currentSearchQuery = ""
-        return GET("$baseUrl$CONFIG_ENDPOINT", headers)
+        return GET("$baseUrl/data/config.json", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         return searchMangaParse(response)
-    }
-
-    override fun popularMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun popularMangaSelector() = throw UnsupportedOperationException()
-
-    override fun popularMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
     }
 
     // Latest
@@ -66,148 +40,100 @@ class BigSolo : ParsedHttpSource() {
         throw UnsupportedOperationException()
     }
 
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun latestUpdatesSelector(): String {
-        throw UnsupportedOperationException()
-    }
-
-    override fun latestUpdatesNextPageSelector(): String? {
+    override fun latestUpdatesParse(response: Response): MangasPage {
         throw UnsupportedOperationException()
     }
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        currentSearchQuery = query
-        return GET("$baseUrl$CONFIG_ENDPOINT", headers)
+        val url = if (query.isNotBlank()) {
+            "$baseUrl/data/config.json#$query"
+        } else {
+            "$baseUrl/data/config.json"
+        }
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val config = parseConfigResponse(response.body.string())
+        val config = response.parseAs<ConfigResponse>()
         val mangaList = mutableListOf<SManga>()
 
-        for (fileName in config.localSeriesFiles) {
-            try {
-                val seriesData = fetchSeriesData(fileName)
+        val fragment = response.request.url.fragment
+        val searchQuery = fragment ?: ""
 
-                // Filter by title if a query is provided
-                if (currentSearchQuery.isBlank() || seriesData.title.contains(
-                        currentSearchQuery,
-                        ignoreCase = true,
-                    )
-                ) {
-                    mangaList.add(seriesData.toSManga())
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load series data for $fileName", e)
-                continue
+        for (fileName in config.localSeriesFiles) {
+            val seriesData = fetchSeriesData(fileName)
+
+            if (searchQuery.isBlank() || seriesData.title.contains(
+                    searchQuery,
+                    ignoreCase = true,
+                )
+            ) {
+                mangaList.add(seriesData.toSManga())
             }
         }
 
         return MangasPage(mangaList, false)
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        throw UnsupportedOperationException()
-    }
-
-    override fun searchMangaSelector(): String {
-        throw UnsupportedOperationException()
-    }
-
-    override fun searchMangaNextPageSelector(): String? {
-        throw UnsupportedOperationException()
-    }
-
     // Details
-    override fun mangaDetailsParse(document: Document): SManga {
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
         val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)?.html()
-            ?: throw IllegalStateException("Series data not found")
+            ?: throw NoSuchElementException("Series data not found in DOM")
 
-        return parseSeriesData(jsonData).toDetailedSManga()
+        val seriesData = jsonData.parseAs<SeriesData>()
+        return seriesData.toDetailedSManga()
     }
 
-    override fun pageListParse(document: Document): List<Page> {
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
         val chapterNumber = document.location().substringAfterLast("/")
         val chapterId = extractChapterId(document, chapterNumber)
         return fetchChapterPages(chapterId)
     }
 
-    override fun imageUrlParse(document: Document): String {
+    override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
     }
 
     // Chapters
-    override fun chapterListSelector() = SERIES_DATA_SELECTOR
-
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)?.html()
-            ?: throw IllegalStateException("Series data not found")
+            ?: throw NoSuchElementException("Series data not found in DOM")
 
-        val seriesData = parseSeriesData(jsonData)
+        val seriesData = jsonData.parseAs<SeriesData>()
         return buildChapterList(seriesData)
     }
 
-    override fun chapterFromElement(element: Element): SChapter {
-        throw UnsupportedOperationException()
-    }
-
-    // Helper methods for better code organization
-    private fun parseConfigResponse(json: String): ConfigResponse {
-        return try {
-            JSONObject(json).toConfigResponse()
-        } catch (e: org.json.JSONException) {
-            throw IllegalStateException("Failed to parse config JSON: ${e.message}", e)
-        }
-    }
-
     private fun fetchSeriesData(fileName: String): SeriesData {
-        val fileUrl = "$baseUrl$SERIES_DATA_ENDPOINT$fileName"
-        val response = try {
-            client.newCall(GET(fileUrl, headers)).execute()
-        } catch (e: java.io.IOException) {
-            throw IllegalStateException("Failed to fetch series data", e)
+        val cachedData = seriesDataCache[fileName]
+        if (cachedData != null) {
+            return cachedData
         }
 
-        return parseSeriesData(response.body.string())
-    }
+        val fileUrl = "$baseUrl/data/series/$fileName"
+        val response = client.newCall(GET(fileUrl, headers)).execute()
+        val seriesData = response.parseAs<SeriesData>()
 
-    private fun parseSeriesData(json: String): SeriesData {
-        return try {
-            JSONObject(json).toSeriesData()
-        } catch (e: org.json.JSONException) {
-            throw IllegalStateException("Failed to parse series JSON: ${e.message}", e)
-        }
+        seriesDataCache[fileName] = seriesData
+
+        return seriesData
     }
 
     private fun extractChapterId(document: Document, chapterNumber: String): String {
-        val jsonData = document.selectFirst(READER_DATA_SELECTOR)?.html()
-            ?: throw IllegalStateException("Reader data not found")
+        val jsonData = document.selectFirst("#reader-data-placeholder")?.html()
+            ?: throw NoSuchElementException("Reader data not found in DOM")
 
-        val seriesJson = try {
-            JSONObject(jsonData).optJSONObject("series")
-        } catch (e: Exception) {
-            throw IllegalStateException("Failed to parse reader data JSON", e)
-        }
-
-        val currentChapter = seriesJson?.optJSONObject("chapters")?.optJSONObject(chapterNumber)
-        val groups = currentChapter?.optJSONObject("groups")
-
-        return if (groups != null) {
-            val keys = groups.keys()
-            if (keys.hasNext()) {
-                val firstGroupKey = keys.next()
-                val firstGroup = groups.optString(firstGroupKey)
-                firstGroup.substringAfterLast("/")
-            } else {
-                ""
-            }
-        } else {
-            ""
-        }
+        val readerData = jsonData.parseAs<ReaderData>()
+        return readerData.series.chapters
+            ?.get(chapterNumber)
+            ?.groups
+            ?.values
+            ?.firstOrNull()
+            ?.substringAfterLast("/")
+            ?: throw NoSuchElementException("Chapter data not found for chapter $chapterNumber")
     }
 
     private fun buildChapterList(seriesData: SeriesData): List<SChapter> {
@@ -244,23 +170,12 @@ class BigSolo : ParsedHttpSource() {
     }
 
     private fun fetchChapterPages(chapterId: String): List<Page> {
-        val pagesResponse = try {
-            client.newCall(GET("$baseUrl$CHAPTER_PAGES_API?id=$chapterId", headers)).execute()
-        } catch (e: java.io.IOException) {
-            throw IllegalStateException("Failed to fetch chapter pages", e)
-        }
-
-        val pagesJson = try {
-            org.json.JSONArray(pagesResponse.body.string())
-        } catch (e: org.json.JSONException) {
-            throw IllegalStateException("Failed to parse chapter pages JSON", e)
-        }
-
-        return List(pagesJson.length()) { index ->
-            Page(
-                index,
-                imageUrl = pagesJson.getJSONObject(index).optString("link"),
-            )
+        val pagesResponse =
+            client.newCall(GET("$baseUrl/api/imgchest-chapter-pages?id=$chapterId", headers))
+                .execute()
+        val pages = pagesResponse.parseAs<List<PageData>>()
+        return pages.mapIndexed { index, pageData ->
+            Page(index, imageUrl = pageData.link)
         }
     }
 }
