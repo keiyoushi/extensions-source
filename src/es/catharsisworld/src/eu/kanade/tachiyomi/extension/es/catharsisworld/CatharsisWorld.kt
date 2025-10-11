@@ -90,9 +90,15 @@ class CatharsisWorld :
             dialogTitle = "Editar URL de la fuente"
             dialogMessage = "URL por defecto:\n${super.baseUrl}"
             setDefaultValue(super.baseUrl)
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, "Reinicie la aplicación para aplicar los cambios", Toast.LENGTH_LONG).show()
-                true
+            setOnPreferenceChangeListener { _, newVal ->
+                val url = newVal as String
+                try {
+                    val httpurl = url.toHttpUrl()
+                    preferences.prefBaseUrl = "https://${httpurl.host}"
+                } catch (_: Throwable) {
+                    Toast.makeText(screen.context, "Invalid Url", Toast.LENGTH_LONG).show()
+                }
+                false
             }
         }.also { screen.addPreference(it) }
     }
