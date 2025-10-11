@@ -40,12 +40,6 @@ class VortexScans : Iken(
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
     val perPage = 18
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
-        return client.newCall(mangaDetailsRequest(manga))
-            .asObservable()
-            .map(::mangaDetailsParse)
-    }
-
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return client.newCall(chapterListRequest(manga))
             .asObservable()
