@@ -48,7 +48,7 @@ class Creativecomic : HttpSource() {
     private val json: Json by injectLazy()
 
     @SuppressLint("SetJavaScriptEnabled")
-    fun getToken(): String? {
+    fun getToken(): String {
         _token?.also { return it }
         val latch = CountDownLatch(1)
         handler.post {
@@ -72,7 +72,7 @@ class Creativecomic : HttpSource() {
             webview.loadDataWithBaseURL("$baseUrl/", " ", "text/html", null, null)
         }
         latch.await(10, TimeUnit.SECONDS)
-        return _token
+        return _token!!
     }
 
     private fun getApiHeaders(): Headers {
@@ -85,7 +85,7 @@ class Creativecomic : HttpSource() {
         }
 
         // Check token expiration
-        val claims = token!!.substringAfter(".").substringBefore(".")
+        val claims = token.substringAfter(".").substringBefore(".")
         val decoded = Base64.decode(claims, Base64.DEFAULT).decodeToString()
         val expiration = json.decodeFromString<JWTClaims>(decoded).exp
         val now = System.currentTimeMillis() / 1000
