@@ -16,8 +16,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -45,7 +43,6 @@ class Creativecomic : HttpSource() {
     private var _token: String? = null
     private val context: Application by injectLazy()
     private val handler by lazy { Handler(Looper.getMainLooper()) }
-    private val json: Json by injectLazy()
 
     @SuppressLint("SetJavaScriptEnabled")
     fun getToken(): String {
@@ -87,7 +84,7 @@ class Creativecomic : HttpSource() {
         // Check token expiration
         val claims = token.substringAfter(".").substringBefore(".")
         val decoded = Base64.decode(claims, Base64.DEFAULT).decodeToString()
-        val expiration = json.decodeFromString<JWTClaims>(decoded).exp
+        val expiration = decoded.parseAs<JWTClaims>().exp
         val now = System.currentTimeMillis() / 1000
         if (now > expiration) throw Exception("token过期，请到WebView重新登录")
 
