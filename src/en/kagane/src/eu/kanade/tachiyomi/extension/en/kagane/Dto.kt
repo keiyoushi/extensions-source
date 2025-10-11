@@ -101,19 +101,3 @@ class ChallengeDto(
     @SerialName("access_token")
     val accessToken: String,
 )
-
-@Serializable
-class PagesCountDto(
-    val data: Data,
-) {
-    @Serializable
-    class Data(
-        val media: PagesCount,
-    ) {
-        @Serializable
-        class PagesCount(
-            @SerialName("pagesCount")
-            val pagesCount: Int,
-        )
-    }
-}

@@ -224,6 +224,7 @@ class Kagane : HttpSource(), ConfigurableSource {
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+        if (chapter.url.count{it == ';'} == 2) throw Exception("Chapter url error, please refresh chapter list.")
         var (seriesId, chapterId, pageCount) = chapter.url.split(";")
 
         val challengeResp = getChallengeResponse(seriesId, chapterId)
@@ -363,15 +364,6 @@ class Kagane : HttpSource(), ConfigurableSource {
             .parseAs<ChallengeDto>()
     }
 
-    private fun getPageCountResponse(seriesId: String, chapterId: String): Int {
-        val challengeUrl = "$apiUrl/api/v1/books/$seriesId/metadata/$chapterId"
-
-        val dto = client.newCall(GET(challengeUrl, apiHeaders)).execute()
-            .parseAs<PagesCountDto>()
-
-        return dto.data.media.pagesCount
-    }
-
     private fun concat(vararg arrays: ByteArray): ByteArray =
         arrays.reduce { acc, bytes -> acc + bytes }
 
@@ -437,7 +429,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     companion object {
         private const val SHOW_NSFW_KEY = "pref_show_nsfw"
-        private const val DATA_SAVER = "data_saver"
+        private const val DATA_SAVER = "data_saver_default"
     }
 
     // ============================= Filters ==============================
