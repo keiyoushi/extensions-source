@@ -155,7 +155,40 @@ class MangaFire(
                     // allow script from their cdn
                     if (url.host.orEmpty().contains("mfcdn.cc") && url.pathSegments.lastOrNull().orEmpty().contains("js")) {
                         Log.d(name, "allowed: $url")
-                        return super.shouldInterceptRequest(view, request)
+                        return super.shouldInterceptRequest(view, request).also {
+                            // trigger after main script loads
+
+                            // write the query in the search bar then trigger a key event
+                            // this triggers the drop down suggestions request
+                            // which is caught in `shouldInterceptRequest`
+                            handler.postDelayed(
+                                {
+                                    Log.d(name, "triggering search")
+                                    webView?.evaluateJavascript(
+                                        """
+                                        (() => {
+                                            const searchInput = document.querySelector('.search-inner input');
+                                            searchInput.value = '$query';
+                                            searchInput.focus();
+                                        })();
+                                        """.trimIndent(),
+                                    ) {}
+                                    webView?.dispatchKeyEvent(
+                                        KeyEvent(
+                                            KeyEvent.ACTION_DOWN,
+                                            KeyEvent.KEYCODE_SPACE,
+                                        ),
+                                    )
+                                    webView?.dispatchKeyEvent(
+                                        KeyEvent(
+                                            KeyEvent.ACTION_UP,
+                                            KeyEvent.KEYCODE_SPACE,
+                                        ),
+                                    )
+                                },
+                                2.seconds.inWholeMilliseconds,
+                            )
+                        }
                     }
 
                     // allow jquery script
@@ -180,34 +213,6 @@ class MangaFire(
 
             webview.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", "")
         }
-
-        // write the query in the search bar then trigger a key event
-        // this triggers the drop down suggestions request
-        // which is caught in `shouldInterceptRequest`
-        handler.postDelayed({
-            Log.d(name, "triggering search")
-            webView?.evaluateJavascript(
-                """
-                    (() => {
-                        const searchInput = document.querySelector('.search-inner input');
-                        searchInput.value = '$query';
-                        searchInput.focus();
-                    })();
-                """.trimIndent(),
-            ) {}
-            webView?.dispatchKeyEvent(
-                KeyEvent(
-                    KeyEvent.ACTION_DOWN,
-                    KeyEvent.KEYCODE_SPACE,
-                ),
-            )
-            webView?.dispatchKeyEvent(
-                KeyEvent(
-                    KeyEvent.ACTION_UP,
-                    KeyEvent.KEYCODE_SPACE,
-                ),
-            )
-        }, 10.seconds.inWholeMilliseconds,)
 
         latch.await(20, TimeUnit.SECONDS)
         handler.post {
