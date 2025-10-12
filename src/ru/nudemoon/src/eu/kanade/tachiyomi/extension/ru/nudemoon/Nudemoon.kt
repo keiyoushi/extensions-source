@@ -170,30 +170,39 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun chapterListSelector() = popularMangaSelector()
+    protected fun chapterListNextPageSelector() = popularMangaNextPageSelector()
 
     override fun chapterListParse(response: Response): List<SChapter> = mutableListOf<SChapter>().apply {
         val document = response.asJsoup()
 
         document.selectFirst("td.button a:contains(Все главы)")?.let { allPageElement ->
+            var page = 1
             var pageListDocument: Document
-            val pageListLink = allPageElement.attr("href")
-            client.newCall(
-                GET(baseUrl + pageListLink, headers),
-            ).execute().run {
-                if (!isSuccessful) {
-                    close()
-                    throw Exception("HTTP error $code")
-                }
-                pageListDocument = this.asJsoup()
-            }
-            if (pageListDocument.select(chapterListSelector()).isEmpty()) {
-                add(chapterFromSinglePage(document, response.request.url.toString()))
-            } else {
-                pageListDocument.select(chapterListSelector())
-                    .forEach {
-                        add(chapterFromElement(it))
+            var pageListLink = allPageElement.attr("href")
+            do {
+                client.newCall(
+                    GET(baseUrl + pageListLink, headers),
+                ).execute().run {
+                    if (!isSuccessful) {
+                        close()
+                        throw Exception("HTTP error $code")
                     }
-            }
+                    pageListDocument = this.asJsoup()
+                }
+                if (pageListDocument.select(chapterListSelector()).isEmpty() && page == 1) {
+                    add(chapterFromSinglePage(document, response.request.url.toString()))
+                    break
+                } else {
+                    pageListDocument.select(chapterListSelector())
+                        .forEach {
+                            add(chapterFromElement(it))
+                        }
+                }
+                pageListDocument.selectFirst(chapterListNextPageSelector())?.let { nextPageElement ->
+                    page++
+                    pageListLink = nextPageElement.attr("href")
+                }
+            } while (pageListDocument.selectFirst(chapterListNextPageSelector()) != null)
         } ?: run {
             add(chapterFromSinglePage(document, response.request.url.toString()))
         }
