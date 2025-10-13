@@ -351,7 +351,20 @@ abstract class EHentai(
 
     override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String = response.asJsoup().select("#img").attr("abs:src")
+    override fun imageUrlParse(response: Response): String {
+        val doc = response.asJsoup()
+        val imgUrl = doc.select("#img").attr("abs:src")
+        // refer to https://github.com/Miuzarte/EHentai-go/blob/dd9a24adb13300c028c35f53b9eff31b51966def/query.go#L694
+        val nlValue = doc.selectFirst("#loadfail")
+            ?.attr("onclick")
+            ?.let { Regex("nl\\('(.+?)'\\)").find(it)?.groupValues?.get(1) }
+
+        return if (nlValue.isNullOrEmpty()) {
+            imgUrl
+        } else {
+            "$imgUrl#bak=${response.request.url}&nl=$nlValue"
+        }
+    }
 
     private val cookiesHeader by lazy {
         val cookies = mutableMapOf<String, String>()
@@ -398,6 +411,22 @@ abstract class EHentai(
 
     override val client = network.cloudflareClient.newBuilder()
         .cookieJar(CookieJar.NO_COOKIES)
+        .addInterceptor { chain ->
+            var request = chain.request()
+            val rawUrl = request.url.toString()
+            val (baseUrl, bakUrl) = rawUrl.split("#", limit = 2).let {
+                it[0] to it.getOrNull(1)
+            }
+            request = request.newBuilder().url(baseUrl).build()
+            var response = chain.proceed(request)
+            if (!response.isSuccessful && bakUrl?.startsWith("bak=") == true) {
+                response.close()
+                val backupReq = request.newBuilder().url(bakUrl).build()
+                response = chain.proceed(backupReq)
+            }
+
+            response
+        }
         .addInterceptor { chain ->
             val newReq = chain
                 .request()
