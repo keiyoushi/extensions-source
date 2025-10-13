@@ -10,14 +10,6 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ConfigResponse(
-    @SerialName("ENV")
-    val env: String?,
-    @SerialName("URL_GIT_CUBARI")
-    val urlGitCubari: String?,
-    @SerialName("URL_RAW_JSON_GITHUB")
-    val urlRawJsonGithub: String?,
-    @SerialName("URL_API_IMGCHEST")
-    val urlApiImgchest: String?,
     @SerialName("LOCAL_SERIES_FILES")
     val localSeriesFiles: List<String>,
 )
@@ -32,16 +24,7 @@ data class SeriesData(
     val coverLow: String?,
     @SerialName("cover_hq")
     val coverHq: String?,
-    @SerialName("manga_type")
-    val mangaType: String?,
-    val magazine: String?,
-    @SerialName("release_year")
-    val releaseYear: Int?,
     val tags: List<String>?,
-    @SerialName("jp_title")
-    val jpTitle: String?,
-    @SerialName("alternative_titles")
-    val alternativeTitles: List<String>?,
     @SerialName("release_status")
     val releaseStatus: String?,
     val chapters: Map<String, ChapterData>?,

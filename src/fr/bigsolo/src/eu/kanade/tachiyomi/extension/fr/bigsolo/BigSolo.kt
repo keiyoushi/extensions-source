@@ -79,8 +79,7 @@ class BigSolo : HttpSource() {
     // Details
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)?.html()
-            ?: throw NoSuchElementException("Series data not found in DOM")
+        val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)!!.html()
 
         val seriesData = jsonData.parseAs<SeriesData>()
         return seriesData.toDetailedSManga()
@@ -100,8 +99,7 @@ class BigSolo : HttpSource() {
     // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)?.html()
-            ?: throw NoSuchElementException("Series data not found in DOM")
+        val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)!!.html()
 
         val seriesData = jsonData.parseAs<SeriesData>()
         return buildChapterList(seriesData)
@@ -123,8 +121,7 @@ class BigSolo : HttpSource() {
     }
 
     private fun extractChapterId(document: Document, chapterNumber: String): String {
-        val jsonData = document.selectFirst("#reader-data-placeholder")?.html()
-            ?: throw NoSuchElementException("Reader data not found in DOM")
+        val jsonData = document.selectFirst("#reader-data-placeholder")!!.html()
 
         val readerData = jsonData.parseAs<ReaderData>()
         return readerData.series.chapters
