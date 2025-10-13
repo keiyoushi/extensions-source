@@ -200,7 +200,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
                 }
                 pageListDocument.selectFirst(chapterListNextPageSelector())?.let { nextPageElement ->
                     page++
-                    pageListLink = nextPageElement.attr("href")
+                    pageListLink = nextPageElement.absUrl("href")
                 }
             } while (pageListDocument.selectFirst(chapterListNextPageSelector()) != null)
         } ?: run {
