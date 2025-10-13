@@ -39,8 +39,8 @@ class InfraFandub : Madara(
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
         with(element) {
-            chapter.setUrlWithoutDomain(attr("href"))
-            chapter.name = selectFirst("span.chapter-number")?.text() ?: ""
+            chapter.setUrlWithoutDomain(absUrl("href"))
+            chapter.name = selectFirst("span.chapter-number")!!.text()
             chapter.date_upload = parseChapterDate(selectFirst("span.chapter-date")?.text())
         }
         return chapter
