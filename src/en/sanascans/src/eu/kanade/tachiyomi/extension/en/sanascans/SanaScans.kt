@@ -4,11 +4,11 @@ import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
 import okhttp3.Response
 import java.text.Normalizer
 import java.util.Locale
-import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
 
 class SanaScans : Iken(
     "Sana Scans",
