@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.all.batoto
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
@@ -91,8 +92,15 @@ open class BatoTo(
         val removeCustomPref = EditTextPreference(screen.context).apply {
             key = "${REMOVE_TITLE_CUSTOM_PREF}_$lang"
             title = "Custom regex to be removed from title"
-            summary = preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "") ?: ""
+            summary = customRemoveTitle()
             setDefaultValue("")
+            setOnPreferenceChangeListener { _, newValue ->
+                runCatching {
+                    Regex(newValue as String)
+                }.onFailure {
+                    Toast.makeText(screen.context, it.message, Toast.LENGTH_LONG).show()
+                }.isSuccess
+            }
         }
         screen.addPreference(mirrorPref)
         screen.addPreference(altChapterListPref)
@@ -129,7 +137,7 @@ open class BatoTo(
         return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
     }
     private fun customRemoveTitle(): String =
-        preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "") ?: ""
+        preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
 
     private fun SharedPreferences.migrateMirrorPref() {
         val selectedMirror = getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)!!
@@ -356,15 +364,13 @@ open class BatoTo(
         }
         return super.mangaDetailsRequest(manga)
     }
-    private var titleRegex: Regex =
-        Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|\\/Official|\\/ Official", RegexOption.IGNORE_CASE)
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("div#mainer div.container-fluid")!!
         val manga = SManga.create()
         val workStatus = infoElement.selectFirst("div.attr-item:contains(original work) span")?.text()
         val uploadStatus = infoElement.selectFirst("div.attr-item:contains(upload status) span")?.text()
-        val originalTitle = infoElement.select("h3").text().removeEntities()
+        val title = infoElement.select("h3").text().removeEntities()
         val description = buildString {
             append(infoElement.select("div.limit-html").text())
             infoElement.selectFirst(".episode-list > .alert-warning")?.also {
@@ -379,10 +385,12 @@ open class BatoTo(
             }
         }.trim()
 
-        val cleanedTitle = originalTitle.let {
-            var tempTitle = it
-            if (customRemoveTitle().isNotEmpty()) {
-                tempTitle = tempTitle.replace(Regex(customRemoveTitle()), "")
+        val cleanedTitle = title.let { originalTitle ->
+            var tempTitle = originalTitle
+            customRemoveTitle().takeIf { it.isNotEmpty() }?.let { customRegex ->
+                runCatching {
+                    tempTitle = tempTitle.replace(Regex(customRegex), "")
+                }
             }
             if (isRemoveTitleVersion()) {
                 tempTitle = tempTitle.replace(titleRegex, "")
@@ -395,8 +403,8 @@ open class BatoTo(
         manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
         manga.status = parseStatus(workStatus, uploadStatus)
         manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
-        manga.description = if (originalTitle.trim() != cleanedTitle) {
-            listOf(originalTitle, description)
+        manga.description = if (title.trim() != cleanedTitle) {
+            listOf(title, description)
                 .joinToString("\n\n")
         } else {
             description
@@ -1125,5 +1133,8 @@ open class BatoTo(
         private const val ALT_CHAPTER_LIST_PREF_TITLE = "Alternative Chapter List"
         private const val ALT_CHAPTER_LIST_PREF_SUMMARY = "If checked, uses an alternate chapter list"
         private const val ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE = false
+
+        private val titleRegex: Regex =
+            Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)
     }
 }
