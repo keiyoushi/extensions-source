@@ -160,17 +160,7 @@ abstract class Iken(
             throw Exception("Unlock chapter in webview")
         }
 
-        val pages = document.getNextJson("images")
-            .parseAs<List<PageParseDto>>()
-            .let { imageEntries ->
-                if (imageEntries.any { it.order != null }) {
-                    imageEntries.sortedBy { it.order ?: Int.MAX_VALUE }
-                } else {
-                    imageEntries
-                }
-            }
-
-        return pages.mapIndexed { idx, p ->
+        return document.getNextJson("images").parseAs<List<PageParseDto>>().mapIndexed { idx, p ->
             Page(idx, imageUrl = p.url)
         }
     }
@@ -178,7 +168,6 @@ abstract class Iken(
     @Serializable
     class PageParseDto(
         val url: String,
-        val order: Int? = null,
     )
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

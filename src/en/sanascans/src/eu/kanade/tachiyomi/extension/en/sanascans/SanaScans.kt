@@ -2,9 +2,13 @@ package eu.kanade.tachiyomi.extension.en.sanascans
 
 import eu.kanade.tachiyomi.multisrc.iken.Iken
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.Response
 import java.text.Normalizer
 import java.util.Locale
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
 
 class SanaScans : Iken(
     "Sana Scans",
@@ -26,7 +30,6 @@ class SanaScans : Iken(
         val filtered = result.mangas.filter { manga ->
             val searchableFields = listOf(
                 manga.title.normalizeForSearch(),
-                manga.url.substringBeforeLast("#").normalizeForSearch(),
                 manga.description.normalizeForSearch(),
             )
 
@@ -36,6 +39,22 @@ class SanaScans : Iken(
         }
 
         return MangasPage(filtered, result.hasNextPage)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+
+        if (document.selectFirst("svg.lucide-lock") != null) {
+            throw Exception("Unlock chapter in webview")
+        }
+
+        val pages = document.getNextJson("images")
+            .parseAs<List<SanaPageDto>>()
+            .sortedBy { it.order ?: Int.MAX_VALUE }
+
+        return pages.mapIndexed { idx, p ->
+            Page(idx, imageUrl = p.url)
+        }
     }
 
     private fun String?.normalizeForSearch(): String {
@@ -55,4 +74,10 @@ class SanaScans : Iken(
         private val nonAlphanumericRegex = Regex("[^a-z0-9]+")
         private val multiSpaceRegex = Regex("\\s+")
     }
+
+    @Serializable
+    private data class SanaPageDto(
+        val url: String,
+        val order: Int? = null,
+    )
 }
