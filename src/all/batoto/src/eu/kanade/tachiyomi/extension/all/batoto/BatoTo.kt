@@ -58,7 +58,10 @@ open class BatoTo(
         get() {
             val current = field
             if (current.isNotEmpty()) {
-                return current
+                return when (current) {
+                    "Auto" -> getMirrorPref()
+                    else -> current
+                }
             }
             field = getMirrorPref()
             return field
