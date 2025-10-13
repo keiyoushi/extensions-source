@@ -3,10 +3,10 @@ package eu.kanade.tachiyomi.extension.en.mangadistrict
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.widget.Toast
+import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
-import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -306,7 +306,7 @@ class MangaDistrict :
         }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SwitchPreferenceCompat(screen.context).apply {
+        CheckBoxPreference(screen.context).apply {
             key = REMOVE_TITLE_VERSION_PREF
             title = "Remove version information from entry titles"
             summary = "This removes version tags like “(Official)” or “(Doujinshi)” from entry titles " +
