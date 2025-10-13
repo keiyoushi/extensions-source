@@ -178,10 +178,10 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
         document.selectFirst("td.button a:contains(Все главы)")?.let { allPageElement ->
             var page = 1
             var pageListDocument: Document
-            var pageListLink = allPageElement.attr("href")
+            var pageListLink = allPageElement.absUrl("href")
             do {
                 client.newCall(
-                    GET(baseUrl + pageListLink, headers),
+                    GET(pageListLink, headers),
                 ).execute().run {
                     if (!isSuccessful) {
                         close()
