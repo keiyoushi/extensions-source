@@ -54,18 +54,7 @@ open class BatoTo(
 
     override val name: String = "Bato.to"
 
-    override var baseUrl: String = ""
-        get() {
-            val current = field
-            if (current.isNotEmpty()) {
-                return when (current) {
-                    "Auto" -> getMirrorPref()
-                    else -> current
-                }
-            }
-            field = getMirrorPref()
-            return field
-        }
+    override val baseUrl: String get() = getMirrorPref()
 
     override val id: Long = when (lang) {
         "zh-Hans" -> 2818874445640189582
@@ -82,10 +71,6 @@ open class BatoTo(
             entryValues = MIRROR_PREF_ENTRY_VALUES
             setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
             summary = "%s"
-            setOnPreferenceChangeListener { _, newValue ->
-                baseUrl = newValue as String
-                true
-            }
         }
         val altChapterListPref = CheckBoxPreference(screen.context).apply {
             key = "${ALT_CHAPTER_LIST_PREF_KEY}_$lang"
