@@ -13,6 +13,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -24,18 +25,21 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.internal.charset
+import okio.Buffer
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.io.ByteArrayInputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -255,11 +259,11 @@ class MangaFire(
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         var ajaxUrl: String? = null
-        var errorMessage: String? = null
 
         val context = Injekt.get<Application>()
         val handler = Handler(Looper.getMainLooper())
         val latch = CountDownLatch(1)
+        val emptyWebViewResponse = WebResourceResponse("text/html", "utf-8", Buffer().inputStream())
         var webView: WebView? = null
 
         handler.post {
@@ -270,12 +274,10 @@ class MangaFire(
                 domStorageEnabled = true
                 databaseEnabled = true
                 blockNetworkImage = true
-                userAgentString = headers["User-Agent"]
             }
 
             webview.webViewClient = object : WebViewClient() {
                 private val ajaxCalls = setOf("ajax/read/chapter", "ajax/read/volume")
-                private val emptyWebViewResponse = WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(" ".toByteArray()))
 
                 override fun shouldInterceptRequest(
                     view: WebView,
@@ -287,14 +289,14 @@ class MangaFire(
                     if (url.host.orEmpty().contains("mfcdn.cc") && url.pathSegments.lastOrNull().orEmpty().contains("js")) {
                         Log.d(name, "allowed: $url")
 
-                        return super.shouldInterceptRequest(view, request)
+                        return fetchWebResource(request)
                     }
 
                     // allow jquery script
                     if (url.host.orEmpty().contains("cloudflare.com") && url.encodedPath.orEmpty().contains("jquery")) {
                         Log.d(name, "allowed: $url")
 
-                        return super.shouldInterceptRequest(view, request)
+                        return fetchWebResource(request)
                     }
 
                     // allow ajax/read calls and intercept ajax/read/chapter or ajax/read/volume
@@ -304,15 +306,13 @@ class MangaFire(
 
                             if (url.getQueryParameter("vrf") != null) {
                                 ajaxUrl = url.toString()
-                            } else {
-                                errorMessage = "vrf not found"
                             }
 
                             latch.countDown()
                         } else {
                             // need to allow other call to ajax/read
                             Log.d(name, "allowed: $url")
-                            return super.shouldInterceptRequest(view, request)
+                            return fetchWebResource(request)
                         }
                     }
 
@@ -333,7 +333,7 @@ class MangaFire(
         if (latch.count == 1L) {
             throw Exception("Timeout getting vrf token")
         } else if (ajaxUrl == null) {
-            throw Exception(errorMessage ?: "Unknown Error")
+            throw Exception("Unable to find vrf token")
         }
 
         return client.newCall(GET(ajaxUrl!!, headers)).execute()
@@ -345,6 +345,31 @@ class MangaFire(
 
                 Page(index, imageUrl = imageUrl)
             }
+    }
+
+    private fun fetchWebResource(request: WebResourceRequest): WebResourceResponse = runBlocking(Dispatchers.IO) {
+        val okhttpRequest = Request.Builder().apply {
+            url(request.url.toString())
+            headers(headers)
+
+            val skipHeaders = setOf("referer", "user-agent", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "x-requested-with")
+            for ((name, value) in request.requestHeaders) {
+                if (skipHeaders.contains(name.lowercase())) continue
+                addHeader(name, value)
+            }
+        }.build()
+
+        client.newCall(okhttpRequest).await().use { response ->
+            val mediaType = response.body.contentType()
+
+            WebResourceResponse(
+                mediaType?.let { "${it.type}/${it.subtype}" },
+                mediaType?.charset()?.name(),
+                Buffer().readFrom(
+                    response.body.byteStream(),
+                ).inputStream(),
+            )
+        }
     }
 
     @Serializable
