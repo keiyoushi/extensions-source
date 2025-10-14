@@ -40,10 +40,15 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 class MangaFire(
     override val lang: String,
@@ -56,7 +61,25 @@ class MangaFire(
     override val supportsLatest = true
     private val preferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder().addInterceptor(ImageInterceptor).build()
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor(ImageInterceptor)
+        .apply {
+            val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
+            object : X509TrustManager {
+                override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+                override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+                override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
+            }
+
+            val insecureSocketFactory = SSLContext.getInstance("SSL").apply {
+                val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
+                init(null, trustAllCerts, SecureRandom())
+            }.socketFactory
+
+            sslSocketFactory(insecureSocketFactory, naiveTrustManager)
+            hostnameVerifier { _, _ -> true }
+        }
+        .build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
