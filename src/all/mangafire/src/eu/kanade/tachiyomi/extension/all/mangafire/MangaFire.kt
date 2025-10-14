@@ -11,7 +11,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -109,15 +108,6 @@ class MangaFire(
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     // =============================== Search ===============================
-    private val vrfScript by lazy {
-        val vrf = this::class.java.getResourceAsStream("/assets/vrf.js")!!
-            .bufferedReader()
-            .readText()
-
-        QuickJs.create().use {
-            it.compile(vrf, "vrf")
-        }
-    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
@@ -136,10 +126,7 @@ class MangaFire(
             addQueryParameter("page", page.toString())
 
             if (query.isNotBlank()) {
-                val vrf = QuickJs.create().use {
-                    it.execute(vrfScript)
-                    it.evaluate("crc_vrf(\"${query.trim()}\")") as String
-                }
+                val vrf = VrfGenerator.generate(query.trim())
                 addQueryParameter("vrf", vrf)
             }
         }.build()
