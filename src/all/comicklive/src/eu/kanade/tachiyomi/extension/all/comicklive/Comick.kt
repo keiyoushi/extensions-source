@@ -30,7 +30,6 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import okhttp3.internal.closeQuietly
 import org.jsoup.Jsoup
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 
