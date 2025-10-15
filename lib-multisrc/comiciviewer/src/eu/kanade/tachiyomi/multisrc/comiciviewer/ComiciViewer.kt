@@ -174,12 +174,15 @@ abstract class ComiciViewer(
         val viewer = document.selectFirst("#comici-viewer") ?: throw Exception("You need to log in via WebView to read this chapter or purchase this chapter")
         val comiciViewerId = viewer.attr("comici-viewer-id")
         val memberJwt = viewer.attr("data-member-jwt")
+        val apiHeaders = headers.newBuilder()
+            .set("Referer", response.request.url.toString())
+            .build()
         val requestUrl = "$baseUrl/book/contentsInfo".toHttpUrl().newBuilder()
             .addQueryParameter("comici-viewer-id", comiciViewerId)
             .addQueryParameter("user-id", memberJwt)
             .addQueryParameter("page-from", "0")
 
-        val pageTo = client.newCall(GET(requestUrl.addQueryParameter("page-to", "1").build(), headers))
+        val pageTo = client.newCall(GET(requestUrl.addQueryParameter("page-to", "1").build(), apiHeaders))
             .execute().use { initialResponse ->
                 if (!initialResponse.isSuccessful) {
                     throw Exception("Failed to get page list")
@@ -188,7 +191,7 @@ abstract class ComiciViewer(
             }
 
         val getAllPagesUrl = requestUrl.setQueryParameter("page-to", pageTo).build()
-        return client.newCall(GET(getAllPagesUrl, headers)).execute().use { allPagesResponse ->
+        return client.newCall(GET(getAllPagesUrl, apiHeaders)).execute().use { allPagesResponse ->
             if (allPagesResponse.isSuccessful) {
                 allPagesResponse.parseAs<ViewerResponse>().result.map { resultItem ->
                     val urlBuilder = resultItem.imageUrl.toHttpUrl().newBuilder()
