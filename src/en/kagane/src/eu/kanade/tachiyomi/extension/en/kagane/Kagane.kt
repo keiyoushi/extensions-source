@@ -138,7 +138,9 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortFilter(0)))
+    override fun popularMangaRequest(page: Int) =
+        searchMangaRequest(page, "", FilterList(SortFilter(1)))
+
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     // =============================== Latest ===============================
@@ -203,7 +205,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<ChapterDto>()
-        return dto.content.map { it.toSChapter() }.reversed()
+        return dto.content.mapIndexed { i, it -> it.toSChapter(i + 1) }.reversed()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -351,11 +353,12 @@ class Kagane : HttpSource(), ConfigurableSource {
             throw Exception("Failed to get drm challenge")
         }
 
-        val challengeUrl = "$apiUrl/api/v1/books/$seriesId/file/$chapterId".toHttpUrl().newBuilder().apply {
-            if (preferences.dataSaver) {
-                addQueryParameter("datasaver", true.toString())
-            }
-        }.build()
+        val challengeUrl =
+            "$apiUrl/api/v1/books/$seriesId/file/$chapterId".toHttpUrl().newBuilder().apply {
+                if (preferences.dataSaver) {
+                    addQueryParameter("datasaver", true.toString())
+                }
+            }.build()
         val challengeBody = buildJsonObject {
             put("challenge", jsInterface.challenge)
         }.toJsonString().toRequestBody("application/json".toMediaType())
@@ -441,7 +444,8 @@ class Kagane : HttpSource(), ConfigurableSource {
     class SortFilter(state: Int = 0) : UriPartFilter(
         "Sort By",
         arrayOf(
-            Pair("Relevance", "avg_views,desc"),
+            Pair("Relevance", ""),
+            Pair("Popular", "avg_views,desc"),
             Pair("Latest", "updated_at"),
             Pair("Latest Descending", "updated_at,desc"),
             Pair("By Name", "series_name"),
