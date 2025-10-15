@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.comicklive
 
-import android.app.Application
 import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -24,7 +23,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import okhttp3.Cache
 import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -32,9 +30,7 @@ import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import okhttp3.internal.closeQuietly
 import org.jsoup.Jsoup
-import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -71,15 +67,6 @@ class Comick(
             val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
             if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
         }
-        .cache(
-            Cache(
-                directory = File(
-                    Injekt.get<Application>().externalCacheDir,
-                    "network_cache_comick",
-                ),
-                maxSize = 10L * 1024 * 1024, // 10 MiB
-            ),
-        )
         .build()
 
     override fun popularMangaRequest(page: Int): Request {
