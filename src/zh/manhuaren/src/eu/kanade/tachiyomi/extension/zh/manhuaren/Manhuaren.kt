@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.text.format.DateFormat
 import android.util.Base64
+import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -57,9 +58,12 @@ class Manhuaren : HttpSource(), ConfigurableSource {
     private val gsnSalt = "4e0a48e1c0b54041bce9c8f0e036124d"
     private val encodedPublicKey = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmFCg289dTws27v8GtqIffkP4zgFR+MYIuUIeVO5AGiBV0rfpRh5gg7i8RrT12E9j6XwKoe3xJz1khDnPc65P5f7CJcNJ9A8bj7Al5K4jYGxz+4Q+n0YzSllXPit/Vz/iW5jFdlP6CTIgUVwvIoGEL2sS4cqqqSpCDKHSeiXh9CtMsktc6YyrSN+8mQbBvoSSew18r/vC07iQiaYkClcs7jIPq9tuilL//2uR9kWn5jsp8zHKVjmXuLtHDhM9lObZGCVJwdlN2KDKTh276u/pzQ1s5u8z/ARtK26N8e5w8mNlGcHcHfwyhjfEQurvrnkqYH37+12U3jGk5YNHGyOPcwIDAQAB"
     private val imei: String by lazy { generateIMEI() }
-    private val token: String by lazy { fetchToken() }
-    private var userId: String = preferences.getString(USER_ID_PREF, null) ?: "-1"
     private val lastUsedTime: String by lazy { generateLastUsedTime() }
+
+    companion object {
+        const val USER_ID_PREF = "userId"
+        const val TOKEN_PREF = "token"
+    }
 
     override val client: OkHttpClient = network.cloudflareClient
         .newBuilder()
@@ -129,8 +133,9 @@ class Manhuaren : HttpSource(), ConfigurableSource {
     )
 
     private fun fetchToken(): String {
-        var token = preferences.getString(TOKEN_PREF, null)
-        if (token == null || userId == "-1") {
+        var token = preferences.getString(TOKEN_PREF, "")!!
+        var userId = preferences.getString(USER_ID_PREF, "")!!
+        if (token.isEmpty() || userId.isEmpty()) {
             val res = client.newCall(getAnonyUser()).execute()
             val tokenResponse = Json.decodeFromString<GetAnonyUserBody>(res.body.string()).response
             val tokenResult = tokenResponse.tokenResult
@@ -249,6 +254,7 @@ class Manhuaren : HttpSource(), ConfigurableSource {
 
     private fun myRequest(url: HttpUrl, method: String, body: RequestBody?): Request {
         val now = DateFormat.format("yyyy-MM-dd+HH:mm:ss", Date()).toString()
+        val userId = preferences.getString(USER_ID_PREF, "-1")!!
         val newUrl = url.newBuilder()
             .setQueryParameter("gsm", "md5")
             .setQueryParameter("gft", "json")
@@ -302,7 +308,7 @@ class Manhuaren : HttpSource(), ConfigurableSource {
     }
 
     private fun myGet(url: HttpUrl): Request {
-        val authorization = token
+        val authorization = fetchToken()
         return myRequest(url, "GET", null).newBuilder()
             .addHeader("Authorization", authorization)
             .cacheControl(CacheControl.Builder().maxAge(10, MINUTES).build())
@@ -348,6 +354,7 @@ class Manhuaren : HttpSource(), ConfigurableSource {
             put("ac", "") // area code
         }
 
+        val userId = preferences.getString(USER_ID_PREF, "-1")!!
         return Headers.Builder().apply {
             add("X-Yq-Yqci", JSONObject(yqciMap).toString())
             add("X-Yq-Key", userId)
@@ -666,14 +673,26 @@ class Manhuaren : HttpSource(), ConfigurableSource {
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        SimpleEditTextPreference(screen.context).apply {
+        EditTextPreference(screen.context).apply {
             key = USER_ID_PREF
             title = "用户ID"
+            val userId = preferences.getString(USER_ID_PREF, "")!!
+            summary = userId.ifEmpty { "无用户ID，点击设置" }
+            setOnPreferenceChangeListener { _, newValue ->
+                summary = (newValue as String).ifEmpty { "无用户ID，点击设置" }
+                true
+            }
+        }.let(screen::addPreference)
 
-            setEnabled(false)
+        EditTextPreference(screen.context).apply {
+            key = TOKEN_PREF
+            title = "令牌(Token)"
+            val token = preferences.getString(TOKEN_PREF, "")!!
+            summary = if (token.isEmpty()) "无令牌，点击设置" else "点击查看"
+            setOnPreferenceChangeListener { _, newValue ->
+                summary = if ((newValue as String).isEmpty()) "无令牌，点击设置" else "点击查看"
+                true
+            }
         }.let(screen::addPreference)
     }
 }
-
-internal const val TOKEN_PREF = "token"
-internal const val USER_ID_PREF = "userId"
