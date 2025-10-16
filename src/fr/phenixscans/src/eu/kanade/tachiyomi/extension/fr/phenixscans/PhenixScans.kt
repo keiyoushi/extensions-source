@@ -18,7 +18,7 @@ import java.util.Locale
 
 class PhenixScans : HttpSource() {
     override val baseUrl = "https://phenix-scans.com"
-    private val apiBaseUrl = "https://api.phenix-scans.com"
+    private val apiBaseUrl = "https://phenix-scans.com/api"
     override val lang = "fr"
     override val name = "Phenix Scans"
     override val supportsLatest = true
@@ -157,14 +157,16 @@ class PhenixScans : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<MangaDetailDto>()
 
-        return data.chapters.map {
-            SChapter.create().apply {
-                chapter_number = it.number.float
-                date_upload = simpleDateFormat.tryParse(it.createdAt)
-                name = "Chapter ${it.number}"
-                url = "${data.manga.slug}/${it.number}"
+        return data.chapters
+            .filter { it.price == 0 }
+            .map { chapterDto ->
+                SChapter.create().apply {
+                    chapter_number = chapterDto.number.float
+                    date_upload = simpleDateFormat.tryParse(chapterDto.createdAt)
+                    name = "Chapter ${chapterDto.number}"
+                    url = "${data.manga.slug}/${chapterDto.number}"
+                }
             }
-        }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

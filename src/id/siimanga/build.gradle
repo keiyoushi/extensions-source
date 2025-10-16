@@ -2,8 +2,8 @@ ext {
     extName = 'Siikomik'
     extClass = '.Siikomik'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://siikomik.art'
-    overrideVersionCode = 12
+    baseUrl = 'https://web.siikomik.org'
+    overrideVersionCode = 13
     isNsfw = false
 }
 

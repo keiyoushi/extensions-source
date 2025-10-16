@@ -2,8 +2,8 @@ ext {
     extName = 'Read Tokyo Ghoul Re & Tokyo Ghoul Manga Online'
     extClass = '.ReadTokyoGhoulReTokyoGhoulMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww10.tokyoghoulre.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://ww11.tokyoghoulre.com'
+    overrideVersionCode = 4
     isNsfw = false
 }
 

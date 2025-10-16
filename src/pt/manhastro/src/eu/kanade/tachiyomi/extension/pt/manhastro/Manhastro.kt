@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import android.util.Log
+import android.webkit.CookieManager
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -18,7 +20,6 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import okhttp3.CacheControl
@@ -33,10 +34,9 @@ import org.jsoup.nodes.Document
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class Manhastro :
     Madara(
@@ -53,9 +53,14 @@ class Manhastro :
 
     private val application: Application by lazy { Injekt.get<Application>() }
 
+    private val cookieManager by lazy { CookieManager.getInstance() }
+
     private var showWarning: Boolean = true
 
     private val authCookie: Cookie by lazy {
+        cookieManager.removeAllCookies(null)
+        cookieManager.flush()
+
         val cookieJson = preferences.getString(COOKIE_STORAGE_PREF, "") as String
         if (cookieJson.isBlank()) {
             return@lazy doAuth().also(::upsetCookie)
@@ -67,10 +72,17 @@ class Manhastro :
             ?: doAuth().also(::upsetCookie)
     }
 
+    // Prevent multiple login when rateLimit is greater than 1
+    private var initializedCookie = AtomicBoolean(false)
     private val cookieInterceptor: Interceptor by lazy {
         return@lazy when {
             authCookie.isEmpty() -> bypassInterceptor
-            else -> CookieInterceptor(baseUrl.substringAfterLast("/"), listOf(authCookie.value))
+            else -> {
+                if (initializedCookie.compareAndSet(false, true).not()) {
+                    return@lazy bypassInterceptor
+                }
+                CookieInterceptor(baseUrl.substringAfterLast("/"), listOf(authCookie.value))
+            }
         }
     }
 
@@ -182,61 +194,51 @@ class Manhastro :
         password = preferences.getString(PASSWORD_PREF, "") as String,
     )
 
-    private val defaultClient = network.cloudflareClient
+    private val defaultClient = network.cloudflareClient.newBuilder()
+        .rateLimit(1)
+        .readTimeout(1, TimeUnit.MINUTES)
+        .connectTimeout(1, TimeUnit.MINUTES)
+        .build()
 
-    var attempts: Int
-        get() = preferences.getInt(COOKIE_ATTEMPT, 0)
-        set(value) {
-            preferences.edit()
-                .putInt(COOKIE_ATTEMPT, value)
-                .apply()
-        }
-    var lastAttempt: Date?
+    private var _cache: Attempt? = null
+    val attempt: Attempt
         get() {
-            val time = preferences.getLong(COOKIE_LAST_REQUEST, 0)
-            if (time == 0L) {
-                return null
+            if (_cache != null) {
+                return _cache!!
             }
-            return Date(time)
+
+            val stored = preferences.getString(COOKIE_ATTEMPT_REF, "")
+            if (stored.isNullOrBlank()) {
+                return Attempt().also {
+                    _cache = it
+                    preferences
+                        .edit()
+                        .putString(COOKIE_ATTEMPT_REF, json.encodeToString(it))
+                        .apply()
+                }
+            }
+            return stored.parseAs<Attempt>().also { _cache = it }
         }
-        set(value) {
-            val time = value?.time ?: 0L
-            preferences.edit()
-                .putLong(COOKIE_LAST_REQUEST, time)
-                .apply()
-        }
+
+    private fun Attempt.save() {
+        preferences
+            .edit()
+            .putString(COOKIE_ATTEMPT_REF, json.encodeToString(this))
+            .apply()
+    }
 
     private fun doAuth(): Cookie {
         if (credentials.isEmpty) {
             return Cookie.empty()
         }
 
-        attempts++
-        /**
-         * Avoids excessive invalid requests when credentials are invalid
-         */
-        if (attempts >= MAX_ATTEMPT_WITHIN_PERIOD) {
-            if (lastAttempt == null) {
-                lastAttempt = Date()
-                return Cookie.empty()
-            }
-
-            val lockPeriod = Calendar.getInstance().apply {
-                time = lastAttempt!!
-                add(Calendar.HOUR, 6)
-            }
-
-            when {
-                Date().after(lockPeriod.time) -> {
-                    attempts = 0
-                    lastAttempt = null
-                }
-                else -> {
-                    showToast("Login permitido após 6h de ${toastDateFormat.format(lastAttempt!!)}")
-                    return Cookie.empty()
-                }
-            }
+        val attemptCount = attempt.takeIfUnlocked() ?: return Cookie.empty().also {
+            showToast("Login permitido após ${Attempt.MIN_PERIOD}h de ${attempt.updateAt()}")
         }
+
+        Log.i(Manhastro::class.simpleName, "trying: ${attemptCount}x")
+
+        attempt.save()
 
         val document = defaultClient.newCall(GET(baseUrl, headers)).execute().asJsoup()
         val nonce = document.selectFirst("script#wp-manga-login-ajax-js-extra")
@@ -249,17 +251,22 @@ class Manhastro :
         val formHeaders = headers.newBuilder()
             .set("Accept", "*/*")
             .set("Accept-Encoding", "gzip, deflate, br")
-            .set("Accept-Language", "en-US,en;q=0.9")
+            .set("Accept-Language", "pt-BR,en-US;q=0.7,en;q=0.3")
             .set("Connection", "keep-alive")
             .set("Origin", baseUrl)
             .set("Referer", "$baseUrl/")
+            .set("Sec-Fetch-Site", "same-origin")
+            .set("Sec-Fetch-Mode", "cors")
+            .set("Sec-Fetch-Dest", "empty")
+            .set("Priority", "u=0")
+            .set("TE", "trailers")
             .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
         val form = FormBody.Builder()
             .add("action", "wp_manga_signin")
             .add("login", credentials.email)
-            .add("pass", credentials.password)
+            .addEncoded("pass", credentials.password)
             .add("rememberme", "forever")
             .add("nonce", nonce)
             .build()
@@ -276,6 +283,7 @@ class Manhastro :
             Falha ao acessar recurso: Usuário ou senha incorreto.
             Altere suas credências em Extensões > $name > Configuração.
         """.trimIndent()
+
         response.use {
             if (it.isSuccessful.not()) {
                 showToast(message)
@@ -288,43 +296,6 @@ class Manhastro :
             ?: Cookie.empty().also {
                 showToast(message)
             }
-    }
-
-    private class Credential(
-        val email: String,
-        val password: String,
-    ) {
-        val isEmpty: Boolean get() = email.isBlank() || password.isBlank()
-        val isNotEmpty: Boolean get() = isEmpty.not()
-    }
-
-    @Serializable
-    private class Cookie {
-        val value: Pair<String, String>
-        val expired: String
-
-        private constructor() {
-            value = "" to ""
-            expired = ""
-        }
-
-        constructor(setCookie: String) {
-            val slices = setCookie.split("; ")
-            value = slices.first().split("=").let {
-                it.first() to it.last()
-            }
-            expired = slices.last().substringAfter("=")
-        }
-
-        fun isExpired(): Boolean =
-            try { dateFormat.parse(expired)!!.before(Date()) } catch (e: Exception) { true }
-
-        fun isEmpty(): Boolean = expired.isEmpty() || value.toList().any(String::isBlank)
-
-        companion object {
-            fun empty() = Cookie()
-            private val dateFormat = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.ENGLISH)
-        }
     }
 
     // ============================ Utilities ====================================
@@ -363,15 +334,12 @@ class Manhastro :
     }
 
     companion object {
-        private const val MAX_ATTEMPT_WITHIN_PERIOD = 2
         private const val RESTART_APP_MESSAGE = "Reinicie o aplicativo para aplicar as alterações"
         private const val USERNAME_PREF = "MANHASTRO_USERNAME"
         private const val PASSWORD_PREF = "MANHASTRO_PASSWORD"
         private const val COOKIE_STORAGE_PREF = "MANHASTRO_COOKIE_STORAGE"
-        private const val COOKIE_LAST_REQUEST = "MANHASTRO_COOKIE_LAST_REQUEST"
-        private const val COOKIE_ATTEMPT = "MANHASTRO_COOKIE_ATTEMPT"
+        private const val COOKIE_ATTEMPT_REF = "MANHASTRO_COOKIE_ATTEMPT_REF"
         private const val IMG_CONTENT_TYPE = "image/jpeg"
         private val NONCE_LOGIN_REGEX = """"nonce":"([^"]+)""".toRegex()
-        val toastDateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("pt", "BR"))
     }
 }

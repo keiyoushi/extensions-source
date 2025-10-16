@@ -18,13 +18,13 @@ import java.util.Locale
 
 class KomikIndoID : ParsedHttpSource() {
     override val name = "KomikIndoID"
-    override val baseUrl = "https://komikindo.pw"
+    override val baseUrl = "https://komikindo.ch"
     override val lang = "id"
     override val supportsLatest = true
     override val client: OkHttpClient = network.cloudflareClient
     private val dateFormat: SimpleDateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
-    // similar/modified theme of "https://bacakomik.one"
+    // similar/modified theme of "https://bacakomik.my"
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/daftar-manga/page/$page/?order=popular", headers)
     }

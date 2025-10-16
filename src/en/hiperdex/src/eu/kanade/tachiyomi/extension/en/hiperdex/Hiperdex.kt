@@ -11,12 +11,15 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import keiyoushi.utils.getPreferences
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class Hiperdex :
     Madara(
         "Hiperdex",
         "https://hiperdex.com",
         "en",
+        dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.US),
     ),
     ConfigurableSource {
 
@@ -52,6 +55,8 @@ class Hiperdex :
 
         addRandomUAPreferenceToScreen(screen)
     }
+
+    override fun searchMangaSelector() = "#loop-content div.page-listing-item"
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
 

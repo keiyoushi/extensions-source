@@ -1,8 +1,10 @@
 package eu.kanade.tachiyomi.extension.en.weebcentral
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -12,6 +14,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -66,6 +69,17 @@ class WeebCentral : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector(): String = searchMangaNextPageSelector()
 
     // =============================== Search ===============================
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        val pathSegment = query.takeIf { it.startsWith(URL_SEARCH_PREFIX) }
+            ?.removePrefix(URL_SEARCH_PREFIX)
+            ?: return super.fetchSearchManga(page, query, filters)
+
+        return client.newCall(mangaDetailsRequest(SManga.create().apply { url = "/series/$pathSegment" }))
+            .asObservableSuccess()
+            .map { MangasPage(listOf(mangaDetailsParse(it).apply { initialized = true }), false) }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filterList = filters.ifEmpty { getFilterList() }
         val url = "$baseUrl/search/data".toHttpUrl().newBuilder().apply {
@@ -84,7 +98,7 @@ class WeebCentral : ParsedHttpSource() {
     override fun searchMangaSelector(): String = "article > section > a"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        thumbnail_url = element.sourceImg()
         title = element.selectFirst("div:not([class]):last-child")!!.text()
         setUrlWithoutDomain(element.absUrl("href"))
     }
@@ -101,7 +115,7 @@ class WeebCentral : ParsedHttpSource() {
         val descBuilder = StringBuilder()
 
         with(document.select("section[x-data] > section")[0]) {
-            thumbnail_url = selectFirst("img")!!.attr("abs:src")
+            thumbnail_url = sourceImg()
             author = select("ul > li:has(strong:contains(Author)) > span > a").joinToString { it.text() }
             genre = select("ul > li:has(strong:contains(Tag),strong:contains(Type)) a").joinToString { it.text() }
             status = selectFirst("ul > li:has(strong:contains(Status)) > a").parseStatus()
@@ -131,6 +145,8 @@ class WeebCentral : ParsedHttpSource() {
         }
 
         description = descBuilder.toString()
+
+        setUrlWithoutDomain(document.location())
     }
 
     private fun Element?.parseStatus(): Int = when (this?.text()?.lowercase()) {
@@ -215,6 +231,11 @@ class WeebCentral : ParsedHttpSource() {
 
     // ============================= Utilities ==============================
 
+    private fun Element.sourceImg(): String? {
+        return selectFirst("source")?.attr("srcset")?.replace("small", "normal")
+            ?: selectFirst("img")?.absUrl("src")
+    }
+
     private fun defaultFilterList(sortFilter: SortFilter): FilterList = FilterList(
         sortFilter,
         SortOrderFilter(),
@@ -225,6 +246,9 @@ class WeebCentral : ParsedHttpSource() {
     )
 
     companion object {
-        const val FETCH_LIMIT = 24
+        // The related "&limit=" query parameter of the api is currently non functional
+        // and always returns 32 entries per request
+        const val FETCH_LIMIT = 32
+        const val URL_SEARCH_PREFIX = "id:"
     }
 }

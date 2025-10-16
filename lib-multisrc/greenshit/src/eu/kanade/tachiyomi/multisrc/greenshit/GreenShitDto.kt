@@ -13,7 +13,40 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 import java.text.Normalizer
 import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
+
+@Serializable
+class Token(
+    val value: String = "",
+    val updateAt: Long = Date().time,
+) {
+    fun isValid() = value.isNotEmpty() && isExpired().not()
+
+    fun isExpired(): Boolean {
+        val updateAtDate = Date(updateAt)
+        val expiration = Calendar.getInstance().apply {
+            time = updateAtDate
+            add(Calendar.HOUR, 1)
+        }
+        return Date().after(expiration.time)
+    }
+
+    override fun toString() = value
+
+    companion object {
+        fun empty() = Token()
+    }
+}
+
+class Credential(
+    val email: String = "",
+    val password: String = "",
+) {
+    fun isEmpty() = listOf(email, password).any(String::isBlank)
+    fun isNotEmpty() = isEmpty().not()
+}
 
 @Serializable
 class ResultDto<T>(
@@ -36,8 +69,8 @@ class ResultDto<T>(
         .chapters.map {
             SChapter.create().apply {
                 name = it.name
-                it.chapterNumber?.let {
-                    chapter_number = it
+                CHAPTER_NUMBER_REGEX.find(it.name)?.groups?.get(0)?.value?.let {
+                    chapter_number = it.toFloat()
                 }
                 url = "/capitulo/${it.id}"
                 date_upload = dateFormat.tryParse(it.updateAt)
@@ -46,7 +79,9 @@ class ResultDto<T>(
 
     fun toPageList(): List<Page> {
         val dto = (results as ChapterPageDto)
-
+        val chapter = dto.chapterNumber.let { number ->
+            number.takeIf { it.isNotInteger() } ?: number.toInt()
+        }
         return dto.pages.mapIndexed { index, image ->
             val imageUrl = when {
                 image.isWordPressContent() -> {
@@ -56,13 +91,15 @@ class ResultDto<T>(
                         .build()
                 }
                 else -> {
-                    "$CDN_URL/scans/${dto.manga.scanId}/obras/${dto.manga.id}/capitulos/${dto.chapterNumber}/${image.src}"
+                    "$CDN_URL/scans/${dto.manga.scanId}/obras/${dto.manga.id}/capitulos/$chapter/${image.src}"
                         .toHttpUrl()
                 }
             }
             Page(index, imageUrl = imageUrl.toString())
         }
     }
+
+    private fun Float.isNotInteger(): Boolean = toInt() < this
 
     private fun String.createSlug(): String {
         return Normalizer.normalize(this, Normalizer.Form.NFD)
@@ -76,8 +113,15 @@ class ResultDto<T>(
     companion object {
         @SuppressLint("SimpleDateFormat")
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        val CHAPTER_NUMBER_REGEX = """\d+(\.\d+)?""".toRegex()
     }
 }
+
+@Serializable
+class TokenDto(
+    @SerialName("token")
+    val value: String,
+)
 
 @Serializable
 class MangaDto(
@@ -149,8 +193,6 @@ class ChapterDto(
     val id: Int,
     @SerialName("cap_nome")
     val name: String,
-    @SerialName("cap_numero")
-    val chapterNumber: Float?,
     @SerialName("cap_lancado_em")
     val updateAt: String,
 )
@@ -168,7 +210,7 @@ class ChapterPageDto(
     @SerialName("obra")
     val manga: MangaReferenceDto,
     @SerialName("cap_numero")
-    val chapterNumber: Int,
+    val chapterNumber: Float,
 ) {
     @Serializable
     class MangaReferenceDto(
@@ -183,7 +225,7 @@ class ChapterPageDto(
 class PageDto(
     val src: String,
     @SerialName("numero")
-    val number: Int? = null,
+    val number: Float? = null,
 ) {
     fun isWordPressContent(): Boolean = number == null
 }

@@ -1,35 +1,38 @@
 package eu.kanade.tachiyomi.extension.zh.zaimanhua
 
+import eu.kanade.tachiyomi.extension.zh.zaimanhua.Zaimanhua.Companion.DEFAULT_PAGE_SIZE
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 class MangaDto(
     private val id: Int,
     private val title: String,
-    private val cover: String,
-    private val description: String? = null,
-    private val types: List<TagDto>,
-    private val status: List<TagDto>,
-    private val authors: List<TagDto>? = null,
+    private val cover: String?,
+    private val description: String?,
+    private val types: List<TagDto>?,
+    private val status: List<TagDto>?,
+    private val authors: List<TagDto>?,
     @SerialName("chapters")
     private val chapterGroups: List<ChapterGroupDto>,
     @SerialName("last_update_chapter_id")
-    private val lastUpdateChapterId: Int = 0,
+    private val lastUpdateChapterId: Int,
     @SerialName("last_updatetime")
-    private val lastUpdateTime: Long = 0,
+    private val lastUpdateTime: Long,
 ) {
     fun toSManga() = SManga.create().apply {
         url = id.toString()
         title = this@MangaDto.title
         author = authors?.joinToString { it.name }
         description = this@MangaDto.description
-        genre = types.joinToString { it.name }
-        status = parseStatus(this@MangaDto.status[0].name)
+        genre = types?.joinToString { it.name }
+        status = parseStatus(this@MangaDto.status?.firstOrNull()?.name.orEmpty())
         thumbnail_url = cover
         initialized = true
     }
@@ -51,11 +54,10 @@ class ChapterGroupDto(
 ) {
     fun toSChapterList(mangaId: String, lastUpdateChapter: String, lastUpdateTime: Long): List<SChapter> {
         val groupName = title
-        val isDefaultGroup = groupName == "连载"
         val current = System.currentTimeMillis()
         return data.map {
             it.toSChapterInternal().apply {
-                if (!isDefaultGroup) scanlator = groupName
+                scanlator = groupName
                 // For some chapters, api will always return current time as upload time
                 // Therefore upload times that differ too little from the current time will be ignored
                 // When the chapter is the latest chapter, use the last update time as the upload time
@@ -81,12 +83,12 @@ class ChapterDto(
     @SerialName("chapter_title")
     private val name: String,
     @SerialName("updatetime")
-    private val updateTime: Long = 0,
+    private val updateTime: Long?,
 ) {
     fun toSChapterInternal() = SChapter.create().apply {
         url = id.toString()
         name = this@ChapterDto.name.formatChapterName()
-        date_upload = updateTime * 1000
+        date_upload = updateTime?.times(1000) ?: 0L
     }
 }
 
@@ -94,43 +96,54 @@ class ChapterDto(
 class ChapterImagesDto(
     @SerialName("page_url_hd")
     val images: List<String>,
+    val canRead: Boolean,
 )
 
 @Serializable
 class PageDto(
+    // Only genre(/comic/filter/list) use `comicList`, others use `list`
+    @JsonNames("comicList")
     private val list: List<PageItemDto>?,
-    private val page: Int,
-    private val size: Int,
+    // Genre(/comic/filter/list) doesn't have `page` and `size`
+    private val page: Int?,
+    private val size: Int?,
+    // Only genre(/comic/filter/list) use `totalNum`, others use `total`
+    @JsonNames("totalNum")
     private val total: Int,
 ) {
-    fun toMangasPage(): MangasPage {
+    fun toMangasPage(page: Int): MangasPage {
+        val currentPage = this.page ?: page
+        val pageSize = this.size ?: DEFAULT_PAGE_SIZE
         if (list.isNullOrEmpty()) throw Exception("漫画结果为空，请检查输入")
-        val hasNextPage = page * size < total
+        val hasNextPage = currentPage * pageSize < total
         return MangasPage(list.map { it.toSManga() }, hasNextPage)
     }
 }
 
 @Serializable
 class PageItemDto(
-    private val id: Int = 0,
+    // must have at least one of id and comicId
+    // Genre(/comic/filter/list) only have `id`
+    // Ranking(/comic/rank/list) only have `comic_id`
+    // latest(/comic/update/list) have both `id` (always 0) and `comic_id`
+    // Search(/search/index) have both `id` and `comic_id` (always 0)
+    private val id: Int?,
     @SerialName("comic_id")
-    private val comicId: Int = 0,
+    private val comicId: Int?,
+    // Only genre(/comic/filter/list) use `name`, others use `title`
+    @JsonNames("name")
     private val title: String,
-    private val authors: String = "",
-    private val status: String,
-    private val cover: String,
-    private val types: String,
+    private val authors: String?,
+    private val status: String?,
+    private val cover: String?,
+    private val types: String?,
 ) {
     fun toSManga() = SManga.create().apply {
-        url = if (this@PageItemDto.id != 0) {
-            this@PageItemDto.id.toString()
-        } else {
-            this@PageItemDto.comicId.toString()
-        }
+        url = (this@PageItemDto.comicId?.takeIf { it != 0 } ?: this@PageItemDto.id)!!.toString()
         title = this@PageItemDto.title
-        author = authors.formatList()
-        genre = types.formatList()
-        status = parseStatus(this@PageItemDto.status)
+        author = authors?.formatList()
+        genre = types?.formatList()
+        status = parseStatus(this@PageItemDto.status ?: "")
         thumbnail_url = cover
     }
 }
@@ -159,12 +172,12 @@ class DataWrapperDto<T>(
 
 @Serializable
 class SimpleResponseDto(
-    val errno: Int = 0,
+    val errno: Int? = 0,
 )
 
 @Serializable
 class ResponseDto<T>(
-    val errno: Int = 0,
+    val errno: Int? = 0,
     val errmsg: String = "",
     val data: T,
 )
@@ -173,4 +186,30 @@ class ResponseDto<T>(
 data class ImageRetryParamsDto(
     val url: String,
     val index: Int,
+)
+
+@Serializable
+class CanReadDto(
+    val canRead: Boolean?,
+)
+
+@Serializable
+class CommentDataDto(
+    val list: List<JsonArray>?,
+) {
+    fun toCommentList(): List<String> {
+        return if (list.isNullOrEmpty()) {
+            listOf("没有吐槽")
+        } else {
+            list.map { item ->
+                item.last().jsonPrimitive.content
+            }
+        }
+    }
+}
+
+@Serializable
+class JwtPayload(
+    @SerialName("exp")
+    val expirationTime: Long,
 )

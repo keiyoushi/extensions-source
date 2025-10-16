@@ -2,8 +2,8 @@ ext {
     extName = 'Manhwa Toon'
     extClass = '.ManhwaToon'
     themePkg = 'madara'
-    baseUrl = 'https://www.manhwatoon.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.manhwatoon.me'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

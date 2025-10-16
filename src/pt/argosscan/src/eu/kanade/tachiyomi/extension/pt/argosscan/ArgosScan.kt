@@ -2,19 +2,23 @@ package eu.kanade.tachiyomi.extension.pt.argosscan
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class ArgosScan : ParsedHttpSource() {
 
@@ -27,14 +31,8 @@ class ArgosScan : ParsedHttpSource() {
     override val supportsLatest = false
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-            if (response.request.url.pathSegments.any { it.equals("pagina-de-login", true) }) {
-                throw IOException("Faça login na WebView")
-            }
-
-            response
-        }
+        .connectTimeout(1, TimeUnit.MINUTES)
+        .readTimeout(1, TimeUnit.MINUTES)
         .build()
 
     // Website changed custom CMS.
@@ -43,17 +41,23 @@ class ArgosScan : ParsedHttpSource() {
     // ============================ Popular ======================================
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
-    override fun popularMangaSelector() = ".card__main._grid:not(:has(a[href*=novel]))"
-
+    override fun popularMangaSelector() = "#projects-container .manga-block"
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        with(element.selectFirst("h3.card__title")!!) {
-            title = text()
-            setUrlWithoutDomain(selectFirst("a")!!.absUrl("href"))
-        }
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        title = element.selectFirst("h3")!!.text()
+        thumbnail_url = element.selectFirst("img")!!.absUrl("src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
-
     override fun popularMangaNextPageSelector() = null
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        if (document.select("a[href*='auth/discord']").isNotEmpty()) {
+            throw IOException("Faça login na WebView")
+        }
+        return document.select(popularMangaSelector()).map(::popularMangaFromElement).let {
+            MangasPage(it, hasNextPage = false)
+        }
+    }
 
     // ============================ Latest ======================================
 
@@ -67,56 +71,70 @@ class ArgosScan : ParsedHttpSource() {
 
     // ============================ Search ======================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addQueryParameter("s", query)
-            .build()
-        return GET(url, headers)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return fetchPopularManga(page).map { mangasPage ->
+            MangasPage(mangasPage.mangas.filter { it.title.contains(query, ignoreCase = true) }, hasNextPage = false)
+        }
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
 
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
+
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     // ============================ Details =====================================
 
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/projeto/${manga.getProjectId()}"
+
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(getMangaUrl(manga), headers)
+
+    private fun SManga.getProjectId() = url.replace("/", "").substringAfter(ENTRY_URL_REGEX)
+
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1")!!.text()
-        thumbnail_url = document.selectFirst("img.story__thumbnail-image")?.absUrl("src")
-        description = document.selectFirst(".story__summary p")?.text()
-        document.selectFirst(".story__status")?.let {
-            status = when (it.text().trim().lowercase()) {
-                "em andamento" -> SManga.ONGOING
-                else -> SManga.UNKNOWN
+        with(document) {
+            title = selectFirst(".content h2")!!.text()
+            thumbnail_url = selectFirst(".trailer-box img")?.absUrl("src")
+            description = selectFirst(".content p")?.text()
+            selectFirst("section[data-status]")?.attr("data-status")?.let {
+                status = when (it.lowercase()) {
+                    "ongoing" -> SManga.ONGOING
+                    "completed" -> SManga.COMPLETED
+                    "hiatus" -> SManga.ON_HIATUS
+                    else -> SManga.UNKNOWN
+                }
             }
+            genre = select("h6:contains(Tags) + h6 > span").joinToString { it.text() }
         }
-        setUrlWithoutDomain(document.location())
     }
 
     // ============================ Chapter =====================================
 
-    override fun chapterListSelector() = ".chapter-group__list li:has(a)"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        with(element.selectFirst("a")!!) {
-            name = text()
-            setUrlWithoutDomain(absUrl("href"))
-        }
-        element.selectFirst(".chapter-group__list-item-date")?.attr("datetime")?.let {
-            date_upload = it.parseDate()
-        }
-    }
+    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         return super.chapterListParse(response).sortedByDescending(SChapter::chapter_number)
     }
 
+    override fun chapterListSelector() = ".manga-chapter"
+
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        name = element.selectFirst("h5")!!.ownText()
+        element.selectFirst("h6")?.let {
+            date_upload = dateFormat.tryParse(it.text())
+            SIMPLE_NUMBER_REGEX.find(name)?.groups?.get(0)?.value?.toFloat()?.let {
+                chapter_number = it
+            }
+        }
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+    }
+
     // ============================ Pages =======================================
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("#chapter-content img").mapIndexed { index, element ->
+        return document.select(".manga-page img").mapIndexed { index, element ->
             Page(index, imageUrl = element.absUrl("src"))
         }
     }
@@ -125,10 +143,13 @@ class ArgosScan : ParsedHttpSource() {
 
     // ============================== Utilities ==================================
 
-    private fun String.parseDate(): Long {
-        return try { dateFormat.parse(this.trim())!!.time } catch (_: Exception) { 0L }
-    }
+    private fun String.substringAfter(regex: Regex): String =
+        regex.find(this)?.value?.let(::substringAfter) ?: this
+
     companion object {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+        private val POPULAR_REGEX = """projects(?:\s+)?=(?:\s+)?(.+\]);""".toRegex()
+        private val SIMPLE_NUMBER_REGEX = """\d+(\.?\d+)?""".toRegex()
+        private val ENTRY_URL_REGEX = """projetos?""".toRegex()
     }
 }

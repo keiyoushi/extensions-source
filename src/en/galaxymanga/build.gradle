@@ -1,0 +1,10 @@
+ext {
+    extName = 'Galaxy Manga'
+    extClass = '.GalaxyManga'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://galaxymanga.io'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

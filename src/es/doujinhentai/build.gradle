@@ -3,7 +3,7 @@ ext {
     extClass = '.DoujinHentai'
     themePkg = 'madara'
     baseUrl = 'https://doujinhentai.net'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 

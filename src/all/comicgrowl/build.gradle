@@ -1,9 +1,9 @@
 ext {
     extName = 'Comic Growl'
     extClass = '.ComicGrowl'
-    themePkg = 'gigaviewer'
+    themePkg = 'comiciviewer'
     baseUrl = 'https://comic-growl.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 7
     isNsfw = false
 }
 

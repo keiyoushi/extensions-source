@@ -23,7 +23,7 @@ import java.util.TimeZone
 class DocTruyen3Q :
     WPComics(
         "DocTruyen3Q",
-        "https://doctruyen3qui9.pro",
+        "https://doctruyen3qui12.pro",
         "vi",
         dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
@@ -95,7 +95,7 @@ class DocTruyen3Q :
     }
 
     override val genresSelector = ".categories-detail ul.nav li:not(.active) a"
-	
+
     // Configurable, automatic change domain
     private val preferences: SharedPreferences = getPreferences()
     private var hasCheckedRedirect = false

@@ -7,12 +7,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class JeazScans : Madara(
-    "JeazScans",
-    "https://marcialhub.xyz",
+    "Jeaz Scans",
+    "https://lectorhub.j5z.xyz",
     "es",
-    SimpleDateFormat("d MMMM, yyyy", Locale("es")),
+    dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale("es")),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    override val id = 5292079548510508306
+
     override val useNewChapterEndpoint = true
 
     override val client: OkHttpClient = super.client.newBuilder()

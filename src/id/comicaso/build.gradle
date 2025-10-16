@@ -2,8 +2,8 @@ ext {
     extName = 'Comicaso'
     extClass = '.Comicaso'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://comicaso.id'
-    overrideVersionCode = 2
+    baseUrl = 'https://comicaso.space'
+    overrideVersionCode = 3
     isNsfw = true
 }
 

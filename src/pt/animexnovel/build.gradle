@@ -3,7 +3,7 @@ ext {
     extClass = '.AnimeXNovel'
     themePkg = 'zeistmanga'
     baseUrl = 'https://www.animexnovel.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 3
     isNsfw = false
 }
 

@@ -57,17 +57,31 @@ abstract class Iken(
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/home", headers)
 
+    protected open val popularMangaSelector = "aside a:has(img), .splide:has(.card) li a:has(img)"
+
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
 
-        val entries = document.select("aside a:has(img)").mapNotNull {
+        val entries = document.select(popularMangaSelector).mapNotNull {
             titleCache[it.absUrl("href").substringAfter("series/")]?.toSManga()
         }
 
         return MangasPage(entries, false)
     }
 
-    override fun latestUpdatesRequest(page: Int) = searchMangaRequest(page, "", getFilterList())
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$apiUrl/api/posts".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            addQueryParameter("perPage", perPage.toString())
+            if (apiUrl.startsWith("https://api.", true)) {
+                addQueryParameter("tag", "latestUpdate")
+                addQueryParameter("isNovel", "false")
+            }
+        }.build()
+
+        return GET(url, headers)
+    }
+
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -159,7 +173,7 @@ abstract class Iken(
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = showLockedChapterPrefKey
-            title = "Show locked chapters"
+            title = "Show inaccessible chapters"
             setDefaultValue(false)
         }.also(screen::addPreference)
     }

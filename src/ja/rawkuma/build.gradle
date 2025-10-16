@@ -2,8 +2,8 @@ ext {
     extName = 'Rawkuma'
     extClass = '.Rawkuma'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://rawkuma.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://old.rawkuma.net'
+    overrideVersionCode = 3
     isNsfw = true
 }
 

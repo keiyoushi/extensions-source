@@ -198,7 +198,7 @@ class HentaiCosplay : HttpSource() {
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Observable.fromCallable {
         SChapter.create().apply {
             name = "Gallery"
-            url = manga.url.removeSuffix("/").plus("/attachment/1/")
+            url = manga.url.replace("/image/", "/story/")
             date_upload = runCatching {
                 dateFormat.parse(dateCache[manga.url]!!)!!.time
             }.getOrDefault(0L)
@@ -209,21 +209,13 @@ class HentaiCosplay : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val pageUrl = document.location().substringBeforeLast("/1/")
-
-        val totalPages = document.selectFirst("#right_sidebar > h3, #title > h2")
-            ?.text()?.trim()
-            ?.run { pagesRegex.find(this)?.groupValues?.get(1) }
-            ?.toIntOrNull()
-            ?: return emptyList()
-
-        val pages = (1..totalPages).map {
-            Page(it, "$pageUrl/$it/")
-        }
-
-        pages[0].imageUrl = imageUrlParse(document)
-
-        return pages
+        return document.select("amp-img[src*=upload]:not(.related-thumbnail)")
+            .mapIndexed { index, element ->
+                Page(
+                    index = index,
+                    imageUrl = element.attr("src"),
+                )
+            }
     }
 
     override fun imageUrlParse(response: Response) = imageUrlParse(response.asJsoup())

@@ -1,0 +1,10 @@
+ext {
+    extName = 'Biblio Panda'
+    extClass = '.BiblioPanda'
+    themePkg = 'madara'
+    baseUrl = 'https://bibliopanda.visblog.online'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

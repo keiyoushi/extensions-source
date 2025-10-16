@@ -3,7 +3,7 @@ ext {
     extClass = '.Manhastro'
     themePkg = 'madara'
     baseUrl = 'https://manhastro.net'
-    overrideVersionCode = 7
+    overrideVersionCode = 9
     isNsfw = true
 }
 

@@ -8,7 +8,7 @@ import java.util.Locale
 
 class TenshiId : MangaThemesia(
     "Tenshi.id",
-    "https://tenshi01.id",
+    "https://01.tenshiku.asia",
     "id",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id", "ID")),
     mangaUrlDirectory = "/komik",

@@ -23,13 +23,8 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -50,7 +45,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         else -> preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
     }
 
-    private val defaultBaseUrl: String = "https://yugenmangasbr.nssec.xyz"
+    private val defaultBaseUrl: String = "https://yugenmangasbr.yocat.xyz"
 
     override val lang = "pt-BR"
 
@@ -93,30 +88,14 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val jsonContent = document.select("script")
-            .map(Element::data)
-            .firstOrNull(POPULAR_MANGA_REGEX::containsMatchIn)
-            ?: throw Exception("Não foi possivel encontrar a lista de mangás/manhwas")
+        val script = document.selectFirst("script:containsData(initialSeries)")?.data()
+            ?: throw Exception(warning)
 
-        val mangas = POPULAR_MANGA_REGEX.findAll(jsonContent)
-            .mapNotNull { result ->
-                result.groups.lastOrNull()?.value?.sanitizeJson()?.parseAs<JsonObject>()?.jsonObject
-            }
-            .map { element ->
-                val manga = element["children"]?.jsonArray
-                    ?.firstOrNull()?.jsonArray
-                    ?.firstOrNull { it is JsonObject }?.jsonObject
-                    ?.get("children")?.jsonArray
-                    ?.firstOrNull { it is JsonObject }?.jsonObject
-
-                SManga.create().apply {
-                    title = manga!!.getValue("alt")
-                    thumbnail_url = manga.getValue("src")
-                    url = element.getValue("href")
-                }
-            }.toList()
-
-        return MangasPage(mangas, jsonContent.hasNextPage(response))
+        val json = POPULAR_MANGA_REGEX.find(script)?.groups?.get(1)?.value
+            ?.replace(ESCAPE_QUOTATION_MARK_REGEX, "\"")
+            ?: throw Exception("Erro ao analisar lista de mangás/manhwas")
+        val dto = json.parseAs<LibraryWrapper>()
+        return MangasPage(dto.mangas.map(MangaDetailsDto::toSManga), dto.hasNextPage())
     }
 
     // ================================ Latest =======================================
@@ -126,25 +105,14 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val jsonContent = document.select("script")
-            .map(Element::data)
-            .firstOrNull(LATEST_UPDATE_REGEX::containsMatchIn)
-            ?: throw Exception("Não foi possivel encontrar a lista de mangás/manhwas")
-
-        val mangas = LATEST_UPDATE_REGEX.findAll(jsonContent)
-            .mapNotNull { result ->
-                result.groups.firstOrNull()?.value?.sanitizeJson()?.parseAs<JsonObject>()?.jsonObject
+        val mangas = document.select("div.bg-card a[href*=series]").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst("h3")!!.text()
+                thumbnail_url = element.selectFirst("img")?.attrImageSet()
+                setUrlWithoutDomain(element.absUrl("href").substringBeforeLast("/"))
             }
-            .map { element ->
-                val jsonString = element.toString()
-                SManga.create().apply {
-                    this.title = jsonString.getFirstValueByKey("children")!!
-                    thumbnail_url = jsonString.getFirstValueByKey("src")!!
-                    url = element.getValue("href")
-                }
-            }.toList()
-
-        return MangasPage(mangas, jsonContent.hasNextPage())
+        }.takeIf(List<SManga>::isNotEmpty) ?: throw Exception(warning)
+        return MangasPage(mangas, document.selectFirst("a[aria-label='Próxima página']:not([aria-disabled='true'])") != null)
     }
 
     // ================================ Search =======================================
@@ -161,8 +129,14 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     // ================================ Details =======================================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        return getJsonFromResponse(response).parseAs<ContainerDto>().series.toSManga()
+    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+        val document = response.asJsoup()
+        title = document.selectFirst("h1")!!.text()
+        description = document.selectFirst("[property='og:description']")?.attr("content")
+        thumbnail_url = document.selectFirst("img")?.attrImageSet()
+        author = document.selectFirst("p:contains(Autor) ~ div")?.text()
+        artist = document.selectFirst("p:contains(Artista) ~ div")?.text()
+        genre = document.select("p:contains(Gêneros) ~ div div.inline-flex").joinToString { it.text() }
     }
 
     // ================================ Chapters =======================================
@@ -172,9 +146,10 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         val chapters = mutableListOf<SChapter>()
         do {
             val response = client.newCall(chapterListRequest(manga, page++)).execute()
-            val chapterContainer = getJsonFromResponse(response).parseAs<ContainerDto>()
-            chapters += chapterContainer.toSChapterList()
-        } while (chapterContainer.hasNext())
+            val chapterGroup = chapterListParse(response).also {
+                chapters += it
+            }
+        } while (chapterGroup.isNotEmpty())
 
         return Observable.just(chapters)
     }
@@ -187,22 +162,22 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         return GET(url, headers)
     }
 
-    override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select("a.flex.bg-card[href*=series]").map { element ->
+            SChapter.create().apply {
+                name = element.selectFirst("p")!!.text()
+                setUrlWithoutDomain(element.absUrl("href"))
+            }
+        }
+    }
 
     // ================================ Pages =======================================}
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val script = document.select("script")
-            .map(Element::data)
-            .firstOrNull(PAGES_REGEX::containsMatchIn)
-            ?: throw Exception("Páginas não encontradas")
-
-        val jsonContent = PAGES_REGEX.find(script)?.groups?.get(1)?.value?.sanitizeJson()
-            ?: throw Exception("Erro ao obter as páginas")
-
-        return json.decodeFromString<List<String>>(jsonContent).mapIndexed { index, imageUrl ->
-            Page(index, baseUrl, "$BASE_MEDIA/$imageUrl")
+        return document.select("img[alt^=página]").mapIndexed { index, element ->
+            Page(index, imageUrl = element.absUrl("src"))
         }
     }
 
@@ -237,43 +212,17 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     // ================================ Utils =======================================
 
-    private fun String.getFirstValueByKey(field: String) =
-        """$field":"([^"]+)""".toRegex().find(this)?.groups?.get(1)?.value
-
-    private fun String.hasNextPage(): Boolean =
-        LATEST_PAGES_REGEX.findAll(this).lastOrNull()?.groups?.get(1)?.value?.toBoolean()?.not() ?: false
-
-    private fun String.hasNextPage(response: Response): Boolean {
-        val lastPage = POPULAR_PAGES_REGEX.findAll(this).mapNotNull {
-            it.groups[1]?.value?.toInt()
-        }.max() - 1
-
-        return response.request.url.queryParameter("page")
-            ?.toInt()?.let { it < lastPage } ?: false
+    private fun Element?.attrImageSet(): String? {
+        return this?.attr("srcset")?.split(SRCSET_DELIMITER_REGEX)
+            ?.map(String::trim)?.last(String::isNotBlank)
+            ?.let { "$baseUrl$it" }
     }
 
-    private fun String.sanitizeJson() =
-        this.replace("""\\{1}"""".toRegex(), "\"")
-            .replace("""\\{2,}""".toRegex(), """\\""")
-            .trimIndent()
-
-    private fun JsonObject.getValue(key: String): String =
-        this[key]!!.jsonPrimitive.content
-
-    private fun getJsonFromResponse(response: Response): String {
-        val document = response.asJsoup()
-
-        val script = document.select("script")
-            .map(Element::data)
-            .firstOrNull(MANGA_DETAILS_REGEX::containsMatchIn)
-            ?: throw Exception("Dados não encontrado")
-
-        val jsonContent = MANGA_DETAILS_REGEX.find(script)
-            ?.groups?.get(1)?.value
-            ?: throw Exception("Erro ao obter JSON")
-
-        return jsonContent.sanitizeJson()
-    }
+    private val warning = """
+        Não foi possível localizar a lista de mangás/manhwas.
+        Tente atualizar a URL acessando: Extensões > $name > Configurações.
+        Isso talvez resolva o problema.
+    """.trimIndent()
 
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
@@ -281,13 +230,9 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val RESTART_APP_MESSAGE = "Reinicie o aplicativo para aplicar as alterações"
         private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
-        private const val BASE_MEDIA = "https://media.yugenweb.com"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-        private val POPULAR_MANGA_REGEX = """\d+\\",(\{\\"href\\":\\"\/series\/.*?\]\]\})""".toRegex()
-        private val LATEST_UPDATE_REGEX = """\{\\"href\\":\\"\/series\/\d+(.*?)\}\]\]\}\]\]\}\]\]\}""".toRegex()
-        private val LATEST_PAGES_REGEX = """aria-disabled\\":([^,]+)""".toRegex()
-        private val POPULAR_PAGES_REGEX = """series\?page=(\d+)""".toRegex()
-        private val MANGA_DETAILS_REGEX = """(\{\\"series\\":.*?"\})\],\[""".toRegex()
-        private val PAGES_REGEX = """images\\":(\[[^\]]+\])""".toRegex()
+        private val POPULAR_MANGA_REGEX = """(\{\\"initialSeries.+\"\})\]""".toRegex()
+        private val ESCAPE_QUOTATION_MARK_REGEX = """\\"""".toRegex()
+        private val SRCSET_DELIMITER_REGEX = """\d+w,?""".toRegex()
     }
 }

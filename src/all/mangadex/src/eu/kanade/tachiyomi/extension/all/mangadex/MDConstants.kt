@@ -30,7 +30,6 @@ object MDConstants {
     const val apiMangaUrl = "$apiUrl/manga"
     const val apiChapterUrl = "$apiUrl/chapter"
     const val apiListUrl = "$apiUrl/list"
-    const val atHomePostUrl = "https://api.mangadex.network/report"
     val whitespaceRegex = "\\s".toRegex()
 
     val mdAtHomeTokenLifespan = 5.minutes.inWholeMilliseconds
@@ -146,6 +145,11 @@ object MDConstants {
     private const val finalChapterInDescPref = "finalChapterInDesc"
     fun getFinalChapterInDescPrefKey(dexLang: String): String {
         return "${finalChapterInDescPref}_$dexLang"
+    }
+
+    private const val includeUnavailablePref = "includeUnavailable"
+    fun getIncludeUnavailablePrefKey(dexLang: String): String {
+        return "${includeUnavailablePref}_$dexLang"
     }
 
     private const val tagGroupContent = "content"

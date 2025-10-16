@@ -27,17 +27,19 @@ import java.util.concurrent.TimeUnit
 
 class TruyenGG : ParsedHttpSource(), ConfigurableSource {
 
-    override val name = "TruyenGG"
+    override val name = "FoxTruyen"
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://truyengg.net"
+    private val defaultBaseUrl = "https://foxtruyen.com"
 
     override val supportsLatest = true
 
     private val preferences: SharedPreferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
+
+    override val id: Long = 1458993267006200127
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 2, TimeUnit.SECONDS)

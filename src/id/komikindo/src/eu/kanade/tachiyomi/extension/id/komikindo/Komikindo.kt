@@ -8,7 +8,7 @@ import org.jsoup.nodes.Document
 
 class Komikindo : MangaThemesia(
     "Komikindo",
-    "https://komikindo.icu",
+    "https://komikindo4.link",
     "id",
 ) {
     // Some covers fail to load with no Accept header + no resize parameter.

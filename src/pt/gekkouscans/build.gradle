@@ -1,8 +1,0 @@
-ext {
-    extName = 'Gekkou Scans'
-    extClass = '.GekkouScans'
-    extVersionCode = 42
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

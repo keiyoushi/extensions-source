@@ -38,7 +38,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         else -> preferences.prefBaseUrl
     }
 
-    private val defaultBaseUrl: String = "https://ikigaitoon.bookir.net"
+    private val defaultBaseUrl: String = "https://visualikigai.eurofiyati.online"
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
@@ -70,8 +70,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
     private val cookieInterceptor = CookieInterceptor(
         "",
         listOf(
-            "data-saving" to "0",
-            "nsfw-mode" to "1",
+            "nsfw-mode" to "true",
         ),
     )
 

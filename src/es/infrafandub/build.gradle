@@ -3,7 +3,7 @@ ext {
     extClass = '.InfraFandub'
     themePkg = 'madara'
     baseUrl = 'https://infrafandub.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 

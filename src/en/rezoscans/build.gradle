@@ -1,9 +1,9 @@
 ext {
     extName = 'Rezo Scans'
     extClass = '.RezoScans'
-    themePkg = 'keyoapp'
-    baseUrl = 'https://rezoscans.com'
-    overrideVersionCode = 3
+    themePkg = 'iken'
+    baseUrl = 'https://rezoscan.org'
+    overrideVersionCode = 11
     isNsfw = false
 }
 
