@@ -1,0 +1,10 @@
+ext {
+    extName = 'Storia Dash'
+    extClass = '.StoriaDash'
+    themePkg = 'comicgamma'
+    baseUrl = 'https://storia.takeshobo.co.jp'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
