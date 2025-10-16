@@ -30,7 +30,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-import java.io.IOException
 import java.net.URLEncoder
 
 abstract class EHentai(
@@ -365,14 +364,15 @@ abstract class EHentai(
         }
 
         // from https://github.com/Miuzarte/EHentai-go/blob/dd9a24adb13300c028c35f53b9eff31b51966def/query.go#L695
-        val loadfail = doc.select("#loadfail").first() ?: return imgUrl
+        val loadfail = doc.selectFirst("#loadfail") ?: return imgUrl
         val onclick = loadfail.attr("onclick")
         val nlValue = Regex("nl\\('(.+?)'\\)").find(onclick)?.groupValues?.get(1)
         if (nlValue.isNullOrEmpty()) return imgUrl
 
-        val reqUrl = response.request.url.toString()
-        val bakUrl = "$reqUrl&nl=$nlValue"
-        return "$imgUrl#bak=$bakUrl"
+        val bakUrl = response.request.url.newBuilder()
+            .addQueryParameter("nl", nlValue)
+            .toString()
+        return "$imgUrl#$bakUrl"
     }
 
     private val cookiesHeader by lazy {
@@ -421,29 +421,23 @@ abstract class EHentai(
     override val client = network.cloudflareClient.newBuilder()
         .cookieJar(CookieJar.NO_COOKIES)
         .addInterceptor { chain ->
-            var request = chain.request()
-            val rawUrl = request.url.toString()
-            val (baseUrl, bakUrl) = rawUrl.split("#", limit = 2).let { it[0] to it.getOrNull(1) }
-            request = request.newBuilder().url(baseUrl).build()
-            var response: Response? = null
-            var mainFailed = false
-            try {
-                response = chain.proceed(request)
-                if (!response.isSuccessful) {
-                    mainFailed = true
-                }
-            } catch (_: Exception) {
-                mainFailed = true
-            }
-            if (mainFailed && bakUrl?.startsWith("bak=") == true) {
-                response?.close()
-                val bakImageUrl = chain.proceed(Request.Builder().url(bakUrl.removePrefix("bak=")).build()).use { resp ->
-                    imageUrlParse(resp, false)
-                }
-                response = chain.proceed(Request.Builder().url(bakImageUrl).build())
-            }
+            val request = chain.request()
+            val result = runCatching { chain.proceed(request) }
+            val bakUrl = request.url.fragment
+                ?: return@addInterceptor result.getOrThrow()
 
-            response ?: throw IOException("both main and backup are broken")
+            if (result.isFailure || result.getOrNull()?.isSuccessful != true) {
+                result.getOrNull()?.close()
+                val newRequest = GET(bakUrl, headers)
+                val newImageUrl = imageUrlParse(chain.proceed(newRequest), false)
+                val newImageRequest = request.newBuilder()
+                    .url(newImageUrl)
+                    .build()
+
+                chain.proceed(newImageRequest)
+            } else {
+                result.getOrThrow()
+            }
         }
         .addInterceptor { chain ->
             val newReq = chain
