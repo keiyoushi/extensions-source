@@ -138,13 +138,15 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     // ============================== Popular ===============================
 
-    override fun popularMangaRequest(page: Int) = searchMangaRequest(page, "", FilterList(SortFilter(0)))
+    override fun popularMangaRequest(page: Int) =
+        searchMangaRequest(page, "", FilterList(SortFilter(1)))
+
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
     // =============================== Latest ===============================
 
     override fun latestUpdatesRequest(page: Int) =
-        searchMangaRequest(page, "", FilterList(SortFilter(1)))
+        searchMangaRequest(page, "", FilterList(SortFilter(2)))
 
     override fun latestUpdatesParse(response: Response) = searchMangaParse(response)
 
@@ -188,7 +190,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val dto = response.parseAs<DetailsDto>()
-        return dto.data.toSManga()
+        return dto.toSManga()
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -203,7 +205,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<ChapterDto>()
-        return dto.data.content.map { it.toSChapter() }.reversed()
+        return dto.content.mapIndexed { i, it -> it.toSChapter(i + 1) }.reversed()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -224,15 +226,16 @@ class Kagane : HttpSource(), ConfigurableSource {
     }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
-        var (seriesId, chapterId) = chapter.url.split(";")
+        if (chapter.url.count { it == ';' } != 2) throw Exception("Chapter url error, please refresh chapter list.")
+        var (seriesId, chapterId, pageCount) = chapter.url.split(";")
 
         val challengeResp = getChallengeResponse(seriesId, chapterId)
         accessToken = challengeResp.accessToken
-        val pageCount = getPageCountResponse(seriesId, chapterId)
         if (preferences.dataSaver) {
             chapterId = chapterId + "_ds"
         }
-        val pages = (0 until pageCount).map { page ->
+
+        val pages = (0 until pageCount.toInt()).map { page ->
             val pageUrl = "$apiUrl/api/v1/books".toHttpUrl().newBuilder().apply {
                 addPathSegment(seriesId)
                 addPathSegment("file")
@@ -350,26 +353,18 @@ class Kagane : HttpSource(), ConfigurableSource {
             throw Exception("Failed to get drm challenge")
         }
 
-        val challengeUrl = "$apiUrl/api/v1/books/$seriesId/file/$chapterId".toHttpUrl().newBuilder().apply {
-            if (preferences.dataSaver) {
-                addQueryParameter("datasaver", true.toString())
-            }
-        }.build()
+        val challengeUrl =
+            "$apiUrl/api/v1/books/$seriesId/file/$chapterId".toHttpUrl().newBuilder().apply {
+                if (preferences.dataSaver) {
+                    addQueryParameter("datasaver", true.toString())
+                }
+            }.build()
         val challengeBody = buildJsonObject {
             put("challenge", jsInterface.challenge)
         }.toJsonString().toRequestBody("application/json".toMediaType())
 
         return client.newCall(POST(challengeUrl.toString(), apiHeaders, challengeBody)).execute()
             .parseAs<ChallengeDto>()
-    }
-
-    private fun getPageCountResponse(seriesId: String, chapterId: String): Int {
-        val challengeUrl = "$apiUrl/api/v1/books/$seriesId/metadata/$chapterId"
-
-        val dto = client.newCall(GET(challengeUrl, apiHeaders)).execute()
-            .parseAs<PagesCountDto>()
-
-        return dto.data.media.pagesCount
     }
 
     private fun concat(vararg arrays: ByteArray): ByteArray =
@@ -418,7 +413,7 @@ class Kagane : HttpSource(), ConfigurableSource {
     private val SharedPreferences.showNsfw
         get() = this.getBoolean(SHOW_NSFW_KEY, true)
     private val SharedPreferences.dataSaver
-        get() = this.getBoolean(DATA_SAVER, true)
+        get() = this.getBoolean(DATA_SAVER, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -429,7 +424,7 @@ class Kagane : HttpSource(), ConfigurableSource {
         SwitchPreferenceCompat(screen.context).apply {
             key = DATA_SAVER
             title = "Data saver"
-            setDefaultValue(true)
+            setDefaultValue(false)
         }.let(screen::addPreference)
     }
 
@@ -437,7 +432,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     companion object {
         private const val SHOW_NSFW_KEY = "pref_show_nsfw"
-        private const val DATA_SAVER = "data_saver"
+        private const val DATA_SAVER = "data_saver_default"
     }
 
     // ============================= Filters ==============================
@@ -450,6 +445,7 @@ class Kagane : HttpSource(), ConfigurableSource {
         "Sort By",
         arrayOf(
             Pair("Relevance", ""),
+            Pair("Popular", "avg_views,desc"),
             Pair("Latest", "updated_at"),
             Pair("Latest Descending", "updated_at,desc"),
             Pair("By Name", "series_name"),

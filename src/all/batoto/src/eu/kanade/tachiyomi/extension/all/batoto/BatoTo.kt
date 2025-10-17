@@ -54,15 +54,7 @@ open class BatoTo(
 
     override val name: String = "Bato.to"
 
-    override var baseUrl: String = ""
-        get() {
-            val current = field
-            if (current.isNotEmpty()) {
-                return current
-            }
-            field = getMirrorPref()
-            return field
-        }
+    override val baseUrl: String get() = getMirrorPref()
 
     override val id: Long = when (lang) {
         "zh-Hans" -> 2818874445640189582
@@ -79,10 +71,6 @@ open class BatoTo(
             entryValues = MIRROR_PREF_ENTRY_VALUES
             setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
             summary = "%s"
-            setOnPreferenceChangeListener { _, newValue ->
-                baseUrl = newValue as String
-                true
-            }
         }
         val altChapterListPref = CheckBoxPreference(screen.context).apply {
             key = "${ALT_CHAPTER_LIST_PREF_KEY}_$lang"
@@ -1044,39 +1032,72 @@ open class BatoTo(
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private val MIRROR_PREF_ENTRIES = arrayOf(
             "Auto",
-            "batocomic.com",
-            "batocomic.net",
-            "batocomic.org",
+            // https://batotomirrors.pages.dev/
+            "ato.to",
+            "dto.to",
+            "fto.to",
+            "hto.to",
+            "jto.to",
+            "lto.to",
+            "mto.to",
+            "nto.to",
+            "vto.to",
+            "wto.to",
+            "xto.to",
+            "yto.to",
+            "vba.to",
+            "wba.to",
+            "xba.to",
+            "yba.to",
+            "zba.to",
+            "bato.ac",
+            "bato.bz",
+            "bato.cc",
+            "bato.cx",
+            "bato.id",
+            "bato.pw",
+            "bato.sh",
+            "bato.to",
+            "bato.vc",
+            "bato.day",
+            "bato.red",
+            "bato.run",
+            "batoto.in",
+            "batoto.tv",
             "batotoo.com",
             "batotwo.com",
+            "batpub.com",
+            "batread.com",
             "battwo.com",
-            "comiko.net",
-            "comiko.org",
-            "readtoto.com",
-            "readtoto.net",
-            "readtoto.org",
             "xbato.com",
             "xbato.net",
             "xbato.org",
             "zbato.com",
             "zbato.net",
             "zbato.org",
-            "dto.to",
-            "fto.to",
-            "hto.to",
-            "jto.to",
-            "mto.to",
-            "wto.to",
+            "comiko.net",
+            "comiko.org",
+            "mangatoto.com",
+            "mangatoto.net",
+            "mangatoto.org",
+            "batocomic.com",
+            "batocomic.net",
+            "batocomic.org",
+            "readtoto.com",
+            "readtoto.net",
+            "readtoto.org",
+            "kuku.to",
+            "okok.to",
+            "ruru.to",
+            "xdxd.to",
+            // "bato.si", // (v4)
+            // "bato.ing", // (v4)
         )
         private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
 
         private val DEPRECATED_MIRRORS = listOf(
-            "https://bato.to",
             "https://batocc.com", // parked
-            "https://mangatoto.com",
-            "https://mangatoto.net",
-            "https://mangatoto.org",
         )
 
         private const val ALT_CHAPTER_LIST_PREF_KEY = "ALT_CHAPTER_LIST"
