@@ -1,0 +1,10 @@
+ext {
+    extName = "FireCross"
+    extClass = ".FireCross"
+    themePkg = 'clipstudioreader'
+    baseUrl = 'https://firecross.jp'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
