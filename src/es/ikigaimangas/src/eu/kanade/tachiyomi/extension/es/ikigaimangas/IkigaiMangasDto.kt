@@ -88,11 +88,17 @@ class PayloadChaptersDto(
 class ChapterDto(
     private val id: Long,
     private val name: String,
+    private val title: String? = null,
     @SerialName("published_at") val date: String,
 ) {
     fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
         url = "/capitulo/$id/"
-        name = "Capítulo ${this@ChapterDto.name}"
+        name = buildString {
+            append("Capítulo ${this@ChapterDto.name}")
+            title?.let {
+                append(": $it")
+            }
+        }
         date_upload = try {
             dateFormat.parse(date)?.time ?: 0L
         } catch (e: Exception) {
