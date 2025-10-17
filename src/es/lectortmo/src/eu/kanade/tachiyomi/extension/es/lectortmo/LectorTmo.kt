@@ -239,7 +239,10 @@ class LectorTmo : ParsedHttpSource(), ConfigurableSource {
             author = it.first()?.attr("title")?.substringAfter(", ")
             artist = it.last()?.attr("title")?.substringAfter(", ")
         }
-        genre = (document.select("a.py-2").map { it.text() } + document.selectFirst("h1.book-type")?.text()?.capitalize()).filterNotNull().joinToString(", ")
+        genre = buildList {
+            addAll(document.select("a.py-2").eachText())
+            document.selectFirst("h1.book-type")?.text()?.capitalize()?.also(::add)
+        }.joinToString()
         description = document.select("p.element-description").text()
         status = parseStatus(document.select("span.book-status").text())
         thumbnail_url = document.select(".book-thumbnail").attr("src")
