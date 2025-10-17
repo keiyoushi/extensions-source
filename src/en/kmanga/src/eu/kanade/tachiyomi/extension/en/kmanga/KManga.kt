@@ -31,14 +31,18 @@ import okio.ByteString.Companion.encodeUtf8
 import rx.Observable
 import java.net.URLDecoder
 import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.GregorianCalendar
 import java.util.Locale
+import java.util.TimeZone
 
 class KManga : HttpSource() {
 
     override val name = "K Manga"
     override val baseUrl = "https://kmanga.kodansha.com"
     override val lang = "en"
-    override val supportsLatest = false
+    override val supportsLatest = true
 
     private val apiUrl = "https://api.kmanga.kodansha.com"
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
@@ -100,6 +104,49 @@ class KManga : HttpSource() {
             }
         }
         return MangasPage(mangas, hasNextPage)
+    }
+
+    // Latest
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val calendar = GregorianCalendar(TimeZone.getTimeZone("Asia/Tokyo")).apply {
+            time = Date()
+
+            add(Calendar.DAY_OF_MONTH, -(page - 1))
+
+            // Manga seems to usually update at 10 AM JST, so if we're before that time we should go
+            // back a day since we don't expect there to have been any updates today yet.
+            if (get(Calendar.HOUR_OF_DAY) < 10) {
+                add(Calendar.DAY_OF_MONTH, -1)
+            }
+        }
+
+        val dateString = buildString {
+            append(calendar.get(Calendar.YEAR))
+            append('-')
+            append((calendar.get(Calendar.MONTH) + 1).toString().padStart(2, '0'))
+            append('-')
+            append(calendar.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0'))
+        }
+
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments("web/top/updated/title")
+            .addQueryParameter("base_date", dateString)
+            .build()
+
+        return hashedGet(url)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val result = response.parseAs<LatestTitleListResponse>()
+        val manga = result.titleList.map { manga ->
+            SManga.create().apply {
+                url = "/title/${manga.titleId}"
+                title = manga.titleName
+                thumbnail_url = manga.thumbnailImageUrl
+            }
+        }
+        return MangasPage(manga, true)
     }
 
     // Search
@@ -388,7 +435,5 @@ class KManga : HttpSource() {
     }
 
     // Unsupported
-    override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response) = throw UnsupportedOperationException()
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }
