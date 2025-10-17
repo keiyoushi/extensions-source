@@ -28,11 +28,17 @@ abstract class ClipStudioReader(
         .set("Referer", "$baseUrl/")
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val authkey = document.selectFirst("div#meta input[name=param]")?.attr("value")
-            ?: throw Exception("Could not find auth key")
-        val endpoint = document.selectFirst("div#meta input[name=cgi]")?.attr("value")
-            ?: throw Exception("Could not find endpoint")
+        val requestUrl = response.request.url
+        var authkey = requestUrl.queryParameter("param")?.replace(" ", "+")
+        var endpoint = requestUrl.queryParameter("cgi")
+
+        if (authkey.isNullOrEmpty() || endpoint.isNullOrEmpty()) {
+            val document = response.asJsoup()
+            authkey = document.selectFirst("div#meta input[name=param]")?.attr("value")
+                ?: throw Exception("Could not find auth key.")
+            endpoint = document.selectFirst("div#meta input[name=cgi]")?.attr("value")
+                ?: throw Exception("Could not find endpoint.")
+        }
 
         val viewerUrl = baseUrl.toHttpUrl().resolve(endpoint)
             ?: throw Exception("Could not resolve endpoint URL: $endpoint")
