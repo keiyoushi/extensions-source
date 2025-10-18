@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -21,6 +22,7 @@ abstract class ClipStudioReader(
     override val supportsLatest = false
 
     override val client = super.client.newBuilder()
+        .addInterceptor(Deobfuscator())
         .addInterceptor(ImageInterceptor())
         .build()
 
@@ -29,15 +31,62 @@ abstract class ClipStudioReader(
 
     override fun pageListParse(response: Response): List<Page> {
         val requestUrl = response.request.url
+        val contentId = requestUrl.queryParameter("c")
+
+        if (contentId != null) {
+            // EPUB-based path
+            val tokenUrl = "$baseUrl/api/tokens/viewer?content_id=$contentId".toHttpUrl()
+            val tokenResponse = client.newCall(GET(tokenUrl, headers)).execute()
+            val viewerToken = tokenResponse.parseAs<TokenResponse>().token
+
+            val metaUrl = "$baseUrl/api/contents/$contentId/meta".toHttpUrl()
+            val apiHeaders = headersBuilder().add("Authorization", "Bearer $viewerToken").build()
+            val metaResponse = client.newCall(GET(metaUrl, apiHeaders)).execute()
+            val contentBaseUrl = metaResponse.parseAs<MetaResponse>().content.baseUrl
+
+            val preprocessUrl = "$contentBaseUrl/preprocess-settings.json"
+            val obfuscationResponse = client.newCall(GET(preprocessUrl, headers)).execute()
+            val obfuscationKey = obfuscationResponse.parseAs<PreprocessSettings>().obfuscateImageKey
+
+            val containerUrl = "$contentBaseUrl/META-INF/container.xml"
+            val containerResponse = client.newCall(GET(containerUrl, headers)).execute()
+            val containerDoc = containerResponse.asJsoup()
+            val opfPath = containerDoc.selectFirst("*|rootfile")?.attr("full-path")
+                ?: throw Exception("Failed to find rootfile in container.xml")
+
+            val opfUrl = (contentBaseUrl.removeSuffix("/") + "/" + opfPath).toHttpUrl()
+            val opfResponse = client.newCall(GET(opfUrl, headers)).execute()
+            val opfDoc = opfResponse.asJsoup()
+
+            val imageManifestItems = opfDoc.select("*|item[media-type^=image/]")
+                .sortedBy { it.attr("href") }
+            if (imageManifestItems.isEmpty()) {
+                throw Exception("No image pages found in the EPUB manifest")
+            }
+
+            return imageManifestItems.mapIndexed { i, item ->
+                val href = item.attr("href")
+                    ?: throw Exception("Image item found with no href")
+                val imageUrlBuilder = opfUrl.resolve(href)!!.newBuilder()
+                obfuscationKey.let {
+                    imageUrlBuilder.addQueryParameter("obfuscateKey", it.toString())
+                }
+                Page(i, imageUrl = imageUrlBuilder.build().toString())
+            }
+        }
+
+        // param/cgi-based XML path
+        // param/cgi in URL
         var authkey = requestUrl.queryParameter("param")?.replace(" ", "+")
         var endpoint = requestUrl.queryParameter("cgi")
 
+        // param/cgi in HTML
         if (authkey.isNullOrEmpty() || endpoint.isNullOrEmpty()) {
             val document = response.asJsoup()
             authkey = document.selectFirst("div#meta input[name=param]")?.attr("value")
-                ?: throw Exception("Could not find auth key.")
+                ?: throw Exception("Could not find auth key")
             endpoint = document.selectFirst("div#meta input[name=cgi]")?.attr("value")
-                ?: throw Exception("Could not find endpoint.")
+                ?: throw Exception("Could not find endpoint")
         }
 
         val viewerUrl = baseUrl.toHttpUrl().resolve(endpoint)
