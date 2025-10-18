@@ -2,12 +2,14 @@ package eu.kanade.tachiyomi.extension.all.qtoon
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.HttpUrl
@@ -73,12 +75,39 @@ class QToon(
         popularMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        throw Exception("Not implemented")
+        if (query.isNotBlank()) {
+            val url = apiUrl.toHttpUrl().newBuilder().apply {
+                addPathSegments("api/w/search/comic/search")
+                addQueryParameter("title", query.trim())
+                addQueryParameter("page", page.toString())
+            }.build()
+
+            return apiRequest(url)
+        }
+
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("api/w/search/comic/gallery")
+            addQueryParameter("area", "-1")
+            addQueryParameter("tag", filters.firstInstance<TagFilter>().selected)
+            addQueryParameter("gender", filters.firstInstance<GenderFilter>().selected)
+            addQueryParameter("serialStatus", filters.firstInstance<StatusFilter>().selected)
+            addQueryParameter("sortType", filters.firstInstance<SortFilter>().selected)
+            addQueryParameter("page", page.toString())
+        }.build()
+
+        return apiRequest(url)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        throw Exception("Not implemented")
-    }
+    override fun getFilterList() = FilterList(
+        Filter.Header("Filters don't work with text search"),
+        TagFilter(),
+        StatusFilter(),
+        SortFilter(),
+        GenderFilter(),
+    )
+
+    override fun searchMangaParse(response: Response) =
+        popularMangaParse(response)
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         Log.d(name, manga.url)
