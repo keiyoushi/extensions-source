@@ -8,8 +8,6 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-// val randomToken = generatedRandomString(24)
-
 fun generateRandomString(length: Int): String {
     val allowedChars = ('A'..'Z') + ('a'..'z') + ('2'..'8')
     return (1..length)
