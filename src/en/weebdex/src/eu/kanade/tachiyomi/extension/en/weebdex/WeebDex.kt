@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.weebdex
 
+import eu.kanade.tachiyomi.extension.en.weebdex.dto.ChapterDto
+import eu.kanade.tachiyomi.extension.en.weebdex.dto.ChapterListDto
+import eu.kanade.tachiyomi.extension.en.weebdex.dto.MangaDto
+import eu.kanade.tachiyomi.extension.en.weebdex.dto.MangaListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -8,64 +12,63 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONArray
-import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
 class WeebDex : HttpSource() {
     override val name = "WeebDex"
-    override val baseUrl = "https://api.weebdex.org"
+    override val baseUrl = "https://weebdex.org"
     override val lang = "en"
     override val supportsLatest = true
 
-    // Rate limit by WeebDex API is 5reqs/sec. Its toned down to 3 here just in case.
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(3)
+        .rateLimit(WeebDexConstants.rateLimitUsed)
         .build()
+
+    override fun headersBuilder(): Headers.Builder = Headers.Builder()
+        .add("User-Agent", "Tachiyomi " + System.getProperty("http.agent"))
+        .add("Referer", "$baseUrl/")
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
 
     // -------------------- Popular --------------------
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$baseUrl/manga".toHttpUrlOrNull()!!.newBuilder()
+        val url = WeebDexConstants.apiMangaUrl.toHttpUrlOrNull()!!.newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "views")
             .addQueryParameter("order", "desc")
             .addQueryParameter("hasChapters", "1")
             .build()
-        return GET(url.toString())
+        return GET(url.toString(), headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val body = response.body.string()
-        val json = JSONObject(body)
-        val data = json.optJSONArray("data") ?: JSONArray()
-        val mangas = mutableListOf<SManga>()
-        for (i in 0 until data.length()) {
-            val m = data.getJSONObject(i)
-            mangas += mangaFromJson(m)
-        }
-        val page = json.optInt("page", 1)
-        val limit = json.optInt("limit", mangas.size)
-        val total = json.optInt("total", page * limit)
-        val hasNext = page * limit < total
-
-        return MangasPage(mangas, hasNext)
+        val mangaListDto = json.decodeFromString<MangaListDto>(body)
+        val mangas = mangaListDto.data.map { mangaFromDto(it) }
+        return MangasPage(mangas, mangaListDto.hasNextPage)
     }
 
     // -------------------- Latest --------------------
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$baseUrl/manga".toHttpUrlOrNull()!!.newBuilder()
+        val url = WeebDexConstants.apiMangaUrl.toHttpUrlOrNull()!!.newBuilder()
             .addQueryParameter("page", page.toString())
             .addQueryParameter("sort", "updatedAt")
             .addQueryParameter("order", "desc")
             .addQueryParameter("hasChapters", "1")
             .build()
-        return GET(url.toString())
+        return GET(url.toString(), headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
@@ -74,7 +77,7 @@ class WeebDex : HttpSource() {
     override fun getFilterList(): FilterList = buildFilterList()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val urlBuilder = "$baseUrl/manga".toHttpUrlOrNull()!!.newBuilder()
+        val urlBuilder = WeebDexConstants.apiMangaUrl.toHttpUrlOrNull()!!.newBuilder()
             .addQueryParameter("page", page.toString())
 
         if (query.isNotBlank()) {
@@ -85,7 +88,7 @@ class WeebDex : HttpSource() {
                     is TagList -> {
                         filter.state.forEach { tag ->
                             if (tag.state) {
-                                TAGS[tag.name]?.let { tagId ->
+                                WeebDexConstants.tags[tag.name]?.let { tagId ->
                                     urlBuilder.addQueryParameter("tag", tagId)
                                 }
                             }
@@ -94,7 +97,7 @@ class WeebDex : HttpSource() {
                     is TagsExcludeFilter -> {
                         filter.state.forEach { tag ->
                             if (tag.state) {
-                                TAGS[tag.name]?.let { tagId ->
+                                WeebDexConstants.tags[tag.name]?.let { tagId ->
                                     urlBuilder.addQueryParameter("tagx", tagId)
                                 }
                             }
@@ -107,6 +110,7 @@ class WeebDex : HttpSource() {
             }
         }
 
+        // Separated explicity to be applied even when a search query is applied.
         filters.forEach { filter ->
             when (filter) {
                 is SortFilter -> urlBuilder.addQueryParameter("sort", filter.selected)
@@ -122,7 +126,7 @@ class WeebDex : HttpSource() {
             }
         }
 
-        return GET(urlBuilder.build().toString())
+        return GET(urlBuilder.build().toString(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
@@ -130,25 +134,23 @@ class WeebDex : HttpSource() {
     // -------------------- Manga details --------------------
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl${manga.url}")
+        return GET("${WeebDexConstants.apiUrl}${manga.url}", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
         val body = response.body.string()
-        val obj = JSONObject(body)
-        val m = obj.optJSONObject("data") ?: obj
-        val rel = m.optJSONObject("relationships")
+        val manga = json.decodeFromString<MangaDto>(body)
 
         return SManga.create().apply {
-            title = m.optString("title")
-            description = m.optString("description")
-            status = parseStatus(m.optString("status"))
-            thumbnail_url = buildCoverUrl(m)
+            title = manga.title
+            description = manga.description
+            status = parseStatus(manga.status)
+            thumbnail_url = buildCoverUrl(manga.id, manga.relationships?.cover)
 
-            if (rel != null) {
-                rel.optJSONArray("authors")?.let { author = jsonArrayToString(it) }
-                rel.optJSONArray("artists")?.let { artist = jsonArrayToString(it) }
-                rel.optJSONArray("tags")?.let { genre = jsonArrayToString(it) }
+            manga.relationships?.let { rel ->
+                author = rel.authors.joinToString(", ") { it.name }
+                artist = rel.artists.joinToString(", ") { it.name }
+                genre = rel.tags.joinToString(", ") { it.name }
             }
         }
     }
@@ -157,65 +159,62 @@ class WeebDex : HttpSource() {
 
     override fun chapterListRequest(manga: SManga): Request {
         // chapter list is paginated; get all pages
-        return GET("$baseUrl${manga.url}/chapters?order=desc")
+        return GET("${WeebDexConstants.apiUrl}${manga.url}/chapters?order=desc", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val body = response.body.string()
-
         val chapters = mutableListOf<SChapter>()
 
         // Recursively parse pages
-        fun parsePage(json: JSONObject) {
-            val arr = json.optJSONArray("data") ?: JSONArray()
-            for (i in 0 until arr.length()) {
-                val ch = arr.getJSONObject(i)
+        fun parsePage(chapterListDto: ChapterListDto) {
+            chapterListDto.data.forEach { ch ->
                 val s = SChapter.create().apply {
-                    url = "/chapter/${ch.getString("id")}"
-                    val chapTitle = ch.optString("title")
-                    name = chapTitle.ifBlank { "Chapter ${ch.optString("chapter")}" }
-                    date_upload = parseDate(ch.optString("published_at"))
+                    url = "/chapter/${ch.id}"
+                    val chapTitle = ch.title
+                    name = if (chapTitle.isNullOrBlank()) "Chapter ${ch.chapter}" else chapTitle
+                    date_upload = parseDate(ch.published_at)
+                    scanlator = ch.relationships?.groups?.joinToString(", ") { it.name }
                 }
                 chapters.add(s)
             }
-            val page = json.optInt("page", 1)
-            val limit = json.optInt("limit", 1)
-            val total = json.optInt("total", 0)
-            if (page * limit < total) {
+
+            if (chapterListDto.hasNextPage) {
                 val nextUrl = response.request.url.newBuilder()
-                    .setQueryParameter("page", (page + 1).toString())
+                    .setQueryParameter("page", (chapterListDto.page + 1).toString())
                     .build()
-                val nextResponse = client.newCall(GET(nextUrl)).execute()
-                parsePage(JSONObject(nextResponse.body.string()))
+                val nextResponse = client.newCall(GET(nextUrl, headers)).execute()
+                val nextChapterListDto = json.decodeFromString<ChapterListDto>(nextResponse.body.string())
+                parsePage(nextChapterListDto)
             }
         }
-        parsePage(JSONObject(body))
+
+        parsePage(json.decodeFromString<ChapterListDto>(body))
         return chapters
     }
 
     // -------------------- Pages --------------------
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$baseUrl${chapter.url}")
+        return GET("${WeebDexConstants.apiUrl}${chapter.url}", headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val body = response.body.string()
-        val obj = JSONObject(body)
-        val data = obj.optJSONObject("data") ?: obj
-        val pagesArray = data.optJSONArray("data_optimized") ?: data.optJSONArray("data") ?: JSONArray()
+        val chapter = json.decodeFromString<ChapterDto>(body)
+        val pagesArray = chapter.data_optimized ?: chapter.data ?: emptyList()
         val pages = mutableListOf<Page>()
-        for (i in 0 until pagesArray.length()) {
-            val p = pagesArray.getJSONObject(i)
+
+        pagesArray.forEachIndexed { index, pageData ->
             // pages in spec have 'name' field and images served from /data/{id}/{filename}
-            val filename = p.optString("name")
-            val chapterId = data.optString("id")
-            val imageUrl = if (filename.isNotBlank() && chapterId.isNotBlank()) {
-                "https://srv.notdelta.xyz/data/$chapterId/$filename"
+            val filename = pageData.name
+            val chapterId = chapter.id
+            val imageUrl = if (!filename.isNullOrBlank() && chapterId.isNotBlank()) {
+                "${WeebDexConstants.cdnDataUrl}/$chapterId/$filename"
             } else {
-                p.optString("imageUrl", "")
+                ""
             }
-            pages.add(Page(i, imageUrl = imageUrl))
+            pages.add(Page(index, imageUrl = imageUrl))
         }
         return pages
     }
@@ -224,34 +223,19 @@ class WeebDex : HttpSource() {
 
     // -------------------- Utilities --------------------
 
-    private fun mangaFromJson(m: JSONObject): SManga {
+    private fun mangaFromDto(manga: MangaDto): SManga {
         return SManga.create().apply {
-            title = m.optString("title")
-            url = "/manga/${m.getString("id")}"
-            thumbnail_url = buildCoverUrl(m)
-            description = m.optString("description")
+            title = manga.title
+            url = "/manga/${manga.id}"
+            thumbnail_url = buildCoverUrl(manga.id, manga.relationships?.cover)
+            description = manga.description
         }
     }
 
-    private fun buildCoverUrl(m: JSONObject): String? {
-        val rel = m.optJSONObject("relationships") ?: return null
-        val cover = rel.optJSONObject("cover") ?: return null
-        val ext = cover.optString("ext", ".jpg")
-        return "https://srv.notdelta.xyz/covers/${m.getString("id")}/${cover.getString("id")}$ext"
-    }
-
-    private fun jsonArrayToString(arr: JSONArray): String {
-        val list = mutableListOf<String>()
-        for (i in 0 until arr.length()) {
-            // tags/authors may be objects or strings; handle both
-            val item = arr.get(i)
-            if (item is JSONObject) {
-                list.add(item.optString("name", item.optString("id")))
-            } else {
-                list.add(item.toString())
-            }
-        }
-        return list.joinToString(", ")
+    private fun buildCoverUrl(mangaId: String, cover: eu.kanade.tachiyomi.extension.en.weebdex.dto.CoverDto?): String? {
+        if (cover == null) return null
+        val ext = cover.ext
+        return "${WeebDexConstants.cdnCoverUrl}/$mangaId/${cover.id}$ext"
     }
 
     private fun parseStatus(status: String?): Int = when (status?.lowercase(Locale.ROOT)) {
