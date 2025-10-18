@@ -100,3 +100,32 @@ class SortFilter : SelectFilter(
         "Rate" to "rate",
     ),
 )
+
+class HomePageFilter : SelectFilter(
+    name = "Home Page Section",
+    options = listOf(
+        "" to "",
+        "✨Trending Updates✨" to "as_l9zC15glGlkcS7yIamHQ",
+        "🥵Hottest BL" to "as_8CgkZpYmgOr0aAYHsePs",
+        "❤️‍🔥Hot & Sweet Desire❤️‍🔥" to "as_DP6QM8o_pgvu4Q8uVNjt",
+        "🔄Rebirth. Revenge. Reclaim.💥" to "as_16RPgJOVcNQ11N97pOe4B3",
+        "🇯🇵Manga Paradise⛩️" to "as_eF_lw9vKVUWpf0trKDk1",
+        "🏫Campus Love, Teen Feels💓" to "as_RtRk4KegzUjsoEEUGWOK",
+        "📖Reborn in a Novel/Game🎮" to "as_16IPE5so_KZ13zYzBRSf4O",
+        "⚔️Level Up to a Top Hunter!" to "as_fQnbLm2ZSymVTHEWoxMf",
+        "Must-Read Completed" to "as_fdZX3BgTPGRELzqlfg_A",
+        "🌸BL Vibes, Innocent Hearts💝" to "as_FPRnQVKG6qJ5poOo7FKE",
+        "🌅Reborn! A New Life Awaits🔥" to "as_eth_Jc0XcLftyVnVJOnb",
+        "💕Beyond Friendship💕LGBT+" to "as_JW0c05O4zWPFSmDW0iCH",
+        "✨Trending Updates✨" to "as_l9zC15glGlkcS7yIamHQ",
+        "🥵Hottest BL" to "as_8CgkZpYmgOr0aAYHsePs",
+        "❤️‍🔥Hot & Sweet Desire❤️‍🔥" to "as_DP6QM8o_pgvu4Q8uVNjt",
+        "🔄Rebirth. Revenge. Reclaim.💥" to "as_16RPgJOVcNQ11N97pOe4B3",
+        "🇯🇵Manga Paradise⛩️" to "as_eF_lw9vKVUWpf0trKDk1",
+        "🏫Campus Love, Teen Feels💓" to "as_RtRk4KegzUjsoEEUGWOK",
+        "📖Reborn in a Novel/Game🎮" to "as_16IPE5so_KZ13zYzBRSf4O",
+        "⚔️Level Up to a Top Hunter!" to "as_fQnbLm2ZSymVTHEWoxMf",
+        "Must-Read Completed" to "as_fdZX3BgTPGRELzqlfg_A",
+        "🌸BL Vibes, Innocent Hearts💝" to "as_FPRnQVKG6qJ5poOo7FKE",
+    ),
+)

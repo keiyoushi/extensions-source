@@ -34,30 +34,11 @@ class QToon(
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("api/w/album/page/comics")
-            addQueryParameter("page", page.toString())
-            addQueryParameter("asid", "as_l9zC15glGlkcS7yIamHQ")
-        }.build()
+    override fun popularMangaRequest(page: Int) =
+        searchMangaRequest(page, "", getFilterList())
 
-        return apiRequest(url)
-    }
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val data = response.decryptAs<Comics>()
-
-        return MangasPage(
-            mangas = data.comics.map { comic ->
-                SManga.create().apply {
-                    url = ComicUrl(comic.csid, comic.webLinkId.orEmpty()).toJsonString()
-                    title = comic.title
-                    thumbnail_url = comic.image.thumb.url
-                }
-            },
-            hasNextPage = data.more == 1,
-        )
-    }
+    override fun popularMangaParse(response: Response) =
+        searchMangaParse(response)
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder().apply {
@@ -70,7 +51,7 @@ class QToon(
     }
 
     override fun latestUpdatesParse(response: Response) =
-        popularMangaParse(response)
+        searchMangaParse(response)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
@@ -78,6 +59,17 @@ class QToon(
                 addPathSegments("api/w/search/comic/search")
                 addQueryParameter("title", query.trim())
                 addQueryParameter("page", page.toString())
+            }.build()
+
+            return apiRequest(url)
+        }
+
+        val homePageSection = filters.firstInstance<HomePageFilter>().selected
+        if (homePageSection.isNotBlank()) {
+            val url = apiUrl.toHttpUrl().newBuilder().apply {
+                addPathSegments("api/w/album/page/comics")
+                addQueryParameter("page", page.toString())
+                addQueryParameter("asid", homePageSection)
             }.build()
 
             return apiRequest(url)
@@ -102,10 +94,25 @@ class QToon(
         StatusFilter(),
         SortFilter(),
         GenderFilter(),
+        Filter.Separator(),
+        Filter.Header("Home Page section don't work with other filters"),
+        HomePageFilter(),
     )
 
-    override fun searchMangaParse(response: Response) =
-        popularMangaParse(response)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val data = response.decryptAs<Comics>()
+
+        return MangasPage(
+            mangas = data.comics.map { comic ->
+                SManga.create().apply {
+                    url = ComicUrl(comic.csid, comic.webLinkId.orEmpty()).toJsonString()
+                    title = comic.title
+                    thumbnail_url = comic.image.thumb.url
+                }
+            },
+            hasNextPage = data.more == 1,
+        )
+    }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         Log.d(name, manga.url)
