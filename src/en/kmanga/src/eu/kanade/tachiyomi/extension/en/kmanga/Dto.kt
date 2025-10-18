@@ -27,6 +27,18 @@ class TitleDetail(
 )
 
 @Serializable
+class LatestTitleListResponse(
+    @SerialName("title_list") val titleList: List<LatestTitleDetail>,
+)
+
+@Serializable
+class LatestTitleDetail(
+    @SerialName("title_id") val titleId: Int,
+    @SerialName("title_name") val titleName: String,
+    @SerialName("thumbnail_rect_image_url") val thumbnailImageUrl: String? = null,
+)
+
+@Serializable
 class BirthdayCookie(val value: String, val expires: Long)
 
 @Serializable
