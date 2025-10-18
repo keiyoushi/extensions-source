@@ -24,7 +24,7 @@ class FireCross : ClipStudioReader(
     "https://firecross.jp",
     "ja",
 ) {
-    private val apiUrl = "https://firecross.jp/api"
+    private val apiUrl = "$baseUrl/api"
     private val dateFormat = SimpleDateFormat("yyyy/M/d", Locale.JAPAN)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/ebook/comics?sort=1&page=$page", headers)
@@ -34,7 +34,7 @@ class FireCross : ClipStudioReader(
         val mangas = document.select("ul.seriesList li.seriesList_item").map { element ->
             SManga.create().apply {
                 element.selectFirst("a.seriesList_itemTitle")!!.let { a ->
-                    setUrlWithoutDomain(a.attr("href"))
+                    setUrlWithoutDomain(a.absUrl("href"))
                     title = a.text()
                 }
                 thumbnail_url = element.selectFirst("img.series-list-img")?.absUrl("src")
@@ -52,7 +52,6 @@ class FireCross : ClipStudioReader(
             artist = author
             description = document.selectFirst("p.ebook-series-synopsis")?.text()
             genre = document.select("div.book-genre a").joinToString { it.text() }
-            thumbnail_url = thumbnail_url
         }
     }
 

@@ -29,9 +29,9 @@ class DreComics : ClipStudioReader(
         val document = response.asJsoup()
         val mangas = document.select(".seriesList__item").map {
             SManga.create().apply {
-                setUrlWithoutDomain(it.selectFirst("a")!!.attr("href"))
+                setUrlWithoutDomain(it.selectFirst("a")!!.absUrl("href"))
                 title = it.selectFirst(".seriesList__text")!!.text()
-                thumbnail_url = it.selectFirst("img")?.attr("src")
+                thumbnail_url = it.selectFirst("img")?.absUrl("src")
             }
         }
         return MangasPage(mangas, false)
@@ -50,9 +50,9 @@ class DreComics : ClipStudioReader(
             val document = response.asJsoup()
             val mangas = document.select(".seriesLineupStudios_item").map {
                 SManga.create().apply {
-                    setUrlWithoutDomain(it.attr("href"))
+                    setUrlWithoutDomain(it.absUrl("href"))
                     title = it.selectFirst(".seriesLineupStudios_itemTitle")!!.text()
-                    thumbnail_url = it.selectFirst("img")?.attr("src")
+                    thumbnail_url = it.selectFirst("img")?.absUrl("src")
                 }
             }
             return MangasPage(mangas, false)
@@ -67,16 +67,16 @@ class DreComics : ClipStudioReader(
         return SManga.create().apply {
             if (isWebtoon) {
                 title = document.selectFirst(".detailStudios_title span")!!.text()
-                author = document.select(".detailStudios_author p").eachText().joinToString(", ")
+                author = document.select(".detailStudios_author p").eachText().joinToString()
                 description = document.selectFirst(".detailStudios_storySynopsis")?.text()
-                genre = document.select(".seriesDetail__genreLink--studios").eachText().joinToString(", ")
-                thumbnail_url = document.selectFirst(".detailStudios_mainLeft img.img-fluid")?.attr("src")
+                genre = document.select(".seriesDetail__genreLink--studios").eachText().joinToString()
+                thumbnail_url = document.selectFirst(".detailStudios_mainLeft img.img-fluid")?.absUrl("src")
             } else {
                 title = document.selectFirst(".detailComics_title span")!!.text()
-                author = document.select(".detailComics_authorsItem").eachText().joinToString(", ")
+                author = document.select(".detailComics_authorsItem").eachText().joinToString()
                 description = document.selectFirst(".detailComics_synopsis")?.text()
-                genre = document.select(".detailComics_genreListItem").eachText().joinToString(", ")
-                thumbnail_url = document.selectFirst(".detailComicsSection .img-fluid")?.attr("src")
+                genre = document.select(".detailComics_genreListItem").eachText().joinToString()
+                thumbnail_url = document.selectFirst(".detailComicsSection .img-fluid")?.absUrl("src")
             }
         }
     }
@@ -89,7 +89,7 @@ class DreComics : ClipStudioReader(
             return document.select(".detailStudios_ebookList_item").map {
                 SChapter.create().apply {
                     name = it.selectFirst(".detailStudios_ebookList_itemTitle")!!.text()
-                    setUrlWithoutDomain(it.attr("abs:href"))
+                    setUrlWithoutDomain(it.absUrl("href"))
                 }
             }.reversed()
         }
@@ -97,7 +97,7 @@ class DreComics : ClipStudioReader(
         return document.select("div.ebookListItem:not(.disabled) a.ebookListItem_title").map {
             SChapter.create().apply {
                 name = it.selectFirst(".ebookListItem_title")!!.text()
-                setUrlWithoutDomain(it.selectFirst("a")!!.attr("href"))
+                setUrlWithoutDomain(it.selectFirst("a")!!.absUrl("href"))
                 date_upload = dateFormat.tryParse(it.selectFirst(".ebookListItem_publishDate span")?.text()?.substringAfter("公開："))
             }
         }
