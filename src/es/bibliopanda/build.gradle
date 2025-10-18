@@ -2,8 +2,8 @@ ext {
     extName = 'Biblio Panda'
     extClass = '.BiblioPanda'
     themePkg = 'madara'
-    baseUrl = 'https://bibliopanda.visblog.online'
-    overrideVersionCode = 1
+    baseUrl = 'https://bibliopanda.com'
+    overrideVersionCode = 2
     isNsfw = false
 }
 
