@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.firstInstance
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -38,26 +37,50 @@ class DreComics : ClipStudioReader(
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val filter = filters.firstInstance<TypeFilter>()
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments(filter.toUriPart().removePrefix("/"))
-            .build()
-        return GET(url, headers)
+        val url = "$baseUrl/search".toHttpUrl().newBuilder().apply {
+            addQueryParameter("t", "2")
+            addQueryParameter("page", page.toString())
+
+            if (query.isNotBlank()) {
+                addQueryParameter("q", query)
+            }
+
+            var labelsAdded = false
+            filters.forEach { filter ->
+                when (filter) {
+                    is LabelFilter -> filter.state.filter { it.state }.forEach {
+                        addQueryParameter("l[]", it.value)
+                        labelsAdded = true
+                    }
+
+                    is GenreFilter -> filter.state.filter { it.state }.forEach {
+                        addQueryParameter("g[]", it.value)
+                    }
+
+                    else -> {}
+                }
+            }
+
+            if (!labelsAdded) {
+                addQueryParameter("l[]", "3") // DRE Comics (Manga)
+                addQueryParameter("l[]", "1") // DRE Studios (Webtoon)
+            }
+        }
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().contains("/drestudios")) {
-            val document = response.asJsoup()
-            val mangas = document.select(".seriesLineupStudios_item").map {
-                SManga.create().apply {
-                    setUrlWithoutDomain(it.absUrl("href"))
-                    title = it.selectFirst(".seriesLineupStudios_itemTitle")!!.text()
-                    thumbnail_url = it.selectFirst("img")?.absUrl("src")
-                }
+        val document = response.asJsoup()
+        val mangas = document.select("ul.seriesColumn__list li.seriesColumn__item").map {
+            SManga.create().apply {
+                setUrlWithoutDomain(it.selectFirst("a.seriesColumn__linkButton")!!.absUrl("href"))
+                title = it.selectFirst("span.seriesColumn__title")!!.text()
+                thumbnail_url = it.selectFirst("img.seriesColumn__img")?.absUrl("src")
             }
-            return MangasPage(mangas, false)
         }
-        return popularMangaParse(response)
+
+        val hasNextPage = document.selectFirst("a.pagination__link-next--active") != null
+        return MangasPage(mangas, hasNextPage)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -103,22 +126,87 @@ class DreComics : ClipStudioReader(
         }
     }
 
-    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
-        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
-        fun toUriPart() = vals[state].second
-    }
-
     override fun getFilterList(): FilterList {
         return FilterList(
-            TypeFilter(),
+            LabelFilter(getLabelList()),
+            GenreFilter(getGenreList()),
         )
     }
 
-    private class TypeFilter : UriPartFilter(
-        "Type",
-        arrayOf(
-            Pair("Manga", "/drecomics/series"),
-            Pair("Webtoon", "/drestudios"),
-        ),
+    private class Label(name: String, val value: String) : Filter.CheckBox(name)
+    private class LabelFilter(labels: List<Label>) : Filter.Group<Label>("Label", labels)
+
+    private class Genre(name: String, val value: String) : Filter.CheckBox(name)
+    private class GenreFilter(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
+
+    private fun getLabelList(): List<Label> = listOf(
+        Label("DREコミックス（コミック）", "3"),
+        Label("DRE STUDIOS（webtoon）", "1"),
+    )
+
+    private fun getGenreList(): List<Genre> = listOf(
+        Genre("ファンタジー", "1"),
+        Genre("バトル", "2"),
+        Genre("恋愛", "3"),
+        Genre("ラブコメ", "4"),
+        Genre("SF", "5"),
+        Genre("ミステリー", "6"),
+        Genre("ホラー", "7"),
+        Genre("シリアス", "34"),
+        Genre("コメディ", "35"),
+        Genre("業界", "57"),
+        Genre("歴史", "53"),
+        Genre("オカルト", "36"),
+        Genre("アクション", "37"),
+        Genre("もふもふ", "38"),
+        Genre("サスペンス", "39"),
+        Genre("異世界", "8"),
+        Genre("異能", "9"),
+        Genre("チート能力", "10"),
+        Genre("タイムリープ", "40"),
+        Genre("ゲーム世界", "12"),
+        Genre("政治", "55"),
+        Genre("経営", "56"),
+        Genre("思想", "58"),
+        Genre("ハーレム", "13"),
+        Genre("聖女", "33"),
+        Genre("追放", "15"),
+        Genre("転生", "16"),
+        Genre("転移", "17"),
+        Genre("復讐", "18"),
+        Genre("溺愛", "41"),
+        Genre("悪役令嬢", "14"),
+        Genre("王侯・貴族", "19"),
+        Genre("婚約破棄", "42"),
+        Genre("逆ハーレム", "43"),
+        Genre("結婚", "44"),
+        Genre("本格", "54"),
+        Genre("日常", "21"),
+        Genre("戦争", "45"),
+        Genre("ドラマ", "30"),
+        Genre("成り上がり", "47"),
+        Genre("現代", "20"),
+        Genre("学園", "22"),
+        Genre("青春", "23"),
+        Genre("お仕事", "24"),
+        Genre("スローライフ", "25"),
+        Genre("旅", "26"),
+        Genre("子供", "27"),
+        Genre("医療", "31"),
+        Genre("グルメ", "28"),
+        Genre("不良・ヤンキー", "29"),
+        Genre("イケメン", "46"),
+        Genre("メカ", "32"),
+        Genre("魔王", "48"),
+        Genre("人外", "49"),
+        Genre("書き下ろし", "50"),
+        Genre("エッセイ", "52"),
+        Genre("コミカライズ", "51"),
+        Genre("アニメ化", "62"),
+        Genre("webtoon", "61"),
+        Genre("受賞作", "63"),
+        Genre("DREコミックス", "59"),
+        Genre("DREコミックスF", "67"),
+        Genre("完結", "65"),
     )
 }
