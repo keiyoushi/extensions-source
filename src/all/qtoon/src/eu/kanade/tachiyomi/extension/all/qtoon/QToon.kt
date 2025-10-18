@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.qtoon
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -7,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -43,10 +45,12 @@ class QToon(
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.decryptAs<Comics>()
 
+        Log.d(name, data.toJsonString(tmpJson))
+
         return MangasPage(
             mangas = data.comics.map { comic ->
                 SManga.create().apply {
-                    url = ComicUrl(comic.csid, comic.webLinkId).toJsonString()
+                    url = ComicUrl(comic.csid, comic.webLinkId.orEmpty()).toJsonString()
                     title = comic.title
                     thumbnail_url = comic.image.thumb.url
                 }
@@ -77,39 +81,137 @@ class QToon(
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        throw Exception("Not implemented")
+        Log.d(name, manga.url)
+        val comicUrl = manga.url.parseAs<ComicUrl>()
+
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("api/w/comic/detail")
+            addQueryParameter("csid", comicUrl.webLinkId.ifBlank { comicUrl.csid })
+        }.build()
+
+        return apiRequest(url)
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        val comicUrl = manga.url.parseAs<ComicUrl>()
+        return buildString {
+            append(baseUrl)
+            append("/detail/")
+            append(comicUrl.webLinkId.ifBlank { comicUrl.csid })
+        }
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        throw Exception("Not implemented")
+        val comic = response.decryptAs<ComicDetailsResponse>().comic
+
+        Log.d(name, comic.toJsonString(tmpJson))
+
+        return SManga.create().apply {
+            url = ComicUrl(comic.csid, comic.webLinkId.orEmpty()).toJsonString()
+            title = comic.title
+            thumbnail_url = comic.image.thumb.url
+            author = comic.author
+            description = buildString {
+                append(comic.introduction)
+                if (!comic.updateMemo.isNullOrBlank()) {
+                    append("\n\nUpdates: ", comic.updateMemo)
+                }
+            }
+            genre = buildSet {
+                comic.tags.mapTo(this) { it.name }
+                comic.corners.cornerTags.mapTo(this) { it.name }
+            }.joinToString()
+            Log.d(name, comic.serialStatus)
+            status = when (comic.serialStatus.lowercase()) {
+                "serializing" -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
+        }
     }
 
-    override fun chapterListRequest(manga: SManga): Request {
-        throw Exception("Not implemented")
-    }
+    override fun chapterListRequest(manga: SManga) =
+        mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        throw Exception("Not implemented")
+        val episodes = response.decryptAs<ChapterEpisodes>().episodes
+        val csid = response.request.url.queryParameter("csid")!!
+
+        Log.d(name, episodes.toJsonString(tmpJson))
+
+        return episodes.map { episode ->
+            SChapter.create().apply {
+                url = EpisodeUrl(episode.esid, csid).toJsonString()
+                name = episode.title
+                chapter_number = episode.serialNo.toFloat()
+            }
+        }.asReversed()
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        throw Exception("Not implemented")
+        Log.d(name, chapter.url)
+        val episodeUrl = chapter.url.parseAs<EpisodeUrl>()
+
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("api/w/comic/episode/detail")
+            addQueryParameter("esid", episodeUrl.esid)
+        }.build()
+
+        return apiRequest(url)
+    }
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val episodeUrl = chapter.url.parseAs<EpisodeUrl>()
+
+        return buildString {
+            append(baseUrl)
+            append("/reader/")
+            append(episodeUrl.csid)
+            append("?chapter=")
+            append(episodeUrl.esid)
+        }
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        throw Exception("Not implemented")
+        val token = response.decryptAs<EpisodeResponse>().definitions[0].token
+
+        val urlBuilder = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("api/w/resource/group/rslv")
+            addQueryParameter("token", token)
+        }
+        var page = 1
+        var hasNextPage = true
+        val resources = mutableListOf<Resource>()
+
+        while (hasNextPage) {
+            val url = urlBuilder
+                .setQueryParameter("page", page.toString())
+                .build()
+
+            val data = client.newCall(apiRequest(url)).execute()
+                .decryptAs<EpisodeResources>()
+
+            hasNextPage = data.more == 1
+            resources.addAll(data.resources)
+            page++
+        }
+
+        return resources.map {
+            Page(it.rgIdx, imageUrl = decryptImageUrl(it.url, requestToken))
+        }.sortedBy { it.index }
     }
 
     override fun imageUrlParse(response: Response): String {
-        throw Exception("Not implemented")
+        throw UnsupportedOperationException()
     }
+
+    private val requestToken = generateRandomString(24)
 
     private fun apiRequest(url: HttpUrl): Request {
         val headers = headersBuilder().apply {
             val platform = mobileUserAgentRegex.containsMatchIn(headers["User-Agent"]!!)
             add("platform", if (platform) "h5" else "pc")
             add("lth", siteLang)
-            add("did", randomToken)
+            add("did", requestToken)
         }.build()
 
         return GET(url, headers)
