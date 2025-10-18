@@ -337,7 +337,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
         val finalUrl = if (query.isNotBlank()) "$baseUrlWithPage?s=${query.replace(" ", "+")}" else baseUrlWithPage
 
-        /*
+        /* Will be used later if DoujinDesu aleardy fix their problem
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
                 is CategoryNames -> {
@@ -398,28 +398,17 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         return GET(finalUrl, headers)
     }
 
-    private val nonAlphaNumSpaceDashRegex = Regex("[^a-z0-9\\s-]")
-    private val multiSpaceRegex = Regex("\\s+")
-
-    private fun String.toMultiSlug(): String {
-        return this
-            .trim()
-            .lowercase()
-            .replace(nonAlphaNumSpaceDashRegex, "")
-            .replace(multiSpaceRegex, "-")
-    }
-
     override fun searchMangaFromElement(element: Element): SManga =
         basicInformationFromElement(element)
 
     override fun getFilterList() = FilterList(
         Filter.Header("NB: Fitur Emergency, jadi maklumi aja jika ada bug!"),
         Filter.Separator(),
-        Filter.Header("NB: Gunakan ini untuk filter per Author, Group dan Series saja, tidak bisa digabungkan dengan memakai pencarian teks dan filter lainnya!"),
+        Filter.Header("NB: Tidak bisa digabungkan dengan memakai pencarian teks dan filter lainnya, serta harus memasukkan nama Author, Group dan Series secara lengkap!"),
         AuthorGroupSeriesFilter(authorGroupSeriesOptions),
         AuthorGroupSeriesValueFilter(),
         Filter.Separator(),
-        /*
+        /* Will be used later if DoujinDesu aleardy fix their problem
         Filter.Header("NB: Untuk Character Filter akan mengambil hasil apapun jika diinput, misal 'alice', maka hasil akan memunculkan semua Karakter yang memiliki nama 'Alice', bisa digabungkan dengan filter lainnya"),
         CharacterFilter(),
         StatusList(statusList),
