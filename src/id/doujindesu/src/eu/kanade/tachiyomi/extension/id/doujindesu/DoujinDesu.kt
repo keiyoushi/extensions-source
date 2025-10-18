@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
 import android.content.SharedPreferences
-import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -367,8 +366,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         }
          */
 
-        Log.d("DoujinDesuLOG", "Search URL: $finalUrl")
-
         val agsFilter = filters.firstInstanceOrNull<AuthorGroupSeriesFilter>()
         val agsValueFilter = filters.firstInstanceOrNull<AuthorGroupSeriesValueFilter>()
         val selectedOption = agsFilter?.values?.getOrNull(agsFilter.state)
@@ -392,7 +389,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 }
                 GET(url, headers)
             }
-            Log.d("DoujinDesuLOG", "Author/Group/Series search URL: ${request.url}")
             return request
         }
         return GET(finalUrl, headers)
