@@ -18,6 +18,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -57,7 +58,13 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
             setUrlWithoutDomain(it!!.absUrl("href"))
             title = it.text()
         }
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        thumbnail_url = element.selectFirst("img")
+            ?.absUrl("src")
+            ?.let { url ->
+                url.toHttpUrlOrNull()
+                    ?.queryParameter("url")
+                    ?: url
+            }
     }
 
     override fun latestUpdatesNextPageSelector(): String = "nav ul li"
@@ -99,8 +106,17 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.select("section aside:first-child h1").text()
         genre = document.select("span:contains(Thể loại:) ~ a").joinToString { it.text().trim(',', ' ') }
-        description = document.select("div.mt-3").joinToString { it.wholeText() }
-        thumbnail_url = document.selectFirst("section aside:first-child img")?.absUrl("src")
+        description = document.select("div.mt-3").joinToString {
+            it.select("a, strong").unwrap()
+            it.wholeText().trim()
+        }
+        thumbnail_url = document.selectFirst("section aside:first-child img")
+            ?.absUrl("src")
+            ?.let { url ->
+                url.toHttpUrlOrNull()
+                    ?.queryParameter("url")
+                    ?: url
+            }
         status = parseStatus(document.selectFirst("span:contains(Trạng thái:) + b")?.text())
         author = document.selectFirst("span:contains(Tác giả:) + b")?.text()
     }
