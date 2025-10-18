@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
 import android.content.SharedPreferences
+import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -20,10 +21,8 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
 import okhttp3.Headers
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -250,9 +249,19 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         Genre("Yuri"),
     )
 
-    private class AuthorFilter : Filter.Text("Author")
-    private class GroupFilter : Filter.Text("Group")
-    private class SeriesFilter : Filter.Text("Series")
+    private class AuthorGroupSeriesOption(val display: String, val key: String) {
+        override fun toString(): String = display
+    }
+
+    private val authorGroupSeriesOptions = arrayOf(
+        AuthorGroupSeriesOption("None", ""),
+        AuthorGroupSeriesOption("Author", "author"),
+        AuthorGroupSeriesOption("Group", "group"),
+        AuthorGroupSeriesOption("Series", "series"),
+    )
+
+    private class AuthorGroupSeriesFilter(options: Array<AuthorGroupSeriesOption>) : Filter.Select<AuthorGroupSeriesOption>("Filter by Author/Group/Series", options, 0)
+    private class AuthorGroupSeriesValueFilter : Filter.Text("Nama Author/Group/Series")
     private class CharacterFilter : Filter.Text("Karakter")
     private class CategoryNames(categories: Array<Category>) : Filter.Select<Category>("Kategori", categories, 0)
     private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Urutkan", orders, 0)
@@ -296,7 +305,8 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         basicInformationFromElement(element)
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/manga/page/$page/?title=&author=&character=&statusx=&typex=&order=popular", headers)
+        // Original url $baseUrl/manga/page/$page/?title=&author=&character=&statusx=&typex=&order=popular
+        return GET("$baseUrl/manhwa/page/$page/", headers)
     }
 
     // Latest
@@ -305,7 +315,8 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         basicInformationFromElement(element)
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/manga/page/$page/?title=&author=&character=&statusx=&typex=&order=update", headers)
+        // Original url $baseUrl/manga/page/$page/?title=&author=&character=&statusx=&typex=&order=update
+        return GET("$baseUrl/doujin/page/$page/", headers)
     }
 
     // Element Selectors
@@ -322,9 +333,11 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         // Anything else filter handling
-        val url = "$baseUrl/manga/page/$page/".toHttpUrl().newBuilder()
-        url.addQueryParameter("title", query.ifBlank { "" })
+        val baseUrlWithPage = if (page == 1) "$baseUrl/" else "$baseUrl/page/$page/"
 
+        val finalUrl = if (query.isNotBlank()) "$baseUrlWithPage?s=${query.replace(" ", "+")}" else baseUrlWithPage
+
+        /*
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
                 is CategoryNames -> {
@@ -352,82 +365,37 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 else -> {}
             }
         }
+         */
 
-        fun normalize(str: String?): String {
-            return str
-                ?.trim()
-                ?.lowercase()
-                ?.replace(Regex("\\s+"), " ")
-                ?: ""
-        }
+        Log.d("DoujinDesuLOG", "Search URL: $finalUrl")
 
-        val author = filters.firstInstanceOrNull<AuthorFilter>()?.state
-        val group = filters.firstInstanceOrNull<GroupFilter>()?.state
-        val series = filters.firstInstanceOrNull<SeriesFilter>()?.state
+        val agsFilter = filters.firstInstanceOrNull<AuthorGroupSeriesFilter>()
+        val agsValueFilter = filters.firstInstanceOrNull<AuthorGroupSeriesValueFilter>()
+        val selectedOption = agsFilter?.values?.getOrNull(agsFilter.state)
+        val filterValue = agsValueFilter?.state?.trim() ?: ""
 
-        val normalizedAuthor = normalize(author)
-        val normalizedGroup = normalize(group)
-        val normalizedSeries = normalize(series)
-
-        val lastInput = listOf(normalizedAuthor, normalizedGroup, normalizedSeries)
-            .filter { it.isNotBlank() }
-            .lastOrNull()
-
-        val activeFilters = listOf(normalizedAuthor, normalizedGroup, normalizedSeries)
-            .filter { it.isNotBlank() }
-
-        if (activeFilters.size > 1) {
-            filters.firstInstanceOrNull<AuthorFilter>()?.state =
-                if (normalizedAuthor == lastInput) author.orEmpty() else ""
-
-            filters.firstInstanceOrNull<GroupFilter>()?.state =
-                if (normalizedGroup == lastInput) group.orEmpty() else ""
-
-            filters.firstInstanceOrNull<SeriesFilter>()?.state =
-                if (normalizedSeries == lastInput) series.orEmpty() else ""
-        }
-
-        // Author filter handling
-        if (query.isBlank()) {
-            if (!author.isNullOrBlank() && lastInput != author) {
-                val slug = author.toMultiSlug()
-                if (slug.isNotBlank()) {
-                    val authorUrl = if (page == 1) {
-                        "$baseUrl/author/$slug/"
-                    } else {
-                        "$baseUrl/author/$slug/page/$page/"
-                    }
-                    return GET(authorUrl, headers)
+        // Author/Group/Series filter handling
+        if (query.isBlank() && selectedOption != null && selectedOption.key.isNotBlank()) {
+            val typePath = selectedOption.key
+            val request = if (filterValue.isBlank()) {
+                val url = if (page == 1) {
+                    "$baseUrl/$typePath/"
+                } else {
+                    "$baseUrl/$typePath/page/$page/"
                 }
-            }
-
-            // Group filter handling
-            if (!group.isNullOrBlank() && lastInput != group) {
-                val slug = group.toMultiSlug()
-                if (slug.isNotBlank()) {
-                    val groupUrl = if (page == 1) {
-                        "$baseUrl/group/$slug/"
-                    } else {
-                        "$baseUrl/group/$slug/page/$page/"
-                    }
-                    return GET(groupUrl, headers)
+                GET(url, headers)
+            } else {
+                val url = if (page == 1) {
+                    "$baseUrl/$typePath/$filterValue/"
+                } else {
+                    "$baseUrl/$typePath/$filterValue/page/$page/"
                 }
+                GET(url, headers)
             }
-
-            // Series filter handling
-            if (!series.isNullOrBlank() && lastInput != series) {
-                val slug = series.toMultiSlug()
-                if (slug.isNotBlank()) {
-                    val seriesUrl = if (page == 1) {
-                        "$baseUrl/series/$slug/"
-                    } else {
-                        "$baseUrl/series/$slug/page/$page/"
-                    }
-                    return GET(seriesUrl, headers)
-                }
-            }
+            Log.d("DoujinDesuLOG", "Author/Group/Series search URL: ${request.url}")
+            return request
         }
-        return GET(url.build(), headers)
+        return GET(finalUrl, headers)
     }
 
     private val nonAlphaNumSpaceDashRegex = Regex("[^a-z0-9\\s-]")
@@ -445,19 +413,20 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         basicInformationFromElement(element)
 
     override fun getFilterList() = FilterList(
-        Filter.Header("NB: Filter bisa digabungkan dengan memakai pencarian teks selain filter Author, Group dan Series!"),
+        Filter.Header("NB: Fitur Emergency, jadi maklumi aja jika ada bug!"),
         Filter.Separator(),
-        Filter.Header("NB: Gunakan ini untuk Filter per Author, Group dan Series saja, harus memasukkan nama Author, Group dan Series secara lengkap"),
-        AuthorFilter(),
-        GroupFilter(),
-        SeriesFilter(),
+        Filter.Header("NB: Gunakan ini untuk filter per Author, Group dan Series saja, tidak bisa digabungkan dengan memakai pencarian teks dan filter lainnya!"),
+        AuthorGroupSeriesFilter(authorGroupSeriesOptions),
+        AuthorGroupSeriesValueFilter(),
         Filter.Separator(),
-        Filter.Header("NB: Untuk Filter Karakter akan mengambil hasil apapun jika diinput, misal 'alice', maka hasil akan memunculkan semua Karakter yang memiliki nama 'Alice'"),
+        /*
+        Filter.Header("NB: Untuk Character Filter akan mengambil hasil apapun jika diinput, misal 'alice', maka hasil akan memunculkan semua Karakter yang memiliki nama 'Alice', bisa digabungkan dengan filter lainnya"),
         CharacterFilter(),
         StatusList(statusList),
         CategoryNames(categoryNames),
         OrderBy(orderBy),
         GenreList(genreList()),
+         */
     )
 
     // Detail Parse
@@ -514,12 +483,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 val paragraphs = element.select("p")
                 val firstText = paragraphs.firstOrNull()?.text()?.trim()?.lowercase()
 
-                // Fungsi untuk mendekode semua entitas HTML
-                val decodeHtmlEntities = { text: String ->
-                    Jsoup.parse(text).text().replace('\u00A0', ' ')
-                }
-
-                // CASE 1: Gabungan chapter dalam satu paragraf (Manga Style)
+                // CASE 1: Gabungan chapter dalam satu paragraf
                 val mergedChapterElement = element.select("p:has(strong:matchesOwn(^\\s*Sinopsis\\s*:))").firstOrNull {
                     chapterListRegex.containsMatchIn(it.html())
                 }
@@ -528,13 +492,13 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                     val chapterList = mergedChapterElement.html()
                         .split("<br>")
                         .drop(1)
-                        .map { decodeHtmlEntities(it.replace(htmlTagRegex, "").trim()) }
+                        .map { it.replace(htmlTagRegex, "").trim() }
                         .filter { it.isNotEmpty() }
 
                     return@let "Daftar Chapter:\n" + chapterList.joinToString(" | ")
                 }
 
-                // CASE 2: Dua paragraf: p[0] = "Sinopsis:", p[1] = daftar chapter (Manga Style)
+                // CASE 2: Dua paragraf: p[0] = "Sinopsis:", p[1] = daftar chapter
                 if (
                     firstText == "sinopsis:" &&
                     paragraphs.size > 1 &&
@@ -542,42 +506,39 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 ) {
                     val chapterList = paragraphs[1].html()
                         .split("<br>")
-                        .map { decodeHtmlEntities(it.replace(htmlTagRegex, "").trim()) }
+                        .map { it.replace(htmlTagRegex, "").trim() }
                         .filter { it.isNotEmpty() }
 
                     return@let "Daftar Chapter:\n" + chapterList.joinToString(" | ")
                 }
 
-                // CASE 3 + 5 Hybrid: Tangani Sinopsis dengan <strong> + <br> + <p> campuran (Manhwa Style + Terkompresi)
+                // CASE 3: Sinopsis biasa pakai <strong>Sinopsis:</strong> di p awal
                 val sinopsisPara = element.select("p:has(strong:matchesOwn(^\\s*Sinopsis\\s*:))")
                 if (sinopsisPara.isNotEmpty()) {
                     val sinopsisStart = sinopsisPara.first()!!
                     val htmlSplit = sinopsisStart.html().split("<br>")
 
-                    val startText = htmlSplit
-                        .drop(1)
-                        .map { decodeHtmlEntities(it.replace(htmlTagRegex, "").trim()) }
-                        .filter { it.isNotEmpty() && !it.lowercase().startsWith("download") }
+                    val startText = htmlSplit.getOrNull(1)?.replace(htmlTagRegex, "")?.trim().orEmpty()
 
                     val sinopsisTexts = buildList {
-                        addAll(startText)
+                        if (startText.isNotEmpty()) add(startText)
 
                         val allP = element.select("p")
                         val startIndex = allP.indexOf(sinopsisStart)
 
                         for (i in startIndex + 1 until allP.size) {
-                            val content = decodeHtmlEntities(allP[i].text().trim())
-                            if (content.lowercase().startsWith("download")) break
-                            if (content.isNotEmpty()) add(content)
+                            val content = allP[i].text().trim()
+                            if (!content.lowercase().startsWith("download")) {
+                                add(content)
+                            } else {
+                                break
+                            }
                         }
                     }
-
-                    if (sinopsisTexts.isNotEmpty()) {
-                        return@let "Sinopsis:\n" + sinopsisTexts.joinToString("\n\n")
-                    }
+                    return@let "Sinopsis:\n" + sinopsisTexts.joinToString("\n\n")
                 }
 
-                // CASE 4: Satu paragraf saja dengan <strong> dan <br> (Manhwa Style)
+                // CASE 4: Satu paragraf saja dengan <strong> dan <br>
                 if (
                     paragraphs.size == 1 &&
                     element.select("p:has(strong:matchesOwn(^\\s*Sinopsis\\s*:))").isNotEmpty()
@@ -585,19 +546,15 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                     val para = paragraphs[0]
                     val htmlSplit = para.html().split("<br>")
 
-                    val content = htmlSplit.getOrNull(1)?.let {
-                        decodeHtmlEntities(it.replace(htmlTagRegex, "").trim())
-                    }.orEmpty()
+                    val content = htmlSplit.getOrNull(1)?.replace(htmlTagRegex, "")?.trim().orEmpty()
 
-                    if (content.isNotBlank()) {
-                        return@let "Sinopsis:\n$content"
-                    }
+                    return@let "Sinopsis:\n$content"
                 }
 
-                // CASE 6: Fallback
+                // CASE 5: Fallback
                 if (firstText == "sinopsis:") {
                     val sinopsisLines = paragraphs.drop(1)
-                        .map { decodeHtmlEntities(it.text().trim()) }
+                        .map { it.text().trim() }
                         .filter { !it.lowercase().startsWith("download") }
 
                     return@let "Sinopsis:\n" + sinopsisLines.joinToString("\n\n")
