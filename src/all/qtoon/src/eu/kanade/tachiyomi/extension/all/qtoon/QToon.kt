@@ -47,8 +47,6 @@ class QToon(
     override fun popularMangaParse(response: Response): MangasPage {
         val data = response.decryptAs<Comics>()
 
-        Log.d(name, data.toJsonString(tmpJson))
-
         return MangasPage(
             mangas = data.comics.map { comic ->
                 SManga.create().apply {
@@ -133,8 +131,6 @@ class QToon(
     override fun mangaDetailsParse(response: Response): SManga {
         val comic = response.decryptAs<ComicDetailsResponse>().comic
 
-        Log.d(name, comic.toJsonString(tmpJson))
-
         return SManga.create().apply {
             url = ComicUrl(comic.csid, comic.webLinkId.orEmpty()).toJsonString()
             title = comic.title
@@ -150,9 +146,9 @@ class QToon(
                 comic.tags.mapTo(this) { it.name }
                 comic.corners.cornerTags.mapTo(this) { it.name }
             }.joinToString()
-            Log.d(name, comic.serialStatus)
             status = when (comic.serialStatus.lowercase()) {
                 "serializing" -> SManga.ONGOING
+                "finish" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
         }
@@ -164,8 +160,6 @@ class QToon(
     override fun chapterListParse(response: Response): List<SChapter> {
         val episodes = response.decryptAs<ChapterEpisodes>().episodes
         val csid = response.request.url.queryParameter("csid")!!
-
-        Log.d(name, episodes.toJsonString(tmpJson))
 
         return episodes.map { episode ->
             SChapter.create().apply {

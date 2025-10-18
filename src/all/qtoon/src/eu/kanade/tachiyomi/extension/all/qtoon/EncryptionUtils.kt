@@ -1,11 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.qtoon
 
 import android.util.Base64
-import android.util.Log
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.toJsonString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import okhttp3.Response
 import java.security.MessageDigest
 import javax.crypto.Cipher
@@ -58,9 +54,7 @@ fun decrypt(response: Response): String {
 }
 
 inline fun <reified T> Response.decryptAs(): T {
-    return decrypt(this)
-        .also { Log.i("QToon", it.parseAs<JsonObject>().toJsonString(tmpJson)) }
-        .parseAs()
+    return decrypt(this).parseAs()
 }
 
 fun decryptImageUrl(url: String, requestToken: String): String {
@@ -77,9 +71,3 @@ val mobileUserAgentRegex = Regex(
     """android|avantgo|blackberry|iemobile|ipad|iphone|ipod|j2me|midp|mobile|opera mini|phone|palm|pocket|psp|symbian|up.browser|up.link|wap|windows ce|xda|xiino""",
     RegexOption.IGNORE_CASE,
 )
-
-val tmpJson = Json {
-    ignoreUnknownKeys = true
-    isLenient = true
-    prettyPrint = true
-}

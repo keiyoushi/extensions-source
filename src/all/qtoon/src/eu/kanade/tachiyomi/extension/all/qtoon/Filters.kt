@@ -88,7 +88,7 @@ class StatusFilter : SelectFilter(
     options = listOf(
         "All" to "-1",
         "Ongoing" to "101",
-        "Completed" to "203",
+        "Completed" to "103",
     ),
 )
 
