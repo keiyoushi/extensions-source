@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.qtoon
 
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -115,7 +114,6 @@ class QToon(
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        Log.d(name, manga.url)
         val comicUrl = manga.url.parseAs<ComicUrl>()
 
         val url = apiUrl.toHttpUrl().newBuilder().apply {
@@ -128,8 +126,13 @@ class QToon(
 
     override fun getMangaUrl(manga: SManga): String {
         val comicUrl = manga.url.parseAs<ComicUrl>()
+        val siteLangDir = siteLang.split("-", limit = 2).first()
+
         return buildString {
             append(baseUrl)
+            if (siteLangDir != "en") {
+                append("/$siteLangDir")
+            }
             append("/detail/")
             append(comicUrl.webLinkId.ifBlank { comicUrl.csid })
         }
@@ -178,7 +181,6 @@ class QToon(
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        Log.d(name, chapter.url)
         val episodeUrl = chapter.url.parseAs<EpisodeUrl>()
 
         val url = apiUrl.toHttpUrl().newBuilder().apply {
@@ -191,9 +193,13 @@ class QToon(
 
     override fun getChapterUrl(chapter: SChapter): String {
         val episodeUrl = chapter.url.parseAs<EpisodeUrl>()
+        val siteLangDir = siteLang.split("-", limit = 2).first()
 
         return buildString {
             append(baseUrl)
+            if (siteLangDir != "en") {
+                append("/$siteLangDir")
+            }
             append("/reader/")
             append(episodeUrl.csid)
             append("?chapter=")
