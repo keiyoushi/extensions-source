@@ -1,29 +1,53 @@
 package eu.kanade.tachiyomi.extension.en.weebdex.dto
 
+import WeebDexHelper
+import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MangaListDto(
-    val data: List<MangaDto> = emptyList(),
+class MangaListDto(
+    private val data: List<MangaDto> = emptyList(),
     val page: Int = 1,
     val limit: Int = 0,
     val total: Int = 0,
 ) {
     val hasNextPage: Boolean
         get() = page * limit < total
+    fun toSMangaList(): List<SManga> {
+        return data.map { it.toSManga() }
+    }
 }
 
 @Serializable
-data class MangaDto(
-    val id: String,
-    val title: String,
-    val description: String = "",
-    val status: String? = null,
+class MangaDto(
+    private val id: String,
+    private val title: String,
+    private val description: String = "",
+    private val status: String? = null,
     val relationships: RelationshipsDto? = null,
 )
+{
+    @Contextual
+    private val helper = WeebDexHelper()
+    fun toSManga(): SManga {
+       return SManga.create().apply {
+            title = this@MangaDto.title
+            description = this@MangaDto.description
+            status = helper.parseStatus(this@MangaDto.status)
+            thumbnail_url = helper.buildCoverUrl(id, relationships?.cover)
+
+            relationships?.let { rel ->
+                author = rel.authors.joinToString(", ") { it.name }
+                artist = rel.artists.joinToString(", ") { it.name }
+                genre = rel.tags.joinToString(", ") { it.name }
+            }
+        }
+    }
+}
 
 @Serializable
-data class RelationshipsDto(
+class RelationshipsDto(
     val authors: List<NamedEntity> = emptyList(),
     val artists: List<NamedEntity> = emptyList(),
     val tags: List<NamedEntity> = emptyList(),
@@ -31,13 +55,12 @@ data class RelationshipsDto(
 )
 
 @Serializable
-data class NamedEntity(
-    val id: String,
+class NamedEntity(
     val name: String,
 )
 
 @Serializable
-data class CoverDto(
+class CoverDto(
     val id: String,
     val ext: String = ".jpg",
 )

@@ -3,18 +3,18 @@ package eu.kanade.tachiyomi.extension.en.weebdex
 object WeebDexConstants {
 
     // API Base URLs
-    const val apiUrl = "https://api.weebdex.org"
-    const val cdnUrl = "https://srv.notdelta.xyz"
+    const val API_URL = "https://api.weebdex.org"
+    const val CDN_URL = "https://srv.notdelta.xyz"
 
     // API Endpoints
-    const val apiMangaUrl = "$apiUrl/manga"
+    const val API_MANGA_URL = "$API_URL/manga"
 
     // CDN Endpoints
-    const val cdnCoverUrl = "$cdnUrl/covers"
-    const val cdnDataUrl = "$cdnUrl/data"
+    const val CDN_COVER_URL = "$CDN_URL/covers"
+    const val CDN_DATA_URL = "$CDN_URL/data"
 
     // Rate Limit (API is 5 req/s, using conservative value)
-    const val rateLimitUsed = 3
+    const val RATE_LIMIT = 3
 
     // Tags Map
     val tags = mapOf(
