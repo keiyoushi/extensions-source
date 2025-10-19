@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.jsoup.parser.Parser
 
 @Serializable
 class ChapterListDto(
@@ -27,6 +28,7 @@ class ChapterDto(
     private val id: String,
     private val title: String? = null,
     private val chapter: String? = null,
+    private val volume: String? = null,
     @SerialName("published_at") private val publishedAt: String = "",
     private val data: List<PageData>? = null,
     @SerialName("data_optimized") private val dataOptimized: List<PageData>? = null,
@@ -36,10 +38,38 @@ class ChapterDto(
     private val helper = WeebDexHelper()
 
     fun toSChapter(): SChapter {
+        val chapterName = mutableListOf<String>()
+        // Build chapter name
+        volume?.let {
+            if (it.isNotEmpty()) {
+                chapterName.add("Vol.$it")
+            }
+        }
+
+        chapter?.let {
+            if (it.isNotEmpty()) {
+                chapterName.add("Ch.$it")
+            }
+        }
+
+        title?.let {
+            if (it.isNotEmpty()) {
+                if (chapterName.isNotEmpty()) {
+                    chapterName.add("-")
+                }
+                chapterName.add(it)
+            }
+        }
+
+        // if volume, chapter and title is empty its a oneshot
+        if (chapterName.isEmpty()) {
+            chapterName.add("Oneshot")
+        }
+
         return SChapter.create().apply {
             url = "/chapter/$id"
-            val chapTitle = title
-            name = if (chapTitle.isNullOrBlank()) "Chapter $chapter" else chapTitle
+            name = Parser.unescapeEntities(chapterName.joinToString(" "), false)
+            chapter_number = chapter?.toFloat() ?: -2F
             date_upload = helper.parseDate(publishedAt)
             scanlator = relationships?.groups?.joinToString(", ") { it.name }
         }

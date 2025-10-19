@@ -35,7 +35,7 @@ class MangaDto(
             description = this@MangaDto.description
             status = helper.parseStatus(this@MangaDto.status)
             thumbnail_url = helper.buildCoverUrl(id, relationships?.cover)
-
+            url = "/manga/$id"
             relationships?.let { rel ->
                 author = rel.authors.joinToString(", ") { it.name }
                 artist = rel.artists.joinToString(", ") { it.name }
