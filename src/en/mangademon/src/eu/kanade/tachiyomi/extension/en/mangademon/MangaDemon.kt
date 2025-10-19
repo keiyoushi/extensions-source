@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -30,8 +31,22 @@ class MangaDemon : ParsedHttpSource() {
     override val baseUrl = "https://demonicscans.org"
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
+        .addInterceptor(::thumbnailInterceptor)
+        .rateLimit(2)
         .build()
+
+    private val thumbnailClient = network.cloudflareClient.newBuilder()
+        .rateLimit(6)
+        .build()
+
+    private fun thumbnailInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        return if (request.url.toString().contains("images/thumbnails")) {
+            thumbnailClient.newCall(request).execute()
+        } else {
+            chain.proceed(request)
+        }
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -56,7 +71,7 @@ class MangaDemon : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun latestUpdatesSelector() = "div#updates-container > div.updates-element"
+    override fun latestUpdatesSelector() = "div#updates-container > div.updates-element:not(:has(.toffee-badge))"
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         with(element.selectFirst("div.updates-element-info")!!) {
