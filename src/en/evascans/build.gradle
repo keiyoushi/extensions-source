@@ -1,0 +1,10 @@
+ext {
+    extName = 'Eva Scans'
+    extClass = '.EvaScans'
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://evascans.org'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

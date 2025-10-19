@@ -351,7 +351,29 @@ abstract class EHentai(
 
     override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String = response.asJsoup().select("#img").attr("abs:src")
+    override fun imageUrlParse(response: Response): String {
+        return imageUrlParse(response, true)
+    }
+
+    private fun imageUrlParse(response: Response, isGetBakImageUrl: Boolean): String {
+        val doc = response.asJsoup()
+        val imgUrl = doc.select("#img").attr("abs:src")
+
+        if (!isGetBakImageUrl) {
+            return imgUrl
+        }
+
+        // from https://github.com/Miuzarte/EHentai-go/blob/dd9a24adb13300c028c35f53b9eff31b51966def/query.go#L695
+        val loadfail = doc.selectFirst("#loadfail") ?: return imgUrl
+        val onclick = loadfail.attr("onclick")
+        val nlValue = Regex("nl\\('(.+?)'\\)").find(onclick)?.groupValues?.get(1)
+        if (nlValue.isNullOrEmpty()) return imgUrl
+
+        val bakUrl = response.request.url.newBuilder()
+            .addQueryParameter("nl", nlValue)
+            .toString()
+        return "$imgUrl#$bakUrl"
+    }
 
     private val cookiesHeader by lazy {
         val cookies = mutableMapOf<String, String>()
@@ -398,6 +420,25 @@ abstract class EHentai(
 
     override val client = network.cloudflareClient.newBuilder()
         .cookieJar(CookieJar.NO_COOKIES)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val result = runCatching { chain.proceed(request) }
+            val bakUrl = request.url.fragment
+                ?: return@addInterceptor result.getOrThrow()
+
+            if (result.isFailure || result.getOrNull()?.isSuccessful != true) {
+                result.getOrNull()?.close()
+                val newRequest = GET(bakUrl, headers)
+                val newImageUrl = imageUrlParse(chain.proceed(newRequest), false)
+                val newImageRequest = request.newBuilder()
+                    .url(newImageUrl)
+                    .build()
+
+                chain.proceed(newImageRequest)
+            } else {
+                result.getOrThrow()
+            }
+        }
         .addInterceptor { chain ->
             val newReq = chain
                 .request()
