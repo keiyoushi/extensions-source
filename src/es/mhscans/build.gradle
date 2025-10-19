@@ -2,7 +2,7 @@ ext {
     extName = 'MHScans'
     extClass = '.MHScans'
     themePkg = 'madara'
-    baseUrl = 'https://mh.baxoi.buzz'
+    baseUrl = 'https://mh.topmanhuas.net'
     overrideVersionCode = 7
     isNsfw = false
 }
