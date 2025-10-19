@@ -30,7 +30,7 @@ class MangaDemon : ParsedHttpSource() {
     override val baseUrl = "https://demonicscans.org"
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
+        .rateLimit(2)
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -56,7 +56,7 @@ class MangaDemon : ParsedHttpSource() {
 
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
-    override fun latestUpdatesSelector() = "div#updates-container > div.updates-element"
+    override fun latestUpdatesSelector() = "div#updates-container > div.updates-element:not(:has(.toffee-badge))"
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         with(element.selectFirst("div.updates-element-info")!!) {
