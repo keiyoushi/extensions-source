@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.clipstudioreader
+package eu.kanade.tachiyomi.lib.clipstudioreader
 
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType

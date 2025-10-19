@@ -1,10 +1,12 @@
 ext {
     extName = "DRE Comics"
     extClass = ".DreComics"
-    themePkg = 'clipstudioreader'
-    baseUrl = 'https://drecom-media.jp'
-    overrideVersionCode = 0
+    extVersionCode = 1
     isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:clipstudioreader"))
+}

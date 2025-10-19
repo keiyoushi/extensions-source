@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.drecomics
 
-import eu.kanade.tachiyomi.multisrc.clipstudioreader.ClipStudioReader
+import eu.kanade.tachiyomi.lib.clipstudioreader.ClipStudioReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -209,4 +209,7 @@ class DreComics : ClipStudioReader(
         Genre("DREコミックスF", "67"),
         Genre("完結", "65"),
     )
+
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }

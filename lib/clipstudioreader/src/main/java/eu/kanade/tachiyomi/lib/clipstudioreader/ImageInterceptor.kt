@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.multisrc.clipstudioreader
+package eu.kanade.tachiyomi.lib.clipstudioreader
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory

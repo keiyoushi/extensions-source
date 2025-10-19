@@ -1,18 +1,15 @@
-package eu.kanade.tachiyomi.multisrc.clipstudioreader
+package eu.kanade.tachiyomi.lib.clipstudioreader
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
-import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import org.jsoup.parser.Parser
 
 abstract class ClipStudioReader(
     override val name: String,
@@ -50,7 +47,7 @@ abstract class ClipStudioReader(
 
             val containerUrl = "$contentBaseUrl/META-INF/container.xml"
             val containerResponse = client.newCall(GET(containerUrl, headers)).execute()
-            val containerDoc = containerResponse.asJsoup()
+            val containerDoc = Jsoup.parse(containerResponse.body.string(), containerUrl, Parser.xmlParser())
             val opfPath = containerDoc.selectFirst("*|rootfile")?.attr("full-path")
                 ?: throw Exception("Failed to find rootfile in container.xml")
 
@@ -169,15 +166,6 @@ abstract class ClipStudioReader(
         val scrambleHeight = document.selectFirst("Scramble > Height")?.text()?.toIntOrNull()
         return FaceData(totalPages!!, scrambleWidth!!, scrambleHeight!!)
     }
-
-    override fun popularMangaRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun popularMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
-    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
-    override fun mangaDetailsParse(response: Response): SManga = throw UnsupportedOperationException()
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     companion object {
         private const val MODE_DL_FACE_XML = "7"

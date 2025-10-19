@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.firecross
 
-import eu.kanade.tachiyomi.multisrc.clipstudioreader.ClipStudioReader
+import eu.kanade.tachiyomi.lib.clipstudioreader.ClipStudioReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
@@ -167,4 +167,8 @@ class FireCross : ClipStudioReader(
             ),
         )
     }
+
+    // Unsupported
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException()
+    override fun latestUpdatesParse(response: Response): MangasPage = throw UnsupportedOperationException()
 }
