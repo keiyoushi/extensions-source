@@ -26,12 +26,11 @@ class MangaDto(
     private val description: String = "",
     private val status: String? = null,
     val relationships: RelationshipsDto? = null,
-)
-{
+) {
     @Contextual
     private val helper = WeebDexHelper()
     fun toSManga(): SManga {
-       return SManga.create().apply {
+        return SManga.create().apply {
             title = this@MangaDto.title
             description = this@MangaDto.description
             status = helper.parseStatus(this@MangaDto.status)

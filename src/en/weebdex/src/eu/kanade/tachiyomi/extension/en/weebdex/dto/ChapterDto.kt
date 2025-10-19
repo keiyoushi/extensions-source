@@ -31,14 +31,13 @@ class ChapterDto(
     private val data: List<PageData>? = null,
     @SerialName("data_optimized") private val dataOptimized: List<PageData>? = null,
     private val relationships: ChapterRelationshipsDto? = null,
-)
-{
+) {
     @Contextual
     private val helper = WeebDexHelper()
 
     fun toSChapter(): SChapter {
-       return SChapter.create().apply {
-            url = "/chapter/${id}"
+        return SChapter.create().apply {
+            url = "/chapter/$id"
             val chapTitle = title
             name = if (chapTitle.isNullOrBlank()) "Chapter $chapter" else chapTitle
             date_upload = helper.parseDate(publishedAt)
