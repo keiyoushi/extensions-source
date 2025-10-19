@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.qtoon
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,6 +16,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 
 class QToon(
     override val lang: String,
@@ -51,6 +53,39 @@ class QToon(
 
     override fun latestUpdatesParse(response: Response) =
         searchMangaParse(response)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith("https://")) {
+            val urlPath = query.toHttpUrl().pathSegments
+            val csid = if (
+                urlPath.size == 2 &&
+                (urlPath[0] == "detail" || urlPath[0] == "reader") &&
+                siteLang == "en-US"
+            ) {
+                urlPath[1]
+            } else if (
+                urlPath.size == 3 &&
+                (urlPath[1] == "detail" || urlPath[1] == "reader") &&
+                urlPath[0] == siteLang.split("-", limit = 2)[0]
+            ) {
+                urlPath[2]
+            } else {
+                return Observable.just(MangasPage(emptyList(), false))
+            }
+
+            val url = apiUrl.toHttpUrl().newBuilder().apply {
+                addPathSegments("api/w/comic/detail")
+                addQueryParameter("csid", csid)
+            }.build()
+
+            return client.newCall(apiRequest(url))
+                .asObservableSuccess()
+                .map(::mangaDetailsParse)
+                .map { MangasPage(listOf(it), false) }
+        }
+
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
@@ -161,6 +196,7 @@ class QToon(
                 "finish" -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
+            initialized = true
         }
     }
 
