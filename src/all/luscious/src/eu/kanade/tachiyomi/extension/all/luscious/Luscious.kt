@@ -57,8 +57,8 @@ abstract class Luscious(
     private val json: Json by injectLazy()
 
     override fun headersBuilder(): Headers.Builder {
-        return Headers.Builder()
-            .add("Referer", getMirrorPref() ?: "https://www.luscious.net/")
+        return super.headersBuilder()
+            .add("Referer", "$baseUrl/")
     }
 
     override val client: OkHttpClient
