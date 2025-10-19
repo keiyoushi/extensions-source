@@ -1,5 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.qtoon
 
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.toJsonString
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -9,17 +11,9 @@ class EncryptedResponse(
 )
 
 @Serializable
-class Comics(
+class ComicsList(
     val comics: List<Comic>,
     val more: Int,
-)
-
-@Serializable
-class Comic(
-    val csid: String,
-    val webLinkId: String? = null,
-    val title: String,
-    val image: Image,
 )
 
 @Serializable
@@ -40,22 +34,45 @@ class Thumb(
 
 @Serializable
 class ComicDetailsResponse(
-    val comic: ComicDetails,
+    val comic: Comic,
 )
 
 @Serializable
-class ComicDetails(
+class Comic(
     val csid: String,
     val webLinkId: String? = null,
     val title: String,
     val image: Image,
     val tags: List<Tag>,
     val author: String? = null,
-    val serialStatus: String,
+    val serialStatus2: Int,
     val updateMemo: String? = null,
     val introduction: String,
     val corners: Corner,
-)
+) {
+    fun toSManga() = SManga.create().apply {
+        url = ComicUrl(csid, webLinkId.orEmpty()).toJsonString()
+        title = this@Comic.title
+        thumbnail_url = image.thumb.url
+        author = this@Comic.author
+        description = buildString {
+            append(introduction)
+            if (!updateMemo.isNullOrBlank()) {
+                append("\n\nUpdates: ", updateMemo)
+            }
+        }
+        genre = buildSet {
+            tags.mapTo(this) { it.name }
+            corners.cornerTags.mapTo(this) { it.name }
+        }.joinToString()
+        status = when (serialStatus2) {
+            101 -> SManga.ONGOING
+            103 -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+        initialized = true
+    }
+}
 
 @Serializable
 class Tag(

@@ -134,16 +134,10 @@ class QToon(
     )
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val data = response.decryptAs<Comics>()
+        val data = response.decryptAs<ComicsList>()
 
         return MangasPage(
-            mangas = data.comics.map { comic ->
-                SManga.create().apply {
-                    url = ComicUrl(comic.csid, comic.webLinkId.orEmpty()).toJsonString()
-                    title = comic.title
-                    thumbnail_url = comic.image.thumb.url
-                }
-            },
+            mangas = data.comics.map(Comic::toSManga),
             hasNextPage = data.more == 1,
         )
     }
@@ -176,28 +170,7 @@ class QToon(
     override fun mangaDetailsParse(response: Response): SManga {
         val comic = response.decryptAs<ComicDetailsResponse>().comic
 
-        return SManga.create().apply {
-            url = ComicUrl(comic.csid, comic.webLinkId.orEmpty()).toJsonString()
-            title = comic.title
-            thumbnail_url = comic.image.thumb.url
-            author = comic.author
-            description = buildString {
-                append(comic.introduction)
-                if (!comic.updateMemo.isNullOrBlank()) {
-                    append("\n\nUpdates: ", comic.updateMemo)
-                }
-            }
-            genre = buildSet {
-                comic.tags.mapTo(this) { it.name }
-                comic.corners.cornerTags.mapTo(this) { it.name }
-            }.joinToString()
-            status = when (comic.serialStatus.lowercase()) {
-                "serializing" -> SManga.ONGOING
-                "finish" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-            initialized = true
-        }
+        return comic.toSManga()
     }
 
     override fun chapterListRequest(manga: SManga) =
