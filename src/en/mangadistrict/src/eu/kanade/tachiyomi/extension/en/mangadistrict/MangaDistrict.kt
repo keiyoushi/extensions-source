@@ -330,7 +330,7 @@ class MangaDistrict :
                         override fun onTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
 
                         override fun afterTextChanged(editable: Editable?) {
-                            requireNotNull(editable)
+                            editable ?: return
                             val text = editable.toString()
                             val valid = validate(text)
                             editText.error = if (!valid.first) valid.second else null
