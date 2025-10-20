@@ -11,13 +11,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser
 
-abstract class ClipStudioReader(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
-    override val supportsLatest = false
-
+abstract class ClipStudioReader : HttpSource() {
     override val client = super.client.newBuilder()
         .addInterceptor(Deobfuscator())
         .addInterceptor(ImageInterceptor())

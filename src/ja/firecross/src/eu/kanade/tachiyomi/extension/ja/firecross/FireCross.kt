@@ -23,11 +23,12 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class FireCross : ClipStudioReader(
-    "FireCross",
-    "https://firecross.jp",
-    "ja",
-) {
+class FireCross : ClipStudioReader() {
+    override val name = "FireCross"
+    override val baseUrl = "https://firecross.jp"
+    override val lang = "ja"
+    override val supportsLatest = false
+
     private val apiUrl = "$baseUrl/api"
     private val dateFormat = SimpleDateFormat("yyyy/M/d", Locale.JAPAN)
 

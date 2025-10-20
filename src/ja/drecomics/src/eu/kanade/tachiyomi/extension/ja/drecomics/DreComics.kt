@@ -15,11 +15,12 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DreComics : ClipStudioReader(
-    "DRE Comics",
-    "https://drecom-media.jp",
-    "ja",
-) {
+class DreComics : ClipStudioReader() {
+    override val name = "DRE Comics"
+    override val baseUrl = "https://drecom-media.jp"
+    override val lang = "ja"
+    override val supportsLatest = false
+
     private val dateFormat = SimpleDateFormat("yyyy年MM月dd日", Locale.JAPAN)
 
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/drecomics/series", headers)
