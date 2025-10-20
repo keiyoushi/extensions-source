@@ -149,7 +149,7 @@ open class BatoTo(
         val manga = SManga.create()
         val item = element.select("a.item-cover")
         val imgurl = item.select("img").attr("abs:src")
-        manga.setUrlWithoutDomain(item.attr("href"))
+        manga.setUrlWithoutDomain(stripSeriesUrl(item.attr("href")))
         manga.title = element.select("a.item-title").text().removeEntities()
         manga.thumbnail_url = imgurl
         return manga
@@ -277,7 +277,7 @@ open class BatoTo(
         manga.title = infoElement.select("h3").text().removeEntities()
         manga.thumbnail_url = document.select("div.attr-cover img")
             .attr("abs:src")
-        manga.setUrlWithoutDomain(infoElement.select("h3 a").attr("abs:href"))
+        manga.setUrlWithoutDomain(stripSeriesUrl(infoElement.select("h3 a").attr("abs:href")))
         return MangasPage(listOf(manga), false)
     }
 
@@ -308,7 +308,7 @@ open class BatoTo(
 
     private fun searchUtilsFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.setUrlWithoutDomain(element.select("td a").attr("href"))
+        manga.setUrlWithoutDomain(stripSeriesUrl(element.select("td a").attr("href")))
         manga.title = element.select("td a").text()
         manga.thumbnail_url = element.select("img").attr("abs:src")
         return manga
@@ -316,7 +316,7 @@ open class BatoTo(
 
     private fun searchHistoryFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.setUrlWithoutDomain(element.select(".position-relative a").attr("href"))
+        manga.setUrlWithoutDomain(stripSeriesUrl(element.select(".position-relative a").attr("href")))
         manga.title = element.select(".position-relative a").text()
         manga.thumbnail_url = element.select("img").attr("abs:src")
         return manga
@@ -424,9 +424,9 @@ open class BatoTo(
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        return if (getAltChapterListPref()) {
-            val id = manga.url.substringBeforeLast("/").substringAfterLast("/").trim()
-
+        val id = seriesIdRegex.find(manga.url)
+            ?.groups?.get(1)?.value?.trim()
+        return if (getAltChapterListPref() && !id.isNullOrBlank()) {
             GET("$baseUrl/rss/series/$id.xml", headers)
         } else if (manga.url.startsWith("http")) {
             // Check if trying to use a deprecated mirror, force current mirror
@@ -1026,7 +1026,14 @@ open class BatoTo(
         CheckboxFilterOption("pt-PT", "Portuguese (Portugal)"),
     ).filterNot { it.value == siteLang }
 
+    private fun stripSeriesUrl(url: String): String {
+        val matchResult = seriesUrlRegex.find(url)
+        return matchResult?.groups?.get(1)?.value ?: url
+    }
+
     companion object {
+        private val seriesUrlRegex = Regex("""(.*/series/\d+)/.*""")
+        private val seriesIdRegex = Regex("""series/(\d+)""")
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
