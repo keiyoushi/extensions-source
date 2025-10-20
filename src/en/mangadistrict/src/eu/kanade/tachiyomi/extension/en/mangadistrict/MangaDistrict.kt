@@ -316,11 +316,12 @@ class MangaDistrict :
             setOnPreferenceChangeListener { _, newValue ->
                 runCatching {
                     Regex(newValue as String)
+                    summary = newValue
                 }.onFailure {
                     Toast.makeText(screen.context, it.message, Toast.LENGTH_LONG).show()
                 }.isSuccess
             }
-        }.also { screen.addPreference(it) }
+        }.let(screen::addPreference)
 
         ListPreference(screen.context).apply {
             key = IMG_RES_PREF
