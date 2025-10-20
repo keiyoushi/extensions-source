@@ -13,6 +13,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:host="qtoon.com" />
+                <data android:host="www.qtoon.com" />
                 <data android:scheme="https" />
 
                 <data android:pathPattern="/detail/..*" />
