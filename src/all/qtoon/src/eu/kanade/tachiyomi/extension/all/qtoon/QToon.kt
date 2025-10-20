@@ -160,7 +160,8 @@ class QToon(
         return buildString {
             append(baseUrl)
             if (siteLangDir != "en") {
-                append("/$siteLangDir")
+                append("/")
+                append(siteLangDir)
             }
             append("/detail/")
             append(comicUrl.webLinkId.ifBlank { comicUrl.csid })
@@ -207,7 +208,8 @@ class QToon(
         return buildString {
             append(baseUrl)
             if (siteLangDir != "en") {
-                append("/$siteLangDir")
+                append(("/"))
+                append(siteLangDir)
             }
             append("/reader/")
             append(episodeUrl.csid)
