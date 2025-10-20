@@ -317,13 +317,10 @@ class MangaDistrict :
             summary = customRemoveTitle()
             setDefaultValue("")
 
-            val validate = validate@{ str: String ->
-                try {
-                    Regex(str)
-                } catch (e: Exception) {
-                    return@validate false to e.message
-                }
-                return@validate true to ""
+            val validate = { str: String ->
+                runCatching { Regex(str) }
+                    .map { true to "" }
+                    .getOrElse { false to it.message }
             }
 
             setOnBindEditTextListener { editText ->
@@ -344,12 +341,13 @@ class MangaDistrict :
             }
 
             setOnPreferenceChangeListener { _, newValue ->
-                runCatching {
-                    Regex(newValue as String)
+                val (isValid, message) = validate(newValue as String)
+                if (isValid) {
                     summary = newValue
-                }.onFailure {
-                    Toast.makeText(screen.context, it.message, Toast.LENGTH_LONG).show()
-                }.isSuccess
+                } else {
+                    Toast.makeText(screen.context, message, Toast.LENGTH_LONG).show()
+                }
+                isValid
             }
         }.let(screen::addPreference)
 
