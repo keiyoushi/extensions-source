@@ -1,5 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.hiperdex
 
+import android.text.Editable
+import android.text.TextWatcher
+import android.widget.Button
 import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
@@ -71,12 +74,38 @@ class Hiperdex :
             title = "Custom regex to be removed from title"
             summary = customRemoveTitle()
             setDefaultValue("")
+
+            val validate = { str: String ->
+                runCatching { Regex(str) }
+                    .map { true to "" }
+                    .getOrElse { false to it.message }
+            }
+
+            setOnBindEditTextListener { editText ->
+                editText.addTextChangedListener(
+                    object : TextWatcher {
+                        override fun beforeTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+                        override fun onTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+
+                        override fun afterTextChanged(editable: Editable?) {
+                            editable ?: return
+                            val text = editable.toString()
+                            val valid = validate(text)
+                            editText.error = if (!valid.first) valid.second else null
+                            editText.rootView.findViewById<Button>(android.R.id.button1)?.isEnabled = editText.error == null
+                        }
+                    },
+                )
+            }
+
             setOnPreferenceChangeListener { _, newValue ->
-                runCatching {
-                    Regex(newValue as String)
-                }.onFailure {
-                    Toast.makeText(screen.context, it.message, Toast.LENGTH_LONG).show()
-                }.isSuccess
+                val (isValid, message) = validate(newValue as String)
+                if (isValid) {
+                    summary = newValue
+                } else {
+                    Toast.makeText(screen.context, message, Toast.LENGTH_LONG).show()
+                }
+                isValid
             }
         }.also { screen.addPreference(it) }
 

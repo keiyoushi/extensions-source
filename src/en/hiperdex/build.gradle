@@ -1,5 +1,5 @@
 ext {
-    kmkVersionCode = 1
+    kmkVersionCode = 2
     extName = 'Hiperdex'
     extClass = '.Hiperdex'
     themePkg = 'madara'
