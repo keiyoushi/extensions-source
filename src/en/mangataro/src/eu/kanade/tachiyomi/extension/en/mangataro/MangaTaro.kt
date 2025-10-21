@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -88,24 +89,15 @@ class MangaTaro : HttpSource() {
             page = page,
             search = query.trim(),
             years = filters.firstInstanceOrNull<YearFilter>()
-                ?.selected
-                .let(::listOfNotNull)
-                .toJsonString(),
+                ?.selected.let(::listOfNotNull),
             genres = filters.firstInstanceOrNull<TagFilter>()
-                ?.checked
-                .orEmpty()
-                .map(String::toInt)
-                .toJsonString(),
+                ?.checked.orEmpty(),
             types = filters.firstInstanceOrNull<TypeFilter>()
-                ?.selected
-                .let(::listOfNotNull)
-                .toJsonString(),
+                ?.selected.let(::listOfNotNull),
             statuses = filters.firstInstanceOrNull<StatusFilter>()
-                ?.selected
-                .let(::listOfNotNull)
-                .toJsonString(),
-            sort = filters.firstInstanceOrNull<SortFilter>()?.selected.orEmpty(),
-            genreMatchMode = filters.firstInstanceOrNull<TagFilterMatch>()?.selected.orEmpty(),
+                ?.selected.let(::listOfNotNull),
+            sort = filters.firstInstance<SortFilter>().selected,
+            genreMatchMode = filters.firstInstance<TagFilterMatch>().selected,
         ).toJsonString().toRequestBody("application/json".toMediaType())
 
         return POST("$baseUrl/wp-json/manga/v1/load", headers, body)

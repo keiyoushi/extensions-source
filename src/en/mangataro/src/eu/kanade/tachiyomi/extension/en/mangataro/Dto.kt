@@ -1,19 +1,36 @@
 package eu.kanade.tachiyomi.extension.en.mangataro
 
+import keiyoushi.utils.toJsonString
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
 
 @Serializable
 class SearchPayload(
     private val page: Int,
     private val search: String,
-    private val years: String,
-    private val genres: String,
-    private val types: String,
-    private val statuses: String,
+    @Serializable(with = StringifiedListSerializer::class)
+    private val years: List<Int>,
+    @Serializable(with = StringifiedListSerializer::class)
+    private val genres: List<Int>,
+    @Serializable(with = StringifiedListSerializer::class)
+    private val types: List<String>,
+    @Serializable(with = StringifiedListSerializer::class)
+    private val statuses: List<String>,
     private val sort: String,
     private val genreMatchMode: String,
 )
+
+class StringifiedListSerializer<T>(elementSerializer: KSerializer<T>) :
+    JsonTransformingSerializer<List<T>>(ListSerializer(elementSerializer)) {
+
+    override fun transformSerialize(element: JsonElement) =
+        JsonPrimitive(element.toJsonString())
+}
 
 @Serializable
 class BrowseManga(
