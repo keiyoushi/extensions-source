@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.en.mangataro
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -54,9 +55,47 @@ class MangaTaro : HttpSource() {
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (query.startsWith("https://")) {
             deeplinkHandler(query)
+        } else if (
+            query.isNotBlank() &&
+            filters.firstInstanceOrNull<SearchWithFilters>()?.state == false
+        ) {
+            querySearch(query)
         } else {
             super.fetchSearchManga(page, query, filters)
         }
+    }
+
+    private fun querySearch(query: String): Observable<MangasPage> {
+        val body = SearchQueryPayload(
+            query = query.trim(),
+            limit = 25,
+        ).toJsonString().toRequestBody("application/json".toMediaType())
+
+        return client.newCall(POST("$baseUrl/auth/search", headers, body))
+            .asObservableSuccess()
+            .map { response ->
+                val data = response.parseAs<SearchQueryResponse>().results
+
+                val mangas = data.filter { it.type != "Novel" }
+                    .map {
+                        SManga.create().apply {
+                            url = MangaUrl(it.id.toString(), it.slug).toJsonString()
+                            title = it.title
+                            thumbnail_url = it.thumbnail
+                            description = it.description
+                            status = when (it.status) {
+                                "Ongoing" -> SManga.ONGOING
+                                "Completed" -> SManga.COMPLETED
+                                else -> SManga.UNKNOWN
+                            }
+                        }
+                    }
+
+                MangasPage(
+                    mangas = mangas,
+                    hasNextPage = false,
+                )
+            }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -79,6 +118,10 @@ class MangaTaro : HttpSource() {
     }
 
     override fun getFilterList() = FilterList(
+        SearchWithFilters(),
+        Filter.Header("If unchecked, all filters will be ignored with search query"),
+        Filter.Header("But will give more relevant results"),
+        Filter.Separator(),
         SortFilter(),
         TypeFilter(),
         StatusFilter(),
@@ -124,6 +167,10 @@ class MangaTaro : HttpSource() {
                     "ongoing" -> SManga.ONGOING
                     "completed" -> SManga.COMPLETED
                     else -> SManga.UNKNOWN
+                }
+
+                if (document.selectFirst(".manga-page-wrapper span:contains(Novel)") != null) {
+                    throw Exception("Novels are not supported")
                 }
 
                 id to status

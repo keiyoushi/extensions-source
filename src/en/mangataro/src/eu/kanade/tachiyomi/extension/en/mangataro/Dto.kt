@@ -34,6 +34,29 @@ class StringifiedListSerializer<T>(elementSerializer: KSerializer<T>) :
 }
 
 @Serializable
+@Suppress("unused")
+class SearchQueryPayload(
+    val limit: Int,
+    val query: String,
+)
+
+@Serializable
+class SearchQueryResponse(
+    val results: List<Manga>,
+) {
+    @Serializable
+    class Manga(
+        val id: Int,
+        val slug: String,
+        val title: String,
+        val thumbnail: String,
+        val type: String,
+        val description: String,
+        val status: String,
+    )
+}
+
+@Serializable
 class BrowseManga(
     val id: String,
     val url: String,

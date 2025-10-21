@@ -26,6 +26,8 @@ abstract class CheckBoxGroup<T>(
     val checked get() = state.filter { it.state }.map { it.value }
 }
 
+class SearchWithFilters : Filter.CheckBox("Apply filters to Text Search", false)
+
 class TypeFilter : SelectFilter<String?>(
     name = "Type",
     options = listOf(
