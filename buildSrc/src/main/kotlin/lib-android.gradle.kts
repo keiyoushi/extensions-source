@@ -18,6 +18,7 @@ android {
 
 dependencies {
     compileOnly(versionCatalogs.named("libs").findBundle("common").get())
+    implementation(project(":core"))
 }
 
 tasks.register("printDependentExtensions") {
