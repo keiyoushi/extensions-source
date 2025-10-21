@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTransformingSerializer
 
 @Serializable
+@Suppress("unused")
 class SearchPayload(
     private val page: Int,
     private val search: String,

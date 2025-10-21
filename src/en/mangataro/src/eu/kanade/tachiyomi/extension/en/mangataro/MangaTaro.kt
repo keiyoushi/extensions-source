@@ -59,31 +59,6 @@ class MangaTaro : HttpSource() {
         }
     }
 
-    private fun deeplinkHandler(url: String): Observable<MangasPage> {
-        val slug = url.toSlug()
-
-        return client.newCall(GET("$baseUrl/manga/$slug", headers))
-            .asObservableSuccess()
-            .map {
-                val document = it.asJsoup()
-
-                val id = document.body().dataset()["manga-id"]!!
-                val status = when (document.selectFirst(".manga-page-wrapper span.capitalize")?.text()?.lowercase()) {
-                    "ongoing" -> SManga.ONGOING
-                    "completed" -> SManga.COMPLETED
-                    else -> SManga.UNKNOWN
-                }
-
-                id to status
-            }
-            .switchMap {
-                client.newCall(mangaDetailsRequest(it.first, it.second))
-                    .asObservableSuccess()
-                    .map(::mangaDetailsParse)
-            }
-            .map { MangasPage(listOf(it), false) }
-    }
-
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val body = SearchPayload(
             page = page,
@@ -134,6 +109,31 @@ class MangaTaro : HttpSource() {
             mangas = mangas,
             hasNextPage = data.size == 24,
         )
+    }
+
+    private fun deeplinkHandler(url: String): Observable<MangasPage> {
+        val slug = url.toSlug()
+
+        return client.newCall(GET("$baseUrl/manga/$slug", headers))
+            .asObservableSuccess()
+            .map {
+                val document = it.asJsoup()
+
+                val id = document.body().dataset()["manga-id"]!!
+                val status = when (document.selectFirst(".manga-page-wrapper span.capitalize")?.text()?.lowercase()) {
+                    "ongoing" -> SManga.ONGOING
+                    "completed" -> SManga.COMPLETED
+                    else -> SManga.UNKNOWN
+                }
+
+                id to status
+            }
+            .switchMap {
+                client.newCall(mangaDetailsRequest(it.first, it.second))
+                    .asObservableSuccess()
+                    .map(::mangaDetailsParse)
+            }
+            .map { MangasPage(listOf(it), false) }
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
