@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -32,11 +31,6 @@ class WeebDex : HttpSource() {
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-    }
-
     // -------------------- Popular --------------------
 
     override fun popularMangaRequest(page: Int): Request {
@@ -50,7 +44,7 @@ class WeebDex : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val mangaListDto = response.parseAs<MangaListDto>(json)
+        val mangaListDto = response.parseAs<MangaListDto>()
         val mangas = mangaListDto.toSMangaList()
         return MangasPage(mangas, mangaListDto.hasNextPage)
     }
@@ -133,7 +127,7 @@ class WeebDex : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val manga = response.parseAs<MangaDto>(json)
+        val manga = response.parseAs<MangaDto>()
         return manga.toSManga()
     }
 
@@ -155,12 +149,12 @@ class WeebDex : HttpSource() {
                     .setQueryParameter("page", (chapterListDto.page + 1).toString())
                     .build()
                 val nextResponse = client.newCall(GET(nextUrl, headers)).execute()
-                val nextChapterListDto = nextResponse.parseAs<ChapterListDto>(json)
+                val nextChapterListDto = nextResponse.parseAs<ChapterListDto>()
                 parsePage(nextChapterListDto)
             }
         }
 
-        parsePage(response.parseAs<ChapterListDto>(json))
+        parsePage(response.parseAs<ChapterListDto>())
         return chapters
     }
 
@@ -171,7 +165,7 @@ class WeebDex : HttpSource() {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapter = response.parseAs<ChapterDto>(json)
+        val chapter = response.parseAs<ChapterDto>()
         return chapter.toPageList()
     }
 
