@@ -90,7 +90,7 @@ class MangaDistrict :
         return super.chapterFromElement(element).apply {
             val urlKey = url.urlKey()
             val dates = preferences.dates
-            preferences.dates[urlKey]?.also {
+            dates[urlKey]?.also {
                 if (date_upload == 0L) {
                     // If date_upload is not set (due to NEW tag), try to get it from the page lists
                     date_upload = it
