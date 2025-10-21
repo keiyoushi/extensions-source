@@ -284,6 +284,7 @@ class Picacomic : HttpSource(), ConfigurableSource {
                 .distinct()
                 .joinToString(", ")
             status = if (comic.finished) SManga.COMPLETED else SManga.ONGOING
+            thumbnail_url = comic.thumb.let { "${it.fileServer}/static/${it.path}" }
         }
     }
 
