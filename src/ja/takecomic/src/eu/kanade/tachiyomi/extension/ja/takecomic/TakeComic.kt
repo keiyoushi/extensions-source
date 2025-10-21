@@ -27,6 +27,7 @@ class TakeComic : ComiciViewer(
     "https://takecomic.jp",
     "ja",
 ) {
+    private val apiUrl = "$baseUrl/api"
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -50,7 +51,7 @@ class TakeComic : ComiciViewer(
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
-            val url = "$baseUrl/api/search".toHttpUrl().newBuilder()
+            val url = "$apiUrl/search".toHttpUrl().newBuilder()
                 .addQueryParameter("q", query)
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("size", SEARCH_PAGE_SIZE.toString())
@@ -84,7 +85,7 @@ class TakeComic : ComiciViewer(
 
     override fun mangaDetailsParse(response: Response): SManga {
         val seriesHash = response.request.url.pathSegments.last()
-        val apiUrl = "$baseUrl/api/episodes".toHttpUrl().newBuilder()
+        val apiUrl = "$apiUrl/episodes".toHttpUrl().newBuilder()
             .addQueryParameter("seriesHash", seriesHash)
             .build()
         val apiRequest = GET(apiUrl, headers)
@@ -94,7 +95,7 @@ class TakeComic : ComiciViewer(
 
     override fun chapterListRequest(manga: SManga): Request {
         val seriesHash = manga.url.substringAfterLast("/")
-        val apiUrl = "$baseUrl/api/episodes".toHttpUrl().newBuilder()
+        val apiUrl = "$apiUrl/episodes".toHttpUrl().newBuilder()
             .addQueryParameter("seriesHash", seriesHash)
             .addQueryParameter("episodeFrom", "1")
             .addQueryParameter("episodeTo", "9999")
@@ -106,7 +107,7 @@ class TakeComic : ComiciViewer(
         val apiResponse = response.parseAs<ApiResponse>()
         val seriesHash = response.request.url.queryParameter("seriesHash")!!
 
-        val accessUrl = "$baseUrl/api/series/access".toHttpUrl().newBuilder()
+        val accessUrl = "$apiUrl/series/access".toHttpUrl().newBuilder()
             .addQueryParameter("seriesHash", seriesHash)
             .addQueryParameter("episodeFrom", "1")
             .addQueryParameter("episodeTo", "9999")
@@ -136,7 +137,7 @@ class TakeComic : ComiciViewer(
         var memberJwt: String? = null
 
         try {
-            val apiUrl = "$baseUrl/api/episodes/$episodeId"
+            val apiUrl = "$apiUrl/episodes/$episodeId"
             val accessRequest = GET(apiUrl, headers, CacheControl.FORCE_NETWORK)
             val apiResponse = client.newCall(accessRequest).execute()
             if (apiResponse.isSuccessful) {
@@ -154,13 +155,13 @@ class TakeComic : ComiciViewer(
         }
 
         val userId = try {
-            val userInfoResponse = client.newCall(GET("$baseUrl/api/user/info", headers)).execute()
+            val userInfoResponse = client.newCall(GET("$apiUrl/user/info", headers)).execute()
             userInfoResponse.parseAs<UserInfoApiResponse>().user?.id
         } catch (e: Exception) {
             memberJwt
         }
 
-        val requestUrl = "$baseUrl/api/book/contentsInfo".toHttpUrl().newBuilder()
+        val requestUrl = "$apiUrl/book/contentsInfo".toHttpUrl().newBuilder()
             .addQueryParameter("comici-viewer-id", comiciViewerId)
             .addQueryParameter("user-id", userId)
             .addQueryParameter("page-from", "0")
