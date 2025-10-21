@@ -41,7 +41,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val id: Long = 6425642624422299254
 
-    private val defaultBaseUrl = "https://vlogtruyen54.com"
+    private val defaultBaseUrl = "https://vlogtruyen55.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
