@@ -88,11 +88,15 @@ class MangaDistrict :
 
     override fun chapterFromElement(element: Element): SChapter {
         return super.chapterFromElement(element).apply {
-            if (date_upload == 0L) {
-                // If date_upload is not set (due to NEW tag), try to get it from the page lists
-                val urlKey = url.urlKey()
-                preferences.dates[urlKey]?.also {
+            val urlKey = url.urlKey()
+            val dates = preferences.dates
+            preferences.dates[urlKey]?.also {
+                if (date_upload == 0L) {
+                    // If date_upload is not set (due to NEW tag), try to get it from the page lists
                     date_upload = it
+                } else {
+                    dates.remove(urlKey)
+                    preferences.dates = dates
                 }
             }
         }
