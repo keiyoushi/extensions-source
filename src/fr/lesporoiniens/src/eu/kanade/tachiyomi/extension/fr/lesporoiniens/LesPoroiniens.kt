@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.extension.fr.lesporoiniens
 import eu.kanade.tachiyomi.multisrc.scanr.ScanR
 
 class LesPoroiniens : ScanR(
-    "Les Poroiniens",
-    "https://lesporoiniens.org",
-    "fr",
-    false,
-    "_",
+    name = "Les Poroiniens",
+    baseUrl = "https://lesporoiniens.org",
+    lang = "fr",
+    useHighLowQualityCover = false,
+    slugSeparator = "_",
 )

@@ -32,7 +32,6 @@ abstract class ScanR(
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        println("popularMangaRequest called")
         return GET("$baseUrl/data/config.json", headers)
     }
 
@@ -85,10 +84,8 @@ abstract class ScanR(
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)!!.html()
-        println("jsonData")
 
         val seriesData = jsonData.parseAs<SeriesData>()
-        println("seriesData")
         return seriesData.toDetailedSManga(useHighLowQualityCover, slugSeparator)
     }
 
