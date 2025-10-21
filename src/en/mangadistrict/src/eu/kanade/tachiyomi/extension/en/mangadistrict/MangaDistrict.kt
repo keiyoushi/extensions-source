@@ -52,7 +52,15 @@ class MangaDistrict :
         } catch (_: Exception) {}
     }
 
+    override fun popularMangaFromElement(element: Element): SManga {
+        return super.popularMangaFromElement(element)
+    }
+
     override fun popularMangaNextPageSelector() = "div[role=navigation] span.current + a.page"
+
+    override fun latestUpdatesFromElement(element: Element): SManga {
+        return super.latestUpdatesFromElement(element)
+    }
 
     override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
