@@ -198,6 +198,7 @@ open class BatoTo(
         val imgurl = item.select("img").attr("abs:src")
         manga.setUrlWithoutDomain(item.attr("href"))
         manga.title = element.select("a.item-title").text().removeEntities()
+            .cleanTitleIfNeeded()
         manga.thumbnail_url = imgurl
         return manga
     }
@@ -322,6 +323,7 @@ open class BatoTo(
         val infoElement = document.select("div#mainer div.container-fluid")
         val manga = SManga.create()
         manga.title = infoElement.select("h3").text().removeEntities()
+            .cleanTitleIfNeeded()
         manga.thumbnail_url = document.select("div.attr-cover img")
             .attr("abs:src")
         manga.setUrlWithoutDomain(infoElement.select("h3 a").attr("abs:href"))
@@ -357,6 +359,7 @@ open class BatoTo(
         val manga = SManga.create()
         manga.setUrlWithoutDomain(element.select("td a").attr("href"))
         manga.title = element.select("td a").text()
+            .cleanTitleIfNeeded()
         manga.thumbnail_url = element.select("img").attr("abs:src")
         return manga
     }
@@ -365,6 +368,7 @@ open class BatoTo(
         val manga = SManga.create()
         manga.setUrlWithoutDomain(element.select(".position-relative a").attr("href"))
         manga.title = element.select(".position-relative a").text()
+            .cleanTitleIfNeeded()
         manga.thumbnail_url = element.select("img").attr("abs:src")
         return manga
     }
@@ -399,7 +403,7 @@ open class BatoTo(
         val manga = SManga.create()
         val workStatus = infoElement.selectFirst("div.attr-item:contains(original work) span")?.text()
         val uploadStatus = infoElement.selectFirst("div.attr-item:contains(upload status) span")?.text()
-        val title = infoElement.select("h3").text().removeEntities()
+        val originalTitle = infoElement.select("h3").text().removeEntities()
         val description = buildString {
             append(infoElement.select("div.limit-html").text())
             infoElement.selectFirst(".episode-list > .alert-warning")?.also {
@@ -413,27 +417,15 @@ open class BatoTo(
                 append(it.text().split('/').joinToString("\n") { "• ${it.trim()}" })
             }
         }.trim()
-
-        val cleanedTitle = title.let { originalTitle ->
-            var tempTitle = originalTitle
-            customRemoveTitle().takeIf { it.isNotEmpty() }?.let { customRegex ->
-                runCatching {
-                    tempTitle = tempTitle.replace(Regex(customRegex), "")
-                }
-            }
-            if (isRemoveTitleVersion()) {
-                tempTitle = tempTitle.replace(titleRegex, "")
-            }
-            tempTitle.trim()
-        }
+        val cleanedTitle = originalTitle.cleanTitleIfNeeded()
 
         manga.title = cleanedTitle
         manga.author = infoElement.select("div.attr-item:contains(author) span").text()
         manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
         manga.status = parseStatus(workStatus, uploadStatus)
         manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
-        manga.description = if (title.trim() != cleanedTitle) {
-            listOf(title, description)
+        manga.description = if (originalTitle.trim() != cleanedTitle) {
+            listOf(originalTitle, description)
                 .joinToString("\n\n")
         } else {
             description
@@ -627,6 +619,19 @@ open class BatoTo(
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private fun String.removeEntities(): String = Parser.unescapeEntities(this, true)
+
+    private fun String.cleanTitleIfNeeded(): String {
+        var tempTitle = this
+        customRemoveTitle().takeIf { it.isNotEmpty() }?.let { customRegex ->
+            runCatching {
+                tempTitle = tempTitle.replace(Regex(customRegex), "")
+            }
+        }
+        if (isRemoveTitleVersion()) {
+            tempTitle = tempTitle.replace(titleRegex, "")
+        }
+        return tempTitle.trim()
+    }
 
     override fun getFilterList() = FilterList(
         LetterFilter(getLetterFilter(), 0),
