@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.getPreferences
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -112,28 +113,48 @@ class Hiperdex :
         addRandomUAPreferenceToScreen(screen)
     }
 
+    override fun popularMangaFromElement(element: Element): SManga {
+        return super.popularMangaFromElement(element).apply {
+            title = title.cleanTitleIfNeeded()
+        }
+    }
+
+    override fun latestUpdatesFromElement(element: Element): SManga {
+        return super.latestUpdatesFromElement(element).apply {
+            title = title.cleanTitleIfNeeded()
+        }
+    }
+
+    override fun searchMangaFromElement(element: Element): SManga {
+        return super.searchMangaFromElement(element).apply {
+            title = title.cleanTitleIfNeeded()
+        }
+    }
+
     override fun searchMangaSelector() = "#loop-content div.page-listing-item"
 
     override fun mangaDetailsParse(document: Document): SManga {
         return super.mangaDetailsParse(document).apply {
-            val cleanedTitle = title.let { originalTitle ->
-                var tempTitle = originalTitle
-                customRemoveTitle().takeIf { it.isNotEmpty() }?.let { customRegex ->
-                    runCatching {
-                        tempTitle = tempTitle.replace(Regex(customRegex), "")
-                    }
-                }
-                if (isRemoveTitleVersion()) {
-                    tempTitle = tempTitle.replace(titleRegex, "")
-                }
-                tempTitle.trim()
-            }
-            if (cleanedTitle != title) {
+            val cleanedTitle = title.cleanTitleIfNeeded()
+            if (cleanedTitle != title.trim()) {
                 description = listOfNotNull(title, description)
                     .joinToString("\n\n")
                 title = cleanedTitle
             }
         }
+    }
+
+    private fun String.cleanTitleIfNeeded(): String {
+        var tempTitle = this
+        customRemoveTitle().takeIf { it.isNotEmpty() }?.let { customRegex ->
+            runCatching {
+                tempTitle = tempTitle.replace(Regex(customRegex), "")
+            }
+        }
+        if (isRemoveTitleVersion()) {
+            tempTitle = tempTitle.replace(titleRegex, "")
+        }
+        return tempTitle.trim()
     }
 
     private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
