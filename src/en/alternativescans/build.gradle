@@ -1,9 +1,10 @@
 ext {
-    set("extName", "Alternative Scans")
-    set("extVersionCode", 1)
-    set("extClass", ".AlternativeScans")
-    set("baseUrl", "https://alternativescans.icu")
-    set("overrideVersionCode", 0)
+    extName = "Alternative Scans"
+    extClass = ".AlternativeScans"
+    themePkg = "madara"
+    baseUrl = "https://alternativescans.icu"
+    extVersionCode = 2
+    overrideVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
