@@ -22,26 +22,17 @@ class Bakamh : Madara(
             .add("Accept-Language", "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7")
     }
 
-    val chapterSelectors = listOf(
-        ".chapter-loveYou",
-        "li a[onclick]",
-        "li a",
-    )
+    override fun chapterListSelector() = ".chapter-loveYou, li a[onclick], li a"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaUrl = response.request.url.toString().lowercase()
         val doc = response.asJsoup()
-        for (selector in chapterSelectors) {
-            val chapters = doc.select(selector)
-                .mapNotNull { paresChapter(it, mangaUrl) }
-            if (chapters.isNotEmpty()) {
-                return chapters
-            }
-        }
-        return emptyList()
+        return doc.select(chapterListSelector())
+            .mapNotNull { paresChapter(it, mangaUrl) }
     }
 
     fun paresChapter(element: Element, mangaUrl: String): SChapter? {
+        // current url attribute
         if (element.hasAttr("storage-chapter-url")) {
             return SChapter.create().apply {
                 url = element.absUrl("storage-chapter-url")
@@ -50,6 +41,7 @@ class Bakamh : Madara(
             }
         }
 
+        // compatibility operation for modified versions
         return element.attributes()
             .find { attr ->
                 val value = attr.value.lowercase()
