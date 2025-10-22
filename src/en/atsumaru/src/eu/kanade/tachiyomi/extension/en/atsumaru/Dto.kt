@@ -63,16 +63,19 @@ class MangaDto(
     // Chapters
     val chapters: List<ChapterDto>? = null,
 ) {
-    private fun getImagePath(): String? = when (imagePath) {
-        is JsonPrimitive -> imagePath.content
-        is JsonObject -> imagePath["image"]?.jsonPrimitive?.content
-        else -> null
+    private fun getImagePath(): String? {
+        val url = when (imagePath) {
+            is JsonPrimitive -> imagePath.content
+            is JsonObject -> imagePath["image"]?.jsonPrimitive?.content
+            else -> null
+        }
+        return url?.removePrefix("/")?.removePrefix("static/")
     }
 
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         url = id
         title = this@MangaDto.title
-        thumbnail_url = getImagePath().let { it -> baseUrl + it }
+        thumbnail_url = getImagePath().let { it -> "$baseUrl/static/$it" }
         description = synopsis
         genre = buildList {
             type?.let { add(it) }

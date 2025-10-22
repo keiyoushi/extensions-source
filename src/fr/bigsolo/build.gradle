@@ -1,0 +1,10 @@
+ext {
+    extName = 'BigSolo'
+    extClass = '.BigSolo'
+    themePkg = 'scanr'
+    baseUrl = 'https://www.bigsolo.org'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
