@@ -36,7 +36,7 @@ class AlternativeScans : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = json.decodeFromString<ApiResponse>(response.body.string())
+        val result = response.parseAs<ApiResponse>()
         val mangas = result.latestReleases
             .distinctBy { it.manga }
             .map {
