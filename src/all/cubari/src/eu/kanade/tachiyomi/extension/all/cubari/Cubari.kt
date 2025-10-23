@@ -44,7 +44,7 @@ class Cubari(override val lang: String) : HttpSource() {
         .build()
 
     private val cubariHeaders = super.headersBuilder()
-        .add(
+        .set(
             "User-Agent",
             "(Android ${Build.VERSION.RELEASE}; " +
                 "${Build.MANUFACTURER} ${Build.MODEL}) " +
