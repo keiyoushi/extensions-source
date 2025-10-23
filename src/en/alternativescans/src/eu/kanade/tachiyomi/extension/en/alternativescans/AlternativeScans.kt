@@ -103,7 +103,7 @@ class AlternativeScans : HttpSource() {
             SChapter.create().apply {
                 name = "Chapter ${it.chapterNo}" + (it.chapterName?.let { ": $it" } ?: "")
                 url = "/reader.html?id=$seriesId&series=$nick&chapter=${it.chapterNo}"
-                date_upload = try { dateFormat.parse(it.uploadDate)?.time ?: 0L } catch (e: Exception) { 0L }
+                date_upload = dateFormat.tryParse(it.uploadDate)
                 chapter_number = it.chapterNo.let { chapterNum ->
                     val numbers = Regex("(\\d+\\.?\\d*)").findAll(chapterNum).map { it.value }.toList()
                     numbers.lastOrNull()?.toFloatOrNull() ?: -1f
