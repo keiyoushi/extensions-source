@@ -284,7 +284,7 @@ class MangaFire(
 
     @SuppressLint("SetJavaScriptEnabled")
     private suspend fun getVrfFromWebview(document: Document): String = withContext(Dispatchers.Main.immediate) {
-        withTimeoutOrNull(10.seconds) {
+        withTimeoutOrNull(20.seconds) {
             suspendCancellableCoroutine { continuation ->
                 val emptyWebViewResponse = runCatching {
                     WebResourceResponse("text/html", "utf-8", Buffer().inputStream())
