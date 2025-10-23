@@ -23,11 +23,10 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
@@ -41,13 +40,12 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.net.SocketTimeoutException
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLHandshakeException
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import kotlin.coroutines.resume
@@ -286,8 +284,8 @@ class MangaFire(
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private suspend fun getVrfFromWebview(document: Document): String = withTimeout(20.seconds) {
-        withContext(Dispatchers.Main.immediate) {
+    private suspend fun getVrfFromWebview(document: Document): String = withContext(Dispatchers.Main.immediate) {
+        withTimeoutOrNull(10.seconds) {
             suspendCancellableCoroutine { continuation ->
                 val emptyWebViewResponse = runCatching {
                     WebResourceResponse("text/html", "utf-8", Buffer().inputStream())
@@ -297,16 +295,16 @@ class MangaFire(
                 }
 
                 val context = Injekt.get<Application>()
-                val webview = WebView(context)
-                val resumed = AtomicBoolean(false)
+                var webview: WebView? = WebView(context)
 
                 fun cleanup() = runBlocking(Dispatchers.Main.immediate) {
-                    webview.stopLoading()
-                    webview.destroy()
+                    webview?.stopLoading()
+                    webview?.destroy()
+                    webview = null
                 }
 
-                webview.apply {
-                    with(webview.settings) {
+                webview?.apply {
+                    with(settings) {
                         javaScriptEnabled = true
                         domStorageEnabled = true
                         databaseEnabled = true
@@ -332,7 +330,7 @@ class MangaFire(
                                 runCatching { fetchWebResource(request) }
                                     .onSuccess { return it }
                                     .onFailure {
-                                        if (resumed.compareAndSet(false, true)) {
+                                        if (continuation.isActive) {
                                             continuation.resumeWithException(it)
                                             cleanup()
                                         }
@@ -349,7 +347,7 @@ class MangaFire(
                                 runCatching { fetchWebResource(request) }
                                     .onSuccess { return it }
                                     .onFailure {
-                                        if (resumed.compareAndSet(false, true)) {
+                                        if (continuation.isActive) {
                                             continuation.resumeWithException(it)
                                             cleanup()
                                         }
@@ -365,26 +363,25 @@ class MangaFire(
                                     Log.d(name, "found: $url")
 
                                     if (url.getQueryParameter("vrf") != null) {
-                                        if (resumed.compareAndSet(false, true)) {
+                                        if (continuation.isActive) {
                                             continuation.resume(url.toString())
                                             cleanup()
                                         }
                                     } else {
-                                        if (resumed.compareAndSet(false, true)) {
+                                        if (continuation.isActive) {
                                             continuation.resumeWithException(
                                                 Exception("Unable to find vrf token"),
                                             )
                                             cleanup()
                                         }
                                     }
-                                    return emptyWebViewResponse
                                 } else {
                                     // need to allow other call to ajax/read
                                     Log.d(name, "allowed: $url")
                                     runCatching { fetchWebResource(request) }
                                         .onSuccess { return it }
                                         .onFailure {
-                                            if (resumed.compareAndSet(false, true)) {
+                                            if (continuation.isActive) {
                                                 continuation.resumeWithException(it)
                                                 cleanup()
                                             }
@@ -397,7 +394,7 @@ class MangaFire(
                         }
                     }
 
-                    webview.loadDataWithBaseURL(
+                    loadDataWithBaseURL(
                         document.location(),
                         document.outerHtml(),
                         "text/html",
@@ -407,13 +404,10 @@ class MangaFire(
                 }
 
                 continuation.invokeOnCancellation {
-                    if (resumed.compareAndSet(false, true)) {
-                        webview.stopLoading()
-                        webview.destroy()
-                    }
+                    cleanup()
                 }
             }
-        }
+        } ?: throw Exception("Timeout getting vrf token")
     }
 
     private fun fetchWebResource(request: WebResourceRequest): WebResourceResponse = runBlocking(Dispatchers.IO) {
