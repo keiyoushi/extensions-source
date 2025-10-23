@@ -27,11 +27,8 @@ class AlternativeScans : HttpSource() {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    private val apiHeaders: Headers by lazy {
-        Headers.Builder()
-            .add("Referer", baseUrl)
-            .build()
-    }
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
