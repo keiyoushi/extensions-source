@@ -32,7 +32,7 @@ class AlternativeScans : HttpSource() {
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/api/admin/getLatestUpdate", apiHeaders)
+        return GET("$apiUrl/api/admin/getLatestUpdate", headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
