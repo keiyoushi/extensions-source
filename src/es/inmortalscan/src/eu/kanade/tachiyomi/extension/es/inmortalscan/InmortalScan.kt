@@ -6,7 +6,7 @@ import java.util.Locale
 
 class InmortalScan : Madara(
     "Inmortal Scan",
-    "https://scaninmortal.com",
+    "https://scanimnortal.com",
     "es",
     SimpleDateFormat("MMM dd, yyyy", Locale("es")),
 ) {
