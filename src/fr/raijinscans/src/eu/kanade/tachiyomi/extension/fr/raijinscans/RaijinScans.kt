@@ -24,7 +24,7 @@ import java.util.Locale
 class RaijinScans : HttpSource() {
 
     override val name = "Raijin Scans"
-    override val baseUrl = "https://raijinscan.co"
+    override val baseUrl = "https://raijin-scans.fr"
     override val lang = "fr"
     override val supportsLatest = true
 

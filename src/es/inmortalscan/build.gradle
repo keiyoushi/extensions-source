@@ -2,8 +2,8 @@ ext {
     extName = 'Inmortal Scan'
     extClass = '.InmortalScan'
     themePkg = 'madara'
-    baseUrl = 'https://scaninmortal.com'
-    overrideVersionCode = 2
+    baseUrl = 'https://scanimnortal.com'
+    overrideVersionCode = 3
     isNsfw = false
 }
 
