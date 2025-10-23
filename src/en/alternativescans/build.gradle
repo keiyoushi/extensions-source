@@ -1,10 +1,7 @@
 ext {
     extName = "Alternative Scans"
     extClass = ".AlternativeScans"
-    themePkg = "madara"
-    baseUrl = "https://alternativescans.icu"
-    extVersionCode = 2
-    overrideVersionCode = 1
+    extVersionCode = 1
 }
 
 apply from: "$rootDir/common.gradle"
