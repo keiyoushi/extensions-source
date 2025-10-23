@@ -23,6 +23,7 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -40,10 +41,12 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.net.SocketTimeoutException
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
@@ -295,6 +298,7 @@ class MangaFire(
 
                 val context = Injekt.get<Application>()
                 val webview = WebView(context)
+                val resumed = AtomicBoolean(false)
 
                 fun cleanup() = runBlocking(Dispatchers.Main.immediate) {
                     webview.stopLoading()
@@ -328,8 +332,10 @@ class MangaFire(
                                 runCatching { fetchWebResource(request) }
                                     .onSuccess { return it }
                                     .onFailure {
-                                        continuation.resumeWithException(it)
-                                        cleanup()
+                                        if (resumed.compareAndSet(false, true)) {
+                                            continuation.resumeWithException(it)
+                                            cleanup()
+                                        }
                                     }
                             }
 
@@ -343,8 +349,10 @@ class MangaFire(
                                 runCatching { fetchWebResource(request) }
                                     .onSuccess { return it }
                                     .onFailure {
-                                        continuation.resumeWithException(it)
-                                        cleanup()
+                                        if (resumed.compareAndSet(false, true)) {
+                                            continuation.resumeWithException(it)
+                                            cleanup()
+                                        }
                                     }
                             }
 
@@ -357,13 +365,18 @@ class MangaFire(
                                     Log.d(name, "found: $url")
 
                                     if (url.getQueryParameter("vrf") != null) {
-                                        continuation.resume(url.toString())
+                                        if (resumed.compareAndSet(false, true)) {
+                                            continuation.resume(url.toString())
+                                            cleanup()
+                                        }
                                     } else {
-                                        continuation.resumeWithException(
-                                            Exception("Unable to find vrf token"),
-                                        )
+                                        if (resumed.compareAndSet(false, true)) {
+                                            continuation.resumeWithException(
+                                                Exception("Unable to find vrf token"),
+                                            )
+                                            cleanup()
+                                        }
                                     }
-                                    cleanup()
                                     return emptyWebViewResponse
                                 } else {
                                     // need to allow other call to ajax/read
@@ -371,8 +384,10 @@ class MangaFire(
                                     runCatching { fetchWebResource(request) }
                                         .onSuccess { return it }
                                         .onFailure {
-                                            continuation.resumeWithException(it)
-                                            cleanup()
+                                            if (resumed.compareAndSet(false, true)) {
+                                                continuation.resumeWithException(it)
+                                                cleanup()
+                                            }
                                         }
                                 }
                             }
@@ -392,8 +407,10 @@ class MangaFire(
                 }
 
                 continuation.invokeOnCancellation {
-                    webview.stopLoading()
-                    webview.destroy()
+                    if (resumed.compareAndSet(false, true)) {
+                        webview.stopLoading()
+                        webview.destroy()
+                    }
                 }
             }
         }
