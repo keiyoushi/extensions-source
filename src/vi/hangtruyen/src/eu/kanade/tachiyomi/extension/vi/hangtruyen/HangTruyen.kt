@@ -1,29 +1,27 @@
 package eu.kanade.tachiyomi.extension.vi.hangtruyen
 
-import eu.kanade.tachiyomi.multisrc.wpcomics.WPComics
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Response
+import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
-class HangTruyen : WPComics(
-    "HangTruyen",
-    "https://hangtruyen.net",
-    "vi",
-    dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
-        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-    },
-    gmtOffset = null,
-) {
+class HangTruyen : ParsedHttpSource() {
+    override val name = "HangTruyen"
+    override val lang = "vi"
+    override val supportsLatest = true
+    override val baseUrl = "https://hangtruyen.net"
+
     override val client = super.client.newBuilder()
         .rateLimit(5)
         .build()
@@ -32,15 +30,6 @@ class HangTruyen : WPComics(
     override fun popularMangaRequest(page: Int) =
         GET("$baseUrl/tim-kiem?r=newly-updated&page=$page&orderBy=view_desc")
 
-    override fun popularMangaNextPageSelector() = ".next-page"
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val entries = document.select("div.search-result .m-post").map(::popularMangaFromElement)
-        val hasNextPage = popularMangaNextPageSelector()?.let { document.selectFirst(it) } != null
-        return MangasPage(entries, hasNextPage)
-    }
-
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         val a = element.selectFirst("a")!!
         setUrlWithoutDomain(a.attr("abs:href"))
@@ -48,32 +37,32 @@ class HangTruyen : WPComics(
         thumbnail_url = element.selectFirst("img")?.attr("abs:data-src")
     }
 
+    override fun popularMangaSelector() = "div.search-result .m-post"
+    override fun popularMangaNextPageSelector() = ".next-page"
+
     // Latest
     override fun latestUpdatesRequest(page: Int) =
         GET("$baseUrl/tim-kiem?r=newly-updated&page=$page")
 
+    override fun latestUpdatesSelector() = popularMangaSelector()
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
-
-    override fun latestUpdatesFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
 
     // Search
-    override val searchPath = "tim-kiem"
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/tim-kiem".toHttpUrl().newBuilder().apply {
+            addQueryParameter("page", page.toString())
+            if (query.isNotBlank()) {
+                addQueryParameter("keyword", query)
+            }
+        }
+
+        return GET(url.toString(), headers)
+    }
 
     override fun searchMangaSelector() = "div.search-result"
-
-    override fun searchMangaParse(response: Response): MangasPage {
-        return popularMangaParse(response)
-    }
-
-    override fun searchMangaFromElement(element: Element): SManga {
-        return popularMangaFromElement(element)
-    }
+    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
+    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
     // Details
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -109,4 +98,56 @@ class HangTruyen : WPComics(
             Page(index, imageUrl = img)
         }.distinctBy { it.imageUrl }
     }
+
+    override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    private fun String?.toDate(): Long {
+        this ?: return 0L
+
+        val secondWords = listOf("second", "giây")
+        val minuteWords = listOf("minute", "phút")
+        val hourWords = listOf("hour", "giờ")
+        val dayWords = listOf("day", "ngày")
+        val monthWords = listOf("month", "tháng")
+        val yearWords = listOf("year", "năm")
+        val agoWords = listOf("ago", "trước")
+
+        return try {
+            if (agoWords.any { this.contains(it, ignoreCase = true) }) {
+                val trimmedDate = this.substringBefore(" ago").removeSuffix("s").split(" ")
+                val calendar = Calendar.getInstance()
+
+                when {
+                    yearWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.YEAR, -trimmedDate[0].toInt()) }
+                    monthWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
+                    dayWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
+                    hourWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
+                    minuteWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
+                    secondWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.SECOND, -trimmedDate[0].toInt()) }
+                }
+
+                calendar.timeInMillis
+            } else {
+                substringAfterLast(" ").let {
+                    // timestamp has year
+                    if (Regex("""\d+/\d+/\d\d""").find(it)?.value != null) {
+                        dateFormat.parse(it)?.time ?: 0L
+                    } else {
+                        // MangaSum - timestamp sometimes doesn't have year (current year implied)
+                        dateFormat.parse("$it/$currentYear")?.time ?: 0L
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+    }
+
+    private val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
+
+    private fun List<String>.doesInclude(thisWord: String): Boolean = this.any { it.contains(thisWord, ignoreCase = true) }
 }
