@@ -17,6 +17,7 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -108,7 +109,7 @@ class Kagane : HttpSource(), ConfigurableSource {
             page,
             "",
             FilterList(
-                SortFilter(1),
+                SortFilter(Filter.Sort.Selection(1, false)),
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
@@ -125,7 +126,7 @@ class Kagane : HttpSource(), ConfigurableSource {
             page,
             "",
             FilterList(
-                SortFilter(2),
+                SortFilter(Filter.Sort.Selection(2, false)),
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
@@ -160,9 +161,8 @@ class Kagane : HttpSource(), ConfigurableSource {
             filters.forEach { filter ->
                 when (filter) {
                     is SortFilter -> {
-                        filter.selected?.let {
-                            addQueryParameter("sort", filter.toUriPart())
-                        }
+                        filter.toUriPart().takeIf { it.isNotEmpty() }
+                            ?.let { uriPart -> addQueryParameter("sort", uriPart) }
                     }
 
                     is ScanlationsFilter -> {
@@ -466,6 +466,7 @@ class Kagane : HttpSource(), ConfigurableSource {
             GenresFilter(),
             TagsFilter(),
             SourcesFilter(),
+            Filter.Separator(),
             ScanlationsFilter(),
         )
     }
