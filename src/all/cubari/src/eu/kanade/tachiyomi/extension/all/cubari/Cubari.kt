@@ -48,7 +48,7 @@ class Cubari(override val lang: String) : HttpSource() {
             "User-Agent",
             "(Android ${Build.VERSION.RELEASE}; " +
                 "${Build.MANUFACTURER} ${Build.MODEL}) " +
-                "Tachiyomi/Mihon/${AppInfo.getVersionName()} (Keiyoushi)" +
+                "Tachiyomi/Mihon/${AppInfo.getVersionName()} (Keiyoushi) " +
                 Build.ID,
         ).build()
 
@@ -235,7 +235,7 @@ class Cubari(override val lang: String) : HttpSource() {
                     .map { response ->
                         val result = response.parseAs<JsonObject>()
                         val manga = SManga.create().apply {
-                            url = "/read/$source/$slug/"
+                            url = "/read/$source/$slug"
                         }
                         val mangaList = listOf(parseManga(result, manga))
 
