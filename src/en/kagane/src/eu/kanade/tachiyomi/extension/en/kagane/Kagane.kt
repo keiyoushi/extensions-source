@@ -50,7 +50,6 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     private val domain = "kagane.org"
     private val apiUrl = "https://api.$domain"
-    private val imageApiUrl = "https://kazana.$domain"
     override val baseUrl = "https://$domain"
 
     override val lang = "en"
@@ -88,6 +87,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                 throw IOException("Failed to retrieve token")
             }
             accessToken = challenge.accessToken
+            cacheUrl = challenge.cacheUrl
             response = chain.proceed(
                 request.newBuilder()
                     .url(url.newBuilder().setQueryParameter("token", accessToken).build())
@@ -223,12 +223,13 @@ class Kagane : HttpSource(), ConfigurableSource {
 
         val challengeResp = getChallengeResponse(seriesId, chapterId)
         accessToken = challengeResp.accessToken
+        cacheUrl = challengeResp.cacheUrl
         if (preferences.dataSaver) {
             chapterId = chapterId + "_ds"
         }
 
         val pages = (0 until pageCount.toInt()).map { page ->
-            val pageUrl = "$imageApiUrl/api/v1/books".toHttpUrl().newBuilder().apply {
+            val pageUrl = "$cacheUrl/api/v1/books".toHttpUrl().newBuilder().apply {
                 addPathSegment(seriesId)
                 addPathSegment("file")
                 addPathSegment(chapterId)
@@ -242,6 +243,7 @@ class Kagane : HttpSource(), ConfigurableSource {
         return Observable.just(pages)
     }
 
+    private var cacheUrl = ""
     private var accessToken: String = ""
     private fun getChallengeResponse(seriesId: String, chapterId: String): ChallengeDto {
         val f = "$seriesId:$chapterId".sha256().sliceArray(0 until 16)
