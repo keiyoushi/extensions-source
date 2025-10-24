@@ -26,6 +26,9 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -450,14 +453,20 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     // ============================= Filters ==============================
 
-    override fun getFilterList() = FilterList(
-        SortFilter(),
-        ContentRatingFilter(
-            preferences.contentRating.toSet(),
-        ),
-        GenresFilter(),
-        TagsFilter(),
-        SourcesFilter(),
-        ScanlationsFilter(),
-    )
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private fun launchIO(block: () -> Unit) = scope.launch { block() }
+
+    override fun getFilterList(): FilterList {
+        launchIO { fetchMetadata(apiUrl, client) }
+        return FilterList(
+            SortFilter(),
+            ContentRatingFilter(
+                preferences.contentRating.toSet(),
+            ),
+            GenresFilter(),
+            TagsFilter(),
+            SourcesFilter(),
+            ScanlationsFilter(),
+        )
+    }
 }

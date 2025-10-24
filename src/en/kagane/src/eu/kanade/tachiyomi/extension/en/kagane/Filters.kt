@@ -1,12 +1,57 @@
 package eu.kanade.tachiyomi.extension.en.kagane
 
 import eu.kanade.tachiyomi.extension.en.kagane.Kagane.Companion.CONTENT_RATINGS
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+
+private var metadataFetchAttempts: Int = 0
+private var metadataFetched = false
+
+private var genresList: List<String> = emptyList()
+private var tagsList: List<String> = emptyList()
+private var sourcesList: List<String> = emptyList()
+
+fun fetchMetadata(apiUrl: String, client: okhttp3.OkHttpClient) {
+    if (metadataFetchAttempts < 3 && !metadataFetched) {
+        try {
+            client.newCall(GET("$apiUrl/api/v1/metadata"))
+                .execute().parseAs<MetadataDto>()
+                .let { metadata ->
+                    genresList = metadata.getGenresList()
+                    tagsList = metadata.getTagsList()
+                    sourcesList = metadata.getSourcesList()
+                    metadataFetched = true
+                }
+        } catch (_: Exception) {
+        } finally {
+            metadataFetchAttempts++
+        }
+    }
+}
+
+@Serializable
+data class MetadataDto(
+    val genres: List<MetadataTagDto>,
+    val tags: List<MetadataTagDto>,
+    val sources: List<MetadataTagDto>,
+) {
+    fun getGenresList() = genres.map { it.name }
+    fun getTagsList() = tags.sortedByDescending { it.count }.slice(0..200).map { it.name }
+    fun getSourcesList() = sources.map { it.name }
+}
+
+@Serializable
+data class MetadataTagDto(
+    val name: String,
+    val count: Int = 0,
+)
 
 internal class SortFilter(state: Int = 0) : UriPartFilter(
     "Sort By",
@@ -39,7 +84,7 @@ internal class ContentRatingFilter(
 )
 
 internal class GenresFilter(
-    genres: List<FilterData> = GENRES.map { FilterData(it, it) },
+    genres: List<FilterData> = genresList.map { FilterData(it, it) },
 ) : JsonMultiSelectTriFilter(
     "Genres",
     "genres",
@@ -49,7 +94,7 @@ internal class GenresFilter(
 )
 
 internal class TagsFilter(
-    tags: List<FilterData> = TAGS.map { FilterData(it, it.replaceFirstChar { c -> c.uppercase() }) },
+    tags: List<FilterData> = tagsList.map { FilterData(it, it.replaceFirstChar { c -> c.uppercase() }) },
 ) : JsonMultiSelectTriFilter(
     "Tags",
     "tags",
@@ -59,7 +104,7 @@ internal class TagsFilter(
 )
 
 internal class SourcesFilter(
-    sources: List<FilterData> = SOURCES.map { FilterData(it, it) },
+    sources: List<FilterData> = sourcesList.map { FilterData(it, it) },
 ) : JsonMultiSelectFilter(
     "Sources",
     "sources",
@@ -137,314 +182,3 @@ internal open class JsonMultiSelectTriFilter(
 internal interface JsonFilter {
     fun addToJsonObject(builder: JsonObjectBuilder)
 }
-
-private val GENRES = listOf(
-    "Romance",
-    "Drama",
-    "Manhwa",
-    "Fantasy",
-    "Comedy",
-    "Manga",
-    "Action",
-    "LGBTQIA+",
-    "Mature",
-    "Shoujo",
-    "Boys' Love",
-    "Shounen",
-    "Supernatural",
-    "Josei",
-    "Manhua",
-    "Slice of Life",
-    "Seinen",
-    "Adventure",
-    "School Life",
-    "Yaoi",
-    "Smut",
-    "Historical",
-    "Hentai",
-    "Isekai",
-    "Mystery",
-    "Psychological",
-    "Tragedy",
-    "Harem",
-    "Martial Arts",
-    "Shounen Ai",
-    "Science Fiction",
-    "Horror",
-    "Ecchi",
-    "OEL",
-    "Thriller",
-    "Girls' Love",
-    "Yuri",
-    "Sports",
-    "Coming of Age",
-    "Gender Bender",
-    "Suspense",
-    "Music",
-    "Shoujo Ai",
-    "Award Winning",
-    "Cooking",
-    "Doujinshi",
-    "Anime",
-    "Mecha",
-    "Magical Girls",
-    "Philosophical",
-    "Medical",
-    "4-Koma",
-    "Crime",
-    "Animals",
-    "Magic",
-    "Oneshot",
-    "Wuxia",
-    "Anthology",
-    "Superhero",
-)
-
-private val TAGS = listOf(
-    "full color",
-    "webtoons",
-    "manhwa",
-    "male protagonist",
-    "webtoon",
-    "heterosexual",
-    "female protagonist",
-    "based on a web novel",
-    "long strip",
-    "boys' love",
-    "bl",
-    "manhua",
-    "nudity",
-    "primarily adult cast",
-    "magic",
-    "reincarnation",
-    "school",
-    "isekai",
-    "web comic",
-    "revenge",
-    "love triangles",
-    "royalty",
-    "love triangle",
-    "person in a strange world",
-    "european ambience",
-    "nobility/aristocracy",
-    "handsome male lead",
-    "based on a novel",
-    "nobility",
-    "time skip",
-    "age gap",
-    "rape",
-    "21st century",
-    "time travel",
-    "tragedy",
-    "strong male lead",
-    "historical",
-    "demons",
-    "adult couples",
-    "fellatio",
-    "work",
-    "beautiful female lead",
-    "shounen-ai",
-    "mature romance",
-    "childhood friends",
-    "unrequited love",
-    "primarily male cast",
-    "bullying",
-    "male lead falls in love first",
-    "misunderstandings",
-    "college",
-    "female harem",
-    "strong female lead",
-    "black-haired male lead",
-    "time manipulation",
-    "university/post-secondary students",
-    "masturbation",
-    "martial arts",
-    "high school students",
-    "adapted to anime",
-    "big breasts",
-    "handjob",
-    "anal sex",
-    "cunnilingus",
-    "urban fantasy",
-    "seinen",
-    "modern era",
-    "super powers",
-    "flashbacks",
-    "lgbtq+ themes",
-    "transported into a novel",
-    "nakadashi",
-    "dead family members",
-    "past plays a big role",
-    "shoujo",
-    "second chance",
-    "swordplay",
-    "monsters",
-    "shounen",
-    "royal affairs",
-    "non-human protagonists",
-    "super power",
-    "betrayal",
-    "secret identity",
-    "yandere",
-    "age regression",
-    "time rewind",
-    "drama",
-    "public sex",
-    "special abilities",
-    "gods",
-    "game elements",
-    "orphans",
-    "cohabitation",
-    "older uke younger seme",
-    "cultivation",
-    "tl",
-    "adult cast",
-    "murders",
-    "fellatio/blowjob",
-    "transmigration",
-    "violence",
-    "urban",
-    "foreign",
-    "high school",
-    "korea",
-    "fantasy world",
-    "friendship",
-    "traumatic past",
-    "politics",
-    "amnesia",
-    "gore",
-    "suicides",
-    "threesome",
-    "dead parents",
-    "smart female lead",
-    "anti-hero",
-    "sex toys",
-    "villainess",
-    "blackmail",
-    "princes",
-    "arranged marriage",
-    "defloration",
-    "crossdressing",
-    "marriage",
-    "south korea",
-    "danmei",
-    "netorare",
-    "fantasy",
-    "oel",
-    "dragons",
-    "tsundere",
-    "romance",
-    "reunions",
-    "weak to strong",
-    "interspecies relationship",
-    "survival",
-    "sci fi",
-    "smart male lead",
-    "primarily teen cast",
-    "dubious consent",
-    "japan",
-    "coming of age",
-    "character growth",
-    "slow romance",
-    "student-student relationship",
-    "ceos",
-    "crimes",
-    "older female younger male",
-    "family life",
-    "jealousy",
-    "video games",
-    "rich male lead",
-    "virginity",
-    "tragic past",
-    "older male younger female",
-    "wars",
-    "based on a light novel",
-    "first-time intercourse",
-    "yuri",
-    "twins",
-    "beautiful artwork",
-    "office workers",
-    "assassins",
-    "arrogant characters",
-    "kind male lead",
-    "dukes",
-    "crime",
-    "acting",
-    "teachers",
-    "bisexual",
-    "suicide",
-    "deepthroat",
-    "first love",
-    "adult couple",
-    "josei",
-    "bondage",
-    "university/college",
-    "curses",
-    "axed/cancelled/discontinued",
-    "borderline h",
-    "ghosts",
-    "office lady",
-    "animals",
-    "kidnappings",
-    "mages",
-    "maids",
-    "blood and gore",
-    "cheating/infidelity",
-    "knights",
-    "long-haired male lead",
-    "attempted murder",
-    "multiple couples",
-    "coworkers",
-    "primarily female cast",
-    "comedy",
-    "trauma",
-    "attempted rape",
-    "human-nonhuman relationship",
-    "idols",
-)
-
-private val SOURCES = listOf(
-    "Asura Scans",
-    "Comikey",
-    "Dark Horse Comics",
-    "Day Comics",
-    "FAKKU",
-    "Flame Comics",
-    "Grim Scans",
-    "Hive Toons",
-    "INKR Comics",
-    "J-Novel Club",
-    "Kana",
-    "Kenscans",
-    "Kodansha Comics",
-    "Lezhin",
-    "Luna Toons",
-    "Madarascans",
-    "MangaDex",
-    "Manta",
-    "Nyx Scans",
-    "One Peace Books",
-    "Others",
-    "Pocket Comics",
-    "Raven Scans",
-    "Reset Scans",
-    "Rizz Fables",
-    "Rokari Comics",
-    "Seven Seas Entertainment",
-    "Siren Scans",
-    "Square Enix Manga",
-    "StoneScape",
-    "TOKYOPOP",
-    "Tapas",
-    "Tappytoon",
-    "Temple Scan",
-    "Thunderscans",
-    "Toomics",
-    "UDON Entertainment",
-    "VAST Visual",
-    "VIZ Media",
-    "Vortex Scans",
-    "Webcomics",
-    "Webtoon",
-    "Yen Press",
-)
