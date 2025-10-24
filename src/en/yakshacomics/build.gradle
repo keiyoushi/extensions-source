@@ -3,7 +3,7 @@ ext {
     extClass = '.YakshaComics'
     themePkg = 'madara'
     baseUrl = 'https://yakshacomics.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
