@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
-import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
@@ -18,7 +17,6 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -28,11 +26,8 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.serialization.json.JsonObjectBuilder
-import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -149,7 +144,7 @@ class Kagane : HttpSource(), ConfigurableSource {
         val body = buildJsonObject {
             filters.forEach { filter ->
                 when (filter) {
-                    is ContentRatingFilter -> {
+                    is JsonMultiSelectFilter -> {
                         filter.addToJonObject(this)
                     }
                     else -> {}
@@ -444,7 +439,7 @@ class Kagane : HttpSource(), ConfigurableSource {
     companion object {
         private const val CONTENT_RATING = "pref_content_rating"
         private const val CONTENT_RATING_DEFAULT = "pornographic"
-        private val CONTENT_RATINGS = arrayOf(
+        internal val CONTENT_RATINGS = arrayOf(
             "safe",
             "suggestive",
             "erotica",
@@ -461,71 +456,6 @@ class Kagane : HttpSource(), ConfigurableSource {
         ContentRatingFilter(
             preferences.contentRating.toSet(),
         ),
+        SourcesFilter(),
     )
-
-    class SortFilter(state: Int = 0) : UriPartFilter(
-        "Sort By",
-        arrayOf(
-            Pair("Relevance", ""),
-            Pair("Popular", "avg_views,desc"),
-            Pair("Latest", "updated_at"),
-            Pair("Latest Descending", "updated_at,desc"),
-            Pair("By Name", "series_name"),
-            Pair("By Name Descending", "series_name,desc"),
-            Pair("Books count", "books_count"),
-            Pair("Books count Descending", "books_count,desc"),
-            Pair("Created at", "created_at"),
-            Pair("Created at Descending", "created_at,desc"),
-        ),
-        state,
-    )
-
-    class ContentRating(
-        val id: String,
-        val name: String,
-    )
-
-    private class ContentRatingFilter(
-        defaultRatings: Set<String>,
-        ratings: List<ContentRating> = CONTENT_RATINGS.map { ContentRating(it, it.replaceFirstChar { c -> c.uppercase() }) },
-    ) : JsonMultiSelectFilter(
-        "Content Rating",
-        "content_rating",
-        ratings.map {
-            MultiSelectOption(it.name, it.id).apply {
-                state = defaultRatings.contains(it.id)
-            }
-        },
-    )
-
-    open class UriPartFilter(
-        displayName: String,
-        private val vals: Array<Pair<String, String>>,
-        state: Int = 0,
-    ) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
-        fun toUriPart() = vals[state].second
-        val selected get() = vals[state].second.takeUnless { it.isEmpty() }
-    }
-
-    open class MultiSelectOption(name: String, val id: String = name) : Filter.CheckBox(name, false)
-
-    open class JsonMultiSelectFilter(
-        name: String,
-        private val param: String,
-        genres: List<MultiSelectOption>,
-    ) : Filter.Group<MultiSelectOption>(name, genres), JsonFilter {
-        override fun addToJonObject(builder: JsonObjectBuilder) {
-            val whatToInclude = state.filter { it.state }.map { it.id }
-
-            if (whatToInclude.isNotEmpty()) {
-                builder.putJsonArray(param) {
-                    whatToInclude.forEach { add(it) }
-                }
-            }
-        }
-    }
-
-    interface JsonFilter {
-        fun addToJonObject(builder: JsonObjectBuilder)
-    }
 }
