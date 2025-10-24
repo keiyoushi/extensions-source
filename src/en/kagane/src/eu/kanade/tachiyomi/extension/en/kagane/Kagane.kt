@@ -137,7 +137,7 @@ class Kagane : HttpSource(), ConfigurableSource {
             filters.forEach { filter ->
                 when (filter) {
                     is JsonFilter -> {
-                        filter.addToJonObject(this)
+                        filter.addToJsonObject(this)
                     }
                     else -> {}
                 }
