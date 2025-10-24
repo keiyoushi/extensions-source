@@ -54,6 +54,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     private val domain = "kagane.org"
     private val apiUrl = "https://api.$domain"
+    private val imageApiUrl = "https://kazana.$domain"
     override val baseUrl = "https://$domain"
 
     override val lang = "en"
@@ -236,7 +237,7 @@ class Kagane : HttpSource(), ConfigurableSource {
         }
 
         val pages = (0 until pageCount.toInt()).map { page ->
-            val pageUrl = "$apiUrl/api/v1/books".toHttpUrl().newBuilder().apply {
+            val pageUrl = "$imageApiUrl/api/v1/books".toHttpUrl().newBuilder().apply {
                 addPathSegment(seriesId)
                 addPathSegment("file")
                 addPathSegment(chapterId)
