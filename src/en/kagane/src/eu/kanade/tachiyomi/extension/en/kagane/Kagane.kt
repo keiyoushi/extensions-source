@@ -109,6 +109,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
+                ScanlationsFilter(),
             ),
         )
 
@@ -125,6 +126,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
+                ScanlationsFilter(),
             ),
         )
 
