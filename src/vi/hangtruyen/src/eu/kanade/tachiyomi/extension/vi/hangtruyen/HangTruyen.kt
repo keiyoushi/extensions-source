@@ -1,12 +1,16 @@
 package eu.kanade.tachiyomi.extension.vi.hangtruyen
 
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -16,11 +20,17 @@ import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
 
-class HangTruyen : ParsedHttpSource() {
+class HangTruyen : ParsedHttpSource(), ConfigurableSource {
     override val name = "HangTruyen"
     override val lang = "vi"
     override val supportsLatest = true
-    override val baseUrl = "https://hangtruyen.net"
+
+    private val preferences by getPreferencesLazy()
+
+    override val baseUrl: String
+        get() {
+            return getCustomDomain().ifBlank { "https://hangtruyen.top" }
+        }
 
     override val client = super.client.newBuilder()
         .rateLimit(5)
@@ -60,7 +70,7 @@ class HangTruyen : ParsedHttpSource() {
         return GET(url.toString(), headers)
     }
 
-    override fun searchMangaSelector() = "div.search-result"
+    override fun searchMangaSelector() = popularMangaSelector()
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
 
@@ -100,6 +110,30 @@ class HangTruyen : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
+
+    private fun getCustomDomain(): String = preferences.getString(CUSTOM_URL_PREF, "")!!
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = CUSTOM_URL_PREF
+            title = CUSTOM_URL_PREF_TITLE
+            summary = "$CUSTOM_URL_PREF_SUMMARY\n${getCustomDomain()}"
+            setDefaultValue("")
+            dialogTitle = CUSTOM_URL_PREF_TITLE
+            setOnPreferenceChangeListener { _, value ->
+                summary = "$CUSTOM_URL_PREF_SUMMARY\n${value as String}"
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val CUSTOM_URL_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val CUSTOM_URL_PREF = "overrideBaseUrl"
+        private const val CUSTOM_URL_PREF_SUMMARY =
+            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt.\n" +
+                "Để trống để sử dụng URL mặc định."
+    }
 
     private fun String?.toDate(): Long {
         this ?: return 0L
