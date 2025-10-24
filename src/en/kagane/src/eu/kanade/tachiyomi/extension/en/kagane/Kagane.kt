@@ -149,7 +149,6 @@ class Kagane : HttpSource(), ConfigurableSource {
         val url = "$apiUrl/api/v1/search".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", (page - 1).toString())
             addQueryParameter("size", 35.toString()) // Default items per request
-            addQueryParameter("scanlations", "true")
             if (query.isNotBlank()) {
                 addQueryParameter("name", query)
             }
@@ -159,6 +158,10 @@ class Kagane : HttpSource(), ConfigurableSource {
                         filter.selected?.let {
                             addQueryParameter("sort", filter.toUriPart())
                         }
+                    }
+
+                    is ScanlationsFilter -> {
+                        addQueryParameter("scanlations", filter.state.toString())
                     }
 
                     else -> {}
@@ -451,5 +454,6 @@ class Kagane : HttpSource(), ConfigurableSource {
         GenresFilter(),
         TagsFilter(),
         SourcesFilter(),
+        ScanlationsFilter(),
     )
 }
