@@ -133,18 +133,10 @@ class Kagane : HttpSource(), ConfigurableSource {
     // =============================== Search ===============================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        /*
-            content_rating : ["safe", "suggestive", "erotica", "pornographic"]
-            exclusive_genres : {values: ["Drama"], match_all: false}
-            exclusive_tags : {values: ["webtoons"], match_all: false}
-            inclusive_genres : {values: ["Romance", "Manhwa"], match_all: true}
-            inclusive_tags : {values: ["full color"], match_all: true}
-            sources : ["Day Comics", "Comikey"]
-         */
         val body = buildJsonObject {
             filters.forEach { filter ->
                 when (filter) {
-                    is JsonMultiSelectFilter -> {
+                    is JsonFilter -> {
                         filter.addToJonObject(this)
                     }
                     else -> {}
@@ -456,6 +448,8 @@ class Kagane : HttpSource(), ConfigurableSource {
         ContentRatingFilter(
             preferences.contentRating.toSet(),
         ),
+        GenresFilter(),
+        TagsFilter(),
         SourcesFilter(),
     )
 }
