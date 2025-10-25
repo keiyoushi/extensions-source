@@ -53,7 +53,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
                 val newUrlHttp = newUrl.toHttpUrl()
                 val redirectedDomain = newUrlHttp.run { "$scheme://$host" }
                 if (redirectedDomain != baseUrl) {
-                    preferences.edit().putString(CUSTOM_URL_PREF, redirectedDomain).apply()
+                    preferences.edit().putString(CUSTOM_URL_PREF, redirectedDomain).commit()
                 }
                 response.close()
                 request = request.newBuilder()
