@@ -91,34 +91,46 @@ class BigSolo : HttpSource() {
     // Details
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)!!.html()
+        val splitedPath = URI(document.baseUri()).path.split("/")
+        val slug = splitedPath[1]
+        val serieJson =
+            client.newCall(GET("$baseUrl/data/series/$slug", headers))
+                .execute()
 
-        val serie = jsonData.parseAs<Serie>()
+        val serie = serieJson.parseAs<Serie>()
         return serie.toDetailedSManga()
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        val splitedPath = URI(document.baseUri()).path.split("/")
+    override fun pageListRequest(chapter: SChapter): Request {
+        val splitedPath = URI(chapter.url).path.split("/")
         val slug = splitedPath[1]
         val chapterId = splitedPath[2]
-        return fetchChapterPages(slug, chapterId)
+        return GET("$baseUrl/data/series/$slug/$chapterId", headers)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val chapterDetails = response.parseAs<ChapterDetails>()
+        return chapterDetails.images.mapIndexed { index, pageData ->
+            Page(index, imageUrl = pageData)
+        }
     }
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
     }
 
-    // Chapters
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val jsonData = document.selectFirst(SERIES_DATA_SELECTOR)!!.html()
-        val seriesData = jsonData.parseAs<Serie>()
-        val slug = URI(document.baseUri()).path.split("/")[1]
-        return buildChapterList(seriesData, slug)
+    override fun chapterListRequest(manga: SManga): Request {
+        val slug = URI(manga.url).path.split("/")[1]
+        return GET("$baseUrl/data/series/$slug", headers)
     }
 
-    private fun buildChapterList(serie: Serie, slug: String): List<SChapter> {
+    // Chapters
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val seriesData = response.parseAs<Serie>()
+        return buildChapterList(seriesData)
+    }
+
+    private fun buildChapterList(serie: Serie): List<SChapter> {
         val chapters = serie.chapters
         val chapterList = mutableListOf<SChapter>()
         val multipleChapters = chapters.size > 1
@@ -141,7 +153,7 @@ class BigSolo : HttpSource() {
 
             val chapter = SChapter.create().apply {
                 name = baseName
-                setUrlWithoutDomain("$baseUrl/$slug/$chapterNumber")
+                setUrlWithoutDomain("$baseUrl/${serie.slug}/$chapterNumber")
                 chapter_number = chapterNumber.toFloatOrNull() ?: -1f
                 scanlator = chapterData.teams.joinToString(" & ")
                 date_upload = chapterData.timestamp * 1000L
@@ -150,15 +162,5 @@ class BigSolo : HttpSource() {
         }
 
         return chapterList.sortedByDescending { it.chapter_number }
-    }
-
-    private fun fetchChapterPages(slug: String, chapterId: String): List<Page> {
-        val pagesResponse =
-            client.newCall(GET("$baseUrl/data/series/$slug/$chapterId", headers))
-                .execute()
-        val chapterDetails = pagesResponse.parseAs<ChapterDetails>()
-        return chapterDetails.images.mapIndexed { index, pageData ->
-            Page(index, imageUrl = pageData)
-        }
     }
 }
