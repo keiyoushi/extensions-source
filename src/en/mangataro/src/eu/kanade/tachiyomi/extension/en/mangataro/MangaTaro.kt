@@ -249,14 +249,14 @@ class MangaTaro : HttpSource() {
                 setUrlWithoutDomain(it.absUrl("href"))
                 val details = it.select("> div + div > div")
                 name = buildString {
-                    append(details[0].selectFirst("span")!!.ownText())
+                    append(it.attr("title"))
                     details[1].text().also { title ->
                         if (title !in placeholders) {
                             append(": ", title)
                         }
                     }
                 }
-                details[2].text().let { group ->
+                it.attr("data-group-name").let { group ->
                     if (group !in placeholders) {
                         scanlator = group
                         hasScanlator = true
