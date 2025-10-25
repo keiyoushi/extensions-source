@@ -1,0 +1,9 @@
+ext {
+    extName = 'ScanR'
+    extClass = '.ScanR'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+
+apply from: "$rootDir/common.gradle"
