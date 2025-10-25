@@ -247,42 +247,42 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
                 "Để trống để sử dụng URL mặc định.\n" +
                 "Hiện tại sử dụng: "
 
-        private val domainRegex = Regex("""^https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}$""")
+        private val domainRegex = Regex("""^https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9]{1,6}$""")
     }
 
     private fun String?.toDate(): Long {
         this ?: return 0L
 
-        val secondWords = listOf("second", "giây")
-        val minuteWords = listOf("minute", "phút")
-        val hourWords = listOf("hour", "giờ")
-        val dayWords = listOf("day", "ngày")
-        val monthWords = listOf("month", "tháng")
-        val yearWords = listOf("year", "năm")
-        val agoWords = listOf("ago", "trước")
+        val secondWords = "giây"
+        val minuteWords = "phút"
+        val hourWords = "giờ"
+        val dayWords = "ngày"
+        val monthWords = "tháng"
+        val yearWords = "năm"
+        val agoWords = "trước"
 
         return try {
-            if (agoWords.any { this.contains(it, ignoreCase = true) }) {
-                val trimmedDate = this.substringBefore(" ago").removeSuffix("s").split(" ")
+            if (contains(agoWords, ignoreCase = true)) {
+                val trimmedDate = substringBefore(agoWords).trim().split(" ")
                 val calendar = Calendar.getInstance()
 
                 when {
-                    yearWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.YEAR, -trimmedDate[0].toInt()) }
-                    monthWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
-                    dayWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
-                    hourWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
-                    minuteWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
-                    secondWords.doesInclude(trimmedDate[1]) -> calendar.apply { add(Calendar.SECOND, -trimmedDate[0].toInt()) }
+                    yearWords.equals(trimmedDate[1].trim(), true) -> calendar.apply { add(Calendar.YEAR, -trimmedDate[0].toInt()) }
+                    monthWords.equals(trimmedDate[1].trim(), true) -> calendar.apply { add(Calendar.MONTH, -trimmedDate[0].toInt()) }
+                    dayWords.equals(trimmedDate[1].trim(), true) -> calendar.apply { add(Calendar.DAY_OF_MONTH, -trimmedDate[0].toInt()) }
+                    hourWords.equals(trimmedDate[1].trim(), true) -> calendar.apply { add(Calendar.HOUR_OF_DAY, -trimmedDate[0].toInt()) }
+                    minuteWords.equals(trimmedDate[1].trim(), true) -> calendar.apply { add(Calendar.MINUTE, -trimmedDate[0].toInt()) }
+                    secondWords.equals(trimmedDate[1].trim(), true) -> calendar.apply { add(Calendar.SECOND, -trimmedDate[0].toInt()) }
                 }
 
                 calendar.timeInMillis
             } else {
                 substringAfterLast(" ").let {
                     // timestamp has year
-                    if (Regex("""\d+/\d+/\d\d""").find(it)?.value != null) {
+                    if (Regex("""\d+/\d+/\d\d\d\d""").find(it)?.value != null) {
                         dateFormat.parse(it)?.time ?: 0L
                     } else {
-                        // MangaSum - timestamp sometimes doesn't have year (current year implied)
+                        // Timestamp sometimes doesn't have year (current year implied)
                         dateFormat.parse("$it/$currentYear")?.time ?: 0L
                     }
                 }
@@ -292,11 +292,8 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
-    private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
+    private val currentYear by lazy { Calendar.getInstance(Locale.US)[Calendar.YEAR].toString() }
+    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
         timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
     }
-
-    private val currentYear by lazy { Calendar.getInstance(Locale.US)[Calendar.YEAR].toString().takeLast(2) }
-
-    private fun List<String>.doesInclude(thisWord: String): Boolean = this.any { it.contains(thisWord, ignoreCase = true) }
 }
