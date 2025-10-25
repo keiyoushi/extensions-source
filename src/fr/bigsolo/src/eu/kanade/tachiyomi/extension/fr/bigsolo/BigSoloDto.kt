@@ -9,31 +9,24 @@ import kotlinx.serialization.Serializable
  */
 
 @Serializable
-data class SeriesResponse(
+class SeriesResponse(
     val series: List<Serie>,
     val os: List<Serie>,
     val reco: List<Serie>,
 )
 
 @Serializable
-data class Serie(
+class Serie(
     val slug: String = "",
     val title: String,
     val description: String,
     val artist: String,
     val author: String,
-    val demographic: String,
-    val magazine: String,
-    @SerialName("release_year")
-    val releaseYear: Int,
     val tags: List<String>,
     @SerialName("ja_title")
     val jaTitle: String,
     @SerialName("alternative_titles")
     val alternativeTitles: List<String>,
-    val teams: List<Teams>,
-    @SerialName("imgchest_username")
-    val imgchestUsername: String,
     val status: String,
     val cover: Cover? = null,
     val chapters: Map<String, Chapter>,
@@ -42,48 +35,29 @@ data class Serie(
 )
 
 @Serializable
-data class lastChapter(
-    val number: Int,
-    val title: String,
-    val volume: String = "",
+class lastChapter(
     val timestamp: Int,
-    val teams: List<String>,
 )
 
 @Serializable
-data class Chapter(
+class Chapter(
     val title: String,
     val volume: String = "",
     val timestamp: Int,
     val teams: List<String>,
-    val source: Source? = null,
     @SerialName("licensed")
     val licencied: Boolean = false,
 )
 
 @Serializable
-data class ChapterDetails(
+class ChapterDetails(
     val images: List<String>,
 )
 
 @Serializable
-data class Source(
-    val service: String,
-    val id: String,
-)
-
-@Serializable
-data class Cover(
+class Cover(
     @SerialName("url_hq")
     val urlHq: String,
-    @SerialName("url_lq")
-    val urlLq: String,
-)
-
-@Serializable
-data class Teams(
-    val id: String,
-    val active: Boolean,
 )
 
 // DTO to SManga extension functions
@@ -92,7 +66,7 @@ fun Serie.toDetailedSManga(): SManga = SManga.create().apply {
     description = this@toDetailedSManga.description
     artist = this@toDetailedSManga.artist
     author = this@toDetailedSManga.author
-    genre = this@toDetailedSManga.tags.joinToString(", ")
+    genre = this@toDetailedSManga.tags.joinToString()
     status = when (this@toDetailedSManga.status) {
         "En cours" -> SManga.ONGOING
         "Finis", "Fini" -> SManga.COMPLETED
