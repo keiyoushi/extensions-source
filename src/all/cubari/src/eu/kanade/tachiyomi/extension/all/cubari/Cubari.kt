@@ -48,8 +48,8 @@ class Cubari(override val lang: String) : HttpSource() {
             "User-Agent",
             "(Android ${Build.VERSION.RELEASE}; " +
                 "${Build.MANUFACTURER} ${Build.MODEL}) " +
-                "Tachiyomi/Mihon/${AppInfo.getVersionName()} (Keiyoushi) " +
-                Build.ID,
+                "Tachiyomi/${AppInfo.getVersionName()} ${Build.ID} " +
+                "Keiyoushi"
         ).build()
 
     override fun latestUpdatesRequest(page: Int): Request {
