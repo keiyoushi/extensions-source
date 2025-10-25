@@ -34,6 +34,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()
+    private val prefsLock = Any()
 
     override val baseUrl: String
         get() {
@@ -53,7 +54,9 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
                 val newUrlHttp = newUrl.toHttpUrl()
                 val redirectedDomain = newUrlHttp.run { "$scheme://$host" }
                 if (redirectedDomain != baseUrl) {
-                    preferences.edit().putString(CUSTOM_URL_PREF, redirectedDomain).commit()
+                    synchronized(prefsLock) {
+                        preferences.edit().putString(CUSTOM_URL_PREF, redirectedDomain).commit()
+                    }
                 }
                 response.close()
                 request = request.newBuilder()
@@ -180,7 +183,9 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 
-    private fun getCustomDomain(): String = preferences.getString(CUSTOM_URL_PREF, "")!!
+    private fun getCustomDomain(): String = synchronized(prefsLock) {
+        preferences.getString(CUSTOM_URL_PREF, "")!!
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
