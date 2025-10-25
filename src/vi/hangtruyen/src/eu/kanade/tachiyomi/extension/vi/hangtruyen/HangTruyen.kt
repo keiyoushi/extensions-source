@@ -8,12 +8,16 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -90,19 +94,44 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val filterList = filters.ifEmpty { getFilterList() }
+            .filterNotNull()
         val url = "$baseUrl/tim-kiem".toHttpUrl().newBuilder().apply {
             addQueryParameter("page", page.toString())
             if (query.isNotBlank()) {
                 addQueryParameter("keyword", query)
+            }
+            filterList.forEach { filter ->
+                when (filter) {
+                    is SortFilter -> {
+                        val uriPart = filter.toUriPart()
+                        if (uriPart.isNotEmpty()) {
+                            addQueryParameter("orderBy", uriPart)
+                        }
+                    }
+                    is UriPartMultiSelectFilter -> {
+                        val uriPart = filter.toUriPart()
+                        if (uriPart.isNotEmpty()) {
+                            addQueryParameter(filter.param, uriPart)
+                        }
+                    }
+                    else -> {}
+                }
             }
         }
 
         return GET(url.toString(), headers)
     }
 
-    override fun searchMangaSelector() = popularMangaSelector()
-    override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
-    override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+    override fun searchMangaSelector() = "div.search-result .m-post, div.list-managas .m-post"
+    override fun searchMangaNextPageSelector() = ".next-page"
+
+    override fun searchMangaFromElement(element: Element) = SManga.create().apply {
+        val a = element.selectFirst("a")!!
+        setUrlWithoutDomain(a.attr("abs:href"))
+        title = a.attr("title")
+        thumbnail_url = element.selectFirst("img")?.attr("abs:data-src")
+    }
 
     // Details
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -188,6 +217,20 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
                 isValid
             }
         }.also(screen::addPreference)
+    }
+
+    // ============================= Filters ==============================
+
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private fun launchIO(block: () -> Unit) = scope.launch { block() }
+
+    override fun getFilterList(): FilterList {
+        launchIO { fetchMetadata(baseUrl, client) }
+        return FilterList(
+            SortFilter(),
+            CategoriesFilter(),
+            GenresFilter(),
+        )
     }
 
     companion object {
