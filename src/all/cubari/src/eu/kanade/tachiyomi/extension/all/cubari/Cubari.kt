@@ -49,7 +49,7 @@ class Cubari(override val lang: String) : HttpSource() {
             "(Android ${Build.VERSION.RELEASE}; " +
                 "${Build.MANUFACTURER} ${Build.MODEL}) " +
                 "Tachiyomi/${AppInfo.getVersionName()} ${Build.ID} " +
-                "Keiyoushi"
+                "Keiyoushi",
         ).build()
 
     override fun latestUpdatesRequest(page: Int): Request {
