@@ -1,10 +1,12 @@
 package eu.kanade.tachiyomi.extension.en.kagane
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
@@ -15,6 +17,7 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -30,14 +33,18 @@ import keiyoushi.utils.toJsonString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.brotli.BrotliInterceptor
+import okhttp3.internal.closeQuietly
 import okio.IOException
 import rx.Observable
 import uy.kohesive.injekt.Injekt
@@ -66,6 +73,11 @@ class Kagane : HttpSource(), ConfigurableSource {
         .addInterceptor(ImageInterceptor())
         .addInterceptor(::refreshTokenInterceptor)
         .rateLimit(2)
+        // fix disk cache
+        .apply {
+            val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
+            if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
+        }
         .build()
 
     private fun refreshTokenInterceptor(chain: Interceptor.Chain): Response {
@@ -250,6 +262,8 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     private var cacheUrl = "https://kazana.$domain"
     private var accessToken: String = ""
+
+    @SuppressLint("SetJavaScriptEnabled")
     private fun getChallengeResponse(seriesId: String, chapterId: String): ChallengeDto {
         val f = "$seriesId:$chapterId".sha256().sliceArray(0 until 16)
 
@@ -453,21 +467,75 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     // ============================= Filters ==============================
 
-    private val scope = CoroutineScope(Dispatchers.IO)
-    private fun launchIO(block: () -> Unit) = scope.launch { block() }
+    private val metadataClient = client.newBuilder()
+        .addNetworkInterceptor { chain ->
+            chain.proceed(chain.request()).newBuilder()
+                .header("Cache-Control", "max-age=${24 * 60 * 60}")
+                .removeHeader("Pragma")
+                .removeHeader("Expires")
+                .build()
+        }.build()
 
-    override fun getFilterList(): FilterList {
-        launchIO { fetchMetadata(apiUrl, client) }
-        return FilterList(
+    override fun getFilterList(): FilterList = runBlocking(Dispatchers.IO) {
+        val filters: MutableList<Filter<*>> = mutableListOf(
             SortFilter(),
             ContentRatingFilter(
                 preferences.contentRating.toSet(),
             ),
-            GenresFilter(),
-            TagsFilter(),
-            SourcesFilter(),
+            // GenresFilter(),
+            // TagsFilter(),
+            // SourcesFilter(),
             Filter.Separator(),
             ScanlationsFilter(),
         )
+
+        val response = metadataClient.newCall(
+            GET("$apiUrl/api/v1/metadata", headers, CacheControl.FORCE_CACHE),
+        ).await()
+
+        // the cache only request fails if it was not cached already
+        if (!response.isSuccessful) {
+            CoroutineScope(Dispatchers.IO).launch {
+                metadataClient.newCall(
+                    GET("$apiUrl/api/v1/metadata", headers, CacheControl.FORCE_NETWORK),
+                ).await().closeQuietly()
+            }
+
+            filters.addAll(
+                index = 0,
+                listOf(
+                    Filter.Header("Press 'reset' to load more filters"),
+                    Filter.Separator(),
+                ),
+            )
+
+            return@runBlocking FilterList(filters)
+        }
+
+        val metadata = try {
+            response.parseAs<MetadataDto>()
+        } catch (e: Throwable) {
+            Log.e(name, "Unable to parse filters", e)
+
+            filters.addAll(
+                index = 0,
+                listOf(
+                    Filter.Header("Failed to parse additional filters"),
+                    Filter.Separator(),
+                ),
+            )
+            return@runBlocking FilterList(filters)
+        }
+
+        filters.addAll(
+            index = 2,
+            listOf(
+                GenresFilter(metadata.getGenresList()),
+                TagsFilter(metadata.getTagsList()),
+                SourcesFilter(metadata.getSourcesList()),
+            ),
+        )
+
+        FilterList(filters)
     }
 }
