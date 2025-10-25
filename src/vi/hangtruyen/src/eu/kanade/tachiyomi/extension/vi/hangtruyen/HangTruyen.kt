@@ -164,7 +164,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
         val a = element.selectFirst("a.ll-chap")!!
         setUrlWithoutDomain(a.attr("href"))
         name = a.text().trim()
-        date_upload = element.select("span.ll-update")[0].text().toDate()
+        date_upload = element.selectFirst("span.ll-update")?.text()?.toDate() ?: 0L
     }
 
     // Pages
@@ -194,11 +194,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
                 if (str.isBlank()) {
                     true
                 } else {
-                    runCatching { str.toHttpUrl() }
-                        .getOrElse { false }
-                        .let {
-                            domainRegex.matchEntire(str) != null
-                        }
+                    runCatching { str.toHttpUrl() }.isSuccess && domainRegex.matchEntire(str) != null
                 }
             }
 
@@ -300,7 +296,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
         timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
     }
 
-    private val currentYear by lazy { Calendar.getInstance(Locale.US)[1].toString().takeLast(2) }
+    private val currentYear by lazy { Calendar.getInstance(Locale.US)[Calendar.YEAR].toString().takeLast(2) }
 
     private fun List<String>.doesInclude(thisWord: String): Boolean = this.any { it.contains(thisWord, ignoreCase = true) }
 }
