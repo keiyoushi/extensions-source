@@ -87,7 +87,9 @@ class MangaDto(
         this@MangaDto.status?.let {
             status = when (it.lowercase().trim()) {
                 "ongoing" -> SManga.ONGOING
-                "complete" -> SManga.COMPLETED
+                "completed" -> SManga.COMPLETED
+                "hiatus" -> SManga.ON_HIATUS
+                "canceled" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
         }
