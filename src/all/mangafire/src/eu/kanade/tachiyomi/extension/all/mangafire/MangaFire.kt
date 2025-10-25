@@ -2,8 +2,6 @@ package eu.kanade.tachiyomi.extension.all.mangafire
 
 import android.annotation.SuppressLint
 import android.app.Application
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -26,6 +24,9 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
@@ -43,11 +44,12 @@ import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.time.Duration.Companion.seconds
 
 class MangaFire(
     override val lang: String,
@@ -265,88 +267,11 @@ class MangaFire(
 
     // =============================== Pages ================================
 
-    @SuppressLint("SetJavaScriptEnabled")
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        var ajaxUrl: String? = null
+        val ajaxUrl = runBlocking { getVrfFromWebview(document) }
 
-        val context = Injekt.get<Application>()
-        val handler = Handler(Looper.getMainLooper())
-        val latch = CountDownLatch(1)
-        val emptyWebViewResponse = WebResourceResponse("text/html", "utf-8", Buffer().inputStream())
-        var webView: WebView? = null
-
-        handler.post {
-            val webview = WebView(context)
-                .also { webView = it }
-            with(webview.settings) {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                blockNetworkImage = true
-            }
-
-            webview.webViewClient = object : WebViewClient() {
-                private val ajaxCalls = setOf("ajax/read/chapter", "ajax/read/volume")
-
-                override fun shouldInterceptRequest(
-                    view: WebView,
-                    request: WebResourceRequest,
-                ): WebResourceResponse? {
-                    val url = request.url
-
-                    // allow script from their cdn
-                    if (url.host.orEmpty().contains("mfcdn.cc") && url.pathSegments.lastOrNull().orEmpty().contains("js")) {
-                        Log.d(name, "allowed: $url")
-
-                        return fetchWebResource(request)
-                    }
-
-                    // allow jquery script
-                    if (url.host.orEmpty().contains("cloudflare.com") && url.encodedPath.orEmpty().contains("jquery")) {
-                        Log.d(name, "allowed: $url")
-
-                        return fetchWebResource(request)
-                    }
-
-                    // allow ajax/read calls and intercept ajax/read/chapter or ajax/read/volume
-                    if (url.host == "mangafire.to" && url.encodedPath.orEmpty().contains("ajax/read")) {
-                        if (ajaxCalls.any { url.encodedPath!!.contains(it) }) {
-                            Log.d(name, "found: $url")
-
-                            if (url.getQueryParameter("vrf") != null) {
-                                ajaxUrl = url.toString()
-                            }
-
-                            latch.countDown()
-                        } else {
-                            // need to allow other call to ajax/read
-                            Log.d(name, "allowed: $url")
-                            return fetchWebResource(request)
-                        }
-                    }
-
-                    Log.d(name, "denied: $url")
-                    return emptyWebViewResponse
-                }
-            }
-
-            webview.loadDataWithBaseURL(document.location(), document.outerHtml(), "text/html", "utf-8", "")
-        }
-
-        latch.await(20, TimeUnit.SECONDS)
-        handler.post {
-            webView?.stopLoading()
-            webView?.destroy()
-        }
-
-        if (latch.count == 1L) {
-            throw Exception("Timeout getting vrf token")
-        } else if (ajaxUrl == null) {
-            throw Exception("Unable to find vrf token")
-        }
-
-        return client.newCall(GET(ajaxUrl!!, headers)).execute()
+        return client.newCall(GET(ajaxUrl, headers)).execute()
             .parseAs<ResponseDto<PageListDto>>().result
             .pages.mapIndexed { index, image ->
                 val url = image.url
@@ -355,6 +280,133 @@ class MangaFire(
 
                 Page(index, imageUrl = imageUrl)
             }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private suspend fun getVrfFromWebview(document: Document): String = withContext(Dispatchers.Main.immediate) {
+        withTimeoutOrNull(20.seconds) {
+            suspendCancellableCoroutine { continuation ->
+                val emptyWebViewResponse = runCatching {
+                    WebResourceResponse("text/html", "utf-8", Buffer().inputStream())
+                }.getOrElse {
+                    continuation.resumeWithException(it)
+                    return@suspendCancellableCoroutine
+                }
+
+                val context = Injekt.get<Application>()
+                var webview: WebView? = WebView(context)
+
+                fun cleanup() = runBlocking(Dispatchers.Main.immediate) {
+                    webview?.stopLoading()
+                    webview?.destroy()
+                    webview = null
+                }
+
+                webview?.apply {
+                    with(settings) {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        databaseEnabled = true
+                        blockNetworkImage = true
+                    }
+
+                    webViewClient = object : WebViewClient() {
+                        private val ajaxCalls = setOf("ajax/read/chapter", "ajax/read/volume")
+
+                        override fun shouldInterceptRequest(
+                            view: WebView,
+                            request: WebResourceRequest,
+                        ): WebResourceResponse? {
+                            val url = request.url
+
+                            // allow script from their cdn
+                            if (
+                                url.host.orEmpty().contains("mfcdn.cc") &&
+                                url.pathSegments.lastOrNull().orEmpty().contains("js")
+                            ) {
+                                Log.d(name, "allowed: $url")
+
+                                runCatching { fetchWebResource(request) }
+                                    .onSuccess { return it }
+                                    .onFailure {
+                                        if (continuation.isActive) {
+                                            continuation.resumeWithException(it)
+                                            cleanup()
+                                        }
+                                    }
+                            }
+
+                            // allow jquery script
+                            if (
+                                url.host.orEmpty().contains("cloudflare.com") &&
+                                url.encodedPath.orEmpty().contains("jquery")
+                            ) {
+                                Log.d(name, "allowed: $url")
+
+                                runCatching { fetchWebResource(request) }
+                                    .onSuccess { return it }
+                                    .onFailure {
+                                        if (continuation.isActive) {
+                                            continuation.resumeWithException(it)
+                                            cleanup()
+                                        }
+                                    }
+                            }
+
+                            // allow ajax/read calls and intercept ajax/read/chapter or ajax/read/volume
+                            if (
+                                url.host == "mangafire.to" &&
+                                url.encodedPath.orEmpty().contains("ajax/read")
+                            ) {
+                                if (ajaxCalls.any { url.encodedPath!!.contains(it) }) {
+                                    Log.d(name, "found: $url")
+
+                                    if (url.getQueryParameter("vrf") != null) {
+                                        if (continuation.isActive) {
+                                            continuation.resume(url.toString())
+                                            cleanup()
+                                        }
+                                    } else {
+                                        if (continuation.isActive) {
+                                            continuation.resumeWithException(
+                                                Exception("Unable to find vrf token"),
+                                            )
+                                            cleanup()
+                                        }
+                                    }
+                                } else {
+                                    // need to allow other call to ajax/read
+                                    Log.d(name, "allowed: $url")
+                                    runCatching { fetchWebResource(request) }
+                                        .onSuccess { return it }
+                                        .onFailure {
+                                            if (continuation.isActive) {
+                                                continuation.resumeWithException(it)
+                                                cleanup()
+                                            }
+                                        }
+                                }
+                            }
+
+                            Log.d(name, "denied: $url")
+                            return emptyWebViewResponse
+                        }
+                    }
+
+                    loadDataWithBaseURL(
+                        document.location(),
+                        document.outerHtml(),
+                        "text/html",
+                        "utf-8",
+                        "",
+                    )
+                }
+
+                continuation.invokeOnCancellation {
+                    cleanup()
+                }
+            }
+        } ?: throw Exception("Timeout getting vrf token")
     }
 
     private fun fetchWebResource(request: WebResourceRequest): WebResourceResponse = runBlocking(Dispatchers.IO) {
