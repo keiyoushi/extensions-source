@@ -15,10 +15,6 @@ import java.net.URI
 
 class BigSolo : HttpSource() {
 
-    companion object {
-        private const val SERIES_DATA_SELECTOR = "#series-data-placeholder"
-    }
-
     override val name = "BigSolo"
     override val baseUrl = "https://bigsolo.org"
     override val lang = "fr"
