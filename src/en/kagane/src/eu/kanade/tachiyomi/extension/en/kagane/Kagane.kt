@@ -202,7 +202,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val dto = response.parseAs<ChapterDto>()
-        return dto.content.mapIndexed { i, it -> it.toSChapter(i + 1) }.reversed()
+        return dto.content.map { it -> it.toSChapter() }.reversed()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
