@@ -37,6 +37,33 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val client = super.client.newBuilder()
         .rateLimit(5)
+        .followRedirects(false)
+        .addInterceptor { chain ->
+            val maxRedirects = 5
+            var request = chain.request()
+            var response = chain.proceed(request)
+            var redirectCount = 0
+
+            while (response.isRedirect && redirectCount < maxRedirects) {
+                val newUrl = response.header("Location") ?: break
+                val newUrlHttp = newUrl.toHttpUrl()
+                val redirectedDomain = newUrlHttp.run { "$scheme://$host" }
+                if (redirectedDomain != baseUrl) {
+                    preferences.edit().putString(CUSTOM_URL_PREF, redirectedDomain).apply()
+                }
+                response.close()
+                request = request.newBuilder()
+                    .url(newUrlHttp)
+                    .build()
+                response = chain.proceed(request)
+                redirectCount++
+            }
+            if (redirectCount >= maxRedirects) {
+                response.close()
+                throw java.io.IOException("Too many redirects: $maxRedirects")
+            }
+            response
+        }
         .build()
 
     // Popular
@@ -120,7 +147,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
         EditTextPreference(screen.context).apply {
             key = CUSTOM_URL_PREF
             title = CUSTOM_URL_PREF_TITLE
-            summary = "$CUSTOM_URL_PREF_SUMMARY\n${getCustomDomain()}"
+            summary = "$CUSTOM_URL_PREF_SUMMARY${getCustomDomain()}"
             setDefaultValue("")
             dialogTitle = CUSTOM_URL_PREF_TITLE
 
@@ -156,7 +183,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
             setOnPreferenceChangeListener { _, newValue ->
                 val isValid = validate(newValue as String)
                 if (isValid) {
-                    summary = "$CUSTOM_URL_PREF_SUMMARY\n$newValue"
+                    summary = "$CUSTOM_URL_PREF_SUMMARY$newValue"
                 }
                 isValid
             }
@@ -168,7 +195,8 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
         private const val CUSTOM_URL_PREF = "overrideBaseUrl"
         private const val CUSTOM_URL_PREF_SUMMARY =
             "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt.\n" +
-                "Để trống để sử dụng URL mặc định."
+                "Để trống để sử dụng URL mặc định.\n" +
+                "Hiện tại sử dụng: "
 
         private val domainRegex = Regex("""^https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}$""")
     }
