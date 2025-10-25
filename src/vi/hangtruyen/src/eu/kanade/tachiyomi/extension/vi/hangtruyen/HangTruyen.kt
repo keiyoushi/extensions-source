@@ -6,10 +6,10 @@ import android.widget.Button
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -22,6 +22,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -40,7 +41,6 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
         }
 
     override val client = super.client.newBuilder()
-        .rateLimit(5)
         .followRedirects(false)
         .addInterceptor { chain ->
             val maxRedirects = 5
@@ -71,26 +71,36 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
         .build()
 
     // Popular
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl/tim-kiem?r=newly-updated&page=$page&orderBy=view_desc")
-
-    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        val a = element.selectFirst("a")!!
-        setUrlWithoutDomain(a.attr("abs:href"))
-        title = a.attr("title")
-        thumbnail_url = element.selectFirst("img")?.attr("abs:data-src")
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return super.fetchPopularManga(page)
+            .map {
+                if (page == 1) {
+                    MangasPage(it.mangas, true)
+                } else {
+                    it
+                }
+            }
     }
 
-    override fun popularMangaSelector() = "div.search-result .m-post"
-    override fun popularMangaNextPageSelector() = ".next-page"
+    override fun popularMangaRequest(page: Int): Request {
+        return if (page == 1) {
+            GET("$baseUrl/hot-nhat?type=week")
+        } else {
+            searchMangaRequest(page - 1, "", FilterList(SortFilter(Filter.Sort.Selection(1, false))))
+        }
+    }
+
+    override fun popularMangaSelector() = searchMangaSelector()
+    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
+    override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
 
     // Latest
     override fun latestUpdatesRequest(page: Int) =
-        GET("$baseUrl/tim-kiem?r=newly-updated&page=$page")
+        searchMangaRequest(page, "", FilterList(SortFilter(Filter.Sort.Selection(2, false))))
 
-    override fun latestUpdatesSelector() = popularMangaSelector()
-    override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
-    override fun latestUpdatesFromElement(element: Element) = popularMangaFromElement(element)
+    override fun latestUpdatesSelector() = searchMangaSelector()
+    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
+    override fun latestUpdatesFromElement(element: Element) = searchMangaFromElement(element)
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -138,7 +148,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
         title = document.selectFirst("h1.title-detail a")!!.text().trim()
         author = document.selectFirst("div.author p")?.text()?.trim()
         description = document.selectFirst("div.sort-des div.line-clamp")?.text()?.trim()
-        genre = document.select("div.kind a, div.m-tags a").joinToString(", ") { it.text().trim() }
+        genre = document.select("div.kind a, div.m-tags a").joinToString { it.text().trim() }
         status = when (document.selectFirst("div.status p")?.text()?.trim()) {
             "Đang tiến hành" -> SManga.ONGOING
             "Hoàn thành" -> SManga.COMPLETED
