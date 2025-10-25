@@ -4,15 +4,19 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.OkHttpClient
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
-private var genresFetchAttempts: Int = 0
-private var genresFetched = false
+private val genresFetchAttempts = AtomicInteger(0)
+private val genresFetched = AtomicBoolean(false)
 
+@Volatile
 private var genresList: List<FilterData> = emptyList()
+
 private val genreRegex = Regex("""\s*#\s*(.*)\s*""")
 
 fun fetchMetadata(baseUrl: String, client: OkHttpClient) {
-    if (genresFetchAttempts < 3 && !genresFetched) {
+    if (genresFetchAttempts.get() < 3 && !genresFetched.get()) {
         try {
             client.newCall(GET("$baseUrl/tim-kiem"))
                 .execute().asJsoup()
@@ -23,11 +27,11 @@ fun fetchMetadata(baseUrl: String, client: OkHttpClient) {
                                 ?.groupValues?.getOrNull(1)?.trim()
                                 ?.let { name -> FilterData(it.attr("data-value"), name) }
                         }
-                    genresFetched = true
+                    genresFetched.set(true)
                 }
         } catch (_: Exception) {
         } finally {
-            genresFetchAttempts++
+            genresFetchAttempts.incrementAndGet()
         }
     }
 }

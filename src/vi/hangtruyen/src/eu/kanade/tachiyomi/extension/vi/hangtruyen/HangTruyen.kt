@@ -206,8 +206,8 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
             setOnBindEditTextListener { editText ->
                 editText.addTextChangedListener(
                     object : TextWatcher {
-                        override fun beforeTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
-                        override fun onTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+                        override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) {}
+                        override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {}
 
                         override fun afterTextChanged(editable: Editable?) {
                             editable ?: return
