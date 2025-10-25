@@ -1,9 +1,7 @@
 ext {
     extName = 'BigSolo'
     extClass = '.BigSolo'
-    themePkg = 'scanr'
-    baseUrl = 'https://www.bigsolo.org'
-    overrideVersionCode = 1
+    extVersionCode = 3
     isNsfw = false
 }
 
