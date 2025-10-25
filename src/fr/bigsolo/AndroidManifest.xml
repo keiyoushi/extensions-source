@@ -17,6 +17,10 @@
                     android:host="bigsolo.org"
                     android:pathPattern="/..*"
                     android:scheme="https" />
+                <data
+                    android:host="www.bigsolo.org"
+                    android:pathPattern="/..*"
+                    android:scheme="https" />
             </intent-filter>
         </activity>
     </application>
