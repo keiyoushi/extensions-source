@@ -19,10 +19,11 @@ class BigSolo : HttpSource() {
         private const val SERIES_DATA_SELECTOR = "#series-data-placeholder"
     }
 
-    override val name = "Big Solo"
+    override val name = "BigSolo"
     override val baseUrl = "https://bigsolo.org"
     override val lang = "fr"
     override val supportsLatest = true
+    override val id = 4410528266393104437
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
