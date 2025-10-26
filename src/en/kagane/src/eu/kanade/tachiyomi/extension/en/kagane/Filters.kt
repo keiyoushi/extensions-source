@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.kagane
 
 import eu.kanade.tachiyomi.extension.en.kagane.Kagane.Companion.CONTENT_RATINGS
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
-import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.add
@@ -11,40 +9,19 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
-private var metadataFetchAttempts: Int = 0
-private var metadataFetched = false
-
-private var genresList: List<String> = emptyList()
-private var tagsList: List<String> = emptyList()
-private var sourcesList: List<String> = emptyList()
-
-fun fetchMetadata(apiUrl: String, client: okhttp3.OkHttpClient) {
-    if (metadataFetchAttempts < 3 && !metadataFetched) {
-        try {
-            client.newCall(GET("$apiUrl/api/v1/metadata"))
-                .execute().parseAs<MetadataDto>()
-                .let { metadata ->
-                    genresList = metadata.getGenresList()
-                    tagsList = metadata.getTagsList()
-                    sourcesList = metadata.getSourcesList()
-                    metadataFetched = true
-                }
-        } catch (_: Exception) {
-        } finally {
-            metadataFetchAttempts++
-        }
-    }
-}
-
 @Serializable
 data class MetadataDto(
     val genres: List<MetadataTagDto>,
     val tags: List<MetadataTagDto>,
     val sources: List<MetadataTagDto>,
 ) {
-    fun getGenresList() = genres.map { it.name }
-    fun getTagsList() = tags.sortedByDescending { it.count }.slice(0..200).map { it.name }
-    fun getSourcesList() = sources.map { it.name }
+    fun getGenresList() = genres
+        .map { FilterData(it.name, it.name) }
+    fun getTagsList() = tags.sortedByDescending { it.count }
+        .slice(0..200)
+        .map { FilterData(it.name, it.name.replaceFirstChar { c -> c.uppercase() }) }
+    fun getSourcesList() = sources
+        .map { FilterData(it.name, it.name) }
 }
 
 @Serializable
@@ -96,7 +73,7 @@ internal class ContentRatingFilter(
 )
 
 internal class GenresFilter(
-    genres: List<FilterData> = genresList.map { FilterData(it, it) },
+    genres: List<FilterData>,
 ) : JsonMultiSelectTriFilter(
     "Genres",
     "genres",
@@ -106,7 +83,7 @@ internal class GenresFilter(
 )
 
 internal class TagsFilter(
-    tags: List<FilterData> = tagsList.map { FilterData(it, it.replaceFirstChar { c -> c.uppercase() }) },
+    tags: List<FilterData>,
 ) : JsonMultiSelectTriFilter(
     "Tags",
     "tags",
@@ -116,7 +93,7 @@ internal class TagsFilter(
 )
 
 internal class SourcesFilter(
-    sources: List<FilterData> = sourcesList.map { FilterData(it, it) },
+    sources: List<FilterData>,
 ) : JsonMultiSelectFilter(
     "Sources",
     "sources",
@@ -127,7 +104,7 @@ internal class SourcesFilter(
 
 internal class ScanlationsFilter() : Filter.CheckBox("Show scanlations", true)
 
-internal class FilterData(
+class FilterData(
     val id: String,
     val name: String,
 )
