@@ -1,16 +1,17 @@
 package eu.kanade.tachiyomi.extension.fr.bigsolo
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import java.net.URI
 
 class BigSolo : HttpSource() {
@@ -42,9 +43,7 @@ class BigSolo : HttpSource() {
         return GET("$baseUrl/data/series", headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return searchMangaParse(response)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -85,18 +84,22 @@ class BigSolo : HttpSource() {
     }
 
     // Details
-    override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val splitedPath = URI(document.baseUri()).path.split("/")
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+        val splitedPath = URI(manga.url).path.split("/")
         val slug = splitedPath[1]
-        val serieJson =
-            client.newCall(GET("$baseUrl/data/series/$slug", headers))
-                .execute()
+        return client.newCall(GET("$baseUrl/data/series/$slug", headers))
+            .asObservableSuccess()
+            .map { response ->
+                mangaDetailsParse(response)
+            }
+    }
 
-        val serie = serieJson.parseAs<Serie>()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val serie = response.parseAs<Serie>()
         return serie.toDetailedSManga()
     }
 
+    // Pages
     override fun pageListRequest(chapter: SChapter): Request {
         val splitedPath = URI(chapter.url).path.split("/")
         val slug = splitedPath[1]
@@ -111,21 +114,16 @@ class BigSolo : HttpSource() {
         }
     }
 
-    override fun imageUrlParse(response: Response): String {
-        throw UnsupportedOperationException()
-    }
-
+    // Chapters
     override fun chapterListRequest(manga: SManga): Request {
         val slug = URI(manga.url).path.split("/")[1]
         return GET("$baseUrl/data/series/$slug", headers)
     }
 
-    // Chapters
     override fun chapterListParse(response: Response): List<SChapter> {
         val seriesData = response.parseAs<Serie>()
         return buildChapterList(seriesData)
     }
-
     private fun buildChapterList(serie: Serie): List<SChapter> {
         val chapters = serie.chapters
         val chapterList = mutableListOf<SChapter>()
@@ -158,5 +156,10 @@ class BigSolo : HttpSource() {
         }
 
         return chapterList.sortedByDescending { it.chapter_number }
+    }
+
+    // Unsupported Stuff
+    override fun imageUrlParse(response: Response): String {
+        throw UnsupportedOperationException()
     }
 }
