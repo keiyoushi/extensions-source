@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.mangagun
 
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -7,10 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Cookie
-import okhttp3.Interceptor
 import okhttp3.Request
-import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -29,33 +27,8 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
 
     override val infoElementSelector = "div.row div.row"
 
-    override val client = super.client.newBuilder().addNetworkInterceptor(::checkCookie).build()
-
-    private fun checkCookie(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        if (request.tag() == PAGE_LIST_REQUEST) {
-            // check smart link cookie
-            val cookie =
-                client.cookieJar.loadForRequest(request.url).find { it.name == COOKIE_SMART_LINK }
-            if (cookie == null) {
-                client.cookieJar.saveFromResponse(
-                    request.url,
-                    listOf(
-                        Cookie.Builder()
-                            .name(COOKIE_SMART_LINK)
-                            .domain(DOMAIN)
-                            .value("1")
-                            .build(),
-                    ),
-                )
-            }
-        }
-        return chain.proceed(request)
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        return super.pageListRequest(chapter).newBuilder().tag(PAGE_LIST_REQUEST).build()
-    }
+    override val client = super.client.newBuilder()
+        .addNetworkInterceptor(CookieInterceptor(DOMAIN, "smartlink_shown" to "1")).build()
 
     // source is picky about URL format
     private fun mangaRequest(sortBy: String, page: Int): Request {
@@ -139,10 +112,5 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
         return Jsoup.parse(html).select("img.chapter-img").mapIndexed { index, element ->
             Page(index, imageUrl = element.attr("abs:data-srcset").trim())
         }
-    }
-
-    companion object {
-        private const val PAGE_LIST_REQUEST = "page_list_request"
-        private const val COOKIE_SMART_LINK = "smartlink_shown"
     }
 }
