@@ -20,6 +20,6 @@ If you've setup the Remote Storage via WebView the Recent tab shows your recent,
 You can visit the [Cubari](https://cubari.moe/) website for for more information.
 
 ### How do I add a gallery to Cubari?
-You can directly open a imgur or Cubari link in the extension.
+You can directly open a imgur or Cubari link in the extension or paste the url in cubari browse
 
 [Uncomment this if needed]: <> (## Guides)
