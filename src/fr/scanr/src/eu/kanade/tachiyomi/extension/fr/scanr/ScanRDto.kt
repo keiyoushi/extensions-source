@@ -19,6 +19,7 @@ class Serie(
     val os: Boolean = false,
     val chapters: Map<String, Chapter>,
     val completed: Boolean = false,
+    val konami: Boolean = false,
 )
 
 @Serializable
@@ -32,7 +33,7 @@ class Chapter(
 
 // DTO to SManga extension functions
 fun Serie.toDetailedSManga(): SManga = SManga.create().apply {
-    title = this@toDetailedSManga.title
+    title = (if (this@toDetailedSManga.konami == true) "[+18] " else "") + this@toDetailedSManga.title
     description = this@toDetailedSManga.description
     artist = this@toDetailedSManga.artist
     author = this@toDetailedSManga.author
