@@ -48,7 +48,7 @@ class MagazinePocket : HttpSource() {
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
         .build()
 
