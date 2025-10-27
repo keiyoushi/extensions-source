@@ -17,17 +17,18 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import okhttp3.CacheControl
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import okhttp3.internal.closeQuietly
+import okio.IOException
 import org.jsoup.Jsoup
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
@@ -138,11 +139,19 @@ class Rawkuma : HttpSource() {
         ).await()
 
         if (!response.isSuccessful) {
-            CoroutineScope(Dispatchers.IO).launch {
-                metadataClient.newCall(
-                    GET(url, headers, CacheControl.FORCE_NETWORK),
-                ).await().closeQuietly()
-            }
+            metadataClient.newCall(
+                GET(url, headers, CacheControl.FORCE_NETWORK),
+            ).enqueue(
+                object : Callback {
+                    override fun onResponse(call: Call, response: Response) {
+                        response.closeQuietly()
+                    }
+
+                    override fun onFailure(call: Call, e: IOException) {
+                        Log.e(name, "Failed to fetch genre filter", e)
+                    }
+                },
+            )
 
             filters.addAll(
                 listOf(
