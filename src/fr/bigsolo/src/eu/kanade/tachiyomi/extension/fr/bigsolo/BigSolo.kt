@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.bigsolo
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,7 +10,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import okhttp3.Request
 import okhttp3.Response
-import rx.Observable
 import java.net.URI
 
 class BigSolo : HttpSource() {
@@ -63,18 +61,19 @@ class BigSolo : HttpSource() {
         val fragment = response.request.url.fragment
         val searchQuery = fragment ?: ""
 
-        for (serie in allSeries) {
-            if (searchQuery.startsWith("SLUG:") && serie.slug == searchQuery.removePrefix("SLUG:")) {
+        if (searchQuery.startsWith("SLUG:")) {
+            val serie = allSeries.find { it.slug == searchQuery.removePrefix("SLUG:") }
+            if (serie != null) {
                 mangaList.add(serie.toDetailedSManga())
-                break
             }
+            return MangasPage(mangaList, false)
+        }
 
-            if ((
-                searchQuery.isBlank() ||
-                    serie.title.contains(searchQuery, ignoreCase = true) ||
-                    serie.alternativeTitles.any { it.contains(searchQuery, ignoreCase = true) } ||
-                    serie.jaTitle.contains(searchQuery, ignoreCase = true)
-                ) && !searchQuery.startsWith("SLUG:")
+        for (serie in allSeries) {
+            if (searchQuery.isBlank() ||
+                serie.title.contains(searchQuery, ignoreCase = true) ||
+                serie.alternativeTitles.any { it.contains(searchQuery, ignoreCase = true) } ||
+                serie.jaTitle.contains(searchQuery, ignoreCase = true)
             ) {
                 mangaList.add(serie.toDetailedSManga())
             }
@@ -84,14 +83,14 @@ class BigSolo : HttpSource() {
     }
 
     // Details
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+    override fun mangaDetailsRequest(manga: SManga): Request {
         val splitedPath = URI(manga.url).path.split("/")
         val slug = splitedPath[1]
-        return client.newCall(GET("$baseUrl/data/series/$slug", headers))
-            .asObservableSuccess()
-            .map { response ->
-                mangaDetailsParse(response)
-            }
+        return GET("$baseUrl/data/series/$slug", headers)
+    }
+
+    override fun getMangaUrl(manga: SManga): String {
+        return "$baseUrl${manga.url}"
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
