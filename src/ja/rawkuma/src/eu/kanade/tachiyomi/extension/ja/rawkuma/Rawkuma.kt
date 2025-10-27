@@ -249,9 +249,13 @@ class Rawkuma : HttpSource() {
             return client.newCall(GET(url, headers))
                 .asObservableSuccess()
                 .map { response ->
-                    val manga = response.parseAs<List<Manga>>()[0].toSManga()
+                    val manga = response.parseAs<List<Manga>>()[0]
 
-                    MangasPage(listOf(manga), false)
+                    if (manga.embedded.getTerms("type").contains("Novel")) {
+                        throw Exception("Novels are not supported")
+                    }
+
+                    MangasPage(listOf(manga.toSManga()), false)
                 }
         }
 
