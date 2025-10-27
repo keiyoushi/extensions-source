@@ -67,7 +67,7 @@ class MangaNova : HttpSource() {
         val url = if (query.isNotBlank()) {
             "$api/catalogue/#$query"
         } else {
-            "$api/cataloge/"
+            "$api/catalogue/"
         }
         return GET(url, headers)
     }
