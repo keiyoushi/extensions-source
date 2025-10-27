@@ -136,14 +136,10 @@ class MangaNova : HttpSource() {
     }
 
     // Chapters
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+    override fun chapterListRequest(manga: SManga): Request {
         val splitedPath = URI(manga.url).path.split("/")
         val slug = splitedPath[2]
-        return client.newCall(GET("$api/mangas/$slug", headers))
-            .asObservableSuccess()
-            .map { response ->
-                chapterListParse(response)
-            }
+        return GET("$api/mangas/$slug", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
