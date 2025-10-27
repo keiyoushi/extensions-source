@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.mangagun
 
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -25,6 +26,9 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
     override val id = 3811800324362294701
 
     override val infoElementSelector = "div.row div.row"
+
+    override val client = super.client.newBuilder()
+        .addNetworkInterceptor(CookieInterceptor(DOMAIN, "smartlink_shown" to "1")).build()
 
     // source is picky about URL format
     private fun mangaRequest(sortBy: String, page: Int): Request {
