@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.ja.rawkuma
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -30,6 +31,7 @@ import okhttp3.brotli.BrotliInterceptor
 import okhttp3.internal.closeQuietly
 import okio.IOException
 import org.jsoup.Jsoup
+import rx.Observable
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -63,6 +65,14 @@ class Rawkuma : HttpSource() {
 
     override fun latestUpdatesParse(response: Response) =
         searchMangaParse(response)
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return if (query.startsWith("https://")) {
+            deepLink(query)
+        } else {
+            return super.fetchSearchManga(page, query, filters)
+        }
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/wp-admin/admin-ajax.php?action=advanced_search"
@@ -203,7 +213,7 @@ class Rawkuma : HttpSource() {
             slugs.forEach { slug ->
                 addQueryParameter("slug[]", slug)
             }
-            addQueryParameter("per_page", "${slugs.count() + 1}")
+            addQueryParameter("per_page", "${slugs.size + 1}")
             addQueryParameter("_embed", null)
         }.build()
 
@@ -221,6 +231,31 @@ class Rawkuma : HttpSource() {
         val hasNextPage = document.selectFirst("button > svg") != null
 
         return MangasPage(mangas, hasNextPage)
+    }
+
+    private fun deepLink(url: String): Observable<MangasPage> {
+        val httpUrl = url.toHttpUrl()
+        if (
+            httpUrl.host == baseUrl.toHttpUrl().host &&
+            httpUrl.pathSegments.size >= 2 &&
+            httpUrl.pathSegments[0] == "manga"
+        ) {
+            val slug = httpUrl.pathSegments[1]
+            val url = "$baseUrl/wp-json/wp/v2/manga".toHttpUrl().newBuilder()
+                .addQueryParameter("slug[]", slug)
+                .addQueryParameter("_embed", null)
+                .build()
+
+            return client.newCall(GET(url, headers))
+                .asObservableSuccess()
+                .map { response ->
+                    val manga = response.parseAs<List<Manga>>()[0].toSManga()
+
+                    MangasPage(listOf(manga), false)
+                }
+        }
+
+        return Observable.error(Exception("Unsupported url"))
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
