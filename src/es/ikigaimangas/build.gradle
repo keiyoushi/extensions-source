@@ -1,12 +1,8 @@
 ext {
     extName = 'Ikigai Mangas'
     extClass = '.IkigaiMangas'
-    extVersionCode = 27
+    extVersionCode = 28
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation(project(":lib:cookieinterceptor"))
-}
