@@ -110,6 +110,7 @@ class Rawkuma : HttpSource() {
 
     private var nonce: String? = null
 
+    @Synchronized
     private fun getNonce(): String {
         if (nonce == null) {
             val url = "$baseUrl/wp-admin/admin-ajax.php?type=search_form&action=get_nonce"
