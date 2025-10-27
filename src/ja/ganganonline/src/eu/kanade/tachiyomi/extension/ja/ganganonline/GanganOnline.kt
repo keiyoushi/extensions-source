@@ -11,7 +11,6 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -52,25 +51,13 @@ class GanganOnline : HttpSource() {
                 val data = response.parseAsNextData<MangaListDto>()
                 data.sections?.flatMap { it.titleLinks }
                     ?.filter { it.isNovel != true }
-                    ?.map {
-                        SManga.create().apply {
-                            this.url = "/title/${it.titleId}"
-                            title = it.name!!
-                            thumbnail_url = baseUrl + it.imageUrl
-                        }
-                    }
+                    ?.map { it.toSManga(baseUrl) }
             }
             "/rensai" in url || "/finish" in url -> {
                 val data = response.parseAsNextData<MangaListDto>()
                 data.titleSections?.flatMap { it.titles }
                     ?.filter { it.isNovel != true }
-                    ?.map {
-                        SManga.create().apply {
-                            this.url = "/title/${it.titleId}"
-                            title = it.header!!
-                            thumbnail_url = baseUrl + it.imageUrl
-                        }
-                    }
+                    ?.map { it.toSManga(baseUrl) }
             }
             "/ga" in url -> {
                 val data = response.parseAsNextData<MangaListDto>()
@@ -78,23 +65,11 @@ class GanganOnline : HttpSource() {
                 val finished = data.finishedTitleSection?.titles!!
                 (ongoing + finished)
                     .filter { it.isNovel != true }
-                    .map {
-                        SManga.create().apply {
-                            this.url = "/title/${it.titleId}"
-                            title = it.header!!
-                            thumbnail_url = baseUrl + it.imageUrl
-                        }
-                    }
+                    .map { it.toSManga(baseUrl) }
             }
             "/pixiv" in url -> {
                 val data = response.parseAsNextData<PixivPageDto>()
-                data.ganganTitles?.map {
-                    SManga.create().apply {
-                        this.url = "/title/${it.titleId}"
-                        title = it.name
-                        thumbnail_url = baseUrl + it.imageUrl
-                    }
-                }
+                data.ganganTitles?.map { it.toSManga(baseUrl) }
             }
             else -> null
         }
@@ -102,13 +77,7 @@ class GanganOnline : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.parseAsNextData<MangaDetailDto>().default
-        return SManga.create().apply {
-            title = data.titleName
-            author = data.author
-            description = data.description
-            thumbnail_url = baseUrl + data.imageUrl
-        }
+        return response.parseAsNextData<MangaDetailDto>().default.toSManga(baseUrl)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -119,13 +88,7 @@ class GanganOnline : HttpSource() {
 
         return data.chapters
             .filter { it.status == null || it.status >= 4 }
-            .map { chapter ->
-                SChapter.create().apply {
-                    url = "$mangaUrl/chapter/${chapter.id}"
-                    name = chapter.mainText + if (!chapter.subText.isNullOrEmpty()) " - ${chapter.subText}" else ""
-                    date_upload = chapter.publishingPeriod?.substringBefore("〜").let { dateFormat.tryParse(it) }
-                }
-            }
+            .map { it.toSChapter(mangaUrl, dateFormat) }
     }
 
     override fun pageListParse(response: Response): List<Page> {

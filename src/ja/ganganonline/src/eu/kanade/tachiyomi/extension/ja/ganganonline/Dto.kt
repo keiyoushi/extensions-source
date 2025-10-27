@@ -1,6 +1,10 @@
 package eu.kanade.tachiyomi.extension.ja.ganganonline
 
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
 
 @Serializable
 class NextData<T>(
@@ -37,12 +41,18 @@ class SearchSectionDto(
 
 @Serializable
 class MangaDto(
-    val titleId: Int,
-    val header: String?, // Popular/Finished
-    val name: String?, // Search
-    val imageUrl: String?,
+    private val titleId: Int,
+    private val header: String?, // Popular/Finished
+    private val name: String?, // Search
+    private val imageUrl: String?,
     val isNovel: Boolean?,
-)
+) {
+    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+        url = "/title/$titleId"
+        title = header ?: name!!
+        thumbnail_url = baseUrl + imageUrl
+    }
+}
 
 @Serializable
 class PixivPageDto(
@@ -51,10 +61,16 @@ class PixivPageDto(
 
 @Serializable
 class PixivMangaDto(
-    val titleId: Int,
-    val name: String,
-    val imageUrl: String,
-)
+    private val titleId: Int,
+    private val name: String,
+    private val imageUrl: String,
+) {
+    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+        url = "/title/$titleId"
+        title = name
+        thumbnail_url = baseUrl + imageUrl
+    }
+}
 
 @Serializable
 class MangaDetailDto(
@@ -63,21 +79,34 @@ class MangaDetailDto(
 
 @Serializable
 class MangaDetailDefaultDto(
-    val titleName: String,
-    val author: String,
-    val description: String,
-    val imageUrl: String,
+    private val titleName: String,
+    private val author: String,
+    private val description: String,
+    private val imageUrl: String,
     val chapters: List<ChapterDto>,
-)
+) {
+    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+        title = titleName
+        author = this@MangaDetailDefaultDto.author
+        description = this@MangaDetailDefaultDto.description
+        thumbnail_url = baseUrl + imageUrl
+    }
+}
 
 @Serializable
 class ChapterDto(
-    val id: Int,
+    private val id: Int,
     val status: Int?,
-    val mainText: String,
-    val subText: String?,
-    val publishingPeriod: String?,
-)
+    private val mainText: String,
+    private val subText: String?,
+    private val publishingPeriod: String?,
+) {
+    fun toSChapter(mangaUrl: String, dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
+        url = "$mangaUrl/chapter/$id"
+        name = mainText + if (!subText.isNullOrEmpty()) " - $subText" else ""
+        date_upload = publishingPeriod?.substringBefore("〜").let { dateFormat.tryParse(it) }
+    }
+}
 
 @Serializable
 class PageListDto(
