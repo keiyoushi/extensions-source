@@ -56,21 +56,8 @@ class MangaDto(
 
 @Serializable
 class PixivPageDto(
-    val ganganTitles: List<PixivMangaDto>?,
+    val ganganTitles: List<MangaDto>?,
 )
-
-@Serializable
-class PixivMangaDto(
-    private val titleId: Int,
-    private val name: String,
-    private val imageUrl: String,
-) {
-    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
-        url = "/title/$titleId"
-        title = name
-        thumbnail_url = baseUrl + imageUrl
-    }
-}
 
 @Serializable
 class MangaDetailDto(
