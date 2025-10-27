@@ -55,7 +55,7 @@ class Embedded(
     private val terms: List<List<Term>>,
 ) {
     fun getTerms(type: String): List<String> {
-        return terms.find { it[0].taxonomy == type }?.map { it.name } ?: emptyList()
+        return terms.find { it.getOrNull(0)?.taxonomy == type }?.map { it.name } ?: emptyList()
     }
 }
 

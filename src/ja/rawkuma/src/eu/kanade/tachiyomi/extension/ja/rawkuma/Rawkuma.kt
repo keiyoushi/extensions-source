@@ -70,7 +70,7 @@ class Rawkuma : HttpSource() {
         return if (query.startsWith("https://")) {
             deepLink(query)
         } else {
-            return super.fetchSearchManga(page, query, filters)
+            super.fetchSearchManga(page, query, filters)
         }
     }
 
