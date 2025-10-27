@@ -204,9 +204,9 @@ class Rawkuma : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         val document = Jsoup.parseBodyFragment(response.body.string(), baseUrl)
         val slugs = document.select("div > a[href*=/manga/]:has(> img)").map {
-            val slug = it.absUrl("href")
-                .toHttpUrl().pathSegments[1]
-            slug
+            it.absUrl("href").toHttpUrl().pathSegments[1]
+        }.ifEmpty {
+            return MangasPage(emptyList(), false)
         }
 
         val url = "$baseUrl/wp-json/wp/v2/manga".toHttpUrl().newBuilder().apply {
