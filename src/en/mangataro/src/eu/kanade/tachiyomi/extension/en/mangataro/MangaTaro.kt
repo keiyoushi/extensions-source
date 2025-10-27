@@ -193,6 +193,7 @@ class MangaTaro : HttpSource() {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("wp-json/wp/v2/manga")
             addPathSegment(id)
+            addQueryParameter("_embed", null)
             fragment(status.toString())
         }.build()
 
@@ -201,32 +202,20 @@ class MangaTaro : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.parseAs<MangaDetails>()
-        val thumbnail = getThumbnail(data.featuredMedia)
 
         return SManga.create().apply {
             url = MangaUrl(data.id.toString(), data.slug).toJsonString()
             title = data.title.rendered
             description = Jsoup.parseBodyFragment(data.content.rendered).wholeText()
             genre = buildSet {
-                addAll(data.getFromClassList("tag"))
+                addAll(data.embedded.getTerms("post_tag"))
                 addAll(data.getFromClassList("type"))
             }.joinToString()
-            author = data.getFromClassList("manga_author").joinToString()
+            author = data.embedded.getTerms("manga_author").joinToString()
             status = response.request.url.fragment!!.toInt()
-            thumbnail_url = thumbnail
+            thumbnail_url = data.embedded.featuredMedia.firstOrNull()?.url
             initialized = true
         }
-    }
-
-    private fun getThumbnail(mediaId: Int): String {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("wp-json/wp/v2/media")
-            addPathSegment(mediaId.toString())
-        }.build()
-
-        return client.newCall(GET(url, headers)).execute()
-            .parseAs<Thumbnail>()
-            .url
     }
 
     override fun getMangaUrl(manga: SManga): String {
