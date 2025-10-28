@@ -181,7 +181,6 @@ class FlameComics : HttpSource() {
         thumbnail_url = thumbnailUrl(seriesData)
         description = seriesData.description
             ?.let { Jsoup.parseBodyFragment(it).wholeText() }
-            ?: "No description"
 
         genre = seriesData.tags?.let { tags ->
             (listOf(seriesData.type) + tags).joinToString()
@@ -199,7 +198,8 @@ class FlameComics : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chaptersListResponseData = json.decodeFromString<ChapterListResponseData>(response.body.string())
+        val chaptersListResponseData =
+            json.decodeFromString<ChapterListResponseData>(response.body.string())
         return chaptersListResponseData.pageProps.chapters.map { chapter ->
             SChapter.create().apply {
                 setUrlWithoutDomain(
