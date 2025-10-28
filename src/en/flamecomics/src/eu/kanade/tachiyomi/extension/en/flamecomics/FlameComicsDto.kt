@@ -78,11 +78,11 @@ class ChapterPageData(
 ) {
     @Serializable
     class PageProps(
-        val chapter: Chapter,
+        val chapter: ChapterPage,
     )
 
     @Serializable
-    data class Chapter(
+    data class ChapterPage(
         val release_date: Long,
         val series_id: Int,
         val token: String,
