@@ -28,6 +28,9 @@ class MangasNoSekai : Madara(
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
+    override fun headersBuilder() = super.headersBuilder()
+        .removeAll("Referer")
+
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2, 1)
         .build()
