@@ -293,7 +293,7 @@ class Rawkuma : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = Jsoup.parseBodyFragment(response.body.string(), baseUrl)
 
-        return document.select("#chapter-list a").map {
+        return document.select("#chapter-list > div[data-chapter-number] > a").map {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 name = it.selectFirst("div > span")!!.ownText()
