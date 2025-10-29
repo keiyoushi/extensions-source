@@ -1,10 +1,12 @@
 ext {
-    extName = 'Rawkuma'
-    extClass = '.Rawkuma'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://old.rawkuma.net'
-    overrideVersionCode = 3
-    isNsfw = true
+	extName = 'Rawkuma'
+	extClass = '.Rawkuma'
+	extVersionCode = 34
+	isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    compileOnly("com.squareup.okhttp3:okhttp-brotli:5.0.0-alpha.11")
+}
