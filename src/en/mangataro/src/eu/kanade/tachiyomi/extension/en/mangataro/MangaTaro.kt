@@ -292,6 +292,7 @@ class MangaTaro : HttpSource() {
 
         when (unit) {
             "h" -> calendar.add(Calendar.HOUR, -amount.toInt())
+            "d" -> calendar.add(Calendar.DAY_OF_YEAR, -amount.toInt())
             "w" -> calendar.add(Calendar.WEEK_OF_YEAR, -amount.toInt())
             "mo" -> calendar.add(Calendar.MONTH, -amount.toInt())
             "y" -> calendar.add(Calendar.YEAR, -amount.toInt())
@@ -300,7 +301,7 @@ class MangaTaro : HttpSource() {
         return calendar.timeInMillis
     }
 
-    private val relativeDateRegex = Regex("""(\d+)(h|w|mo|y) ago""")
+    private val relativeDateRegex = Regex("""(\d+)(h|d|w|mo|y) ago""")
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
