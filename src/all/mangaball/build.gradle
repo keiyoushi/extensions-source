@@ -1,0 +1,12 @@
+ext {
+	extName = 'Manga Ball'
+	extClass = '.MangaBallFactory'
+	extVersionCode = 1
+	isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    compileOnly("com.squareup.okhttp3:okhttp-brotli:5.0.0-alpha.11")
+}
