@@ -197,6 +197,5 @@ class StatusFilter : SelectFilter<String>(
         "Completed" to "completed",
         "Hiatus" to "hiatus",
         "Cancelled" to "cancelled",
-
     ),
 )
