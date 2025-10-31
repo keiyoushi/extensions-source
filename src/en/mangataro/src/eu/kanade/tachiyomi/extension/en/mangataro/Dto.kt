@@ -68,7 +68,7 @@ class BrowseManga(
 )
 
 @Serializable
-class MangaUrl(
+data class MangaUrl(
     val id: String,
     val slug: String,
 )

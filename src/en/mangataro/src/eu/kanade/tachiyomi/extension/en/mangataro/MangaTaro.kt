@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangataro
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -15,11 +16,14 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.internal.closeQuietly
+import okio.IOException
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 import rx.Observable
@@ -223,10 +227,14 @@ class MangaTaro : HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        return GET(getMangaUrl(manga), headers)
+        val (id, slug) = manga.url.parseAs<MangaUrl>()
+
+        return GET("$baseUrl/manga/$slug#$id", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        countViews(response.request.url.fragment!!)
+
         val document = response.asJsoup()
         val placeholders = listOf("", "N/A", "—")
         var hasScanlator = false
@@ -299,6 +307,26 @@ class MangaTaro : HttpSource() {
     }
 
     private val relativeDateRegex = Regex("""(\d+)(h|d|w|mo|y) ago""")
+
+    private fun countViews(postId: String) {
+        val payload = """{"post_id":"$postId"}"""
+            .toRequestBody("application/json".toMediaType())
+        val url = "$baseUrl/wp-json/pviews/v1/increment/"
+        val request = POST(url, headers, payload)
+
+        client.newCall(request)
+            .enqueue(
+                object : Callback {
+                    override fun onResponse(call: okhttp3.Call, response: Response) {
+                        response.closeQuietly()
+                    }
+                    override fun onFailure(call: okhttp3.Call, e: IOException) {
+                        Log.e(name, "Failed to count views", e)
+                    }
+                }
+            )
+
+    }
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
