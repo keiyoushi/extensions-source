@@ -159,10 +159,10 @@ class Manhuarm(
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
         val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
-        val nonce = document.selectFirst("#manga-ocr-display-script-js-extra")!!.data().let {
-            NONCE_REGEX.find(it)!!.groupValues.last()
-        }
-
+        val nonce = document.select("script").firstOrNull { it.html().contains("const nonce") }?.let {
+            NONCE_REGEX.find(it.html())?.groupValues?.get(1)
+        } ?: "18b0e544f4" // fallback
+        
         val form = FormBody.Builder()
             .add("action", "get_ocr_data")
             .add("chapter_id", chapterId)
