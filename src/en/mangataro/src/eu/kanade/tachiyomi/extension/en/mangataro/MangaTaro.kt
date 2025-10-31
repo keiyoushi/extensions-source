@@ -208,10 +208,7 @@ class MangaTaro : HttpSource() {
             url = MangaUrl(data.id.toString(), data.slug).toJsonString()
             title = Parser.unescapeEntities(data.title.rendered, false)
             description = Jsoup.parseBodyFragment(data.content.rendered).wholeText()
-            genre = buildSet {
-                addAll(data.embedded.getTerms("post_tag"))
-                addAll(data.getFromClassList("type"))
-            }.joinToString()
+            genre = data.embedded.getTerms("post_tag").joinToString()
             author = data.embedded.getTerms("manga_author").joinToString()
             status = response.request.url.fragment!!.toInt()
             thumbnail_url = data.embedded.featuredMedia.firstOrNull()?.url

@@ -79,20 +79,9 @@ class MangaDetails(
     val slug: String,
     val title: Rendered,
     val content: Rendered,
-    @SerialName("class_list")
-    private val classList: List<String>,
     @SerialName("_embedded")
     val embedded: Embedded,
-) {
-    fun getFromClassList(type: String): List<String> {
-        return classList.filter { it.startsWith("$type-") }
-            .map {
-                it.substringAfter("$type-")
-                    .split("-")
-                    .joinToString(" ") { word -> word.replaceFirstChar { it.titlecase() } }
-            }
-    }
-}
+)
 
 @Serializable
 class Embedded(
