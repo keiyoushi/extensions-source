@@ -79,6 +79,7 @@ class MangaDetails(
     val slug: String,
     val title: Rendered,
     val content: Rendered,
+    val type: String,
     @SerialName("_embedded")
     val embedded: Embedded,
 )
