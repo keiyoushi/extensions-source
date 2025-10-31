@@ -1,0 +1,10 @@
+ext {
+    extName = 'Sana Scans'
+    extClass = '.SanaScans'
+    themePkg = 'iken'
+    baseUrl = 'https://sanascans.com'
+    overrideVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

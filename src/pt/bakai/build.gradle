@@ -1,7 +1,7 @@
 ext {
     extName = 'Bakai'
     extClass = '.Bakai'
-    extVersionCode = 11
+    extVersionCode = 13
     isNsfw = true
 }
 

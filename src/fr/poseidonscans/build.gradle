@@ -1,9 +1,7 @@
 ext {
     extName = 'Poseidon Scans'
     extClass = '.PoseidonScans'
-    baseUrl = 'https://poseidonscans.fr'
-    overrideVersionCode = 0
-    extVersionCode = 44
+    extVersionCode = 47
     isNsfw = false
 }
 

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.SManga
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -20,20 +21,20 @@ class DoujinHentai : Madara(
 
     override val fetchGenres = false
 
-    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/lista-manga-hentai?orderby=views&page=$page", headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/list-manga-hentai?orderby=views&page=$page", headers)
     override fun popularMangaSelector() = "div.col-md-3 a"
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
 
         manga.setUrlWithoutDomain(element.attr("href"))
-        manga.title = element.select("h5").text()
+        manga.title = element.select("span.card-title").text().removePrefix("Leer").trim()
         manga.thumbnail_url = element.select("img").attr("abs:data-src")
 
         return manga
     }
 
     override fun popularMangaNextPageSelector() = "a[rel=next]"
-    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/lista-manga-hentai?orderby=last&page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/list-manga-hentai?orderby=last&page=$page", headers)
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder()
         if (query.isNotBlank()) {
@@ -44,7 +45,7 @@ class DoujinHentai : Madara(
                 when (filter) {
                     is GenreSelectFilter -> {
                         if (filter.state != 0) {
-                            url.addPathSegments("lista-manga-hentai/category/${filter.toUriPart()}")
+                            url.addPathSegments("list-manga-hentai/category/${filter.toUriPart()}")
                             url.addQueryParameter("page", page.toString())
                         }
                     }
@@ -67,6 +68,12 @@ class DoujinHentai : Madara(
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
     override fun chapterListSelector() = "ul.main.version-chap > li.wp-manga-chapter:not(:last-child)" // removing empty li
     override val pageListParseSelector = "div#all > img.img-responsive"
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        return super.mangaDetailsParse(document).apply {
+            title = title.removePrefix("Doujin Hentai:").trim()
+        }
+    }
 
     override fun getFilterList() = FilterList(
         Filter.Header("Solo funciona si la consulta está en blanco"),

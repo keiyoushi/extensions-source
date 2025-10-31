@@ -1,9 +1,9 @@
 ext {
     extName = 'ReYume'
     extClass = '.ReYume'
-    themePkg = 'makaru'
+    themePkg = 'zeistmanga'
     baseUrl = 'https://www.re-yume.my.id'
-    overrideVersionCode = 35
+    overrideVersionCode = 26
     isNsfw = true
 }
 

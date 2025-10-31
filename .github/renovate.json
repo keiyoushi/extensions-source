@@ -5,7 +5,9 @@
   "schedule": ["on sunday"],
   "includePaths": [
     "buildSrc/gradle/**",
+    "buildSrc/*.gradle.kts",
     "gradle/**",
+    "*.gradle.kts",
     ".github/**"
   ],
   "ignoreDeps": ["keiyoushi/issue-moderator-action"],

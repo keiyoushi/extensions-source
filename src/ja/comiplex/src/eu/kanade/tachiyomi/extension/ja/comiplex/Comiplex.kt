@@ -12,6 +12,7 @@ class Comiplex : GigaViewer(
     "https://viewer.heros-web.com",
     "ja",
     "https://cdn-img.viewer.heros-web.com/public/page",
+    isPaginated = true,
 ) {
 
     override val supportsLatest: Boolean = false

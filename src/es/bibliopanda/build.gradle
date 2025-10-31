@@ -3,7 +3,7 @@ ext {
     extClass = '.BiblioPanda'
     themePkg = 'madara'
     baseUrl = 'https://bibliopanda.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 2
     isNsfw = false
 }
 

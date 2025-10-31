@@ -4,6 +4,7 @@ ext {
     themePkg = 'iken'
     baseUrl = 'https://id.ikiru.wtf'
     overrideVersionCode = 9
+    extVersionCode = 43
     isNsfw = true
 }
 

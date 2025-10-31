@@ -2,8 +2,9 @@ ext {
     extName = 'Siren Komik'
     extClass = '.SirenKomik'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://sirenkomik.my.id'
-    overrideVersionCode = 7
+    baseUrl = 'https://sirenkomik.xyz'
+    overrideVersionCode = 9
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

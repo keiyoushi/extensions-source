@@ -2,8 +2,8 @@ ext {
     extName = 'Read Fairy Tail & Edens Zero Manga Online'
     extClass = '.ReadFairyTailEdensZeroMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww4.readfairytail.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://ww8.readfairytail.com'
+    overrideVersionCode = 2
     isNsfw = false
 }
 

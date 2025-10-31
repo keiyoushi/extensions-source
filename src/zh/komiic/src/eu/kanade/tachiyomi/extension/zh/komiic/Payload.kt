@@ -3,36 +3,48 @@ package eu.kanade.tachiyomi.extension.zh.komiic
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 
-@Serializable
-data class Payload<T>(
-    val operationName: String,
-    val variables: T,
-    val query: String,
-)
+const val PAGE_SIZE = 30 // using 20 causes weird behavior in the filter endpoint
 
 @Serializable
-data class Pagination(
-    val offset: Int,
-    val orderBy: String,
+class ListingVariables(
+    val pagination: Pagination,
+) {
     @EncodeDefault
-    val limit: Int = Komiic.PAGE_SIZE,
+    var categoryId: List<String> = emptyList()
+
+    fun encode() = Json.encodeToJsonElement(this) as JsonObject
+}
+
+@Suppress("unused")
+@Serializable
+class Pagination(
+    private val offset: Int,
     @EncodeDefault
-    val status: String = "",
+    var orderBy: OrderBy = OrderBy.DATE_UPDATED,
+) {
     @EncodeDefault
-    val asc: Boolean = true,
-)
+    var status: String = ""
 
-class Variables {
-    val variableMap = mutableMapOf<String, JsonElement>()
+    @EncodeDefault
+    private val asc: Boolean = false // this should be true in popular but doesn't take effect in any case
 
-    inline fun <reified T> set(key: String, value: T): Variables {
-        variableMap[key] = Json.encodeToJsonElement(value)
-        return this
-    }
+    @EncodeDefault
+    private val limit: Int = PAGE_SIZE
 
-    fun build() = JsonObject(variableMap)
+    @EncodeDefault
+    var sexyLevel: Int? = null
+}
+
+enum class OrderBy {
+    DATE_UPDATED,
+    DATE_CREATED,
+    VIEWS,
+    MONTH_VIEWS,
+    ID,
+    COMIC_DATE_UPDATED,
+    FAVORITE_ADDED,
+    FAVORITE_COUNT,
 }

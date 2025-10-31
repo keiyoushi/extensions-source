@@ -1,7 +1,7 @@
 ext {
     extName = 'YellowNote'
-    extClass = '.YellowNoteSourceFactory'
-    extVersionCode = 1
+    extClass = '.YellowNote'
+    extVersionCode = 3
     isNsfw = true
 }
 

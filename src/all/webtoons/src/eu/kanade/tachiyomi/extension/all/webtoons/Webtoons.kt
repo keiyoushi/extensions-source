@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
 import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -26,6 +27,7 @@ import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 import rx.Observable
 import java.net.SocketException
+import java.text.DecimalFormat
 import java.util.Calendar
 
 open class Webtoons(
@@ -65,6 +67,7 @@ open class Webtoons(
             }
         }
         .addInterceptor(TextInterceptor())
+        .rateLimitHost(mobileUrl.toHttpUrl(), 1)
         .build()
 
     private val preferences by getPreferencesLazy()
@@ -276,52 +279,81 @@ open class Webtoons(
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAs<EpisodeListResponse>()
 
-        val recognized: MutableList<Int> = mutableListOf()
-        val unrecognized: MutableList<Int> = mutableListOf()
+        var recognized = 0
+        var unrecognized = 0
 
-        val chapters = result.result.episodeList.mapIndexed { index, episode ->
-            SChapter.create().apply {
-                url = episode.viewerLink
-                name = Parser.unescapeEntities(episode.episodeTitle, false)
-                if (episode.hasBgm) {
-                    name += " ♫"
-                }
-                date_upload = episode.exposureDateMillis
-                chapter_number = episodeNoRegex
-                    .find(episode.episodeTitle)
-                    ?.groupValues
-                    ?.get(4)
-                    ?.toFloat()
-                    ?: -1f
-                if (chapter_number == -1f) {
-                    unrecognized += index
-                } else {
-                    recognized += index
-                }
+        val chapters = result.result.episodeList.onEach { episode ->
+            val match = episodeNoRegex
+                .find(episode.episodeTitle)
+                ?.groupValues
+                ?.takeIf { it[6].isEmpty() } // skip mini/bonus episodes
+
+            episode.chapterNumber = match?.get(11)?.toFloat() ?: -1f
+            episode.seasonNumber = match?.get(4)?.takeIf(String::isNotBlank)?.toInt() ?: 1
+
+            if (episode.chapterNumber == -1f) {
+                unrecognized++
+            } else {
+                recognized++
             }
         }
 
-        if (unrecognized.size > recognized.size) {
+        if (useSequentialNumberingPref() || unrecognized > recognized) {
             chapters.onEachIndexed { index, chapter ->
-                chapter.chapter_number = (index + 1).toFloat()
+                chapter.chapterNumber = (index + 1).toFloat()
             }
         } else {
-            unrecognized.forEach { uIdx ->
-                val chapter = chapters[uIdx]
-                val previous = chapters.getOrNull(uIdx - 1)
-                if (previous == null) {
-                    chapter.chapter_number = 0f
+            var maxChapterNumber = 0f
+            var currentSeason = 1
+            var seasonOffset = 0f
+
+            chapters.forEachIndexed { idx, chapter ->
+                if (chapter.chapterNumber != -1f) {
+                    val originalNumber = chapter.chapterNumber
+
+                    // Check if we've moved to a new season
+                    if (chapter.seasonNumber > currentSeason) {
+                        currentSeason = chapter.seasonNumber
+                        if (originalNumber <= maxChapterNumber) {
+                            seasonOffset = maxChapterNumber
+                        }
+                    }
+
+                    chapter.chapterNumber = seasonOffset + originalNumber
+                    maxChapterNumber = maxOf(maxChapterNumber, chapter.chapterNumber)
                 } else {
-                    chapter.chapter_number = previous.chapter_number + 0.01f
+                    val previous = chapters.getOrNull(idx - 1)
+                    if (previous == null) {
+                        chapter.chapterNumber = 0f
+                    } else {
+                        chapter.chapterNumber = previous.chapterNumber + 0.01f
+                    }
                 }
             }
         }
 
-        return chapters.asReversed()
+        val numberFormatter = DecimalFormat("#.##")
+        return chapters.map { episode ->
+            SChapter.create().apply {
+                url = episode.viewerLink
+                name = buildString {
+                    append(Parser.unescapeEntities(episode.episodeTitle, false))
+                    append(" (ch. ", numberFormatter.format(episode.chapterNumber), ")")
+                    if (episode.hasBgm) {
+                        append(" ♫")
+                    }
+                }
+                date_upload = episode.exposureDateMillis
+                chapter_number = episode.chapterNumber
+            }
+        }.asReversed()
     }
 
+    // season number - 4 capture group
+    // possible bonus/mini/special episode - 6 capture group
+    // episode number - 11 capture group
     private val episodeNoRegex = Regex(
-        """(ep(isode)?|ch(apter)?)\s*\.?\s*(\d+(\.\d+)?)""",
+        """(?:(s(eason)?|saison|part|vol(ume)?)\s*\.?\s*(\d+).*?)?(.*?(mini|bonus|special).*?)?(e(p(isode)?)?|ch(apter)?)\s*\.?\s*(\d+(\.\d+)?)""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -384,6 +416,7 @@ open class Webtoons(
 
     private fun showAuthorsNotesPref() = preferences.getBoolean(SHOW_AUTHORS_NOTES_KEY, false)
     private fun useMaxQualityPref() = preferences.getBoolean(USE_MAX_QUALITY_KEY, false)
+    private fun useSequentialNumberingPref() = preferences.getBoolean(USE_SEQUENTIAL_NUMBERING_KEY, false)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
@@ -399,6 +432,13 @@ open class Webtoons(
             summary = "Enable to load images in maximum quality."
             setDefaultValue(false)
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = USE_SEQUENTIAL_NUMBERING_KEY
+            title = "Use sequential chapter numbering"
+            summary = "Enable to use sequential numbering instead of official episode numbers."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
     }
 
     override fun imageUrlParse(response: Response): String {
@@ -408,4 +448,5 @@ open class Webtoons(
 
 private const val SHOW_AUTHORS_NOTES_KEY = "showAuthorsNotes"
 private const val USE_MAX_QUALITY_KEY = "useMaxQuality"
+private const val USE_SEQUENTIAL_NUMBERING_KEY = "useSequentialNumbering"
 const val ID_SEARCH_PREFIX = "id:"

@@ -4,11 +4,14 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
@@ -18,17 +21,29 @@ import java.util.Locale
 class TempleScanEsp :
     Madara(
         "Temple Scan",
-        "https://templescanesp.caserosvive.com.ar",
+        "https://aedexnox.vxviral.xyz",
         "es",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),
     ConfigurableSource {
 
-    private val isCi = System.getenv("CI") == "true"
+    override val baseUrl get() = preferences.prefBaseUrl
 
-    override val baseUrl get() = when {
-        isCi -> super.baseUrl
-        else -> preferences.prefBaseUrl
+    private val fetchedDomainUrl: String by lazy {
+        if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
+        try {
+            val initClient = network.cloudflareClient
+            val headers = super.headersBuilder().build()
+            val document = initClient.newCall(GET("https://templescanesp.net", headers)).execute().asJsoup()
+            val domain = document.selectFirst("main a:has(button)")?.attr("abs:href")
+                ?: return@lazy preferences.prefBaseUrl
+            val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
+            val newDomain = "https://$host"
+            preferences.prefBaseUrl = newDomain
+            newDomain
+        } catch (_: Exception) {
+            preferences.prefBaseUrl
+        }
     }
 
     override val versionId = 4
@@ -39,7 +54,7 @@ class TempleScanEsp :
 
     override val client by lazy {
         super.client.newBuilder()
-            .rateLimitHost(baseUrl.toHttpUrl(), 3, 1)
+            .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 3, 1)
             .build()
     }
 
@@ -100,7 +115,16 @@ class TempleScanEsp :
                 true
             }
         }.also { screen.addPreference(it) }
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = FETCH_DOMAIN_PREF
+            title = "Buscar dominio automáticamente"
+            summary = "Intenta buscar el dominio automáticamente al abrir la fuente."
+            setDefaultValue(true)
+        }.also { screen.addPreference(it) }
     }
+
+    private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
 
     private var _cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
@@ -118,5 +142,6 @@ class TempleScanEsp :
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val FETCH_DOMAIN_PREF = "fetchDomain"
     }
 }

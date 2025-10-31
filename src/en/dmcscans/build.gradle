@@ -1,9 +1,0 @@
-ext {
-    extName = 'DMC Scans'
-    extClass = '.DMCScans'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://didascans.blogspot.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

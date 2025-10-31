@@ -40,6 +40,9 @@ class MangaKimi : MangaThemesia(
         countViews(document)
 
         val location = document.location()
+
+        super.pageListParse(document).takeIf { it.isNotEmpty() }?.let { return it }
+
         return document.select(pageSelector).mapIndexed { i, img ->
             if (img.tagName() == "img") {
                 Page(i, location, img.imgAttr())

@@ -1,8 +1,8 @@
 ext {
     extName = 'Raijin Scans'
     extClass = '.RaijinScans'
-    baseUrl = 'https://raijinscan.fr'
-    extVersionCode = 47
+    baseUrl = 'https://raijin-scans.fr'
+    extVersionCode = 49
     isNsfw = false
 }
 

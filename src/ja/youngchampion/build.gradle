@@ -1,0 +1,10 @@
+ext {
+    extName = "Young Champion"
+    extClass = ".YoungChampion"
+    themePkg = 'comiciviewer'
+    baseUrl = "https://youngchampion.jp"
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

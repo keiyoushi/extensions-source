@@ -14,7 +14,7 @@ import java.util.Locale
 
 class SirenKomik : MangaThemesia(
     "Siren Komik",
-    "https://sirenkomik.my.id",
+    "https://sirenkomik.xyz",
     "id",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("id")),
 ) {
@@ -64,6 +64,6 @@ class SirenKomik : MangaThemesia(
     }
 
     companion object {
-        val postIdRegex = """postId.:(\d+)""".toRegex()
+        val postIdRegex = """chapter_id\s*=\s*(\d+)""".toRegex()
     }
 }
