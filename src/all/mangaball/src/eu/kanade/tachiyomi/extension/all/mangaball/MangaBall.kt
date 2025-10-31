@@ -282,7 +282,7 @@ class MangaBall(
 
         return data.chapters.flatMap { chapter ->
             chapter.translations.mapNotNull { translation ->
-                if (siteLang.isEmpty() || translation.language in siteLang) {
+                if (translation.language in siteLang) {
                     SChapter.create().apply {
                         url = translation.id
                         name = buildString {
