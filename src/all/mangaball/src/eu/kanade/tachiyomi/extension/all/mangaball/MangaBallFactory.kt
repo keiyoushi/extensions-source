@@ -24,7 +24,7 @@ class MangaBallFactory : SourceFactory {
         MangaBall("it", "it", "it-it"),
         MangaBall("is", "ib", "ib-is", "is"),
         MangaBall("ja", "jp"),
-        MangaBall("kr", "kr"),
+        MangaBall("ko", "kr"),
         MangaBall("kn", "kn", "kn-in", "kn-my", "kn-sg", "kn-tw"),
         MangaBall("ml", "ml", "ml-in", "ml-my", "ml-sg", "ml-tw"),
         MangaBall("ms", "ms"),
