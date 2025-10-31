@@ -54,18 +54,22 @@ class MangaCrab :
         val url = element.attributes()
             .firstNotNullOfOrNull { attr ->
                 element.absUrl(attr.key).toHttpUrlOrNull()
-                    ?.takeIf { it.encodedPath == "/validate.php" }
+                    ?.takeIf { it.encodedQuery.toString().contains("wp-content") }
             }
 
-        val fileUrl = url
-            ?.queryParameter("file")
-            ?.takeIf { it.isNotBlank() }
-            ?.let { file ->
-                url.newBuilder()
-                    .encodedPath("/$file")
-                    .query(null)
-                    .build()
-            }
+        val fileUrl = url?.let { httpUrl ->
+            httpUrl.queryParameterNames
+                .firstNotNullOfOrNull { name ->
+                    httpUrl.queryParameterValues(name)
+                        .firstOrNull { value -> value?.contains("wp-content") == true }
+                }
+                ?.let { file ->
+                    httpUrl.newBuilder()
+                        .encodedPath("/$file")
+                        .query(null)
+                        .build()
+                }
+        }
 
         val imageAbsUrl = element.attributes().firstOrNull { it.value.toHttpUrlOrNull() != null }?.value
 
