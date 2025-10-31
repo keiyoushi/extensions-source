@@ -164,9 +164,6 @@ class MangaBall(
             .filterNot {
                 it.isAdult && hideNsfw
             }
-            .ifEmpty {
-                throw Exception("All results filtered out due to nsfw filter")
-            }
             .map {
                 SManga.create().apply {
                     url = it.url.toHttpUrl().pathSegments[1]
@@ -174,6 +171,10 @@ class MangaBall(
                     thumbnail_url = it.cover
                 }
             }
+
+        if (mangas.isEmpty() && hideNsfw) {
+            throw Exception("All results filtered out due to nsfw filter")
+        }
 
         return MangasPage(mangas, data.hasNextPage())
     }
