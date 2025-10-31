@@ -323,7 +323,7 @@ class MangaBall(
 
     private val groupIdRegex = Regex("""[a-z0-9]{24}""")
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
 
     override fun pageListRequest(chapter: SChapter): Request {
         return GET(getChapterUrl(chapter), headers)
