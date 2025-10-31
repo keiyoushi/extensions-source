@@ -212,7 +212,7 @@ class MangaTaro : HttpSource() {
             url = MangaUrl(data.id.toString(), data.slug).toJsonString()
             title = Parser.unescapeEntities(data.title.rendered, false)
             description = Jsoup.parseBodyFragment(data.content.rendered).wholeText()
-            genre = buildList {
+            genre = buildSet {
                 addAll(data.embedded.getTerms("post_tag"))
                 if (listOf("Manhwa", "Manhua", "Manga").none { it -> this.contains(it) }) {
                     add(data.type)
