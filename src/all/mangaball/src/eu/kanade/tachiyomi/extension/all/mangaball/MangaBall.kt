@@ -28,7 +28,6 @@ import okio.IOException
 import org.jsoup.nodes.Document
 import rx.Observable
 import java.lang.UnsupportedOperationException
-import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -45,7 +44,7 @@ class MangaBall(
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             var request = chain.request()
-            if (request.url.encodedPath.contains("/api/")) {
+            if (request.url.pathSegments[0] == "api") {
                 request = request.newBuilder()
                     .header("X-Requested-With", "XMLHttpRequest")
                     .header("X-CSRF-TOKEN", getCSRF())
@@ -165,13 +164,8 @@ class MangaBall(
             .filterNot {
                 it.isAdult && hideNsfw
             }
-            // prevent "No Results Found" error if everything was filtered out but still has next page
             .ifEmpty {
-                if (data.hasNextPage()) {
-                    listOf(data.data[0])
-                } else {
-                    emptyList()
-                }
+                throw Exception("All results filtered out due to nsfw filter")
             }
             .map {
                 SManga.create().apply {
@@ -285,11 +279,10 @@ class MangaBall(
         }
 
         val data = response.parseAs<ChapterListResponse>()
-        val numberFormatter = DecimalFormat("#.##")
 
         return data.chapters.flatMap { chapter ->
             chapter.translations.mapNotNull { translation ->
-                if (translation.language in siteLang) {
+                if (siteLang.isEmpty() || translation.language in siteLang) {
                     SChapter.create().apply {
                         url = translation.id
                         name = buildString {
@@ -298,7 +291,7 @@ class MangaBall(
                                 append(translation.volume)
                                 append(" ")
                             }
-                            val number = numberFormatter.format(chapter.number)
+                            val number = chapter.number.toString().removeSuffix(".0")
                             if (translation.name.contains(number)) {
                                 append(translation.name.trim())
                             } else {
@@ -344,7 +337,7 @@ class MangaBall(
         val document = response.asJsoup()
         getCSRF(document)
 
-        document.select("script:containsData(titleId)").joinToString { it.data() }.also {
+        document.select("script:containsData(titleId)").joinToString(";") { it.data() }.also {
             val titleId = titleIdRegex.find(it)
                 ?.groupValues?.get(1)
                 ?: return@also
@@ -355,7 +348,7 @@ class MangaBall(
             updateViews(titleId, chapterId)
         }
 
-        val script = document.select("script:containsData(chapterImages)").joinToString { it.data() }
+        val script = document.select("script:containsData(chapterImages)").joinToString(";") { it.data() }
         val images = imagesRegex.find(script)
             ?.groupValues?.get(1)
             ?.parseAs<List<String>>()
@@ -366,9 +359,9 @@ class MangaBall(
         }
     }
 
-    private val imagesRegex = Regex("""const\s*chapterImages\s*=\s*JSON\.parse\(`([^`]+)`\)""")
-    private val titleIdRegex = Regex("""const\s*titleId\s*=\s*`([^`]+)`;""")
-    private val chapterIdRegex = Regex("""const\s*chapterId\s*=\s*`([^`]+)`;""")
+    private val imagesRegex = Regex("""const\s+chapterImages\s*=\s*JSON\.parse\(`([^`]+)`\)""")
+    private val titleIdRegex = Regex("""const\s+titleId\s*=\s*`([^`]+)`;""")
+    private val chapterIdRegex = Regex("""const\s+chapterId\s*=\s*`([^`]+)`;""")
 
     private fun updateViews(titleId: String, chapterId: String = "") {
         val body = FormBody.Builder()
@@ -394,7 +387,7 @@ class MangaBall(
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
             key = NSFW_PREF
-            title = "Hide adult content"
+            title = "Hide NSFW content"
             setDefaultValue(false)
         }.also(screen::addPreference)
     }
