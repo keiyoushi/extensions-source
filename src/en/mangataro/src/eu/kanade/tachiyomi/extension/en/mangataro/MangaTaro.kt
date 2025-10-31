@@ -323,9 +323,8 @@ class MangaTaro : HttpSource() {
                     override fun onFailure(call: okhttp3.Call, e: IOException) {
                         Log.e(name, "Failed to count views", e)
                     }
-                }
+                },
             )
-
     }
 
     override fun imageUrlParse(response: Response): String {
