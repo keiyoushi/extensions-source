@@ -51,13 +51,11 @@ class DialogDto(
             val decoded = Base64.decode(trimmedData, Base64.DEFAULT).toString(Charsets.UTF_8)
 
             // Validate that decoded content is valid JSON
-            if (decoded.isBlank() || decoded.trim().isEmpty()) {
+            if (decoded.isBlank()) {
                 return@lazy "[]"
             }
 
             decoded
-        } catch (e: IllegalArgumentException) {
-            "[]"
         } catch (e: Exception) {
             "[]"
         }
