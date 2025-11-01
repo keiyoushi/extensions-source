@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.en.spyfakku
 
+import android.widget.Toast
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -9,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -29,11 +34,19 @@ import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
-class SpyFakku : HttpSource() {
+class SpyFakku : HttpSource(), ConfigurableSource {
 
     override val name = "SpyFakku"
 
-    override val baseUrl = "https://hentalk.pw"
+    private val preference = getPreferences()
+
+    private val domain =
+        preference.getString(
+            MIRROR_PREF_KEY,
+            MIRROR_PREF_DEFAULT,
+        ) ?: MIRROR_PREF_DEFAULT
+
+    override val baseUrl = "$domain"
 
     private val baseImageUrl = "$baseUrl/image"
 
@@ -362,4 +375,31 @@ class SpyFakku : HttpSource() {
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = MIRROR_PREF_KEY
+            title = "Preferred Mirror"
+            entries = mirrors
+            entryValues = mirrors
+            setDefaultValue(MIRROR_PREF_DEFAULT)
+            summary = "%s"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, "Restart the app to apply changes", Toast.LENGTH_LONG).show()
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
+    companion object {
+        private const val MIRROR_PREF_KEY = "pref_mirror"
+        private const val MIRROR_PREF_DEFAULT = "https://hentalk.pw"
+
+        private val mirrors = arrayOf(
+            "https://hentalk.pw",
+            "https://fakku.cc",
+            "https://fakkuonion.airdns.org:4096",
+        )
+    }
 }
