@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.dynasty
 
 import android.content.SharedPreferences
-import android.util.LruCache
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
@@ -150,8 +149,9 @@ open class Dynasty : HttpSource(), ConfigurableSource {
         )
     }
 
-    // lazy because extension inspector doesn't have implementation
-    private val lruCache by lazy { LruCache<String, Int>(15) }
+    private val lruCache = object : LinkedHashMap<String, Int>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>?) = size > 20
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val typeFilter = filters.firstInstance<TypeFilter>()
