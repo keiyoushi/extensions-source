@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.mangataro
 
+import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -15,12 +16,16 @@ import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.internal.closeQuietly
+import okio.IOException
 import org.jsoup.Jsoup
+import org.jsoup.parser.Parser
 import rx.Observable
 import java.lang.UnsupportedOperationException
 import java.util.Calendar
@@ -193,6 +198,7 @@ class MangaTaro : HttpSource() {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("wp-json/wp/v2/manga")
             addPathSegment(id)
+            addQueryParameter("_embed", null)
             fragment(status.toString())
         }.build()
 
@@ -201,32 +207,22 @@ class MangaTaro : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.parseAs<MangaDetails>()
-        val thumbnail = getThumbnail(data.featuredMedia)
 
         return SManga.create().apply {
             url = MangaUrl(data.id.toString(), data.slug).toJsonString()
-            title = data.title.rendered
+            title = Parser.unescapeEntities(data.title.rendered, false)
             description = Jsoup.parseBodyFragment(data.content.rendered).wholeText()
             genre = buildSet {
-                addAll(data.getFromClassList("tag"))
-                addAll(data.getFromClassList("type"))
+                addAll(data.embedded.getTerms("post_tag"))
+                if (listOf("Manhwa", "Manhua", "Manga").none { it -> this.contains(it) }) {
+                    add(data.type)
+                }
             }.joinToString()
-            author = data.getFromClassList("manga_author").joinToString()
+            author = data.embedded.getTerms("manga_author").joinToString()
             status = response.request.url.fragment!!.toInt()
-            thumbnail_url = thumbnail
+            thumbnail_url = data.embedded.featuredMedia.firstOrNull()?.url
             initialized = true
         }
-    }
-
-    private fun getThumbnail(mediaId: Int): String {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("wp-json/wp/v2/media")
-            addPathSegment(mediaId.toString())
-        }.build()
-
-        return client.newCall(GET(url, headers)).execute()
-            .parseAs<Thumbnail>()
-            .url
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -236,10 +232,14 @@ class MangaTaro : HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        return GET(getMangaUrl(manga), headers)
+        val (id, slug) = manga.url.parseAs<MangaUrl>()
+
+        return GET("$baseUrl/manga/$slug#$id", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        countViews(response.request.url.fragment!!)
+
         val document = response.asJsoup()
         val placeholders = listOf("", "N/A", "—")
         var hasScanlator = false
@@ -302,6 +302,7 @@ class MangaTaro : HttpSource() {
 
         when (unit) {
             "h" -> calendar.add(Calendar.HOUR, -amount.toInt())
+            "d" -> calendar.add(Calendar.DAY_OF_YEAR, -amount.toInt())
             "w" -> calendar.add(Calendar.WEEK_OF_YEAR, -amount.toInt())
             "mo" -> calendar.add(Calendar.MONTH, -amount.toInt())
             "y" -> calendar.add(Calendar.YEAR, -amount.toInt())
@@ -310,7 +311,26 @@ class MangaTaro : HttpSource() {
         return calendar.timeInMillis
     }
 
-    private val relativeDateRegex = Regex("""(\d+)(h|w|mo|y) ago""")
+    private val relativeDateRegex = Regex("""(\d+)(h|d|w|mo|y) ago""")
+
+    private fun countViews(postId: String) {
+        val payload = """{"post_id":"$postId"}"""
+            .toRequestBody("application/json".toMediaType())
+        val url = "$baseUrl/wp-json/pviews/v1/increment/"
+        val request = POST(url, headers, payload)
+
+        client.newCall(request)
+            .enqueue(
+                object : Callback {
+                    override fun onResponse(call: okhttp3.Call, response: Response) {
+                        response.closeQuietly()
+                    }
+                    override fun onFailure(call: okhttp3.Call, e: IOException) {
+                        Log.e(name, "Failed to count views", e)
+                    }
+                },
+            )
+    }
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()

@@ -68,7 +68,7 @@ class BrowseManga(
 )
 
 @Serializable
-class MangaUrl(
+data class MangaUrl(
     val id: String,
     val slug: String,
 )
@@ -79,20 +79,28 @@ class MangaDetails(
     val slug: String,
     val title: Rendered,
     val content: Rendered,
-    @SerialName("featured_media")
-    val featuredMedia: Int,
-    @SerialName("class_list")
-    private val classList: List<String>,
+    val type: String,
+    @SerialName("_embedded")
+    val embedded: Embedded,
+)
+
+@Serializable
+class Embedded(
+    @SerialName("wp:featuredmedia")
+    val featuredMedia: List<Thumbnail>,
+    @SerialName("wp:term")
+    private val terms: List<List<Term>>,
 ) {
-    fun getFromClassList(type: String): List<String> {
-        return classList.filter { it.startsWith("$type-") }
-            .map {
-                it.substringAfter("$type-")
-                    .split("-")
-                    .joinToString(" ") { word -> word.replaceFirstChar { it.titlecase() } }
-            }
+    fun getTerms(type: String): List<String> {
+        return terms.find { it.firstOrNull()?.taxonomy == type }.orEmpty().map { it.name }
     }
 }
+
+@Serializable
+class Term(
+    val name: String,
+    val taxonomy: String,
+)
 
 @Serializable
 class Thumbnail(
