@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
@@ -16,19 +17,23 @@ import eu.kanade.tachiyomi.lib.i18n.Intl
 import eu.kanade.tachiyomi.lib.i18n.Intl.Companion.createDefaultMessageFileName
 import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
 import okhttp3.FormBody
+import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -79,6 +84,10 @@ class Manhuarm(
     private var disableTranslator: Boolean
         get() = preferences.getBoolean(DISABLE_TRANSLATOR_PREF, language.disableTranslator)
         set(value) = preferences.edit().putBoolean(DISABLE_TRANSLATOR_PREF, value).apply()
+
+    private var customUserAgent: String
+        get() = preferences.getString(CUSTOM_UA_PREF, "")!!
+        set(value) = preferences.edit().putString(CUSTOM_UA_PREF, value).apply()
 
     private val i18n = Intl(
         language = language.lang,
@@ -141,6 +150,15 @@ class Manhuarm(
             .addInterceptor(ComposedImageInterceptor(settings))
     }
 
+    override fun headersBuilder(): Headers.Builder {
+        val builder = super.headersBuilder()
+        val ua = customUserAgent.trim()
+        if (ua.isNotEmpty()) {
+            builder.set("User-Agent", ua)
+        }
+        return builder
+    }
+
     private fun OkHttpClient.Builder.addInterceptorIf(condition: Boolean, interceptor: Interceptor): OkHttpClient.Builder {
         return this.takeIf { condition.not() } ?: this.addInterceptor(interceptor)
     }
@@ -159,9 +177,9 @@ class Manhuarm(
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
         val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
-        val nonce = document.select("script").firstOrNull { it.html().contains("const nonce") }?.let {
-            NONCE_REGEX.find(it.html())?.groupValues?.get(1)
-        } ?: "18b0e544f4" // fallback nonce from site reference
+        val scriptsContent = document.select("script").joinToString("\n") { it.html() }
+        val nonce = NONCE_REGEX.find(scriptsContent)?.groupValues?.get(1)
+            ?: throw Exception("Nonce not found in page")
 
         val form = FormBody.Builder()
             .add("action", "get_ocr_data")
@@ -191,6 +209,54 @@ class Manhuarm(
             Page(index, imageUrl = "${page.imageUrl}${fragment.toFragment()}")
         }
     }
+
+    override fun popularMangaRequest(page: Int): okhttp3.Request {
+        val url = if (page == 1) {
+            "$baseUrl/manga/?m_orderby=trending"
+        } else {
+            "$baseUrl/manga/page/$page/?m_orderby=trending"
+        }
+        return GET(url, headers)
+    }
+
+    override fun popularMangaSelector(): String = ".page-item-detail, .manga-card"
+
+    override fun popularMangaFromElement(element: Element): SManga {
+        val manga = SManga.create()
+        val titleEl = element.selectFirst(".post-title a, .manga-title a")
+        val thumbEl = element.selectFirst(".item-thumb img, .manga-thumb img, img")
+        manga.setUrlWithoutDomain(titleEl!!.attr("href"))
+        manga.title = titleEl.text()
+        manga.thumbnail_url = thumbEl?.absUrl("data-src") ?: thumbEl?.absUrl("src")
+        return manga
+    }
+
+    override fun popularMangaNextPageSelector(): String? = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
+
+    override fun latestUpdatesRequest(page: Int): okhttp3.Request {
+        val url = if (page == 1) {
+            "$baseUrl/manga/?m_orderby=latest"
+        } else {
+            "$baseUrl/manga/page/$page/?m_orderby=latest"
+        }
+        return GET(url, headers)
+    }
+
+    override fun latestUpdatesSelector(): String = ".page-item-detail, .manga-card"
+
+    override fun latestUpdatesFromElement(element: Element): SManga {
+        val manga = SManga.create()
+        val titleEl = element.selectFirst(".manga-title a")
+            ?: element.selectFirst(".post-title a, h3.h5 a, .post-title h3 a")
+        val thumbEl = element.selectFirst(".manga-thumb img")
+            ?: element.selectFirst(".item-thumb img, img")
+        manga.setUrlWithoutDomain(titleEl!!.attr("href"))
+        manga.title = titleEl.text()
+        manga.thumbnail_url = thumbEl?.absUrl("src")
+        return manga
+    }
+
+    override fun latestUpdatesNextPageSelector(): String? = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
 
     private fun String.fixJsonFormat(): String {
         return JSON_FORMAT_REGEX.replace(this) { matchResult ->
@@ -333,6 +399,17 @@ class Manhuarm(
             }
         }.also(screen::addPreference)
 
+        EditTextPreference(screen.context).apply {
+            key = CUSTOM_UA_PREF
+            title = "Custom User-Agent"
+            summary = "Set a custom User-Agent for requests. Leave blank to use the default."
+            setDefaultValue(customUserAgent)
+            setOnPreferenceChange { _, newValue ->
+                customUserAgent = (newValue as String).trim()
+                true
+            }
+        }.also(screen::addPreference)
+
         if (language.target == language.origin) {
             return
         }
@@ -396,7 +473,7 @@ class Manhuarm(
     companion object {
         val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
         val JSON_FORMAT_REGEX = """(?:"text":\s+?".*?)([\s\S]*?)(?:",\s+?"box")""".toRegex()
-        val NONCE_REGEX = """(?:nonce":")([^"]+)""".toRegex()
+        val NONCE_REGEX = """(?:const\s+nonce\s*=\s*'|\"nonce\"\s*:\s*\")(.*?)['\"]""".toRegex()
 
         const val DEVICE_FONT = "device:"
         private const val FONT_SIZE_PREF = "fontSizePref"
@@ -405,6 +482,7 @@ class Manhuarm(
         private const val DISABLE_WORD_BREAK_PREF = "disableWordBreakPref"
         private const val DISABLE_TRANSLATOR_PREF = "disableTranslatorPref"
         private const val TRANSLATOR_PROVIDER_PREF = "translatorProviderPref"
+        private const val CUSTOM_UA_PREF = "customUserAgentPref"
         private const val DEFAULT_FONT_SIZE = "28"
     }
 }
