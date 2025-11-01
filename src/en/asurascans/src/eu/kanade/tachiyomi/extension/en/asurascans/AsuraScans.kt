@@ -1,20 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.asurascans
 
 import android.app.Application
-import android.content.ComponentName
-import android.content.Intent
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Handler
-import android.os.Looper
-import android.text.InputType
 import android.webkit.CookieManager
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -49,8 +37,6 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 import kotlin.text.RegexOption
 
@@ -72,12 +58,6 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     private val application: Application by injectLazy()
     private val cookieManager by lazy { CookieManager.getInstance() }
-
-    @Volatile
-    private var cachedManualCookieRaw: String? = null
-
-    @Volatile
-    private var cachedManualAuth: ManualAuth? = null
 
     @Volatile
     private var cachedAuthState: Boolean? = null
@@ -115,10 +95,14 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
                             cookieManager.setCookie(url.toString(), cookie.toString())
                         }
                     }
+                    runCatching { cookieManager.flush() }
                 }
 
                 override fun loadForRequest(url: HttpUrl): MutableList<Cookie> {
-                    val cookieString = cookieManager.getCookie(url.toString()) ?: return mutableListOf()
+                    val cookieString = runCatching {
+                        cookieManager.getCookie(url.toString())
+                    }.getOrNull() ?: return mutableListOf()
+
                     return cookieString.split(';')
                         .mapNotNull { Cookie.parse(url, it.trim()) }
                         .toMutableList()
@@ -135,7 +119,15 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     private fun forceHighQualityInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
-        if (preferences.forceHighQuality() && !failedHighQuality && request.url.fragment == "pageListParse") {
+        val shouldTryHighQuality = runCatching {
+            request.header(HQ_ATTEMPT_HEADER) == null &&
+                preferences.forceHighQuality() &&
+                isAuthenticated() &&
+                !failedHighQuality &&
+                request.url.fragment == "pageListParse"
+        }.getOrDefault(false)
+
+        if (shouldTryHighQuality) {
             STANDARD_IMAGE_PATH_REGEX.find(request.url.encodedPath)?.also { match ->
                 val (id, filename) = match.destructured
                 val optimizedName = "$filename-optimized.webp"
@@ -143,13 +135,16 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
                     .encodedPath("/storage/media/$id/conversions/$optimizedName")
                     .build()
 
-                val hiResRequest = request.newBuilder().url(optimizedUrl).build()
-                val response = chain.proceed(hiResRequest)
-                if (response.isSuccessful) {
+                val hiResRequest = request.newBuilder()
+                    .url(optimizedUrl)
+                    .header(HQ_ATTEMPT_HEADER, "1")
+                    .build()
+                val response = runCatching { chain.proceed(hiResRequest) }.getOrNull()
+                if (response?.isSuccessful == true) {
                     return response
                 } else {
                     failedHighQuality = true
-                    response.close()
+                    response?.close()
                 }
             }
         }
@@ -158,33 +153,15 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     private fun authInterceptor(chain: Interceptor.Chain): Response {
-        val original = chain.request()
-        val builder = original.newBuilder()
+        val response = chain.proceed(chain.request())
 
-        val loginMethod = preferences.loginMethod()
-
-        if (loginMethod == LOGIN_METHOD_COOKIE) {
-            val manualAuth = getManualAuth()
-            manualAuth?.authorizationHeader?.let { header ->
-                builder.header("Authorization", header)
-            }
-
-            if (manualAuth?.cookieHeader != null && original.url.requiresAuthCookie()) {
-                builder.header("Cookie", manualAuth.cookieHeader)
-            }
+        if (response.code == 401 || response.code == 403) {
+            handleSessionExpiry(response)
         }
 
-        val response = chain.proceed(builder.build())
-
-        if (loginMethod != LOGIN_METHOD_NONE) {
-            if (response.code == 401 || response.code == 403) {
-                handleSessionExpiry(response, loginMethod)
-            }
-
-            val location = response.header("Location")
-            if (location != null && location.contains("/login", ignoreCase = true)) {
-                handleSessionExpiry(response, loginMethod)
-            }
+        val location = response.header("Location")
+        if (location != null && location.contains("/login", ignoreCase = true)) {
+            handleSessionExpiry(response)
         }
 
         return response
@@ -473,11 +450,6 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     private fun getXsrfToken(): String? {
-        val manualToken = (cachedManualAuth ?: getManualAuth())
-            ?.cookies
-            ?.firstOrNull { it.first.equals("XSRF-TOKEN", ignoreCase = true) }
-            ?.second
-
         val cookieToken = sequence {
             apiUrl.toHttpUrlOrNull()?.let { yield(it) }
             baseUrl.toHttpUrlOrNull()?.let { yield(it) }
@@ -487,7 +459,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
                 ?.value
         }.firstOrNull()
 
-        return decodeCookieValue(cookieToken ?: manualToken)
+        return decodeCookieValue(cookieToken)
     }
 
     private fun decodeCookieValue(value: String?): String? {
@@ -557,77 +529,6 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         filterIsInstance<R>().firstOrNull()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val loginMethodPref = ListPreference(screen.context).apply {
-            key = PREF_LOGIN_METHOD
-            title = "Authentication method"
-            entries = arrayOf(
-                "None",
-                "Paste cookie or token",
-                "WebView login",
-            )
-            entryValues = arrayOf(
-                LOGIN_METHOD_NONE,
-                LOGIN_METHOD_COOKIE,
-                LOGIN_METHOD_WEBVIEW,
-            )
-            summary = "%s"
-            setDefaultValue(LOGIN_METHOD_NONE)
-        }
-
-        val cookieSummaryEnabled = "Paste raw cookie string (e.g., name=value; other=value) or bearer token"
-        val cookieSummaryDisabled = "Select \"Paste cookie or token\" above to enable editing"
-
-        val cookiePreference = EditTextPreference(screen.context).apply {
-            key = PREF_ASURA_COOKIE
-            title = "Paste cookie or token"
-            summary = cookieSummaryEnabled
-            setDefaultValue("")
-            setOnBindEditTextListener { editText ->
-                editText.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                editText.isSingleLine = true
-            }
-        }
-
-        fun updateAuthPreferenceState(method: String) {
-            val resolvedMethod = method.ifBlank { LOGIN_METHOD_NONE }
-            val cookieEnabled = resolvedMethod == LOGIN_METHOD_COOKIE
-            cookiePreference.setEnabled(cookieEnabled)
-            cookiePreference.summary = if (cookieEnabled) cookieSummaryEnabled else cookieSummaryDisabled
-        }
-
-        loginMethodPref.setOnPreferenceChangeListener { _, newValue ->
-            val method = newValue as String
-            resetAuthCache()
-            cachedManualCookieRaw = null
-            cachedManualAuth = null
-            updateAuthPreferenceState(method)
-
-            // Auto-launch WebView when user selects WebView login
-            if (method == LOGIN_METHOD_WEBVIEW) {
-                launchWebViewLogin()
-            }
-
-            true
-        }
-
-        cookiePreference.setOnPreferenceChangeListener { pref, newValue ->
-            val value = (newValue as String).trim()
-            resetAuthCache()
-            cachedManualCookieRaw = null
-            cachedManualAuth = null
-            if (value != newValue) {
-                (pref as EditTextPreference).text = value
-                false
-            } else {
-                true
-            }
-        }
-
-        updateAuthPreferenceState(preferences.loginMethod())
-
-        screen.addPreference(loginMethodPref)
-        screen.addPreference(cookiePreference)
-
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_DYNAMIC_URL
             title = "Automatically update dynamic URLs"
@@ -644,10 +545,10 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
         SwitchPreferenceCompat(screen.context).apply {
             key = PREF_FORCE_HIGH_QUALITY
-            title = "Force high quality chapter images"
-            val baseSummary = "Use the site's optimized image format when available.\nAutomatically falls back if unavailable.\nWill increase bandwidth by ~50%."
+            title = "Enable max quality"
+            val baseSummary = "Asura+ Basic/Premium subscribers can request optimized max quality images. Requires authentication. Increases bandwidth by ~50%."
             summary = if (failedHighQuality) {
-                "$baseSummary\n*DISABLED* because of missing high quality images."
+                "$baseSummary\n*DISABLED* because of missing max quality images."
             } else {
                 baseSummary
             }
@@ -675,8 +576,6 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
                 .apply()
         }
 
-    private fun SharedPreferences.loginMethod(): String = getString(PREF_LOGIN_METHOD, LOGIN_METHOD_NONE)!!
-
     private fun SharedPreferences.dynamicUrl(): Boolean = getBoolean(PREF_DYNAMIC_URL, true)
     private fun SharedPreferences.hidePremiumChapters(): Boolean = getBoolean(
         PREF_HIDE_PREMIUM_CHAPTERS,
@@ -699,218 +598,10 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         return UNESCAPE_REGEX.replace(this, "$1")
     }
 
-    private fun launchWebViewLogin() {
-        resetAuthCache()
-
-        // Check if Activity can be resolved (will fail on iOS/Tachimanga where Activities don't work)
-        val activityIntent = Intent(application, AsuraScansLoginActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            putExtra(AsuraScansLoginActivity.EXTRA_URL, "$baseUrl/login")
-        }
-
-        val canResolveActivity = try {
-            val componentName = ComponentName(application, AsuraScansLoginActivity::class.java)
-            application.packageManager.getActivityInfo(componentName, 0)
-            true
-        } catch (e: PackageManager.NameNotFoundException) {
-            false
-        } catch (e: Exception) {
-            false
-        }
-
-        // Try Activity-based approach first (works on Android)
-        if (canResolveActivity) {
-            try {
-                application.startActivity(activityIntent)
-                Toast.makeText(application, "WebView login launched.", Toast.LENGTH_SHORT).show()
-                return
-            } catch (e: Exception) {
-                // Activity resolution passed but launch failed - fall through to browser
-            }
-        }
-
-        // Activity not available (iOS/Tachimanga) - try external browser
-        try {
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("$baseUrl/login")).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            application.startActivity(browserIntent)
-            Toast.makeText(application, "Opening login page in browser. After logging in, copy cookies from browser DevTools and paste them in the 'Cookie or token' field.", Toast.LENGTH_LONG).show()
-            return
-        } catch (e: Exception) {
-            // Browser also failed - fall through to WebView fallback
-        }
-
-        // Final fallback: Use WebView directly (may not be visible on iOS)
-        try {
-            val handler = Handler(Looper.getMainLooper())
-            val latch = CountDownLatch(1)
-            var webView: WebView? = null
-
-            handler.post {
-                try {
-                    val webview = WebView(application)
-                    webView = webview
-                    with(webview.settings) {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-                        databaseEnabled = true
-                        useWideViewPort = true
-                        loadWithOverviewMode = true
-                    }
-
-                    CookieManager.getInstance().setAcceptCookie(true)
-
-                    webview.webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            super.onPageFinished(view, url)
-                            if (url != null && url.startsWith(baseUrl)) {
-                                val cookies = CookieManager.getInstance().getCookie(baseUrl)
-                                if (cookies != null && cookies.isNotEmpty()) {
-                                    latch.countDown()
-                                }
-                            }
-                        }
-                    }
-
-                    webview.loadUrl("$baseUrl/login")
-                    Toast.makeText(application, "WebView login launched. Please log in in the browser, then paste cookies.", Toast.LENGTH_LONG).show()
-
-                    handler.postDelayed(
-                        {
-                            if (latch.count > 0) {
-                                latch.countDown()
-                            }
-                        },
-                        30000,
-                    )
-                } catch (e: Exception) {
-                    Toast.makeText(application, "WebView not available. Please use cookie paste method instead.", Toast.LENGTH_LONG).show()
-                    latch.countDown()
-                }
-            }
-
-            thread {
-                try {
-                    latch.await(60, TimeUnit.SECONDS)
-                    handler.post {
-                        webView?.stopLoading()
-                        webView?.destroy()
-                        webView = null
-                    }
-                } catch (e: Exception) {
-                    handler.post {
-                        webView?.stopLoading()
-                        webView?.destroy()
-                        webView = null
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Toast.makeText(application, "WebView login not available on this platform. Please use the cookie paste method.", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun getManualAuth(): ManualAuth? {
-        val raw = preferences.manualCookie().trim()
-        if (raw.isEmpty()) return null
-
-        val cachedRaw = cachedManualCookieRaw
-        if (cachedRaw != null && cachedRaw == raw) {
-            return cachedManualAuth
-        }
-
-        val parsed = parseManualAuth(raw)
-        cachedManualCookieRaw = raw
-        cachedManualAuth = parsed
-        parsed?.cookies?.let(::syncManualCookies)
-        return parsed
-    }
-
-    private fun parseManualAuth(raw: String): ManualAuth? {
-        val lines = raw.lines().mapNotNull { it.trim().takeIf(String::isNotEmpty) }
-
-        var cookieHeader: String? = null
-        var authorizationHeader: String? = null
-        val segments = mutableListOf<String>()
-
-        for (line in lines) {
-            val lower = line.lowercase()
-            when {
-                lower.startsWith("cookie:") -> cookieHeader = line.substringAfter(":").trim()
-                lower.startsWith("authorization:") -> authorizationHeader = line.substringAfter(":").trim()
-                lower.startsWith("bearer ") -> authorizationHeader = line.trim()
-                else -> segments += line
-            }
-        }
-
-        if (cookieHeader == null && authorizationHeader == null && segments.isNotEmpty()) {
-            val combined = segments.joinToString("; ")
-            if (combined.startsWith("Bearer ", ignoreCase = true)) {
-                authorizationHeader = combined
-            } else {
-                cookieHeader = combined
-            }
-        }
-
-        authorizationHeader = authorizationHeader?.let { auth ->
-            if (auth.startsWith("Bearer ", ignoreCase = true)) {
-                val token = auth.substringAfter(" ").trim()
-                "Bearer $token"
-            } else {
-                auth
-            }
-        }
-
-        val cookiePairs = cookieHeader
-            ?.split(';')
-            ?.mapNotNull { token ->
-                val trimmed = token.trim()
-                if (trimmed.isEmpty()) return@mapNotNull null
-                val index = trimmed.indexOf('=')
-                if (index <= 0) return@mapNotNull null
-                val name = trimmed.substring(0, index).trim()
-                val value = trimmed.substring(index + 1).trim()
-                if (name.isEmpty() || value.isEmpty()) return@mapNotNull null
-                name to value
-            }
-            ?.takeIf { it.isNotEmpty() }
-            ?: emptyList()
-
-        val sanitizedCookieHeader = if (cookiePairs.isNotEmpty()) {
-            cookiePairs.joinToString("; ") { (name, value) -> "$name=$value" }
-        } else {
-            null
-        }
-
-        if (sanitizedCookieHeader == null && authorizationHeader == null) return null
-
-        return ManualAuth(cookiePairs, sanitizedCookieHeader, authorizationHeader)
-    }
-
-    private fun syncManualCookies(cookies: List<Pair<String, String>>) {
-        if (cookies.isEmpty()) return
-        val targets = arrayOf("https://$ASURA_MAIN_HOST/", "https://$ASURA_API_HOST/")
-        for ((name, value) in cookies) {
-            for (target in targets) {
-                runCatching { cookieManager.setCookie(target, "$name=$value; Path=/") }
-            }
-        }
-    }
-
-    private fun HttpUrl.requiresAuthCookie(): Boolean {
-        return host == ASURA_MAIN_HOST || host == ASURA_API_HOST || host.endsWith(".$ASURA_MAIN_HOST")
-    }
-
-    private fun handleSessionExpiry(response: Response, loginMethod: String): Nothing {
+    private fun handleSessionExpiry(response: Response): Nothing {
         resetAuthCache()
         response.close()
-        val message = if (loginMethod == LOGIN_METHOD_COOKIE) {
-            "Session expired. Please update your cookie string."
-        } else {
-            "Session expired. Please login again via WebView."
-        }
-        throw Exception(message)
+        throw Exception("Authentication failed. Please login again via WebView.")
     }
 
     private fun resetAuthCache() {
@@ -918,11 +609,14 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         lastAuthCheck = 0L
     }
 
-    private fun SharedPreferences.manualCookie(): String = getString(PREF_ASURA_COOKIE, "")!!
-
     private fun isAuthenticated(force: Boolean = false): Boolean {
-        val method = preferences.loginMethod()
-        if (method == LOGIN_METHOD_NONE) {
+        // Check if we have WebView cookies
+        val hasWebViewCookies = runCatching {
+            cookieManager.getCookie("https://$ASURA_MAIN_HOST")?.isNotEmpty() == true ||
+                cookieManager.getCookie("https://$ASURA_API_HOST")?.isNotEmpty() == true
+        }.getOrDefault(false)
+
+        if (!hasWebViewCookies) {
             cachedAuthState = false
             lastAuthCheck = System.currentTimeMillis()
             return false
@@ -947,12 +641,6 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         return isAuthed
     }
 
-    private data class ManualAuth(
-        val cookies: List<Pair<String, String>>,
-        val cookieHeader: String?,
-        val authorizationHeader: String?,
-    )
-
     companion object {
         private val UNESCAPE_REGEX = """\\(.)""".toRegex()
         private val PAGES_REGEX = """\\"pages\\":(\[.*?])""".toRegex()
@@ -966,20 +654,14 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         private const val ASURA_API_HOST = "gg.asuracomic.net"
         private const val AUTH_CACHE_DURATION = 60_000L
         private const val CHAPTER_DATA_TOKEN = """\"chapter\":"""
-        private const val PREMIUM_AUTH_MESSAGE = "Premium chapter requires authentication."
+        private const val PREMIUM_AUTH_MESSAGE = "Premium chapter requires authentication. Login via WebView."
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private const val MEDIA_QUALITY_MAX = "max-quality"
+        private const val HQ_ATTEMPT_HEADER = "X-Asura-HQ-Attempt"
 
-        private const val PREF_LOGIN_METHOD = "pref_asura_login_method"
-        private const val PREF_ASURA_COOKIE = "pref_asura_cookie"
-        private const val PREF_TRIGGER_WEBVIEW_LOGIN = "pref_trigger_webview_login"
         private const val PREF_SLUG_MAP = "pref_slug_map_2"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
         private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
         private const val PREF_FORCE_HIGH_QUALITY = "pref_force_high_quality"
-
-        private const val LOGIN_METHOD_NONE = "none"
-        private const val LOGIN_METHOD_COOKIE = "cookie"
-        private const val LOGIN_METHOD_WEBVIEW = "webview"
     }
 }
