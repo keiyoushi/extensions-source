@@ -686,27 +686,7 @@ with open(f"{package}/src/{source}.kt", "w") as f:
 
 ## Running
 
-If you do not have either a **rooted device** or an **emulator without Google Play**, you must use the **Debug build of Mihon** for debugging.
-
-In Android Studio, navigate to the Mihon repository and install the debug app through one of the following ways:
-
-1. Click **Debug 'app'** at the top of Android Studio to install the Mihon debug app.
-
-2. Or install the Mihon debug app through the command line:
-
-    1.  **Build the debug APK:**
-        Open a terminal in the project root and run the following command:
-        ```
-        ./gradlew assembleDebug
-        ```
-
-    2.  **Install the debug app:**
-        To install the app on a connected device or emulator, run:
-        ```
-        ./gradlew installDebug
-        ```
-
-For local development, navigate back to the extensions-source repository and use the following run configuration to launch the app directly into the Browse panel.
+For local development, use the following run configuration to launch the app directly into the Browse panel.
 
 ![](https://i.imgur.com/6s2dvax.png)
 
@@ -716,7 +696,7 @@ Copy the following into `Launch Flags` for the Debug build of Mihon:
 -W -S -n app.mihon.dev/eu.kanade.tachiyomi.ui.main.MainActivity -a eu.kanade.tachiyomi.SHOW_CATALOGUES
 ```
 
-For other builds (only on rooted devices or emulators without Google Play), replace  `app.mihon.dev` with the corresponding package IDs:
+For other builds, replace  `app.mihon.dev` with the corresponding package IDs:
 - Release build: `app.mihon`
 - Preview build: `app.mihon.debug`
 
