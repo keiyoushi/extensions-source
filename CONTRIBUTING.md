@@ -684,7 +684,7 @@ with open(f"{package}/src/{source}.kt", "w") as f:
 
 </details>
 
-## How to build and run locally
+## Running
 
 If you do not have either a **rooted device** or an **emulator without Google Play**, you must use the **Debug build of Mihon**.
 
@@ -692,30 +692,31 @@ In Android Studio, navigate to the Mihon repository and do the following to inst
 
 1.  **Build the debug APK:**
     Open a terminal in the project root and run the following command:
-    ```bash
+    ```
     ./gradlew assembleDebug
     ```
-    This will create an APK file in `app/build/outputs/apk/debug/`.
 
 2.  **Install the debug app:**
     To install the app on a connected device or emulator, run:
-    ```bash
+    ```
     ./gradlew installDebug
     ```
 
-For local development, navigate back to the extensions-source repository and use the following run configuration to launch the app directly into the Browse panel, if it builds and runs successfully then your code changes to the extension should be in your local app:
+For local development, navigate back to the extensions-source repository and use the following run configuration to launch the app directly into the Browse panel.
 
 ![](https://i.imgur.com/6s2dvax.png)
 
-Copy the following into launch flags for the Debug build of Mihon:
+Copy the following into `Launch Flags` for the Debug build of Mihon:
 
 ```
 -W -S -n app.mihon.dev/eu.kanade.tachiyomi.ui.main.MainActivity -a eu.kanade.tachiyomi.SHOW_CATALOGUES
 ```
 
-For other builds (rooted devices only or emulators without Google Play), replace  `app.mihon.dev` with the corresponding package IDs:
+For other builds (only on rooted devices or emulators without Google Play), replace  `app.mihon.dev` with the corresponding package IDs:
 - Release build: `app.mihon`
 - Preview build: `app.mihon.debug`
+
+If it builds and runs successfully then your code changes to the extension should be in your local app.
 
 > [!IMPORTANT]
 > If you're deploying to Android 11 or higher, enable the "Always install with package manager" option in the run configurations. Without this option enabled, you might face issues such as Android Studio running an older version of the extension without the modifications you might have done.
@@ -725,18 +726,22 @@ For other builds (rooted devices only or emulators without Google Play), replace
 ### Android Debugger
 
 > [!IMPORTANT]
-> If you didn't build the main app from source with debug enabled and are using a release/beta APK, you **need** a rooted device.
-> If you are using an emulator instead, make sure you choose a profile **without** Google Play.
+> If you didn't build the main app from source with **debug enabled** and are using a release/beta APK, you **need a rooted device**.
+> If you are using an **emulator** instead, make sure you choose a profile **without Google Play**.
 
-You can leverage the Android Debugger to step through your extension while debugging.
+Follow the steps above for building and running locally if you haven't already. Debugging will not work if you did not follow the steps above.
+
+You can leverage the Android Debugger to add breakpoints and step through your extension while debugging.
 
 You *cannot* simply use Android Studio's `Debug 'module.name'` -> this will most likely result in an
 error while launching.
 
 Instead, once you've built and installed your extension on the target device, use
-`Attach Debugger to Android Process` to start debugging the app.
+`Attach Debugger to Android Process` to start debugging the app. 
 
-![](https://i.imgur.com/muhXyfu.png)
+Once the app is running on your device and `Show all processes` is checked, you should be able to select `app.mihon.dev` and press OK.
+
+![](https://i.imgur.com/SUhdB52.png)
 
 
 ### Logs
