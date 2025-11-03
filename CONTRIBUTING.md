@@ -684,22 +684,38 @@ with open(f"{package}/src/{source}.kt", "w") as f:
 
 </details>
 
-## Running
+## How to build and run locally
 
-To make local development more convenient, you can use the following run configuration to launch
-the app directly at the Browse panel:
+If you do not have either a **rooted device** or an **emulator without Google Play**, you must use the **Debug build of Mihon**.
 
-![](https://i.imgur.com/STy0UFY.png)
+In Android Studio, navigate to the Mihon repository and do the following to install the Debug app on your device:
 
-If you're running a Preview build of Mihon:
+1.  **Build the debug APK:**
+    Open a terminal in the project root and run the following command:
+    ```bash
+    ./gradlew assembleDebug
+    ```
+    This will create an APK file in `app/build/outputs/apk/debug/`.
+
+2.  **Install the debug app:**
+    To install the app on a connected device or emulator, run:
+    ```bash
+    ./gradlew installDebug
+    ```
+
+For local development, navigate back to the extensions-source repository and use the following run configuration to launch the app directly into the Browse panel, if it builds and runs successfully then your code changes to the extension should be in your local app:
+
+![](https://i.imgur.com/6s2dvax.png)
+
+Copy the following into launch flags for the Debug build of Mihon:
 
 ```
--W -S -n app.mihon.debug/eu.kanade.tachiyomi.ui.main.MainActivity -a eu.kanade.tachiyomi.SHOW_CATALOGUES
+-W -S -n app.mihon.dev/eu.kanade.tachiyomi.ui.main.MainActivity -a eu.kanade.tachiyomi.SHOW_CATALOGUES
 ```
 
-For other builds, replace the first `app.mihon.debug` with the corresponding package IDs:
+For other builds (rooted devices only or emulators without Google Play), replace  `app.mihon.dev` with the corresponding package IDs:
 - Release build: `app.mihon`
-- Debug build: `app.mihon.dev`
+- Preview build: `app.mihon.debug`
 
 > [!IMPORTANT]
 > If you're deploying to Android 11 or higher, enable the "Always install with package manager" option in the run configurations. Without this option enabled, you might face issues such as Android Studio running an older version of the extension without the modifications you might have done.
