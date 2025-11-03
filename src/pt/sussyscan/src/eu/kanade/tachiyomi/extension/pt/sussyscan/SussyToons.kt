@@ -11,7 +11,7 @@ class SussyToons : GreenShit(
 ) {
     override val id = 6963507464339951166
 
-    override val versionId = 2
+    override val versionId = 3
 
     override val contentOrigin: ContentOrigin = ContentOrigin.Mobile
 
