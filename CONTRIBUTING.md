@@ -686,21 +686,25 @@ with open(f"{package}/src/{source}.kt", "w") as f:
 
 ## Running
 
-If you do not have either a **rooted device** or an **emulator without Google Play**, you must use the **Debug build of Mihon**.
+If you do not have either a **rooted device** or an **emulator without Google Play**, you must use the **Debug build of Mihon** for debugging.
 
-In Android Studio, navigate to the Mihon repository and do the following to install the Debug app on your device:
+In Android Studio, navigate to the Mihon repository and install the debug app through one of the following ways:
 
-1.  **Build the debug APK:**
-    Open a terminal in the project root and run the following command:
-    ```
-    ./gradlew assembleDebug
-    ```
+1. Click **Debug 'app'** at the top of Android Studio to install the Mihon debug app.
 
-2.  **Install the debug app:**
-    To install the app on a connected device or emulator, run:
-    ```
-    ./gradlew installDebug
-    ```
+2. Or install the Mihon debug app through the command line:
+
+    1.  **Build the debug APK:**
+        Open a terminal in the project root and run the following command:
+        ```
+        ./gradlew assembleDebug
+        ```
+
+    2.  **Install the debug app:**
+        To install the app on a connected device or emulator, run:
+        ```
+        ./gradlew installDebug
+        ```
 
 For local development, navigate back to the extensions-source repository and use the following run configuration to launch the app directly into the Browse panel.
 
@@ -716,7 +720,7 @@ For other builds (only on rooted devices or emulators without Google Play), repl
 - Release build: `app.mihon`
 - Preview build: `app.mihon.debug`
 
-If it builds and runs successfully then the code changes to the extension should be in your local app.
+If the extension builds and runs successfully then the code changes should be ready to test in your local app.
 
 > [!IMPORTANT]
 > If you're deploying to Android 11 or higher, enable the `Always install with package manager` option in the run configurations. Without this option enabled, you might face issues such as Android Studio running an older version of the extension without the modifications you might have done.
