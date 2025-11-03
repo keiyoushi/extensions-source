@@ -719,14 +719,14 @@ For other builds (only on rooted devices or emulators without Google Play), repl
 If it builds and runs successfully then your code changes to the extension should be in your local app.
 
 > [!IMPORTANT]
-> If you're deploying to Android 11 or higher, enable the "Always install with package manager" option in the run configurations. Without this option enabled, you might face issues such as Android Studio running an older version of the extension without the modifications you might have done.
+> If you're deploying to Android 11 or higher, enable the `Always install with package manager` option in the run configurations. Without this option enabled, you might face issues such as Android Studio running an older version of the extension without the modifications you might have done.
 
 ## Debugging
 
 ### Android Debugger
 
 > [!IMPORTANT]
-> If you didn't build the main app from source with **debug enabled** and are using a release/beta APK, you **need a rooted device**.
+> If you didn't **build the main app** from source with **debug enabled** and are using a release/beta APK, you **need a rooted device**.
 > If you are using an **emulator** instead, make sure you choose a profile **without Google Play**.
 
 Follow the steps above for building and running locally if you haven't already. Debugging will not work if you did not follow the steps above.
