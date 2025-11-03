@@ -716,7 +716,7 @@ For other builds (only on rooted devices or emulators without Google Play), repl
 - Release build: `app.mihon`
 - Preview build: `app.mihon.debug`
 
-If it builds and runs successfully then your code changes to the extension should be in your local app.
+If it builds and runs successfully then the code changes to the extension should be in your local app.
 
 > [!IMPORTANT]
 > If you're deploying to Android 11 or higher, enable the `Always install with package manager` option in the run configurations. Without this option enabled, you might face issues such as Android Studio running an older version of the extension without the modifications you might have done.
@@ -739,7 +739,7 @@ error while launching.
 Instead, once you've built and installed your extension on the target device, use
 `Attach Debugger to Android Process` to start debugging the app. 
 
-Once the app is running on your device and `Show all processes` is checked, you should be able to select `app.mihon.dev` and press OK.
+Inside the `Attach Debugger to Android Process` window, once the app is running on your device and `Show all processes` is checked, you should be able to select `app.mihon.dev` and press OK.
 
 ![](https://i.imgur.com/SUhdB52.png)
 
