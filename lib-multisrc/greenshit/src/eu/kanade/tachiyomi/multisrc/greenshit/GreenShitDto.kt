@@ -226,7 +226,6 @@ class PageDto(
     val src: String,
     @SerialName("numero")
     val number: Float? = null,
-    
 ) {
     fun isWordPressContent(): Boolean = number == null
 }
