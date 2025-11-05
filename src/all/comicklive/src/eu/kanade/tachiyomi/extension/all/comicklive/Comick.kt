@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.all.comicklive
 import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.await
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -114,20 +115,32 @@ class Comick(
 
     private var nextCursor: String? = null
 
+    private val spaceSlashRegex = Regex("[ /]")
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (page == 1) {
             nextCursor = null
         }
 
         val url = "$baseUrl/api/search".toHttpUrl().newBuilder().apply {
-            addQueryParameter("order_by", filters.firstInstance<SortFilter>().selected)
-            addQueryParameter("order_direction", "desc")
+            filters.firstInstance<SortFilter>().let {
+                addQueryParameter("order_by", it.selected)
+                addQueryParameter("order_direction", if (it.state!!.ascending) "asc" else "desc")
+            }
             filters.firstInstanceOrNull<GenreFilter>()?.let { genre ->
                 genre.included.forEach {
                     addQueryParameter("genres[]", it)
                 }
                 genre.excluded.forEach {
                     addQueryParameter("excludes[]", it)
+                }
+            }
+            filters.firstInstanceOrNull<TagFilterText>()?.let { text ->
+                text.state.split(",").filter(String::isNotBlank).forEach {
+                    val value = it.trim().lowercase().replace(spaceSlashRegex, "-")
+                    addQueryParameter(
+                        if (value.startsWith("-")) "excluded_tags" else "tags",
+                        value.replaceFirst("-", ""),
+                    )
                 }
             }
             filters.firstInstanceOrNull<TagFilter>()?.let { tag ->
@@ -208,8 +221,8 @@ class Comick(
         val filters: MutableList<Filter<*>> = mutableListOf(
             SortFilter(),
             DemographicFilter(),
-            CreatedAtFilter(),
             TypeFilter(),
+            CreatedAtFilter(),
             MinimumChaptersFilter(),
             StatusFilter(),
             ContentRatingFilter(),
@@ -221,7 +234,16 @@ class Comick(
             GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_CACHE),
         ).await()
 
-        // the cache only request fails if it was not cached already
+        val getTags = preferences.getBoolean(GET_TAGS, false)
+
+        val textTags: List<Filter<*>> = listOf(
+            Filter.Separator(),
+            Filter.Header("Separate tags with commas (,)"),
+            Filter.Header("Prepend with dash (-) to exclude"),
+            TagFilterText(),
+            Filter.Separator(),
+        )
+
         if (!response.isSuccessful) {
             metadataClient.newCall(
                 GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_NETWORK),
@@ -236,10 +258,16 @@ class Comick(
                 },
             )
 
+            if (!getTags) {
+                filters.addAll(
+                    index = 2,
+                    textTags,
+                )
+            }
             filters.addAll(
                 index = 0,
                 listOf(
-                    Filter.Header("Press 'reset' to load genres and tags"),
+                    Filter.Header("Press 'reset' to load genres ${if (getTags) "and tags" else ""}"),
                     Filter.Separator(),
                 ),
             )
@@ -251,32 +279,50 @@ class Comick(
         } catch (e: Throwable) {
             Log.e(name, "Unable to parse filters", e)
 
+            if (!getTags) {
+                filters.addAll(
+                    index = 2,
+                    textTags,
+                )
+            }
             filters.addAll(
                 index = 0,
                 listOf(
-                    Filter.Header("Failed to parse genres and tags"),
+                    Filter.Header("Failed to parse genres ${if (getTags) "and tags" else ""}"),
                     Filter.Separator(),
                 ),
             )
             return@runBlocking FilterList(filters)
         }
-
-        filters.addAll(
-            index = 1,
-            listOf(
-                GenreFilter(data.genres),
-                TagFilter(data.tags),
-            ),
+        
+        filters.add(
+            index = 3,
+            GenreFilter(data.genres),
         )
+        if (!getTags) {
+            filters.addAll(
+                index = 4,
+                textTags,
+            )
+        } else {
+            filters.add(
+                index = 4,
+                TagFilter(data.genres),
+            )
+        }
         return@runBlocking FilterList(filters)
     }
 
     override fun mangaDetailsRequest(manga: SManga) =
         GET("$baseUrl/comic/${manga.url}", headers)
 
+    private val altTitleRegex = Regex(""""md_titles":\{((?:"\d+":\{.*?\},?)+)\}""")
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.asJsoup()
-            .selectFirst("#comic-data")!!.data()
+            .selectFirst("#comic-data")!!.data().replace(altTitleRegex) {
+            val v = it.groupValues[1].replace(Regex(""""[0-9]+":"""), "")
+            """"md_titles":[$v]"""
+        }
             .parseAs<ComicData>()
 
         return SManga.create().apply {
@@ -300,7 +346,7 @@ class Comick(
                 if (data.titles.isNotEmpty()) {
                     append("\n\n Alternative Titles: \n")
                     data.titles.forEach {
-                        append(it.title, "\n")
+                        append("- ", it.title.trim(), "\n")
                     }
                 }
             }.trim()
@@ -383,8 +429,23 @@ class Comick(
             summary = "%s"
             setDefaultValue("0")
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = GET_TAGS
+            title = "Tags Input Type"
+            summaryOn = "Tags will be in a form of scrollable list"
+            summaryOff = "Tags will need to be inputted manually"
+            setDefaultValue(false)
+
+            setOnPreferenceChangeListener { _, newValue ->
+                preferences.edit()
+                    .putBoolean(GET_TAGS, newValue as Boolean)
+                    .commit()
+            }
+        }.also(screen::addPreference)
     }
 }
 
 private val domains = arrayOf("https://comick.live", "https://comick.art")
 private const val DOMAIN_PREF = "domain_pref"
+private const val GET_TAGS = "get_tags"
