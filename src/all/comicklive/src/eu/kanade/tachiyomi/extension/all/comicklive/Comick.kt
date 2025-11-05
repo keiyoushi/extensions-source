@@ -19,16 +19,17 @@ import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import okhttp3.CacheControl
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import okhttp3.internal.closeQuietly
+import okio.IOException
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -222,11 +223,18 @@ class Comick(
 
         // the cache only request fails if it was not cached already
         if (!response.isSuccessful) {
-            CoroutineScope(Dispatchers.IO).launch {
-                metadataClient.newCall(
-                    GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_NETWORK),
-                ).await().closeQuietly()
-            }
+            metadataClient.newCall(
+                GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_NETWORK),
+            ).enqueue(
+                object : Callback {
+                    override fun onResponse(call: Call, response: Response) {
+                        response.closeQuietly()
+                    }
+                    override fun onFailure(call: Call, e: IOException) {
+                        Log.e(name, "Unable to fetch filters", e)
+                    }
+                },
+            )
 
             filters.addAll(
                 index = 0,
