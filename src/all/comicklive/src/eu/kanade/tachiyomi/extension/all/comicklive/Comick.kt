@@ -294,7 +294,7 @@ class Comick(
             )
             return@runBlocking FilterList(filters)
         }
-        
+
         filters.add(
             index = 3,
             GenreFilter(data.genres),
