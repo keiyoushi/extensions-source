@@ -30,13 +30,13 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.CacheControl
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -495,11 +495,18 @@ class Kagane : HttpSource(), ConfigurableSource {
 
         // the cache only request fails if it was not cached already
         if (!response.isSuccessful) {
-            CoroutineScope(Dispatchers.IO).launch {
-                metadataClient.newCall(
-                    GET("$apiUrl/api/v1/metadata", headers, CacheControl.FORCE_NETWORK),
-                ).await().closeQuietly()
-            }
+            metadataClient.newCall(
+                GET("$apiUrl/api/v1/metadata", headers, CacheControl.FORCE_NETWORK),
+            ).enqueue(
+                object : Callback {
+                    override fun onResponse(call: Call, response: Response) {
+                        response.closeQuietly()
+                    }
+                    override fun onFailure(call: Call, e: IOException) {
+                        Log.e(name, "Failed to fetch filters", e)
+                    }
+                },
+            )
 
             filters.addAll(
                 index = 0,
