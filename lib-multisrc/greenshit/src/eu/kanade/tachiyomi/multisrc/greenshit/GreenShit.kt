@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.multisrc.greenshit
 
 import android.content.SharedPreferences
-import android.util.Base64
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -31,8 +30,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.IOException
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 abstract class GreenShit(
     override val name: String,
@@ -196,29 +193,9 @@ abstract class GreenShit(
     private fun pageListRequestMobile(chapter: SChapter): Request {
         val pathSegment = chapter.url.replace("capitulo", "capitulo-app-token")
         val newHeaders = headers.newBuilder()
-            .set("x-client-hash", generateToken(scanId, SECRET_KEY))
             .set("authorization", "Bearer $token")
             .build()
         return GET("$apiUrl$pathSegment", newHeaders)
-    }
-
-    private fun generateToken(scanId: Long, secretKey: String): String {
-        val timestamp = System.currentTimeMillis() / 1000
-        val expiration = timestamp + 3600
-
-        val payload = buildJsonObject {
-            put("scan_id", scanId)
-            put("timestamp", timestamp)
-            put("exp", expiration)
-        }.toJsonString()
-
-        val hmac = Mac.getInstance("HmacSHA256")
-        val secretKeySpec = SecretKeySpec(secretKey.toByteArray(), "HmacSHA256")
-        hmac.init(secretKeySpec)
-        val signatureBytes = hmac.doFinal(payload.toByteArray())
-        val signature = signatureBytes.joinToString("") { "%02x".format(it) }
-
-        return Base64.encodeToString("$payload.$signature".toByteArray(), Base64.NO_WRAP)
     }
 
     override fun pageListParse(response: Response): List<Page> =
@@ -444,7 +421,5 @@ abstract class GreenShit(
         private const val TOKEN_PREF = "greenShitToken"
         private const val USERNAME_PREF = "usernamePref"
         private const val PASSWORD_PREF = "passwordPref"
-
-        private const val SECRET_KEY = "sua_chave_secreta_aqui_32_caracteres"
     }
 }
