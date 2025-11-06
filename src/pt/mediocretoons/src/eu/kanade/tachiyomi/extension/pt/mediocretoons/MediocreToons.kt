@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.mediocretoons
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -69,12 +70,36 @@ class MediocreToons : HttpSource() {
     // =============================== Search ================================
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$apiUrl/obras".toHttpUrl().newBuilder()
-            .addQueryParameter("string", query)
             .addQueryParameter("limite", "20")
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("temCapitulo", "true")
-            .build()
-        return GET(url, headers)
+
+        if (query.isNotEmpty()) {
+            url.addQueryParameter("string", query)
+        }
+
+        filters.forEach { filter ->
+            when (filter) {
+                is FormatoFilter -> {
+                    if (filter.selected.isNotEmpty()) {
+                        url.addQueryParameter("formato", filter.selected)
+                    }
+                }
+                is StatusFilter -> {
+                    if (filter.selected.isNotEmpty()) {
+                        url.addQueryParameter("status", filter.selected)
+                    }
+                }
+                is TagsFilter -> {
+                    filter.state
+                        .filter { it.state }
+                        .forEach { url.addQueryParameter("tags[]", it.value) }
+                }
+                else -> {}
+            }
+        }
+
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -82,6 +107,111 @@ class MediocreToons : HttpSource() {
         val mangas = dto.data.map { it.toSManga() }
         val hasNext = dto.pagination?.hasNextPage ?: false
         return MangasPage(mangas, hasNextPage = hasNext)
+    }
+
+    // ============================== Filters ================================
+    override fun getFilterList() = FilterList(
+        FormatoFilter(),
+        StatusFilter(),
+        TagsFilter(),
+    )
+
+    private class FormatoFilter : UriSelectFilter(
+        "Formato",
+        arrayOf(
+            Pair("Todos", ""),
+            Pair("Novel", "3"),
+            Pair("Shoujo", "4"),
+            Pair("Comic", "5"),
+            Pair("Yaoi", "8"),
+            Pair("Yuri", "9"),
+            Pair("Hentai", "10"),
+        ),
+    )
+
+    private class StatusFilter : UriSelectFilter(
+        "Status",
+        arrayOf(
+            Pair("Todos", ""),
+            Pair("Ativo", "1"),
+            Pair("Em Andamento", "2"),
+            Pair("Cancelada", "3"),
+            Pair("Concluído", "4"),
+            Pair("Hiato", "6"),
+        ),
+    )
+
+    private class TagsFilter : Filter.Group<TagCheckBox>(
+        "Tags",
+        listOf(
+            TagCheckBox("Ação", "2"),
+            TagCheckBox("Aventura", "3"),
+            TagCheckBox("Fantasia", "4"),
+            TagCheckBox("Romance", "5"),
+            TagCheckBox("Comédia", "6"),
+            TagCheckBox("Drama", "7"),
+            TagCheckBox("Terror", "8"),
+            TagCheckBox("Horror", "9"),
+            TagCheckBox("Suspense", "10"),
+            TagCheckBox("Histórico", "11"),
+            TagCheckBox("Vida escolar", "12"),
+            TagCheckBox("Sobrenatural", "13"),
+            TagCheckBox("Militar", "14"),
+            TagCheckBox("Shounen", "15"),
+            TagCheckBox("Shoujo", "16"),
+            TagCheckBox("Josei", "17"),
+            TagCheckBox("One-shot", "18"),
+            TagCheckBox("Isekai", "19"),
+            TagCheckBox("Retorno", "20"),
+            TagCheckBox("Reencarnação", "21"),
+            TagCheckBox("Sistema", "22"),
+            TagCheckBox("Cultivo", "23"),
+            TagCheckBox("Artes Marciais", "24"),
+            TagCheckBox("Dungeon", "25"),
+            TagCheckBox("Tragédia", "26"),
+            TagCheckBox("Psicológico", "27"),
+            TagCheckBox("Culinaria", "28"),
+            TagCheckBox("Magia", "29"),
+            TagCheckBox("SuperPoder", "30"),
+            TagCheckBox("Murim", "31"),
+            TagCheckBox("Necromante", "32"),
+            TagCheckBox("Apocalipse", "33"),
+            TagCheckBox("Seinen", "34"),
+            TagCheckBox("Luta", "35"),
+            TagCheckBox("máfia", "36"),
+            TagCheckBox("Monstros", "37"),
+            TagCheckBox("Esportes", "38"),
+            TagCheckBox("Demônios", "39"),
+            TagCheckBox("Ficção Científica", "40"),
+            TagCheckBox("Fatia da Vida/Slice of Life", "41"),
+            TagCheckBox("Ecchi", "42"),
+            TagCheckBox("Mistério", "43"),
+            TagCheckBox("Harém", "44"),
+            TagCheckBox("manhua", "45"),
+            TagCheckBox("Jogo", "46"),
+            TagCheckBox("Regressão", "47"),
+            TagCheckBox("+18", "48"),
+            TagCheckBox("Oneshot", "49"),
+            TagCheckBox("Yuri", "50"),
+            TagCheckBox("Crime", "51"),
+            TagCheckBox("Policial", "52"),
+            TagCheckBox("Viagem no Tempo", "53"),
+            TagCheckBox("Moderno", "54"),
+        ),
+    )
+
+    private class TagCheckBox(name: String, val value: String) : Filter.CheckBox(name)
+
+    private open class UriSelectFilter(
+        displayName: String,
+        private val options: Array<Pair<String, String>>,
+        defaultValue: Int = 0,
+    ) : Filter.Select<String>(
+        displayName,
+        options.map { it.first }.toTypedArray(),
+        defaultValue,
+    ) {
+        val selected get() = options[state].second
     }
 
     // ============================ Manga Details ============================
