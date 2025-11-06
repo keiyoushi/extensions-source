@@ -1,9 +1,8 @@
 ext {
     extName = 'Mediocre Toons'
     extClass = '.MediocreToons'
-    themePkg = 'orangeshit'
     baseUrl = 'https://mediocretoons.com'
-    overrideVersionCode = 7
+    extVersionCode = 9
     isNsfw = true
 }
 
