@@ -1,0 +1,9 @@
+ext {
+    extName = 'Lycan Toons'
+    extClass = '.LycanToons'
+    baseUrl = 'https://lycantoons.com'
+    extVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
