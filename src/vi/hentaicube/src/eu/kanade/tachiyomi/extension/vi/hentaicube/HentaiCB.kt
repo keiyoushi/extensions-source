@@ -37,9 +37,39 @@ class HentaiCB :
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(3)
+        .followRedirects(false)
+        .addInterceptor { chain ->
+            val maxRedirects = 5
+            var request = chain.request()
+            var response = chain.proceed(request)
+            var redirectCount = 0
+
+            while (response.isRedirect && redirectCount < maxRedirects) {
+                val newUrl = response.header("Location") ?: break
+                val newUrlHttp = newUrl.toHttpUrl()
+                val redirectedDomain = newUrlHttp.run { "$scheme://$host" }
+                if (redirectedDomain != baseUrl) {
+                    synchronized(prefsLock) {
+                        preferences.edit().putString(BASE_URL_PREF, redirectedDomain).commit()
+                    }
+                }
+                response.close()
+                request = request.newBuilder()
+                    .url(newUrlHttp)
+                    .build()
+                response = chain.proceed(request)
+                redirectCount++
+            }
+            if (redirectCount >= maxRedirects) {
+                response.close()
+                throw java.io.IOException("Too many redirects: $maxRedirects")
+            }
+            response
+        }
         .build()
 
     private val preferences: SharedPreferences = getPreferences()
+    private val prefsLock = Any()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
@@ -51,7 +81,9 @@ class HentaiCB :
             }
         }
     }
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
+    private fun getPrefBaseUrl(): String = synchronized(prefsLock) {
+        preferences.getString(BASE_URL_PREF, super.baseUrl)!!
+    }
 
     override val baseUrl: String
         get() = getPrefBaseUrl().ifBlank { super.baseUrl }
