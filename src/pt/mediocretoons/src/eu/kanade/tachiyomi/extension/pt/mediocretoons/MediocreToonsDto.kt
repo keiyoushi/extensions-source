@@ -3,8 +3,13 @@ package eu.kanade.tachiyomi.extension.pt.mediocretoons
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
 data class MediocrePaginationDto(
@@ -25,47 +30,48 @@ data class MediocreListDto<T>(
 @Serializable
 data class MediocreTagDto(
     val id: Int = 0,
-    val nome: String = "",
+    @SerialName("nome") val name: String = "",
 )
 
 @Serializable
 data class MediocreFormatDto(
     val id: Int = 0,
-    val nome: String = "",
+    @SerialName("nome") val name: String = "",
 )
 
 @Serializable
 data class MediocreStatusDto(
     val id: Int = 0,
-    val nome: String = "",
+    @SerialName("nome") val name: String = "",
 )
 
 @Serializable
 data class MediocreChapterSimpleDto(
     val id: Int = 0,
-    val nome: String = "",
-    val numero: Float? = null,
-    val imagem: String? = null,
-    val lancado_em: String? = null,
-    val criado_em: String? = null,
-    val descricao: String? = null,
-    val tem_paginas: Boolean = false,
+    @SerialName("nome") val name: String = "",
+    @SerialName("numero") val number: Float? = null,
+    @SerialName("imagem") val image: String? = null,
+    @SerialName("lancado_em") val releasedAt: String? = null,
+    @SerialName("criado_em") val createdAt: String? = null,
+    @SerialName("descricao") val description: String? = null,
+    @SerialName("tem_paginas") val hasPages: Boolean = false,
     val totallinks: Int = 0,
-    val lido: Boolean = false,
+    @SerialName("lido") val read: Boolean = false,
     val views: Int = 0,
 )
 
 @Serializable
 data class MediocreMangaDto(
     val id: Int = 0,
-    val nome: String = "",
-    val descricao: String? = null,
-    val imagem: String? = null,
-    val formato: MediocreFormatDto? = null,
+    val slug: String = "",
+    @SerialName("nome") val name: String = "",
+    @SerialName("descricao") val description: String? = null,
+    @SerialName("imagem") val image: String? = null,
+    @SerialName("formato") val format: MediocreFormatDto? = null,
     val tags: List<MediocreTagDto> = emptyList(),
     val status: MediocreStatusDto? = null,
-    val total_capitulos: Int = 0,
-    val capitulos: List<MediocreChapterSimpleDto> = emptyList(),
+    @SerialName("total_capitulos") val totalChapters: Int = 0,
+    @SerialName("capitulos") val chapters: List<MediocreChapterSimpleDto> = emptyList(),
 )
 
 @Serializable
@@ -76,68 +82,60 @@ data class MediocrePageSrcDto(
 @Serializable
 data class MediocreChapterDetailDto(
     val id: Int = 0,
-    val nome: String = "",
-    val numero: Float? = null,
-    val imagem: String? = null,
-    val paginas: List<MediocrePageSrcDto> = emptyList(),
-    val lancado_em: String? = null,
-    val criado_em: String? = null,
-    val obra: MediocreMangaDto? = null,
+    @SerialName("nome") val name: String = "",
+    @SerialName("numero") val number: Float? = null,
+    @SerialName("imagem") val image: String? = null,
+    @SerialName("paginas") val pages: List<MediocrePageSrcDto> = emptyList(),
+    @SerialName("lancado_em") val releasedAt: String? = null,
+    @SerialName("criado_em") val createdAt: String? = null,
+    @SerialName("obra") val manga: MediocreMangaDto? = null,
 )
 
 fun MediocreMangaDto.toSManga(): SManga {
     val sManga = SManga.create().apply {
-        title = nome
-        thumbnail_url = imagem?.let {
+        title = name
+        thumbnail_url = image?.let {
             when {
                 it.startsWith("http") -> it
                 else -> "${MediocreToons.CDN_URL}/obras/${this@toSManga.id}/$it?v=3"
             }
         }
         initialized = true
-        url = "/obra/${this@toSManga.id}"
-        genre = tags.joinToString { it.nome }
+        url = "/obra/$id"
+        genre = tags.joinToString { it.name }
     }
-    descricao?.let { Jsoup.parseBodyFragment(it).let { sManga.description = it.text() } }
-    sManga.status = status?.let {
-        when (it.nome.lowercase()) {
+    description?.let { Jsoup.parseBodyFragment(it).let { sManga.description = it.text() } }
+    status?.let {
+        sManga.status = when (it.name.lowercase()) {
             "em andamento" -> SManga.ONGOING
             "completo" -> SManga.COMPLETED
             "hiato" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
-    } ?: SManga.UNKNOWN
+    }
     return sManga
 }
 
 fun MediocreChapterSimpleDto.toSChapter(): SChapter {
     return SChapter.create().apply {
-        name = nome
-        chapter_number = numero ?: 0f
+        name = this@toSChapter.name
+        chapter_number = number ?: 0f
         url = "/capitulo/$id"
-        date_upload = criado_em?.let { MediocreToonsDateParser.parse(it) } ?: 0
+        date_upload = dateFormat.tryParse(createdAt)
     }
 }
 
 fun MediocreChapterDetailDto.toPageList(): List<Page> {
-    val obraId = obra?.id ?: 0
-    val capituloNome = nome
-    return paginas.mapIndexed { idx, p ->
+    val obraId = manga?.id ?: 0
+    val capituloNome = name
+    return pages.mapIndexed { idx, p ->
         val imageUrl = "${MediocreToons.CDN_URL}/obras/$obraId/capitulos/$capituloNome/${p.src}"
         Page(idx, imageUrl = imageUrl)
     }
 }
 
-object MediocreToonsDateParser {
-    private val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
-        timeZone = java.util.TimeZone.getTimeZone("UTC")
-    }
-
-    fun parse(value: String): Long {
-        return try {
-            format.parse(value)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
+private val dateFormat by lazy {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
     }
 }

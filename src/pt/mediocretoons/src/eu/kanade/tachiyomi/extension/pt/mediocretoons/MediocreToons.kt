@@ -10,28 +10,26 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import java.text.Normalizer
 
 class MediocreToons : HttpSource() {
 
     override val name = "Mediocre Toons"
 
-    override val baseUrl = "https://mediocretoons.com"
+    override val baseUrl = "https://mediocretoons.site"
 
     override val lang = "pt-BR"
 
     override val supportsLatest = true
 
-    private val apiUrl = "https://api.mediocretoons.com"
+    private val apiUrl = "https://api.mediocretoons.site"
 
     private val scanId: Long = 2
 
     override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::imageLocation)
         .rateLimit(2)
         .build()
 
@@ -40,8 +38,14 @@ class MediocreToons : HttpSource() {
         .set("x-app-key", "toons-mediocre-app")
 
     // ============================== Popular ================================
-    override fun popularMangaRequest(page: Int) =
-        GET("$apiUrl/obras?ordenarPor=views_hoje&limite=20", headers)
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
+            .addQueryParameter("ordenarPor", "views_hoje")
+            .addQueryParameter("limite", "20")
+            .addQueryParameter("pagina", page.toString())
+            .build()
+        return GET(url, headers)
+    }
 
     override fun popularMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
@@ -215,7 +219,12 @@ class MediocreToons : HttpSource() {
     }
 
     // ============================ Manga Details ============================
-    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
+    override fun getMangaUrl(manga: SManga): String {
+        // manga.url is "/obra/{id}" for API/internal use. Build webview URL with slug from title.
+        val id = manga.url.substringAfter("/obra/").substringBefore('/')
+        val slug = manga.title.toSlug()
+        return "$baseUrl/obra/$id/$slug"
+    }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val pathSegment = manga.url.replace("/obra/", "/obras/")
@@ -231,7 +240,7 @@ class MediocreToons : HttpSource() {
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
     override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<MediocreMangaDto>().capitulos.map { it.toSChapter() }
+        response.parseAs<MediocreMangaDto>().chapters.map { it.toSChapter() }
             .distinctBy(SChapter::url)
 
     // =============================== Pages =================================
@@ -252,34 +261,16 @@ class MediocreToons : HttpSource() {
         return GET(page.url, imageHeaders)
     }
 
-    // ============================= Interceptors ============================
-    private fun imageLocation(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
-        if (response.isSuccessful) {
-            return response
-        }
-
-        response.close()
-
-        val url = request.url.newBuilder()
-            .dropPathSegment(4)
-            .build()
-
-        val newRequest = request.newBuilder()
-            .url(url)
-            .build()
-        return chain.proceed(newRequest)
-    }
-
-    private fun HttpUrl.Builder.dropPathSegment(count: Int): HttpUrl.Builder {
-        repeat(count) {
-            removePathSegment(0)
-        }
-        return this
-    }
-
     companion object {
-        const val CDN_URL = "https://cdn.mediocretoons.com"
+        const val CDN_URL = "https://cdn2.fufutebol.com.br"
     }
+}
+
+private fun String.toSlug(): String {
+    val noDiacritics = Normalizer.normalize(this, Normalizer.Form.NFD)
+        .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+    val slug = noDiacritics.lowercase()
+        .replace(Regex("[^a-z0-9]+"), "-")
+        .trim('-')
+    return if (slug.isEmpty()) this.hashCode().toString() else slug
 }
