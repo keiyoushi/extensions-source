@@ -1,8 +1,15 @@
 package eu.kanade.tachiyomi.extension.all.comicklive
 
+import android.graphics.Insets.add
+import eu.kanade.tachiyomi.extension.all.comicklive.ComicData.Title
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.buildJsonArray
 
 @Serializable
 class Data<T>(
@@ -77,6 +84,20 @@ class ComicData(
         @SerialName("md_genres")
         val genres: Name,
     )
+}
+
+object Transform : JsonTransformingSerializer<ComicData>(ComicData.serializer()) {
+
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        if (element !is JsonObject) return element
+
+        val mdTitles = element["md_titles"] ?: return element
+        if (mdTitles !is JsonObject) return element
+
+        val titles = buildJsonArray { mdTitles.values.forEach { add(it) } }
+
+        return JsonObject(element.toMutableMap().apply { put("md_titles", titles) })
+    }
 }
 
 @Serializable

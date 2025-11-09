@@ -18,10 +18,12 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.decodeFromString
 import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
@@ -128,10 +130,10 @@ class Comick(
             }
             filters.firstInstanceOrNull<GenreFilter>()?.let { genre ->
                 genre.included.forEach {
-                    addQueryParameter("genres[]", it)
+                    addQueryParameter("genres", it)
                 }
                 genre.excluded.forEach {
-                    addQueryParameter("excludes[]", it)
+                    addQueryParameter("excludes", it)
                 }
             }
             filters.firstInstanceOrNull<TagFilterText>()?.let { text ->
@@ -145,20 +147,20 @@ class Comick(
             }
             filters.firstInstanceOrNull<TagFilter>()?.let { tag ->
                 tag.included.forEach {
-                    addQueryParameter("tags[]", it)
+                    addQueryParameter("tags", it)
                 }
                 tag.excluded.forEach {
-                    addQueryParameter("excluded_tags[]", it)
+                    addQueryParameter("excluded_tags", it)
                 }
             }
             filters.firstInstance<DemographicFilter>().checked.forEach {
-                addQueryParameter("demographic[]", it)
+                addQueryParameter("demographic", it)
             }
             filters.firstInstance<CreatedAtFilter>().selected?.let {
                 addQueryParameter("time", it)
             }
             filters.firstInstance<TypeFilter>().checked.forEach {
-                addQueryParameter("country[]", it)
+                addQueryParameter("country", it)
             }
             filters.firstInstance<MinimumChaptersFilter>().state.let {
                 if (it.isNotBlank()) {
@@ -234,7 +236,7 @@ class Comick(
             GET("$baseUrl/api/metadata", headers, CacheControl.FORCE_CACHE),
         ).await()
 
-        val getTags = preferences.getBoolean(GET_TAGS, false)
+        val getTags = preferences.getBoolean(GET_TAGS, true)
 
         val textTags: List<Filter<*>> = listOf(
             Filter.Separator(),
@@ -316,15 +318,11 @@ class Comick(
     override fun mangaDetailsRequest(manga: SManga) =
         GET("$baseUrl/comic/${manga.url}", headers)
 
-    private val altTitleRegex = Regex(""""md_titles":\{((?:"\d+":\{.*?\},?)+)\}""")
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = response.asJsoup()
-            .selectFirst("#comic-data")!!.data().replace(altTitleRegex) {
-            val v = it.groupValues[1].replace(Regex(""""[0-9]+":"""), "")
-            """"md_titles":[$v]"""
-        }
-            .parseAs<ComicData>()
-
+        val data = jsonInstance.decodeFromString(
+            Transform,
+            response.asJsoup().selectFirst("#comic-data")!!.data()
+        )
         return SManga.create().apply {
             title = data.title
             url = data.slug
@@ -435,13 +433,7 @@ class Comick(
             title = "Tags Input Type"
             summaryOn = "Tags will be in a form of scrollable list"
             summaryOff = "Tags will need to be inputted manually"
-            setDefaultValue(false)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                preferences.edit()
-                    .putBoolean(GET_TAGS, newValue as Boolean)
-                    .commit()
-            }
+            setDefaultValue(true)
         }.also(screen::addPreference)
     }
 }
