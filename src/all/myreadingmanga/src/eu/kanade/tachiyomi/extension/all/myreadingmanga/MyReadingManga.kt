@@ -46,7 +46,6 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
     override val supportsLatest = true
 
     // Popular - Random
-    // Should this use '/popular' ?
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/page/$page/?s=&ep_sort=rand&ep_filter_lang=$siteLang", headers) // Random Manga as returned by search
     }
