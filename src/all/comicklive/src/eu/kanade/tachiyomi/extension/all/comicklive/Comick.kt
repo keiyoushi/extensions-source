@@ -321,7 +321,7 @@ class Comick(
     override fun mangaDetailsParse(response: Response): SManga {
         val data = jsonInstance.decodeFromString(
             Transform,
-            response.asJsoup().selectFirst("#comic-data")!!.data()
+            response.asJsoup().selectFirst("#comic-data")!!.data(),
         )
         return SManga.create().apply {
             title = data.title
