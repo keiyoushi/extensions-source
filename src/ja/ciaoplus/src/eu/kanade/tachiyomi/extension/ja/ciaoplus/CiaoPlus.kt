@@ -9,16 +9,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -88,14 +80,7 @@ class CiaoPlus : HttpSource() {
         }
 
         val detailsResult = detailsResponse.parseAs<TitleListResponse>()
-        val mangas = detailsResult.titleList.map { manga ->
-            SManga.create().apply {
-                val paddedId = manga.titleId.toString().padStart(5, '0')
-                url = "/comics/title/$paddedId"
-                title = manga.titleName
-                thumbnail_url = manga.thumbnailImageUrl
-            }
-        }
+        val mangas = detailsResult.titleList.map { it.toSManga() }
 
         if (requestUrl.contains("/genre/")) {
             return MangasPage(mangas.reversed(), hasNextPage)
@@ -130,14 +115,7 @@ class CiaoPlus : HttpSource() {
             }
             .flatMap { it.value }
             .distinctBy { it.titleId }
-            .map { manga ->
-                SManga.create().apply {
-                    val paddedId = manga.titleId.toString().padStart(5, '0')
-                    url = "/comics/title/$paddedId"
-                    title = manga.titleName
-                    thumbnail_url = manga.thumbnailImageUrl
-                }
-            }
+            .map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -180,46 +158,36 @@ class CiaoPlus : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage {
         val requestUrl = response.request.url.toString()
         if (requestUrl.contains("/search/title")) {
-            val result = response.parseAs<SearchApiResponse>()
-            val mangas = result.searchTitleList.map { manga ->
-                SManga.create().apply {
-                    val paddedId = manga.titleId.toString().padStart(5, '0')
-                    url = "/comics/title/$paddedId"
-                    title = manga.titleName
-                    thumbnail_url = manga.bannerImageUrl
-                }
-            }
+            val result = response.parseAs<TitleListResponse>()
+            val mangas = result.titleList.map { it.toSManga() }
             return MangasPage(mangas, false)
         }
         return popularMangaParse(response)
     }
 
     // Details
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val titleId = manga.url.substringAfter("/title/")
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegments("title/list")
+            .addQueryParameter("platform", "3")
+            .addQueryParameter("title_id_list", titleId)
+            .build()
+        return hashedGet(url)
+    }
+
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
-        val nuxtData = document.selectFirst("script#__NUXT_DATA__")?.data()
-            ?: throw Exception("Could not find Nuxt data")
-        val rootArray = nuxtData.parseAs<JsonArray>()
-
-        fun resolve(ref: JsonElement): JsonElement = rootArray[ref.jsonPrimitive.content.toInt()]
-
-        val titleDetailsObject = rootArray
-            .filterIsInstance<JsonObject>()
-            .findLast { "title_name" in it && "author_text" in it && "introduction_text" in it }
-            ?.jsonObject
-
+        val details = response.parseAs<DetailResponse>()
+        val result = details.webTitle.first()
         return SManga.create().apply {
-            title = resolve(titleDetailsObject?.get("title_name")!!).jsonPrimitive.content
-            author = resolve(titleDetailsObject["author_text"]!!).jsonPrimitive.content
-            description = resolve(titleDetailsObject["introduction_text"]!!).jsonPrimitive.content
-            val genreIdRefs = resolve(titleDetailsObject["genre_id_list"]!!).jsonArray
-            val genreIds = genreIdRefs.map { resolve(it).jsonPrimitive.content.toInt() }
-
-            if (genreIds.isNotEmpty()) {
+            title = result.titleName
+            author = result.authorText
+            description = result.introductionText
+            if (result.genreIdList.isNotEmpty()) {
                 val genreApiUrl = apiUrl.toHttpUrl().newBuilder()
                     .addPathSegments("genre/list")
                     .addQueryParameter("platform", "3")
-                    .addQueryParameter("genre_id_list", genreIds.joinToString(","))
+                    .addQueryParameter("genre_id_list", result.genreIdList.joinToString(","))
                     .build()
 
                 val genreRequest = hashedGet(genreApiUrl)
@@ -235,21 +203,16 @@ class CiaoPlus : HttpSource() {
 
     // Chapters
     override fun chapterListRequest(manga: SManga): Request {
-        return GET(baseUrl + manga.url, headers)
+        return mangaDetailsRequest(manga)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val nuxtData = document.selectFirst("script#__NUXT_DATA__")?.data()
-            ?: throw Exception("Could not find Nuxt data")
-
-        val rootArray = nuxtData.parseAs<JsonArray>()
-        fun resolve(ref: JsonElement): JsonElement = rootArray[ref.jsonPrimitive.content.toInt()]
-
-        val titleDetailsObject = rootArray.first { it is JsonObject && it.jsonObject.containsKey("episode_id_list") }.jsonObject
-        val mangaTitle = resolve(titleDetailsObject["title_name"]!!).jsonPrimitive.content
-        val episodeIdRefs = resolve(titleDetailsObject["episode_id_list"]!!).jsonArray
-        val episodeIds = episodeIdRefs.map { resolve(it).jsonPrimitive.content }
+        val details = response.parseAs<DetailResponse>()
+        val resultIds = details.webTitle.first()
+        val episodeIds = resultIds.episodeIdList.map { it.toString() }
+        if (episodeIds.isEmpty()) {
+            return emptyList()
+        }
 
         val formBody = FormBody.Builder()
             .add("platform", "3")
@@ -274,32 +237,7 @@ class CiaoPlus : HttpSource() {
 
         val result = apiResponse.parseAs<EpisodeListResponse>()
 
-        return result.episodeList.map { chapter ->
-            SChapter.create().apply {
-                val paddedId = chapter.titleId.toString().padStart(5, '0')
-                url = "/comics/title/$paddedId/episode/${chapter.episodeId}"
-
-                val originalChapterName = chapter.episodeName.trim()
-                val chapterName = if (originalChapterName.startsWith(mangaTitle)) {
-                    "【第${chapter.index}話】 $originalChapterName" // If entry title is in chapter name, that part of the chapter name is missing, so index is added here to the name
-                } else {
-                    originalChapterName
-                }
-
-                // It is possible to read paid chapters even though you have to purchase them on the website, so leaving this here in case they change it
-                /*
-                name = if (chapter.point > 0 && chapter.badge != 3 && chapter.rentalFinishTime == null) {
-                    "🔒 $chapterName"
-                } else {
-                    chapterName
-                }
-                 */
-
-                name = chapterName
-                chapter_number = chapter.index.toFloat()
-                date_upload = dateFormat.tryParse(chapter.startTime)
-            }
-        }.reversed()
+        return result.episodeList.map { it.toSChapter(resultIds.titleName, dateFormat) }.reversed()
     }
 
     // Pages
