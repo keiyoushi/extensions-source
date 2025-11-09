@@ -41,7 +41,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
             return getCustomDomain().ifBlank { "https://hangtruyen.top" }
         }
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudFlareClient.newBuilder()
         .followRedirects(false)
         .addInterceptor { chain ->
             val maxRedirects = 5
@@ -148,7 +148,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
 
     // Details
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1.title-detail a")!!.text().trim()
+        title = document.selectFirst("h1.title-detail a")!!.text()
         author = document.selectFirst("div.author p")?.text()?.trim()
         description = document.selectFirst("div.sort-des div.line-clamp")?.text()?.trim()
         genre = document.select("div.kind a, div.m-tags a").joinToString { it.text().trim() }
