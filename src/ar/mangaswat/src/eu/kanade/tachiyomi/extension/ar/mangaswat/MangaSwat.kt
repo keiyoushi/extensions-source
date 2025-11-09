@@ -197,7 +197,7 @@ class MangaSwat :
     )
 
     companion object {
-        private const val RESTART_TACHIYOMI = "Restart Tachiyomi to apply new setting."
+        private const val RESTART_APP = "Restart the app to apply the new URL"
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting."
@@ -214,7 +214,7 @@ class MangaSwat :
             dialogMessage = "Default: ${super.baseUrl}"
 
             setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_TACHIYOMI, Toast.LENGTH_LONG).show()
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
                 true
             }
         }
