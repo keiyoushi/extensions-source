@@ -17,31 +17,30 @@ class BarManga : Madara(
 
     override val mangaDetailsSelectorDescription = "div.flamesummary > div.manga-excerpt"
 
-    private val newImageUrlRegex = """var u1 = '([A-Za-z0-9+/=]+)';\s*var u2 = '([A-Za-z0-9+/=]+)';""".toRegex()
     override val pageListParseSelector = "div.page-break"
+
+    private val imageSegmentsRegex = """var\s+imageSegments\s*=\s*\[\s*(['"][A-Za-z0-9+/=]+['"](?:\s*,\s*['"][A-Za-z0-9+/=]+['"])*)\s*];""".toRegex()
+    private val base64ItemRegex = """['"]([A-Za-z0-9+/=]+)['"]""".toRegex()
 
     override fun pageListParse(document: Document): List<Page> {
         launchIO { countViews(document) }
 
         return document.select(pageListParseSelector).mapIndexedNotNull { index, element ->
-            val scripts = element.select("script")
-
-            val scriptData = scripts.firstNotNullOfOrNull { script ->
+            val scriptData = element.select("script").firstNotNullOfOrNull { script ->
                 val data = script.data()
-                if (data.contains("var u1") && data.contains("var u2")) {
-                    data
-                } else {
-                    null
-                }
+                if (data.contains("var imageSegments")) data else null
             } ?: return@mapIndexedNotNull null
 
-            val match = newImageUrlRegex.find(scriptData) ?: return@mapIndexedNotNull null
-            val (b64part1, b64part2) = match.destructured
+            val match = imageSegmentsRegex.find(scriptData) ?: return@mapIndexedNotNull null
+            val arrayContent = match.groupValues[1]
 
-            val part1 = String(Base64.decode(b64part1, Base64.DEFAULT))
-            val part2 = String(Base64.decode(b64part2, Base64.DEFAULT))
+            val segments = base64ItemRegex.findAll(arrayContent).map { it.groupValues[1] }.toList()
+            if (segments.isEmpty()) return@mapIndexedNotNull null
 
-            Page(index, document.location(), part1 + part2)
+            val joinedBase64 = segments.joinToString("")
+            val imageUrl = String(Base64.decode(joinedBase64, Base64.DEFAULT))
+
+            Page(index, document.location(), imageUrl)
         }
     }
 }
