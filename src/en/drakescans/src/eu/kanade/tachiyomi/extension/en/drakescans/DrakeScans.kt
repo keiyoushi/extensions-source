@@ -15,7 +15,7 @@ class DrakeScans : MangaThemesiaAlt(
     "en",
 ) {
     // madara -> mangathemesia
-    override val versionId = 3
+    override val versionId = 2
 
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3, 1, TimeUnit.SECONDS)
