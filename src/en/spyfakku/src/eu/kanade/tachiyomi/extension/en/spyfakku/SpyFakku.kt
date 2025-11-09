@@ -38,6 +38,9 @@ class SpyFakku : HttpSource(), ConfigurableSource {
 
     override val name = "SpyFakku"
 
+    override val lang = "en"
+
+    override val supportsLatest = true
     private val preference = getPreferences()
 
     private val domain =
@@ -51,10 +54,6 @@ class SpyFakku : HttpSource(), ConfigurableSource {
     private val baseImageUrl = "$baseUrl/image"
 
     private val baseApiUrl = "$baseUrl/api"
-
-    override val lang = "en"
-
-    override val supportsLatest = true
 
     private val json: Json by injectLazy()
 
