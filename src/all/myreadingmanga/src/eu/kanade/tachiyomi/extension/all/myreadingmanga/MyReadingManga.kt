@@ -105,7 +105,6 @@ open class MyReadingManga(override val lang: String, private val siteLang: Strin
         return MangasPage(mangas, mangaParsedSoFar < totalResults)
     }
 
-    // override fun searchMangaFromElement(element: Element) = buildManga(element.select("a").first()!!, element.select("img").first())
     override fun searchMangaFromElement(element: Element) = buildManga(element.select("a[rel]").first()!!, element.select("a.entry-image-link img").first())
 
     // Build Manga From Element
