@@ -41,7 +41,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
             return getCustomDomain().ifBlank { "https://hangtruyen.top" }
         }
 
-    override val client = network.cloudFlareClient.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .followRedirects(false)
         .addInterceptor { chain ->
             val maxRedirects = 5
