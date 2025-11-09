@@ -149,10 +149,10 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
     // Details
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.title-detail a")!!.text()
-        author = document.selectFirst("div.author p")?.text()?.trim()
-        description = document.selectFirst("div.sort-des div.line-clamp")?.text()?.trim()
-        genre = document.select("div.kind a, div.m-tags a").joinToString { it.text().trim() }
-        status = when (document.selectFirst("div.status p")?.text()?.trim()) {
+        author = document.selectFirst("div.author p")?.text()
+        description = document.selectFirst("div.sort-des div.line-clamp")?.text()
+        genre = document.select("div.kind a, div.m-tags a").joinToString { it.text() }
+        status = when (document.selectFirst("div.status p")?.text()) {
             "Đang tiến hành" -> SManga.ONGOING
             "Hoàn thành" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
@@ -166,7 +166,7 @@ class HangTruyen : ParsedHttpSource(), ConfigurableSource {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val a = element.selectFirst("a.ll-chap")!!
         setUrlWithoutDomain(a.attr("href"))
-        name = a.text().trim()
+        name = a.text()
         date_upload = element.selectFirst("span.ll-update")?.text()?.toDate() ?: 0L
     }
 
