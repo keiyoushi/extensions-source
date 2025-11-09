@@ -166,6 +166,10 @@ class CiaoPlus : HttpSource() {
     }
 
     // Details
+    override fun getMangaUrl(manga: SManga): String {
+        return baseUrl + manga.url
+    }
+
     override fun mangaDetailsRequest(manga: SManga): Request {
         val titleId = manga.url.substringAfter("/title/")
         val url = apiUrl.toHttpUrl().newBuilder()
