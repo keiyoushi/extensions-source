@@ -18,7 +18,6 @@ import eu.kanade.tachiyomi.lib.i18n.Intl.Companion.createDefaultMessageFileName
 import eu.kanade.tachiyomi.multisrc.machinetranslations.translator.TranslatorEngine
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
@@ -27,7 +26,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
-import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -177,21 +175,10 @@ class Manhuarm(
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
         val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
-        val scriptsContent = document.select("script").joinToString("\n") { it.html() }
-        val nonce = NONCE_REGEX.find(scriptsContent)?.groupValues?.get(1)
-            ?: throw Exception("Nonce not found in page")
 
-        val form = FormBody.Builder()
-            .add("action", "get_ocr_data")
-            .add("chapter_id", chapterId)
-            .add("nonce", nonce)
-            .build()
-
-        val dialogDto = client.newCall(POST("$baseUrl/wp-admin/admin-ajax.php", headers, form))
+        val dialog = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data/$chapterId.json", headers))
             .execute()
-            .parseAs<DialogDto>()
-
-        val dialog = dialogDto.content.parseAs<List<PageDto>>()
+            .parseAs<List<PageDto>>()
 
         if (dialog.isEmpty()) {
             return pages
@@ -257,14 +244,6 @@ class Manhuarm(
     }
 
     override fun latestUpdatesNextPageSelector(): String? = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
-
-    private fun String.fixJsonFormat(): String {
-        return JSON_FORMAT_REGEX.replace(this) { matchResult ->
-            val content = matchResult.groupValues.last()
-            val modifiedContent = content.replace("\"", "'")
-            """"text": "${modifiedContent.trimIndent()}", "box""""
-        }
-    }
 
     // Prevent bad fragments
     fun String.toFragment(): String = "#${this.replace("#", "*")}"
@@ -472,7 +451,6 @@ class Manhuarm(
 
     companion object {
         val PAGE_REGEX = Regex(".*?\\.(webp|png|jpg|jpeg)#\\[.*?]", RegexOption.IGNORE_CASE)
-        val JSON_FORMAT_REGEX = """(?:"text":\s+?".*?)([\s\S]*?)(?:",\s+?"box")""".toRegex()
         val NONCE_REGEX = """(?:const\s+nonce\s*=\s*'|\"nonce\"\s*:\s*\")(.*?)['\"]""".toRegex()
 
         const val DEVICE_FONT = "device:"
