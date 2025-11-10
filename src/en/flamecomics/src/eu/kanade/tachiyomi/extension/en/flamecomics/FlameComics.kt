@@ -133,6 +133,7 @@ class FlameComics : HttpSource() {
     ): MangasPage {
         val searchedSeriesData =
             json.decodeFromString<SearchPageData>(response.body.string()).pageProps.series
+                .filter { series -> series.series_id != null }
 
         val page = if (!response.request.url.fragment?.contains("&")!!) {
             response.request.url.fragment!!.toInt()
