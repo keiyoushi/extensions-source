@@ -4,7 +4,7 @@ ext {
     themePkg = 'madara'
     baseUrl = 'https://libribar.com'
     overrideVersionCode = 6
-    isNsfw = false
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
