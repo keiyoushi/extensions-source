@@ -13,6 +13,7 @@ import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -125,6 +126,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
+                GenresFilter(emptyList()),
                 ScanlationsFilter(),
             ),
         )
@@ -142,6 +144,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
+                GenresFilter(emptyList()),
                 ScanlationsFilter(),
             ),
         )
@@ -154,6 +157,9 @@ class Kagane : HttpSource(), ConfigurableSource {
         val body = buildJsonObject {
             filters.forEach { filter ->
                 when (filter) {
+                    is GenresFilter -> {
+                        filter.addToJsonObject(this, preferences.excludedGenres.toList())
+                    }
                     is JsonFilter -> {
                         filter.addToJsonObject(this)
                     }
@@ -430,6 +436,9 @@ class Kagane : HttpSource(), ConfigurableSource {
             return CONTENT_RATINGS.slice(0..index.coerceAtLeast(0))
         }
 
+    private val SharedPreferences.excludedGenres: Set<String>
+        get() = this.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
+
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
@@ -441,6 +450,21 @@ class Kagane : HttpSource(), ConfigurableSource {
             entryValues = CONTENT_RATINGS
             summary = "%s"
             setDefaultValue(CONTENT_RATING_DEFAULT)
+        }.let(screen::addPreference)
+
+        MultiSelectListPreference(screen.context).apply {
+            key = GENRES_PREF
+            title = "Exclude Genres"
+            entries = GenresList.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
+            entryValues = GenresList
+            summary = preferences.excludedGenres.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+            setDefaultValue(emptySet<String>())
+
+            setOnPreferenceChangeListener { _, values ->
+                val selected = values as Set<String>
+                this.summary = selected.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+                true
+            }
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -461,6 +485,8 @@ class Kagane : HttpSource(), ConfigurableSource {
             "erotica",
             "pornographic",
         )
+
+        private const val GENRES_PREF = "pref_genres_exclude"
 
         private const val DATA_SAVER = "data_saver_default"
     }
