@@ -201,9 +201,9 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val urls = document.select(Evaluator.Class("comicpage")).map { it.attr("src")!! }
         val thumbnail = urls[0].replace("P00.jpg", ".jpg")
         return (listOf(thumbnail) + urls).mapIndexed { index, imageUrl ->
+        val urls = document.select(".webcomic-page img").map { it.attr("src") }
             Page(index, imageUrl = imageUrl)
         }
     }
