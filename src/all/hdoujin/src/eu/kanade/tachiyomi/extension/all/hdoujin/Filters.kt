@@ -27,7 +27,7 @@ fun getFilters(): FilterList {
         TextFilter("Languages", "language"),
         Filter.Separator(),
         Filter.Header("Filter by pages, for example: (>20)"),
-        PageFilter("Pages"),
+        TextFilter("Pages", "pages"),
     )
 }
 
@@ -47,8 +47,6 @@ internal class TagType(title: String, val type: String) : Filter.Select<String>(
     title,
     arrayOf("AND", "OR"),
 )
-
-internal open class PageFilter(name: String) : Filter.Text(name)
 
 internal open class TextFilter(name: String, val type: String) : Filter.Text(name)
 
