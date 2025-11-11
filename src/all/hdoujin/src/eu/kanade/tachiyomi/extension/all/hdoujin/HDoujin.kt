@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.hdoujin
 
 import CategoryFilter
-import SortFilter
+import SelectFilter
 import TagType
 import TextFilter
 import android.annotation.SuppressLint
@@ -200,8 +200,8 @@ class HDoujin(
             if (lang != "all") terms += "language:\"^$siteLang$\""
             filters.forEach { filter ->
                 when (filter) {
-                    is SortFilter -> {
-                        val value = filter.getValue()
+                    is SelectFilter -> {
+                        val value = filter.selected
                         if (value == "popular") {
                             addPathSegment(value)
                         } else {

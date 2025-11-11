@@ -50,11 +50,6 @@ internal class TagType(title: String, val type: String) : Filter.Select<String>(
 
 internal open class TextFilter(name: String, val type: String) : Filter.Text(name)
 
-internal open class SortFilter(name: String, selection: Selection, private val vals: List<Pair<String, String>>) :
-    Filter.Sort(name, vals.map { it.first }.toTypedArray(), selection) {
-    fun getValue() = vals[state!!.index].second
-}
-
 internal open class SelectFilter(name: String, val vals: List<Pair<String, String>>, state: Int = 2) :
     Filter.Select<String>(name, vals.map { it.first }.toTypedArray(), state) {
     val selected get() = vals[state].second.takeIf { it.isNotEmpty() }
