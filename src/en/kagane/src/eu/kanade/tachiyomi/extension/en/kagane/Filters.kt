@@ -102,8 +102,6 @@ internal class SourcesFilter(
     },
 )
 
-internal class ScanlationsFilter() : Filter.CheckBox("Show scanlations", true)
-
 class FilterData(
     val id: String,
     val name: String,

@@ -127,7 +127,6 @@ class Kagane : HttpSource(), ConfigurableSource {
                     preferences.contentRating.toSet(),
                 ),
                 GenresFilter(emptyList()),
-                ScanlationsFilter(),
             ),
         )
 
@@ -145,7 +144,6 @@ class Kagane : HttpSource(), ConfigurableSource {
                     preferences.contentRating.toSet(),
                 ),
                 GenresFilter(emptyList()),
-                ScanlationsFilter(),
             ),
         )
 
@@ -183,13 +181,10 @@ class Kagane : HttpSource(), ConfigurableSource {
                             ?.let { uriPart -> addQueryParameter("sort", uriPart) }
                     }
 
-                    is ScanlationsFilter -> {
-                        addQueryParameter("scanlations", filter.state.toString())
-                    }
-
                     else -> {}
                 }
             }
+            addQueryParameter("scanlations", preferences.showScanlations.toString())
         }
 
         return POST(url.toString(), headers, body)
@@ -439,6 +434,9 @@ class Kagane : HttpSource(), ConfigurableSource {
     private val SharedPreferences.excludedGenres: Set<String>
         get() = this.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
 
+    private val SharedPreferences.showScanlations: Boolean
+        get() = this.getBoolean(SHOW_SCANLATIONS, SHOW_SCANLATIONS_DEFAULT)
+
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
@@ -468,6 +466,12 @@ class Kagane : HttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_SCANLATIONS
+            title = "Show scanlations"
+            setDefaultValue(SHOW_SCANLATIONS_DEFAULT)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = DATA_SAVER
             title = "Data saver"
             setDefaultValue(false)
@@ -487,6 +491,8 @@ class Kagane : HttpSource(), ConfigurableSource {
         )
 
         private const val GENRES_PREF = "pref_genres_exclude"
+        private const val SHOW_SCANLATIONS = "pref_show_scanlations"
+        private const val SHOW_SCANLATIONS_DEFAULT = true
 
         private const val DATA_SAVER = "data_saver_default"
     }
@@ -512,7 +518,6 @@ class Kagane : HttpSource(), ConfigurableSource {
             // TagsFilter(),
             // SourcesFilter(),
             Filter.Separator(),
-            ScanlationsFilter(),
         )
 
         val response = metadataClient.newCall(
