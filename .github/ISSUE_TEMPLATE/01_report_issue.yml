@@ -1,5 +1,5 @@
 name: 🐞 Issue report
-description: Report a source issue in Tachiyomi
+description: Report a source issue in Keiyoushi
 labels: [Bug]
 body:
 
@@ -63,7 +63,7 @@ body:
       description: |
         You can find your Mihon/Tachiyomi version in **More → About**.
       placeholder: |
-        Example: "0.16.3"
+        Example: "0.18.0"
     validations:
       required: true
 
@@ -99,9 +99,9 @@ body:
           required: true
         - label: I have updated all installed extensions.
           required: true
-        - label: I have tried the [troubleshooting guide](https://tachiyomi.org/help/guides/troubleshooting/).
+        - label: I have tried the [troubleshooting guide](https://mihon.app/docs/guides/troubleshooting/).
           required: true
-        - label: If this is an issue with the app itself, I should be opening an issue in the [app repository](https://github.com/tachiyomiorg/tachiyomi/issues/new/choose).
+        - label: If this is an issue with the app itself, I should be opening an issue in the app repository.
           required: true
         - label: I will fill out all of the requested information in this form.
           required: true

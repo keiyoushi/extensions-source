@@ -1,9 +1,0 @@
-ext {
-    extName = 'Todaymic'
-    extClass = '.Todaymic'
-    themePkg = 'madara'
-    baseUrl = 'https://todaymic.com'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

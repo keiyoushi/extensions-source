@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.all.ehentai
 
 import android.annotation.SuppressLint
-import android.app.Application
 import android.content.SharedPreferences
 import android.net.Uri
 import android.webkit.CookieManager
@@ -23,6 +22,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.CacheControl
 import okhttp3.CookieJar
 import okhttp3.Headers
@@ -30,8 +30,6 @@ import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
 
 abstract class EHentai(
@@ -41,18 +39,18 @@ abstract class EHentai(
 
     override val name = "E-Hentai"
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
     private val memberId: String by lazy { getMemberIdPref() }
     private val passHash: String by lazy { getPassHashPref() }
+    private val igneous: String by lazy { getIgneousPref() }
+    private val forceEh: Boolean by lazy { getForceEhPref() }
 
     override val baseUrl: String
         get() = when {
             System.getenv("CI") == "true" -> "https://e-hentai.org"
-            memberId.isNotEmpty() && passHash.isNotEmpty() -> "https://exhentai.org"
+            !forceEh && memberId.isNotEmpty() && passHash.isNotEmpty() -> "https://exhentai.org"
             else -> "https://e-hentai.org"
         }
 
@@ -170,18 +168,18 @@ abstract class EHentai(
             query.isBlank() -> languageTag(enforceLanguageFilter)
             else -> languageTag(enforceLanguageFilter).let { if (it.isNotEmpty()) "$query,$it" else query }
         }
-        filters.filterIsInstance<TextFilter>().forEach { it ->
-            if (it.state.isNotEmpty()) {
-                val splitted = it.state.split(",").filter(String::isNotBlank)
-                if (splitted.size < 2 && it.type != "tags") {
-                    modifiedQuery += " ${it.type}:\"${it.state.replace(" ", "+")}\""
+        filters.filterIsInstance<TextFilter>().forEach { filter ->
+            if (filter.state.isNotEmpty()) {
+                val splitted = filter.state.split(",").filter(String::isNotBlank)
+                if (splitted.size < 2 && filter.type != "tags") {
+                    modifiedQuery += " ${filter.type}:\"${filter.state.replace(" ", "+")}\""
                 } else {
                     splitted.forEach { tag ->
                         val trimmed = tag.trim().lowercase()
-                        if (trimmed.startsWith('-')) {
-                            modifiedQuery += " -${it.type}:\"${trimmed.removePrefix("-").replace(" ", "+")}\""
+                        modifiedQuery += if (trimmed.startsWith('-')) {
+                            " -${filter.type}:\"${trimmed.removePrefix("-").replace(" ", "+")}\""
                         } else {
-                            modifiedQuery += " ${it.type}:\"${trimmed.replace(" ", "+")}\""
+                            " ${filter.type}:\"${trimmed.replace(" ", "+")}\""
                         }
                     }
                 }
@@ -353,7 +351,29 @@ abstract class EHentai(
 
     override fun pageListParse(response: Response) = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String = response.asJsoup().select("#img").attr("abs:src")
+    override fun imageUrlParse(response: Response): String {
+        return imageUrlParse(response, true)
+    }
+
+    private fun imageUrlParse(response: Response, isGetBakImageUrl: Boolean): String {
+        val doc = response.asJsoup()
+        val imgUrl = doc.select("#img").attr("abs:src")
+
+        if (!isGetBakImageUrl) {
+            return imgUrl
+        }
+
+        // from https://github.com/Miuzarte/EHentai-go/blob/dd9a24adb13300c028c35f53b9eff31b51966def/query.go#L695
+        val loadfail = doc.selectFirst("#loadfail") ?: return imgUrl
+        val onclick = loadfail.attr("onclick")
+        val nlValue = Regex("nl\\('(.+?)'\\)").find(onclick)?.groupValues?.get(1)
+        if (nlValue.isNullOrEmpty()) return imgUrl
+
+        val bakUrl = response.request.url.newBuilder()
+            .addQueryParameter("nl", nlValue)
+            .toString()
+        return "$imgUrl#$bakUrl"
+    }
 
     private val cookiesHeader by lazy {
         val cookies = mutableMapOf<String, String>()
@@ -378,7 +398,7 @@ abstract class EHentai(
 
         cookies["ipb_pass_hash"] = passHash
 
-        cookies["igneous"] = ""
+        cookies["igneous"] = igneous
 
         buildCookies(cookies)
     }
@@ -398,8 +418,27 @@ abstract class EHentai(
         .appendQueryParameter(param, value)
         .toString()
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .cookieJar(CookieJar.NO_COOKIES)
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val result = runCatching { chain.proceed(request) }
+            val bakUrl = request.url.fragment
+                ?: return@addInterceptor result.getOrThrow()
+
+            if (result.isFailure || result.getOrNull()?.isSuccessful != true) {
+                result.getOrNull()?.close()
+                val newRequest = GET(bakUrl, headers)
+                val newImageUrl = imageUrlParse(chain.proceed(newRequest), false)
+                val newImageRequest = request.newBuilder()
+                    .url(newImageUrl)
+                    .build()
+
+                chain.proceed(newImageRequest)
+            } else {
+                result.getOrThrow()
+            }
+        }
         .addInterceptor { chain ->
             val newReq = chain
                 .request()
@@ -414,6 +453,7 @@ abstract class EHentai(
     // Filters
     override fun getFilterList() = FilterList(
         EnforceLanguageFilter(getEnforceLanguagePref()),
+        Favorites(),
         Watched(),
         GenreGroup(),
         Filter.Header("Separate tags with commas (,)"),
@@ -431,6 +471,14 @@ abstract class EHentai(
         override fun addToUri(builder: Uri.Builder) {
             if (state) {
                 builder.appendPath("watched")
+            }
+        }
+    }
+
+    class Favorites : CheckBox("Favorites"), UriFilter {
+        override fun addToUri(builder: Uri.Builder) {
+            if (state) {
+                builder.appendPath("favorites.php")
             }
         }
     }
@@ -561,21 +609,33 @@ abstract class EHentai(
         private const val PASS_HASH_PREF_TITLE = "ipb_pass_hash"
         private const val PASS_HASH_PREF_SUMMARY = "ipb_pass_hash value"
         private const val PASS_HASH_PREF_DEFAULT_VALUE = ""
+
+        private const val IGNEOUS_PREF_KEY = "IGNEOUS"
+        private const val IGNEOUS_PREF_TITLE = "igneous"
+        private const val IGNEOUS_PREF_SUMMARY = "igneous value override"
+        private const val IGNEOUS_PREF_DEFAULT_VALUE = ""
+
+        private const val FORCE_EH = "FORCE_EH"
+        private const val FORCE_EH_TITLE = "Force e-hentai"
+        private const val FORCE_EH_SUMMARY = "Force e-hentai to avoid content on exhentai"
+        private const val FORCE_EH_DEFAULT_VALUE = true
     }
 
     // Preferences
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val forceEhPref = CheckBoxPreference(screen.context).apply {
+            key = FORCE_EH
+            title = FORCE_EH_TITLE
+            summary = FORCE_EH_SUMMARY
+            setDefaultValue(FORCE_EH_DEFAULT_VALUE)
+        }
+
         val enforceLanguagePref = CheckBoxPreference(screen.context).apply {
             key = "${ENFORCE_LANGUAGE_PREF_KEY}_$lang"
             title = ENFORCE_LANGUAGE_PREF_TITLE
             summary = ENFORCE_LANGUAGE_PREF_SUMMARY
             setDefaultValue(ENFORCE_LANGUAGE_PREF_DEFAULT_VALUE)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean("${ENFORCE_LANGUAGE_PREF_KEY}_$lang", checkValue).commit()
-            }
         }
 
         val memberIdPref = EditTextPreference(screen.context).apply {
@@ -593,8 +653,19 @@ abstract class EHentai(
 
             setDefaultValue(PASS_HASH_PREF_DEFAULT_VALUE)
         }
+
+        val igneousPref = EditTextPreference(screen.context).apply {
+            key = IGNEOUS_PREF_KEY
+            title = IGNEOUS_PREF_TITLE
+            summary = IGNEOUS_PREF_SUMMARY
+
+            setDefaultValue(IGNEOUS_PREF_DEFAULT_VALUE)
+        }
+
+        screen.addPreference(forceEhPref)
         screen.addPreference(memberIdPref)
         screen.addPreference(passHashPref)
+        screen.addPreference(igneousPref)
         screen.addPreference(enforceLanguagePref)
     }
 
@@ -628,5 +699,13 @@ abstract class EHentai(
 
     private fun getMemberIdPref(): String {
         return getCookieValue(MEMBER_ID_PREF_TITLE, MEMBER_ID_PREF_DEFAULT_VALUE, MEMBER_ID_PREF_KEY)
+    }
+
+    private fun getIgneousPref(): String {
+        return getCookieValue(IGNEOUS_PREF_TITLE, IGNEOUS_PREF_DEFAULT_VALUE, IGNEOUS_PREF_KEY)
+    }
+
+    private fun getForceEhPref(): Boolean {
+        return preferences.getBoolean(FORCE_EH, FORCE_EH_DEFAULT_VALUE)
     }
 }

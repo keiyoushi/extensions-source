@@ -1,78 +1,146 @@
 package eu.kanade.tachiyomi.extension.pt.fenixmanhwas
 
-import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistMangaDto
-import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistMangaEntryDto
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.nodes.Document
+import rx.Observable
+import java.util.Calendar
 
-class FenixManhwas : ZeistManga(
-    "Fênix Manhwas",
-    "https://fenixleitura.blogspot.com",
-    "pt-BR",
-) {
-    override val supportsLatest = false
+class FenixManhwas : HttpSource() {
 
-    override fun popularMangaRequest(page: Int) = latestUpdatesRequest(page)
+    override val name: String = "Fênix Manhwas"
 
-    override fun popularMangaParse(response: Response) = latestUpdatesParse(response)
+    override val baseUrl: String = "https://fenixscan.xyz"
 
-    override fun mangaDetailsParse(response: Response) = SManga.create().apply {
+    override val lang: String = "pt-BR"
+
+    override val supportsLatest: Boolean = true
+
+    override val versionId: Int = 3
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(3)
+        .build()
+
+    // ========================== Popular ==========================
+
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        title = document.selectFirst("h1")!!.text()
-        thumbnail_url = document.selectFirst(".thum")?.attr("style")?.imgAttr()
-        genre = document.select("a[rel=tag]").joinToString { it.text() }
-        setUrlWithoutDomain(document.location())
+        val mangas = document.select(".obra-slider a.obra-slide-item").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst(".obra-slide-title")!!.text()
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")
+                setUrlWithoutDomain(element.absUrl("href"))
+            }
+        }
+        return MangasPage(mangas, hasNextPage = false)
     }
 
-    override fun getChapterFeedUrl(doc: Document): String {
-        val feed = doc.selectFirst(".chapter_get")!!.attr("data-labelchapter")
-        return apiUrl(chapterCategory)
-            .addPathSegments(feed)
-            .addQueryParameter("max-results", maxChapterResults.toString())
-            .build().toString()
+    // ========================== Latest ==========================
+
+    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+        val mangas = document.select("#lancamentos-container .lancamento-bloco").map { element ->
+            SManga.create().apply {
+                title = element.selectFirst(".lancamento-titulo")!!.text()
+                thumbnail_url = element.selectFirst("img")?.absUrl("src")
+                setUrlWithoutDomain(element.selectFirst("a.lancamento-thumb-link")!!.absUrl("href"))
+            }
+        }
+        return MangasPage(mangas, hasNextPage = false)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request {
-        val url = "$baseUrl/feeds/posts/default/-/Chapter?alt=json"
-        val chapterHeaders = headers.newBuilder()
-            .set("Referer", "$baseUrl${chapter.url}")
-            .build()
-        return GET(url, chapterHeaders)
-    }
+    // ========================== Search ==========================
 
-    override fun pageListParse(response: Response): List<Page> {
-        val chapterUrl = response.request.headers.get("Referer")!!
-        val chapterRef = chapterUrl
-            .substringAfterLast("/")
-            .substringBeforeLast(".")
-
-        val result = json.decodeFromString<ZeistMangaDto>(response.body.string())
-        val mangaEntryDto: ZeistMangaEntryDto = result.feed?.entry
-            ?.firstOrNull { it.url?.firstOrNull { link -> link.href.contains(chapterRef, true) } != null }
-            ?: throw Exception("Páginas não encontradas")
-
-        return mangaEntryDto.content!!.t.pagesURL().mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return Observable.zip(fetchPopularManga(page), fetchLatestUpdates(page)) { popularPage, latestPage ->
+            val distinctMangas = (popularPage.mangas + latestPage.mangas)
+                .distinctBy(SManga::url)
+                .filter { it.title.contains(query, ignoreCase = true) }
+            MangasPage(distinctMangas, hasNextPage = false)
         }
     }
 
-    private fun String.pagesURL(): List<String?> {
-        val regex = """src="(?<url>[^"]*)"""".toRegex()
-        val matches = regex.findAll(this)
-        return matches.map { it.groups["url"]?.value }.toList()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+        throw UnsupportedOperationException()
+
+    override fun searchMangaParse(response: Response): MangasPage =
+        throw UnsupportedOperationException()
+
+    // ========================== Details ==========================
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = response.asJsoup()
+        return SManga.create().apply {
+            title = document.selectFirst("h1.obra-title")!!.text()
+            thumbnail_url = document.selectFirst("img.obra-thumb")?.absUrl("src")
+            description = document.selectFirst(".obra-excerpt")?.text()
+            genre = document.select(".obra-genero").joinToString { it.text() }
+            author = document.selectFirst(".info-pill:has(.mdi-account)")?.text()
+            status = when (document.selectFirst(".info-pill:has(.mdi-information)")?.text()?.lowercase()) {
+                "andamento" -> SManga.ONGOING
+                else -> SManga.UNKNOWN
+            }
+        }
     }
 
-    private fun String.imgAttr(): String? {
-        val regex = """url\("(?<url>[^"]+)"\)""".toRegex()
-        val matchResult = regex.find(this)
-        return matchResult?.groups?.get("url")?.value
+    // ========================== Chapters ==========================
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        return document.select(".chapters-grid > .chapter-item").map { element ->
+            SChapter.create().apply {
+                name = element.selectFirst(".chapter-title-text")!!.text()
+                chapter_number = element.attr("data-num").toFloat()
+                element.selectFirst("small")?.text()?.let(::parseRelativeDate)?.let {
+                    date_upload = it
+                }
+                setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
+            }
+        }
+    }
+
+    private fun parseRelativeDate(date: String): Long {
+        val number = DATE_NUMBER_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
+        val cal = Calendar.getInstance()
+
+        return when {
+            date.contains("segundo", ignoreCase = true) -> cal.apply { add(Calendar.SECOND, -number) }.timeInMillis
+            date.contains("minuto", ignoreCase = true) -> cal.apply { add(Calendar.MINUTE, -number) }.timeInMillis
+            date.contains("hora", ignoreCase = true) -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
+            date.contains("dia", ignoreCase = true) -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
+            date.contains("semana", ignoreCase = true) -> cal.apply { add(Calendar.DAY_OF_MONTH, -number * 7) }.timeInMillis
+            date.contains("mes", ignoreCase = true) -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
+            date.contains("ano", ignoreCase = true) -> cal.apply { add(Calendar.YEAR, -number) }.timeInMillis
+            else -> 0
+        }
+    }
+
+    // ========================== Pages ==========================
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+        return document.select(".chapter-content img.lozad").mapIndexed { index, element ->
+            Page(index, imageUrl = element.absUrl("data-src"))
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
+
+    companion object {
+        private val DATE_NUMBER_REGEX = """(\d+)""".toRegex()
     }
 }

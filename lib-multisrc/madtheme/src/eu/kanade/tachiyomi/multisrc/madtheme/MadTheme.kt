@@ -11,11 +11,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Headers
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -25,7 +22,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -43,7 +39,26 @@ abstract class MadTheme(
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(1, 1, TimeUnit.SECONDS)
-        .build()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url
+            val response = chain.proceed(request)
+            if (!response.isSuccessful && url.fragment == "image-request") {
+                response.close()
+                val newUrl = url.newBuilder()
+                    .host("sb.mbcdn.xyz")
+                    .encodedPath(url.encodedPath.replaceFirst("/res/", "/"))
+                    .fragment(null)
+                    .build()
+
+                return@addInterceptor chain.proceed(request.newBuilder().url(newUrl).build())
+            }
+            response
+        }.build()
+
+    protected open val useLegacyApi = false
+
+    protected open val useSlugSearch = false
 
     // TODO: better cookie sharing
     // TODO: don't count cached responses against rate limit
@@ -54,8 +69,6 @@ abstract class MadTheme(
     override fun headersBuilder() = Headers.Builder().apply {
         add("Referer", "$baseUrl/")
     }
-
-    private val json: Json by injectLazy()
 
     private var genreKey = "genre[]"
 
@@ -177,30 +190,63 @@ abstract class MadTheme(
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        if (response.code in 200..299) {
+        if (response.request.url.fragment == "idFound") {
             return super.chapterListParse(response)
         }
 
-        // Try to show message/error from site
-        response.body.let { body ->
-            json.decodeFromString<JsonObject>(body.string())["message"]
-                ?.jsonPrimitive
-                ?.content
-                ?.let { throw Exception(it) }
+        val document = response.asJsoup()
+
+        val script = document.selectFirst("script:containsData(bookId)")
+            ?: throw Exception("Cannot find script")
+        val bookId = script.data().substringAfter("bookId = ").substringBefore(";")
+        val bookSlug = script.data().substringAfter("bookSlug = \"").substringBefore("\";")
+
+        var chaptersList = document.select(chapterListSelector()).map { chapterFromElement(it) }
+
+        val fetchApi = document.selectFirst("div#show-more-chapters > span")
+            ?.attr("onclick")?.equals("getChapters()")
+            ?: false
+
+        if (fetchApi) {
+            val apiChapters = client.newCall(GET(buildChapterUrl(bookId, bookSlug), headers)).execute()
+                .asJsoup().select(chapterListSelector()).map { chapterFromElement(it) }
+
+            val cutIndex = chaptersList.indexOfFirst { chapter ->
+                apiChapters.any { it.url == chapter.url }
+            }.takeIf { it != -1 } ?: chaptersList.size
+
+            chaptersList = (chaptersList.subList(0, cutIndex) + apiChapters)
         }
 
-        throw Exception("HTTP error ${response.code}")
+        return chaptersList
     }
 
-    override fun chapterListRequest(manga: SManga): Request =
-        MANGA_ID_REGEX.find(manga.url)?.groupValues?.get(1)?.let { mangaId ->
-            val url = "$baseUrl/service/backend/chaplist/".toHttpUrl().newBuilder()
-                .addQueryParameter("manga_id", mangaId)
-                .addQueryParameter("manga_name", manga.title)
-                .build()
+    private fun buildChapterUrl(mangaId: String, mangaSlug: String): HttpUrl {
+        return baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("api")
+            addPathSegment("manga")
+            addPathSegment(if (useSlugSearch) mangaSlug else mangaId)
+            addPathSegment("chapters")
+            addQueryParameter("source", "detail")
+        }.build()
+    }
 
-            GET(url, headers)
-        } ?: GET("$baseUrl/api/manga${manga.url}/chapters?source=detail", headers)
+    override fun chapterListRequest(manga: SManga): Request {
+        if (useLegacyApi) {
+            val mangaId = MANGA_ID_REGEX.find(manga.url)?.groupValues?.get(1)
+            val url = mangaId?.let {
+                "$baseUrl/service/backend/chaplist/".toHttpUrl().newBuilder()
+                    .addQueryParameter("manga_id", it)
+                    .addQueryParameter("manga_name", manga.title)
+                    .fragment("idFound")
+                    .build()
+                    .toString()
+            } ?: (baseUrl + manga.url)
+
+            return GET(url, headers)
+        }
+        return GET(baseUrl + manga.url, headers)
+    }
 
     override fun searchMangaParse(response: Response): MangasPage {
         if (genresList == null) {
@@ -296,6 +342,10 @@ abstract class MadTheme(
         } else {
             super.pageListRequest(chapter)
         }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        return GET("${page.imageUrl}#image-request", headers)
     }
 
     override fun imageUrlParse(document: Document): String =

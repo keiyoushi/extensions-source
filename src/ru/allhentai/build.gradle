@@ -2,8 +2,8 @@ ext {
     extName = 'AllHentai'
     extClass = '.AllHentai'
     themePkg = 'grouple'
-    baseUrl = 'https://z.ahen.me'
-    overrideVersionCode = 24
+    baseUrl = 'https://20.allhen.online'
+    overrideVersionCode = 25
     isNsfw = true
 }
 

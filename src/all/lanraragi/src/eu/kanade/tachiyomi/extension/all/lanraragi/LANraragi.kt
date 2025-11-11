@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.lanraragi
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.net.Uri
 import android.text.InputType
@@ -18,6 +17,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -35,6 +35,7 @@ import rx.schedulers.Schedulers
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.IOException
+import java.net.URL
 import java.security.MessageDigest
 import kotlin.math.max
 
@@ -138,7 +139,12 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         val archivePage = json.decodeFromString<ArchivePage>(response.body.string())
 
         return archivePage.pages.mapIndexed { index, url ->
-            val uri = Uri.parse("${baseUrl}${url.trimStart('.')}")
+            var newUrl = url
+            val subPath = URL(baseUrl).path
+            if (!subPath.isNullOrEmpty()) {
+                newUrl = newUrl.replaceFirst(subPath, "")
+            }
+            val uri = Uri.parse("${baseUrl}${newUrl.trimStart('.')}")
             Page(index, uri.toString(), uri.toString(), uri)
         }
     }
@@ -284,9 +290,7 @@ open class LANraragi(private val suffix: String = "") : ConfigurableSource, Unme
         (0..7).map { bytes[it].toLong() and 0xff shl 8 * (7 - it) }.reduce(Long::or) and Long.MAX_VALUE
     }
 
-    internal val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    internal val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun getPrefBaseUrl(): String = preferences.getString(HOSTNAME_KEY, HOSTNAME_DEFAULT)!!
     private fun getPrefAPIKey(): String = preferences.getString(APIKEY_KEY, "")!!

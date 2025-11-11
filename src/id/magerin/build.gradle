@@ -1,9 +1,0 @@
-ext {
-    extName = 'Magerin'
-    extClass = '.Magerin'
-    themePkg = 'zeistmanga'
-    baseUrl = 'https://www.magerin.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

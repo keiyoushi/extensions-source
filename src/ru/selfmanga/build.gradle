@@ -2,8 +2,9 @@ ext {
     extName = 'SelfManga'
     extClass = '.SelfManga'
     themePkg = 'grouple'
-    baseUrl = 'https://selfmanga.live'
-    overrideVersionCode = 22
+    baseUrl = 'https://1.selfmanga.live'
+    overrideVersionCode = 23
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

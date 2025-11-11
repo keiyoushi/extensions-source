@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.vi.vlogtruyen
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
@@ -10,14 +9,16 @@ import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -27,9 +28,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -41,18 +39,16 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    private val defaultBaseUrl = "https://vlogtruyen34.com"
+    override val id: Long = 6425642624422299254
+
+    private val defaultBaseUrl = "https://vlogtruyen55.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    private val searchURL by lazy { "$baseUrl/tim-kiem" }
-
     private val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.US)
 
-    private val json: Json by injectLazy()
-
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
+        .rateLimit(3)
         .build()
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
@@ -97,14 +93,14 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val json = json.decodeFromString<ChapterDTO>(response.body.string().replace("\\n", ""))
+        val json = response.parseAs<ChapterDTO>()
         val document = Jsoup.parseBodyFragment(json.data.chaptersHtml, response.request.url.toString())
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
-        return document.select("li, .ul-list-chaper-detail-commic li").filterNot {
+        return document.select("li").filterNot {
             if (hidePaidChapters) {
-                it.select("li:not(:has(> b))").text().isBlank().or(!hidePaidChapters)
+                it.select("li > b").isNotEmpty()
             } else {
-                it.select("li > a").text().isBlank().or(false)
+                false
             }
         }
             .mapNotNull {
@@ -114,14 +110,10 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
                     if (it.select("li > b").text().isNotBlank()) {
                         name += " " + it.select("li > b").text() + " 🔒"
                     }
-                    date_upload = parseDate(it.select("li:not(:has(> span.chapter-view)) > span, li > span:last-child").text())
+                    date_upload = dateFormat.tryParse(it.select("li:not(:has(> span.chapter-view)) > span, li > span:last-child").text())
                 }
             }
     }
-
-    private fun parseDate(date: String): Long = runCatching {
-        dateFormat.parse(date)?.time
-    }.getOrNull() ?: 0L
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         val url = client.newCall(GET(baseUrl + manga.url, headers)).execute().asJsoup()
@@ -141,9 +133,20 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = searchURL.toHttpUrl().newBuilder().apply {
-            addQueryParameter("q", query)
-            if (page > 1) {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (query.isNotBlank()) {
+                addPathSegment("tim-kiem")
+                addQueryParameter("q", query)
+                addQueryParameter("page", page.toString())
+            } else {
+                (if (filters.isEmpty()) getFilterList() else filters).forEach {
+                    when (it) {
+                        is GenreList -> addPathSegments(it.values[it.state].genre)
+                        is StatusByFilter -> addQueryParameter("status", it.values[it.state].genre)
+                        is OrderByFilter -> addQueryParameter("sort", it.values[it.state].genre)
+                        else -> {}
+                    }
+                }
                 addQueryParameter("page", page.toString())
             }
         }.build()
@@ -159,18 +162,115 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
     override fun pageListParse(document: Document): List<Page> {
         val loginRequired = document.selectFirst(".area-show-content span")
 
-        if (loginRequired != null) {
-            throw Exception("${loginRequired.text()} Hãy đăng nhập trong WebView.")
+        if (loginRequired?.text() == "Xin lỗi, bạn cần đăng nhập để đọc được chapter này!") {
+            throw Exception("${loginRequired.text()} \n Hãy đăng nhập trong WebView.")
         }
-        return document.select(".comicDetails img").mapIndexed { i, e ->
-            Page(i, imageUrl = e.attr("abs:src"))
+        return document.select("img.image-commic").mapIndexed { i, e ->
+            Page(i, imageUrl = e.absUrl("src"))
         }
     }
 
     override fun imageUrlParse(document: Document): String = ""
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    override fun getFilterList() = FilterList(
+        Filter.Header("Không dùng chung với tìm kiếm bằng từ khoá."),
+        StatusByFilter(),
+        OrderByFilter(),
+        GenreList(getGenreList()),
+    )
+
+    private class OrderByFilter : Filter.Select<Genre>(
+        "Sắp xếp theo",
+        arrayOf(
+            Genre("Mới nhất", "moi-nhat"),
+            Genre("Đang hot", "dang-hot"),
+            Genre("Cũ nhất", "cu-nhat"),
+        ),
+    )
+
+    private class StatusByFilter : Filter.Select<Genre>(
+        "Trạng thái",
+        arrayOf(
+            Genre("Trạng thái", "Trang-thai"),
+            Genre("Đã hoàn thành", "1"),
+            Genre("Chưa hoàn thành", "2"),
+        ),
+    )
+
+    private class GenreList(genre: Array<Genre>) : Filter.Select<Genre>("Thể loại", genre)
+
+    private fun getGenreList() = arrayOf(
+        Genre("Hành Động", "the-loai/hanh-dong"),
+        Genre("Fantasy", "the-loai/fantasy"),
+        Genre("Truyện Trung", "the-loai/manhua"),
+        Genre("Võ Thuật", "the-loai/vo-thuat"),
+        Genre("Truyện Màu", "the-loai/truyen-mau"),
+        Genre("Chuyển Sinh", "the-loai/chuyen-sinh"),
+        Genre("Bí Ẩn", "the-loai/mystery"),
+        Genre("Ngôn Tình", "the-loai/ngon-tinh"),
+        Genre("Manhwa", "the-loai/manhwa"),
+        Genre("Phiêu Lưu", "the-loai/adventure"),
+        Genre("Cổ Đại", "the-loai/co"),
+        Genre("Hài Hước", "the-loai/hai"),
+        Genre("Kịch Tính", "the-loai/drama"),
+        Genre("Lịch Sử", "the-loai/historical"),
+        Genre("Xuyên Không", "the-loai/xuyen-khong"),
+        Genre("Lãng Mạn", "the-loai/romance"),
+        Genre("Học Đường", "the-loai/school-life"),
+        Genre("Đời Thường", "the-loai/slice-of-life"),
+        Genre("Siêu Nhiên", "the-loai/supernatural"),
+        Genre("Truyện Âu Mỹ", "the-loai/comic"),
+        Genre("Việt Nam", "the-loai/viet-nam"),
+        Genre("Shounen", "the-loai/shounen"),
+        Genre("Webtoon", "the-loai/webtoon"),
+        Genre("Kinh Dị", "the-loai/horror"),
+        Genre("Tâm Lý", "the-loai/psychological"),
+        Genre("Seinen", "the-loai/seinen"),
+        Genre("Manga", "the-loai/manga"),
+        Genre("Khoa Học Viễn Tưởng", "the-loai/sci-fi"),
+        Genre("Bi Kịch", "the-loai/tragedy"),
+        Genre("Thể Thao", "the-loai/sports"),
+        Genre("Anime", "the-loai/anime"),
+        Genre("Thiếu Nhi", "the-loai/thieu-nhi"),
+        Genre("Người Máy", "the-loai/mecha"),
+        Genre("Trinh Thám", "the-loai/trinh-tham"),
+        Genre("One shot", "the-loai/one-shot"),
+        Genre("Tạp chí truyện tranh", "the-loai/tap-chi-truyen-tranh"),
+        Genre("Doujinshi", "the-loai/doujinshi"),
+        Genre("Live action", "the-loai/live-action"),
+        Genre("Nấu Nướng", "the-loai/cooking"),
+        Genre("Truyện scan", "the-loai/truyen-scan"),
+        Genre("Cổ Đại", "the-loai/co-dai"),
+        Genre("Detective", "the-loai/detective"),
+        Genre("Trọng Sinh", "the-loai/trong-sinh"),
+        Genre("Chuyển sinh", "the-loai/isekai"),
+        Genre("Huyền Huyễn", "the-loai/huyen-huyen"),
+        Genre("Game", "the-loai/game"),
+        Genre("Chuyển sinh", "the-loai/isekaidi-gioitrong-sinh"),
+        Genre("Tu tiên", "the-loai/tu-tien"),
+        Genre("Hệ Thống", "the-loai/he-thong"),
+        Genre("Võ lâm", "the-loai/vo-lam"),
+        Genre("Già Gân", "the-loai/gia-gan"),
+        Genre("Hồi Quy", "the-loai/hoi-quy"),
+        Genre("Bắt Nạt", "the-loai/bat-nat"),
+        Genre("Báo Thù", "the-loai/bao-thu"),
+        Genre("Đấu Trí", "the-loai/dau-tri"),
+        Genre("Tài Chính", "the-loai/tai-chinh"),
+        Genre("Tận Thế", "the-loai/tan-the"),
+        Genre("Sinh Tồn", "the-loai/sinh-ton"),
+        Genre("Phản Diện", "the-loai/phan-dien"),
+        Genre("Martial Arts", "the-loai/martial-arts"),
+        Genre("Hành Động", "the-loai/action"),
+        Genre("Comedy", "the-loai/comedy"),
+        Genre("Âm Nhạc", "the-loai/am-nhac"),
+        Genre("Công Sở", "the-loai/cong-so"),
+        Genre("Diễn Viên", "the-loai/dien-vien"),
+        Genre("Vlogtruyen", "the-loai/vlogtruyen"),
+    )
+    private class Genre(val name: String, val genre: String) {
+        override fun toString() = name
+    }
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->

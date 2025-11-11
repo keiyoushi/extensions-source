@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.readallcomicscom
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -11,11 +10,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
@@ -33,56 +29,31 @@ class ReadAllComics : ParsedHttpSource() {
 
     private lateinit var searchPageElements: Elements
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::archivedCategoryInterceptor)
-        .rateLimit(2)
-        .build()
+    override val client = network.cloudflareClient
 
-    private fun archivedCategoryInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        val response = chain.proceed(request)
+    override fun popularMangaRequest(page: Int): Request {
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            addPathSegments("page/$page")
+        }.build()
 
-        val document = Jsoup.parse(
-            response.peekBody(Long.MAX_VALUE).string(),
-            request.url.toString(),
-        )
-
-        val newUrl = document.selectFirst(".description-archive > p > span > a")
-            ?.attr("href")?.toHttpUrlOrNull()
-            ?: return response
-
-        if (newUrl.pathSegments.contains("category")) {
-            response.close()
-
-            return chain.proceed(
-                request.newBuilder()
-                    .url(newUrl)
-                    .build(),
-            )
-        }
-
-        return response
+        return GET(url, headers)
     }
-
-    override fun popularMangaRequest(page: Int) =
-        GET("$baseUrl${if (page > 1)"/page/$page/" else ""}", headers)
 
     override fun popularMangaFromElement(element: Element): SManga {
         val manga = SManga.create().apply {
             val category = element.classNames()
                 .firstOrNull { it.startsWith("category-") }!!
                 .substringAfter("category-")
-
-            url = "/category/$category/"
-            title = category.replace("-", " ").capitalizeEachWord()
-            thumbnail_url = element.select("img").attr("abs:src")
+            setUrlWithoutDomain("/category/$category")
+            title = category.replace("-", " ").titleCaseWords()
+            thumbnail_url = element.selectFirst("img")?.attr("src")
         }
 
         return manga
     }
 
     override fun popularMangaSelector() = "#post-area > div"
-    override fun popularMangaNextPageSelector() = "div.pagenavi > a.next"
+    override fun popularMangaNextPageSelector() = "a.page-numbers.next"
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return if (page == 1) {
@@ -126,7 +97,7 @@ class ReadAllComics : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element) = SManga.create().apply {
         setUrlWithoutDomain(element.attr("href"))
         title = element.text()
-        thumbnail_url = "https://fakeimg.pl/200x300/?text=No%20Cover%0AOn%20Search&font_size=62"
+        thumbnail_url = ""
     }
 
     override fun searchMangaSelector() = ".categories a"
@@ -164,20 +135,9 @@ class ReadAllComics : ParsedHttpSource() {
         }
     }
 
-    private fun String.capitalizeEachWord(): String {
-        val result = StringBuilder(length)
-        var capitalize = true
-        for (char in this) {
-            result.append(
-                if (capitalize) {
-                    char.uppercase()
-                } else {
-                    char.lowercase()
-                },
-            )
-            capitalize = char.isWhitespace()
-        }
-        return result.toString()
+    private fun String.titleCaseWords(): String {
+        val words = this.split(" ")
+        return words.joinToString(" ") { word -> word.replaceFirstChar { it.titlecase() } }
     }
 
     override fun imageUrlParse(document: Document) =

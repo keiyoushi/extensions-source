@@ -40,7 +40,7 @@ class TraducoesDoLipe : ZeistManga(
     override fun getChapterFeedUrl(doc: Document): String {
         val feed = doc.select("script").map(Element::html)
             .firstOrNull { script -> script.contains("catNameProject") }
-            ?.let { script -> PROJECT_NAME_REGEX.find(script)?.groups?.get("project")?.value }
+            ?.let { script -> PROJECT_NAME_REGEX.find(script)?.groups?.get(1)?.value }
             ?: throw Exception("Não foi possivel encontrar o nome do projeto")
 
         return apiUrl(chapterCategory)
@@ -52,7 +52,7 @@ class TraducoesDoLipe : ZeistManga(
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
         val pages = document.selectFirst(".chapter script")!!.html().let {
-            val list = PAGES_REGEX.find(it)?.groups?.get("pages")?.value
+            val list = PAGES_REGEX.find(it)?.groups?.get(1)?.value
             json.decodeFromString<List<String>>(list!!)
         }
 
@@ -62,7 +62,7 @@ class TraducoesDoLipe : ZeistManga(
     }
 
     companion object {
-        val PROJECT_NAME_REGEX = """=\s+?\('(?<project>[^']+)""".toRegex()
-        val PAGES_REGEX = """=(?<pages>\[[^]]+])""".toRegex()
+        val PROJECT_NAME_REGEX = """=\s+?\('([^']+)""".toRegex()
+        val PAGES_REGEX = """=(\[[^]]+])""".toRegex()
     }
 }

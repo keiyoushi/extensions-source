@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.mangabz
 
-import android.app.Application
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.lib.unpacker.SubstringExtractor
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.getPreferences
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -23,37 +23,32 @@ import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import org.jsoup.select.Evaluator
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
 
-    private val _baseUrl: String
+    override val baseUrl: String
     override val client: OkHttpClient
 
     private val urlSuffix: String
 
     init {
-        val preferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val preferences = getPreferences()
         val mirror = preferences.mirror
-        _baseUrl = "https://" + mirror.domain
+        baseUrl = when (System.getenv("CI")) {
+            "true" -> MIRRORS.joinToString("#, ") { "https://" + it.domain }
+            else -> "https://" + mirror.domain
+        }
         urlSuffix = mirror.urlSuffix
 
         val cookieInterceptor = CookieInterceptor(mirror.domain, mirror.langCookie to preferences.lang)
-        client = network.client.newBuilder()
+        client = network.cloudflareClient.newBuilder()
             .rateLimit(5)
             .addNetworkInterceptor(cookieInterceptor)
             .build()
     }
 
-    private val isCi = System.getenv("CI") == "true"
-    override val baseUrl get() = when {
-        isCi -> MIRRORS.joinToString("#, ") { "https://" + it.domain }
-        else -> _baseUrl
-    }
-
     override fun headersBuilder() = Headers.Builder()
-        .add("Referer", _baseUrl)
+        .add("Referer", baseUrl)
         .add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0")
 
     private fun SManga.stripMirror() = apply {
@@ -97,10 +92,10 @@ class Mangabz : MangabzTheme("Mangabz"), ConfigurableSource {
 
     override fun parseDescription(element: Element, title: String, details: Elements): String {
         val text = element.ownText()
-        val start = if (text.startsWith(title)) title.length + 4 else 0
+        val start = text.removePrefix("${title}漫画 ，").removePrefix("${title}漫畫 ，")
         val collapsed = element.selectFirst(Evaluator.Tag("span"))?.ownText()
-            ?: return text.substring(start)
-        return buildString { append(text, start, text.length - 1).append(collapsed) }
+            ?: return start
+        return start + collapsed
     }
 
     override fun chapterListRequest(manga: SManga) = GET(baseUrl + manga.url.toMirror(), headers)

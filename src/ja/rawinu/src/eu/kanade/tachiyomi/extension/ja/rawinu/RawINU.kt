@@ -20,7 +20,7 @@ class RawINU : FMReader(
     "https://rawinu.com",
     "ja",
 ) {
-    override val client = network.client.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .addInterceptor(::ddosChallengeInterceptor)
         .build()

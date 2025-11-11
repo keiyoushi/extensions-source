@@ -1,9 +1,10 @@
 ext {
     extName = 'Maid Scan'
     extClass = '.MaidScan'
-    themePkg = 'madara'
-    baseUrl = 'https://empreguetes.site'
-    overrideVersionCode = 2
+    themePkg = 'greenshit'
+    baseUrl = 'https://novo.empreguetes.site'
+    overrideVersionCode = 46
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

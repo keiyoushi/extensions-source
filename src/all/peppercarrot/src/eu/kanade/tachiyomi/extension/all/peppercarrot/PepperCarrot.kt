@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.peppercarrot
 
-import android.app.Application
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -11,6 +10,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.CacheControl
 import okhttp3.Request
 import okhttp3.Response
@@ -18,8 +19,6 @@ import org.jsoup.nodes.TextNode
 import org.jsoup.select.Evaluator
 import rx.Observable
 import rx.Single
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -31,9 +30,7 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
 
     override val baseUrl = BASE_URL
 
-    private val preferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)!!
-    }
+    private val preferences by getPreferencesLazy()
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> = Single.create<MangasPage> {
         updateLangData(client, headers, preferences)

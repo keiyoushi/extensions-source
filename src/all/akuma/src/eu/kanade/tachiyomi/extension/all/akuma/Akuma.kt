@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.akuma
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -25,8 +25,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -48,12 +46,12 @@ class Akuma(
 
     private var storedToken: String? = null
 
-    private val ddosGuardIntercept = DDosGuardInterceptor(network.client)
+    private val ddosGuardIntercept = DDosGuardInterceptor(network.cloudflareClient)
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(ddosGuardIntercept)
         .addInterceptor(::tokenInterceptor)
         .rateLimit(2)
@@ -112,9 +110,7 @@ class Akuma(
         return storedToken!!
     }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private val displayFullTitle: Boolean get() = preferences.getBoolean(PREF_TITLE, false)
 

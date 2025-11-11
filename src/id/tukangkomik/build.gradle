@@ -1,9 +1,0 @@
-ext {
-    extName = 'TukangKomik'
-    extClass = '.TukangKomik'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://tukangkomik.co'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

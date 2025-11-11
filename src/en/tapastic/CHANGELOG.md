@@ -25,7 +25,7 @@
 
  * Remove genre incorrectly added to titles
 
-## 1.2.15 
+## 1.2.15
 
 ### Fix
 
@@ -56,7 +56,7 @@
 ### Features
 
  * Show lock on locked chapters after login
- 
+
 ## 1.2.10
 
 ### Fix
@@ -67,7 +67,7 @@
 
 ### Fix
 
- * Fix chapter list parsing for non logged-in users 
+ * Fix chapter list parsing for non logged-in users
 
 ## 1.2.8
 
@@ -108,7 +108,7 @@
 ## 1.0.2
 
 ### Features
- 
+
  * Add BL genres
 
 ## 1.0.1

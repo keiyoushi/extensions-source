@@ -1,9 +1,0 @@
-ext {
-    extName = 'Diskus Scan'
-    extClass = '.DiskusScan'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://diskusscan.online'
-    overrideVersionCode = 13
-}
-
-apply from: "$rootDir/common.gradle"

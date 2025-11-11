@@ -27,6 +27,8 @@ abstract class ZeistManga(
 
     override val supportsLatest = true
 
+    override val client = network.cloudflareClient
+
     protected val json: Json by injectLazy()
 
     private val intl by lazy { ZeistMangaIntl(lang) }
@@ -152,6 +154,7 @@ abstract class ZeistManga(
     protected open val mangaDetailsSelectorAuthor = "span#author"
     protected open val mangaDetailsSelectorArtist = "span#artist"
     protected open val mangaDetailsSelectorAltName = "header > p"
+    protected open val mangaDetailsSelectorStatus = "span[data-status]"
     protected open val mangaDetailsSelectorInfo = ".y6x11p"
     protected open val mangaDetailsSelectorInfoTitle = "strong"
     protected open val mangaDetailsSelectorInfoDescription = "span.dt"
@@ -173,6 +176,7 @@ abstract class ZeistManga(
                 .joinToString { it.text() }
             author = profileManga.selectFirst(mangaDetailsSelectorAuthor)?.text()
             artist = profileManga.selectFirst(mangaDetailsSelectorArtist)?.text()
+            status = parseStatus(profileManga.selectFirst(mangaDetailsSelectorStatus)?.text() ?: "")
 
             val infoElement = profileManga.select(mangaDetailsSelectorInfo)
             infoElement.forEach { element ->

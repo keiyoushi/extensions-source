@@ -1,7 +1,8 @@
 ext {
     extName = 'BacaKomik'
     extClass = '.BacaKomik'
-    extVersionCode = 10
+    extVersionCode = 12
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

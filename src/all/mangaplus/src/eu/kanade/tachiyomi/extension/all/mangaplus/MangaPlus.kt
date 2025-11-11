@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.mangaplus
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -27,8 +27,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.util.UUID
 
@@ -50,7 +48,7 @@ class MangaPlus(
         .add("User-Agent", USER_AGENT)
         .add("SESSION-TOKEN", UUID.randomUUID().toString())
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageIntercept)
         .addInterceptor(::thumbnailIntercept)
         .rateLimitHost(API_URL.toHttpUrl(), 1)
@@ -68,9 +66,7 @@ class MangaPlus(
         )
     }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     /**
      * Private cache to find the newest thumbnail URL in case the existing one
@@ -127,8 +123,7 @@ class MangaPlus(
         }
     }
 
-    override fun latestUpdatesRequest(page: Int) =
-        GET("$API_URL/web/web_homeV4?lang=$internalLang&clang=$internalLang&format=json", headers)
+    override fun latestUpdatesRequest(page: Int) = GET("$API_URL/home_v4?lang=$internalLang&clang=$internalLang&format=json", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val result = response.asMangaPlusResponse()
@@ -137,26 +132,16 @@ class MangaPlus(
             result.error!!.langPopup(langCode)?.body ?: intl["unknown_error"]
         }
 
-        directory = result.success.webHomeViewV4!!.groups
-            .flatMap(UpdatedTitleV2Group::titleGroups)
-            .flatMap(OriginalTitleGroup::titles)
-            .map(UpdatedTitle::title)
-            .filter { it.language == langCode }
-            .distinctBy(Title::titleId)
+        directory =
+            result.success.homeViewV3!!
+                .groups
+                .flatMap(UpdatedTitleV2Group::titleGroups)
+                .flatMap(OriginalTitleGroup::titles)
+                .map(UpdatedTitle::title)
+                .filter { it.language == langCode }
+                .distinctBy(Title::titleId)
 
         titleCache.putAll(directory.associateBy(Title::titleId))
-        titleCache.putAll(
-            result.success.webHomeViewV4.rankedTitles
-                .flatMap(RankedTitle::titles)
-                .filter { it.language == langCode }
-                .associateBy(Title::titleId),
-        )
-        titleCache.putAll(
-            result.success.webHomeViewV4.featuredTitleLists
-                .flatMap(FeaturedTitleList::featuredTitles)
-                .filter { it.language == langCode }
-                .associateBy(Title::titleId),
-        )
 
         return parseDirectory(1)
     }

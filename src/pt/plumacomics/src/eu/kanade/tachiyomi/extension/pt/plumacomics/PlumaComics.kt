@@ -1,18 +1,17 @@
 package eu.kanade.tachiyomi.extension.pt.plumacomics
 
-import eu.kanade.tachiyomi.multisrc.madara.Madara
-import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
+import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
-class PlumaComics : Madara(
+class PlumaComics : MangaThemesia(
     "Pluma Comics",
     "https://plumacomics.cloud",
     "pt-BR",
-    SimpleDateFormat("dd 'de' MMM 'de' yyyy", Locale("pt", "BR")),
 ) {
-    override val useNewChapterEndpoint = true
+    override val client = super.client.newBuilder()
+        .rateLimit(2)
+        .build()
 
-    override fun chapterListParse(response: Response) =
-        super.chapterListParse(response).reversed()
+    // Moved from YuYu to Madara
+    override val versionId = 4
 }

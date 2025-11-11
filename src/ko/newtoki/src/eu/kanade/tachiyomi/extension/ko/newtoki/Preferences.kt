@@ -1,12 +1,10 @@
 package eu.kanade.tachiyomi.extension.ko.newtoki
 
-import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import keiyoushi.utils.getPreferences
 
 const val MANATOKI_ID = 2526381983439079467L // "NewToki/ko/1"
 const val NEWTOKI_ID = 1977818283770282459L // "NewToki (Webtoon)/ko/1"
@@ -14,8 +12,8 @@ const val NEWTOKI_ID = 1977818283770282459L // "NewToki (Webtoon)/ko/1"
 const val MANATOKI_PREFIX = "manatoki"
 const val NEWTOKI_PREFIX = "newtoki"
 
-val manaTokiPreferences = getSharedPreferences(MANATOKI_ID).migrate()
-val newTokiPreferences = getSharedPreferences(NEWTOKI_ID).migrate()
+val manaTokiPreferences = getPreferences(MANATOKI_ID).migrate()
+val newTokiPreferences = getPreferences(NEWTOKI_ID).migrate()
 
 fun getPreferencesInternal(context: Context) = arrayOf(
 
@@ -85,6 +83,3 @@ private const val DOMAIN_NUMBER_PREF = "domainNumber"
 private const val RATE_LIMIT_PERIOD_PREF = "rateLimitPeriod"
 private const val RATE_LIMIT_PERIOD_DEFAULT = 2.toString()
 private const val RATE_LIMIT_PERIOD_MAX = 9
-
-private fun getSharedPreferences(id: Long): SharedPreferences =
-    Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)

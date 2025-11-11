@@ -2,8 +2,8 @@ ext {
     extName = 'Hiperdex'
     extClass = '.Hiperdex'
     themePkg = 'madara'
-    baseUrl = 'https://hipertoon.com'
-    overrideVersionCode = 15
+    baseUrl = 'https://hiperdex.com'
+    overrideVersionCode = 21
     isNsfw = true
 }
 

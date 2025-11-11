@@ -1,9 +1,0 @@
-ext {
-    extName = 'CrystalComics'
-    extClass = '.CrystalComics'
-    themePkg = 'etoshore'
-    baseUrl = 'https://crystalcomics.com'
-    overrideVersionCode = 37
-}
-
-apply from: "$rootDir/common.gradle"

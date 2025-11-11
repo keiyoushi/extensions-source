@@ -3,7 +3,8 @@ ext {
     extClass = '.SixMH'
     themePkg = 'mccms'
     baseUrl = 'https://www.liumanhua.com'
-    overrideVersionCode = 5
+    overrideVersionCode = 8
+    isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"

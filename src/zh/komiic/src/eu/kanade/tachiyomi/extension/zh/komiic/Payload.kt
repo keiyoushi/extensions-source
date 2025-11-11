@@ -1,49 +1,50 @@
 package eu.kanade.tachiyomi.extension.zh.komiic
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.encodeToJsonElement
+
+const val PAGE_SIZE = 30 // using 20 causes weird behavior in the filter endpoint
 
 @Serializable
-class Payload<T>(
-    val operationName: String,
-    val variables: T,
-    val query: String,
-)
+class ListingVariables(
+    val pagination: Pagination,
+) {
+    @EncodeDefault
+    var categoryId: List<String> = emptyList()
 
-@Serializable
-data class MangaListPagination(
-    val limit: Int,
-    val offset: Int,
-    val orderBy: String,
-    val status: String,
-    val asc: Boolean,
-)
+    fun encode() = Json.encodeToJsonElement(this) as JsonObject
+}
 
+@Suppress("unused")
 @Serializable
-data class HotComicsVariables(
-    val pagination: MangaListPagination,
-)
+class Pagination(
+    private val offset: Int,
+    @EncodeDefault
+    var orderBy: OrderBy = OrderBy.DATE_UPDATED,
+) {
+    @EncodeDefault
+    var status: String = ""
 
-@Serializable
-data class RecentUpdateVariables(
-    val pagination: MangaListPagination,
-)
+    @EncodeDefault
+    private val asc: Boolean = false // this should be true in popular but doesn't take effect in any case
 
-@Serializable
-data class SearchVariables(
-    val keyword: String,
-)
+    @EncodeDefault
+    private val limit: Int = PAGE_SIZE
 
-@Serializable
-data class ComicByIdVariables(
-    val comicId: String,
-)
+    @EncodeDefault
+    var sexyLevel: Int? = null
+}
 
-@Serializable
-data class ChapterByComicIdVariables(
-    val comicId: String,
-)
-
-@Serializable
-data class ImagesByChapterIdVariables(
-    val chapterId: String,
-)
+enum class OrderBy {
+    DATE_UPDATED,
+    DATE_CREATED,
+    VIEWS,
+    MONTH_VIEWS,
+    ID,
+    COMIC_DATE_UPDATED,
+    FAVORITE_ADDED,
+    FAVORITE_COUNT,
+}

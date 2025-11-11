@@ -2,8 +2,9 @@ ext {
     extName = 'Read Dr. Stone Manga Online'
     extClass = '.ReadDrStoneMangaOnline'
     themePkg = 'mangacatalog'
-    baseUrl = 'https://ww3.readdrstone.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://ww7.readdrstone.com'
+    overrideVersionCode = 1
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

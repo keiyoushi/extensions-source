@@ -1,0 +1,8 @@
+ext {
+    extName = 'Poseidon Scans'
+    extClass = '.PoseidonScans'
+    extVersionCode = 47
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

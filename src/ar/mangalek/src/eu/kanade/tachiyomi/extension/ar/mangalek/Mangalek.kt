@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.ar.mangalek
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.ListPreference
@@ -11,13 +10,12 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -54,9 +52,7 @@ class Mangalek :
         }
     }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val mirrorPref = ListPreference(screen.context).apply {

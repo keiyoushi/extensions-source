@@ -4,62 +4,310 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 
-class FlameComics : MangaThemesia(
-    "Flame Comics",
-    "https://flamecomics.xyz",
-    "en",
-    mangaUrlDirectory = "/series",
-) {
+class FlameComics : HttpSource() {
+    override val name = "Flame Comics"
+    override val lang = "en"
+    override val supportsLatest = true
+    override val versionId: Int = 2
+    override val baseUrl = "https://flamecomics.xyz"
+    private val cdn = "https://cdn.flamecomics.xyz"
 
-    // Flame Scans -> Flame Comics
-    override val id = 6350607071566689772
+    private val json: Json by injectLazy()
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2, 7)
+        .addInterceptor(::buildIdOutdatedInterceptor)
         .addInterceptor(::composedImageIntercept)
         .build()
 
-    override val pageSelector = "div#readerarea img:not(noscript img)[class*=wp-image]"
+    private val removeSpecialCharsRegex = Regex("[^A-Za-z0-9 ]")
 
-    // Split Image Fixer Start
-    private val composedSelector: String = "#readerarea div.figure_container div.composed_figure"
+    private fun dataApiReqBuilder() = baseUrl.toHttpUrl().newBuilder().apply {
+        addPathSegment("_next")
+        addPathSegment("data")
+        addPathSegment(buildId)
+    }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val hasSplitImages = document
-            .select(composedSelector)
-            .firstOrNull() != null
+    private fun imageApiUrlBuilder() = "$cdn/uploads/images/series".toHttpUrl().newBuilder()
 
-        if (!hasSplitImages) {
-            return super.pageListParse(document)
+    private fun thumbnailUrl(seriesData: Series) =
+        imageApiUrlBuilder().apply {
+            addPathSegment(seriesData.series_id.toString())
+            addPathSegment(seriesData.cover)
+            addQueryParameter(seriesData.last_edit, null)
+        }.build().toString()
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
+        GET(
+            dataApiReqBuilder().apply {
+                addPathSegment("browse.json")
+                fragment("$page&${removeSpecialCharsRegex.replace(query.lowercase(), "")}")
+            }.build(),
+            headers,
+        )
+
+    override fun popularMangaRequest(page: Int): Request =
+        GET(
+            dataApiReqBuilder().apply {
+                addPathSegment("browse.json")
+                fragment("$page")
+            }.build(),
+            headers,
+        )
+
+    override fun latestUpdatesRequest(page: Int): Request = GET(
+        dataApiReqBuilder().apply {
+            addPathSegment("index.json")
+        }.build(),
+        headers,
+    )
+
+    override fun searchMangaParse(response: Response): MangasPage =
+        mangaParse(response) { seriesList ->
+            val query = response.request.url.fragment!!.split("&")[1]
+            seriesList.filter { series ->
+                val titles = mutableListOf(series.title)
+                if (series.altTitles != null) {
+                    titles += series.altTitles
+                }
+                titles.any { title ->
+                    removeSpecialCharsRegex.replace(
+                        query.lowercase(),
+                        "",
+                    ) in removeSpecialCharsRegex.replace(
+                        title.lowercase(),
+                        "",
+                    )
+                }
+            }
         }
 
-        return document.select("#readerarea p:has(img), $composedSelector").toList()
-            .filter {
-                it.select("img").all { imgEl ->
-                    imgEl.attr("abs:src").isNullOrEmpty().not()
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val latestData = json.decodeFromString<LatestPageData>(response.body.string())
+        return MangasPage(
+            latestData.pageProps.latestEntries.blocks[0].series.map { seriesData ->
+                SManga.create().apply {
+                    title = seriesData.title
+                    setUrlWithoutDomain(
+                        baseUrl.toHttpUrl().newBuilder().apply {
+                            addPathSegment("series")
+                            addPathSegment(seriesData.series_id.toString())
+                        }.build().toString(),
+                    )
+                    thumbnail_url = thumbnailUrl(seriesData)
                 }
-            }
-            .mapIndexed { i, el ->
-                if (el.tagName() == "p") {
-                    Page(i, "", el.select("img").attr("abs:src"))
-                } else {
-                    val imageUrls = el.select("img")
-                        .joinToString("|") { it.attr("abs:src") }
+            },
+            false,
+        )
+    }
 
-                    Page(i, document.location(), imageUrls + COMPOSED_SUFFIX)
+    override fun popularMangaParse(response: Response): MangasPage =
+        mangaParse(response) { list -> list.sortedByDescending { it.views } }
+
+    private fun mangaParse(
+        response: Response,
+        transform: (List<Series>) -> List<Series>,
+    ): MangasPage {
+        val searchedSeriesData =
+            json.decodeFromString<SearchPageData>(response.body.string()).pageProps.series
+                .filter { series -> series.series_id != null }
+
+        val page = if (!response.request.url.fragment?.contains("&")!!) {
+            response.request.url.fragment!!.toInt()
+        } else {
+            response.request.url.fragment!!.split("&")[0].toInt()
+        }
+
+        val manga = transform(searchedSeriesData).map { seriesData ->
+            SManga.create().apply {
+                title = seriesData.title
+                setUrlWithoutDomain(
+                    baseUrl.toHttpUrl().newBuilder().apply {
+                        addPathSegment("series")
+                        addPathSegment(seriesData.series_id.toString())
+                    }.build().toString(),
+                )
+                thumbnail_url = thumbnailUrl(seriesData)
+            }
+        }
+
+        val itemsPerPage = 20
+        val startIndex = (page - 1) * itemsPerPage
+        val endIndex = minOf(page * itemsPerPage, manga.size)
+        return MangasPage(manga.subList(startIndex, endIndex), endIndex < manga.size)
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request = GET(
+        dataApiReqBuilder().apply {
+            val seriesID =
+                ("$baseUrl${manga.url}").toHttpUrl().pathSegments.last()
+            addPathSegment("series")
+            addPathSegment("$seriesID.json")
+            addQueryParameter("id", seriesID)
+        }.build(),
+        headers,
+    )
+
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
+    override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
+        val seriesData =
+            json.decodeFromString<MangaDetailsResponseData>(response.body.string()).pageProps.series
+        title = seriesData.title
+        thumbnail_url = thumbnailUrl(seriesData)
+        description = seriesData.description
+            ?.let { Jsoup.parseBodyFragment(it).wholeText() }
+
+        genre = seriesData.tags?.let { tags ->
+            (listOf(seriesData.type) + tags).joinToString()
+        } ?: seriesData.type
+
+        author = seriesData.author?.joinToString()
+        artist = seriesData.artist?.joinToString()
+        status = when (seriesData.status.lowercase()) {
+            "ongoing" -> SManga.ONGOING
+            "dropped" -> SManga.CANCELLED
+            "hiatus" -> SManga.ON_HIATUS
+            "completed" -> SManga.COMPLETED
+            else -> SManga.UNKNOWN
+        }
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val chaptersListResponseData =
+            json.decodeFromString<ChapterListResponseData>(response.body.string())
+        return chaptersListResponseData.pageProps.chapters.map { chapter ->
+            SChapter.create().apply {
+                setUrlWithoutDomain(
+                    baseUrl.toHttpUrl().newBuilder().apply {
+                        addPathSegment("series")
+                        addPathSegment(chapter.series_id.toString())
+                        addPathSegment(chapter.token)
+                    }.build().toString(),
+                )
+                chapter_number = chapter.chapter.toFloat()
+                date_upload = chapter.release_date * 1000
+                name = buildString {
+                    append("Chapter ${chapter.chapter.toString().removeSuffix(".0")}")
+                    if (!chapter.title.isNullOrBlank()) {
+                        append(" - ${chapter.title}")
+                    }
                 }
             }
+        }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request = GET(
+        dataApiReqBuilder().apply {
+            val seriesID = ("$baseUrl${chapter.url}").toHttpUrl().pathSegments[1]
+            val token = ("$baseUrl${chapter.url}").toHttpUrl().pathSegments[2]
+            addPathSegment("series")
+            addPathSegment(seriesID)
+            addPathSegment("$token.json")
+            addQueryParameter("id", seriesID)
+            addQueryParameter("token", token)
+        }.build(),
+        headers,
+    )
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+
+    override fun pageListParse(response: Response): List<Page> {
+        val chapter =
+            json.decodeFromString<ChapterPageData>(response.body.string()).pageProps.chapter
+        return chapter.images.mapIndexed { idx, page ->
+            Page(
+                idx,
+                imageUrl = imageApiUrlBuilder().apply {
+                    addPathSegment(chapter.series_id.toString())
+                    addPathSegment(chapter.token)
+                    addPathSegment(page.name)
+                    addQueryParameter(
+                        chapter.release_date.toString(),
+                        value = null,
+                    )
+                }.build().toString(),
+            )
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = ""
+
+    private fun fetchBuildId(document: Document? = null): String {
+        val realDocument = document
+            ?: client.newCall(GET(baseUrl, headers)).execute().use { it.asJsoup() }
+
+        val nextData = realDocument.selectFirst("script#__NEXT_DATA__")?.data()
+            ?: throw Exception("Failed to find __NEXT_DATA__")
+
+        val dto = json.decodeFromString<NewBuildID>(nextData)
+        return dto.buildId
+    }
+
+    private var buildId = ""
+        get() {
+            if (field == "") {
+                field = fetchBuildId()
+            }
+            return field
+        }
+
+    private fun buildIdOutdatedInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        if (
+            response.code == 404 &&
+            request.url.run {
+                host == baseUrl.removePrefix("https://") &&
+                    pathSegments.getOrNull(0) == "_next" &&
+                    pathSegments.getOrNull(1) == "data" &&
+                    fragment != "DO_NOT_RETRY"
+            } &&
+            response.header("Content-Type")?.contains("text/html") != false
+        ) {
+            // The 404 page should have the current buildId
+            val document = response.asJsoup()
+            buildId = fetchBuildId(document)
+
+            // Redo request with new buildId
+            val url = request.url.newBuilder()
+                .setPathSegment(2, buildId)
+                .fragment("DO_NOT_RETRY")
+                .build()
+            val newRequest = request.newBuilder()
+                .url(url)
+                .build()
+
+            return chain.proceed(newRequest)
+        }
+
+        return response
     }
 
     private fun composedImageIntercept(chain: Interceptor.Chain): Response {

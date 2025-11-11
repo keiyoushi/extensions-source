@@ -1,9 +1,10 @@
 ext {
     extName = 'Arcanescans'
     extClass = '.Arcanescans'
-    themePkg = 'madara'
+    themePkg = 'mangathemesia'
     baseUrl = 'https://arcanescans.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 15
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

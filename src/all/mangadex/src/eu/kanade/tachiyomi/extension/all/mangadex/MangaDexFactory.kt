@@ -6,15 +6,19 @@ import eu.kanade.tachiyomi.source.SourceFactory
 class MangaDexFactory : SourceFactory {
     override fun createSources(): List<Source> = listOf(
         MangaDexEnglish(),
+        MangadexAfrikaans(),
         MangaDexAlbanian(),
         MangaDexArabic(),
         MangaDexAzerbaijani(),
+        MangaDexBasque(),
+        MangaDexBelarusian(),
         MangaDexBengali(),
         MangaDexBulgarian(),
         MangaDexBurmese(),
         MangaDexCatalan(),
         MangaDexChineseSimplified(),
         MangaDexChineseTraditional(),
+        MangaDexChuvash(),
         MangaDexCroatian(),
         MangaDexCzech(),
         MangaDexDanish(),
@@ -30,8 +34,10 @@ class MangaDexFactory : SourceFactory {
         MangaDexHebrew(),
         MangaDexHindi(),
         MangaDexHungarian(),
+        MangaDexIrish(),
         MangaDexIndonesian(),
         MangaDexItalian(),
+        MangaDexJavanese(),
         MangaDexJapanese(),
         MangaDexKazakh(),
         MangaDexKorean(),
@@ -57,19 +63,25 @@ class MangaDexFactory : SourceFactory {
         MangaDexThai(),
         MangaDexTurkish(),
         MangaDexUkrainian(),
+        MangaDexUrdu(),
+        MangaDexUzbek(),
         MangaDexVietnamese(),
     )
 }
 
+class MangadexAfrikaans : MangaDex("af")
 class MangaDexAlbanian : MangaDex("sq")
 class MangaDexArabic : MangaDex("ar")
 class MangaDexAzerbaijani : MangaDex("az")
+class MangaDexBasque : MangaDex("eu")
+class MangaDexBelarusian : MangaDex("be")
 class MangaDexBengali : MangaDex("bn")
 class MangaDexBulgarian : MangaDex("bg")
 class MangaDexBurmese : MangaDex("my")
 class MangaDexCatalan : MangaDex("ca")
 class MangaDexChineseSimplified : MangaDex("zh-Hans", "zh")
 class MangaDexChineseTraditional : MangaDex("zh-Hant", "zh-hk")
+class MangaDexChuvash : MangaDex("cv")
 class MangaDexCroatian : MangaDex("hr")
 class MangaDexCzech : MangaDex("cs")
 class MangaDexDanish : MangaDex("da")
@@ -86,9 +98,11 @@ class MangaDexGreek : MangaDex("el")
 class MangaDexHebrew : MangaDex("he")
 class MangaDexHindi : MangaDex("hi")
 class MangaDexHungarian : MangaDex("hu")
+class MangaDexIrish : MangaDex("ga")
 class MangaDexIndonesian : MangaDex("id")
 class MangaDexItalian : MangaDex("it")
 class MangaDexJapanese : MangaDex("ja")
+class MangaDexJavanese : MangaDex("jv")
 class MangaDexKazakh : MangaDex("kk")
 class MangaDexKorean : MangaDex("ko")
 class MangaDexLatin : MangaDex("la")
@@ -113,4 +127,6 @@ class MangaDexTelugu : MangaDex("te")
 class MangaDexThai : MangaDex("th")
 class MangaDexTurkish : MangaDex("tr")
 class MangaDexUkrainian : MangaDex("uk")
+class MangaDexUrdu : MangaDex("ur")
+class MangaDexUzbek : MangaDex("uz")
 class MangaDexVietnamese : MangaDex("vi")

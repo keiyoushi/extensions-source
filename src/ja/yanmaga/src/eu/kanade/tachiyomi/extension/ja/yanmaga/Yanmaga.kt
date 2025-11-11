@@ -33,7 +33,7 @@ abstract class Yanmaga(
 
     protected val json = Injekt.get<Json>()
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(SpeedBinbInterceptor(json))
         .build()
 
@@ -79,10 +79,10 @@ abstract class Yanmaga(
 
         val chapterUrl = response.request.url.toString()
         val firstChapterList = document
-            .select("ul.mod-episode-list:first-of-type > li.mod-episode-item")
+            .select("ul.mod-episode-list:first-of-type > li.mod-episode-item:has(.mod-episode-title)")
             .map { chapterFromElement(it) }
         val lastChapterList = document
-            .select("ul.mod-episode-list:last-of-type > li.mod-episode-item")
+            .select("ul.mod-episode-list:last-of-type > li.mod-episode-item:has(.mod-episode-title)")
             .map { chapterFromElement(it) }
         val totalChapterCount = document
             .selectFirst("#contents")
@@ -132,7 +132,7 @@ abstract class Yanmaga(
             .filter { it.url.isNotEmpty() }
     }
 
-    override fun chapterListSelector() = "ul.mod-episode-list > li.mod-episode-item"
+    override fun chapterListSelector() = "ul.mod-episode-list > li.mod-episode-item:has(.mod-episode-title)"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         // The first chapter sometimes is a fake one. However, this still count towards the total

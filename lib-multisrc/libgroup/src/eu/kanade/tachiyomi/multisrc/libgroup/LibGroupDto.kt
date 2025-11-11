@@ -45,7 +45,7 @@ class Constants(
     )
 
     fun getServer(isServers: String?, siteId: Int): ImageServer =
-        if (!isServers.isNullOrBlank()) {
+        if (!isServers.isNullOrBlank() and (isServers != "auto")) {
             imageServers.first { it.id == isServers && it.siteIds.contains(siteId) }
         } else {
             imageServers.first { it.siteIds.contains(siteId) }

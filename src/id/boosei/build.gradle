@@ -1,9 +1,0 @@
-ext {
-    extName = 'Boosei'
-    extClass = '.Boosei'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://boosei.net'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

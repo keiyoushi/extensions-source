@@ -2,9 +2,15 @@ package eu.kanade.tachiyomi.extension.all.batoto
 
 import android.app.Application
 import android.content.SharedPreferences
+import android.text.Editable
+import android.text.TextWatcher
+import android.widget.Button
+import android.widget.Toast
 import androidx.preference.CheckBoxPreference
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
 import eu.kanade.tachiyomi.lib.cryptoaes.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
@@ -19,6 +25,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -27,7 +34,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -38,22 +44,23 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 open class BatoTo(
     final override val lang: String,
     private val siteLang: String,
 ) : ConfigurableSource, ParsedHttpSource() {
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences by getPreferencesLazy { migrateMirrorPref() }
 
     override val name: String = "Bato.to"
-    override val baseUrl: String by lazy { getMirrorPref()!! }
+
+    override val baseUrl: String get() = getMirrorPref()
+
     override val id: Long = when (lang) {
         "zh-Hans" -> 2818874445640189582
         "zh-Hant" -> 38886079663327225
@@ -69,24 +76,12 @@ open class BatoTo(
             entryValues = MIRROR_PREF_ENTRY_VALUES
             setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
             summary = "%s"
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val selected = newValue as String
-                val index = findIndexOfValue(selected)
-                val entry = entryValues[index] as String
-                preferences.edit().putString("${MIRROR_PREF_KEY}_$lang", entry).commit()
-            }
         }
         val altChapterListPref = CheckBoxPreference(screen.context).apply {
             key = "${ALT_CHAPTER_LIST_PREF_KEY}_$lang"
             title = ALT_CHAPTER_LIST_PREF_TITLE
             summary = ALT_CHAPTER_LIST_PREF_SUMMARY
             setDefaultValue(ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val checkValue = newValue as Boolean
-                preferences.edit().putBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", checkValue).commit()
-            }
         }
         val removeOfficialPref = CheckBoxPreference(screen.context).apply {
             key = "${REMOVE_TITLE_VERSION_PREF}_$lang"
@@ -97,26 +92,96 @@ open class BatoTo(
                 "You might also want to clear the database in advanced settings."
             setDefaultValue(false)
         }
+        val removeCustomPref = EditTextPreference(screen.context).apply {
+            key = "${REMOVE_TITLE_CUSTOM_PREF}_$lang"
+            title = "Custom regex to be removed from title"
+            summary = customRemoveTitle()
+            setDefaultValue("")
+
+            val validate = { str: String ->
+                runCatching { Regex(str) }
+                    .map { true to "" }
+                    .getOrElse { false to it.message }
+            }
+
+            setOnBindEditTextListener { editText ->
+                editText.addTextChangedListener(
+                    object : TextWatcher {
+                        override fun beforeTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+                        override fun onTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+
+                        override fun afterTextChanged(editable: Editable?) {
+                            editable ?: return
+                            val text = editable.toString()
+                            val valid = validate(text)
+                            editText.error = if (!valid.first) valid.second else null
+                            editText.rootView.findViewById<Button>(android.R.id.button1)?.isEnabled = editText.error == null
+                        }
+                    },
+                )
+            }
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val (isValid, message) = validate(newValue as String)
+                if (isValid) {
+                    summary = newValue
+                } else {
+                    Toast.makeText(screen.context, message, Toast.LENGTH_LONG).show()
+                }
+                isValid
+            }
+        }
         screen.addPreference(mirrorPref)
         screen.addPreference(altChapterListPref)
         screen.addPreference(removeOfficialPref)
+        screen.addPreference(removeCustomPref)
     }
 
-    private fun getMirrorPref(): String? = preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
+    private fun getMirrorPref(): String {
+        if (System.getenv("CI") == "true") {
+            return (MIRROR_PREF_ENTRY_VALUES.drop(1) + DEPRECATED_MIRRORS).joinToString("#, ")
+        }
+
+        return preferences.getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)
+            ?.takeUnless { it == MIRROR_PREF_DEFAULT_VALUE }
+            ?: let {
+                /* Semi-sticky mirror:
+                 * - Don't randomize on boot
+                 * - Don't randomize per language
+                 * - Fallback for non-Android platform
+                 */
+                val seed = runCatching {
+                    val pm = Injekt.get<Application>().packageManager
+                    pm.getPackageInfo(BuildConfig.APPLICATION_ID, 0).lastUpdateTime
+                }.getOrElse {
+                    BuildConfig.VERSION_NAME.hashCode().toLong()
+                }
+
+                MIRROR_PREF_ENTRY_VALUES.drop(1).random(Random(seed))
+            }
+    }
+
     private fun getAltChapterListPref(): Boolean = preferences.getBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
     private fun isRemoveTitleVersion(): Boolean {
         return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
     }
+    private fun customRemoveTitle(): String =
+        preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
+
+    private fun SharedPreferences.migrateMirrorPref() {
+        val selectedMirror = getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)!!
+
+        if (selectedMirror in DEPRECATED_MIRRORS) {
+            edit().putString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE).apply()
+        }
+    }
 
     override val supportsLatest = true
     private val json: Json by injectLazy()
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
+    override val client = network.cloudflareClient
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/browse?langs=$siteLang&sort=update&page=$page")
+        return GET("$baseUrl/browse?langs=$siteLang&sort=update&page=$page", headers)
     }
 
     override fun latestUpdatesSelector(): String {
@@ -131,8 +196,9 @@ open class BatoTo(
         val manga = SManga.create()
         val item = element.select("a.item-cover")
         val imgurl = item.select("img").attr("abs:src")
-        manga.setUrlWithoutDomain(item.attr("href"))
+        manga.setUrlWithoutDomain(stripSeriesUrl(item.attr("href")))
         manga.title = element.select("a.item-title").text().removeEntities()
+            .cleanTitleIfNeeded()
         manga.thumbnail_url = imgurl
         return manga
     }
@@ -140,7 +206,7 @@ open class BatoTo(
     override fun latestUpdatesNextPageSelector() = "div#mainer nav.d-none .pagination .page-item:last-of-type:not(.disabled)"
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/browse?langs=$siteLang&sort=views_a&page=$page")
+        return GET("$baseUrl/browse?langs=$siteLang&sort=views_a&page=$page", headers)
     }
 
     override fun popularMangaSelector() = latestUpdatesSelector()
@@ -257,9 +323,10 @@ open class BatoTo(
         val infoElement = document.select("div#mainer div.container-fluid")
         val manga = SManga.create()
         manga.title = infoElement.select("h3").text().removeEntities()
+            .cleanTitleIfNeeded()
         manga.thumbnail_url = document.select("div.attr-cover img")
             .attr("abs:src")
-        manga.url = infoElement.select("h3 a").attr("abs:href")
+        manga.setUrlWithoutDomain(stripSeriesUrl(infoElement.select("h3 a").attr("abs:href")))
         return MangasPage(listOf(manga), false)
     }
 
@@ -290,16 +357,18 @@ open class BatoTo(
 
     private fun searchUtilsFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.setUrlWithoutDomain(element.select("td a").attr("href"))
+        manga.setUrlWithoutDomain(stripSeriesUrl(element.select("td a").attr("href")))
         manga.title = element.select("td a").text()
+            .cleanTitleIfNeeded()
         manga.thumbnail_url = element.select("img").attr("abs:src")
         return manga
     }
 
     private fun searchHistoryFromElement(element: Element): SManga {
         val manga = SManga.create()
-        manga.setUrlWithoutDomain(element.select(".position-relative a").attr("href"))
+        manga.setUrlWithoutDomain(stripSeriesUrl(element.select(".position-relative a").attr("href")))
         manga.title = element.select(".position-relative a").text()
+            .cleanTitleIfNeeded()
         manga.thumbnail_url = element.select("img").attr("abs:src")
         return manga
     }
@@ -318,77 +387,85 @@ open class BatoTo(
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (manga.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = manga.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             return GET(manga.url, headers)
         }
         return super.mangaDetailsRequest(manga)
     }
-    private var titleRegex: Regex =
-        Regex("(?:\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|/.+?)\\s*|([|/~].*)|-.*-")
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.select("div#mainer div.container-fluid")
+        val infoElement = document.selectFirst("div#mainer div.container-fluid")!!
         val manga = SManga.create()
-        val workStatus = infoElement.select("div.attr-item:contains(original work) span").text()
-        val uploadStatus = infoElement.select("div.attr-item:contains(upload status) span").text()
+        val workStatus = infoElement.selectFirst("div.attr-item:contains(original work) span")?.text()
+        val uploadStatus = infoElement.selectFirst("div.attr-item:contains(upload status) span")?.text()
         val originalTitle = infoElement.select("h3").text().removeEntities()
-        val alternativeTitles = document.select("div.pb-2.alias-set.line-b-f").text()
-        val description = infoElement.select("div.limit-html").text() + "\n" +
-            infoElement.select(".episode-list > .alert-warning").text().trim()
-        val cleanedTitle = if (isRemoveTitleVersion()) {
-            originalTitle.replace(titleRegex, "").trim()
-        } else {
-            originalTitle
-        }
+        val description = buildString {
+            append(infoElement.select("div.limit-html").text())
+            infoElement.selectFirst(".episode-list > .alert-warning")?.also {
+                append("\n\n${it.text()}")
+            }
+            infoElement.selectFirst("h5:containsOwn(Extra Info:) + div")?.also {
+                append("\n\nExtra Info:\n${it.wholeText()}")
+            }
+            document.selectFirst("div.pb-2.alias-set.line-b-f")?.takeIf { it.hasText() }?.also {
+                append("\n\nAlternative Titles:\n")
+                append(it.text().split('/').joinToString("\n") { "• ${it.trim()}" })
+            }
+        }.trim()
+        val cleanedTitle = originalTitle.cleanTitleIfNeeded()
 
         manga.title = cleanedTitle
         manga.author = infoElement.select("div.attr-item:contains(author) span").text()
         manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
         manga.status = parseStatus(workStatus, uploadStatus)
         manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
-        manga.description = description +
-            if (alternativeTitles.isNotBlank()) "\n\nAlternative Titles:\n$alternativeTitles" else ""
+        manga.description = if (originalTitle.trim() != cleanedTitle) {
+            listOf(originalTitle, description)
+                .joinToString("\n\n")
+        } else {
+            description
+        }
         manga.thumbnail_url = document.select("div.attr-cover img").attr("abs:src")
         return manga
     }
-    private fun parseStatus(workStatus: String?, uploadStatus: String?) = when {
-        workStatus == null -> SManga.UNKNOWN
-        workStatus.contains("Ongoing") -> SManga.ONGOING
-        workStatus.contains("Cancelled") -> SManga.CANCELLED
-        workStatus.contains("Hiatus") -> SManga.ON_HIATUS
-        workStatus.contains("Completed") -> when {
-            uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
-            else -> SManga.COMPLETED
+    private fun parseStatus(workStatus: String?, uploadStatus: String?): Int {
+        val status = workStatus ?: uploadStatus
+        return when {
+            status == null -> SManga.UNKNOWN
+            status.contains("Ongoing") -> SManga.ONGOING
+            status.contains("Cancelled") -> SManga.CANCELLED
+            status.contains("Hiatus") -> SManga.ON_HIATUS
+            status.contains("Completed") -> when {
+                uploadStatus?.contains("Ongoing") == true -> SManga.PUBLISHING_FINISHED
+                else -> SManga.COMPLETED
+            }
+            else -> SManga.UNKNOWN
         }
-        else -> SManga.UNKNOWN
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val url = client.newCall(
-            GET(
-                when {
-                    manga.url.startsWith("http") -> manga.url
-                    else -> "$baseUrl${manga.url}"
-                },
-            ),
-        ).execute().asJsoup()
-        if (getAltChapterListPref() || checkChapterLists(url)) {
-            val id = manga.url.substringBeforeLast("/").substringAfterLast("/").trim()
-            return client.newCall(GET("$baseUrl/rss/series/$id.xml"))
-                .asObservableSuccess()
-                .map { altChapterParse(it, manga.title) }
-        }
-        return super.fetchChapterList(manga)
-    }
-
-    private fun altChapterParse(response: Response, title: String): List<SChapter> {
+    private fun altChapterParse(response: Response): List<SChapter> {
         return Jsoup.parse(response.body.string(), response.request.url.toString(), Parser.xmlParser())
             .select("channel > item").map { item ->
                 SChapter.create().apply {
-                    url = item.selectFirst("guid")!!.text()
-                    name = item.selectFirst("title")!!.text().substringAfter(title).trim()
-                    date_upload = SimpleDateFormat("E, dd MMM yyyy H:m:s Z", Locale.US).parse(item.selectFirst("pubDate")!!.text())?.time ?: 0L
+                    setUrlWithoutDomain(item.selectFirst("guid")!!.text())
+                    name = item.selectFirst("title")!!.text()
+                    date_upload = parseAltChapterDate(item.selectFirst("pubDate")!!.text())
                 }
             }
+    }
+
+    private val altDateFormat = SimpleDateFormat("E, dd MMM yyyy H:m:s Z", Locale.US)
+    private fun parseAltChapterDate(date: String): Long {
+        return try {
+            altDateFormat.parse(date)!!.time
+        } catch (_: ParseException) {
+            0L
+        }
     }
 
     private fun checkChapterLists(document: Document): Boolean {
@@ -396,10 +473,36 @@ open class BatoTo(
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        if (manga.url.startsWith("http")) {
-            return GET(manga.url, headers)
+        val id = seriesIdRegex.find(manga.url)
+            ?.groups?.get(1)?.value?.trim()
+        return if (getAltChapterListPref() && !id.isNullOrBlank()) {
+            GET("$baseUrl/rss/series/$id.xml", headers)
+        } else if (manga.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = manga.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
+            GET(manga.url, headers)
+        } else {
+            super.chapterListRequest(manga)
         }
-        return super.chapterListRequest(manga)
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        if (getAltChapterListPref()) {
+            return altChapterParse(response)
+        }
+
+        val document = response.asJsoup()
+
+        if (checkChapterLists(document)) {
+            throw Exception("Deleted from site")
+        }
+
+        return document.select(chapterListSelector())
+            .map(::chapterFromElement)
     }
 
     override fun chapterListSelector() = "div.main div.p-2"
@@ -477,6 +580,12 @@ open class BatoTo(
 
     override fun pageListRequest(chapter: SChapter): Request {
         if (chapter.url.startsWith("http")) {
+            // Check if trying to use a deprecated mirror, force current mirror
+            val httpUrl = chapter.url.toHttpUrl()
+            if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
+                val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
+                return GET(newHttpUrl.build(), headers)
+            }
             return GET(chapter.url, headers)
         }
         return super.pageListRequest(chapter)
@@ -510,6 +619,19 @@ open class BatoTo(
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     private fun String.removeEntities(): String = Parser.unescapeEntities(this, true)
+
+    private fun String.cleanTitleIfNeeded(): String {
+        var tempTitle = this
+        customRemoveTitle().takeIf { it.isNotEmpty() }?.let { customRegex ->
+            runCatching {
+                tempTitle = tempTitle.replace(Regex(customRegex), "")
+            }
+        }
+        if (isRemoveTitleVersion()) {
+            tempTitle = tempTitle.replace(titleRegex, "")
+        }
+        return tempTitle.trim()
+    }
 
     override fun getFilterList() = FilterList(
         LetterFilter(getLetterFilter(), 0),
@@ -966,45 +1088,94 @@ open class BatoTo(
         CheckboxFilterOption("pt-PT", "Portuguese (Portugal)"),
     ).filterNot { it.value == siteLang }
 
+    private fun stripSeriesUrl(url: String): String {
+        val matchResult = seriesUrlRegex.find(url)
+        return matchResult?.groups?.get(1)?.value ?: url
+    }
+
     companion object {
+        private val seriesUrlRegex = Regex("""(.*/series/\d+)/.*""")
+        private val seriesIdRegex = Regex("""series/(\d+)""")
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
+        private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
         private val MIRROR_PREF_ENTRIES = arrayOf(
-            "bato.to",
-            "batocomic.com",
-            "batocomic.net",
-            "batocomic.org",
-            "batotoo.com",
-            "batotwo.com",
-            "battwo.com",
-            "comiko.net",
-            "comiko.org",
-            "mangatoto.com",
-            "mangatoto.net",
-            "mangatoto.org",
-            "readtoto.com",
-            "readtoto.net",
-            "readtoto.org",
+            "Auto",
+            // https://batotomirrors.pages.dev/
+            "ato.to",
             "dto.to",
             "fto.to",
-            "jto.to",
             "hto.to",
+            "jto.to",
+            "lto.to",
             "mto.to",
+            "nto.to",
+            "vto.to",
             "wto.to",
+            "xto.to",
+            "yto.to",
+            "vba.to",
+            "wba.to",
+            "xba.to",
+            "yba.to",
+            "zba.to",
+            "bato.ac",
+            "bato.bz",
+            "bato.cc",
+            "bato.cx",
+            "bato.id",
+            "bato.pw",
+            "bato.sh",
+            "bato.to",
+            "bato.vc",
+            "bato.day",
+            "bato.red",
+            "bato.run",
+            "batoto.in",
+            "batoto.tv",
+            "batotoo.com",
+            "batotwo.com",
+            "batpub.com",
+            "batread.com",
+            "battwo.com",
             "xbato.com",
             "xbato.net",
             "xbato.org",
             "zbato.com",
             "zbato.net",
             "zbato.org",
+            "comiko.net",
+            "comiko.org",
+            "mangatoto.com",
+            "mangatoto.net",
+            "mangatoto.org",
+            "batocomic.com",
+            "batocomic.net",
+            "batocomic.org",
+            "readtoto.com",
+            "readtoto.net",
+            "readtoto.org",
+            "kuku.to",
+            "okok.to",
+            "ruru.to",
+            "xdxd.to",
+            // "bato.si", // (v4)
+            // "bato.ing", // (v4)
         )
         private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
+
+        private val DEPRECATED_MIRRORS = listOf(
+            "https://batocc.com", // parked
+        )
 
         private const val ALT_CHAPTER_LIST_PREF_KEY = "ALT_CHAPTER_LIST"
         private const val ALT_CHAPTER_LIST_PREF_TITLE = "Alternative Chapter List"
         private const val ALT_CHAPTER_LIST_PREF_SUMMARY = "If checked, uses an alternate chapter list"
         private const val ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE = false
+
+        private val titleRegex: Regex =
+            Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)
     }
 }

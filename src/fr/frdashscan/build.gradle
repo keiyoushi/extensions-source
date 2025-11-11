@@ -1,9 +1,0 @@
-ext {
-    extName = 'FR-Scan'
-    extClass = '.FRScan'
-    themePkg = 'madara'
-    baseUrl = 'https://fr-scan.com'
-    overrideVersionCode = 6
-}
-
-apply from: "$rootDir/common.gradle"

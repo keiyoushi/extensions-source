@@ -2,8 +2,8 @@ ext {
     extName = 'Ghost Scan'
     extClass = '.GhostScan'
     themePkg = 'madara'
-    baseUrl = 'https://ghostscan.com.br'
-    overrideVersionCode = 0
+    baseUrl = 'https://ghostscan.xyz'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

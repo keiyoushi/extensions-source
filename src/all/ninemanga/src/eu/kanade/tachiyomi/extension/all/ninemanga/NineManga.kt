@@ -29,7 +29,7 @@ open class NineManga(
 
     private val cookieInterceptor = CookieInterceptor(baseUrl.substringAfter("://"), "ninemanga_list_num" to "1")
 
-    override val client: OkHttpClient = network.client.newBuilder()
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()

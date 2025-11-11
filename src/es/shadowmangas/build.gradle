@@ -1,9 +1,0 @@
-ext {
-    extName = 'Shadow Mangas'
-    extClass = '.ShadowMangas'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://shadowmangas.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

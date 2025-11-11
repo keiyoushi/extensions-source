@@ -29,6 +29,8 @@ abstract class PizzaReader(
 
     override val supportsLatest = true
 
+    override val client = network.cloudflareClient
+
     open val apiUrl by lazy { "$baseUrl$apiPath" }
 
     protected open val json: Json by injectLazy()
@@ -93,7 +95,7 @@ abstract class PizzaReader(
         artist = comic.artist
         description = comic.description
         genre = comic.genres.joinToString(", ") { it.name }
-        status = comic.status.toStatus()
+        status = comic.status?.toStatus() ?: SManga.UNKNOWN
         thumbnail_url = comic.thumbnail
     }
 

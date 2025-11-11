@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.manhwabuddy
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -101,7 +102,7 @@ class ManhwaBuddy : ParsedHttpSource() {
     override fun searchMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
             setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
-            title = element.selectFirst("h4")!!.text()
+            title = element.selectFirst("a")!!.attr("title")
             thumbnail_url = element.selectFirst("img")?.attr("src")
         }
     }
@@ -109,14 +110,70 @@ class ManhwaBuddy : ParsedHttpSource() {
     override fun searchMangaNextPageSelector(): String = ".next"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.isNotEmpty()) {
+            return GET(
+                baseUrl.toHttpUrl().newBuilder().apply {
+                    addPathSegment("search")
+                    addQueryParameter("s", query)
+                    addQueryParameter("page", page.toString())
+                }.build(),
+                headers,
+            )
+        }
+
+        val genreFilter = filters.find { it is GenreFilter } as GenreFilter
+        val genre = genreFilter.toUriPart()
+
         return GET(
-            "$baseUrl/search".toHttpUrl().newBuilder().apply {
-                addQueryParameter("s", query)
-                addQueryParameter("page", page.toString())
+            baseUrl.toHttpUrl().newBuilder().apply {
+                addPathSegment("genre")
+                addPathSegment(genre)
+                addPathSegment("page")
+                addPathSegment(page.toString())
             }.build(),
             headers,
         )
     }
 
     override fun searchMangaSelector(): String = ".latest-list .latest-item"
+
+    // Filter
+    override fun getFilterList() = FilterList(
+        Filter.Header("Filter does not work with text search, reset it before filter"),
+        Filter.Separator(),
+        GenreFilter(),
+    )
+
+    // copy([...document.querySelectorAll(".nav-pc-list li a")].map((e) => `Pair("${e.textContent.trim()}", "${e.href.split("/").filter(Boolean).pop()}"),`).join("\n"))
+    private class GenreFilter : UriPartFilter(
+        "Genres",
+        arrayOf(
+            Pair("Action", "action"),
+            Pair("Romance", "romance"),
+            Pair("Drama", "drama"),
+            Pair("Martial Arts", "martial-arts"),
+            Pair("Ecchi", "ecchi"),
+            Pair("Fantasy", "fantasy"),
+            Pair("Harem", "harem"),
+            Pair("Historical", "historical"),
+            Pair("Mature", "mature"),
+            Pair("Mystery", "mystery"),
+            Pair("Psychological", "psychological"),
+            Pair("School Life", "school-life"),
+            Pair("Smut", "smut"),
+            Pair("Isekai", "isekai"),
+            Pair("Thriller", "thriller"),
+            Pair("Crime", "crime"),
+            Pair("Sci-Fi", "sci-fi"),
+            Pair("Horror", "horror"),
+            Pair("Mecha", "mecha"),
+            Pair("Medical", "medical"),
+            Pair("Sports", "sports"),
+        ),
+    )
+
+    private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :
+        Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
+        fun toUriPart() = vals[state].second
+    }
 }

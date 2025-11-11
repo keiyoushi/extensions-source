@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaReaderFactory'
     themePkg = 'mangareader'
     baseUrl = 'https://mangareader.to'
-    overrideVersionCode = 4
+    overrideVersionCode = 6
     isNsfw = true
 }
 

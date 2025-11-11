@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.nhentai
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -25,6 +24,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -34,8 +34,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 
 open class NHentai(
@@ -53,9 +51,7 @@ open class NHentai(
 
     private val json: Json by injectLazy()
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client: OkHttpClient by lazy {
         network.cloudflareClient.newBuilder()
@@ -74,7 +70,8 @@ open class NHentai(
     }
 
     private val shortenTitleRegex = Regex("""(\[[^]]*]|[({][^)}]*[)}])""")
-    private val dataRegex = Regex("""JSON.parse\("([^*]*)"\)""")
+    private val dataRegex = Regex("""JSON\.parse\(\s*"(.*)"\s*\)""")
+    private val hentaiSelector = "script:containsData(JSON.parse):not(:containsData(media_server)):not(:containsData(avatar_url))"
     private fun String.shortenTitle() = this.replace(shortenTitleRegex, "").trim()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -211,21 +208,19 @@ open class NHentai(
     override fun searchMangaNextPageSelector() = latestUpdatesNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val script = document.selectFirst("script:containsData(JSON.parse)")!!.data()
-
-        val json = dataRegex.find(script)?.groupValues!![1]
-
-        val data = json.parseAs<Hentai>()
+        val data = document.getHentaiData()
+        val cdnUrl = document.getCdnUrls(thumbnail = true).random()
         return SManga.create().apply {
             title = if (displayFullTitle) data.title.english ?: data.title.japanese ?: data.title.pretty!! else data.title.pretty ?: (data.title.english ?: data.title.japanese)!!.shortenTitle()
-            thumbnail_url = document.select("#cover > a > img").attr("data-src")
+            thumbnail_url = "https://$cdnUrl/galleries/${data.media_id}/1t.${data.images.pages[0].extension}"
             status = SManga.COMPLETED
             artist = getArtists(data)
-            author = getGroups(data)
+            author = getGroups(data) ?: getArtists(data)
             // Some people want these additional details in description
             description = "Full English and Japanese titles:\n"
-                .plus("${data.title.english}\n")
-                .plus("${data.title.japanese}\n\n")
+                .plus("${data.title.english ?: data.title.japanese ?: data.title.pretty ?: ""}\n")
+                .plus(data.title.japanese ?: "")
+                .plus("\n\n")
                 .plus("Pages: ${data.images.pages.size}\n")
                 .plus("Favorited by: ${data.num_favorites}\n")
                 .plus(getTagDescription(data))
@@ -237,12 +232,7 @@ open class NHentai(
     override fun chapterListRequest(manga: SManga): Request = GET("$baseUrl${manga.url}", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(JSON.parse)")!!.data()
-
-        val json = dataRegex.find(script)?.groupValues!![1]
-
-        val data = json.parseAs<Hentai>()
+        val data = response.asJsoup().getHentaiData()
         return listOf(
             SChapter.create().apply {
                 name = "Chapter"
@@ -258,24 +248,34 @@ open class NHentai(
     override fun chapterListSelector() = throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script:containsData(media_server)")!!.data()
-        val script2 = document.selectFirst("script:containsData(JSON.parse)")!!.data()
+        val data = document.getHentaiData()
+        val cdnUrls = document.getCdnUrls(thumbnail = false)
 
-        val mediaServer = Regex("""media_server\s*:\s*(\d+)""").find(script)?.groupValues!![1]
-        val json = dataRegex.find(script2)?.groupValues!![1]
-
-        val data = json.parseAs<Hentai>()
         return data.images.pages.mapIndexed { i, image ->
             Page(
-                i,
-                imageUrl = "${baseUrl.replace("https://", "https://i$mediaServer.")}/galleries/${data.media_id}/${i + 1}" +
-                    when (image.t) {
-                        "w" -> ".webp"
-                        "p" -> ".png"
-                        else -> ".jpg"
-                    },
+                index = i,
+                imageUrl = "https://${cdnUrls.random()}/galleries/${data.media_id}/${i + 1}.${image.extension}",
             )
         }
+    }
+
+    private fun Document.getHentaiData(): Hentai {
+        val script = selectFirst(hentaiSelector)!!.data()
+        return dataRegex.find(script)!!.groupValues[1].parseAs()
+    }
+
+    private fun Document.getCdnUrls(thumbnail: Boolean): List<String> {
+        val regex = Regex(
+            if (thumbnail) {
+                """thumb_cdn_urls:\s*(\[.*])"""
+            } else {
+                """image_cdn_urls:\s*(\[.*])"""
+            },
+        )
+        val html = body().html()
+        val cdnJson = regex.find(html)!!.groupValues[1]
+
+        return cdnJson.parseAs<List<String>>()
     }
 
     override fun getFilterList(): FilterList = FilterList(
@@ -328,10 +328,11 @@ open class NHentai(
     )
 
     private inline fun <reified T> String.parseAs(): T {
+        val data = Regex("""\\u([0-9A-Fa-f]{4})""").replace(this) {
+            it.groupValues[1].toInt(16).toChar().toString()
+        }
         return json.decodeFromString(
-            Regex("""\\u([0-9A-Fa-f]{4})""").replace(this) {
-                it.groupValues[1].toInt(16).toChar().toString()
-            },
+            data,
         )
     }
     private open class UriPartFilter(displayName: String, val vals: Array<Pair<String, String>>) :

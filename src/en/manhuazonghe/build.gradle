@@ -2,8 +2,8 @@ ext {
     extName = 'Manhua Zonghe'
     extClass = '.ManhuaZonghe'
     themePkg = 'madara'
-    baseUrl = 'https://manhuazonghe.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.manhuazonghe.com'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

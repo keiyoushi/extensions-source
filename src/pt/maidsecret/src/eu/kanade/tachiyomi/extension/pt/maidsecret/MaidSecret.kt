@@ -14,7 +14,7 @@ class MaidSecret : Madara(
 ) {
     override val useNewChapterEndpoint = true
 
-    override val client = network.client.newBuilder()
+    override val client = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
 }

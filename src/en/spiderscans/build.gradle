@@ -1,8 +1,8 @@
 ext {
     extName = 'Spider Scans'
     extClass = '.SpiderScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://spiderscans.xyz'
+    themePkg = 'madara'
+    baseUrl = 'https://spidyscans.xyz'
     overrideVersionCode = 0
     isNsfw = true
 }

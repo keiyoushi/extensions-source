@@ -12,8 +12,8 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
 
                 <data
-                    android:host="truyenhentai18.pro"
-                    android:pathPattern="/..*\\.html"
+                    android:host="truyenhentai18.app"
+                    android:pathPattern="/vi/..*\\.html"
                     android:scheme="https"/>
             </intent-filter>
         </activity>

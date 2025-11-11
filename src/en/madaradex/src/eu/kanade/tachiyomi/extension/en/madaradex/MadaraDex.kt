@@ -10,5 +10,7 @@ class MadaraDex : Madara(
     "en",
     dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US),
 ) {
+    override fun headersBuilder() = super.headersBuilder()
+        .set("sec-fetch-site", "same-site")
     override val mangaSubString = "title"
 }

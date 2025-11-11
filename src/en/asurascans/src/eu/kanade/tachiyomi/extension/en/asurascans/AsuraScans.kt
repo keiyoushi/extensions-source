@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.en.asurascans
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
@@ -13,16 +12,17 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -42,8 +42,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     private val dateFormat = SimpleDateFormat("MMMM d yyyy", Locale.US)
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
 
     init {
         // remove legacy preferences
@@ -66,8 +65,34 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     private val json: Json by injectLazy()
 
     override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(1, 3)
+        .addInterceptor(::forceHighQualityInterceptor)
+        .rateLimit(2, 2)
         .build()
+
+    private var failedHighQuality = false
+
+    private fun forceHighQualityInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        if (preferences.forceHighQuality() && !failedHighQuality && request.url.fragment == "pageListParse") {
+            OPTIMIZED_IMAGE_PATH_REGEX.find(request.url.encodedPath)?.also { match ->
+                val (id, page) = match.destructured
+                val newUrl = request.url.newBuilder()
+                    .encodedPath("/storage/media/$id/$page.webp")
+                    .build()
+
+                val response = chain.proceed(request.newBuilder().url(newUrl).build())
+                if (response.code != 404) {
+                    return response
+                } else {
+                    failedHighQuality = true
+                    response.close()
+                }
+            }
+        }
+
+        return chain.proceed(request)
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -205,7 +230,7 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("span.text-xl.font-bold")!!.ownText()
+        title = document.selectFirst("span.text-xl.font-bold, h3.truncate")!!.ownText()
         thumbnail_url = document.selectFirst("img[alt=poster]")?.attr("abs:src")
         description = document.selectFirst("span.font-medium.text-sm")?.text()
         author = document.selectFirst("div.grid > div:has(h3:eq(0):containsOwn(Author)) > h3:eq(1)")?.ownText()
@@ -241,11 +266,14 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
 
-    override fun chapterListSelector() = "div.scrollbar-thumb-themecolor > div.group"
+    override fun chapterListSelector() =
+        if (preferences.hidePremiumChapters()) "div.scrollbar-thumb-themecolor > div.group:not(:has(svg))" else "div.scrollbar-thumb-themecolor > div.group"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href").toPermSlugIfNeeded())
-        name = element.selectFirst("h3")!!.text()
+        val chNumber = element.selectFirst("h3")!!.ownText()
+        val chTitle = element.select("h3 > span").joinToString(" ") { it.ownText() }
+        name = if (chTitle.isBlank()) chNumber else "$chNumber - $chTitle"
         date_upload = try {
             val text = element.selectFirst("h3 + h3")!!.ownText()
             val cleanText = text.replace(CLEAN_DATE_REGEX, "$1")
@@ -265,8 +293,19 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("div > img[alt*=chapter]").mapIndexed { i, element ->
-            Page(i, imageUrl = element.attr("abs:src"))
+        val scriptData = document.select("script:containsData(self.__next_f.push)")
+            .joinToString("") { it.data().substringAfter("\"").substringBeforeLast("\"") }
+        val pagesData = PAGES_REGEX.find(scriptData)?.groupValues?.get(1) ?: throw Exception("Failed to find chapter pages")
+        val pageList = json.decodeFromString<List<PageDto>>(pagesData.unescape()).sortedBy { it.order }
+        return pageList.mapIndexed { i, page ->
+            val newUrl = page.url.toHttpUrlOrNull()?.run {
+                newBuilder()
+                    .fragment("pageListParse")
+                    .build()
+                    .toString()
+            }
+
+            Page(i, imageUrl = newUrl ?: page.url)
         }
     }
 
@@ -283,6 +322,23 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
             title = "Automatically update dynamic URLs"
             summary = "Automatically update random numbers in manga URLs.\nHelps mitigating HTTP 404 errors during update and \"in library\" marks when browsing.\nNote: This setting may require clearing database in advanced settings and migrating all manga to the same source."
             setDefaultValue(true)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_HIDE_PREMIUM_CHAPTERS
+            title = "Hide premium chapters"
+            summary = "Hides the chapters that require a subscription to view"
+            setDefaultValue(true)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_FORCE_HIGH_QUALITY
+            title = "Force high quality chapter images"
+            summary = "Attempt to use high quality chapter images.\nWill increase bandwidth by ~50%."
+            if (failedHighQuality) {
+                summary = "$summary\n*DISABLED* because of missing high quality images."
+            }
+            setDefaultValue(false)
         }.let(screen::addPreference)
     }
 
@@ -302,6 +358,14 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         }
 
     private fun SharedPreferences.dynamicUrl(): Boolean = getBoolean(PREF_DYNAMIC_URL, true)
+    private fun SharedPreferences.hidePremiumChapters(): Boolean = getBoolean(
+        PREF_HIDE_PREMIUM_CHAPTERS,
+        true,
+    )
+    private fun SharedPreferences.forceHighQuality(): Boolean = getBoolean(
+        PREF_FORCE_HIGH_QUALITY,
+        false,
+    )
 
     private fun String.toPermSlugIfNeeded(): String {
         if (!preferences.dynamicUrl()) return this
@@ -311,11 +375,21 @@ class AsuraScans : ParsedHttpSource(), ConfigurableSource {
         return this.replace(slug, absSlug)
     }
 
+    private fun String.unescape(): String {
+        return UNESCAPE_REGEX.replace(this, "$1")
+    }
+
     companion object {
+        private val UNESCAPE_REGEX = """\\(.)""".toRegex()
+        private val PAGES_REGEX = """\\"pages\\":(\[.*?])""".toRegex()
         private val CLEAN_DATE_REGEX = """(\d+)(st|nd|rd|th)""".toRegex()
         private val OLD_FORMAT_MANGA_REGEX = """^/manga/(\d+-)?([^/]+)/?$""".toRegex()
         private val OLD_FORMAT_CHAPTER_REGEX = """^/(\d+-)?[^/]*-chapter-\d+(-\d+)*/?$""".toRegex()
+        private val OPTIMIZED_IMAGE_PATH_REGEX = """^/storage/media/(\d+)/conversions/(.*)-optimized\.webp$""".toRegex()
+
         private const val PREF_SLUG_MAP = "pref_slug_map_2"
         private const val PREF_DYNAMIC_URL = "pref_dynamic_url"
+        private const val PREF_HIDE_PREMIUM_CHAPTERS = "pref_hide_premium_chapters"
+        private const val PREF_FORCE_HIGH_QUALITY = "pref_force_high_quality"
     }
 }

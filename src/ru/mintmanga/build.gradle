@@ -2,8 +2,8 @@ ext {
     extName = 'MintManga'
     extClass = '.MintManga'
     themePkg = 'grouple'
-    baseUrl = 'https://1.mintmanga.com'
-    overrideVersionCode = 46
+    baseUrl = 'https://2.mintmanga.one'
+    overrideVersionCode = 47
     isNsfw = true
 }
 

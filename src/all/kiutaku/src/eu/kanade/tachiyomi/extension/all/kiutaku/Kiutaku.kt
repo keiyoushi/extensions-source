@@ -31,7 +31,7 @@ class Kiutaku : ParsedHttpSource() {
     override val supportsLatest = true
 
     override val client by lazy {
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .rateLimitHost(baseUrl.toHttpUrl(), 2)
             .build()
     }
@@ -78,7 +78,12 @@ class Kiutaku : ParsedHttpSource() {
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/?search=$query&start=${getPage(page)}", headers)
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("search", query)
+            .addQueryParameter("start", getPage(page).toString())
+            .build()
+
+        return GET(url, headers)
     }
 
     override fun searchMangaSelector() = popularMangaSelector()

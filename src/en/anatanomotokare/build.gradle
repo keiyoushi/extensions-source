@@ -1,9 +1,0 @@
-ext {
-    extName = 'Anata no Motokare'
-    extClass = '.AnataNoMotokare'
-    themePkg = 'foolslide'
-    baseUrl = 'https://motokare.xyz'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

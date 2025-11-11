@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
-import android.content.SharedPreferences
+import android.util.Base64
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
@@ -18,6 +18,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,8 +37,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     override val name: String = "禁漫天堂"
     override val supportsLatest: Boolean = true
 
-    private val preferences: SharedPreferences =
-        getSharedPreferences(id)
+    private val preferences = getPreferences { preferenceMigration() }
 
     override val baseUrl: String = "https://" + preferences.baseUrl
 
@@ -54,6 +55,10 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         .setRandomUserAgent(preferences.getPrefUAType(), preferences.getPrefCustomUA())
         .apply { interceptors().add(0, updateUrlInterceptor) }
         .addInterceptor(ScrambledImageInterceptor).build()
+
+    // 添加额外的header增加规避Cloudflare可能性
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
 
     // 点击量排序(人气)
     override fun popularMangaRequest(page: Int): Request {
@@ -163,6 +168,39 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
 
     // 漫画详情
 
+    private fun mangaDetailsResolve(response: Response): Document {
+        val document = response.asJsoup()
+        val scripts =
+            document.select("#wrapper > script:containsData(function base64DecodeUtf8):containsData(document.write(html))")
+
+        for (script in scripts) {
+            val jsCode = script.html().trim()
+
+            jsCode.lines().forEach { line ->
+                val trimmedLine = line.trim()
+                // html = base64DecodeUtf8("...")
+                if (trimmedLine.startsWith("const html") || trimmedLine.startsWith("let html") || trimmedLine.startsWith(
+                        "var html",
+                    )
+                ) {
+                    val start =
+                        trimmedLine.indexOf("base64DecodeUtf8(\"") + "base64DecodeUtf8(\"".length
+                    val end = trimmedLine.indexOf("\");", start)
+                    if (start > 0 && end > start) {
+                        val html = Base64.decode(trimmedLine.substring(start, end), Base64.DEFAULT)
+                        document.body().append(String(html))
+                    }
+                }
+            }
+        }
+        return document
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val document = mangaDetailsResolve(response)
+        return mangaDetailsParse(document)
+    }
+
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         title = document.selectFirst("h1")!!.text()
         // keep thumbnail_url same as the one in popularMangaFromElement()
@@ -226,22 +264,21 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     // 漫画章节信息
     override fun chapterListSelector(): String = "div[id=episode-block] a[href^=/photo/]"
 
-    private val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         url = element.select("a").attr("href")
-        name = element.select("a li").first()!!.ownText()
-        date_upload = sdf.parse(element.select("a li span.hidden-xs").text().trim())?.time ?: 0
+        name = element.select("a li h3").first()!!.ownText()
+        date_upload = dateFormat.tryParse(element.select("a li span.hidden-xs").text().trim())
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+        val document = mangaDetailsResolve(response)
         if (document.select("div[id=episode-block] a li").size == 0) {
             val singleChapter = SChapter.create().apply {
                 name = "单章节"
-                url = document.select("a[class=col btn btn-primary dropdown-toggle reading]").attr("href")
-                date_upload = sdf.parse(document.select("[itemprop=datePublished]").last()!!.attr("content"))?.time
-                    ?: 0
+                url = document.select("#album_photo_cover > div.thumb-overlay > a").attr("href")
+                date_upload = dateFormat.tryParse(document.select("[itemprop=datePublished]").last()!!.attr("content"))
             }
             return listOf(singleChapter)
         }
@@ -251,13 +288,15 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     // 漫画图片信息
     override fun pageListParse(document: Document): List<Page> {
         tailrec fun internalParse(document: Document, pages: MutableList<Page>): List<Page> {
-            val elements = document.select("div[class=center scramble-page][id*=0]")
+            val elements = document.select("div[class=center scramble-page spnotice_chk][id*=0]")
             for (element in elements) {
                 pages.apply {
-                    if (element.select("div[class=center scramble-page][id*=0] img").attr("src").indexOf("blank.jpg") >= 0) {
-                        add(Page(size, "", element.select("div[class=center scramble-page][id*=0] img").attr("data-original").split("\\?")[0]))
+                    if (element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("src").indexOf("blank.jpg") >= 0 ||
+                        element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("data-cfsrc").indexOf("blank.jpg") >= 0
+                    ) {
+                        add(Page(size, "", element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("data-original").split("\\?")[0]))
                     } else {
-                        add(Page(size, "", element.select("div[class=center scramble-page][id*=0] img").attr("src").split("\\?")[0]))
+                        add(Page(size, "", element.select("div[class=center scramble-page spnotice_chk][id*=0] img").attr("src").split("\\?")[0]))
                     }
                 }
             }
@@ -279,6 +318,7 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
         CategoryGroup(),
         SortFilter(),
         TimeFilter(),
+        TypeFilter(),
     )
 
     private class CategoryGroup : UriPartFilter(
@@ -373,10 +413,21 @@ class Jinmantiantang : ParsedHttpSource(), ConfigurableSource {
     private class TimeFilter : UriPartFilter(
         "时间",
         arrayOf(
-            Pair("全部", "t=a"),
-            Pair("今天", "t=t"),
-            Pair("这周", "t=w"),
-            Pair("本月", "t=m"),
+            Pair("全部", "t=a&"),
+            Pair("今天", "t=t&"),
+            Pair("这周", "t=w&"),
+            Pair("本月", "t=m&"),
+        ),
+    )
+
+    private class TypeFilter : UriPartFilter(
+        "搜索范围",
+        arrayOf(
+            Pair("站内搜索", "main_tag=0"),
+            Pair("作品", "main_tag=1"),
+            Pair("作者", "main_tag=2"),
+            Pair("标签", "main_tag=3"),
+            Pair("登场人物", "main_tag=4"),
         ),
     )
 

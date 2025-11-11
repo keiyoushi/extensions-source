@@ -50,3 +50,13 @@ class MangaDetGenresDto(
         val russian: String,
     )
 }
+
+@Serializable
+class MangaDetAuthorsDto(
+    val authors: List<PeopleDto>?,
+) {
+    @Serializable
+    class PeopleDto(
+        val people_name: String,
+    )
+}

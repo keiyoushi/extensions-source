@@ -4,6 +4,7 @@ ext {
     themePkg = 'pizzareader'
     baseUrl = 'https://fmteam.fr'
     overrideVersionCode = 3
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

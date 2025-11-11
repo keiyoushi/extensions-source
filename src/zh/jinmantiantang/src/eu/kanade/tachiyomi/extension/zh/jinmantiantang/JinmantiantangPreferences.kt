@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.jinmantiantang
 
-import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
@@ -8,8 +7,6 @@ import androidx.preference.ListPreference
 import eu.kanade.tachiyomi.network.GET
 import okhttp3.Interceptor
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.io.IOException
 
 internal fun getPreferenceList(context: Context, preferences: SharedPreferences, isUrlUpdated: Boolean) = arrayOf(
@@ -36,7 +33,7 @@ internal fun getPreferenceList(context: Context, preferences: SharedPreferences,
     ListPreference(context).apply {
         val urlList = preferences.urlList
         val fullList = SITE_ENTRIES_ARRAY + urlList
-        val fullDesc = SITE_ENTRIES_ARRAY_DESCRIPTION + Array(urlList.size) { "中国大陆线路${it + 1}" }
+        val fullDesc = SITE_ENTRIES_ARRAY_DESCRIPTION + Array(urlList.size) { "内地线路${it + 1}" }
         val count = fullList.size
 
         key = USE_MIRROR_URL_PREF
@@ -78,8 +75,8 @@ internal const val MAINSITE_RATELIMIT_PERIOD_DEFAULT = 3.toString()
 private const val USE_MIRROR_URL_PREF = "useMirrorWebsitePreference"
 
 private val SITE_ENTRIES_ARRAY_DESCRIPTION get() = arrayOf(
-    "主站",
-    "海外分流",
+    "主站1",
+    "主站2",
     "东南亚线路1",
     "东南亚线路2",
 )
@@ -87,27 +84,26 @@ private val SITE_ENTRIES_ARRAY_DESCRIPTION get() = arrayOf(
 // Please also update AndroidManifest
 private val SITE_ENTRIES_ARRAY get() = arrayOf(
     "18comic.vip",
-    "18comic.org",
-    "jmcomic.me",
-    "jmcomic1.me",
+    "18comic.ink",
+    "jmcomic-zzz.one",
+    "jmcomic-zzz.org",
 )
 
-private const val DEFAULT_LIST = "18comic-cn.vip,18comic-c.xyz,18comic-c.art"
+private const val DEFAULT_LIST = "18comic-ive.club,18comic-aspa.org,18comic-wantgo.cc"
 private const val DEFAULT_LIST_PREF = "defaultBaseUrlList"
 private const val URL_LIST_PREF = "baseUrlList"
 
 private val SharedPreferences.mirrorIndex get() = getString(USE_MIRROR_URL_PREF, "0")!!.toInt()
 private val SharedPreferences.urlList get() = getString(URL_LIST_PREF, DEFAULT_LIST)!!.split(",")
 
-fun getSharedPreferences(id: Long): SharedPreferences {
-    val preferences: SharedPreferences = Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    if (preferences.getString(DEFAULT_LIST_PREF, "")!! == DEFAULT_LIST) return preferences
-    preferences.edit()
-        .remove("overrideBaseUrl")
-        .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
-        .setUrlList(DEFAULT_LIST, preferences.mirrorIndex)
-        .apply()
-    return preferences
+fun SharedPreferences.preferenceMigration() {
+    if (getString(DEFAULT_LIST_PREF, "")!! != DEFAULT_LIST) {
+        edit()
+            .remove("overrideBaseUrl")
+            .putString(DEFAULT_LIST_PREF, DEFAULT_LIST)
+            .setUrlList(DEFAULT_LIST, mirrorIndex)
+            .apply()
+    }
 }
 
 fun SharedPreferences.Editor.setUrlList(urlList: String, oldIndex: Int): SharedPreferences.Editor {

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Fairy Manga'
-    extClass = '.QueenScans'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://fairymanga.com'
-    overrideVersionCode = 1
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,37 +1,32 @@
 package eu.kanade.tachiyomi.extension.es.noblessetranslations
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.source.ConfigurableSource
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import keiyoushi.utils.getPreferences
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class NoblesseTranslations :
     Madara(
         "Noblesse Translations",
-        "https://www.swordalada.org",
+        "https://nobledicion.yoveo.xyz",
         "es",
         dateFormat = SimpleDateFormat("MMMM d, yyyy", Locale("es")),
     ),
     ConfigurableSource {
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences: SharedPreferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val useNewChapterEndpoint = true
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-    override val mangaSubString = "manga"
 
-    override val mangaDetailsSelectorDescription = "div.summary_content > div.post-content div.manga-summary"
-    override val mangaDetailsSelectorStatus = "div.summary_content > div.post-content div.post-content_item:has(div.summary-heading:contains(Status)) div.summary-content"
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
     override val mangaDetailsSelectorTag = "div.tags-content a.notUsed" // Site uses this for the scanlator
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {

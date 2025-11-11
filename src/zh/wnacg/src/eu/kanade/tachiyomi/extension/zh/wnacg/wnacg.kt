@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferences
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -22,7 +23,7 @@ class wnacg : ParsedHttpSource(), ConfigurableSource {
     override val lang = "zh"
     override val supportsLatest = false
 
-    private val preferences = getSharedPreferences(id)
+    private val preferences = getPreferences { preferenceMigration() }
 
     override val baseUrl = when (System.getenv("CI")) {
         "true" -> getCiBaseUrl()
@@ -31,7 +32,7 @@ class wnacg : ParsedHttpSource(), ConfigurableSource {
 
     private val updateUrlInterceptor = UpdateUrlInterceptor(preferences)
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(updateUrlInterceptor)
         .build()
 
@@ -119,7 +120,7 @@ class wnacg : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val regex = """//\S*(jpg|png|webp|gif)""".toRegex()
+        val regex = """//\S*(jpeg|jpg|png|webp|gif)""".toRegex()
         val galleryaid =
             response.body.string()
         return regex.findAll(galleryaid).mapIndexedTo(ArrayList()) { index, match ->

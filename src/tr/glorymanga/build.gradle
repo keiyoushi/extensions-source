@@ -1,9 +1,0 @@
-ext {
-    extName = 'Glory Manga'
-    extClass = '.GloryManga'
-    themePkg = 'madara'
-    baseUrl = 'https://glorymanga.com'
-    overrideVersionCode = 0
-}
-
-apply from: "$rootDir/common.gradle"

@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.zh.boylove
 
-import android.app.Application
 import android.util.Log
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
@@ -16,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -24,8 +24,6 @@ import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.select.Evaluator
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import kotlin.concurrent.thread
 
@@ -39,8 +37,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
     private val json: Json by injectLazy()
 
     override val baseUrl by lazy {
-        val preferences =
-            Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+        val preferences = getPreferences()
 
         val mirrors = MIRRORS
         val index = preferences.getString(MIRROR_PREF, "0")!!.toInt().coerceIn(0, mirrors.size - 1)
@@ -53,7 +50,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
         .build()
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/home/api/getpage/tp/1-topest-${page - 1}", headers)
+        GET("$baseUrl/home/api/getpage/tp/1-topestmh-${page - 1}", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val listPage: ListPageDto<MangaDto> = response.parseAs()
@@ -95,10 +92,11 @@ class BoyLove : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response) = throw UnsupportedOperationException()
 
     override fun chapterListRequest(manga: SManga): Request =
-        GET("$baseUrl/home/api/chapter_list/tp/${manga.url}-0-0-10", headers)
+        GET("$baseUrl/home/api/chapter_list/tp/${manga.url}", headers)
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<ListPageDto<ChapterDto>>().list.map { it.toSChapter() }
+    override fun chapterListParse(response: Response): List<SChapter> {
+        return response.parseAs<ListPageDto<ChapterDto>>().list.map { it.toSChapter() }.reversed()
+    }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         val chapterUrl = chapter.url
@@ -139,9 +137,9 @@ class BoyLove : HttpSource(), ConfigurableSource {
         }
 
     private fun Document.getPartsCount(): Int? {
-        return selectFirst("script:containsData(do_mergeImg):containsData(context0 =)")?.data()?.run {
-            substringBefore("canvas0.width")
-                .substringAfterLast("var ")
+        return selectFirst("script:containsData(firstMergeImg):containsData(imageData)")?.data()?.run {
+            substringBefore("var scrollTop")
+                .substringAfterLast("var randomClass = ")
                 .substringBefore(';')
                 .trim()
                 .substringAfterLast(" ")
@@ -170,7 +168,10 @@ class BoyLove : HttpSource(), ConfigurableSource {
             Filter.Header("分类筛选（搜索文本时无效）"),
             StatusFilter(),
             TypeFilter(),
+            RegionFilter(),
             genreFilter,
+            Filter.Header("若要观看VIP漫画，请先在Webview中登录网站，并确认您的账户已达到Lv3"),
+            VipFilter(),
             // SortFilter(), // useless
         )
     }
@@ -181,7 +182,7 @@ class BoyLove : HttpSource(), ConfigurableSource {
             try {
                 val request = client.newCall(GET("$baseUrl/home/book/cate.html", headers))
                 val document = request.execute().asJsoup()
-                genres = document.select("ul[data-str=tag] > li[class] > a")
+                genres = document.select("div[data-str=tag] > a.button")
                     .map { it.ownText() }.toTypedArray()
             } catch (e: Throwable) {
                 isFetchingGenres = false

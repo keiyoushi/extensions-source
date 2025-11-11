@@ -1,18 +1,14 @@
 package eu.kanade.tachiyomi.extension.ru.yaoilib
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import eu.kanade.tachiyomi.multisrc.libgroup.LibGroup
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import keiyoushi.utils.getPreferencesLazy
 
-class YaoiLib : LibGroup("YaoiLib", "https://slashlib.me", "ru") {
+class YaoiLib : LibGroup("YaoiLib", "https://v2.shlib.life", "ru") {
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
     override val baseUrl: String = domain
@@ -37,6 +33,6 @@ class YaoiLib : LibGroup("YaoiLib", "https://slashlib.me", "ru") {
 
     companion object {
         private const val DOMAIN_TITLE = "Домен"
-        private const val DOMAIN_DEFAULT = "https://test-front.slashlib.me"
+        private const val DOMAIN_DEFAULT = "https://v2.shlib.life"
     }
 }

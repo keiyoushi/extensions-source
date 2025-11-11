@@ -1,9 +1,0 @@
-ext {
-    extName = 'MangaYami'
-    extClass = '.MangaYami'
-    themePkg = 'madara'
-    baseUrl = 'https://www.mangayami.club'
-    overrideVersionCode = 2
-}
-
-apply from: "$rootDir/common.gradle"

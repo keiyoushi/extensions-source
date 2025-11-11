@@ -1,0 +1,9 @@
+ext {
+    extName = 'TruyenTranh3Q'
+    extClass = '.TruyenTranh3Q'
+    baseUrl = 'https://truyentranh3qc.com'
+    extVersionCode = 3
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

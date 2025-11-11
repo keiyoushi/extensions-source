@@ -3,17 +3,22 @@ package eu.kanade.tachiyomi.extension.id.mgkomik
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.Request
+import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.SManga
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class MGKomik : Madara(
     "MG Komik",
-    "https://mgkomik.id",
+    "https://id.mgkomik.cc",
     "id",
     SimpleDateFormat("dd MMM yy", Locale.US),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
     override val useNewChapterEndpoint = false
 
     override val mangaSubString = "komik"
@@ -38,18 +43,64 @@ class MGKomik : Madara(
         .rateLimit(9, 2)
         .build()
 
-    override fun popularMangaNextPageSelector() = ".wp-pagenavi span.current + a"
+    // ================================== Popular ======================================
 
-    override fun searchMangaNextPageSelector() = "a.page.larger"
-
-    override fun latestUpdatesRequest(page: Int): Request =
-        if (useLoadMoreRequest()) {
-            loadMoreRequest(page, popular = false)
-        } else {
-            GET("$baseUrl/$mangaSubString/${searchPage(page)}", headers)
+    override fun popularMangaFromElement(element: Element): SManga {
+        return SManga.create().apply {
+            element.select("div.item-thumb a").let {
+                setUrlWithoutDomain(it.attr("abs:href"))
+                title = it.attr("title")
+                thumbnail_url = it.select("img").attr("abs:src")
+            }
         }
+    }
+
+    // ================================ Chapters ================================
 
     override val chapterUrlSuffix = ""
+
+    // ================================ Filters ================================
+
+    override fun getFilterList(): FilterList {
+        launchIO { fetchGenres() }
+
+        val filters = super.getFilterList().list.toMutableList()
+
+        filters += if (genresList.isNotEmpty()) {
+            listOf(
+                Filter.Separator(),
+                GenreContentFilter(
+                    title = intl["genre_filter_title"],
+                    options = genresList.map { it.name to it.id },
+                ),
+            )
+        } else {
+            listOf(
+                Filter.Separator(),
+                Filter.Header(intl["genre_missing_warning"]),
+            )
+        }
+
+        return FilterList(filters)
+    }
+
+    private class GenreContentFilter(title: String, options: List<Pair<String, String>>) : UriPartFilter(
+        title,
+        options.toTypedArray(),
+    )
+
+    override fun genresRequest() = GET("$baseUrl/$mangaSubString", headers)
+
+    override fun parseGenres(document: Document): List<Genre> {
+        val genres = mutableListOf<Genre>()
+        genres += Genre("All", "")
+        genres += document.select(".row.genres li a").map { a ->
+            Genre(a.text(), a.absUrl("href"))
+        }
+        return genres
+    }
+
+    // =============================== Utilities ==============================
 
     private fun randomString(length: Int): String {
         val charPool = ('a'..'z') + ('A'..'Z') + ('.')

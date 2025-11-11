@@ -1,14 +1,21 @@
 package eu.kanade.tachiyomi.extension.vi.manhuarock
 
+import android.content.SharedPreferences
 import android.util.Log
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -25,7 +32,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class ManhuaRock : ParsedHttpSource() {
+class ManhuaRock : ParsedHttpSource(), ConfigurableSource {
 
     // Site changed from FMReader to some Madara copycat
     override val versionId = 2
@@ -34,7 +41,11 @@ class ManhuaRock : ParsedHttpSource() {
 
     override val lang = "vi"
 
-    override val baseUrl = "https://manhuarockz.com"
+    private val defaultBaseUrl = "https://manhuarock4.site"
+
+    override val baseUrl by lazy { getPrefBaseUrl() }
+
+    private val preferences: SharedPreferences = getPreferences()
 
     override val supportsLatest = true
 
@@ -44,7 +55,7 @@ class ManhuaRock : ParsedHttpSource() {
     private val json: Json by injectLazy()
 
     private val dateFormat by lazy {
-        SimpleDateFormat("dd MMM yyyy", Locale.US).apply {
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
         }
     }
@@ -107,7 +118,7 @@ class ManhuaRock : ParsedHttpSource() {
         status = when (document.selectFirst("div.summary-heading:contains(Tình Trạng) + div.summary-content")?.text()) {
             // I have zero idea what the strings for Ongoing and Completed are, these are educated guesses
             // All the metadata on this page is basically "Unknown".
-            "Đang Ra" -> SManga.ONGOING
+            "Đang Tiến Hành" -> SManga.ONGOING
             "Hoàn Thành" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
@@ -121,11 +132,7 @@ class ManhuaRock : ParsedHttpSource() {
 
         setUrlWithoutDomain(a.attr("abs:href"))
         name = a.text()
-        date_upload = runCatching {
-            val date = element.selectFirst("span.chapter-time")!!.text()
-
-            dateFormat.parse(date)!!.time
-        }.getOrDefault(0L)
+        date_upload = dateFormat.tryParse(element.select("span.chapter-time").attr("data-last-update"))
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
@@ -150,7 +157,7 @@ class ManhuaRock : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         return document.select("img").mapIndexed { i, it ->
-            Page(i, imageUrl = it.attr("abs:data-src"))
+            Page(i, imageUrl = it.attr("abs:src"))
         }
     }
 
@@ -206,44 +213,117 @@ class ManhuaRock : ParsedHttpSource() {
     private fun getGenreList() = arrayOf(
         Slug("Tất cả", "tat-ca-truyen"),
         Slug("Hoàn thành", "hoan-thanh"),
+        Slug("Yuri", "the-loai/yuri"),
         Slug("Xuyên Không", "the-loai/xuyen-khong"),
+        Slug("Webtoon", "the-loai/webtoons"),
         Slug("Webtoon", "the-loai/webtoon"),
+        Slug("Võ Thuật", "the-loai/vo-thuat"),
+        Slug("Võ Lâm", "the-loai/vo-lam"),
+        Slug("Viễn Tưởng", "the-loai/vien-tuong"),
+        Slug("Tu Tiên", "the-loai/tu-tien"),
+        Slug("Truyện Trung", "the-loai/truyen-trung"),
         Slug("Truyện Màu", "the-loai/truyen-mau"),
+        Slug("Trùng Sinh", "the-loai/trung-sinh"),
         Slug("Trọng Sinh", "the-loai/trong-sinh"),
         Slug("Tragedy", "the-loai/tragedy"),
         Slug("Supernatural", "the-loai/supernatural"),
         Slug("Sports", "the-loai/sports"),
         Slug("Slice Of Life", "the-loai/slice-of-life"),
+        Slug("Siêu Nhiên", "the-loai/sieu-nhien"),
+        Slug("Shounen Ai", "the-loai/shounen-ai"),
         Slug("Shounen", "the-loai/shounen"),
         Slug("Shoujo", "the-loai/shoujo"),
+        Slug("Seinen", "the-loai/seinen"),
         Slug("Sci-Fi", "the-loai/sci-fi"),
         Slug("School Life", "the-loai/school-life"),
         Slug("Romance", "the-loai/romance"),
         Slug("Psychological", "the-loai/psychological"),
+        Slug("Phiêu Lưu", "the-loai/phieu-luu"),
+        Slug("One Shot", "the-loai/one-shot"),
         Slug("Ngôn Tình", "the-loai/ngon-tinh"),
         Slug("Mystery", "the-loai/mystery"),
+        Slug("Murim", "the-loai/murim"),
+        Slug("Mecha", "the-loai/mecha"),
         Slug("Mature", "the-loai/mature"),
+        Slug("Mạt thế", "the-loai/mat-the"),
         Slug("Martial Arts", "the-loai/martial-arts"),
         Slug("Manhwa", "the-loai/manhwa"),
         Slug("Manhua", "the-loai/manhua"),
+        Slug("Manga", "the-loai/manga"),
+        Slug("Magic", "the-loai/magic"),
+        Slug("Lịch Sử", "the-loai/lich-su"),
+        Slug("Leo Tháp", "the-loai/leo-thap"),
+        Slug("Lãng Mạn", "the-loai/lang-man"),
+        Slug("Kinh Dị", "the-loai/kinh-di"),
+        Slug("Khoa Học", "the-loai/khoa-hoc"),
         Slug("Josei", "the-loai/josei"),
         Slug("Isekai", "the-loai/isekai"),
         Slug("Huyền Huyễn", "the-loai/huyen-huyen"),
+        Slug("Huyền Bí", "the-loai/huyen-bi"),
         Slug("Horror", "the-loai/horror"),
+        Slug("Học Đường", "the-loai/hoc-duong"),
         Slug("Historical", "the-loai/historical"),
+        Slug("Hiện Đại", "the-loai/hien-dai"),
+        Slug("Hệ Thống", "the-loai/he-thong"),
         Slug("Harem", "the-loai/harem"),
+        Slug("Hành Động", "the-loai/hanh-dong"),
+        Slug("Hầm Ngục", "the-loai/ham-nguc"),
+        Slug("Hài Hước", "the-loai/hai-huoc"),
+        Slug("Gyaru", "the-loai/gyaru"),
         Slug("Gender Bender", "the-loai/gender-bender"),
+        Slug("Game", "the-loai/game"),
+        Slug("Gal", "the-loai/gal"),
         Slug("Fantasy", "the-loai/fantasy"),
         Slug("Ecchi", "the-loai/ecchi"),
         Slug("Drama", "the-loai/drama"),
+        Slug("Doujinshi", "the-loai/doujinshi"),
         Slug("Detective", "the-loai/detective"),
         Slug("Demons", "the-loai/demons"),
         Slug("Comedy", "the-loai/comedy"),
         Slug("Cổ Đại", "the-loai/co-dai"),
         Slug("Chuyển Sinh", "the-loai/chuyen-sinh"),
+        Slug("Bạo Lực", "the-loai/bao-luc"),
         Slug("Anime", "the-loai/anime"),
         Slug("Adventure", "the-loai/adventure"),
         Slug("Adult", "the-loai/adult"),
         Slug("Action", "the-loai/action"),
     )
+
+    init {
+        preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
+            if (prefDefaultBaseUrl != defaultBaseUrl) {
+                preferences.edit()
+                    .putString(BASE_URL_PREF, defaultBaseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, defaultBaseUrl)
+                    .apply()
+            }
+        }
+    }
+
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = BASE_URL_PREF
+            title = BASE_URL_PREF_TITLE
+            summary = BASE_URL_PREF_SUMMARY
+            setDefaultValue(defaultBaseUrl)
+            dialogTitle = BASE_URL_PREF_TITLE
+            dialogMessage = "Default: $defaultBaseUrl"
+
+            setOnPreferenceChangeListener { _, _ ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val RESTART_APP = "Khởi chạy lại ứng dụng để áp dụng thay đổi."
+        private const val BASE_URL_PREF_TITLE = "Ghi đè URL cơ sở"
+        private const val BASE_URL_PREF = "overrideBaseUrl"
+        private const val BASE_URL_PREF_SUMMARY =
+            "Dành cho sử dụng tạm thời, cập nhật tiện ích sẽ xóa cài đặt."
+    }
 }

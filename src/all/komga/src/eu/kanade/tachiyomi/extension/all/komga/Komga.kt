@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.all.komga
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.text.InputType
 import android.util.Log
@@ -28,6 +27,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,17 +41,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.apache.commons.text.StringSubstitutor
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.security.MessageDigest
 import java.util.Locale
 
 open class Komga(private val suffix: String = "") : ConfigurableSource, UnmeteredSource, HttpSource() {
 
-    internal val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    internal val preferences: SharedPreferences by getPreferencesLazy()
 
     private val displayName by lazy { preferences.getString(PREF_DISPLAY_NAME, "")!! }
 
@@ -80,6 +76,8 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     private val password by lazy { preferences.getString(PREF_PASSWORD, "")!! }
 
+    private val apiKey by lazy { preferences.getString(PREF_API_KEY, "")!! }
+
     private val defaultLibraries
         get() = preferences.getStringSet(PREF_DEFAULT_LIBRARIES, emptySet())!!
 
@@ -87,12 +85,17 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun headersBuilder() = super.headersBuilder()
         .set("User-Agent", "TachiyomiKomga/${AppInfo.getVersionName()}")
+        .also { builder ->
+            if (apiKey.isNotBlank()) {
+                builder.set("X-API-Key", apiKey)
+            }
+        }
 
     override val client: OkHttpClient =
-        network.client.newBuilder()
+        network.cloudflareClient.newBuilder()
             .authenticator { _, response ->
-                if (response.request.header("Authorization") != null) {
-                    null // Give up, we've already failed to authenticate.
+                if (apiKey.isNotBlank() || response.request.header("Authorization") != null) {
+                    null // Give up if API key is set or we've already failed to authenticate.
                 } else {
                     response.request.newBuilder()
                         .addHeader("Authorization", Credentials.basic(username, password))
@@ -134,10 +137,16 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         val type = when {
             collectionId != null -> "collections/$collectionId/series"
             filters.find { it is TypeSelect }?.state == 1 -> "readlists"
+            filters.find { it is TypeSelect }?.state == 2 -> "books"
             else -> "series"
         }
 
-        val url = "$baseUrl/api/v1/$type?search=$query&page=${page - 1}&deleted=false".toHttpUrl().newBuilder()
+        val url = "$baseUrl/api/v1".toHttpUrl().newBuilder()
+            .addPathSegments(type)
+            .addQueryParameter("search", query)
+            .addQueryParameter("page", (page - 1).toString())
+            .addQueryParameter("deleted", "false")
+
         val filterList = filters.ifEmpty { getFilterList() }
         val defaultLibraries = defaultLibraries
 
@@ -156,6 +165,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
                         1 -> if (type == "series") "metadata.titleSort" else "name"
                         2 -> "createdDate"
                         3 -> "lastModifiedDate"
+                        4 -> "random"
                         else -> return@forEach
                     } + "," + if (state.ascending) "asc" else "desc"
 
@@ -174,6 +184,8 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
     private fun processSeriesPage(response: Response, baseUrl: String): MangasPage {
         val data = if (response.isFromReadList()) {
             response.parseAs<PageWrapperDto<ReadListDto>>()
+        } else if (response.isFromBook()) {
+            response.parseAs<PageWrapperDto<BookDto>>()
         } else {
             response.parseAs<PageWrapperDto<SeriesDto>>()
         }
@@ -183,11 +195,13 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun getMangaUrl(manga: SManga) = manga.url.replace("/api/v1", "")
 
-    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url)
+    override fun mangaDetailsRequest(manga: SManga) = GET(manga.url, headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         return if (response.isFromReadList()) {
             response.parseAs<ReadListDto>().toSManga(baseUrl)
+        } else if (response.isFromBook()) {
+            response.parseAs<BookDto>().toSManga(baseUrl)
         } else {
             response.parseAs<SeriesDto>().toSManga(baseUrl)
         }
@@ -198,10 +212,30 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
     override fun getChapterUrl(chapter: SChapter) = chapter.url.replace("/api/v1/books", "/book")
 
-    override fun chapterListRequest(manga: SManga): Request =
-        GET("${manga.url}/books?unpaged=true&media_status=READY&deleted=false", headers)
+    override fun chapterListRequest(manga: SManga): Request = when {
+        manga.url.isFromBook() -> GET("${manga.url}?unpaged=true&media_status=READY&deleted=false", headers)
+        else -> GET("${manga.url}/books?unpaged=true&media_status=READY&deleted=false", headers)
+    }
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        if (response.isFromBook()) {
+            val book = response.parseAs<BookDto>()
+            return listOf(
+                SChapter.create().apply {
+                    chapter_number = 1F
+                    url = "$baseUrl/api/v1/books/${book.id}"
+                    name = book.getChapterName(chapterNameTemplate, isFromReadList = true)
+                    scanlator = book.metadata.authors
+                        .filter { it.role == "translator" }
+                        .joinToString { it.name }
+                    date_upload = when {
+                        book.metadata.releaseDate != null -> parseDate(book.metadata.releaseDate)
+                        book.created != null -> parseDateTime(book.created)
+                        else -> parseDateTime(book.fileLastModified)
+                    }
+                },
+            )
+        }
         val page = response.parseAs<PageWrapperDto<BookDto>>().content
         val isFromReadList = response.isFromReadList()
         val chapterNameTemplate = chapterNameTemplate
@@ -232,7 +266,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             .sortedByDescending { it.chapter_number }
     }
 
-    override fun pageListRequest(chapter: SChapter) = GET("${chapter.url}/pages")
+    override fun pageListRequest(chapter: SChapter) = GET("${chapter.url}/pages", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val pages = response.parseAs<List<PageDto>>()
@@ -350,21 +384,33 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
             key = PREF_ADDRESS,
             restartRequired = true,
         )
+        // API key preference (takes precedence over username/password)
         screen.addEditTextPreference(
-            title = "Username",
+            title = "API key",
             default = "",
-            summary = username.ifBlank { "The user account email" },
-            key = PREF_USERNAME,
-            restartRequired = true,
-        )
-        screen.addEditTextPreference(
-            title = "Password",
-            default = "",
-            summary = if (password.isBlank()) "The user account password" else "*".repeat(password.length),
+            summary = if (apiKey.isBlank()) "Optional: Use an API key for authentication" else "*".repeat(apiKey.length),
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
-            key = PREF_PASSWORD,
+            key = PREF_API_KEY,
             restartRequired = true,
         )
+        // Only show username/password if API key is not set
+        if (apiKey.isBlank()) {
+            screen.addEditTextPreference(
+                title = "Username",
+                default = "",
+                summary = username.ifBlank { "The user account email" },
+                key = PREF_USERNAME,
+                restartRequired = true,
+            )
+            screen.addEditTextPreference(
+                title = "Password",
+                default = "",
+                summary = if (password.isBlank()) "The user account password" else "*".repeat(password.length),
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
+                key = PREF_PASSWORD,
+                restartRequired = true,
+            )
+        }
 
         MultiSelectListPreference(screen.context).apply {
             key = PREF_DEFAULT_LIBRARIES
@@ -445,17 +491,17 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
         scope.launch {
             try {
-                libraries = client.newCall(GET("$baseUrl/api/v1/libraries")).await().parseAs()
+                libraries = client.newCall(GET("$baseUrl/api/v1/libraries", headers)).await().parseAs()
                 collections = client
-                    .newCall(GET("$baseUrl/api/v1/collections?unpaged=true"))
+                    .newCall(GET("$baseUrl/api/v1/collections?unpaged=true", headers))
                     .await()
                     .parseAs<PageWrapperDto<CollectionDto>>()
                     .content
-                genres = client.newCall(GET("$baseUrl/api/v1/genres")).await().parseAs()
-                tags = client.newCall(GET("$baseUrl/api/v1/tags")).await().parseAs()
-                publishers = client.newCall(GET("$baseUrl/api/v1/publishers")).await().parseAs()
+                genres = client.newCall(GET("$baseUrl/api/v1/genres", headers)).await().parseAs()
+                tags = client.newCall(GET("$baseUrl/api/v1/tags", headers)).await().parseAs()
+                publishers = client.newCall(GET("$baseUrl/api/v1/publishers", headers)).await().parseAs()
                 authors = client
-                    .newCall(GET("$baseUrl/api/v1/authors"))
+                    .newCall(GET("$baseUrl/api/v1/authors", headers))
                     .await()
                     .parseAs<List<AuthorDto>>()
                     .groupBy { it.role }
@@ -467,7 +513,13 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
         }
     }
 
-    fun Response.isFromReadList() = request.url.toString().contains("/api/v1/readlists")
+    fun String.isFromReadList() = contains("/api/v1/readlists")
+
+    fun String.isFromBook() = contains("/api/v1/books")
+
+    fun Response.isFromReadList() = request.url.toString().isFromReadList()
+
+    fun Response.isFromBook() = request.url.toString().isFromBook()
 
     private inline fun <reified T> Response.parseAs(): T =
         json.decodeFromString(body.string())
@@ -480,6 +532,7 @@ open class Komga(private val suffix: String = "") : ConfigurableSource, Unmetere
 
         internal const val TYPE_SERIES = "Series"
         internal const val TYPE_READLISTS = "Read lists"
+        internal const val TYPE_BOOKS = "Books"
     }
 }
 
@@ -495,6 +548,7 @@ private const val PREF_DISPLAY_NAME = "Source display name"
 private const val PREF_ADDRESS = "Address"
 private const val PREF_USERNAME = "Username"
 private const val PREF_PASSWORD = "Password"
+private const val PREF_API_KEY = "API key"
 private const val PREF_DEFAULT_LIBRARIES = "Default libraries"
 private const val PREF_CHAPTER_NAME_TEMPLATE = "Chapter name template"
 private const val PREF_CHAPTER_NAME_TEMPLATE_DEFAULT = "{number} - {title} ({size})"

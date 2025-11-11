@@ -1,23 +1,16 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
-import eu.kanade.tachiyomi.multisrc.etoshore.Etoshore
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.Response
-import org.jsoup.nodes.Element
+import eu.kanade.tachiyomi.multisrc.madara.Madara
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-class MangaLivre : Etoshore(
-    name = "Manga Livre",
-    baseUrl = "https://mangalivre.one",
-    lang = "pt-BR",
+class MangaLivre : Madara(
+    "Manga Livre",
+    "https://mangalivre.tv",
+    "pt-BR",
+    SimpleDateFormat("MMMM dd, yyyy", Locale("pt")),
 ) {
-    override val versionId = 2
+    override val useNewChapterEndpoint = true
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(2)
-        .build()
-
-    override fun chapterListParse(response: Response) =
-        super.chapterListParse(response).reversed()
-
-    override fun imageFromElement(element: Element): String? = element.attr("abs:src")
+    override val id: Long = 2834885536325274328
 }

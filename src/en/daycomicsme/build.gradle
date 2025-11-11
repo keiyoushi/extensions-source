@@ -1,9 +1,0 @@
-ext {
-    extName = 'DAYcomics.me'
-    extClass = '.DAYcomicsMe'
-    themePkg = 'hotcomics'
-    overrideVersionCode = 0
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

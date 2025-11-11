@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.all.xkcd
 
 import eu.kanade.tachiyomi.extension.all.xkcd.translations.XkcdES
 import eu.kanade.tachiyomi.extension.all.xkcd.translations.XkcdFR
-import eu.kanade.tachiyomi.extension.all.xkcd.translations.XkcdKO
 import eu.kanade.tachiyomi.extension.all.xkcd.translations.XkcdRU
 import eu.kanade.tachiyomi.extension.all.xkcd.translations.XkcdZH
 import eu.kanade.tachiyomi.source.SourceFactory
@@ -14,6 +13,5 @@ class XkcdFactory : SourceFactory {
         XkcdZH(),
         XkcdFR(),
         XkcdRU(),
-        XkcdKO(),
     )
 }

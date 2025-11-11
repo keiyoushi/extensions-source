@@ -14,6 +14,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -22,7 +24,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Call
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -35,7 +36,6 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.floor
@@ -45,6 +45,7 @@ abstract class GigaViewer(
     override val baseUrl: String,
     override val lang: String,
     private val cdnUrl: String = "",
+    private val isPaginated: Boolean = false,
 ) : ParsedHttpSource() {
 
     override val supportsLatest = true
@@ -135,21 +136,24 @@ abstract class GigaViewer(
             .attr("data-src")
     }
 
-    override fun chapterListParse(response: Response): List<SChapter> {
+    protected fun chapterListParseSinglePage(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val readableProductList = document.selectFirst("div.js-readable-product-list")!!
-        val firstListEndpoint = readableProductList.attr("data-first-list-endpoint")
-            .toHttpUrl()
-        val latestListEndpoint = readableProductList.attr("data-latest-list-endpoint")
-            .toHttpUrlOrNull() ?: firstListEndpoint
-        val numberSince = latestListEndpoint.queryParameter("number_since")!!.toFloat()
-            .coerceAtLeast(firstListEndpoint.queryParameter("number_since")!!.toFloat())
+        val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
 
         val newHeaders = headers.newBuilder()
             .set("Referer", response.request.url.toString())
             .build()
-        var readMoreEndpoint = firstListEndpoint.newBuilder()
-            .setQueryParameter("number_since", numberSince.toString())
+
+        var readMoreEndpoint = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("api")
+            .addPathSegment("viewer")
+            .addPathSegment("readable_products")
+            .addQueryParameter("aggregate_id", aggregateId)
+            .addQueryParameter("number_since", Int.MAX_VALUE.toString())
+            .addQueryParameter("number_until", "0")
+            .addQueryParameter("read_more_num", "150")
+            .addQueryParameter("type", "episode")
+            .build()
             .toString()
 
         val chapters = mutableListOf<SChapter>()
@@ -178,6 +182,61 @@ abstract class GigaViewer(
         return chapters
     }
 
+    protected fun paginatedChaptersRequest(referer: String, aggregateId: String, offset: Int): Response {
+        val headers = headers.newBuilder()
+            .set("Referer", referer)
+            .build()
+
+        val apiUrl = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("api")
+            .addPathSegment("viewer")
+            .addPathSegment("pagination_readable_products")
+            .addQueryParameter("type", "episode")
+            .addQueryParameter("aggregate_id", aggregateId)
+            .addQueryParameter("sort_order", "desc")
+            .addQueryParameter("offset", offset.toString())
+            .build()
+            .toString()
+
+        val request = GET(apiUrl, headers)
+        return client.newCall(request).execute()
+    }
+
+    protected fun chapterListParsePaginated(response: Response): List<SChapter> {
+        val document = response.asJsoup()
+        val referer = response.request.url.toString()
+        val aggregateId = document.selectFirst("script.js-valve")!!.attr("data-giga_series")
+
+        val chapters = mutableListOf<SChapter>()
+
+        var offset = 0
+
+        // repeat until the offset is too large to return any chapters, resulting in an empty list
+        while (true) {
+            // make request
+            val result = paginatedChaptersRequest(referer, aggregateId, offset)
+            val resultData = result.parseAs<List<GigaViewerPaginationReadableProduct>>()
+            if (resultData.isEmpty()) {
+                break
+            }
+            resultData.mapTo(chapters) { element ->
+                element.toSChapter(chapterListMode, publisher)
+            }
+            // increase offset
+            offset += resultData.size
+        }
+
+        return chapters
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        return if (isPaginated) {
+            chapterListParsePaginated(response)
+        } else {
+            chapterListParseSinglePage(response)
+        }
+    }
+
     override fun chapterListSelector() = "li.episode"
 
     protected open val chapterListMode = CHAPTER_LIST_PAID
@@ -193,9 +252,7 @@ abstract class GigaViewer(
             } else if (chapterListMode == CHAPTER_LIST_LOCKED && element.hasClass("private")) {
                 name = LOCK + name
             }
-            date_upload = info.selectFirst("span.series-episode-list-date")
-                ?.text().orEmpty()
-                .toDate()
+            date_upload = DATE_PARSER_SIMPLE.tryParse(info.selectFirst("span.series-episode-list-date")?.text().orEmpty())
             scanlator = publisher
             setUrlWithoutDomain(if (info.tagName() == "a") info.attr("href") else mangaUrl)
         }
@@ -212,13 +269,18 @@ abstract class GigaViewer(
                 }
             }
 
+        val isScrambled = episode.readableProduct.pageStructure.choJuGiga == "baku"
+
         return episode.readableProduct.pageStructure.pages
             .filter { it.type == "main" }
             .mapIndexed { i, page ->
-                val imageUrl = page.src.toHttpUrl().newBuilder()
-                    .addQueryParameter("width", page.width.toString())
-                    .addQueryParameter("height", page.height.toString())
-                    .toString()
+                val imageUrl = page.src.toHttpUrl().newBuilder().apply {
+                    addQueryParameter("width", page.width.toString())
+                    addQueryParameter("height", page.height.toString())
+                    if (isScrambled) {
+                        addQueryParameter("baku", "true")
+                    }
+                }.toString()
                 Page(i, document.location(), imageUrl)
             }
     }
@@ -252,7 +314,7 @@ abstract class GigaViewer(
     protected open fun imageIntercept(chain: Interceptor.Chain): Response {
         var request = chain.request()
 
-        if (!request.url.toString().startsWith(cdnUrl)) {
+        if (!request.url.toString().startsWith(cdnUrl) || request.url.queryParameter("baku") != "true") {
             return chain.proceed(request)
         }
 
@@ -262,6 +324,7 @@ abstract class GigaViewer(
         val newUrl = request.url.newBuilder()
             .removeAllQueryParameters("width")
             .removeAllQueryParameters("height")
+            .removeAllQueryParameters("baku")
             .build()
         request = request.newBuilder().url(newUrl).build()
 
@@ -312,14 +375,7 @@ abstract class GigaViewer(
         }
     }
 
-    private fun String.toDate(): Long {
-        return runCatching { DATE_PARSER.parse(this)?.time }
-            .getOrNull() ?: 0L
-    }
-
     companion object {
-        private val DATE_PARSER by lazy { SimpleDateFormat("yyyy/MM/dd", Locale.ENGLISH) }
-
         private const val DIVIDE_NUM = 4
         private const val MULTIPLE = 8
         private val jpegMediaType = "image/jpeg".toMediaType()
@@ -327,7 +383,7 @@ abstract class GigaViewer(
         const val CHAPTER_LIST_PAID = 0
         const val CHAPTER_LIST_LOCKED = 1
 
-        private const val YEN_BANKNOTE = "💴 "
-        private const val LOCK = "🔒 "
+        const val YEN_BANKNOTE = "💴 "
+        const val LOCK = "🔒 "
     }
 }

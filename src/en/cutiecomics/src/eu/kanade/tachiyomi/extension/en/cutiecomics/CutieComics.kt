@@ -30,7 +30,7 @@ class CutieComics : ParsedHttpSource() {
 
     override val supportsLatest = false
 
-    override val client = network.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 2)
         .build()
 

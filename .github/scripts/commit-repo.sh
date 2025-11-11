@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-rsync -a --delete --exclude .git --exclude .gitignore --exclude README.md --exclude repo.json ../main/repo/ .
 git config --global user.email "156378334+keiyoushi-bot@users.noreply.github.com"
 git config --global user.name "keiyoushi-bot"
 git status

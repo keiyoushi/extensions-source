@@ -3,7 +3,7 @@ ext {
     extClass = '.SeiManga'
     themePkg = 'grouple'
     baseUrl = 'https://1.seimanga.me'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 

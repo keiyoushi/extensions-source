@@ -1,12 +1,10 @@
 package eu.kanade.tachiyomi.extension.es.ikigaimangas
 
-import android.app.Application
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
-import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -18,13 +16,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -37,27 +35,27 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     override val baseUrl get() = when {
         isCi -> defaultBaseUrl
-        else -> preferences.getPrefBaseUrl()
+        else -> preferences.prefBaseUrl
     }
 
-    private val defaultBaseUrl: String = "https://lectorikigai.acamu.net"
+    private val defaultBaseUrl: String = "https://visorikigai.damilok.xyz"
 
     private val fetchedDomainUrl: String by lazy {
-        if (!preferences.fetchDomainPref()) preferences.getPrefBaseUrl()
+        if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
         try {
             val initClient = network.cloudflareClient
             val headers = super.headersBuilder().build()
             val document = initClient.newCall(GET("https://ikigaimangas.com", headers)).execute().asJsoup()
             val scriptUrl = document.selectFirst("div[on:click]:containsOwn(Nuevo dominio)")?.attr("on:click")
-                ?: preferences.getPrefBaseUrl()
+                ?: return@lazy preferences.prefBaseUrl
             val script = initClient.newCall(GET("https://ikigaimangas.com/build/$scriptUrl", headers)).execute().body.string()
             val domain = script.substringAfter("window.open(\"").substringBefore("\"")
             val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
             val newDomain = "https://$host"
-            preferences.edit().putString(BASE_URL_PREF, newDomain).apply()
+            preferences.prefBaseUrl = newDomain
             newDomain
         } catch (e: Exception) {
-            preferences.getPrefBaseUrl()
+            preferences.prefBaseUrl
         }
     }
 
@@ -69,24 +67,43 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     override val supportsLatest: Boolean = true
 
-    private val cookieInterceptor = CookieInterceptor(
-        "",
-        listOf(
-            "data-saving" to "0",
-            "nsfw-mode" to "1",
-        ),
-    )
-
     override val client by lazy {
         network.cloudflareClient.newBuilder()
             .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 1, 2)
             .rateLimitHost(apiBaseUrl.toHttpUrl(), 2, 1)
-            .addNetworkInterceptor(cookieInterceptor)
+            .addNetworkInterceptor(::nsfwCookieInterceptor)
             .build()
     }
 
-    private val preferences: SharedPreferences =
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private fun nsfwCookieInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        return request.header("X-Add-Nsfw-Cookie")?.let {
+            val newRequest = request.newBuilder()
+                .removeHeader("X-Add-Nsfw-Cookie")
+                .setCookie("nsfw-mode", "true")
+                .build()
+            chain.proceed(newRequest)
+        } ?: chain.proceed(request)
+    }
+
+    private fun Request.Builder.setCookie(name: String, value: String): Request.Builder {
+        val existingHeader = this.build().header("Cookie") ?: ""
+
+        val cookies = existingHeader
+            .split(";")
+            .mapNotNull {
+                val parts = it.trim().split("=", limit = 2)
+                if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
+            }.toMap().toMutableMap()
+
+        cookies[name] = value
+
+        val mergedHeader = cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+
+        return this.header("Cookie", mergedHeader)
+    }
+
+    private val preferences: SharedPreferences = getPreferences()
 
     private val lazyHeaders by lazy {
         headersBuilder()
@@ -104,7 +121,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         val apiUrl = "$apiBaseUrl/api/swf/series/ranking-list".toHttpUrl().newBuilder()
             .addQueryParameter("type", "total_ranking")
             .addQueryParameter("series_type", "comic")
-            .addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
+            .addQueryParameter("nsfw", if (preferences.showNsfwPref) "true" else "false")
 
         return GET(apiUrl.build(), lazyHeaders)
     }
@@ -117,7 +134,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val apiUrl = "$apiBaseUrl/api/swf/new-chapters".toHttpUrl().newBuilder()
-            .addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
+            .addQueryParameter("nsfw", if (preferences.showNsfwPref) "true" else "false")
             .addQueryParameter("page", page.toString())
 
         return GET(apiUrl.build(), lazyHeaders)
@@ -138,7 +155,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
         apiUrl.addQueryParameter("page", page.toString())
         apiUrl.addQueryParameter("type", "comic")
-        apiUrl.addQueryParameter("nsfw", if (preferences.showNsfwPref()) "true" else "false")
+        apiUrl.addQueryParameter("nsfw", if (preferences.showNsfwPref) "true" else "false")
 
         val genres = filters.firstInstanceOrNull<GenreFilter>()?.state.orEmpty()
             .filter(Genre::state)
@@ -165,7 +182,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return MangasPage(mangaList, result.hasNextPage())
     }
 
-    override fun getMangaUrl(manga: SManga) = preferences.getPrefBaseUrl() + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
+    override fun getMangaUrl(manga: SManga) = preferences.prefBaseUrl + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val slug = manga.url
@@ -180,7 +197,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return result.series.toSMangaDetails()
     }
 
-    override fun getChapterUrl(chapter: SChapter) = preferences.getPrefBaseUrl() + chapter.url.substringBefore("#")
+    override fun getChapterUrl(chapter: SChapter) = preferences.prefBaseUrl + chapter.url.substringBefore("#")
 
     override fun chapterListRequest(manga: SManga): Request {
         val slug = manga.url.substringAfter("/series/comic-").substringBefore("#")
@@ -208,7 +225,14 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         GET(fetchedDomainUrl + chapter.url.substringBefore("#"), lazyHeaders)
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
+        val request = response.request
+        var document = response.asJsoup()
+        document.selectFirst("button > span:contains(permitir nsfw)")?.let {
+            val newRequest = request.newBuilder()
+                .header("X-Add-Nsfw-Cookie", "1")
+                .build()
+            document = client.newCall(newRequest).execute().asJsoup()
+        }
         return document.select("section div.img > img").mapIndexed { i, element ->
             Page(i, imageUrl = element.attr("abs:src"))
         }
@@ -278,6 +302,10 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             key = SHOW_NSFW_PREF
             title = SHOW_NSFW_PREF_TITLE
             setDefaultValue(SHOW_NSFW_PREF_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                _cachedNsfwPref = newValue as Boolean
+                true
+            }
         }.also { screen.addPreference(it) }
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -301,9 +329,33 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         }.also { screen.addPreference(it) }
     }
 
-    private fun SharedPreferences.showNsfwPref() = getBoolean(SHOW_NSFW_PREF, SHOW_NSFW_PREF_DEFAULT)
-    private fun SharedPreferences.getPrefBaseUrl() = getString(BASE_URL_PREF, defaultBaseUrl)!!
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, FETCH_DOMAIN_PREF_DEFAULT)
+
+    private var _cachedBaseUrl: String? = null
+    private var SharedPreferences.prefBaseUrl: String
+        get() {
+            if (_cachedBaseUrl == null) {
+                _cachedBaseUrl = getString(BASE_URL_PREF, defaultBaseUrl)!!
+            }
+            return _cachedBaseUrl!!
+        }
+        set(value) {
+            _cachedBaseUrl = value
+            edit().putString(BASE_URL_PREF, value).apply()
+        }
+
+    private var _cachedNsfwPref: Boolean? = null
+    private var SharedPreferences.showNsfwPref: Boolean
+        get() {
+            if (_cachedNsfwPref == null) {
+                _cachedNsfwPref = getBoolean(SHOW_NSFW_PREF, SHOW_NSFW_PREF_DEFAULT)
+            }
+            return _cachedNsfwPref!!
+        }
+        set(value) {
+            _cachedNsfwPref = value
+            edit().putBoolean(SHOW_NSFW_PREF, value).apply()
+        }
 
     private inline fun <reified R> List<*>.firstInstanceOrNull(): R? =
         filterIsInstance<R>().firstOrNull()

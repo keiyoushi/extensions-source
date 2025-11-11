@@ -23,7 +23,7 @@ class MeituaTop : HttpSource() {
     override val lang = "all"
     override val supportsLatest = false
 
-    override val baseUrl = "https://88188.meitu.lol"
+    override val baseUrl = "https://7a.meitu1.mom"
 
     override fun popularMangaRequest(page: Int) = GET("$baseUrl/arttype/0b-$page.html", headers)
 
@@ -76,11 +76,15 @@ class MeituaTop : HttpSource() {
         val chapter = SChapter.create().apply {
             url = manga.url
             name = "Gallery"
-            date_upload = dateFormat.parse(manga.description!!)!!.time
+            date_upload = parseDate(manga.description!!)
             chapter_number = -2f
         }
         return Observable.just(listOf(chapter))
     }
+
+    private fun parseDate(date: String): Long = runCatching {
+        dateFormat.parse(date)?.time
+    }.getOrNull() ?: 0L
 
     override fun chapterListParse(response: Response) = throw UnsupportedOperationException()
 

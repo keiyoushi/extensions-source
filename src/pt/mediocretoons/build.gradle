@@ -1,0 +1,10 @@
+ext {
+    extName = 'Mediocre Toons'
+    extClass = '.MediocreToons'
+    themePkg = 'greenshit'
+    baseUrl = 'https://mediocretoons.com'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

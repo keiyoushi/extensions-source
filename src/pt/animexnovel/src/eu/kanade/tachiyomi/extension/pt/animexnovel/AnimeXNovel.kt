@@ -1,15 +1,19 @@
 package eu.kanade.tachiyomi.extension.pt.animexnovel
 
 import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
-import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistMangaDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import kotlinx.serialization.decodeFromString
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
+import org.jsoup.nodes.Element
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class AnimeXNovel : ZeistManga(
     "AnimeXNovel",
@@ -24,19 +28,13 @@ class AnimeXNovel : ZeistManga(
     override val popularMangaSelectorUrl = popularMangaSelectorTitle
 
     override fun popularMangaParse(response: Response): MangasPage {
-        return super.popularMangaParse(response).let { mangaPage ->
-            mangaPage.mangas.filter { it.title.contains("[Mangá]") }.let {
-                mangaPage.copy(it)
-            }
-        }
+        return super.popularMangaParse(response).let(::filterMangaEntries)
     }
 
     // ============================== Latest ===============================
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        return super.latestUpdatesParse(response).let {
-            it.copy(it.mangas.filter { it.title.contains("[Mangá]") })
-        }
+        return super.latestUpdatesParse(response).let(::filterMangaEntries)
     }
 
     // ============================== Details ===============================
@@ -47,7 +45,7 @@ class AnimeXNovel : ZeistManga(
         thumbnail_url = document.selectFirst(".thumb")?.absUrl("src")
         description = document.selectFirst("#synopsis")?.text()
         document.selectFirst("span[data-status]")?.let {
-            status = parseStatus(it.text())
+            status = parseStatus(it.text().lowercase())
         }
         genre = document.select("dl:has(dt:contains(Gênero)) dd a")
             .joinToString { it.text() }
@@ -57,31 +55,83 @@ class AnimeXNovel : ZeistManga(
 
     // ============================== Chapters ===============================
 
-    override val chapterCategory = "Capítulo"
-
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
 
-        val url = getChapterFeedUrl(document).toHttpUrl().newBuilder()
-            .setQueryParameter("start-index", "1")
+        val label = document.select("script")
+            .map(Element::data)
+            .firstOrNull(MANGA_TITLE_REGEX::containsMatchIn)?.let {
+                MANGA_TITLE_REGEX.find(it)?.groups?.get(1)?.value
+            } ?: throw IOException("Manga title not found")
 
-        val chapters = mutableListOf<SChapter>()
-        do {
-            val res = client.newCall(GET(url.build(), headers)).execute()
+        val script = document.select("script")
+            .map(Element::data)
+            .firstOrNull(API_KEYS_REGEX::containsMatchIn)
+            ?: throw IOException("The API keys could not be found.")
 
-            val page = json.decodeFromString<ZeistMangaDto>(res.body.string()).feed?.entry
-                ?.filter { it.category.orEmpty().any { category -> category.term == chapterCategory } }
-                ?.map { it.toSChapter(baseUrl) }
-                ?: emptyList()
+        val blogId = BLOG_ID_REGEX.find(script)?.groups?.get(1)?.value
+            ?: throw IOException("Failed to retrieve blog ID")
 
-            chapters += page
-            url.setQueryParameter("start-index", "${chapters.size + 1}")
-        } while (page.isNotEmpty())
+        val apiKeys = getApiKeys(script)
+            ?: throw IOException("Failed to retrieve API keys")
 
-        return chapters
+        lateinit var response: Response
+        for (apiKey in apiKeys) {
+            val url = "https://www.googleapis.com/blogger/v3/blogs/$blogId/posts".toHttpUrl().newBuilder()
+                .addQueryParameter("key", apiKey)
+                .addQueryParameter("labels", label)
+                .addQueryParameter("maxResults", "500")
+                .build()
+
+            response = client.newCall(GET(url, headers)).execute()
+            if (response.isSuccessful) {
+                break
+            }
+            response.close()
+        }
+
+        if (response.isSuccessful.not()) {
+            throw IOException("Chapters not found")
+        }
+
+        return response.parseAs<ChapterWrapperDto>().items.map {
+            SChapter.create().apply {
+                name = it.title
+                date_upload = dateFormat.tryParse(it.published)
+                setUrlWithoutDomain(it.url)
+            }
+        }
     }
+
+    private fun getApiKeys(script: String): List<String>? =
+        API_KEYS_REGEX.find(script)?.groupValues?.get(1)?.let { content ->
+            API_KEY_REGEX.findAll(content).map { it.groupValues[1] }.toList()
+        }
 
     // ============================== Pages ===============================
 
     override val pageListSelector = "#reader .separator"
+
+    // ============================== Utils ===============================
+
+    private fun filterMangaEntries(mangasPage: MangasPage): MangasPage {
+        val prefix = "[Mangá]"
+        return mangasPage.copy(
+            mangasPage.mangas.filter {
+                it.title.contains(prefix)
+            }.map {
+                it.apply {
+                    title = title.substringAfter(prefix).trim()
+                }
+            },
+        )
+    }
+
+    companion object {
+        private val API_KEY_REGEX = """"([^"]+)"""".toRegex()
+        private val API_KEYS_REGEX = """const\s+API_KEYS\s*=\s*\[\s*([\s\S]*?)\s*];""".toRegex()
+        private val BLOG_ID_REGEX = """(?:BLOG_ID(?:\s+)?=(?:\s+)?.)"([^(\\|")]+)""".toRegex()
+        private val MANGA_TITLE_REGEX = """iniciarCapituloLoader\("([^"]+)"\)""".toRegex()
+        private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+    }
 }

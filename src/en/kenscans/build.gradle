@@ -1,0 +1,10 @@
+ext {
+    extName = 'Ken Scans'
+    extClass = '.KenScans'
+    themePkg = 'iken'
+    baseUrl = 'https://kenscans.com'
+    overrideVersionCode = 8
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

@@ -1,9 +1,0 @@
-ext {
-    extName = 'Leviatan Scans'
-    extClass = '.LeviatanScans'
-    themePkg = 'madara'
-    baseUrl = 'https://lscomic.com'
-    overrideVersionCode = 15
-}
-
-apply from: "$rootDir/common.gradle"

@@ -52,7 +52,7 @@ class RizzComic : MangaThemesiaAlt(
             .build()
     }
 
-    override val versionId = 2
+    override val versionId = 4
 
     override val slugRegex = Regex("""^(r\d+-)""")
 
@@ -99,6 +99,7 @@ class RizzComic : MangaThemesiaAlt(
     @Serializable
     class Comic(
         val title: String,
+        val id: String,
         @SerialName("image_url") val cover: String? = null,
         @SerialName("long_description") val synopsis: String? = null,
         val status: String? = null,
@@ -109,9 +110,11 @@ class RizzComic : MangaThemesiaAlt(
         @SerialName("genre_id") val genres: String? = null,
     ) {
         val slug get() = title.trim().lowercase()
+            .replace("'", "")
             .replace(slugRegex, "-")
             .replace("-s-", "s-")
             .replace("-ll-", "ll-")
+            .trim('-')
 
         val genreIds get() = genres?.split(",")?.map(String::trim)
 
@@ -120,12 +123,27 @@ class RizzComic : MangaThemesiaAlt(
         }
     }
 
+    override fun String?.parseStatus(): Int = when {
+        this == null -> SManga.UNKNOWN
+
+        listOf("ongoing", "new season", "mass released")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.ONGOING
+        listOf("completed")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.COMPLETED
+        listOf("dropped")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.CANCELLED
+        listOf("hiatus", "season end")
+            .any { this.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
+
+        else -> SManga.UNKNOWN
+    }
+
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<List<Comic>>()
 
         val entries = result.map { comic ->
             SManga.create().apply {
-                url = "$mangaUrlDirectory/${comic.slug}/"
+                url = "$mangaUrlDirectory/${comic.slug}/#${comic.id}"
                 title = comic.title
                 description = comic.synopsis
                 author = listOfNotNull(comic.author, comic.serialization).joinToString()

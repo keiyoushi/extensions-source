@@ -3,7 +3,8 @@ ext {
     extClass = '.ManhuaPlus'
     themePkg = 'madara'
     baseUrl = 'https://manhuaplus.com'
-    overrideVersionCode = 6
+    overrideVersionCode = 7
+    isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"

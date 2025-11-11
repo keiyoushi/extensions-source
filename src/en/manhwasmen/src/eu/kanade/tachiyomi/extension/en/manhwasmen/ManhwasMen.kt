@@ -4,10 +4,13 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -18,25 +21,41 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
     override val sendViewCount = false
 
     // popular
-    override fun popularMangaSelector() = "div.col-6"
-    override val popularMangaUrlSelector = ".series-box a"
-    override fun popularMangaNextPageSelector() = "a[rel=next]"
+    override fun popularMangaSelector() = "ul > li > article.anime"
+    override fun popularMangaNextPageSelector() = "div nav ul.pagination li.page-item.active + li a"
 
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/manga-list?page=$page", headers)
     }
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return super.popularMangaFromElement(element).apply {
-            title = element.select(popularMangaUrlSelector).text()
-        }
+    override fun popularMangaFromElement(element: Element) = SManga.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        title = element.selectFirst("h3.title")!!.text()
+        thumbnail_url = element.selectFirst("img")!!.attr("abs:src")
     }
 
     // latest
-    override fun latestUpdatesSelector() = "div.d-flex:nth-child(6) div.col-6"
+    override fun latestUpdatesNextPageSelector() = null
 
     override fun latestUpdatesRequest(page: Int): Request {
         return GET(baseUrl, headers)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val document = response.asJsoup()
+
+        val mangas = document.select(popularMangaSelector())
+            .map(::latestMangaFromElement).distinctBy { it.url }
+
+        return MangasPage(mangas, false)
+    }
+
+    private fun latestMangaFromElement(element: Element): SManga {
+        return popularMangaFromElement(element).apply {
+            setUrlWithoutDomain(
+                element.selectFirst("a")!!.attr("abs:href").replaceAfterLast("/", ""),
+            )
+        }
     }
 
     // search
@@ -66,27 +85,41 @@ class ManhwasMen : Madara("Manhwas Men", "https://manhwas.men", "en") {
 
     // manga details
     override fun mangaDetailsParse(document: Document): SManga {
-        return super.mangaDetailsParse(document).apply {
-            document.select(mangaDetailsSelectorStatus).last()?.let {
-                status = when (it.text()) {
-                    in "complete" -> SManga.COMPLETED
-                    in "ongoing" -> SManga.ONGOING
-                    else -> SManga.UNKNOWN
+        val profileManga = document.selectFirst(".anime-single")!!
+        return SManga.create().apply {
+            title = profileManga.selectFirst(".title")!!.text()
+            thumbnail_url = profileManga.selectFirst("img")!!.attr("abs:src")
+            description = profileManga.selectFirst(".sinopsis")!!.text()
+            status = parseStatus(profileManga.select("span.anime-type-peli").last()!!.text())
+            genre = profileManga.select("p.genres > span").joinToString { it.text() }
+            profileManga.selectFirst(altNameSelector)?.ownText()?.let {
+                if (it.isNotBlank() && it.notUpdating()) {
+                    description = when {
+                        description.isNullOrBlank() -> "$altName $it"
+                        else -> "${description}\n\n$altName $it"
+                    }
                 }
             }
         }
     }
 
-    // chapter list
-    override val chapterUrlSuffix = ""
-
-    override fun chapterFromElement(element: Element): SChapter {
-        return super.chapterFromElement(element).apply {
-            name = element.select("p").text()
-        }
+    private fun parseStatus(status: String): Int = when (status) {
+        "ongoing" -> SManga.ONGOING
+        "complete" -> SManga.COMPLETED
+        else -> SManga.UNKNOWN
     }
 
-    // page list
+    override val altNameSelector = "div.container div aside h2.h5"
+
+    // chapter list
+    override fun chapterListSelector() = "aside.principal ul.episodes-list li"
+
+    override fun chapterFromElement(element: Element) = SChapter.create().apply {
+        setUrlWithoutDomain(element.selectFirst("a")!!.attr("abs:href"))
+        name = element.selectFirst("a > div > p > span")!!.text()
+        date_upload = parseRelativeDate(element.selectFirst("a > div > span")!!.text())
+    }
+
     override val pageListParseSelector = "#chapter_imgs img"
 
     // genre

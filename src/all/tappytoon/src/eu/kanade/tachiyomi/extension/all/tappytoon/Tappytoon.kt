@@ -17,7 +17,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.text.SimpleDateFormat
@@ -31,7 +31,7 @@ class Tappytoon(override val lang: String) : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.client.newBuilder().addInterceptor { chain ->
+    override val client = network.cloudflareClient.newBuilder().addInterceptor { chain ->
         val res = chain.proceed(chain.request())
         val mime = res.headers["Content-Type"]
         if (res.isSuccessful) {
@@ -40,9 +40,8 @@ class Tappytoon(override val lang: String) : HttpSource() {
             }
             // Fix image content type
             val type = IMG_CONTENT_TYPE.toMediaType()
-            val body = res.body.bytes().toResponseBody(type)
-            return@addInterceptor res.newBuilder().body(body)
-                .header("Content-Type", IMG_CONTENT_TYPE).build()
+            val body = res.body.source().asResponseBody(type)
+            return@addInterceptor res.newBuilder().body(body).build()
         }
         // Throw JSON error if available
         if (mime == "application/json") {

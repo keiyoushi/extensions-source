@@ -255,7 +255,7 @@ class Buttsmithy : HttpSource() {
     }
 
     private fun generateImageUrlWithText(text: String): String {
-        return "https://fakeimg.pl/800x1236/?text=$text&font=lobster"
+        return "https://fakeimg.ryd.tools/800x1236/?text=$text&font=lobster"
     }
 
     private fun generateMangasPage(): MangasPage {
