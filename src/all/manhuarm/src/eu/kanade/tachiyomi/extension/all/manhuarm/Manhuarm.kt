@@ -140,7 +140,7 @@ class Manhuarm(
         return network.cloudflareClient.newBuilder()
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(2, TimeUnit.MINUTES)
-            .rateLimit(3)
+            .rateLimit(2, 1)
             .addInterceptorIf(
                 !disableTranslator && language.lang != language.origin,
                 TranslationInterceptor(settings, translator),
