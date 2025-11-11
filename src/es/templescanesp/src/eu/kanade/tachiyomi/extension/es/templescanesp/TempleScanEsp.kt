@@ -21,7 +21,7 @@ import java.util.Locale
 class TempleScanEsp :
     Madara(
         "Temple Scan",
-        "https://aedexnox.vxviral.xyz",
+        "https://aedexnox.kawi.lat",
         "es",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),
@@ -120,7 +120,7 @@ class TempleScanEsp :
             key = FETCH_DOMAIN_PREF
             title = "Buscar dominio automáticamente"
             summary = "Intenta buscar el dominio automáticamente al abrir la fuente."
-            setDefaultValue(true)
+            setDefaultValue(false)
         }.also { screen.addPreference(it) }
     }
 
