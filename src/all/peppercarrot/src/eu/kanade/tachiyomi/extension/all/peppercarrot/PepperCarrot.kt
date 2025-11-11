@@ -150,10 +150,9 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
                         else -> substringBeforeLast('(').trimEnd()
                     }
                 }
-                date_upload = it.selectFirst(Evaluator.Tag("figcaption"))!!.ownText().let {
-                    val date = dateRegex.find(it)!!.value
-                    dateFormat.parse(date)!!.time
-                }
+                date_upload = it.selectFirst(Evaluator.Tag("figcaption"))?.text()?.let { text ->
+                    dateRegex.find(text)?.value?.let { date -> dateFormat.parse(date)?.time }
+                } ?: 0L
                 chapter_number = number.toFloat()
             }
         }
