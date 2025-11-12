@@ -31,7 +31,7 @@ class LeerCapitulo : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val baseUrl = "https://www.leercapitulo.co"
+    override val baseUrl = "https://www.leercapitulo.re"
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 3)
