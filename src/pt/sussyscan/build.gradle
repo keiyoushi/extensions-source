@@ -2,7 +2,7 @@ ext {
     extName = 'Sussy Toons'
     extClass = '.SussyToons'
     baseUrl = 'https://www.sussytoons.wtf'
-    overrideVersionCode = 57
+    extVersionCode = 63
     isNsfw = true
 }
 

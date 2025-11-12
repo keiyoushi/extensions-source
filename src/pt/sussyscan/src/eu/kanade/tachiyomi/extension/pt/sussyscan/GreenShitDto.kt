@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.sussyscan
 
-import android.annotation.SuppressLint
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -10,46 +9,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
-
-// ============================= Auth Models ==================================
-
-@Serializable
-class Token(
-    val value: String = "",
-    val updateAt: Long = Date().time,
-) {
-    fun isValid() = value.isNotEmpty() && !isExpired()
-
-    private fun isExpired(): Boolean {
-        val expirationTime = Calendar.getInstance().apply {
-            time = Date(updateAt)
-            add(Calendar.HOUR, 1)
-        }
-        return Date().after(expirationTime.time)
-    }
-
-    override fun toString() = value
-
-    companion object {
-        fun empty() = Token()
-    }
-}
-
-class Credential(
-    val email: String = "",
-    val password: String = "",
-) {
-    fun isNotEmpty() = email.isNotBlank() && password.isNotBlank()
-}
-
-@Serializable
-class TokenDto(
-    @SerialName("token")
-    val value: String,
-)
 
 // ============================= API Response Wrapper =========================
 
@@ -68,34 +28,14 @@ class ResultDto<T>(
     fun hasNextPage() = currentPage < lastPage
 
     companion object {
-        @SuppressLint("SimpleDateFormat")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
-        val CHAPTER_NUMBER_REGEX = """\d+(\.\d+)?""".toRegex()
     }
 }
 
 // ============================= Extension Functions ==========================
 
 fun ResultDto<List<MangaDto>>.toSMangaList(): List<SManga> {
-    return results.map { dto ->
-        dto.apply {
-            if (slug == null) slug = name.toSlug()
-        }.toSManga()
-    }
-}
-
-fun ResultDto<WrapperChapterDto>.toSChapterList(): List<SChapter> {
-    return results.chapters.map { it.toSChapter() }
-        .sortedByDescending { it.chapter_number }
-}
-
-fun ResultDto<ChapterPageDto>.toPageList(): List<Page> {
-    val dto = results
-    val chapter = if (dto.chapterNumber.isNotInteger()) dto.chapterNumber else dto.chapterNumber.toInt()
-
-    return dto.pages.mapIndexed { index, pageDto ->
-        Page(index, imageUrl = pageDto.toImageUrl(dto.manga.scanId, dto.manga.id, chapter.toString()))
-    }
+    return results.map { it.toSManga() }
 }
 
 // ============================= Manga Models =================================
@@ -175,6 +115,8 @@ class ChapterDto(
     val id: Int,
     @SerialName("cap_nome")
     val name: String,
+    @SerialName("cap_numero")
+    val numero: Float? = null,
     @JsonNames("cap_lancado_em", "cap_liberar_em", "cap_criado_em")
     val releaseDate: String? = null,
 ) {
@@ -182,19 +124,11 @@ class ChapterDto(
         this.name = this@ChapterDto.name
         url = "/capitulo/$id"
 
-        ResultDto.CHAPTER_NUMBER_REGEX.find(this@ChapterDto.name)
-            ?.groups?.get(0)?.value?.toFloatOrNull()
-            ?.let { chapter_number = it }
+        numero?.let { chapter_number = it }
 
         date_upload = releaseDate?.let { ResultDto.DATE_FORMAT.tryParse(it) } ?: 0L
     }
 }
-
-@Serializable
-class WrapperChapterDto(
-    @SerialName("capitulos")
-    val chapters: List<ChapterDto>,
-)
 
 // ============================= Page Models ==================================
 
@@ -207,29 +141,19 @@ class ChapterPageDto(
     @SerialName("cap_numero")
     val chapterNumber: Float,
 ) {
+    fun toPageList(): List<Page> {
+        val chapter = if (chapterNumber.isNotInteger()) chapterNumber else chapterNumber.toInt()
+
+        return pages.mapIndexed { index, pageDto ->
+            Page(index, imageUrl = pageDto.toImageUrl(manga.scanId, manga.id, chapter.toString()))
+        }
+    }
+
     @Serializable
     class MangaReferenceDto(
         @SerialName("obr_id") val id: Int,
         @SerialName("scan_id") val scanId: Int,
     )
-}
-
-@Serializable
-class ChapterPageDtoV2(
-    @SerialName("cap_paginas")
-    val pages: List<PageDto>,
-    @SerialName("obr_id")
-    val mangaId: Int,
-    @SerialName("cap_numero")
-    val chapterNumber: Float,
-) {
-    fun toPageList(): List<Page> {
-        val chapter = if (chapterNumber.isNotInteger()) chapterNumber else chapterNumber.toInt()
-
-        return pages.mapIndexed { index, pageDto ->
-            Page(index, imageUrl = pageDto.toImageUrl(1, mangaId, chapter.toString()))
-        }
-    }
 }
 
 @Serializable
