@@ -18,12 +18,10 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferences
-import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.decodeFromString
 import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
@@ -309,7 +307,7 @@ class Comick(
         } else {
             filters.add(
                 index = 4,
-                TagFilter(data.genres),
+                TagFilter(data.tags),
             )
         }
         return@runBlocking FilterList(filters)
@@ -319,10 +317,10 @@ class Comick(
         GET("$baseUrl/comic/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val data = jsonInstance.decodeFromString(
-            Transform,
-            response.asJsoup().selectFirst("#comic-data")!!.data(),
-        )
+        val data = response.asJsoup()
+            .selectFirst("#comic-data")!!.data()
+            .parseAs<ComicData>()
+
         return SManga.create().apply {
             title = data.title
             url = data.slug
