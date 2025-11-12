@@ -13,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.json.Json
@@ -38,7 +39,7 @@ class Comix : HttpSource(), ConfigurableSource {
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
+        .add("Referer", baseUrl)
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
@@ -62,7 +63,7 @@ class Comix : HttpSource(), ConfigurableSource {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val res: SearchResponse = response.parseAs()
-        val manga = res.result.items.map { manga -> manga.toSManga(preferences.posterQuality()) }
+        val manga = res.result.items.map { manga -> manga.toSManga(preferences.posterQuality(), null) }
         return MangasPage(manga, res.result.pagination.page < res.result.pagination.lastPage)
     }
 
@@ -81,7 +82,7 @@ class Comix : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val res: SearchResponse = response.parseAs()
-        val manga = res.result.items.map { manga -> manga.toSManga(preferences.posterQuality()) }
+        val manga = res.result.items.map { manga -> manga.toSManga(preferences.posterQuality(), null) }
         return MangasPage(manga, res.result.pagination.page < res.result.pagination.lastPage)
     }
 
@@ -111,10 +112,36 @@ class Comix : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val res: SingleMangaResponse = response.parseAs()
+        val mangaResponse: SingleMangaResponse = response.parseAs()
+        val manga = mangaResponse.result
+        val terms = mutableListOf<Term>()
 
-        return res.result.toSManga(preferences.posterQuality())
+        // Check the manga's term ids against all terms to match them and aggregate the results
+        // (Genres, Artists, Authors, etc)
+        if (manga.termIds.isNotEmpty()) {
+            val termsUrlBuilder = apiUrl.toHttpUrl()
+                .newBuilder()
+                .addPathSegment("terms")
+                .addQueryParameter("limit", manga.termIds.size.toString())
+
+            manga.termIds.forEach { id ->
+                termsUrlBuilder.addQueryParameter("ids[]", id.toString())
+            }
+
+            // Query each term type, because Comix doesn't support checking everything within one request
+            ApiTerms.values().forEach { apiTerm ->
+                val termsRequest = GET(termsUrlBuilder.setQueryParameter("type", apiTerm.term).build(), headers)
+                val termsResponse = client.newCall(termsRequest).execute().parseAs<TermResponse>()
+
+                if (termsResponse.result.items.isNotEmpty()) {
+                    terms.addAll(termsResponse.result.items)
+                }
+            }
+        }
+
+        return manga.toSManga(preferences.posterQuality(), terms)
     }
+
 
     override fun getMangaUrl(manga: SManga): String {
         return "$baseUrl/title${manga.url}"
@@ -144,6 +171,7 @@ class Comix : HttpSource(), ConfigurableSource {
 
         val chapters = result.result.items.toMutableList()
         val requestUrl = response.request.url
+        val mangaHashId = requestUrl.pathSegments[3].removePrefix("/")
 
         var hasNextPage = result.result.pagination.lastPage > result.result.pagination.page
         var page = result.result.pagination.page
@@ -163,7 +191,7 @@ class Comix : HttpSource(), ConfigurableSource {
             hasNextPage = newResult.result.pagination.lastPage > newResult.result.pagination.page
         }
 
-        return chapters.map { chapter -> chapter.toSChapter() }
+        return chapters.map { chapter -> chapter.toSChapter(mangaHashId) }
     }
 
     /******************************* Page List (Reader) ************************************/
@@ -171,13 +199,21 @@ class Comix : HttpSource(), ConfigurableSource {
         return super.pageListRequest(chapter)
     }
 
+    // Doesn't work cause Next.js
     override fun pageListParse(response: Response): List<Page> {
-        throw UnsupportedOperationException()
+        val doc = response.asJsoup()
+        val data = doc.select("div.viewer-wrapper > div.read-viewer.longsrtip > div.page > img")
+
+        if (data.isEmpty()) {
+            Log.d("comix", "data is null")
+            throw Exception("Could not parse reader page")
+        }
+
+        return data.mapIndexed { index, element -> Page(index, imageUrl = element.attr("src")) }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        val base = getMangaUrl()
-        return "$baseUrl/title${manga.url}"
+        return "$baseUrl/${chapter.url}"
     }
 
     /******************************* PREFERENCES ************************************/
@@ -185,13 +221,13 @@ class Comix : HttpSource(), ConfigurableSource {
         ListPreference(screen.context).apply {
             key = PREF_POSTER_QUALITY
             title = "Thumbnail Quality"
-            summary = "Change the quality of the Thumbnail"
+            summary = "Change the quality of the thumbnail images. Large is the default."
             entryValues = arrayOf("small", "medium", "large")
-            entries = entryValues
+            entries = arrayOf("Small", "Medium", "Large")
             setDefaultValue("large")
         }.let(screen::addPreference)
     }
-    private fun SharedPreferences.posterQuality() = getString(PREF_POSTER_QUALITY, "medium")
+    private fun SharedPreferences.posterQuality() = getString(PREF_POSTER_QUALITY, "large")
     companion object {
         private const val PREF_POSTER_QUALITY = "pref_poster_quality"
     }

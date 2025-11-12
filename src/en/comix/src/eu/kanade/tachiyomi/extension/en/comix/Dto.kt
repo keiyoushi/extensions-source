@@ -7,16 +7,26 @@ import kotlin.collections.distinct
 import kotlin.text.isEmpty
 
 @Serializable
-class Metadata(
-    val genres: List<Name>,
-    val tags: List<Name>,
+class TermResponse(
+    val status: Int,
+    val result: Items,
 ) {
     @Serializable
-    class Name(
-        val name: String,
-        val slug: String,
+    class Items(
+        val items: List<Term>,
+        val pagination: Pagination,
     )
 }
+
+@Serializable
+data class Term(
+    @SerialName("term_id")
+    val termId: Int,
+    val type: String,
+    val title: String,
+    val slug: String,
+    val count: Int,
+)
 
 @Serializable
 class Manga(
@@ -57,8 +67,7 @@ class Manga(
     private val links: Links,
     @SerialName("is_nsfw")
     private val isNsfw: Boolean,
-    @SerialName("term_ids")
-    private val termIds: List<Int>,
+    @SerialName("term_ids") val termIds: List<Int>,
 ) {
     @Serializable
     class Poster(
@@ -80,9 +89,12 @@ class Manga(
         private val mu: String?,
     )
 
-    fun toSManga(posterQuality: String?) = SManga.create().apply {
+    fun toSManga(posterQuality: String?, terms: List<Term>?) = SManga.create().apply {
         url = "/$hashId"
         title = this@Manga.title
+        author = terms.takeUnless { it.isNullOrEmpty() }?.filter { it.type == "author" }
+            ?.joinToString { it.title }
+        artist = terms.takeUnless { it.isNullOrEmpty() }?.filter { it.type == "artist" }?.joinToString { it.title }
         description = buildString {
             synopsis.takeUnless { it.isEmpty() }
                 ?.let { append(it) }
@@ -101,15 +113,18 @@ class Manga(
             else -> SManga.UNKNOWN
         }
         thumbnail_url = this@Manga.poster.from(posterQuality)
-        genre = getGenres()
+        genre = getGenres(terms)
     }
 
-    fun getGenres() = buildList {
+    fun getGenres(terms: List<Term>?) = buildList {
         when (type) {
             "manhwa" -> add("Manhwa")
             "manhua" -> add("Manhua")
-            else -> add("Manga")
+            "manga" -> add("Manga")
+            else -> add("Other")
         }
+        terms.takeUnless { it.isNullOrEmpty() }?.filter { it.type == "genre" }?.map { it.title }.let { addAll(it ?: emptyList()) }
+        terms.takeUnless { it.isNullOrEmpty() }?.filter { it.type == "theme" }?.map { it.title }.let { addAll(it ?: emptyList()) }
     }.distinct().joinToString()
 }
 
@@ -130,8 +145,8 @@ class Pagination(
     val page: Int,
     @SerialName("last_page")
     val lastPage: Int,
-    val from: Int,
-    val to: Int,
+    val from: Int?,
+    val to: Int?,
 )
 
 @Serializable
@@ -186,8 +201,8 @@ class Chapter(
         val slug: String,
     )
 
-    fun toSChapter() = SChapter.create().apply {
-        url = "/chapter/$chapterId"
+    fun toSChapter(mangaId: String) = SChapter.create().apply {
+        url = "title/$mangaId/$chapterId"
         name = buildString {
             append("Chapter ")
             append(this@Chapter.number.toString().removeSuffix(".0"))
