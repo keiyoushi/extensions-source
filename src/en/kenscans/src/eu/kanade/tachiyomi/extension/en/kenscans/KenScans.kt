@@ -9,8 +9,8 @@ import okhttp3.Response
 class KenScans : Iken(
     "Ken Scans",
     "en",
-    "https://kenscans.com",
-    "https://api.kenscans.com",
+    "https://kencomics.com",
+    "https://api.kencomics.com",
 ) {
     override fun chapterListRequest(manga: SManga): Request {
         // Migration from old web theme to the new one(Keyoapp -> Iken)
