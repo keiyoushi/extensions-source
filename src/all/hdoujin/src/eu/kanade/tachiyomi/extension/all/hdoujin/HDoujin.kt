@@ -120,7 +120,7 @@ class HDoujin(
                     }
                 }
             }
-            webview.loadUrl("$baseUrl/")
+            webview.loadDataWithBaseURL("$baseUrl/", " ", "text/html", null, null)
         }
         latch.await(10, TimeUnit.SECONDS)
         return _clearance
