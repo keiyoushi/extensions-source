@@ -184,7 +184,7 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
     private fun parseArtwork(response: Response): List<SChapter> {
         val baseDir = response.request.url.toString().removePrefix(BASE_URL)
         return response.asJsoup().select(Evaluator.Tag("a")).asReversed().mapNotNull {
-            val filename = it.attr("href")!!
+            val filename = it.attr("href")
             if (!filename.endsWith(".jpg")) return@mapNotNull null
 
             val file = filename.removeSuffix(".jpg").removeSuffix("_by-David-Revoy")
