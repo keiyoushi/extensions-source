@@ -44,8 +44,6 @@ object AnibusInterceptor : Interceptor {
         }
     }
 
-    private val handler = Handler(Looper.getMainLooper())
-
     @Synchronized
     @SuppressLint("SetJavaScriptEnabled")
     private fun resolveInWebView(request: Request): Boolean {
@@ -53,6 +51,8 @@ object AnibusInterceptor : Interceptor {
         val cookieManager = CookieManager.getInstance()
         val latch = CountDownLatch(1)
         var webView: WebView? = null
+        val handler = Handler(Looper.getMainLooper())
+
         handler.post {
             val webview = WebView(context)
                 .also { webView = it }
