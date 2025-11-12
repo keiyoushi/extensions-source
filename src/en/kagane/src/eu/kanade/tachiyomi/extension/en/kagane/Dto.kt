@@ -56,7 +56,7 @@ class DetailsDto(
 
         author = authors.joinToString()
         description = desc.toString()
-        genre = genres.joinToString()
+        genre = (listOf(source) + genres).joinToString()
         status = this@DetailsDto.status.toStatus()
     }
 
