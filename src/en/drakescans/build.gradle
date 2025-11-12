@@ -3,7 +3,7 @@ ext {
     extClass = '.DrakeScans'
     themePkg = 'mangathemesia'
     baseUrl = 'https://drakecomic.org'
-    overrideVersionCode = 14
+    overrideVersionCode = 15
     isNsfw = false
 }
 
