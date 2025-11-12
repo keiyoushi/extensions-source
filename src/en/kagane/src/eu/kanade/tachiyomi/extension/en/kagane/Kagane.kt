@@ -179,6 +179,11 @@ class Kagane : HttpSource(), ConfigurableSource {
                     is SortFilter -> {
                         filter.toUriPart().takeIf { it.isNotEmpty() }
                             ?.let { uriPart -> addQueryParameter("sort", uriPart) }
+                            ?: run {
+                                if (query.isBlank()) {
+                                    addQueryParameter("sort", "updated_at,desc")
+                                }
+                            }
                     }
 
                     else -> {}
