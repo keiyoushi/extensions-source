@@ -176,7 +176,7 @@ class PageDto(
         return if (number == null) {
             "$cdn/wp-content/uploads/WP-manga/data/${src.toPathSegment()}"
         } else {
-            "$cdn/${path.toPathSegment()}/$src"
+            "$cdn/${path!!.toPathSegment()}/$src"
         }
     }
 }
