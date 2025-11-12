@@ -13,6 +13,7 @@ fun getFilters(): FilterList {
         Filter.Header("Prepend with dash (-) to exclude [ Only for 'Tags' ]"),
         TextFilter("Tags", "manga_tag"),
         Filter.Separator(),
+        TextFilter("Authors", "author"),
         TextFilter("Artists", "artist"),
         Filter.Separator(),
         Filter.Header("Filter by year uploaded, for example: (>2024)"),

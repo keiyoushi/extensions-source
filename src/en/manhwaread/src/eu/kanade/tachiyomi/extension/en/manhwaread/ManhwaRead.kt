@@ -82,7 +82,12 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
     override val popularMangaUrlSelector = "a.manga-item__link"
 
     private fun getTagId(tag: String, type: String): Int? {
-        val ajax = "$baseUrl/wp-admin/admin-ajax.php?action=search_manga_terms&search=$tag&taxonomy=$type".replace("artist", "manga_artist")
+        val taxonomy = when (type) {
+            "artist" -> "manga_artist"
+            "author" -> "manga_author"
+            else -> type
+        }
+        val ajax = "$baseUrl/wp-admin/admin-ajax.php?action=search_manga_terms&search=$tag&taxonomy=$taxonomy"
         val res = client.newCall(GET(ajax, headers)).execute()
         val items = json.decodeFromString<Results>(res.body.string())
         val item = items.results.filter { it.text.lowercase() == tag.lowercase() }
@@ -95,8 +100,31 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("page/$page")
-            addQueryParameter("s", query)
             addQueryParameter("title-type", "contains")
+
+            // When user clicks Author/Artist from details page, it passes the name in query.
+            // Try to resolve it to taxonomy IDs if explicit filters are not already set.
+            val hasAuthorFilter = filters.any { it is TextFilter && it.type == "author" && it.state.isNotBlank() }
+            val hasArtistFilter = filters.any { it is TextFilter && it.type == "artist" && it.state.isNotBlank() }
+            var taxonomyMatched = false
+            if (query.isNotBlank() && !hasAuthorFilter && !hasArtistFilter) {
+                val authorId = getTagId(query.trim(), "author")
+                if (authorId != null) {
+                    addQueryParameter("authors[]", authorId.toString())
+                    taxonomyMatched = true
+                } else {
+                    val artistId = getTagId(query.trim(), "artist")
+                    if (artistId != null) {
+                        addQueryParameter("artists[]", artistId.toString())
+                        taxonomyMatched = true
+                    }
+                }
+            }
+
+            val sValue = if (query.isNotBlank() && !hasAuthorFilter && !hasArtistFilter && !taxonomyMatched) query else ""
+            addQueryParameter("s", sValue)
+            if (sValue.isNotEmpty()) addQueryParameter("title-type", "contains")
+
             filters.forEach {
                 when (it) {
                     is GenresFilter -> {
