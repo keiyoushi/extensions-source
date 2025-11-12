@@ -22,7 +22,7 @@ class DrakeScans :
     // madara -> mangathemesia
     override val versionId = 2
 
-    private val preferences by getPreferencesLazy {}
+    private val preferences by getPreferencesLazy()
 
     override val client = super.client.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 3, 1, TimeUnit.SECONDS)
