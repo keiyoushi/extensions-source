@@ -209,7 +209,11 @@ class Kagane : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiUrl/api/v1/series/${manga.url}", apiHeaders)
+        return mangaDetailsRequest(manga.url)
+    }
+
+    private fun mangaDetailsRequest(seriesId: String): Request {
+        return GET("$apiUrl/api/v1/series/$seriesId", apiHeaders)
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -219,8 +223,23 @@ class Kagane : HttpSource(), ConfigurableSource {
     // ============================== Chapters ==============================
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        val seriesId = response.request.url.toString()
+            .substringAfterLast("/")
+
         val dto = response.parseAs<ChapterDto>()
-        return dto.content.map { it -> it.toSChapter() }.reversed()
+
+        val source = client.newCall(mangaDetailsRequest(seriesId))
+            .execute()
+            .parseAs<DetailsDto>()
+            .source
+        val useSourceChapterNumber = source in setOf(
+            "Dark Horse Comics",
+            "Flame Comics",
+            "MangaDex",
+            "Square Enix Manga",
+        )
+
+        return dto.content.map { it -> it.toSChapter(useSourceChapterNumber) }.reversed()
     }
 
     override fun chapterListRequest(manga: SManga): Request {

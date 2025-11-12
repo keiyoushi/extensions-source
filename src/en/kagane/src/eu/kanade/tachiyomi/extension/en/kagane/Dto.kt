@@ -83,11 +83,16 @@ class ChapterDto(
         val releaseDate: String?,
         @SerialName("pages_count")
         val pagesCount: Int,
+        @SerialName("number_sort")
+        val number: Float,
     ) {
-        fun toSChapter(): SChapter = SChapter.create().apply {
+        fun toSChapter(useSourceChapterNumber: Boolean = false): SChapter = SChapter.create().apply {
             url = "$seriesId;$id;$pagesCount"
             name = title
             date_upload = dateFormat.tryParse(releaseDate)
+            if (useSourceChapterNumber) {
+                chapter_number = number
+            }
         }
     }
 
