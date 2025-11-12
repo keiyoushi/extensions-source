@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.comico
+package eu.kanade.tachiyomi.extension.ja.comico
 
 import kotlinx.serialization.Serializable
 

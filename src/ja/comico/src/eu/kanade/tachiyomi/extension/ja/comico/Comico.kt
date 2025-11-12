@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.all.comico
+package eu.kanade.tachiyomi.extension.ja.comico
 
 import android.webkit.CookieManager
 import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
@@ -30,16 +30,15 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-open class Comico(
-    final override val baseUrl: String,
-    final override val name: String,
-    private val langCode: String,
-) : HttpSource() {
+class Comico : HttpSource() {
+    override val name = "コミコ"
+    override val baseUrl = "https://www.comico.jp"
+    override val lang = "ja"
+    private val apiUrl = "https://api.comico.jp"
+
+    override val id = 4991718230921189832
+
     final override val supportsLatest = true
-
-    override val lang = langCode.substring(0, 2)
-
-    protected open val apiUrl = baseUrl.replace("www", "api")
 
     private val json by injectLazy<Json>()
 
@@ -77,7 +76,7 @@ open class Comico(
         ).build()
 
     override fun headersBuilder() = Headers.Builder()
-        .set("Accept-Language", langCode)
+        .set("Accept-Language", lang)
         .set("User-Agent", userAgent)
         .set("Referer", "$baseUrl/")
 
