@@ -11,7 +11,7 @@ import java.util.Locale
 
 class HaremDeKira : Madara(
     "Harem de Kira",
-    "https://haremscann.es",
+    "https://kiraproject.lat",
     "es",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
 ) {

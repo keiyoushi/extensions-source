@@ -2,8 +2,8 @@ ext {
     extName = 'Harem de Kira'
     extClass = '.HaremDeKira'
     themePkg = 'madara'
-    baseUrl = 'https://haremscann.es'
-    overrideVersionCode = 1
+    baseUrl = 'https://kiraproject.lat'
+    overrideVersionCode = 2
     isNsfw = true
 }
 
