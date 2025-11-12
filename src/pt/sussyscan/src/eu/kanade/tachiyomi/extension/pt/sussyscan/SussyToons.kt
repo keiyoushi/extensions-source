@@ -1,11 +1,10 @@
 package eu.kanade.tachiyomi.extension.pt.sussyscan
 
-import eu.kanade.tachiyomi.multisrc.greenshit.GreenShit
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 
-class SussyToons : GreenShit(
-    "Sussy Toons",
+class SussyScan : GreenShit(
+    "Sussy Scan",
     "https://www.sussytoons.wtf",
     "pt-BR",
 ) {
