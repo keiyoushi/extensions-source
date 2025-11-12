@@ -505,7 +505,14 @@ class Koharu(
         const val PREFIX_ID_KEY_SEARCH = "id:"
         private const val PREF_MIRROR = "pref_mirror"
         private const val MIRROR_PREF_DEFAULT = "schale.network"
-        private val mirrors = arrayOf(MIRROR_PREF_DEFAULT)
+        private val mirrors = arrayOf(
+            MIRROR_PREF_DEFAULT,
+            "anchira.to",
+            "gehenna.jp",
+            "niyaniya.moe",
+            "shupogaki.moe",
+            "hdoujin.net",
+        )
         private const val PREF_IMAGERES = "pref_image_quality"
         private const val PREF_REM_ADD = "pref_remove_additional"
         private const val PREF_EXCLUDE_TAGS = "pref_exclude_tags"
