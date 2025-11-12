@@ -2,8 +2,8 @@ ext {
     extName = 'Arya Scans'
     extClass = '.AryaScans'
     themePkg = 'madara'
-    baseUrl = 'https://aryascans.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://brainrotcomics.com'
+    overrideVersionCode = 1
     isNsfw = false
 }
 
