@@ -228,10 +228,12 @@ class Kagane : HttpSource(), ConfigurableSource {
 
         val dto = response.parseAs<ChapterDto>()
 
-        val source = client.newCall(mangaDetailsRequest(seriesId))
-            .execute()
-            .parseAs<DetailsDto>()
-            .source
+        val source = runCatching {
+            client.newCall(mangaDetailsRequest(seriesId))
+                .execute()
+                .parseAs<DetailsDto>()
+                .source
+        }.getOrElse { "" }
         val useSourceChapterNumber = source in setOf(
             "Dark Horse Comics",
             "Flame Comics",
