@@ -11,6 +11,14 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+fun String.toPathSegment(): String {
+    return trim().split("/")
+        .filter(String::isNotEmpty)
+        .joinToString("/")
+}
+
+fun Float.isNotInteger(): Boolean = toInt() < this
+
 // ============================= API Response Wrapper =========================
 
 @Serializable
@@ -63,7 +71,7 @@ class MangaDto(
 ) {
     fun toSManga() = SManga.create().apply {
         title = name
-        url = "/obra/${slug ?: name.toSlug()}"
+        url = "/obra/$slug"
         thumbnail_url = buildThumbnailUrl()
         genre = genres.joinToString()
         initialized = true
@@ -163,15 +171,12 @@ class PageDto(
     val number: Float? = null,
     val path: String? = null,
 ) {
-    private fun isWordPressContent() = number == null
-
     fun toImageUrl(scanId: Int, mangaId: Int, chapter: String): String {
         val cdn = "https://cdn.sussytoons.wtf"
-
-        return when {
-            isWordPressContent() -> "$cdn/wp-content/uploads/WP-manga/data/${src.toPathSegment()}"
-            path != null -> "$cdn/${path.toPathSegment()}/$src"
-            else -> "$cdn/scans/$scanId/obras/$mangaId/capitulos/$chapter/$src"
+        return if (number == null) {
+            "$cdn/wp-content/uploads/WP-manga/data/${src.toPathSegment()}"
+        } else {
+            "$cdn/${path.toPathSegment()}/$src"
         }
     }
 }

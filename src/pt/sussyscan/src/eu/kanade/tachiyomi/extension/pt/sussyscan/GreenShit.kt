@@ -9,9 +9,17 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+
+fun HttpUrl.Builder.addQueryParameterIfNotEmpty(name: String, value: String?): HttpUrl.Builder {
+    if (!value.isNullOrEmpty()) {
+        addQueryParameter(name, value)
+    }
+    return this
+}
 
 abstract class GreenShit(
     override val name: String,
@@ -100,7 +108,7 @@ abstract class GreenShit(
     }
 
     override fun getFilterList() = FilterList(
-        Filter.Header("Ordernar por"),
+        Filter.Header("Ordenar por"),
         OrderByFilter(),
         OrderDirectionFilter(),
         Filter.Separator(),
@@ -109,7 +117,7 @@ abstract class GreenShit(
         FormatFilter(),
         StatusFilter(),
         Filter.Separator(),
-        Filter.Header("Selecionar Tags"),
+        Filter.Header("Tags"),
         TagsFilter(TAGS_LIST),
     )
 
