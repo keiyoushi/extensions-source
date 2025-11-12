@@ -233,7 +233,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                 .execute()
                 .parseAs<DetailsDto>()
                 .source
-        }.getOrElse { "" }
+        }.getOrDefault("")
         val useSourceChapterNumber = source in setOf(
             "Dark Horse Comics",
             "Flame Comics",
