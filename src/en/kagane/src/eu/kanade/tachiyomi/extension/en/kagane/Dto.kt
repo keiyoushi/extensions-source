@@ -56,7 +56,7 @@ class DetailsDto(
 
         author = authors.joinToString()
         description = desc.toString()
-        genre = genres.joinToString()
+        genre = (listOf(source) + genres).joinToString()
         status = this@DetailsDto.status.toStatus()
     }
 
@@ -86,11 +86,13 @@ class ChapterDto(
         @SerialName("number_sort")
         val number: Float,
     ) {
-        fun toSChapter(): SChapter = SChapter.create().apply {
+        fun toSChapter(useSourceChapterNumber: Boolean = false): SChapter = SChapter.create().apply {
             url = "$seriesId;$id;$pagesCount"
             name = title
             date_upload = dateFormat.tryParse(releaseDate)
-            chapter_number = number
+            if (useSourceChapterNumber) {
+                chapter_number = number
+            }
         }
     }
 
