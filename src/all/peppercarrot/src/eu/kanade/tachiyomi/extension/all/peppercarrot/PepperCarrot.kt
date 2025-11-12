@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import okhttp3.CacheControl
 import okhttp3.Request
 import okhttp3.Response
@@ -173,7 +174,7 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
                     }
                 }
                 date_upload = it.selectFirst(Evaluator.Tag("figcaption"))?.text()?.let { text ->
-                    dateRegex.find(text)?.value?.let { date -> dateFormat.parse(date)?.time }
+                    dateRegex.find(text)?.value?.let { date -> dateFormat.tryParse(date) }
                 } ?: 0L
                 chapter_number = number.toFloat()
             }
@@ -191,11 +192,11 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
             val date: Long
             if (file.length >= 10 && dateRegex.matches(file.substring(0, 10))) {
                 fileStripped = file.substring(10)
-                date = dateFormat.parse(file.substring(0, 10))!!.time
+                date = dateFormat.tryParse(file.substring(0, 10))
             } else {
                 fileStripped = file
                 val lastModified = it.nextSibling() as? TextNode
-                date = if (lastModified == null) 0 else dateFormat.parse(lastModified.text())!!.time
+                date = if (lastModified == null) 0 else dateFormat.tryParse(lastModified.text())
             }
             val fileNormalized = fileStripped
                 .replace('_', ' ')
