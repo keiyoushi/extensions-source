@@ -179,8 +179,11 @@ abstract class NatsuId(
             return@runBlocking FilterList(filters)
         }
 
+        val responseString = response.body.string()
+        response.close()
+
         val data = try {
-            response.parseAs<List<Term>>()
+            responseString.cleanJsonResponse().parseAs<List<Term>>()
         } catch (e: Throwable) {
             Log.e(name, "Failed to parse genre filters", e)
 
@@ -362,7 +365,7 @@ abstract class NatsuId(
         throw UnsupportedOperationException()
     }
 
-    // JSON cleaner for site like ikiru when sorting latest desc or in some of their title
+    // JSON cleaner for site like ikiru when sorting latest desc or in some of their title or parsing genre list
     private fun String.cleanJsonResponse(): String {
         val trimmed = trimStart()
         val jsonStart = trimmed.indexOfFirst { it == '[' || it == '{' }
