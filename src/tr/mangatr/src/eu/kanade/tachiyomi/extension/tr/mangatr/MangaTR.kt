@@ -38,11 +38,25 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     // ============================== Popular ===============================
     override fun popularMangaNextPageSelector() = "div.btn-group:not(div.btn-block) button.btn-info"
 
-    override fun popularMangaSelector() = "div.row a[data-toggle]"
+    override fun popularMangaSelector() = "div.col-md-12 > span.thumbnail"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.absUrl("href"))
-        title = element.text()
+        val link = element.selectFirst("a.pull-left")!!
+        setUrlWithoutDomain(link.absUrl("href"))
+
+        title = element.selectFirst("h3.media-heading a")?.text()?.trim() ?: ""
+        thumbnail_url = link.selectFirst("img.media-object")?.absUrl("src")
+    }
+
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$baseUrl/$requestPath".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "views")
+            .addQueryParameter("sort_type", "DESC")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("listType", "pagination")
+            .build()
+
+        return GET(url, headers)
     }
 
     // =============================== Search ===============================
