@@ -31,13 +31,14 @@ import okhttp3.brotli.BrotliInterceptor
 import okhttp3.internal.closeQuietly
 import okio.IOException
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import rx.Observable
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.random.Random
 
-abstract class Natsuid(
+abstract class NatsuId(
     override val name: String,
     override val lang: String,
     override val baseUrl: String,
@@ -267,14 +268,32 @@ abstract class Natsuid(
         return Observable.error(Exception("Unsupported url"))
     }
 
+    private fun Element.parseMangaId() = selectFirst("#gallery-list")?.attr("hx-get")
+        ?.substringAfter("manga_id=")?.substringBefore("&")
+
+    private fun getMangaId(manga: SManga): String {
+        return try {
+            manga.url.parseAs<MangaUrl>().id.toString()
+        } catch (e: Exception) {
+            null
+        } ?: run {
+            val mangaUrl = getMangaUrl(manga)
+            client.newCall(GET(mangaUrl, headers)).execute().asJsoup().parseMangaId()
+        } ?: throw Exception("Could not find manga ID")
+    }
+
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.parseAs<MangaUrl>().id
+        val id = getMangaId(manga)
 
         return GET("$baseUrl/wp-json/wp/v2/manga/$id?_embed", headers)
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        val slug = manga.url.parseAs<MangaUrl>().slug
+        val slug = if (manga.url.contains("/manga/")) {
+            manga.url.substringAfter("/manga/")
+        } else {
+            manga.url.parseAs<MangaUrl>().slug
+        }
 
         return "$baseUrl/manga/$slug/"
     }
@@ -284,9 +303,10 @@ abstract class Natsuid(
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url.parseAs<MangaUrl>().id
+        val id = getMangaId(manga)
+
         val url = "$baseUrl/wp-admin/admin-ajax.php".toHttpUrl().newBuilder()
-            .addQueryParameter("manga_id", id.toString())
+            .addQueryParameter("manga_id", id)
             .addQueryParameter("page", "${Random.nextInt(99, 9999)}") // keep above 3 for loading hidden chapter
             .addQueryParameter("action", "chapter_list")
             .build()

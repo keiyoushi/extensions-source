@@ -1,16 +1,15 @@
 package eu.kanade.tachiyomi.extension.id.natsu
 
-import eu.kanade.tachiyomi.multisrc.natsuid.Natsuid
+import eu.kanade.tachiyomi.multisrc.natsuid.NatsuId
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.OkHttpClient
 
-class Natsu : Natsuid(
+class Natsu : NatsuId(
     "Natsu",
     "id",
     "https://natsu.tv",
 ) {
 
-    override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(4)
-        .build()
+//    override val client = network.cloudflareClient.newBuilder()
+//        .rateLimit(4)
+//        .build()
 }

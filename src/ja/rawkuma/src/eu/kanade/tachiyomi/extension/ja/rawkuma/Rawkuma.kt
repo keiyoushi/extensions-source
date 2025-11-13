@@ -1,8 +1,8 @@
 package eu.kanade.tachiyomi.extension.ja.rawkuma
 
-import eu.kanade.tachiyomi.multisrc.natsuid.Natsuid
+import eu.kanade.tachiyomi.multisrc.natsuid.NatsuId
 
-class Rawkuma : Natsuid(
+class Rawkuma : NatsuId(
     "Rawkuma",
     "ja",
     "https://rawkuma.net",
