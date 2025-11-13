@@ -195,7 +195,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         description = infoElement.selectFirst("div.info-desc")?.ownText()?.trim()
         thumbnail_url = document.selectFirst("img.thumbnail")?.absUrl("src")
             ?: document.selectFirst("div.manga-cover img")?.absUrl("src")
-                ?: document.selectFirst("div.info-img img")?.absUrl("src")
+            ?: document.selectFirst("div.info-img img")?.absUrl("src")
 
         status = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(Çeviri Durumu)) div.manga-meta-value")
             ?.text()
@@ -257,7 +257,7 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         return GET(url, headers)
     }
 
-    override val pageListImageSelector = "div.chapter-content img.chapter-img"
+    override val pageListImageSelector = "div#chapter-images img.chapter-img"
 
     // Manga-TR: image URL resolution with Base64-decoded data-src
     override fun getImgAttr(element: Element?): String? {
@@ -269,20 +269,40 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
                     val decodedBytes = Base64.decode(encodedUrl, Base64.DEFAULT)
                     String(decodedBytes, StandardCharsets.UTF_8)
                 } catch (e: Exception) {
-                    element.attr("abs:src")
+                    null
                 }
             }
-            element.hasAttr("src") -> element.attr("abs:src")
-            element.hasAttr("data-original") -> element.attr("abs:data-original")
+            element.hasAttr("data-original") -> element.absUrl("data-original")
             else -> null
         }
     }
 
     // Simple pageListParse - relies on the selector above
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(pageListImageSelector).mapIndexed { i, img ->
-            Page(i, imageUrl = getImgAttr(img))
+        val scripts = document.select("script:not([src])")
+
+        for (script in scripts) {
+            val content = script.html()
+
+            val queueMatch = Regex("""var\s+imageQueue\s*=\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL)
+                .find(content) ?: continue
+
+            val encodedUrls = queueMatch.groupValues[1]
+                .split(",")
+                .map { it.trim().removeSurrounding("\"") }
+                .filter { it.isNotEmpty() && it != "LOGO" }
+
+            return encodedUrls.mapIndexedNotNull { index, encoded ->
+                try {
+                    val decoded = String(Base64.decode(encoded, Base64.DEFAULT), StandardCharsets.UTF_8)
+                    Page(index, imageUrl = decoded)
+                } catch (e: Exception) {
+                    null
+                }
+            }
         }
+
+        return emptyList()
     }
 
     // =========================== List Parse ===========================
