@@ -161,17 +161,31 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val infoElement = document.selectFirst("div#tab1")!!
-        infoElement.selectFirst("table + table tr + tr")?.run {
-            author = selectFirst("td:nth-child(1) a")?.text()
-            artist = selectFirst("td:nth-child(2) a")?.text()
-            genre = selectFirst("td:nth-child(3)")?.text()
-        }
-        description = infoElement.selectFirst("div.well")?.ownText()?.trim()
-        thumbnail_url = document.selectFirst("img.thumbnail")?.absUrl("src")
+        val infoElement = document.selectFirst("div.manga-meta-card")!!
+        title = document.selectFirst("div.info-body h1")?.text()?.trim() ?: ""
+        author = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(Yazar)) div.manga-meta-value")
+            ?.select("a")
+            ?.joinToString { it.text().trim() }
 
-        status = infoElement.selectFirst("tr:contains(Çeviri Durumu) + tr > td:nth-child(2)")
-            .let { parseStatus(it?.text()) }
+        artist = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(Sanatçı)) div.manga-meta-value")
+            ?.select("a")
+            ?.joinToString { it.text().trim() }
+
+        genre = infoElement.select("div.manga-meta-item")
+            .find { it.selectFirst("div.manga-meta-label")?.text()?.contains("Tür") == true }
+            ?.selectFirst("div.manga-meta-value")
+            ?.select("a")
+            ?.joinToString { it.text().trim() }
+
+        description = infoElement.selectFirst("div.info-desc")?.ownText()?.trim()
+        thumbnail_url = document.selectFirst("img.thumbnail")?.absUrl("src")
+            ?: document.selectFirst("div.manga-cover img")?.absUrl("src")
+                ?: document.selectFirst("div.info-img img")?.absUrl("src")
+
+        status = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(Çeviri Durumu)) div.manga-meta-value")
+            ?.text()
+            ?.trim()
+            .let { parseStatus(it) }
     }
 
     // ============================== Chapters ==============================
