@@ -22,8 +22,6 @@ import java.util.Locale
 
 class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.US)) {
 
-    override val versionId: Int = 1
-
     private val cdnHeaders = super.headersBuilder()
         .add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
         .build()
@@ -78,15 +76,6 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
     }
     override fun getFilterList(): FilterList = getFilters()
 
-    override fun searchLoadMoreRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$baseUrl${searchPage(page)}".toHttpUrl().newBuilder()
-            .addQueryParameter("s", query)
-            .addQueryParameter("post_type", "wp-manga")
-            .build()
-
-        return GET(url, headers)
-    }
-
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/top-manhwa/${searchPage(page)}?sortby=weekly_top", headers)
     override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/manhwa/${searchPage(page)}?sortby=new", headers)
     override fun popularMangaSelector() = ".manga-item"
@@ -95,7 +84,7 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
     private fun getTagId(tag: String, type: String): Int? {
         val ajax = "$baseUrl/wp-admin/admin-ajax.php?action=search_manga_terms&search=$tag&taxonomy=$type".replace("artist", "manga_artist")
         val res = client.newCall(GET(ajax, headers)).execute()
-        val items = res.parseAs<Results>()
+        val items = json.decodeFromString<Results>(res.body.string())
         val item = items.results.filter { it.text.lowercase() == tag.lowercase() }
         if (item.isNotEmpty()) {
             return item[0].id
@@ -260,10 +249,6 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
             element.hasAttr("data-cfsrc") -> element.attr("abs:data-cfsrc")
             else -> element.attr("abs:src")
         }
-    }
-
-    private inline fun <reified T> Response.parseAs(): T {
-        return json.decodeFromString(body.string())
     }
 
     public override fun parseChapterDate(raw: String?): Long {
