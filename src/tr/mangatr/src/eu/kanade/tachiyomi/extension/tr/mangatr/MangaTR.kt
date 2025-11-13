@@ -204,11 +204,11 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     }
 
     // ============================== Chapters ==============================
-    override fun chapterListSelector() = "tr.table-bordered"
+    override fun chapterListSelector() = "div.chapter-item"
 
-    override val chapterUrlSelector = "td[align=left] > a"
+    override val chapterUrlSelector = "div.chapter-title a"
 
-    override val chapterTimeSelector = "td[align=right]"
+    override val chapterTimeSelector = "div.stats"
 
     private val chapterListHeaders by lazy {
         headersBuilder().add("X-Requested-With", "XMLHttpRequest").build()
@@ -245,8 +245,17 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         return chapters
     }
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET("$baseUrl/${chapter.url.substringAfter("cek/")}", headers)
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val link = element.selectFirst("div.chapter-title a")!!
+        setUrlWithoutDomain(link.attr("href"))
+        name = link.text().trim()
+        date_upload = parseRelativeDate(element.selectFirst("div.stats")?.ownText() ?: "")
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val url = "$baseUrl/${chapter.url}"
+        return GET(url, headers)
+    }
 
     override val pageListImageSelector = "div.chapter-content img.chapter-img"
 
