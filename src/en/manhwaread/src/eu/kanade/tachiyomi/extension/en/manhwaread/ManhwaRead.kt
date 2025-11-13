@@ -48,8 +48,10 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
             }
             artist = document.select("a[href*=/artist/] span:first-of-type").eachText().joinToString().ifBlank { author }
 
-            genre = document.select(".manga-genres a").eachText().joinToString().ifBlank {
-                document.select(".manga-item__genres span").eachText().joinToString()
+            run {
+                val tokens = document.select("a[rel=tag]")
+                    .mapNotNull { it.selectFirst("span")?.text() }
+                genre = tokens.map(String::trim).filter(String::isNotBlank).distinctBy(String::lowercase).joinToString()
             }
 
             val desc = document.select("#mangaDesc .manga-desc__content").text().ifBlank {
@@ -100,14 +102,14 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
     }
     override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
-            addPathSegments("page/$page")
+        val url = "$baseUrl/${searchPage(page)}".toHttpUrl().newBuilder().apply {
             addQueryParameter("post_type", "wp-manga")
 
             // When user clicks Author/Artist from details page, it passes the name in query.
             // Try to resolve it to taxonomy IDs if explicit filters are not already set.
             val hasAuthorFilter = filters.any { it is TextFilter && it.type == "author" && it.state.isNotBlank() }
             val hasArtistFilter = filters.any { it is TextFilter && it.type == "artist" && it.state.isNotBlank() }
+            val hasTagFilter = filters.any { it is TextFilter && it.type == "manga_tag" && it.state.isNotBlank() }
             var taxonomyMatched = false
             if (query.isNotBlank() && !hasAuthorFilter && !hasArtistFilter) {
                 val authorId = getTagId(query.trim(), "author")
@@ -119,6 +121,12 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
                     if (artistId != null) {
                         addQueryParameter("artists[]", artistId.toString())
                         taxonomyMatched = true
+                    } else if (!hasTagFilter) {
+                        val tagId = getTagId(query.trim(), "manga_tag")
+                        if (tagId != null) {
+                            addQueryParameter("including[]", tagId.toString())
+                            taxonomyMatched = true
+                        }
                     }
                 }
             }

@@ -54,7 +54,7 @@ internal class GenresFilter(name: String) :
             "Sports" to "677",
             "Supernatural" to "544",
             "Thriller" to "580",
-        ).map { CheckBoxFilter(it.first, it.second, true) },
+        ).map { CheckBoxFilter(it.first, it.second, false) },
     )
 
 internal open class MappedSelectFilter(
