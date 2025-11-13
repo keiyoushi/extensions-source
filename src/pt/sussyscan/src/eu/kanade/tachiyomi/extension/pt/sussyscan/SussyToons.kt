@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.sussyscan
 
+import eu.kanade.tachiyomi.multisrc.greenshit.GreenShit
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 

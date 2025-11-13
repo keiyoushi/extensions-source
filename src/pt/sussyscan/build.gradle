@@ -1,8 +1,9 @@
 ext {
     extName = 'Sussy Toons'
     extClass = '.SussyToons'
+    themePkg = 'greenshit'
     baseUrl = 'https://www.sussytoons.wtf'
-    extVersionCode = 63
+    overrideVersionCode = 57
     isNsfw = true
 }
 

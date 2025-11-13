@@ -2,8 +2,8 @@ ext {
     extName = 'Maid Scan'
     extClass = '.MaidScan'
     themePkg = 'greenshit'
-    baseUrl = 'https://novo.empreguetes.site'
-    overrideVersionCode = 46
+    baseUrl = 'https://empreguetes.xyz/'
+    overrideVersionCode = 47
     isNsfw = true
 }
 
