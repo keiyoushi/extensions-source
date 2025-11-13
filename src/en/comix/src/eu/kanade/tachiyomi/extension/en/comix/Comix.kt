@@ -34,12 +34,16 @@ class Comix : HttpSource(), ConfigurableSource {
 
     private val json: Json by injectLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(5, 2)
-        .build()
+    private fun parseSearchResponse(response: Response): MangasPage {
+        val res: SearchResponse = response.parseAs()
+        val manga =
+            res.result.items.map { manga -> manga.toBasicSManga(preferences.posterQuality()) }
+        return MangasPage(manga, res.result.pagination.page < res.result.pagination.lastPage)
+    }
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", baseUrl)
+    override val client = network.cloudflareClient.newBuilder().rateLimit(5, 2).build()
+
+    override fun headersBuilder() = super.headersBuilder().add("Referer", baseUrl)
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
@@ -47,65 +51,50 @@ class Comix : HttpSource(), ConfigurableSource {
 
     /******************************* POPULAR MANGA ************************************/
     override fun popularMangaRequest(page: Int): Request {
-        val url = apiUrl
-            .toHttpUrl()
-            .newBuilder()
-            .addPathSegment("mangas")
+        val url = apiUrl.toHttpUrl().newBuilder().addPathSegment("mangas")
             .addQueryParameter("order[views_30d]", "desc")
             .addQueryParameter("limit", "28")
-            .addQueryParameter("page", page.toString())
-            .build()
+            .addQueryParameter("page", page.toString()).build()
 
         Log.d("comix", url.toString())
 
         return GET(url, headers)
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val res: SearchResponse = response.parseAs()
-        val manga = res.result.items.map { manga -> manga.toSManga(preferences.posterQuality(), null) }
-        return MangasPage(manga, res.result.pagination.page < res.result.pagination.lastPage)
-    }
+    override fun popularMangaParse(response: Response): MangasPage = parseSearchResponse(response)
 
     /******************************* LATEST MANGA ************************************/
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = apiUrl
-            .toHttpUrl()
-            .newBuilder()
-            .addPathSegment("mangas")
-            .addQueryParameter("order[chapter_updated_at]", "desc")
-            .addQueryParameter("limit", "28")
-            .addQueryParameter("page", page.toString())
-            .build()
+        val url = apiUrl.toHttpUrl().newBuilder().addPathSegment("mangas")
+            .addQueryParameter("order[chapter_updated_at]", "desc").addQueryParameter("limit", "28")
+            .addQueryParameter("page", page.toString()).build()
         return GET(url, headers)
     }
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val res: SearchResponse = response.parseAs()
-        val manga = res.result.items.map { manga -> manga.toSManga(preferences.posterQuality(), null) }
-        return MangasPage(manga, res.result.pagination.page < res.result.pagination.lastPage)
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = parseSearchResponse(response)
 
     /******************************* SEARCHING ***************************************/
-    override fun searchMangaRequest(
-        page: Int,
-        query: String,
-        filters: FilterList,
-    ): Request {
-        throw UnsupportedOperationException()
+    override fun getFilterList() = ComixFilters().getFilterList()
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = apiUrl.toHttpUrl().newBuilder().addPathSegment("mangas")
+        filters.filterIsInstance<ComixFilters.UriFilter>().forEach { it.addToUri(url) }
+
+        if (query.isNotBlank()) {
+            url.addQueryParameter("keyword", query)
+        }
+
+        url.addQueryParameter("limit", "28")
+            .addQueryParameter("page", page.toString())
+
+        return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        throw UnsupportedOperationException()
-    }
+    override fun searchMangaParse(response: Response): MangasPage = parseSearchResponse(response)
 
     /******************************* Single Manga Page *******************************/
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = apiUrl
-            .toHttpUrl()
-            .newBuilder()
-            .addPathSegment("mangas")
-            .addPathSegment(manga.url)
+        val url = apiUrl.toHttpUrl().newBuilder().addPathSegment("mangas").addPathSegment(manga.url)
             .build()
 
         return GET(url, headers)
@@ -119,9 +108,7 @@ class Comix : HttpSource(), ConfigurableSource {
         // Check the manga's term ids against all terms to match them and aggregate the results
         // (Genres, Artists, Authors, etc)
         if (manga.termIds.isNotEmpty()) {
-            val termsUrlBuilder = apiUrl.toHttpUrl()
-                .newBuilder()
-                .addPathSegment("terms")
+            val termsUrlBuilder = apiUrl.toHttpUrl().newBuilder().addPathSegment("terms")
                 .addQueryParameter("limit", manga.termIds.size.toString())
 
             manga.termIds.forEach { id ->
@@ -129,8 +116,9 @@ class Comix : HttpSource(), ConfigurableSource {
             }
 
             // Query each term type, because Comix doesn't support checking everything within one request
-            ApiTerms.values().forEach { apiTerm ->
-                val termsRequest = GET(termsUrlBuilder.setQueryParameter("type", apiTerm.term).build(), headers)
+            ComixFilters.ApiTerms.values().forEach { apiTerm ->
+                val termsRequest =
+                    GET(termsUrlBuilder.setQueryParameter("type", apiTerm.term).build(), headers)
                 val termsResponse = client.newCall(termsRequest).execute().parseAs<TermResponse>()
 
                 if (termsResponse.result.items.isNotEmpty()) {
@@ -139,9 +127,15 @@ class Comix : HttpSource(), ConfigurableSource {
             }
         }
 
+        // Check if we are missing demographics
+        if (terms.count() < manga.termIds.count()) {
+            val dems = ComixFilters.getDemographics().filter { (_, id) -> manga.termIds.contains(id.toInt()) }
+                .map { (name, id) -> Term(id.toInt(), "demographic", name, name, 0) }
+            terms.addAll(dems)
+        }
+
         return manga.toSManga(preferences.posterQuality(), terms)
     }
-
 
     override fun getMangaUrl(manga: SManga): String {
         return "$baseUrl/title${manga.url}"
@@ -149,15 +143,9 @@ class Comix : HttpSource(), ConfigurableSource {
 
     /******************************* Chapters List *******************************/
     override fun chapterListRequest(manga: SManga): Request {
-        val url = apiUrl
-            .toHttpUrl()
-            .newBuilder()
-            .addPathSegment("mangas")
-            .addPathSegment(manga.url)
-            .addPathSegment("chapters")
-            .addQueryParameter("order[number]", "desc")
-            .addQueryParameter("limit", "100")
-            .build()
+        val url = apiUrl.toHttpUrl().newBuilder().addPathSegment("mangas").addPathSegment(manga.url)
+            .addPathSegment("chapters").addQueryParameter("order[number]", "desc")
+            .addQueryParameter("limit", "100").build()
 
         return GET(url, headers)
     }
@@ -177,10 +165,7 @@ class Comix : HttpSource(), ConfigurableSource {
         var page = result.result.pagination.page
 
         while (hasNextPage) {
-            val url = requestUrl
-                .newBuilder()
-                .addQueryParameter("page", (++page).toString())
-                .build()
+            val url = requestUrl.newBuilder().addQueryParameter("page", (++page).toString()).build()
 
             val newResponse = client.newCall(GET(url, headers)).execute()
 
@@ -227,7 +212,9 @@ class Comix : HttpSource(), ConfigurableSource {
             setDefaultValue("large")
         }.let(screen::addPreference)
     }
+
     private fun SharedPreferences.posterQuality() = getString(PREF_POSTER_QUALITY, "large")
+
     companion object {
         private const val PREF_POSTER_QUALITY = "pref_poster_quality"
     }

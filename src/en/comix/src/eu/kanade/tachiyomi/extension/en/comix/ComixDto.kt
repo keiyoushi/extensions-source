@@ -1,10 +1,9 @@
 package eu.kanade.tachiyomi.extension.en.comix
+
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlin.collections.distinct
-import kotlin.text.isEmpty
 
 @Serializable
 class TermResponse(
@@ -89,12 +88,13 @@ class Manga(
         private val mu: String?,
     )
 
-    fun toSManga(posterQuality: String?, terms: List<Term>?) = SManga.create().apply {
+    fun toSManga(posterQuality: String?, terms: List<Term> = emptyList()) = SManga.create().apply {
         url = "/$hashId"
         title = this@Manga.title
-        author = terms.takeUnless { it.isNullOrEmpty() }?.filter { it.type == "author" }
+        author = terms.takeUnless { it.isEmpty() }?.filter { it.type == "author" }
             ?.joinToString { it.title }
-        artist = terms.takeUnless { it.isNullOrEmpty() }?.filter { it.type == "artist" }?.joinToString { it.title }
+        artist = terms.takeUnless { it.isEmpty() }?.filter { it.type == "artist" }
+            ?.joinToString { it.title }
         description = buildString {
             synopsis.takeUnless { it.isEmpty() }
                 ?.let { append(it) }
@@ -105,6 +105,7 @@ class Manga(
                     append(altName.joinToString("\n"))
                 }
         }
+        initialized = true
         status = when (this@Manga.status) {
             "releasing" -> SManga.ONGOING
             "on_hiatus" -> SManga.ON_HIATUS
@@ -116,15 +117,24 @@ class Manga(
         genre = getGenres(terms)
     }
 
-    fun getGenres(terms: List<Term>?) = buildList {
+    fun toBasicSManga(posterQuality: String?) = SManga.create().apply {
+        url = "/$hashId"
+        title = this@Manga.title
+        thumbnail_url = this@Manga.poster.from(posterQuality)
+    }
+
+    fun getGenres(terms: List<Term> = emptyList()) = buildList {
         when (type) {
             "manhwa" -> add("Manhwa")
             "manhua" -> add("Manhua")
             "manga" -> add("Manga")
             else -> add("Other")
         }
-        terms.takeUnless { it.isNullOrEmpty() }?.filter { it.type == "genre" }?.map { it.title }.let { addAll(it ?: emptyList()) }
-        terms.takeUnless { it.isNullOrEmpty() }?.filter { it.type == "theme" }?.map { it.title }.let { addAll(it ?: emptyList()) }
+        terms.takeUnless { it.isEmpty() }?.filter { it.type == "genre" }?.map { it.title }
+            .let { addAll(it ?: emptyList()) }
+        terms.takeUnless { it.isEmpty() }?.filter { it.type == "theme" }?.map { it.title }
+            .let { addAll(it ?: emptyList()) }
+        terms.takeUnless { it.isEmpty() }?.filter { it.type == "demographic" }?.map { it.title }
     }.distinct().joinToString()
 }
 
