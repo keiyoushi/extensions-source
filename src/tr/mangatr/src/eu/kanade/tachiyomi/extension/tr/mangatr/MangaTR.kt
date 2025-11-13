@@ -54,6 +54,21 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             .addQueryParameter("sort_type", "DESC")
             .addQueryParameter("page", page.toString())
             .addQueryParameter("listType", "pagination")
+            .addQueryParameter("icerik", "1")
+            .build()
+
+        return GET(url, headers)
+    }
+
+    // =============================== Latest ===============================
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$baseUrl/$requestPath".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "last_update")
+            .addQueryParameter("sort_type", "DESC")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("listType", "pagination")
+            .addQueryParameter("icerik", "1")
             .build()
 
         return GET(url, headers)
