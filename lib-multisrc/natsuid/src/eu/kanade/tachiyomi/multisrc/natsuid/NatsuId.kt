@@ -223,8 +223,15 @@ abstract class NatsuId(
             addQueryParameter("_embed", null)
         }.build()
 
-        val details = client.newCall(GET(url, headers)).execute()
-            .parseAs<List<Manga>>()
+        val jsonResponse = client.newCall(GET(url, headers)).execute()
+        val cleanJson = jsonResponse.body.string().cleanJsonResponse()
+
+        val details = try {
+            cleanJson.parseAs<List<Manga>>()
+        } catch (e: Exception) {
+            Log.e(name, "Failed to parse JSON response: ${e.message}")
+            return MangasPage(emptyList(), false)
+        }
             .filterNot { manga ->
                 manga.embedded.getTerms("type").contains("Novel")
             }
@@ -255,7 +262,8 @@ abstract class NatsuId(
             return client.newCall(GET(url, headers))
                 .asObservableSuccess()
                 .map { response ->
-                    val manga = response.parseAs<List<Manga>>()[0]
+                    val cleanJson = response.body.string().cleanJsonResponse()
+                    val manga = cleanJson.parseAs<List<Manga>>()[0]
 
                     if (manga.embedded.getTerms("type").contains("Novel")) {
                         throw Exception("Novels are not supported")
@@ -299,7 +307,14 @@ abstract class NatsuId(
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        return response.parseAs<Manga>().toSManga()
+        val manga = try {
+            response.body.string().cleanJsonResponse().parseAs<Manga>()
+        } catch (e: Exception) {
+            Log.e(name, "Failed to parse manga details JSON response: ${e.message}")
+            throw e
+        }
+
+        return manga.toSManga()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -345,5 +360,16 @@ abstract class NatsuId(
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
+    }
+
+    // JSON cleaner for site like ikiru when sorting latest desc or in some of their title
+    private fun String.cleanJsonResponse(): String {
+        val trimmed = trimStart()
+        val jsonStart = trimmed.indexOfFirst { it == '[' || it == '{' }
+        return if (jsonStart in 1 until trimmed.length) {
+            trimmed.substring(jsonStart)
+        } else {
+            trimmed
+        }
     }
 }

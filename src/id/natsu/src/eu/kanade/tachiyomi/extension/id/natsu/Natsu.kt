@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.natsu
 
 import eu.kanade.tachiyomi.multisrc.natsuid.NatsuId
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class Natsu : NatsuId(
     "Natsu",
