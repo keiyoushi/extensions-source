@@ -293,41 +293,4 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
             else -> element.attr("abs:src")
         }
     }
-
-    public override fun parseChapterDate(raw: String?): Long {
-        if (raw.isNullOrBlank()) return 0L
-        val text = raw.trim()
-
-        val formats = listOf(
-            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", java.util.Locale.US),
-            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US),
-            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US),
-            java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.US),
-            java.text.SimpleDateFormat("MM/dd/yyyy", java.util.Locale.US),
-            java.text.SimpleDateFormat("yyyy/MM/dd", java.util.Locale.US),
-        )
-        for (fmt in formats) {
-            fmt.isLenient = false
-            kotlin.runCatching { return fmt.parse(text)?.time ?: 0L }
-        }
-
-        val rel = Regex("""(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago""")
-        val m = rel.find(text.lowercase())
-        if (m != null) {
-            val amount = m.groupValues[1].toLongOrNull() ?: return 0L
-            val unit = m.groupValues[2]
-            val millis = when (unit) {
-                "minute" -> amount * 60_000L
-                "hour" -> amount * 3_600_000L
-                "day" -> amount * 86_400_000L
-                "week" -> amount * 604_800_000L
-                "month" -> amount * 2_592_000_000L
-                "year" -> amount * 31_536_000_000L
-                else -> 0L
-            }
-            return System.currentTimeMillis() - millis
-        }
-
-        return 0L
-    }
 }
