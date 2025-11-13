@@ -16,6 +16,8 @@ fun getFilters(): FilterList {
         TextFilter("Authors", "author"),
         TextFilter("Artists", "artist"),
         Filter.Separator(),
+        StatusSelectFilter("Status"),
+        Filter.Separator(),
         Filter.Header("Filter by year uploaded, for example: (>2024)"),
         UploadedFilter("Uploaded"),
         Filter.Separator(),
@@ -53,6 +55,29 @@ internal class GenresFilter(name: String) :
             "Supernatural" to "544",
             "Thriller" to "580",
         ).map { CheckBoxFilter(it.first, it.second, true) },
+    )
+
+internal open class MappedSelectFilter(
+    name: String,
+    private val options: Array<Pair<String, String>>,
+    private val defaultIndex: Int = 0,
+) : Filter.Select<String>(name, options.map { it.first }.toTypedArray(), defaultIndex) {
+    fun selectedValue(): String = options[state].second
+    fun isDefault(): Boolean = state == defaultIndex
+}
+
+internal class StatusSelectFilter(name: String) :
+    MappedSelectFilter(
+        name,
+        arrayOf(
+            "Any" to "",
+            "Completed" to "completed",
+            "Ongoing" to "ongoing",
+            "Canceled" to "canceled",
+            "Hiatus" to "on-hold",
+            "Incomplete" to "incomplete",
+        ),
+        0,
     )
 internal open class CheckBoxFilter(name: String, val value: String, state: Boolean) : Filter.CheckBox(name, state)
 

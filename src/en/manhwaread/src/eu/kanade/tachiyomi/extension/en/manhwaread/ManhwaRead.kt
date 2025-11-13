@@ -68,6 +68,8 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
             status = when (statusAttr) {
                 "completed" -> SManga.COMPLETED
                 "ongoing" -> SManga.ONGOING
+                "canceled" -> SManga.CANCELLED
+                "on-hold" -> SManga.ON_HIATUS
                 else -> SManga.UNKNOWN
             }
 
@@ -100,7 +102,7 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = baseUrl.toHttpUrl().newBuilder().apply {
             addPathSegments("page/$page")
-            addQueryParameter("title-type", "contains")
+            addQueryParameter("post_type", "wp-manga")
 
             // When user clicks Author/Artist from details page, it passes the name in query.
             // Try to resolve it to taxonomy IDs if explicit filters are not already set.
@@ -130,6 +132,11 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
                     is GenresFilter -> {
                         val (activeFilter, _) = it.state.partition { stIt -> stIt.state }
                         activeFilter.forEach { fil -> addQueryParameter("genres[]", fil.value) }
+                    }
+
+                    is StatusSelectFilter -> {
+                        val slug = it.selectedValue()
+                        if (!it.isDefault() && slug.isNotEmpty()) addQueryParameter("status", slug)
                     }
 
                     is PageFilter -> {
