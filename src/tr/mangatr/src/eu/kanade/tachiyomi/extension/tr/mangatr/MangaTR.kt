@@ -186,11 +186,17 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             ?.select("a")
             ?.joinToString { it.text().trim() }
 
-        genre = infoElement.select("div.manga-meta-item")
-            .find { it.selectFirst("div.manga-meta-label")?.text()?.contains("Tür") == true }
-            ?.selectFirst("div.manga-meta-value")
+        val contentType = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(İçerik Türü)) div.manga-meta-value")
+            ?.text()
+            ?.trim()
+
+        val genres = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(Tür(ler))) div.manga-meta-value")
             ?.select("a")
             ?.joinToString { it.text().trim() }
+
+        genre = listOfNotNull(contentType, genres)
+            .filter { it.isNotEmpty() }
+            .joinToString(", ")
 
         description = document.selectFirst("div.info-card div.info-desc")?.text()?.trim()
 
