@@ -12,6 +12,9 @@ import eu.kanade.tachiyomi.extension.en.bookwalker.dto.HoldBookEntityDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.HoldBooksInfoDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SeriesDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SingleDto
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.ViewerAuthResponse
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.ViewerConfiguration
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.ViewerPageInfo
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
@@ -32,6 +35,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
@@ -58,6 +62,10 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
     override val lang = "en"
 
     override val supportsLatest = true
+
+    private val rimgUrl = "https://rimg.bookwalker.jp"
+    private val cUrl = "https://c.bookwalker.jp"
+    private val trialUrl = "https://viewer-trial.bookwalker.jp"
 
     override val client = network.client.newBuilder()
         .addInterceptor(BookWalkerImageRequestInterceptor(this))
@@ -324,12 +332,12 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                         is SeriesDto -> SManga.create().apply {
                             url = "/series/${it.seriesId}/"
                             title = it.seriesName.cleanTitle()
-                            thumbnail_url = it.imageUrl
+                            thumbnail_url = getHiResCoverFromLegacyUrl(it.imageUrl)
                         }
                         is SingleDto -> SManga.create().apply {
                             url = it.detailUrl.substring(baseUrl.length)
                             title = it.title.cleanTitle()
-                            thumbnail_url = it.imageUrl
+                            thumbnail_url = getHiResCoverFromLegacyUrl(it.imageUrl)
                             author = it.authors.joinToString { a -> a.authorName }
                         }
                     }
@@ -351,8 +359,10 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         return SManga.create().apply {
             url = titleElt.attr("href").substring(baseUrl.length)
             title = titleElt.attr("title").cleanTitle()
-            thumbnail_url = element.select(".a-tile-thumb-img > img")
-                .attr("data-srcset").getHighestQualitySrcset()
+            thumbnail_url = getHiResCoverFromLegacyUrl(
+                element.select(".a-tile-thumb-img > img")
+                    .attr("data-srcset").getHighestQualitySrcset(),
+            )
         }
     }
 
@@ -425,10 +435,12 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             // series that release in volumes we want the earliest one, which will _usually_ be the
             // last one on the page. With that said, it's not worth it to paginate in order to find
             // the earliest volume, and volume releases don't usually have 60+ volumes anyways.
-            val chapterUrl = seriesPage
-                .select(".o-tile .a-tile-ttl a").last()
-                ?.attr("href")
-                ?: return@rxSingle mangaDetails
+            val firstItem = seriesPage.select(".o-tile:not(:has(.a-ribbon-pre-order)) .a-tile-ttl a")
+            val chapterUrl = firstItem.attr("href") ?: return@rxSingle mangaDetails
+            val uuid = chapterUrl.substringAfter("/de").substringBefore("/")
+            getHiResCoverUrlFromTrial(uuid)?.let {
+                mangaDetails.thumbnail_url = it
+            }
 
             val chapterPage = client.newCall(GET(chapterUrl, callHeaders)).await().asJsoup()
 
@@ -446,6 +458,11 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
 
             SManga.create().apply {
                 title = getTitleFromChapterPage(document)?.cleanTitle().orEmpty()
+
+                val uuid = manga.url.substringAfter("/de").substringBefore("/")
+                getHiResCoverUrlFromTrial(uuid)?.let {
+                    thumbnail_url = it
+                }
 
                 description = getDescriptionFromChapterPage(document)
                 // From the browse pages we can't distinguish between a true one-shot and a
@@ -465,13 +482,16 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
     }
 
     private fun SManga.updateDetailsFromSeriesPage(document: Document) = run {
+        // Fallback:
         // Take the thumbnail from the first chapter that is not on pre-order.
         // Pre-order chapters often just have a gray rectangle with "NOW PRINTING" as their
         // thumbnail, which doesn't look very pretty for the catalog.
-        thumbnail_url = document
-            .select(".o-tile:not(:has(.a-ribbon-pre-order)) .a-tile-thumb-img > img")
-            .attr("data-srcset")
-            .getHighestQualitySrcset()
+        thumbnail_url = getHiResCoverFromLegacyUrl(
+            document
+                .select(".o-tile:not(:has(.a-ribbon-pre-order)) .a-tile-thumb-img > img")
+                .attr("data-srcset")
+                .getHighestQualitySrcset(),
+        )
         title = document.selectFirst(".title-main-inner")!!.ownText().cleanTitle()
         author = getAvailableFilterNames(document, "side-author").joinToString()
         genre = getAvailableFilterNames(document, "side-genre").joinToString()
@@ -748,6 +768,87 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             Pair(parts[1].trimEnd('x').toIntOrNull(), parts[0])
         }
         return srcsetPairs.maxByOrNull { it.first ?: 0 }?.second
+    }
+
+    // This function works if the cover is from before mid-dec'23 (non-hexadecimal).
+    // If it's a newer cover, it will fall back to the low-res version.
+    private fun getHiResCoverFromLegacyUrl(url: String?): String? {
+        if (url.isNullOrEmpty()) return url
+        return try {
+            val extension = url.substringAfterLast(".")
+            val numericId = when {
+                url.startsWith(rimgUrl) -> {
+                    val id = url.substringAfter("$rimgUrl/").substringBefore('/')
+                    id.reversed().toLongOrNull()
+                }
+                // For legacy covers from the user's library.
+                url.contains("thumbnailImage_") -> {
+                    val id = url.substringAfter("thumbnailImage_").substringBefore(".$extension")
+                    id.toLongOrNull()
+                }
+                else -> null
+            }
+            numericId?.let { "$cUrl/coverImage_${it - 1}.$extension" } ?: url
+        } catch (e: Exception) {
+            url
+        }
+    }
+
+    // This function retrieves high-res covers from the trial viewer when parsing manga details.
+    // It’s not used for covers in popularMangaFromElement because of too many requests.
+    private suspend fun getHiResCoverUrlFromTrial(uuid: String): String? {
+        try {
+            val authUrl = trialUrl.toHttpUrl().newBuilder()
+                .addPathSegment("trial-page")
+                .addPathSegment("c")
+                .addQueryParameter("cid", uuid)
+                .addQueryParameter("BID", "0")
+                .build()
+            val authResponse = client.newCall(GET(authUrl, headers))
+                .awaitSuccess().parseAs<ViewerAuthResponse>()
+            val auth = authResponse.authInfo
+            /*
+            // This is for covers from light novels, but the covers differ from the original ones,
+            // so leaving it unused for now.
+            val readerBaseUrl = if (authResponse.cty == 0) {
+                authResponse.url + "normal_default/"
+            } else {
+                authResponse.url
+            }
+             */
+            val readerBaseHttpUrl = authResponse.url.toHttpUrl()
+
+            val configUrl = readerBaseHttpUrl.newBuilder()
+                .addPathSegment("configuration_pack.json")
+                .addQueryParameter("Policy", auth.policy)
+                .addQueryParameter("Signature", auth.signature)
+                .addQueryParameter("Key-Pair-Id", auth.keyPairId)
+                .build()
+
+            val responseMap = client.newCall(GET(configUrl, headers))
+                .awaitSuccess().body.string().parseAs<Map<String, JsonElement>>()
+
+            val config = responseMap["configuration"]!!.toString().parseAs<ViewerConfiguration>()
+            val coverContent = config.contents.first()
+            val coverFileKey = coverContent.file
+            val coverFileType = coverContent.type
+
+            val coverInfo = responseMap[coverFileKey]!!.toString().parseAs<ViewerPageInfo>()
+            val coverPageNumber = coverInfo.fileLinkInfo.pageLinkInfoList.first().page.pageNumber
+
+            val imageRelativePath = "$coverFileKey/$coverPageNumber.$coverFileType"
+            val resolvedUrl = readerBaseHttpUrl.resolve(imageRelativePath)
+
+            val finalImageUrl = resolvedUrl!!.newBuilder()
+                .addQueryParameter("Policy", auth.policy)
+                .addQueryParameter("Signature", auth.signature)
+                .addQueryParameter("Key-Pair-Id", auth.keyPairId)
+                .build()
+
+            return finalImageUrl.toString()
+        } catch (e: Exception) {
+            return null
+        }
     }
 
     private fun String.parseChapterNumber(): Pair<String, Float>? {
