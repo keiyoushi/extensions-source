@@ -27,7 +27,7 @@ import java.util.TimeZone
 class PoseidonScans : HttpSource() {
 
     override val name = "Poseidon Scans"
-    override val baseUrl = "https://poseidonscans.com"
+    override val baseUrl = "https://poseidon-scans.com"
     override val lang = "fr"
     override val supportsLatest = true
     override val versionId = 2
