@@ -2,8 +2,8 @@ ext {
     extName = 'Aurora Scan'
     extClass = '.AuroraScan'
     themePkg = 'greenshit'
-    baseUrl = 'https://aurorascan.net'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.serenitytoons.win/'
+    overrideVersionCode = 1
     isNsfw = false
 }
 

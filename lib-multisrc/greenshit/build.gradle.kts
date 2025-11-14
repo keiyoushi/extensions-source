@@ -5,5 +5,6 @@ plugins {
 baseVersionCode = 6
 
 dependencies {
-    implementation(project(":lib:textinterceptor"))
+    api(project(":lib:textinterceptor"))
 }
+

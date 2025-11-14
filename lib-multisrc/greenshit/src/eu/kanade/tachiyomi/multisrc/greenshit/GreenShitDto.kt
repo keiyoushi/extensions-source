@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import keiyoushi.utils.toSlug
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -20,6 +19,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
+import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -191,7 +191,6 @@ class Status(
     val name: String,
 )
 
-
 @Serializable
 class Tag(
     @JsonNames("tag_id", "id")
@@ -263,4 +262,14 @@ class PageDto(
 
         return Page(0, "", url)
     }
+}
+
+fun String?.toSlug(slugSeparator: String = "-"): String {
+    if (this == null) return ""
+    return Normalizer.normalize(this, Normalizer.Form.NFD)
+        .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+        .lowercase()
+        .replace("[^a-z0-9\\s-]".toRegex(), "")
+        .replace("\\s+".toRegex(), slugSeparator)
+        .trim(*slugSeparator.toCharArray())
 }
