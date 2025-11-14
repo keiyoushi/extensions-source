@@ -109,8 +109,8 @@ class TruyenQQ : ParsedHttpSource(), ConfigurableSource {
         author = info.select(".org").joinToString { it.text() }
         genre = document.select(".list01 li").joinToString { it.text() }
         description = document.select(".story-detail-info").joinToString {
-            it.select("a, strong").unwrap()
-            it.wholeText()
+            it.select("a, strong, p").unwrap()
+            it.wholeText().trim()
         }
         thumbnail_url = document.selectFirst("img[itemprop=image]")?.absUrl("src")
         status = when (info.select(".status > p:last-child").text()) {
