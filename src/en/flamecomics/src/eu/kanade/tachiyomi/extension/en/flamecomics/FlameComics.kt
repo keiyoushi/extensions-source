@@ -57,7 +57,7 @@ class FlameComics : HttpSource() {
         imageApiUrlBuilder().apply {
             addPathSegment(seriesData.series_id.toString())
             addPathSegment(seriesData.cover)
-            addQueryParameter(seriesData.last_edit, null)
+            addQueryParameter(seriesData.last_edit.toString(), null)
         }.build().toString()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
