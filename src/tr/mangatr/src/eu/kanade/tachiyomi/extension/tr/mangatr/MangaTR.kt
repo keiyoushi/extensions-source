@@ -38,11 +38,40 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
     // ============================== Popular ===============================
     override fun popularMangaNextPageSelector() = "div.btn-group:not(div.btn-block) button.btn-info"
 
-    override fun popularMangaSelector() = "div.row a[data-toggle]"
+    override fun popularMangaSelector() = "div.col-md-12 > span.thumbnail"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        setUrlWithoutDomain(element.absUrl("href"))
-        title = element.text()
+        val link = element.selectFirst("a.pull-left")!!
+        setUrlWithoutDomain(link.absUrl("href"))
+
+        title = element.selectFirst("h3.media-heading a")?.text()?.trim() ?: ""
+        thumbnail_url = link.selectFirst("img.media-object")?.absUrl("src")
+    }
+
+    override fun popularMangaRequest(page: Int): Request {
+        val url = "$baseUrl/$requestPath".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "views")
+            .addQueryParameter("sort_type", "DESC")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("listType", "pagination")
+            .addQueryParameter("icerik", "1")
+            .build()
+
+        return GET(url, headers)
+    }
+
+    // =============================== Latest ===============================
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val url = "$baseUrl/$requestPath".toHttpUrl().newBuilder()
+            .addQueryParameter("sort", "last_update")
+            .addQueryParameter("sort_type", "DESC")
+            .addQueryParameter("page", page.toString())
+            .addQueryParameter("listType", "pagination")
+            .addQueryParameter("icerik", "1")
+            .build()
+
+        return GET(url, headers)
     }
 
     // =============================== Search ===============================
@@ -147,25 +176,44 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
 
     // =========================== Manga Details ============================
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        val infoElement = document.selectFirst("div#tab1")!!
-        infoElement.selectFirst("table + table tr + tr")?.run {
-            author = selectFirst("td:nth-child(1) a")?.text()
-            artist = selectFirst("td:nth-child(2) a")?.text()
-            genre = selectFirst("td:nth-child(3)")?.text()
-        }
-        description = infoElement.selectFirst("div.well")?.ownText()?.trim()
+        val infoElement = document.selectFirst("div.manga-meta-card")!!
+        title = document.selectFirst("div.info-body h1")?.text()?.trim() ?: ""
+        author = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(Yazar)) div.manga-meta-value")
+            ?.select("a")
+            ?.joinToString { it.text().trim() }
+
+        artist = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(Sanatçı)) div.manga-meta-value")
+            ?.select("a")
+            ?.joinToString { it.text().trim() }
+
+        val contentType = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(İçerik Türü)) div.manga-meta-value")
+            ?.text()
+            ?.trim()
+
+        val genres = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(Tür(ler))) div.manga-meta-value")
+            ?.select("a")
+            ?.joinToString { it.text().trim() }
+
+        genre = listOfNotNull(contentType, genres)
+            .filter { it.isNotEmpty() }
+            .joinToString(", ")
+
+        description = document.selectFirst("div.info-card div.info-desc")?.text()?.trim()
+
         thumbnail_url = document.selectFirst("img.thumbnail")?.absUrl("src")
 
-        status = infoElement.selectFirst("tr:contains(Çeviri Durumu) + tr > td:nth-child(2)")
-            .let { parseStatus(it?.text()) }
+        status = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(Çeviri Durumu)) div.manga-meta-value")
+            ?.text()
+            ?.trim()
+            .let { parseStatus(it) }
     }
 
     // ============================== Chapters ==============================
-    override fun chapterListSelector() = "tr.table-bordered"
+    override fun chapterListSelector() = "div.chapter-item"
 
-    override val chapterUrlSelector = "td[align=left] > a"
+    override val chapterUrlSelector = "div.chapter-title a"
 
-    override val chapterTimeSelector = "td[align=right]"
+    override val chapterTimeSelector = "div.stats"
 
     private val chapterListHeaders by lazy {
         headersBuilder().add("X-Requested-With", "XMLHttpRequest").build()
@@ -202,10 +250,19 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
         return chapters
     }
 
-    override fun pageListRequest(chapter: SChapter) =
-        GET("$baseUrl/${chapter.url.substringAfter("cek/")}", headers)
+    override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
+        val link = element.selectFirst("div.chapter-title a")!!
+        setUrlWithoutDomain(link.attr("href"))
+        name = link.text().trim()
+        date_upload = parseRelativeDate(element.selectFirst("div.stats")?.ownText() ?: "")
+    }
 
-    override val pageListImageSelector = "div.chapter-content img.chapter-img"
+    override fun pageListRequest(chapter: SChapter): Request {
+        val url = "$baseUrl/${chapter.url}"
+        return GET(url, headers)
+    }
+
+    override val pageListImageSelector = "div#chapter-images img.chapter-img"
 
     // Manga-TR: image URL resolution with Base64-decoded data-src
     override fun getImgAttr(element: Element?): String? {
@@ -217,20 +274,40 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
                     val decodedBytes = Base64.decode(encodedUrl, Base64.DEFAULT)
                     String(decodedBytes, StandardCharsets.UTF_8)
                 } catch (e: Exception) {
-                    element.attr("abs:src")
+                    null
                 }
             }
-            element.hasAttr("src") -> element.attr("abs:src")
-            element.hasAttr("data-original") -> element.attr("abs:data-original")
+            element.hasAttr("data-original") -> element.absUrl("data-original")
             else -> null
         }
     }
 
     // Simple pageListParse - relies on the selector above
     override fun pageListParse(document: Document): List<Page> {
-        return document.select(pageListImageSelector).mapIndexed { i, img ->
-            Page(i, imageUrl = getImgAttr(img))
+        val scripts = document.select("script:not([src])")
+
+        for (script in scripts) {
+            val content = script.html()
+
+            val queueMatch = Regex("""var\s+imageQueue\s*=\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL)
+                .find(content) ?: continue
+
+            val encodedUrls = queueMatch.groupValues[1]
+                .split(",")
+                .map { it.trim().removeSurrounding("\"") }
+                .filter { it.isNotEmpty() && it != "LOGO" }
+
+            return encodedUrls.mapIndexedNotNull { index, encoded ->
+                try {
+                    val decoded = String(Base64.decode(encoded, Base64.DEFAULT), StandardCharsets.UTF_8)
+                    Page(index, imageUrl = decoded)
+                } catch (e: Exception) {
+                    null
+                }
+            }
         }
+
+        return emptyList()
     }
 
     // =========================== List Parse ===========================
