@@ -143,7 +143,7 @@ class HentaiFox(
         }
         return xhrHeaders.newBuilder()
             .add("X-Csrf-Token", csrfToken)
-            .add("Referer", baseUrl)
+            .add("Referer", "$baseUrl/")
             .build()
     }
 
