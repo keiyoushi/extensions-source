@@ -164,7 +164,6 @@ class FiltersDto(
     @SerialName("generos") val genres: List<Genre> = emptyList(),
     @SerialName("formatos") val formats: List<Format> = emptyList(),
     @SerialName("status") val statuses: List<Status> = emptyList(),
-    @SerialName("parceiras") val partners: List<Partner> = emptyList(),
     @SerialName("tags") val tags: List<Tag> = emptyList(),
 )
 
@@ -192,13 +191,6 @@ class Status(
     val name: String,
 )
 
-@Serializable
-class Partner(
-    @JsonNames("parceira_id", "id")
-    val id: Int,
-    @JsonNames("parceira_nome", "name")
-    val name: String,
-)
 
 @Serializable
 class Tag(
