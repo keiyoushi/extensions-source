@@ -16,23 +16,19 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
 
 class Comix : HttpSource(), ConfigurableSource {
 
     override val name = "Comix"
-    override val baseUrl = "https://comix.to/"
+    override val baseUrl = "https://comix.to"
     private val apiUrl = "https://comix.to/api/v2/"
     override val lang = "en"
     override val supportsLatest = true
 
     private val preferences: SharedPreferences = getPreferences()
-
-    private val json: Json by injectLazy()
 
     private fun parseSearchResponse(response: Response): MangasPage {
         val res: SearchResponse = response.parseAs()
@@ -43,7 +39,7 @@ class Comix : HttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder().rateLimit(5, 2).build()
 
-    override fun headersBuilder() = super.headersBuilder().add("Referer", baseUrl)
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
@@ -53,10 +49,9 @@ class Comix : HttpSource(), ConfigurableSource {
     override fun popularMangaRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder().addPathSegment("mangas")
             .addQueryParameter("order[views_30d]", "desc")
-            .addQueryParameter("limit", "28")
-            .addQueryParameter("page", page.toString()).build()
-
-        Log.d("comix", url.toString())
+            .addQueryParameter("limit", "50")
+            .addQueryParameter("page", page.toString())
+            .build()
 
         return GET(url, headers)
     }
@@ -66,8 +61,11 @@ class Comix : HttpSource(), ConfigurableSource {
     /******************************* LATEST MANGA ************************************/
     override fun latestUpdatesRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder().addPathSegment("mangas")
-            .addQueryParameter("order[chapter_updated_at]", "desc").addQueryParameter("limit", "28")
-            .addQueryParameter("page", page.toString()).build()
+            .addQueryParameter("order[chapter_updated_at]", "desc")
+            .addQueryParameter("limit", "50")
+            .addQueryParameter("page", page.toString())
+            .build()
+
         return GET(url, headers)
     }
 
@@ -84,7 +82,7 @@ class Comix : HttpSource(), ConfigurableSource {
             url.addQueryParameter("keyword", query)
         }
 
-        url.addQueryParameter("limit", "28")
+        url.addQueryParameter("limit", "50")
             .addQueryParameter("page", page.toString())
 
         return GET(url.build(), headers)
@@ -94,7 +92,9 @@ class Comix : HttpSource(), ConfigurableSource {
 
     /******************************* Single Manga Page *******************************/
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val url = apiUrl.toHttpUrl().newBuilder().addPathSegment("mangas").addPathSegment(manga.url)
+        val url = apiUrl.toHttpUrl().newBuilder()
+            .addPathSegment("mangas")
+            .addPathSegment(manga.url)
             .build()
 
         return GET(url, headers)
@@ -129,9 +129,15 @@ class Comix : HttpSource(), ConfigurableSource {
 
         // Check if we are missing demographics
         if (terms.count() < manga.termIds.count()) {
-            val dems = ComixFilters.getDemographics().filter { (_, id) -> manga.termIds.contains(id.toInt()) }
+            val termIdsSet = manga.termIds.map(Int::toString).toSet()
+
+            val demographics = ComixFilters.getDemographics()
+                .asSequence()
+                .filter { (_, id) -> id in termIdsSet }
                 .map { (name, id) -> Term(id.toInt(), "demographic", name, name, 0) }
-            terms.addAll(dems)
+                .toList()
+
+            terms.addAll(demographics)
         }
 
         return manga.toSManga(preferences.posterQuality(), terms)
