@@ -192,10 +192,9 @@ class MangaTR : FMReader("Manga-TR", "https://manga-tr.com", "tr") {
             ?.select("a")
             ?.joinToString { it.text().trim() }
 
-        description = infoElement.selectFirst("div.info-desc")?.ownText()?.trim()
+        description = document.selectFirst("div.info-card div.info-desc")?.text()?.trim()
+
         thumbnail_url = document.selectFirst("img.thumbnail")?.absUrl("src")
-            ?: document.selectFirst("div.manga-cover img")?.absUrl("src")
-            ?: document.selectFirst("div.info-img img")?.absUrl("src")
 
         status = infoElement.selectFirst("div.manga-meta-item:has(div.manga-meta-label:contains(Çeviri Durumu)) div.manga-meta-value")
             ?.text()
