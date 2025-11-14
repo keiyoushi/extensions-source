@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.multisrc.greenshit
 
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -8,10 +10,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -31,60 +36,57 @@ abstract class GreenShit(
 ) : HttpSource() {
 
     override val supportsLatest = true
-
     protected open val apiUrl = "https://api2.sussytoons.wtf"
-
+    protected open val cdnUrl = "https://cdn.sussytoons.wtf"
+    protected open val useWidthInThumbnail = true
     protected open val defaultOrderBy = "ultima_atualizacao"
-
     open val targetAudience: TargetAudience = TargetAudience.All
-
     protected open val popularGenreId = "1"
-
     protected open val latestGenreId = "1"
-
     protected open val popularType = "tipo"
-
     protected open val popularTypeValue = "visualizacoes_geral"
-
     protected open val latestEndpoint = "atualizacoes"
+    protected open val rateLimitPerSecond = 2
+    protected open val includeSlugInUrl: Boolean = false
 
-    override val client = network.cloudflareClient
+    private fun <T> unwrapAndParse(jsonElement: JsonElement, serializer: kotlinx.serialization.KSerializer<T>): T {
+        return if (jsonElement is JsonObject && jsonElement.containsKey("resultado")) {
+            jsonInstance.decodeFromJsonElement(serializer, jsonElement["resultado"]!!)
+        } else {
+            jsonInstance.decodeFromJsonElement(serializer, jsonElement)
+        }
+    }
+
+    private fun <T> parseJsonResponse(response: Response, serializer: kotlinx.serialization.KSerializer<T>): T {
+        val jsonElement = response.parseAs<JsonElement>()
+        return unwrapAndParse(jsonElement, serializer)
+    }
+
+    override val client by lazy {
+        network.cloudflareClient.newBuilder()
+            .addInterceptor(TextInterceptor())
+            .rateLimit(rateLimitPerSecond)
+            .build()
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .set("scan-id", "1")
 
     // ============================= Popular ==================================
 
-    override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/obras/ranking".toHttpUrl().newBuilder()
-            .addQueryParameter(popularType, popularTypeValue)
-            .addQueryParameter("pagina", page.toString())
-            .addQueryParameter("limite", "15")
-            .addQueryParameter("gen_id", popularGenreId)
-            .build()
-        return GET(url, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request =
+        mangasRequest(page, "$apiUrl/obras/ranking", "15", popularGenreId) {
+            addQueryParameter(popularType, popularTypeValue)
+        }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<ResultDto<List<MangaDto>>>()
-        return MangasPage(dto.toSMangaList(), dto.hasNextPage())
-    }
+    override fun popularMangaParse(response: Response): MangasPage = mangasParse(response)
 
     // ============================= Latest ===================================
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/obras/$latestEndpoint".toHttpUrl().newBuilder()
-            .addQueryParameter("pagina", page.toString())
-            .addQueryParameter("limite", "24")
-            .addQueryParameter("gen_id", latestGenreId)
-            .build()
-        return GET(url, headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request =
+        mangasRequest(page, "$apiUrl/obras/$latestEndpoint", "24", latestGenreId)
 
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val dto = response.parseAs<ResultDto<List<MangaDto>>>()
-        return MangasPage(dto.toSMangaList(), dto.hasNextPage())
-    }
+    override fun latestUpdatesParse(response: Response): MangasPage = mangasParse(response)
 
     // ============================= Search ===================================
 
@@ -95,34 +97,49 @@ abstract class GreenShit(
             .addQueryParameter("todos_generos", "1")
             .addQueryParameterIfNotEmpty("obr_nome", query)
 
-        var orderBy = defaultOrderBy
-        var orderDirection = "DESC"
+        val orderBy = filters.firstInstanceOrNull<OrderByFilter>()?.selected ?: defaultOrderBy
+        val orderDirection = filters.firstInstanceOrNull<OrderDirectionFilter>()?.selected ?: "DESC"
 
         filters.forEach { filter ->
             when (filter) {
-                is OrderByFilter -> orderBy = filter.selected
-                is OrderDirectionFilter -> orderDirection = filter.selected
-                is GenreFilter -> url.addQueryParameterIfNotEmpty("gen_id", filter.selected)
-                is FormatFilter -> url.addQueryParameterIfNotEmpty("formt_id", filter.selected)
-                is StatusFilter -> url.addQueryParameterIfNotEmpty("stt_id", filter.selected)
+                is GenreFilter -> url.addQueryParameterIfNotEmpty(genreFilterKey, filter.selected)
+                is FormatFilter -> url.addQueryParameterIfNotEmpty(formatFilterKey, filter.selected)
+                is StatusFilter -> url.addQueryParameterIfNotEmpty(statusFilterKey, filter.selected)
                 is TagsFilter -> filter.state.filter { it.state }.forEach { tag ->
-                    url.addQueryParameter("tags[]", tag.id)
+                    url.addQueryParameter(tagFilterKey, tag.id)
                 }
                 else -> {}
             }
         }
 
-        return GET(
-            url.addQueryParameter("orderBy", orderBy)
-                .addQueryParameter("orderDirection", orderDirection)
-                .build(),
-            headers,
-        )
+        url.addQueryParameter("orderBy", orderBy)
+            .addQueryParameter("orderDirection", orderDirection)
+
+        return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
+    override fun searchMangaParse(response: Response): MangasPage = mangasParse(response)
+
+    private fun mangasRequest(
+        page: Int,
+        url: String,
+        limit: String,
+        genreId: String,
+        block: (HttpUrl.Builder.() -> Unit)? = null,
+    ): Request {
+        val httpUrl = url.toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("limite", limit)
+            .addQueryParameter("gen_id", genreId)
+
+        block?.invoke(httpUrl)
+
+        return GET(httpUrl.build(), headers)
+    }
+
+    private fun mangasParse(response: Response): MangasPage {
         val dto = response.parseAs<ResultDto<List<MangaDto>>>()
-        return MangasPage(dto.toSMangaList(), dto.hasNextPage())
+        return MangasPage(dto.toSMangaList(cdnUrl, useWidthInThumbnail, includeSlugInUrl), dto.hasNextPage())
     }
 
     override fun getFilterList() = FilterList(
@@ -141,47 +158,52 @@ abstract class GreenShit(
 
     private var filters: FiltersDto? = null
 
-    protected open fun getFilters(): FiltersDto = runBlocking {
-        withContext(Dispatchers.IO) {
-            filters ?: runCatching {
-                client.newCall(GET("$apiUrl/obras/filtros", headers)).execute()
-                    .parseAs<FiltersDto>()
-            }.getOrDefault(FiltersDto()).also { filters = it }
-        }
-    }
+    protected open fun getFilters(): FiltersDto = filters ?: runBlocking(Dispatchers.IO) {
+        runCatching {
+            client.newCall(GET("$apiUrl/obras/filtros", headers)).execute()
+                .parseAs<FiltersDto>()
+        }.getOrDefault(FiltersDto())
+    }.also { filters = it }
 
     protected open fun getGenres(): List<Genre> = getFilters().genres
-
     protected open fun getFormats(): List<Format> = getFilters().formats
-
     protected open fun getStatuses(): List<Status> = getFilters().statuses
-
     protected open fun getTags(): List<TagCheckBox> = getFilters().tags.map { TagCheckBox(it.name, it.id.toString()) }
+    protected open val genreFilterKey = "gen_id"
+    protected open val formatFilterKey = "formt_id"
+    protected open val statusFilterKey = "stt_id"
+    protected open val tagFilterKey = "tags[]"
 
     // ============================= Details ==================================
 
     override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
-    override fun mangaDetailsRequest(manga: SManga) = GET("$apiUrl/obras/${manga.url.removePrefix("/obra/")}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val dto = response.parseAs<MangaDto>()
-        return dto.toSManga()
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val mangaId = manga.url.substringAfter("/obra/").substringBefore("/")
+        return GET("$apiUrl/obras/$mangaId", headers)
     }
+
+    override fun mangaDetailsParse(response: Response): SManga =
+        mangaDtoParse(response).toSManga(cdnUrl, useWidthInThumbnail, includeSlugInUrl)
+
+    private fun mangaDtoParse(response: Response): MangaDto =
+        parseJsonResponse(response, MangaDto.serializer())
 
     // ============================= Chapters =================================
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
-
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-
-    override fun chapterListParse(response: Response) = response.parseAs<MangaDto>().toSChapterList()
+    override fun chapterListParse(response: Response): List<SChapter> =
+        mangaDtoParse(response).toSChapterList()
 
     // ============================= Pages ====================================
 
     override fun pageListRequest(chapter: SChapter) = GET("$apiUrl/capitulos/${chapter.url.removePrefix("/capitulo/")}", headers)
 
-    override fun pageListParse(response: Response): List<Page> = response.parseAs<ChapterPageDto>().toPageList()
+    override fun pageListParse(response: Response): List<Page> {
+        val pagesDto = parseJsonResponse(response, ChapterPagesDto.serializer())
+        return pagesDto.toPageList(cdnUrl)
+    }
 
     override fun imageUrlParse(response: Response) = ""
 
@@ -208,7 +230,6 @@ abstract class GreenShit(
     protected open class SelectFilter(
         name: String,
         val options: Array<Pair<String, String>>,
-        default: String? = null,
     ) : Filter.Select<String>(
         name,
         options.map { it.first }.toTypedArray(),
@@ -260,7 +281,4 @@ abstract class GreenShit(
         name: String,
         val id: String,
     ) : Filter.CheckBox(name)
-
-    companion object {
-    }
 }

@@ -5,13 +5,9 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class AuroraScan : GreenShit(
     "Aurora Scan",
-    "https://aurorascan.net",
+    "https://www.serenitytoons.win/",
     "pt-BR",
     scanId = 4,
 ) {
     override val targetAudience = TargetAudience.Shoujo
-
-    override val client = super.client.newBuilder()
-        .rateLimit(2)
-        .build()
 }

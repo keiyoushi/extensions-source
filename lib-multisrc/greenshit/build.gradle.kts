@@ -3,3 +3,7 @@ plugins {
 }
 
 baseVersionCode = 6
+
+dependencies {
+    implementation(project(":lib:textinterceptor"))
+}
