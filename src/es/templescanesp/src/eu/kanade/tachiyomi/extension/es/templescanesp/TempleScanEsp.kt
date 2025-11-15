@@ -25,7 +25,7 @@ class TempleScanEsp :
         "Temple Scan",
         "https://aedexnox.vxviral.xyz",
         "es",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
     ),
     ConfigurableSource {
 
@@ -83,7 +83,7 @@ class TempleScanEsp :
         }
     }
 
-    override val versionId = 5
+    override val versionId = 4
 
     override val mangaSubString = "serie"
 
@@ -151,7 +151,6 @@ class TempleScanEsp :
     }
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
-
 
     private var _cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
