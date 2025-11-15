@@ -92,8 +92,10 @@ class Comix : HttpSource(), ConfigurableSource {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val res: SearchResponse = response.parseAs()
+        val posterQuality = preferences.posterQuality()
+
         val manga =
-            res.result.items.map { manga -> manga.toBasicSManga(preferences.posterQuality()) }
+            res.result.items.map { manga -> manga.toBasicSManga(posterQuality) }
         return MangasPage(manga, res.result.pagination.page < res.result.pagination.lastPage)
     }
 
@@ -157,7 +159,7 @@ class Comix : HttpSource(), ConfigurableSource {
         val chapterList: ArrayList<Chapter>? =
             if (!deduplicate) ArrayList() else null
 
-        var page = 1
+        var page = 2
         var hasNext: Boolean
 
         do {
