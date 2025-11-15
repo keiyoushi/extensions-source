@@ -57,7 +57,7 @@ class Comix : HttpSource(), ConfigurableSource {
     /******************************* POPULAR MANGA ************************************/
     override fun popularMangaRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("mangas")
+            .addPathSegment("manga")
             .addQueryParameter("order[views_30d]", "desc")
             .addQueryParameter("limit", "50")
             .addQueryParameter("page", page.toString())
@@ -72,7 +72,7 @@ class Comix : HttpSource(), ConfigurableSource {
     /******************************* LATEST MANGA ************************************/
     override fun latestUpdatesRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("mangas")
+            .addPathSegment("manga")
             .addQueryParameter("order[chapter_updated_at]", "desc")
             .addQueryParameter("limit", "50")
             .addQueryParameter("page", page.toString())
@@ -89,7 +89,7 @@ class Comix : HttpSource(), ConfigurableSource {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("mangas")
+            .addPathSegment("manga")
 
         filters.filterIsInstance<ComixFilters.UriFilter>()
             .forEach { it.addToUri(url) }
@@ -113,7 +113,7 @@ class Comix : HttpSource(), ConfigurableSource {
     // Manga Details
     override fun mangaDetailsRequest(manga: SManga): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("mangas")
+            .addPathSegment("manga")
             .addPathSegment(manga.url)
             .build()
 
@@ -247,7 +247,7 @@ class Comix : HttpSource(), ConfigurableSource {
 
     private fun chapterListRequest(manga: SManga, page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("mangas")
+            .addPathSegment("manga")
             .addPathSegment(manga.url)
             .addPathSegment("chapters")
             .addQueryParameter("order[number]", "desc")
