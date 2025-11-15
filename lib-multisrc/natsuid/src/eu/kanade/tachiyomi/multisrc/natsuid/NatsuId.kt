@@ -278,14 +278,21 @@ abstract class NatsuId(
         ?.substringAfter("manga_id=")?.substringBefore("&")
 
     private fun getMangaId(manga: SManga): String {
-        return try {
-            manga.url.parseAs<MangaUrl>().id.toString()
+        try {
+            return manga.url.parseAs<MangaUrl>().id.toString()
         } catch (e: Exception) {
-            null
-        } ?: run {
-            val mangaUrl = getMangaUrl(manga)
-            client.newCall(GET(mangaUrl, headers)).execute().asJsoup().parseMangaId()
-        } ?: throw Exception("Could not find manga ID")
+            // continue to fallback methods
+        }
+
+        // try extract from desc
+        manga.description?.takeIf { "ID: " in it }
+            ?.substringAfterLast("ID: ")?.substringBefore("\n")
+            ?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+
+        // fetch and parse from HTML
+        val mangaUrl = getMangaUrl(manga)
+        return client.newCall(GET(mangaUrl, headers)).execute().asJsoup().parseMangaId()
+            ?: throw Exception("Could not find manga ID")
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {

@@ -26,7 +26,7 @@ class Manga(
     fun toSManga() = SManga.create().apply {
         url = MangaUrl(id, slug).toJsonString()
         title = Parser.unescapeEntities(this@Manga.title.rendered, false)
-        description = Jsoup.parseBodyFragment(content.rendered).wholeText()
+        description = Jsoup.parseBodyFragment(content.rendered).wholeText() + "\n\nID: " + id
         thumbnail_url = embedded.featuredMedia.firstOrNull()?.sourceUrl
         author = embedded.getTerms("series-author").joinToString()
         artist = embedded.getTerms("artist").joinToString()
