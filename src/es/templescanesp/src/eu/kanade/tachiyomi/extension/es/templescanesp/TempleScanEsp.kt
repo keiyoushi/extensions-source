@@ -31,12 +31,13 @@ class TempleScanEsp :
 
     override val baseUrl get() = preferences.prefBaseUrl
     private val preferences = getPreferences {
-        if (getString(DEFAULT_BASE_URL_PREF, null) == null) {
-            val currentUserUrl = getString(BASE_URL_PREF, super.baseUrl) ?: super.baseUrl
-            edit()
-                .putString(DEFAULT_BASE_URL_PREF, currentUserUrl)
-                .putBoolean(FETCH_DOMAIN_PREF, true)
-                .apply()
+        this.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
+            if (domain != super.baseUrl) {
+                this.edit()
+                    .putString(BASE_URL_PREF, super.baseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
+                    .apply()
+            }
         }
     }
 
