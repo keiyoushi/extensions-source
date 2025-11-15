@@ -13,6 +13,9 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -28,25 +31,68 @@ class TempleScanEsp :
     ConfigurableSource {
 
     override val baseUrl get() = preferences.prefBaseUrl
+    private val preferences = getPreferences {
+        val domain = this.getString(DEFAULT_BASE_URL_PREF, null)
+        if (domain != super.baseUrl) {
+            this.edit()
+                .putString(BASE_URL_PREF, super.baseUrl)
+                .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
+                .apply()
+        }
+        Unit
+    }
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
+
         try {
             val initClient = network.cloudflareClient
-            val headers = super.headersBuilder().build()
-            val document = initClient.newCall(GET("https://templescanesp.net", headers)).execute().asJsoup()
+            val headers = super.headersBuilder()
+                .add("apikey", SUPABASE_API_KEY)
+                .add("Accept", "application/json")
+                .build()
+
+            initClient.newCall(GET(SUPABASE_URL, headers)).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string().orEmpty()
+                    val value = try {
+                        json.parseToJsonElement(body).jsonArray.first().jsonObject["value"]!!.jsonPrimitive.content
+                    } catch (_: Exception) {
+                        null
+                    }
+
+                    if (!value.isNullOrBlank()) {
+                        val detected = value.trimEnd('/')
+                        val newDomain = if (detected.startsWith("http")) detected else "https://$detected"
+
+                        if (shouldUpdatePref()) {
+                            preferences.prefBaseUrl = newDomain
+                        }
+
+                        return@use newDomain
+                    }
+                }
+                Unit
+            }
+
+            val htmlHeaders = super.headersBuilder().build()
+            val document = initClient.newCall(GET("https://templescanesp.net", htmlHeaders)).execute().asJsoup()
             val domain = document.selectFirst("main a:has(button)")?.attr("abs:href")
                 ?: return@lazy preferences.prefBaseUrl
-            val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
-            val newDomain = "https://$host"
-            preferences.prefBaseUrl = newDomain
-            newDomain
+            val host = initClient.newCall(GET(domain, htmlHeaders)).execute().request.url.host
+            val finalDomain = "https://$host"
+
+            if (shouldUpdatePref()) {
+                preferences.prefBaseUrl = finalDomain
+            }
+
+            return@lazy finalDomain
         } catch (_: Exception) {
             preferences.prefBaseUrl
         }
     }
 
-    override val versionId = 4
+    override val versionId = 5
 
     override val mangaSubString = "serie"
 
@@ -56,17 +102,6 @@ class TempleScanEsp :
         super.client.newBuilder()
             .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 3, 1)
             .build()
-    }
-
-    private val preferences = getPreferences {
-        this.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
-            if (domain != super.baseUrl) {
-                this.edit()
-                    .putString(BASE_URL_PREF, super.baseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
     }
 
     override fun popularMangaSelector() = "div.latest-poster"
@@ -126,6 +161,11 @@ class TempleScanEsp :
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
 
+    private fun shouldUpdatePref(): Boolean {
+        val current = preferences.prefBaseUrl
+        return current == super.baseUrl || current.isBlank()
+    }
+
     private var _cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
         get() {
@@ -143,5 +183,8 @@ class TempleScanEsp :
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val FETCH_DOMAIN_PREF = "fetchDomain"
+
+        private const val SUPABASE_URL = "https://ysilhsqbtixygcgscvbb.supabase.co/rest/v1/parameters?select=value&name=eq.redirect_url_templescan"
+        private const val SUPABASE_API_KEY = "sb_publishable_y5ZlqOnxowq6W7JTSZHSBQ_AQfHg77U"
     }
 }
