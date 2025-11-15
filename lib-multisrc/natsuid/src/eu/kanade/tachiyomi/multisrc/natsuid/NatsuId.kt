@@ -229,12 +229,7 @@ abstract class NatsuId(
         val jsonResponse = client.newCall(GET(url, headers)).execute()
         val cleanJson = jsonResponse.body.string().cleanJsonResponse()
 
-        val details = try {
-            cleanJson.parseAs<List<Manga>>()
-        } catch (e: Exception) {
-            Log.e(name, "Failed to parse JSON response: ${e.message}")
-            return MangasPage(emptyList(), false)
-        }
+        val details = cleanJson.parseAs<List<Manga>>()
             .filterNot { manga ->
                 manga.embedded.getTerms("type").contains("Novel")
             }
