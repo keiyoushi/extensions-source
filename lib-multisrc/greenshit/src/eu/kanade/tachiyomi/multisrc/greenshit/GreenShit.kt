@@ -245,7 +245,10 @@ abstract class GreenShit(
             Pair("Data", "data"),
             Pair("Nome A-Z", "nome_az"),
             Pair("Nome Z-A", "nome_za"),
-            Pair("Visualizações", "visualizacoes_geral"),
+            Pair("Mais Visualizações", "visualizacoes_geral"),
+            Pair("Lançamentos", "criacao"),
+            Pair("Melhor Avaliação", "rating"),
+            Pair("Nome", "nome"),
         ),
     )
 
