@@ -238,7 +238,7 @@ class Manhuarm(
         val thumbEl = element.selectFirst(".item-thumb img, .manga-thumb img, img")
         manga.setUrlWithoutDomain(titleEl!!.attr("href"))
         manga.title = titleEl.text()
-        manga.thumbnail_url = thumbEl?.absUrl("data-src") ?: thumbEl?.absUrl("src")
+        manga.thumbnail_url = thumbEl?.extractCoverUrl()
         return manga
     }
 
@@ -263,11 +263,58 @@ class Manhuarm(
             ?: element.selectFirst(".item-thumb img, img")
         manga.setUrlWithoutDomain(titleEl!!.attr("href"))
         manga.title = titleEl.text()
-        manga.thumbnail_url = thumbEl?.absUrl("src")
+        manga.thumbnail_url = thumbEl?.extractCoverUrl()
         return manga
     }
 
     override fun latestUpdatesNextPageSelector(): String? = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
+
+    /**
+     * Extracts the cover image URL from an image element, checking multiple attributes
+     * to handle lazy loading and different image formats.
+     */
+    private fun Element?.extractCoverUrl(): String? {
+        if (this == null) return null
+
+        // Try data-src first (lazy loading)
+        absUrl("data-src").takeIf { it.isNotBlank() && !it.contains("data:image") }?.let { return it }
+
+        // Try src attribute
+        absUrl("src").takeIf { it.isNotBlank() && !it.contains("data:image") && !it.contains("placeholder") }?.let { return it }
+
+        // Try srcset attribute (parse first URL)
+        attr("srcset").takeIf { it.isNotBlank() }?.let { srcset ->
+            srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()?.let { url ->
+                if (url.startsWith("http")) {
+                    return url
+                } else {
+                    absUrl(url).takeIf { it.isNotBlank() && !it.contains("data:image") }?.let { return it }
+                }
+            }
+        }
+
+        return null
+    }
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        val manga = super.mangaDetailsParse(document)
+
+        // Ensure cover is always set from detail page if it wasn't set from listing
+        if (manga.thumbnail_url.isNullOrBlank()) {
+            val coverEl = document.selectFirst(".summary_image img, .wp-post-image, .item-thumb img, .manga-thumb img, img.wp-post-image")
+            manga.thumbnail_url = coverEl?.extractCoverUrl()
+        } else {
+            // Even if cover was set, try to get a better quality version from detail page
+            val coverEl = document.selectFirst(".summary_image img, .wp-post-image, .item-thumb img, .manga-thumb img, img.wp-post-image")
+            coverEl?.extractCoverUrl()?.let {
+                if (it.isNotBlank() && !it.contains("placeholder")) {
+                    manga.thumbnail_url = it
+                }
+            }
+        }
+
+        return manga
+    }
 
     // Prevent bad fragments
     fun String.toFragment(): String = "#${this.replace("#", "*")}"
