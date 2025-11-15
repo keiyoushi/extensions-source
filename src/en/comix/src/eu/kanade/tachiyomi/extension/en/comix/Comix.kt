@@ -15,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -26,6 +27,11 @@ class Comix : HttpSource(), ConfigurableSource {
     private val apiUrl = "https://comix.to/api/v2/"
     override val lang = "en"
     override val supportsLatest = true
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+    }
 
     private val preferences: SharedPreferences = getPreferences()
     override val client = network.cloudflareClient.newBuilder()
@@ -91,7 +97,7 @@ class Comix : HttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val res: SearchResponse = response.parseAs()
+        val res: SearchResponse = response.parseAs(json)
         val posterQuality = preferences.posterQuality()
 
         val manga =
@@ -116,7 +122,7 @@ class Comix : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val mangaResponse: SingleMangaResponse = response.parseAs()
+        val mangaResponse: SingleMangaResponse = response.parseAs(json)
 
         return mangaResponse.result.toSManga(
             preferences.posterQuality(),
@@ -151,49 +157,34 @@ class Comix : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         val deduplicate = preferences.deduplicateChapters()
         val mangaHash = response.request.url.pathSegments[3]
+        var resp: ChapterDetailsResponse = response.parseAs(json)
 
         // When deduplication is enabled store only the best chapter per number.
-        val chapterMap: LinkedHashMap<Number, Chapter>? =
-            if (deduplicate) LinkedHashMap() else null
+        var chapterMap: LinkedHashMap<Number, Chapter>? = null
         // When disabled just accumulate all.
-        val chapterList: ArrayList<Chapter>? =
-            if (!deduplicate) ArrayList() else null
+        var chapterList: ArrayList<Chapter>? = null
+
+        if (deduplicate) {
+            chapterMap = LinkedHashMap()
+            deduplicateChapters(chapterMap, resp.result.items)
+        } else {
+            chapterList = ArrayList(resp.result.items)
+        }
 
         var page = 2
         var hasNext: Boolean
 
         do {
-            val resp: ChapterDetailsResponse = client
+            resp = client
                 .newCall(chapterListRequest(mangaHash, page++))
                 .execute()
-                .parseAs()
+                .parseAs(json)
 
             val items = resp.result.items
             hasNext = resp.result.pagination.lastPage > resp.result.pagination.page
 
             if (deduplicate) {
-                for (ch in items) {
-                    val key = ch.number
-                    val current = chapterMap!![key]
-                    if (current == null) {
-                        chapterMap[key] = ch
-                    } else {
-                        // Prefer official scan group
-                        val officialNew = ch.scanlationGroupId == 9275
-                        val officialCurrent = current.scanlationGroupId == 9275
-                        val better = when {
-                            officialNew && !officialCurrent -> true
-                            !officialNew && officialCurrent -> false
-                            // compare votes then updatedAt
-                            else -> when {
-                                ch.votes > current.votes -> true
-                                ch.votes < current.votes -> false
-                                else -> ch.updatedAt > current.updatedAt
-                            }
-                        }
-                        if (better) chapterMap[key] = ch
-                    }
-                }
+                deduplicateChapters(chapterMap!!, items)
             } else {
                 chapterList!!.addAll(items)
             }
@@ -209,6 +200,34 @@ class Comix : HttpSource(), ConfigurableSource {
         return finalChapters.map { it.toSChapter(mangaHash) }
     }
 
+    private fun deduplicateChapters(
+        chapterMap: LinkedHashMap<Number, Chapter>,
+        items: List<Chapter>,
+    ) {
+        for (ch in items) {
+            val key = ch.number
+            val current = chapterMap[key]
+            if (current == null) {
+                chapterMap[key] = ch
+            } else {
+                // Prefer official scan group
+                val officialNew = ch.scanlationGroupId == 9275
+                val officialCurrent = current.scanlationGroupId == 9275
+                val better = when {
+                    officialNew && !officialCurrent -> true
+                    !officialNew && officialCurrent -> false
+                    // compare votes then updatedAt
+                    else -> when {
+                        ch.votes > current.votes -> true
+                        ch.votes < current.votes -> false
+                        else -> ch.updatedAt > current.updatedAt
+                    }
+                }
+                if (better) chapterMap[key] = ch
+            }
+        }
+    }
+
     /******************************* Page List (Reader) ************************************/
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/")
@@ -217,7 +236,7 @@ class Comix : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val res: ChapterResponse = response.parseAs()
+        val res: ChapterResponse = response.parseAs(json)
         val result = res.result ?: throw Exception("Chapter not found")
 
         if (result.images.isEmpty()) {

@@ -6,23 +6,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class TermResponse(
-    val result: Items,
-) {
-    @Serializable
-    class Items(
-        val items: List<Term>,
-    )
-}
-
-@Serializable
 data class Term(
     @SerialName("term_id")
-    val termId: Int,
-    val type: String,
+    private val termId: Int,
+    private val type: String,
     val title: String,
-    val slug: String,
-    val count: Int?,
+    private val slug: String,
+    private val count: Int?,
 )
 
 @Serializable
@@ -35,29 +25,20 @@ class Manga(
     private val synopsis: String?,
     private val type: String,
     private val poster: Poster,
-    @SerialName("original_language")
-    private val originalLanguage: String?,
     private val status: String,
-    @SerialName("created_at")
-    private val createdAt: Long,
-    @SerialName("updated_at")
-    private val updatedAt: Long,
     @SerialName("is_nsfw")
     private val isNsfw: Boolean,
-    @SerialName("term_ids")
-    val termIds: List<Int>,
-    val author: List<Term>?,
-    val artist: List<Term>?,
-    val publisher: List<Term>?,
-    val genre: List<Term>?,
-    val theme: List<Term>?,
-    val demographic: List<Term>?,
+    private val author: List<Term>?,
+    private val artist: List<Term>?,
+    private val genre: List<Term>?,
+    private val theme: List<Term>?,
+    private val demographic: List<Term>?,
 ) {
     @Serializable
     class Poster(
-        val small: String,
-        val medium: String,
-        val large: String,
+        private val small: String,
+        private val medium: String,
+        private val large: String,
     ) {
         fun from(quality: String?) = when (quality) {
             "large" -> large
@@ -126,12 +107,8 @@ class SingleMangaResponse(
 
 @Serializable
 class Pagination(
-    @SerialName("current_page")
-    val page: Int,
-    @SerialName("last_page")
-    val lastPage: Int,
-    val from: Int?,
-    val to: Int?,
+    @SerialName("current_page") val page: Int,
+    @SerialName("last_page") val lastPage: Int,
 )
 
 @Serializable
@@ -159,25 +136,18 @@ class ChapterDetailsResponse(
 @Serializable
 class Chapter(
     @SerialName("chapter_id")
-    val chapterId: Int,
-    @SerialName("manga_id")
-    val mangaId: Int,
-    @SerialName("scanlation_group_id")
-    val scanlationGroupId: Int,
+    private val chapterId: Int,
+    @SerialName("scanlation_group_id") val scanlationGroupId: Int,
     val number: Double,
-    val name: String,
+    private val name: String,
     val votes: Int,
-    @SerialName("created_at")
-    val createdAt: Long,
     @SerialName("updated_at")
     val updatedAt: Long,
     @SerialName("scanlation_group")
-    val scanlationGroup: ScanlationGroup?,
+    private val scanlationGroup: ScanlationGroup?,
 ) {
     @Serializable
     class ScanlationGroup(
-        @SerialName("scanlation_group_id")
-        val scanlationGroupId: Int,
         val name: String,
     )
 
@@ -202,33 +172,6 @@ class ChapterResponse(
     class Items(
         @SerialName("chapter_id")
         val chapterId: Int,
-        @SerialName("created_at")
-        val createdAt: Long,
-        @SerialName("updated_at")
-        val updatedAt: Long,
-        @SerialName("scanlation_group")
-        val scanlationGroup: Chapter.ScanlationGroup?,
         val images: List<String>,
-        val prev: PrevNextChapter?,
-        val next: PrevNextChapter?,
-    ) {
-        @Serializable
-        class PrevNextChapter(
-            @SerialName("chapter_id")
-            val chapterId: Int,
-            @SerialName("manga_id")
-            val mangaId: Int,
-            @SerialName("scanlation_group_id")
-            val scanlationGroupId: Int,
-            val number: Double,
-            val name: String,
-            val language: String,
-            val volume: Int,
-            val votes: Int,
-            @SerialName("created_at")
-            val createdAt: Long,
-            @SerialName("updated_at")
-            val updatedAt: Long,
-        )
-    }
+    )
 }
