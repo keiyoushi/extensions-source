@@ -1,3 +1,4 @@
+
 package eu.kanade.tachiyomi.multisrc.greenshit
 
 import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
@@ -42,8 +43,8 @@ class ResultDto<T>(
     }
 }
 
-fun ResultDto<List<MangaDto>>.toSMangaList(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = true): List<SManga> =
-    results.map { it.toSManga(cdnUrl, useWidth, includeSlug) }
+fun ResultDto<List<MangaDto>>.toSMangaList(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = true, defaultScanId: Int? = null): List<SManga> =
+    results.map { it.toSManga(cdnUrl, useWidth, includeSlug, defaultScanId) }
 
 @Serializable
 class MangaDto(
@@ -66,36 +67,31 @@ class MangaDto(
     @JsonNames("capitulos", "chapters")
     val chapters: List<ChapterDto>? = null,
 ) {
-    fun toSManga(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = false) = SManga.create().apply {
+    fun toSManga(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = false, defaultScanId: Int? = null) = SManga.create().apply {
         title = name ?: "Unknown"
-        val finalUrl = if (includeSlug && id != null) {
+        url = if (includeSlug && id != null) {
             val finalSlug = slug?.takeIf { it.isNotEmpty() } ?: name?.toSlug() ?: "unknown"
             "/obra/$id/$finalSlug"
         } else {
             "/obra/${id?.toString() ?: slug ?: "unknown"}"
         }
-        url = finalUrl
-        thumbnail_url = buildThumbnailUrl(cdnUrl, useWidth)
+        thumbnail_url = buildThumbnailUrl(cdnUrl, useWidth, defaultScanId)
         genre = genres.joinToString()
+        description = this@MangaDto.description?.takeIf { it.isNotBlank() }?.let { Jsoup.parseBodyFragment(it).text() }
+        status = this@MangaDto.status?.toStatus() ?: SManga.UNKNOWN
         initialized = false
-
-        this.description = this@MangaDto.description?.takeIf { it.isNotBlank() }?.let {
-            Jsoup.parseBodyFragment(it).text()
-        }
-
-        this@MangaDto.status?.let { this.status = it.toStatus() }
     }
 
-    private fun buildThumbnailUrl(cdnUrl: String, useWidth: Boolean): String? = thumbnail?.let {
-        if (it.startsWith("http")) return@let it
-
-        val width = if (useWidth) "?width=300" else ""
-        val scanId = scanId ?: 0
-        val mangaId = id ?: 0
-
+    private fun buildThumbnailUrl(cdnUrl: String, useWidth: Boolean, defaultScanId: Int?): String? = thumbnail?.let {
         when {
+            it.startsWith("http") -> it
             it.contains("/") -> "$cdnUrl/$it"
-            else -> "$cdnUrl/scans/$scanId/obras/$mangaId/$it$width"
+            else -> {
+                val width = if (useWidth) "?width=300" else ""
+                val scanId = scanId ?: defaultScanId ?: 0
+                val mangaId = id ?: 0
+                "$cdnUrl/scans/$scanId/obras/$mangaId/$it$width"
+            }
         }
     }
 
@@ -216,11 +212,9 @@ class ChapterPagesDto(
             return listOf(Page(0, imageUrl = TextInterceptorHelper.createUrl(name, content)))
         }
 
-        return pages
-            .mapNotNull { it.toPageOrNull(cdnUrl, mangaId, chapterNumber) }
-            .mapIndexed { index, page ->
-                Page(index, page.url, page.imageUrl)
-            }
+        return pages.mapIndexedNotNull { index, pageDto ->
+            pageDto.toPageOrNull(cdnUrl, mangaId, chapterNumber)?.let { Page(index, it.url, it.imageUrl) }
+        }
     }
 }
 
@@ -236,31 +230,23 @@ class PageDto(
     fun toPageOrNull(cdnUrl: String, mangaId: Int?, chapterNumber: String?): Page? = runCatching { toPage(cdnUrl, mangaId, chapterNumber) }.getOrNull()
 
     fun toPage(cdnUrl: String, mangaId: Int?, chapterNumber: String?): Page {
-        if (src.isBlank()) {
-            throw IllegalArgumentException("Page src cannot be empty")
-        }
+        require(src.isNotBlank()) { "Page src cannot be empty" }
 
         if (src.startsWith("http://") || src.startsWith("https://")) {
             return Page(0, "", src)
         }
 
         val normalizedSrc = src.removePrefix("/")
-        val url = when {
+        val imageUrl = when {
             mime != null -> "$cdnUrl/wp-content/uploads/WP-manga/data/$normalizedSrc"
-            numero != null -> "$cdnUrl/scans/1/obras/${mangaId ?: 0}/capitulos/$chapterNumber/$normalizedSrc"
             path != null -> {
-                val safePath = path!!
-                val normalizedPath = if (safePath.startsWith('/')) safePath else "/$safePath"
+                val normalizedPath = path!!.removeSuffix("/").let { if (it.startsWith('/')) it else "/$it" }
                 "$cdnUrl$normalizedPath/$normalizedSrc"
             }
-            else -> "$cdnUrl/scans/1/obras/$normalizedSrc"
+            else -> "$cdnUrl/scans/1/obras/${mangaId ?: 0}/capitulos/$chapterNumber/$normalizedSrc"
         }
 
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            throw IllegalArgumentException("Invalid URL constructed: $url")
-        }
-
-        return Page(0, "", url)
+        return Page(0, "", imageUrl)
     }
 }
 

@@ -48,18 +48,16 @@ abstract class GreenShit(
     protected open val latestEndpoint = "atualizacoes"
     protected open val rateLimitPerSecond = 2
     protected open val includeSlugInUrl: Boolean = false
-
-    private fun <T> unwrapAndParse(jsonElement: JsonElement, serializer: kotlinx.serialization.KSerializer<T>): T {
-        return if (jsonElement is JsonObject && jsonElement.containsKey("resultado")) {
-            jsonInstance.decodeFromJsonElement(serializer, jsonElement["resultado"]!!)
-        } else {
-            jsonInstance.decodeFromJsonElement(serializer, jsonElement)
-        }
-    }
+    protected open val defaultScanId: Int? = null
 
     private fun <T> parseJsonResponse(response: Response, serializer: kotlinx.serialization.KSerializer<T>): T {
         val jsonElement = response.parseAs<JsonElement>()
-        return unwrapAndParse(jsonElement, serializer)
+        val unwrapped = if (jsonElement is JsonObject && jsonElement.containsKey("resultado")) {
+            jsonElement["resultado"]!!
+        } else {
+            jsonElement
+        }
+        return jsonInstance.decodeFromJsonElement(serializer, unwrapped)
     }
 
     override val client by lazy {
@@ -79,14 +77,14 @@ abstract class GreenShit(
             addQueryParameter(popularType, popularTypeValue)
         }
 
-    override fun popularMangaParse(response: Response): MangasPage = mangasParse(response)
+    override fun popularMangaParse(response: Response) = mangasParse(response)
 
     // ============================= Latest ===================================
 
     override fun latestUpdatesRequest(page: Int): Request =
         mangasRequest(page, "$apiUrl/obras/$latestEndpoint", "24", latestGenreId)
 
-    override fun latestUpdatesParse(response: Response): MangasPage = mangasParse(response)
+    override fun latestUpdatesParse(response: Response) = mangasParse(response)
 
     // ============================= Search ===================================
 
@@ -118,7 +116,7 @@ abstract class GreenShit(
         return GET(url.build(), headers)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage = mangasParse(response)
+    override fun searchMangaParse(response: Response) = mangasParse(response)
 
     private fun mangasRequest(
         page: Int,
@@ -139,7 +137,7 @@ abstract class GreenShit(
 
     private fun mangasParse(response: Response): MangasPage {
         val dto = response.parseAs<ResultDto<List<MangaDto>>>()
-        return MangasPage(dto.toSMangaList(cdnUrl, useWidthInThumbnail, includeSlugInUrl), dto.hasNextPage())
+        return MangasPage(dto.toSMangaList(cdnUrl, useWidthInThumbnail, includeSlugInUrl, defaultScanId), dto.hasNextPage())
     }
 
     override fun getFilterList() = FilterList(
@@ -183,18 +181,20 @@ abstract class GreenShit(
         return GET("$apiUrl/obras/$mangaId", headers)
     }
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        mangaDtoParse(response).toSManga(cdnUrl, useWidthInThumbnail, includeSlugInUrl)
-
-    private fun mangaDtoParse(response: Response): MangaDto =
-        parseJsonResponse(response, MangaDto.serializer())
+    override fun mangaDetailsParse(response: Response): SManga {
+        val mangaDto = parseJsonResponse(response, MangaDto.serializer())
+        return mangaDto.toSManga(cdnUrl, useWidthInThumbnail, includeSlugInUrl, defaultScanId)
+    }
 
     // ============================= Chapters =================================
 
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
     override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
-    override fun chapterListParse(response: Response): List<SChapter> =
-        mangaDtoParse(response).toSChapterList()
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val mangaDto = parseJsonResponse(response, MangaDto.serializer())
+        return mangaDto.toSChapterList()
+    }
 
     // ============================= Pages ====================================
 
