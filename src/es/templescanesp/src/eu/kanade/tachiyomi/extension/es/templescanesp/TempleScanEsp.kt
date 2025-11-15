@@ -152,11 +152,6 @@ class TempleScanEsp :
 
     private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
 
-    private fun shouldUpdatePref(): Boolean {
-        val current = preferences.prefBaseUrl
-        val original = preferences.getString(DEFAULT_BASE_URL_PREF, null) ?: super.baseUrl
-        return current == original || current.isBlank()
-    }
 
     private var _cachedBaseUrl: String? = null
     private var SharedPreferences.prefBaseUrl: String
