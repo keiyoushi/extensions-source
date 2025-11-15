@@ -22,7 +22,7 @@ data class Term(
     val type: String,
     val title: String,
     val slug: String,
-    val count: Int,
+    val count: Int?,
 )
 
 @Serializable
@@ -44,7 +44,14 @@ class Manga(
     private val updatedAt: Long,
     @SerialName("is_nsfw")
     private val isNsfw: Boolean,
-    @SerialName("term_ids") val termIds: List<Int>,
+    @SerialName("term_ids")
+    val termIds: List<Int>,
+    val author: List<Term>?,
+    val artist: List<Term>?,
+    val publisher: List<Term>?,
+    val genre: List<Term>?,
+    val theme: List<Term>?,
+    val demographic: List<Term>?,
 ) {
     @Serializable
     class Poster(
@@ -62,14 +69,11 @@ class Manga(
     fun toSManga(
         posterQuality: String?,
         altTitlesInDesc: Boolean = false,
-        terms: List<Term> = emptyList(),
     ) = SManga.create().apply {
         url = "/$hashId"
         title = this@Manga.title
-        author = terms.takeUnless { it.isEmpty() }?.filter { it.type == "author" }
-            ?.joinToString { it.title }
-        artist = terms.takeUnless { it.isEmpty() }?.filter { it.type == "artist" }
-            ?.joinToString { it.title }
+        author = this@Manga.author.takeUnless { it.isNullOrEmpty() }?.joinToString { it.title }
+        artist = this@Manga.artist.takeUnless { it.isNullOrEmpty() }?.joinToString { it.title }
         description = buildString {
             synopsis.takeUnless { it.isNullOrEmpty() }
                 ?.let { append(it) }
@@ -89,7 +93,7 @@ class Manga(
             else -> SManga.UNKNOWN
         }
         thumbnail_url = this@Manga.poster.from(posterQuality)
-        genre = getGenres(terms)
+        genre = getGenres()
     }
 
     fun toBasicSManga(posterQuality: String?) = SManga.create().apply {
@@ -98,18 +102,19 @@ class Manga(
         thumbnail_url = this@Manga.poster.from(posterQuality)
     }
 
-    fun getGenres(terms: List<Term> = emptyList()) = buildList {
+    fun getGenres() = buildList {
         when (type) {
             "manhwa" -> add("Manhwa")
             "manhua" -> add("Manhua")
             "manga" -> add("Manga")
             else -> add("Other")
         }
-        terms.takeUnless { it.isEmpty() }?.filter { it.type == "genre" }?.map { it.title }
+        genre.takeUnless { it.isNullOrEmpty() }?.map { it.title }
             .let { addAll(it ?: emptyList()) }
-        terms.takeUnless { it.isEmpty() }?.filter { it.type == "theme" }?.map { it.title }
+        theme.takeUnless { it.isNullOrEmpty() }?.map { it.title }
             .let { addAll(it ?: emptyList()) }
-        terms.takeUnless { it.isEmpty() }?.filter { it.type == "demographic" }?.map { it.title }
+        demographic.takeUnless { it.isNullOrEmpty() }?.map { it.title }
+            .let { addAll(it ?: emptyList()) }
         if (isNsfw) add("NSFW")
     }.distinct().joinToString()
 }

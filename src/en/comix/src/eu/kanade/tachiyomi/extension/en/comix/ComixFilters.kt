@@ -262,9 +262,4 @@ class ComixFilters {
             }
         }
     }
-
-    enum class ApiTerms(val term: String) {
-        AUTHORS("author"),
-        ARTISTS("artist"),
-    }
 }
