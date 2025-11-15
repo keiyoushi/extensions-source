@@ -15,7 +15,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -27,11 +26,6 @@ class Comix : HttpSource(), ConfigurableSource {
     private val apiUrl = "https://comix.to/api/v2/"
     override val lang = "en"
     override val supportsLatest = true
-
-    private val json = Json {
-        ignoreUnknownKeys = true
-        explicitNulls = false
-    }
 
     private val preferences: SharedPreferences = getPreferences()
     override val client = network.cloudflareClient.newBuilder()
@@ -97,7 +91,7 @@ class Comix : HttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val res: SearchResponse = response.parseAs(json)
+        val res: SearchResponse = response.parseAs()
         val posterQuality = preferences.posterQuality()
 
         val manga =
@@ -122,7 +116,7 @@ class Comix : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val mangaResponse: SingleMangaResponse = response.parseAs(json)
+        val mangaResponse: SingleMangaResponse = response.parseAs()
 
         return mangaResponse.result.toSManga(
             preferences.posterQuality(),
@@ -157,7 +151,7 @@ class Comix : HttpSource(), ConfigurableSource {
     override fun chapterListParse(response: Response): List<SChapter> {
         val deduplicate = preferences.deduplicateChapters()
         val mangaHash = response.request.url.pathSegments[3]
-        var resp: ChapterDetailsResponse = response.parseAs(json)
+        var resp: ChapterDetailsResponse = response.parseAs()
 
         // When deduplication is enabled store only the best chapter per number.
         var chapterMap: LinkedHashMap<Number, Chapter>? = null
@@ -178,7 +172,7 @@ class Comix : HttpSource(), ConfigurableSource {
             resp = client
                 .newCall(chapterListRequest(mangaHash, page++))
                 .execute()
-                .parseAs(json)
+                .parseAs()
 
             val items = resp.result.items
             hasNext = resp.result.pagination.lastPage > resp.result.pagination.page
@@ -236,7 +230,7 @@ class Comix : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val res: ChapterResponse = response.parseAs(json)
+        val res: ChapterResponse = response.parseAs()
         val result = res.result ?: throw Exception("Chapter not found")
 
         if (result.images.isEmpty()) {
