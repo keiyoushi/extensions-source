@@ -6,7 +6,7 @@ import java.util.Locale
 
 class Hwago : Madara(
     "Hwago",
-    "https://hwago01.xyz",
+    "https://01.hwago.xyz",
     "id",
     dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("en")),
 ) {
