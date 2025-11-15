@@ -32,7 +32,7 @@ class Manga(
     private val title: String,
     @SerialName("alt_titles")
     private val altTitles: List<String>,
-    private val synopsis: String,
+    private val synopsis: String?,
     private val type: String,
     private val poster: Poster,
     @SerialName("original_language")
@@ -71,7 +71,7 @@ class Manga(
         artist = terms.takeUnless { it.isEmpty() }?.filter { it.type == "artist" }
             ?.joinToString { it.title }
         description = buildString {
-            synopsis.takeUnless { it.isEmpty() }
+            synopsis.takeUnless { it.isNullOrEmpty() }
                 ?.let { append(it) }
             altTitles.takeIf { altTitlesInDesc && it.isNotEmpty() }
                 ?.let { altName ->
