@@ -33,11 +33,18 @@ class TempleScanEsp :
     private val preferences = getPreferences {
         if (getString(DEFAULT_BASE_URL_PREF, null) == null) {
             val currentUserUrl = getString(BASE_URL_PREF, super.baseUrl) ?: super.baseUrl
-            edit().putString(DEFAULT_BASE_URL_PREF, currentUserUrl).apply()
+            edit()
+                .putString(DEFAULT_BASE_URL_PREF, currentUserUrl)
+                .putBoolean(FETCH_DOMAIN_PREF, true)
+                .apply()
         }
     }
 
     private val fetchedDomainUrl: String by lazy {
+        if (!preferences.fetchDomainPref()) {
+            return@lazy preferences.prefBaseUrl
+        }
+
         try {
             val initClient = network.cloudflareClient
             val headers = super.headersBuilder()
@@ -136,7 +143,16 @@ class TempleScanEsp :
                 true
             }
         }.also { screen.addPreference(it) }
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = FETCH_DOMAIN_PREF
+            title = "Buscar dominio automáticamente"
+            summary = "Intenta buscar el dominio automáticamente al abrir la fuente."
+            setDefaultValue(true)
+        }.also { screen.addPreference(it) }
     }
+
+    private fun SharedPreferences.fetchDomainPref() = getBoolean(FETCH_DOMAIN_PREF, true)
 
     private fun shouldUpdatePref(): Boolean {
         val current = preferences.prefBaseUrl
@@ -160,6 +176,7 @@ class TempleScanEsp :
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val FETCH_DOMAIN_PREF = "fetchDomain"
 
         private const val SUPABASE_URL = "https://ysilhsqbtixygcgscvbb.supabase.co/rest/v1/parameters?select=value&name=eq.redirect_url_templescan"
         private const val SUPABASE_API_KEY = "sb_publishable_y5ZlqOnxowq6W7JTSZHSBQ_AQfHg77U"
