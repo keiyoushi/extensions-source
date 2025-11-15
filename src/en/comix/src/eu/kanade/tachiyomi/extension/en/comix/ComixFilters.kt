@@ -266,7 +266,5 @@ class ComixFilters {
     enum class ApiTerms(val term: String) {
         AUTHORS("author"),
         ARTISTS("artist"),
-        THEMES("theme"),
-        GENRES("genre"),
     }
 }

@@ -7,13 +7,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 class TermResponse(
-    val status: Int,
     val result: Items,
 ) {
     @Serializable
     class Items(
         val items: List<Term>,
-        val pagination: Pagination,
     )
 }
 
@@ -29,41 +27,21 @@ data class Term(
 
 @Serializable
 class Manga(
-    @SerialName("manga_id")
-    private val mangaId: Int,
     @SerialName("hash_id")
     private val hashId: String,
     private val title: String,
     @SerialName("alt_titles")
     private val altTitles: List<String>,
     private val synopsis: String,
-    private val slug: String,
     private val type: String,
     private val poster: Poster,
     @SerialName("original_language")
     private val originalLanguage: String?,
     private val status: String,
-    @SerialName("final_chapter")
-    private val finalChapter: Double,
-    @SerialName("has_chapters")
-    private val hasChapters: Boolean,
-    @SerialName("latest_chapter")
-    private val latestChapter: Double,
-    @SerialName("chapter_updated_at")
-    private val chapterUpdatedAt: Long,
-    @SerialName("end_date")
-    private val endDate: String,
     @SerialName("created_at")
     private val createdAt: Long,
     @SerialName("updated_at")
     private val updatedAt: Long,
-    @SerialName("rated_avg")
-    private val ratedAvg: Double,
-    @SerialName("rated_count")
-    private val ratedCount: Int,
-    @SerialName("follows_total")
-    private val followsTotal: Int,
-    private val links: Links,
     @SerialName("is_nsfw")
     private val isNsfw: Boolean,
     @SerialName("term_ids") val termIds: List<Int>,
@@ -81,14 +59,11 @@ class Manga(
         }
     }
 
-    @Serializable
-    class Links(
-        private val al: String?,
-        private val mal: String?,
-        private val mu: String?,
-    )
-
-    fun toSManga(posterQuality: String?, terms: List<Term> = emptyList()) = SManga.create().apply {
+    fun toSManga(
+        posterQuality: String?,
+        altTitlesInDesc: Boolean = false,
+        terms: List<Term> = emptyList(),
+    ) = SManga.create().apply {
         url = "/$hashId"
         title = this@Manga.title
         author = terms.takeUnless { it.isEmpty() }?.filter { it.type == "author" }
@@ -98,7 +73,7 @@ class Manga(
         description = buildString {
             synopsis.takeUnless { it.isEmpty() }
                 ?.let { append(it) }
-            altTitles.takeUnless { it.isEmpty() }
+            altTitles.takeIf { altTitlesInDesc && it.isNotEmpty() }
                 ?.let { altName ->
                     append("\n\n")
                     append("Alternative Names:\n")
@@ -135,22 +110,17 @@ class Manga(
         terms.takeUnless { it.isEmpty() }?.filter { it.type == "theme" }?.map { it.title }
             .let { addAll(it ?: emptyList()) }
         terms.takeUnless { it.isEmpty() }?.filter { it.type == "demographic" }?.map { it.title }
+        if (isNsfw) add("NSFW")
     }.distinct().joinToString()
 }
 
 @Serializable
 class SingleMangaResponse(
-    val status: Int,
     val result: Manga,
 )
 
 @Serializable
 class Pagination(
-    val count: Int,
-    @SerialName("total")
-    val totalCount: Int,
-    @SerialName("per_page")
-    val perPage: Int,
     @SerialName("current_page")
     val page: Int,
     @SerialName("last_page")
@@ -161,7 +131,6 @@ class Pagination(
 
 @Serializable
 class SearchResponse(
-    val status: Int,
     val result: Items,
 ) {
     @Serializable
@@ -172,8 +141,7 @@ class SearchResponse(
 }
 
 @Serializable
-class ChapterResponse(
-    val status: Int,
+class ChapterDetailsResponse(
     val result: Items,
 ) {
     @Serializable
@@ -193,8 +161,6 @@ class Chapter(
     val scanlationGroupId: Int,
     val number: Double,
     val name: String,
-    val language: String,
-    val volume: Int,
     val votes: Int,
     @SerialName("created_at")
     val createdAt: Long,
@@ -208,7 +174,6 @@ class Chapter(
         @SerialName("scanlation_group_id")
         val scanlationGroupId: Int,
         val name: String,
-        val slug: String,
     )
 
     fun toSChapter(mangaId: String) = SChapter.create().apply {
@@ -216,10 +181,49 @@ class Chapter(
         name = buildString {
             append("Chapter ")
             append(this@Chapter.number.toString().removeSuffix(".0"))
-            this@Chapter.name.takeUnless { it.isEmpty() }?.let { append(" - $it") }
+            this@Chapter.name.takeUnless { it.isEmpty() }?.let { append(": $it") }
         }
         date_upload = this@Chapter.updatedAt * 1000
         chapter_number = this@Chapter.number.toFloat()
         scanlator = this@Chapter.scanlationGroup?.name ?: "Unknown"
+    }
+}
+
+@Serializable
+class ChapterResponse(
+    val result: Items?,
+) {
+    @Serializable
+    class Items(
+        @SerialName("chapter_id")
+        val chapterId: Int,
+        @SerialName("created_at")
+        val createdAt: Long,
+        @SerialName("updated_at")
+        val updatedAt: Long,
+        @SerialName("scanlation_group")
+        val scanlationGroup: Chapter.ScanlationGroup?,
+        val images: List<String>,
+        val prev: PrevNextChapter?,
+        val next: PrevNextChapter?,
+    ) {
+        @Serializable
+        class PrevNextChapter(
+            @SerialName("chapter_id")
+            val chapterId: Int,
+            @SerialName("manga_id")
+            val mangaId: Int,
+            @SerialName("scanlation_group_id")
+            val scanlationGroupId: Int,
+            val number: Double,
+            val name: String,
+            val language: String,
+            val volume: Int,
+            val votes: Int,
+            @SerialName("created_at")
+            val createdAt: Long,
+            @SerialName("updated_at")
+            val updatedAt: Long,
+        )
     }
 }
