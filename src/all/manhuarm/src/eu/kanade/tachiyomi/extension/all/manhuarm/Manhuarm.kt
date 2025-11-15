@@ -118,10 +118,22 @@ class Manhuarm(
      * This ensures that the `OkHttpClient` instance is only created when required, and it is rebuilt
      * when there are configuration changes to ensure that the client uses the most up-to-date settings.
      */
+    private var isClientWarmedUp = false
+
     private var clientInstance: OkHttpClient? = null
         get() {
             if (field == null || isSettingsChanged) {
                 field = clientBuilder().build()
+                isClientWarmedUp = false // Reset warm-up flag when client is rebuilt
+            }
+            if (!isClientWarmedUp) {
+                try {
+                    // Warm up the client by making a request to the base URL to solve Cloudflare challenge
+                    field!!.newCall(GET(baseUrl, headers)).execute().close()
+                    isClientWarmedUp = true
+                } catch (e: Exception) {
+                    // Ignore errors during warm-up
+                }
             }
             return field
         }
@@ -153,7 +165,19 @@ class Manhuarm(
         val ua = customUserAgent.trim()
         if (ua.isNotEmpty()) {
             builder.set("User-Agent", ua)
+        } else {
+            // Set a Firefox UA to better mimic browser requests
+            builder.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0")
         }
+        // Add headers to mimic browser navigation requests
+        builder.set("Accept-Language", "en-US,en;q=0.9")
+        builder.set("Upgrade-Insecure-Requests", "1")
+        builder.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
+        builder.set("Sec-Fetch-Site", "none")
+        builder.set("Sec-Fetch-Mode", "navigate")
+        builder.set("Sec-Fetch-User", "?1")
+        builder.set("Sec-Fetch-Dest", "document")
+        builder.set("Priority", "u=0, i")
         return builder
     }
 
