@@ -53,8 +53,7 @@ class TempleScanEsp :
                 .add("Accept", "application/json")
                 .build()
 
-            val resp = initClient.newCall(GET(SUPABASE_URL, headers)).execute()
-            val maybeDomain = resp.use { r ->
+            val fetchedDomain = initClient.newCall(GET(SUPABASE_URL, headers)).execute().use { r ->
                 if (!r.isSuccessful) return@use null
 
                 val body = r.body?.string().orEmpty()
@@ -69,15 +68,13 @@ class TempleScanEsp :
                 val detected = value.trimEnd('/')
                 val newDomain = if (detected.startsWith("http")) detected else "https://$detected"
 
-                if (shouldUpdatePref()) {
-                    preferences.prefBaseUrl = newDomain
-                }
+                preferences.prefBaseUrl = newDomain
 
                 newDomain
             }
 
-            if (maybeDomain != null) {
-                return@lazy maybeDomain
+            if (fetchedDomain != null) {
+                return@lazy fetchedDomain
             }
 
             return@lazy preferences.prefBaseUrl
