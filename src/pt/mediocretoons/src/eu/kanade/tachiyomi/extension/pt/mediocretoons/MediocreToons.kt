@@ -262,7 +262,7 @@ class MediocreToons : HttpSource() {
     }
 
     companion object {
-        const val CDN_URL = "https://cdn2.fufutebol.com.br"
+        const val CDN_URL = "https://cdn.mediocretoons.site"
     }
 }
 
