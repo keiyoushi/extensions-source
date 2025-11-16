@@ -8,13 +8,11 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.en.bookwalker.dto.BookUpdateDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.HoldBookEntityDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.HoldBooksInfoDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SeriesDto
 import eu.kanade.tachiyomi.extension.en.bookwalker.dto.SingleDto
-import eu.kanade.tachiyomi.extension.en.bookwalker.dto.ViewerAuthResponse
-import eu.kanade.tachiyomi.extension.en.bookwalker.dto.ViewerConfiguration
-import eu.kanade.tachiyomi.extension.en.bookwalker.dto.ViewerPageInfo
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
@@ -34,8 +32,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.polymorphic
@@ -56,16 +54,17 @@ import java.util.regex.PatternSyntaxException
 class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences {
 
     override val name = "BookWalker Global"
+    private val domain = "bookwalker.jp"
 
-    override val baseUrl = "https://global.bookwalker.jp"
+    override val baseUrl = "https://global.$domain"
 
     override val lang = "en"
 
     override val supportsLatest = true
 
-    private val rimgUrl = "https://rimg.bookwalker.jp"
-    private val cUrl = "https://c.bookwalker.jp"
-    private val trialUrl = "https://viewer-trial.bookwalker.jp"
+    private val rimgUrl = "https://rimg.$domain"
+    private val cUrl = "https://c.$domain"
+    private val memberApiUrl = "https://member-app.$domain/api"
 
     override val client = network.client.newBuilder()
         .addInterceptor(BookWalkerImageRequestInterceptor(this))
@@ -326,22 +325,31 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
 
     override fun popularMangaParse(response: Response): MangasPage {
         if (showLibraryInPopular) {
-            val manga = response.parseAs<HoldBooksInfoDto>().holdBookList.entities
-                .map {
-                    when (it) {
-                        is SeriesDto -> SManga.create().apply {
-                            url = "/series/${it.seriesId}/"
-                            title = it.seriesName.cleanTitle()
-                            thumbnail_url = getHiResCoverFromLegacyUrl(it.imageUrl)
-                        }
-                        is SingleDto -> SManga.create().apply {
-                            url = it.detailUrl.substring(baseUrl.length)
-                            title = it.title.cleanTitle()
-                            thumbnail_url = getHiResCoverFromLegacyUrl(it.imageUrl)
-                            author = it.authors.joinToString { a -> a.authorName }
+            val manga = runBlocking(Dispatchers.IO) {
+                response.parseAs<HoldBooksInfoDto>().holdBookList.entities
+                    .mapNotNull { entity ->
+                        when (entity) {
+                            is SeriesDto -> {
+                                SManga.create().apply {
+                                    url = "/series/${entity.seriesId}/"
+                                    title = entity.seriesName.cleanTitle()
+                                    thumbnail_url = getHiResCoverFromLegacyUrl(entity.imageUrl)
+                                }
+                            }
+                            is SingleDto -> {
+                                val bookUpdate = fetchBookUpdate(entity.uuid)
+                                bookUpdate?.let {
+                                    SManga.create().apply {
+                                        url = "/de/${entity.uuid}/"
+                                        title = it.seriesName?.cleanTitle() ?: it.productName.cleanTitle()
+                                        thumbnail_url = it.coverImageUrl
+                                        author = it.authors.joinToString { a -> a.authorName }
+                                    }
+                                }
+                            }
                         }
                     }
-                }
+            }
             return MangasPage(manga, false)
         }
         return super.popularMangaParse(response)
@@ -427,50 +435,48 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                 .asJsoup()
                 .let { validateLogin(it) }
 
-            val mangaDetails = SManga.create().apply {
-                updateDetailsFromSeriesPage(seriesPage)
-            }
-
             // It generally doesn't matter which chapter we take the description from, but for
             // series that release in volumes we want the earliest one, which will _usually_ be the
             // last one on the page. With that said, it's not worth it to paginate in order to find
             // the earliest volume, and volume releases don't usually have 60+ volumes anyways.
-            val firstItem = seriesPage.select(".o-tile:not(:has(.a-ribbon-pre-order)) .a-tile-ttl a")
-            val chapterUrl = firstItem.attr("href") ?: return@rxSingle mangaDetails
-            val uuid = chapterUrl.substringAfter("/de").substringBefore("/")
-            getHiResCoverUrlFromTrial(uuid)?.let {
-                mangaDetails.thumbnail_url = it
-            }
+            val firstItem = seriesPage.selectFirst(".o-tile:not(:has(.a-ribbon-pre-order)) .a-tile-ttl a")
+            val uuid = firstItem!!.absUrl("href").substringAfter("/de").substringBefore("/")
+            val bookUpdate = fetchBookUpdate(uuid)
 
-            val chapterPage = client.newCall(GET(chapterUrl, callHeaders)).await().asJsoup()
-
-            mangaDetails.apply {
-                description = getDescriptionFromChapterPage(chapterPage)
+            SManga.create().apply {
+                title = bookUpdate!!.seriesName?.cleanTitle() ?: bookUpdate.productName.cleanTitle()
+                author = bookUpdate.authors.joinToString { it.authorName }
+                description = listOfNotNull(bookUpdate.productExplanationShort, bookUpdate.productExplanationDetails)
+                    .joinToString("\n\n")
+                    .trim()
+                thumbnail_url = bookUpdate.coverImageUrl
+                genre = getAvailableFilterNames(seriesPage, "side-genre").joinToString()
+                val statusIndicators = seriesPage.select("ul.side-others > li > a").map { it.ownText() }
+                status = parseStatus(statusIndicators)
             }
         }.toObservable()
     }
 
     private fun fetchSingleMangaDetails(manga: SManga): Observable<SManga> {
         return rxSingle {
-            val document = client.newCall(GET(baseUrl + manga.url, callHeaders))
-                .awaitSuccess()
-                .asJsoup()
+            val uuid = manga.url.substringAfter("/de").substringBefore("/")
+            val bookUpdate = fetchBookUpdate(uuid)
 
             SManga.create().apply {
-                title = getTitleFromChapterPage(document)?.cleanTitle().orEmpty()
+                title = bookUpdate!!.seriesName?.cleanTitle() ?: bookUpdate.productName.cleanTitle()
+                author = bookUpdate.authors.joinToString { it.authorName }
+                description = listOfNotNull(bookUpdate.productExplanationShort, bookUpdate.productExplanationDetails)
+                    .joinToString("\n\n")
+                    .trim()
+                thumbnail_url = bookUpdate.coverImageUrl
 
-                val uuid = manga.url.substringAfter("/de").substringBefore("/")
-                getHiResCoverUrlFromTrial(uuid)?.let {
-                    thumbnail_url = it
-                }
-
-                description = getDescriptionFromChapterPage(document)
                 // From the browse pages we can't distinguish between a true one-shot and a
                 // serial manga with only one chapter, but we can detect if there's a series
                 // reference in the chapter page. If there is, we should let the user know that
                 // they may need to take some action in the future to correct the error.
+                val document = client.newCall(GET(baseUrl + manga.url, callHeaders)).awaitSuccess().asJsoup()
                 if (document.selectFirst(".product-detail th:contains(Series Title)") != null) {
-                    description = (
+                    this.description = (
                         "WARNING: This entry is being treated as a one-shot but appears to " +
                             "have an associated series. If another chapter is released in " +
                             "the future, you will likely need to migrate this to itself." +
@@ -481,45 +487,20 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         }.toObservable()
     }
 
-    private fun SManga.updateDetailsFromSeriesPage(document: Document) = run {
-        // Fallback:
-        // Take the thumbnail from the first chapter that is not on pre-order.
-        // Pre-order chapters often just have a gray rectangle with "NOW PRINTING" as their
-        // thumbnail, which doesn't look very pretty for the catalog.
-        thumbnail_url = getHiResCoverFromLegacyUrl(
-            document
-                .select(".o-tile:not(:has(.a-ribbon-pre-order)) .a-tile-thumb-img > img")
-                .attr("data-srcset")
-                .getHighestQualitySrcset(),
-        )
-        title = document.selectFirst(".title-main-inner")!!.ownText().cleanTitle()
-        author = getAvailableFilterNames(document, "side-author").joinToString()
-        genre = getAvailableFilterNames(document, "side-genre").joinToString()
-
-        val statusIndicators = document.select("ul.side-others > li > a").map { it.ownText() }
-
-        status =
-            if (statusIndicators.any { it.startsWith("Completed") }) {
-                if (statusIndicators.any { it.startsWith("Pre-Order") }) {
-                    SManga.PUBLISHING_FINISHED
-                } else {
-                    SManga.COMPLETED
-                }
+    private fun parseStatus(statusIndicators: List<String>): Int {
+        return if (statusIndicators.any { it.startsWith("Completed") }) {
+            if (statusIndicators.any { it.startsWith("Pre-Order") }) {
+                SManga.PUBLISHING_FINISHED
             } else {
-                SManga.ONGOING
+                SManga.COMPLETED
             }
+        } else {
+            SManga.ONGOING
+        }
     }
 
     private fun getTitleFromChapterPage(document: Document): String? {
         return document.selectFirst(".detail-book-title-box h1[itemprop='name']")?.ownText()
-    }
-
-    private fun getDescriptionFromChapterPage(document: Document): String {
-        return buildString {
-            append(document.select(".synopsis-lead").text())
-            append("\n\n")
-            append(document.select(".synopsis-text").text())
-        }.trim()
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
@@ -781,7 +762,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     val id = url.substringAfter("$rimgUrl/").substringBefore('/')
                     id.reversed().toLongOrNull()
                 }
-                // For legacy covers from the user's library.
+                // For legacy covers of "series" from the user's library.
                 url.contains("thumbnailImage_") -> {
                     val id = url.substringAfter("thumbnailImage_").substringBefore(".$extension")
                     id.toLongOrNull()
@@ -794,61 +775,15 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         }
     }
 
-    // This function retrieves high-res covers from the trial viewer when parsing manga details.
-    // It’s not used for covers in popularMangaFromElement because of too many requests.
-    private suspend fun getHiResCoverUrlFromTrial(uuid: String): String? {
-        try {
-            val authUrl = trialUrl.toHttpUrl().newBuilder()
-                .addPathSegment("trial-page")
-                .addPathSegment("c")
-                .addQueryParameter("cid", uuid)
-                .addQueryParameter("BID", "0")
-                .build()
-            val authResponse = client.newCall(GET(authUrl, headers))
-                .awaitSuccess().parseAs<ViewerAuthResponse>()
-            val auth = authResponse.authInfo
-            /*
-            // This is for covers from light novels, but the covers differ from the original ones,
-            // so leaving it unused for now.
-            val readerBaseUrl = if (authResponse.cty == 0) {
-                authResponse.url + "normal_default/"
-            } else {
-                authResponse.url
-            }
-             */
-            val readerBaseHttpUrl = authResponse.url.toHttpUrl()
+    // Fetch manga details form api.
+    private suspend fun fetchBookUpdate(uuid: String): BookUpdateDto? {
+        val apiUrl = "$memberApiUrl/books/updates".toHttpUrl().newBuilder()
+            .addQueryParameter("fileType", "EPUB")
+            .addQueryParameter(uuid, "0")
+            .build()
 
-            val configUrl = readerBaseHttpUrl.newBuilder()
-                .addPathSegment("configuration_pack.json")
-                .addQueryParameter("Policy", auth.policy)
-                .addQueryParameter("Signature", auth.signature)
-                .addQueryParameter("Key-Pair-Id", auth.keyPairId)
-                .build()
-
-            val responseMap = client.newCall(GET(configUrl, headers))
-                .awaitSuccess().body.string().parseAs<Map<String, JsonElement>>()
-
-            val config = responseMap["configuration"]!!.toString().parseAs<ViewerConfiguration>()
-            val coverContent = config.contents.first()
-            val coverFileKey = coverContent.file
-            val coverFileType = coverContent.type
-
-            val coverInfo = responseMap[coverFileKey]!!.toString().parseAs<ViewerPageInfo>()
-            val coverPageNumber = coverInfo.fileLinkInfo.pageLinkInfoList.first().page.pageNumber
-
-            val imageRelativePath = "$coverFileKey/$coverPageNumber.$coverFileType"
-            val resolvedUrl = readerBaseHttpUrl.resolve(imageRelativePath)
-
-            val finalImageUrl = resolvedUrl!!.newBuilder()
-                .addQueryParameter("Policy", auth.policy)
-                .addQueryParameter("Signature", auth.signature)
-                .addQueryParameter("Key-Pair-Id", auth.keyPairId)
-                .build()
-
-            return finalImageUrl.toString()
-        } catch (e: Exception) {
-            return null
-        }
+        return client.newCall(GET(apiUrl, headers)).awaitSuccess()
+            .parseAs<List<BookUpdateDto>>().firstOrNull()
     }
 
     private fun String.parseChapterNumber(): Pair<String, Float>? {
