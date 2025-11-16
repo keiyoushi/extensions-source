@@ -165,9 +165,6 @@ class Manhuarm(
         val ua = customUserAgent.trim()
         if (ua.isNotEmpty()) {
             builder.set("User-Agent", ua)
-        } else {
-            // Set a Firefox UA to better mimic browser requests
-            builder.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0")
         }
         // Add headers to mimic browser navigation requests
         builder.set("Accept-Language", "en-US,en;q=0.9")
