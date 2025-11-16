@@ -25,7 +25,7 @@ class TempleScanEsp :
         "Temple Scan",
         "https://aedexnox.kawi.lat",
         "es",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
+        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),
     ConfigurableSource {
 
