@@ -180,7 +180,7 @@ class ComixFilters {
 
     private class TypeFilter : UriMultiSelectFilter(
         "Type",
-        "type",
+        "types[]",
         arrayOf(
             Pair("Manga", "manga"),
             Pair("Manhwa", "manhwa"),
