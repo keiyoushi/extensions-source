@@ -49,7 +49,7 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
             artist = document.select("a[href*=/artist/] span:first-of-type").eachText().joinToString().ifBlank { author }
 
             run {
-                val tokens = document.select("a[rel=tag]")
+                val tokens = document.select("a[href*=\"/tag/\"][rel=tag]")
                     .mapNotNull { it.selectFirst("span")?.text() }
                 genre = tokens.map(String::trim).filter(String::isNotBlank).distinctBy(String::lowercase).joinToString()
             }
