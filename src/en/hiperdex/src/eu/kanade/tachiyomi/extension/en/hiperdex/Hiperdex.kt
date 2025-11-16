@@ -133,6 +133,8 @@ class Hiperdex :
 
     override fun searchMangaSelector() = "#loop-content div.page-listing-item"
 
+    override val chapterUrlSuffix = ""
+
     override fun mangaDetailsParse(document: Document): SManga {
         return super.mangaDetailsParse(document).apply {
             val cleanedTitle = title.cleanTitleIfNeeded()

@@ -64,6 +64,7 @@ class DetailsDto(
         return when (this) {
             "ONGOING" -> SManga.ONGOING
             "ENDED" -> SManga.COMPLETED
+            "HIATUS" -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
     }

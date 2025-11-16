@@ -248,7 +248,7 @@ class Nudemoon : ParsedHttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> = mutableListOf<Page>().apply {
-        response.asJsoup().select("img.border").mapIndexed { index, img ->
+        response.asJsoup().select("""img.border[title~=.+]""").mapIndexed { index, img ->
             add(Page(index, imageUrl = img.attr("abs:data-src")))
         }
         if (isEmpty() && cookieManager.getCookie(baseUrl).contains("fusion_user").not()) {
