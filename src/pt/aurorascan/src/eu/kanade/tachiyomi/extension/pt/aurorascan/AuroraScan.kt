@@ -7,7 +7,7 @@ import java.util.concurrent.TimeUnit
 
 class AuroraScan : GreenShit(
     "Aurora Scan",
-    "https://www.serenitytoons.win/",
+    "https://www.serenitytoons.win",
     "pt-BR",
 ) {
     override val apiUrl = "https://api.sussytoons.wtf"

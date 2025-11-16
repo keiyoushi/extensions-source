@@ -1,7 +1,5 @@
-
 package eu.kanade.tachiyomi.multisrc.greenshit
 
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
@@ -44,12 +42,12 @@ class ResultDto<T>(
 }
 
 fun ResultDto<List<MangaDto>>.toSMangaList(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = true, defaultScanId: Int? = null): List<SManga> =
-    results.map { it.toSManga(cdnUrl, useWidth, includeSlug, defaultScanId) }
+    results.filter { it.type != "TEXTO" }.map { it.toSManga(cdnUrl, useWidth, includeSlug, defaultScanId) }
 
 @Serializable
 class MangaDto(
     @JsonNames("obr_id", "id")
-    val id: Int? = null,
+    val id: Int,
     @JsonNames("obr_nome", "name")
     val name: String? = null,
     @JsonNames("obr_slug", "slug")
@@ -59,21 +57,22 @@ class MangaDto(
     @JsonNames("obr_descricao", "description")
     val description: String? = null,
     @SerialName("scan_id")
-    val scanId: Int? = null,
+    val scanId: Int,
     @JsonNames("status", "obr_status")
     val status: MangaStatus? = null,
     @JsonNames("tags", "genres")
     val genres: List<Genre> = emptyList(),
     @JsonNames("capitulos", "chapters")
     val chapters: List<ChapterDto>? = null,
+    val type: String? = null,
 ) {
     fun toSManga(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = false, defaultScanId: Int? = null) = SManga.create().apply {
-        title = name ?: "Unknown"
-        url = if (includeSlug && id != null) {
-            val finalSlug = slug?.takeIf { it.isNotEmpty() } ?: name?.toSlug() ?: "unknown"
+        title = name ?: throw IllegalArgumentException("Name is required for title")
+        val finalSlug = slug?.takeIf { it.isNotEmpty() } ?: name?.toSlug() ?: throw IllegalArgumentException("Slug is required")
+        url = if (includeSlug) {
             "/obra/$id/$finalSlug"
         } else {
-            "/obra/${id?.toString() ?: slug ?: "unknown"}"
+            "/obra/$id"
         }
         thumbnail_url = buildThumbnailUrl(cdnUrl, useWidth, defaultScanId)
         genre = genres.joinToString()
@@ -88,8 +87,8 @@ class MangaDto(
             it.contains("/") -> "$cdnUrl/$it"
             else -> {
                 val width = if (useWidth) "?width=300" else ""
-                val scanId = scanId ?: defaultScanId ?: 0
-                val mangaId = id ?: 0
+                val scanId = scanId ?: defaultScanId
+                val mangaId = id
                 "$cdnUrl/scans/$scanId/obras/$mangaId/$it$width"
             }
         }
@@ -208,8 +207,7 @@ class ChapterPagesDto(
 
     fun toPageList(cdnUrl: String): List<Page> {
         if (type == "TEXTO") {
-            val content = text.orEmpty().ifBlank { "Capítulo em texto." }
-            return listOf(Page(0, imageUrl = TextInterceptorHelper.createUrl(name, content)))
+            throw IllegalArgumentException("Novels are not supported")
         }
 
         return pages.mapIndexedNotNull { index, pageDto ->
