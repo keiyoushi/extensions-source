@@ -121,6 +121,7 @@ class Comix : HttpSource(), ConfigurableSource {
         return mangaResponse.result.toSManga(
             preferences.posterQuality(),
             preferences.alternativeNamesInDescription(),
+            preferences.scorePosition(),
         )
     }
 
@@ -269,6 +270,15 @@ class Comix : HttpSource(), ConfigurableSource {
 
             setDefaultValue(false)
         }.let(screen::addPreference)
+
+        ListPreference(screen.context).apply {
+            key = PREF_SCORE_POSITION
+            title = "Score display position"
+            summary = "%s"
+            entries = arrayOf("Top of description", "Bottom of description", "Don't show")
+            entryValues = arrayOf("top", "bottom", "none")
+            setDefaultValue("top")
+        }.let(screen::addPreference)
     }
 
     private fun SharedPreferences.posterQuality() =
@@ -280,9 +290,13 @@ class Comix : HttpSource(), ConfigurableSource {
     private fun SharedPreferences.alternativeNamesInDescription() =
         getBoolean(ALTERNATIVE_NAMES_IN_DESCRIPTION, false)
 
+    private fun SharedPreferences.scorePosition() =
+        getString(PREF_SCORE_POSITION, "top") ?: "top"
+
     companion object {
         private const val PREF_POSTER_QUALITY = "pref_poster_quality"
         private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
         private const val ALTERNATIVE_NAMES_IN_DESCRIPTION = "pref_alt_names_in_description"
+        private const val PREF_SCORE_POSITION = "pref_score_position"
     }
 }
