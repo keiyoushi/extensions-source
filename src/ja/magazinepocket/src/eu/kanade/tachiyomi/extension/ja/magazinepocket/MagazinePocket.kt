@@ -12,7 +12,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -239,19 +238,9 @@ class MagazinePocket : HttpSource() {
 
         val result = apiResponse.parseAs<EpisodeListResponse>()
 
-        return result.episodeList.map { chapter ->
-            SChapter.create().apply {
-                val paddedId = chapter.titleId.toString().padStart(5, '0')
-                url = "/title/$paddedId/episode/${chapter.episodeId}"
-                name = if (chapter.point > 0 && chapter.badge != 3 && chapter.rentalFinishTime == null) {
-                    "🔒 ${chapter.episodeName}"
-                } else {
-                    chapter.episodeName
-                }
-                chapter_number = chapter.index.toFloat()
-                date_upload = dateFormat.tryParse(chapter.startTime)
-            }
-        }.reversed()
+        return result.episodeList
+            .map { it.toSChapter(dateFormat) }
+            .reversed()
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

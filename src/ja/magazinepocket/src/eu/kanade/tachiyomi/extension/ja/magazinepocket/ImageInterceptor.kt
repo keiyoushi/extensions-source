@@ -26,7 +26,7 @@ class ImageInterceptor : Interceptor {
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, options)
 
-        val version = if (options.outHeight == 1600) 2 else 1
+        val version = if (options.outHeight == 1600 || options.outHeight == 1024) 2 else 1
         val originalBitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
         val descrambledBody = descrambleImage(originalBitmap, seed, version)
 

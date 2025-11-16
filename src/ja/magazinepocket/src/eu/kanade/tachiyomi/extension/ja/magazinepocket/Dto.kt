@@ -1,9 +1,12 @@
 package eu.kanade.tachiyomi.extension.ja.magazinepocket
 
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
+import java.text.SimpleDateFormat
 
 @Serializable
 class RankingApiResponse(
@@ -46,15 +49,27 @@ class EpisodeListResponse(
 
 @Serializable
 class Episode(
-    @SerialName("episode_id") val episodeId: Int,
-    @SerialName("episode_name") val episodeName: String,
-    val index: Int,
-    @SerialName("start_time") val startTime: String,
-    val point: Int,
-    @SerialName("title_id") val titleId: Int,
-    val badge: Int,
-    @SerialName("rental_finish_time") val rentalFinishTime: String? = null,
-)
+    @SerialName("episode_id") private val episodeId: Int,
+    @SerialName("episode_name") private val episodeName: String,
+    private val index: Int,
+    @SerialName("start_time") private val startTime: String,
+    private val point: Int,
+    @SerialName("title_id") private val titleId: Int,
+    private val badge: Int,
+    @SerialName("rental_finish_time") private val rentalFinishTime: String? = null,
+) {
+    fun toSChapter(dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
+        val paddedId = titleId.toString().padStart(5, '0')
+        url = "/title/$paddedId/episode/$episodeId"
+        name = if (point > 0 && badge != 3 && rentalFinishTime == null) {
+            "🔒 $episodeName"
+        } else {
+            episodeName
+        }
+        chapter_number = index.toFloat()
+        date_upload = dateFormat.tryParse(startTime)
+    }
+}
 
 @Serializable
 class DetailResponse(
