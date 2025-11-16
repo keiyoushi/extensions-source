@@ -23,7 +23,7 @@ import java.util.Locale
 class TempleScanEsp :
     Madara(
         "Temple Scan",
-        "https://aedexnox.vxviral.xyz",
+        "https://aedexnox.kawi.lat",
         "es",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es"))
     ),
@@ -56,7 +56,7 @@ class TempleScanEsp :
             val fetchedDomain = initClient.newCall(GET(SUPABASE_URL, headers)).execute().use { r ->
                 if (!r.isSuccessful) return@use null
 
-                val body = r.body?.string().orEmpty()
+                val body = r.body.string()
                 val value = try {
                     json.parseToJsonElement(body).jsonArray.first().jsonObject["value"]!!.jsonPrimitive.content
                 } catch (_: Exception) {
