@@ -192,7 +192,7 @@ class LeerCapitulo : ParsedHttpSource() {
 
         for (scriptUrl in scripts) {
             val scriptData = notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().body.string()
-            val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
+            val deobfuscatedScript = runCatching { Deobfuscator.deobfuscateScript(scriptData) }.getOrNull()
             if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
                 dataScript = deobfuscatedScript
                 cachedScriptUrl = scriptUrl

@@ -3,8 +3,12 @@ ext {
     extClass = '.RawINU'
     themePkg = 'fmreader'
     baseUrl = 'https://rawinu.com'
-    overrideVersionCode = 2
+    overrideVersionCode = 3
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(":lib:cookieinterceptor"))
+}
