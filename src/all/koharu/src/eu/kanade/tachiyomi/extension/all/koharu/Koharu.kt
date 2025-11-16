@@ -58,11 +58,27 @@ class Koharu(
     private val searchLang: String = "",
 ) : HttpSource(), ConfigurableSource {
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val preferences: SharedPreferences by getPreferencesLazy {
+        val server = getString(PREF_MIRROR, MIRROR_PREF_DEFAULT) ?: MIRROR_PREF_DEFAULT
+        val isValidMirror = server in mirrors || server.toIntOrNull() != null
+        if (!isValidMirror) {
+            edit().also { editor ->
+                editor.putString(PREF_MIRROR, MIRROR_PREF_DEFAULT)
+            }.apply()
+        }
+    }
 
     override val name = "SchaleNetwork"
 
-    override val baseUrl = "https://${preferences.getString(PREF_MIRROR, MIRROR_PREF_DEFAULT)!!}"
+    override val baseUrl: String
+        get() {
+            val preferenceValue = preferences.getString(PREF_MIRROR, MIRROR_PREF_DEFAULT) ?: MIRROR_PREF_DEFAULT
+            val mirror = preferenceValue.toIntOrNull()?.let { index ->
+                mirrors[index.coerceAtMost(mirrors.lastIndex)]
+            } ?: preferenceValue.takeIf { it in mirrors } ?: MIRROR_PREF_DEFAULT
+
+            return "https://$mirror"
+        }
 
     override val id = if (lang == "en") 1484902275639232927 else super.id
 
