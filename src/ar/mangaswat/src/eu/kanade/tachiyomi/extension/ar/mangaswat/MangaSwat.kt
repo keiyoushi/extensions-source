@@ -4,32 +4,34 @@ import android.widget.Toast
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
-import okhttp3.FormBody
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class MangaSwat :
     MangaThemesia(
         "MangaSwat",
-        "https://swatscans.com",
+        "https://appswat.com",
         "ar",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
     ),
@@ -38,6 +40,14 @@ class MangaSwat :
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     private val preferences by getPreferencesLazy()
+
+    private val apiBaseUrl = "https://appswat.com/v2/api/v2"
+
+    private val apiDateFormat by lazy {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+    }
 
     override val client = super.client.newBuilder()
         .addInterceptor(::tokenInterceptor)
@@ -95,105 +105,228 @@ class MangaSwat :
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val xhrHeaders = headersBuilder()
-            .add("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-            .add("X-Requested-With", "XMLHttpRequest")
+        val apiHeaders = headersBuilder()
+            .add("Accept", "application/json, text/plain, */*")
+            .add("Origin", baseUrl)
+            .add("Referer", "$baseUrl/")
             .build()
-
-        val formBody = FormBody.Builder()
-            .add("action", "more_manga_home")
-            .add("paged", (page - 1).toString())
-            .build()
-
-        return POST("$baseUrl/ajax-request", xhrHeaders, formBody)
+        return GET("$apiBaseUrl/series/?status=79&page=$page", apiHeaders)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        return json
-            .decodeFromString<MoreMangaHomeDto>(response.body.string())
-            .html.toResponseBody("text/html".toMediaType())
-            .let { response.newBuilder().body(it).build() }
-            .let { super.latestUpdatesParse(it) }
-            .let { page ->
-                MangasPage(
-                    mangas = page.mangas,
-                    hasNextPage = page.mangas.size >= 24, // info not present
-                )
+        val data = json.decodeFromString<LatestUpdatesResponse>(response.body.string())
+        val mangas = data.results.map {
+            SManga.create().apply {
+                title = it.title
+                thumbnail_url = it.poster.mediumUrl
+                url = "/series/id/${it.id}/"
             }
+        }
+        return MangasPage(mangas, data.next != null)
+    }
+
+    override fun popularMangaRequest(page: Int): Request {
+        val apiHeaders = headersBuilder()
+            .add("Accept", "application/json, text/plain, */*")
+            .add("Origin", baseUrl)
+            .add("Referer", "$baseUrl/")
+            .build()
+        return GET("$apiBaseUrl/series/?is_hot=true&page=$page", apiHeaders)
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val data = json.decodeFromString<LatestUpdatesResponse>(response.body.string())
+        val mangas = data.results.map {
+            SManga.create().apply {
+                title = it.title
+                thumbnail_url = it.poster.mediumUrl
+                url = "/series/id/${it.id}/"
+            }
+        }
+        return MangasPage(mangas, data.next != null)
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val id = manga.url.removePrefix("/series/id/").removeSuffix("/")
+        val apiHeaders = headersBuilder()
+            .add("Accept", "application/json, text/plain, */*")
+            .add("Origin", baseUrl)
+            .add("Referer", "$baseUrl/")
+            .build()
+        return GET("$apiBaseUrl/series/$id/", apiHeaders)
+    }
+
+    override fun mangaDetailsParse(response: Response): SManga {
+        val manga = json.decodeFromString<MangaDetailsDto>(response.body.string())
+        return SManga.create().apply {
+            title = manga.title
+            description = manga.story
+            author = manga.author?.let {
+                when (it) {
+                    is JsonPrimitive -> it.contentOrNull
+                    is JsonObject -> it["name"]?.jsonPrimitive?.contentOrNull
+                    else -> null
+                }
+            }
+            artist = manga.artist?.let {
+                when (it) {
+                    is JsonPrimitive -> it.contentOrNull
+                    is JsonObject -> it["name"]?.jsonPrimitive?.contentOrNull
+                    else -> null
+                }
+            }
+            genre = manga.genres.joinToString { it.name }
+            status = when (manga.status.name.lowercase()) {
+                "ongoing" -> SManga.ONGOING
+                "completed" -> SManga.COMPLETED
+                else -> SManga.UNKNOWN
+            }
+            thumbnail_url = manga.poster.mediumUrl
+        }
+    }
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val id = manga.url.removePrefix("/series/id/").removeSuffix("/")
+        val apiHeaders = headersBuilder()
+            .add("Accept", "application/json, text/plain, */*")
+            .add("Origin", baseUrl)
+            .add("Referer", "$baseUrl/")
+            .build()
+        return GET("$apiBaseUrl/chapters/?serie=$id&order_by=-order&page_size=200", apiHeaders)
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        var data = json.decodeFromString<ChapterListResponse>(response.body.string())
+        val chapters = mutableListOf<SChapter>()
+        chapters.addAll(data.results.map { chapterFromDto(it) })
+
+        var nextPage = data.next
+        while (nextPage != null) {
+            val nextResponse = client.newCall(GET(nextPage, response.request.headers)).execute()
+            data = json.decodeFromString<ChapterListResponse>(nextResponse.body.string())
+            chapters.addAll(data.results.map { chapterFromDto(it) })
+            nextPage = data.next
+        }
+
+        return chapters
+    }
+
+    private fun chapterFromDto(chapter: ChapterDto): SChapter = SChapter.create().apply {
+        name = chapter.chapter
+        date_upload = runCatching { apiDateFormat.parse(chapter.createdAt)?.time }.getOrNull() ?: 0L
+        url = "/chapters/${chapter.id}/${chapter.slug}/"
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val id = chapter.url.removePrefix("/chapters/").substringBefore("/")
+        val apiHeaders = headersBuilder()
+            .add("Accept", "application/json, text/plain, */*")
+            .add("Origin", baseUrl)
+            .add("Referer", "$baseUrl/")
+            .build()
+        return GET("$apiBaseUrl/chapters/$id/", apiHeaders)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val chapter = json.decodeFromString<PageListResponse>(response.body.string())
+        return chapter.images.map {
+            Page(it.order, imageUrl = it.image)
+        }
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val request = super.searchMangaRequest(page, query, filters)
-        val urlBuilder = request.url.newBuilder()
-
-        // remove trailing slash
-        if (request.url.pathSegments.last().isBlank()) {
-            urlBuilder.removePathSegment(
-                request.url.pathSegments.lastIndex,
-            )
-        }
-
         if (query.isNotBlank()) {
-            urlBuilder
-                .removePathSegment(0)
-                .removeAllQueryParameters("title")
-                .addQueryParameter("s", query)
+            val apiHeaders = headersBuilder()
+                .add("Accept", "application/json, text/plain, */*")
+                .add("Origin", baseUrl)
+                .add("Referer", "$baseUrl/")
                 .build()
+            return GET("$apiBaseUrl/series/?search=$query&page=$page", apiHeaders)
         }
 
-        return request.newBuilder()
-            .url(urlBuilder.build())
-            .build()
+        return super.searchMangaRequest(page, query, filters)
     }
 
-    override val orderByFilterOptions = arrayOf(
-        Pair(intl["order_by_filter_default"], ""),
-        Pair(intl["order_by_filter_az"], "a-z"),
-        Pair(intl["order_by_filter_za"], "z-a"),
-        Pair(intl["order_by_filter_latest_update"], "update"),
-        Pair(intl["order_by_filter_latest_added"], "added"),
-        Pair(intl["order_by_filter_popular"], "popular"),
-    )
+    override fun searchMangaParse(response: Response): MangasPage {
+        if ("appswat.com" !in response.request.url.host) {
+            return super.searchMangaParse(response)
+        }
 
-    override fun searchMangaNextPageSelector() = "a[rel=next]"
-
-    override val seriesTitleSelector = "h1[itemprop=headline]"
-    override val seriesArtistSelector = "span:contains(الناشر) i"
-    override val seriesAuthorSelector = "span:contains(المؤلف) i"
-    override val seriesGenreSelector = "span:contains(التصنيف) a, .mgen a"
-    override val seriesTypeSelector = "span:contains(النوع) a"
-    override val seriesStatusSelector = "span:contains(الحالة)"
-
-    override fun pageListParse(document: Document): List<Page> {
-        val scriptContent = document.selectFirst("script:containsData(ts_reader)")!!.data()
-        val jsonString = scriptContent.substringAfter("ts_reader.run(").substringBefore(");")
-        val tsReader = json.decodeFromString<TSReader>(jsonString)
-        val imageUrls = tsReader.sources.firstOrNull()?.images ?: return emptyList()
-        return imageUrls.mapIndexed { index, imageUrl -> Page(index, document.location(), imageUrl) }
-    }
-
-    override fun chapterListSelector() = "div.bxcl li, ul div:has(span.lchx)"
-
-    override fun chapterFromElement(element: Element) = SChapter.create().apply {
-        val urlElements = element.select("a")
-        setUrlWithoutDomain(urlElements.attr("href"))
-        name = element.select(".lch a, .chapternum").text().ifBlank { urlElements.last()!!.text() }
-        date_upload = element.selectFirst(".chapter-date")?.text().parseChapterDate()
+        val data = json.decodeFromString<LatestUpdatesResponse>(response.body.string())
+        val mangas = data.results.map {
+            SManga.create().apply {
+                title = it.title
+                thumbnail_url = it.poster.mediumUrl
+                url = "/series/id/${it.id}/"
+            }
+        }
+        return MangasPage(mangas, data.next != null)
     }
 
     @Serializable
-    class TSReader(
-        val sources: List<ReaderImageSource>,
+    private data class MangaDetailsDto(
+        @SerialName("title") val title: String,
+        @SerialName("story") val story: String? = null,
+        @SerialName("author") val author: JsonElement? = null,
+        @SerialName("artist") val artist: JsonElement? = null,
+        @SerialName("genres") val genres: List<GenreDto> = emptyList(),
+        @SerialName("status") val status: StatusDto,
+        @SerialName("poster") val poster: PosterDto,
     )
 
     @Serializable
-    class ReaderImageSource(
-        val images: List<String>,
+    private data class GenreDto(
+        @SerialName("name") val name: String,
     )
 
     @Serializable
-    class MoreMangaHomeDto(
-        val html: String,
+    private data class StatusDto(
+        @SerialName("name") val name: String,
+    )
+
+    @Serializable
+    private data class LatestUpdatesResponse(
+        @SerialName("results") val results: List<LatestMangaDto> = emptyList(),
+        @SerialName("next") val next: String? = null,
+    )
+
+    @Serializable
+    private data class LatestMangaDto(
+        @SerialName("id") val id: Int,
+        @SerialName("slug") val slug: String,
+        @SerialName("title") val title: String,
+        @SerialName("poster") val poster: PosterDto,
+    )
+
+    @Serializable
+    private data class PosterDto(
+        @SerialName("medium") val mediumUrl: String,
+    )
+
+    @Serializable
+    private data class ChapterListResponse(
+        @SerialName("count") val count: Int,
+        @SerialName("next") val next: String? = null,
+        @SerialName("results") val results: List<ChapterDto> = emptyList(),
+    )
+
+    @Serializable
+    private data class ChapterDto(
+        @SerialName("id") val id: Int,
+        @SerialName("slug") val slug: String,
+        @SerialName("chapter") val chapter: String,
+        @SerialName("created_at") val createdAt: String,
+    )
+
+    @Serializable
+    private data class PageListResponse(
+        @SerialName("images") val images: List<PageDto>,
+    )
+
+    @Serializable
+    private data class PageDto(
+        @SerialName("image") val image: String,
+        @SerialName("order") val order: Int,
     )
 
     companion object {
