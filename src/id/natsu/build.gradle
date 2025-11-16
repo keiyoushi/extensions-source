@@ -1,9 +1,9 @@
 ext {
     extName = 'Natsu'
     extClass = '.Natsu'
-    themePkg = 'mangathemesia'
-    baseUrl = 'https://natsu.id'
-    overrideVersionCode = 0
+    themePkg = 'natsuid'
+    baseUrl = 'https://natsu.tv'
+    overrideVersionCode = 30
     isNsfw = true
 }
 

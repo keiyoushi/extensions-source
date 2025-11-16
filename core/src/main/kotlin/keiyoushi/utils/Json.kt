@@ -16,10 +16,28 @@ inline fun <reified T> String.parseAs(json: Json = jsonInstance): T =
     json.decodeFromString(this)
 
 /**
+ * Parses JSON string into an object of type [T], applying a [transform] function to the string before parsing.
+ *
+ * @param json The [Json] instance to use for deserialization.
+ * @param transform A function to transform the original JSON string before it is parsed.
+ */
+inline fun <reified T> String.parseAs(json: Json = jsonInstance, transform: (String) -> String): T =
+    transform(this).parseAs(json)
+
+/**
  * Parses the response body into an object of type [T].
  */
 inline fun <reified T> Response.parseAs(json: Json = jsonInstance): T =
     use { json.decodeFromStream(body.byteStream()) }
+
+/**
+ * Parses the response body into an object of type [T], applying a transformation to the raw JSON string before parsing.
+ *
+ * @param json The [Json] instance to use for parsing. Defaults to the injected instance.
+ * @param transform A function to transform the JSON string before it's decoded.
+ */
+inline fun <reified T> Response.parseAs(json: Json = jsonInstance, transform: (String) -> String): T =
+    body.string().parseAs(json, transform)
 
 /**
  * Serializes the object to a JSON string.

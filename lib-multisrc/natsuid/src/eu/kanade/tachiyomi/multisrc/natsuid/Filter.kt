@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.ja.rawkuma
+package eu.kanade.tachiyomi.multisrc.natsuid
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
