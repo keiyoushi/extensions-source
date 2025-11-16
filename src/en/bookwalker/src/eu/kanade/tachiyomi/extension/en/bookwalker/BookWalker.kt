@@ -340,7 +340,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                                 val bookUpdate = fetchBookUpdate(entity.uuid)
                                 bookUpdate?.let {
                                     SManga.create().apply {
-                                        url = "/de/${entity.uuid}/"
+                                        url = "/de${entity.uuid}/"
                                         title = it.seriesName?.cleanTitle() ?: it.productName.cleanTitle()
                                         thumbnail_url = it.coverImageUrl
                                         author = it.authors.joinToString { a -> a.authorName }
