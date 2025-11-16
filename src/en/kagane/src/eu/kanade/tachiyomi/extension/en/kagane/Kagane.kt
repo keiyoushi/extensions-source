@@ -13,6 +13,7 @@ import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -125,7 +126,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
-                ScanlationsFilter(),
+                GenresFilter(emptyList()),
             ),
         )
 
@@ -142,7 +143,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
-                ScanlationsFilter(),
+                GenresFilter(emptyList()),
             ),
         )
 
@@ -154,6 +155,9 @@ class Kagane : HttpSource(), ConfigurableSource {
         val body = buildJsonObject {
             filters.forEach { filter ->
                 when (filter) {
+                    is GenresFilter -> {
+                        filter.addToJsonObject(this, preferences.excludedGenres.toList())
+                    }
                     is JsonFilter -> {
                         filter.addToJsonObject(this)
                     }
@@ -175,15 +179,17 @@ class Kagane : HttpSource(), ConfigurableSource {
                     is SortFilter -> {
                         filter.toUriPart().takeIf { it.isNotEmpty() }
                             ?.let { uriPart -> addQueryParameter("sort", uriPart) }
-                    }
-
-                    is ScanlationsFilter -> {
-                        addQueryParameter("scanlations", filter.state.toString())
+                            ?: run {
+                                if (query.isBlank()) {
+                                    addQueryParameter("sort", "updated_at,desc")
+                                }
+                            }
                     }
 
                     else -> {}
                 }
             }
+            addQueryParameter("scanlations", preferences.showScanlations.toString())
         }
 
         return POST(url.toString(), headers, body)
@@ -203,7 +209,11 @@ class Kagane : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiUrl/api/v1/series/${manga.url}", apiHeaders)
+        return mangaDetailsRequest(manga.url)
+    }
+
+    private fun mangaDetailsRequest(seriesId: String): Request {
+        return GET("$apiUrl/api/v1/series/$seriesId", apiHeaders)
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -213,8 +223,25 @@ class Kagane : HttpSource(), ConfigurableSource {
     // ============================== Chapters ==============================
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        val seriesId = response.request.url.toString()
+            .substringAfterLast("/")
+
         val dto = response.parseAs<ChapterDto>()
-        return dto.content.map { it -> it.toSChapter() }.reversed()
+
+        val source = runCatching {
+            client.newCall(mangaDetailsRequest(seriesId))
+                .execute()
+                .parseAs<DetailsDto>()
+                .source
+        }.getOrDefault("")
+        val useSourceChapterNumber = source in setOf(
+            "Dark Horse Comics",
+            "Flame Comics",
+            "MangaDex",
+            "Square Enix Manga",
+        )
+
+        return dto.content.map { it -> it.toSChapter(useSourceChapterNumber) }.reversed()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -430,6 +457,12 @@ class Kagane : HttpSource(), ConfigurableSource {
             return CONTENT_RATINGS.slice(0..index.coerceAtLeast(0))
         }
 
+    private val SharedPreferences.excludedGenres: Set<String>
+        get() = this.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
+
+    private val SharedPreferences.showScanlations: Boolean
+        get() = this.getBoolean(SHOW_SCANLATIONS, SHOW_SCANLATIONS_DEFAULT)
+
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
@@ -441,6 +474,27 @@ class Kagane : HttpSource(), ConfigurableSource {
             entryValues = CONTENT_RATINGS
             summary = "%s"
             setDefaultValue(CONTENT_RATING_DEFAULT)
+        }.let(screen::addPreference)
+
+        MultiSelectListPreference(screen.context).apply {
+            key = GENRES_PREF
+            title = "Exclude Genres"
+            entries = GenresList.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
+            entryValues = GenresList
+            summary = preferences.excludedGenres.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+            setDefaultValue(emptySet<String>())
+
+            setOnPreferenceChangeListener { _, values ->
+                val selected = values as Set<String>
+                this.summary = selected.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+                true
+            }
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_SCANLATIONS
+            title = "Show scanlations"
+            setDefaultValue(SHOW_SCANLATIONS_DEFAULT)
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -461,6 +515,10 @@ class Kagane : HttpSource(), ConfigurableSource {
             "erotica",
             "pornographic",
         )
+
+        private const val GENRES_PREF = "pref_genres_exclude"
+        private const val SHOW_SCANLATIONS = "pref_show_scanlations"
+        private const val SHOW_SCANLATIONS_DEFAULT = true
 
         private const val DATA_SAVER = "data_saver_default"
     }
@@ -486,7 +544,6 @@ class Kagane : HttpSource(), ConfigurableSource {
             // TagsFilter(),
             // SourcesFilter(),
             Filter.Separator(),
-            ScanlationsFilter(),
         )
 
         val response = metadataClient.newCall(

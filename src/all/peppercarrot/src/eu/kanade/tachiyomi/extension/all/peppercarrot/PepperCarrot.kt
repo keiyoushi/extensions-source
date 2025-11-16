@@ -10,8 +10,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.tryParse
 import okhttp3.CacheControl
 import okhttp3.Request
 import okhttp3.Response
@@ -39,7 +39,8 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
         }
         val langMap = preferences.langData.associateBy { langData -> langData.key }
         val mangas = lang.map { key -> langMap[key]!!.toSManga() }
-        val result = MangasPage(mangas + getArtworkList(), false)
+        val miniFantasyTheaters = lang.map { key -> langMap[key]!!.getMiniFantasyTheaterEntry() }
+        val result = MangasPage(mangas + miniFantasyTheaters + getArtworkList(), false)
         it.onSuccess(result)
     }.toObservable()
 
@@ -68,6 +69,9 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
         val key = manga.url
         val result = if (key.startsWith('#')) {
             getArtworkEntry(key.substring(1))
+        } else if (key.startsWith("miniFantasyTheater")) {
+            val langKey = key.substringAfter("#")
+            preferences.langData.find { lang -> lang.key == langKey }!!.getMiniFantasyTheaterEntry()
         } else {
             preferences.langData.find { lang -> lang.key == key }!!.toSManga()
         }
@@ -78,8 +82,11 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
         val key = manga.url
         val url = if (key.startsWith('#')) { // artwork
             "$BASE_URL/en/files/${key.substring(1)}.html"
+        } else if (key.startsWith("miniFantasyTheater")) {
+            val langKey = key.substringAfter("#")
+            "$BASE_URL/$langKey/webcomics/miniFantasyTheater.html"
         } else {
-            "$BASE_URL/$key/webcomics/index.html"
+            "$BASE_URL/$key/webcomics/peppercarrot.html"
         }
         return GET(url, headers)
     }
@@ -94,7 +101,19 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
             "Language: $name\nTranslators: $translators"
         }
         status = SManga.ONGOING
-        thumbnail_url = "$BASE_URL/0_sources/0ther/artworks/low-res/2016-02-24_vertical-cover_remake_by-David-Revoy.jpg"
+        thumbnail_url =
+            "$BASE_URL/0_sources/0ther/artworks/low-res/2016-02-24_vertical-cover_remake_by-David-Revoy.jpg"
+        initialized = true
+    }
+
+    private fun LangData.getMiniFantasyTheaterEntry() = SManga.create().apply {
+        url = "miniFantasyTheater#$key"
+        title = "Mini Fantasy Theater" + if (key != "en") " (${key.uppercase()})" else ""
+        author = AUTHOR
+        description =
+            "A webcomic series featuring short stories set in the enchanting world of Pepper&Carrot. With its playful humor and whimsical tales, this collection of gag strips is perfect for audiences of all ages."
+        status = SManga.ONGOING
+        thumbnail_url = "$BASE_URL/0_sources/0ther/artworks/low-res/2018-11-22_vertical-cover-book-three_by-David-Revoy.jpg"
         initialized = true
     }
 
@@ -111,18 +130,22 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
         initialized = true
     }
 
-    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> = Single.create<List<SChapter>> {
-        updateLangData(client, headers, preferences)
-        val response = client.newCall(chapterListRequest(manga)).execute()
-        it.onSuccess(chapterListParse(response))
-    }.toObservable()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> =
+        Single.create<List<SChapter>> {
+            updateLangData(client, headers, preferences)
+            val response = client.newCall(chapterListRequest(manga)).execute()
+            it.onSuccess(chapterListParse(response))
+        }.toObservable()
 
     override fun chapterListRequest(manga: SManga): Request {
         val key = manga.url
         val url = if (key.startsWith('#')) { // artwork
             "$BASE_URL/0_sources/0ther/${key.substring(1)}/low-res/"
+        } else if (key.startsWith("miniFantasyTheater")) {
+            val langKey = key.substringAfter("#")
+            "$BASE_URL/$langKey/webcomics/miniFantasyTheater.html"
         } else {
-            "$BASE_URL/$key/webcomics/index.html"
+            "$BASE_URL/$key/webcomics/peppercarrot.html"
         }
         val lastUpdated = preferences.lastUpdated
         if (lastUpdated == 0L) return GET(url, headers)
@@ -150,10 +173,9 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
                         else -> substringBeforeLast('(').trimEnd()
                     }
                 }
-                date_upload = it.selectFirst(Evaluator.Tag("figcaption"))!!.ownText().let {
-                    val date = dateRegex.find(it)!!.value
-                    dateFormat.parse(date)!!.time
-                }
+                date_upload = it.selectFirst(Evaluator.Tag("figcaption"))?.text()?.let { text ->
+                    dateRegex.find(text)?.value?.let { date -> dateFormat.tryParse(date) }
+                } ?: 0L
                 chapter_number = number.toFloat()
             }
         }
@@ -162,7 +184,7 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
     private fun parseArtwork(response: Response): List<SChapter> {
         val baseDir = response.request.url.toString().removePrefix(BASE_URL)
         return response.asJsoup().select(Evaluator.Tag("a")).asReversed().mapNotNull {
-            val filename = it.attr("href")!!
+            val filename = it.attr("href")
             if (!filename.endsWith(".jpg")) return@mapNotNull null
 
             val file = filename.removeSuffix(".jpg").removeSuffix("_by-David-Revoy")
@@ -170,11 +192,11 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
             val date: Long
             if (file.length >= 10 && dateRegex.matches(file.substring(0, 10))) {
                 fileStripped = file.substring(10)
-                date = dateFormat.parse(file.substring(0, 10))!!.time
+                date = dateFormat.tryParse(file.substring(0, 10))
             } else {
                 fileStripped = file
                 val lastModified = it.nextSibling() as? TextNode
-                date = if (lastModified == null) 0 else dateFormat.parse(lastModified.text())!!.time
+                date = if (lastModified == null) 0 else dateFormat.tryParse(lastModified.text())
             }
             val fileNormalized = fileStripped
                 .replace('_', ' ')
@@ -202,9 +224,14 @@ class PepperCarrot : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        val urls = document.select(Evaluator.Class("comicpage")).map { it.attr("src")!! }
-        val thumbnail = urls[0].replace("P00.jpg", ".jpg")
-        return (listOf(thumbnail) + urls).mapIndexed { index, imageUrl ->
+        val urls = document.select(".webcomic-page img").map { it.attr("src") }
+        val thumbnail =
+            if (urls[0].contains("miniFantasyTheater", true)) {
+                emptyList()
+            } else {
+                listOf(urls[0].replace("P00.jpg", ".jpg"))
+            }
+        return (thumbnail + urls).mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
     }

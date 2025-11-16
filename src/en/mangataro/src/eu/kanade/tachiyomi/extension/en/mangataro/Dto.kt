@@ -112,3 +112,19 @@ class Thumbnail(
 class Rendered(
     val rendered: String,
 )
+
+@Serializable
+class ChapterList(
+    val chapters: List<Chapter>,
+)
+
+@Serializable
+class Chapter(
+    val url: String,
+    val chapter: String,
+    val title: String? = null,
+    val date: String,
+    @SerialName("group_name")
+    val groupName: String? = null,
+    val language: String,
+)
