@@ -85,18 +85,24 @@ class ManhwaRead : Madara("ManhwaRead", "https://manhwaread.com", "en", dateForm
     override fun popularMangaSelector() = ".manga-item"
     override val popularMangaUrlSelector = "a.manga-item__link"
 
+    private val tagIdCache = HashMap<String, Int>()
+
     private fun getTagId(tag: String, type: String): Int? {
         val taxonomy = when (type) {
             "artist" -> "manga_artist"
             "author" -> "manga_author"
             else -> type
         }
+        val key = "$taxonomy:${tag.lowercase()}"
+        tagIdCache[key]?.let { return it }
         val ajax = "$baseUrl/wp-admin/admin-ajax.php?action=search_manga_terms&search=$tag&taxonomy=$taxonomy"
         val res = client.newCall(GET(ajax, headers)).execute()
         val items = json.decodeFromString<Results>(res.body.string())
         val item = items.results.filter { it.text.lowercase() == tag.lowercase() }
         if (item.isNotEmpty()) {
-            return item[0].id
+            val id = item[0].id
+            tagIdCache[key] = id
+            return id
         }
         return null
     }
