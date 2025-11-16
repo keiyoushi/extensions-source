@@ -25,30 +25,33 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.brotli.BrotliInterceptor
 import okhttp3.internal.closeQuietly
 import okio.IOException
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
 import rx.Observable
 import java.lang.UnsupportedOperationException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.random.Random
 
+// https://themesinfo.com/natsu_id-theme-wordpress-c8x1c Wordpress Theme Author "Dzul Qurnain"
 abstract class NatsuId(
     override val name: String,
     override val lang: String,
     override val baseUrl: String,
     val dateFormat: SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US),
-    override val supportsLatest: Boolean = true,
 ) : HttpSource() {
 
-    // https://themesinfo.com/natsu_id-theme-wordpress-c8x1c Wordpress Theme Author "Dzul Qurnain"
+    override val supportsLatest: Boolean = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    protected open fun OkHttpClient.Builder.customizeClient(): OkHttpClient.Builder = this
+
+    final override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .customizeClient()
         // fix disk cache
         .apply {
             val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
@@ -179,11 +182,8 @@ abstract class NatsuId(
             return@runBlocking FilterList(filters)
         }
 
-        val responseString = response.body.string()
-        response.close()
-
         val data = try {
-            responseString.cleanJsonResponse().parseAs<List<Term>>()
+            response.parseAs<List<Term>>(transform = ::transformJsonResponse)
         } catch (e: Throwable) {
             Log.e(name, "Failed to parse genre filters", e)
 
@@ -226,10 +226,8 @@ abstract class NatsuId(
             addQueryParameter("_embed", null)
         }.build()
 
-        val jsonResponse = client.newCall(GET(url, headers)).execute()
-        val cleanJson = jsonResponse.body.string().cleanJsonResponse()
-
-        val details = cleanJson.parseAs<List<Manga>>()
+        val details = client.newCall(GET(url, headers)).execute()
+            .parseAs<List<Manga>>(transform = ::transformJsonResponse)
             .filterNot { manga ->
                 manga.embedded.getTerms("type").contains("Novel")
             }
@@ -260,8 +258,7 @@ abstract class NatsuId(
             return client.newCall(GET(url, headers))
                 .asObservableSuccess()
                 .map { response ->
-                    val cleanJson = response.body.string().cleanJsonResponse()
-                    val manga = cleanJson.parseAs<List<Manga>>()[0]
+                    val manga = response.parseAs<List<Manga>>(transform = ::transformJsonResponse)[0]
 
                     if (manga.embedded.getTerms("type").contains("Novel")) {
                         throw Exception("Novels are not supported")
@@ -274,52 +271,44 @@ abstract class NatsuId(
         return Observable.error(Exception("Unsupported url"))
     }
 
-    private fun Element.parseMangaId() = selectFirst("#gallery-list")?.attr("hx-get")
-        ?.substringAfter("manga_id=")?.substringBefore("&")
-
+    private val descriptionIdRegex = Regex("""ID: (\d+)""")
     private fun getMangaId(manga: SManga): String {
-        try {
-            return manga.url.parseAs<MangaUrl>().id.toString()
-        } catch (e: Exception) {
-            // continue to fallback methods
+        return if (manga.url.startsWith("{")) {
+            manga.url.parseAs<MangaUrl>().id.toString()
+        } else if (descriptionIdRegex.containsMatchIn(manga.description?.trim().orEmpty())) {
+            descriptionIdRegex.find(manga.description!!.trim())!!.groupValues[1]
+        } else {
+            val document = client.newCall(
+                GET(getMangaUrl(manga), headers),
+            ).execute().asJsoup()
+
+            document.selectFirst("#gallery-list")!!.attr("hx-get")
+                .substringAfter("manga_id=").substringBefore("&")
         }
-
-        // try extract from desc
-        manga.description?.takeIf { "ID: " in it }
-            ?.substringAfterLast("ID: ")?.substringBefore("\n")
-            ?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
-
-        // fetch and parse from HTML
-        val mangaUrl = getMangaUrl(manga)
-        return client.newCall(GET(mangaUrl, headers)).execute().asJsoup().parseMangaId()
-            ?: throw Exception("Could not find manga ID")
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val id = getMangaId(manga)
+        val appendId = !manga.url.startsWith("{")
 
-        return GET("$baseUrl/wp-json/wp/v2/manga/$id?_embed", headers)
+        return GET("$baseUrl/wp-json/wp/v2/manga/$id?_embed#$appendId", headers)
     }
 
     override fun getMangaUrl(manga: SManga): String {
-        val slug = if (manga.url.contains("/manga/")) {
-            manga.url.substringAfter("/manga/")
-        } else {
+        val slug = if (manga.url.startsWith("{")) {
             manga.url.parseAs<MangaUrl>().slug
+        } else {
+            "$baseUrl${manga.url}".toHttpUrl().pathSegments[1]
         }
 
         return "$baseUrl/manga/$slug/"
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val manga = try {
-            response.body.string().cleanJsonResponse().parseAs<Manga>()
-        } catch (e: Exception) {
-            Log.e(name, "Failed to parse manga details JSON response: ${e.message}")
-            throw e
-        }
+        val manga = response.parseAs<Manga>(transform = ::transformJsonResponse)
+        val appendId = response.request.url.fragment == "true"
 
-        return manga.toSManga()
+        return manga.toSManga(appendId)
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -367,14 +356,5 @@ abstract class NatsuId(
         throw UnsupportedOperationException()
     }
 
-    // JSON cleaner for site like ikiru when sorting latest desc or in some of their title or parsing genre list
-    private fun String.cleanJsonResponse(): String {
-        val trimmed = trimStart()
-        val jsonStart = trimmed.indexOfFirst { it == '[' || it == '{' }
-        return if (jsonStart in 1 until trimmed.length) {
-            trimmed.substring(jsonStart)
-        } else {
-            trimmed
-        }
-    }
+    protected open fun transformJsonResponse(responseBody: String): String = responseBody
 }

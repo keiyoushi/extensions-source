@@ -23,10 +23,15 @@ class Manga(
     @SerialName("_embedded")
     val embedded: Embedded,
 ) {
-    fun toSManga() = SManga.create().apply {
+    fun toSManga(appendId: Boolean = false) = SManga.create().apply {
         url = MangaUrl(id, slug).toJsonString()
         title = Parser.unescapeEntities(this@Manga.title.rendered, false)
-        description = Jsoup.parseBodyFragment(content.rendered).wholeText() + "\n\nID: " + id
+        description = buildString {
+            append(Jsoup.parseBodyFragment(content.rendered).wholeText())
+            if (appendId) {
+                append("\n\nID: $id")
+            }
+        }
         thumbnail_url = embedded.featuredMedia.firstOrNull()?.sourceUrl
         author = embedded.getTerms("series-author").joinToString()
         artist = embedded.getTerms("artist").joinToString()
