@@ -6,13 +6,5 @@ import kotlinx.serialization.Serializable
 @Serializable
 @SerialName("normal")
 class SingleDto(
-    val detailUrl: String,
-    val title: String,
-    val imageUrl: String,
-    val authors: List<AuthorDto>,
+    val uuid: String,
 ) : HoldBookEntityDto()
-
-@Serializable
-class AuthorDto(
-    val authorName: String,
-)
