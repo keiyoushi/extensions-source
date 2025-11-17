@@ -21,7 +21,14 @@ class ImageInterceptor : Interceptor {
 
         val seed = fragment.substringAfter("scramble_seed=").toLong()
         val response = chain.proceed(request)
-        val descrambledBody = descrambleImage(response.body, seed)
+        val imageBytes = response.body.bytes()
+
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, options)
+
+        val version = if (options.outHeight == 1600 || options.outHeight == 1024) 2 else 1
+        val originalBitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+        val descrambledBody = descrambleImage(originalBitmap, seed, version)
 
         return response.newBuilder().body(descrambledBody).build()
     }
@@ -58,10 +65,8 @@ class ImageInterceptor : Interceptor {
         }
     }
 
-    private fun descrambleImage(responseBody: ResponseBody, seed: Long): ResponseBody {
+    private fun descrambleImage(originalBitmap: Bitmap, seed: Long, version: Int): ResponseBody {
         val unscrambledCoords = getUnscrambledCoords(seed)
-        val originalBitmap = BitmapFactory.decodeStream(responseBody.byteStream())
-            ?: throw Exception("Failed to decode image stream")
 
         val originalWidth = originalBitmap.width
         val originalHeight = originalBitmap.height
@@ -69,9 +74,16 @@ class ImageInterceptor : Interceptor {
         val descrambledBitmap = Bitmap.createBitmap(originalWidth, originalHeight, originalBitmap.config)
         val canvas = Canvas(descrambledBitmap)
 
-        val getTileDimension = { size: Int -> (size / 8 * 8) / 4 }
-        val tileWidth = getTileDimension(originalWidth)
-        val tileHeight = getTileDimension(originalHeight)
+        val (tileWidth, tileHeight) = when (version) {
+            2 -> {
+                val getTile = { size: Int -> (size / 32) * 8 }
+                Pair(getTile(originalWidth), getTile(originalHeight))
+            }
+            else -> {
+                val getTile = { size: Int -> (size / 8 * 8) / 4 }
+                Pair(getTile(originalWidth), getTile(originalHeight))
+            }
+        }
 
         unscrambledCoords.forEach { coord ->
             val sx = coord.source.x * tileWidth
@@ -84,6 +96,22 @@ class ImageInterceptor : Interceptor {
 
             canvas.drawBitmap(originalBitmap, srcRect, destRect, null)
         }
+
+        if (version == 2) {
+            val processedWidth = tileWidth * 4
+            val processedHeight = tileHeight * 4
+            if (originalWidth > processedWidth) {
+                val srcRect = Rect(processedWidth, 0, originalWidth, originalHeight)
+                val destRect = Rect(processedWidth, 0, originalWidth, originalHeight)
+                canvas.drawBitmap(originalBitmap, srcRect, destRect, null)
+            }
+            if (originalHeight > processedHeight) {
+                val srcRect = Rect(0, processedHeight, processedWidth, originalHeight)
+                val destRect = Rect(0, processedHeight, processedWidth, originalHeight)
+                canvas.drawBitmap(originalBitmap, srcRect, destRect, null)
+            }
+        }
+
         originalBitmap.recycle()
 
         val outputStream = ByteArrayOutputStream()
