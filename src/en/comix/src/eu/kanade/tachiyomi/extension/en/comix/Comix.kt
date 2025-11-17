@@ -39,12 +39,18 @@ class Comix : HttpSource(), ConfigurableSource {
 
     /******************************* POPULAR MANGA ************************************/
     override fun popularMangaRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("manga")
-            .addQueryParameter("order[views_30d]", "desc")
-            .addQueryParameter("limit", "50")
-            .addQueryParameter("page", page.toString())
-            .build()
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("manga")
+            addQueryParameter("order[views_30d]", "desc")
+            addQueryParameter("limit", "50")
+            addQueryParameter("page", page.toString())
+
+            if (preferences.hideNsfw()) {
+                NSFW_GENRE_IDS.forEach {
+                    addQueryParameter("genres[]", "-$it")
+                }
+            }
+        }.build()
 
         return GET(url, headers)
     }
@@ -54,12 +60,18 @@ class Comix : HttpSource(), ConfigurableSource {
 
     /******************************* LATEST MANGA ************************************/
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("manga")
-            .addQueryParameter("order[chapter_updated_at]", "desc")
-            .addQueryParameter("limit", "50")
-            .addQueryParameter("page", page.toString())
-            .build()
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("manga")
+            addQueryParameter("order[chapter_updated_at]", "desc")
+            addQueryParameter("limit", "50")
+            addQueryParameter("page", page.toString())
+
+            if (preferences.hideNsfw()) {
+                NSFW_GENRE_IDS.forEach {
+                    addQueryParameter("genres[]", "-$it")
+                }
+            }
+        }.build()
 
         return GET(url, headers)
     }
@@ -71,23 +83,30 @@ class Comix : HttpSource(), ConfigurableSource {
     override fun getFilterList() = ComixFilters().getFilterList()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = apiUrl.toHttpUrl().newBuilder()
-            .addPathSegment("manga")
+        val url = apiUrl.toHttpUrl().newBuilder().apply {
+            addPathSegment("manga")
 
-        filters.filterIsInstance<ComixFilters.UriFilter>()
-            .forEach { it.addToUri(url) }
+            filters.filterIsInstance<ComixFilters.UriFilter>()
+                .forEach { it.addToUri(this) }
 
-        // Make searches accurate
-        if (query.isNotBlank()) {
-            url.addQueryParameter("keyword", query)
-            url.removeAllQueryParameters("order[views_30d]")
-            url.setQueryParameter("order[relevance]", "desc")
-        }
+            // Make searches accurate
+            if (query.isNotBlank()) {
+                addQueryParameter("keyword", query)
+                removeAllQueryParameters("order[views_30d]")
+                setQueryParameter("order[relevance]", "desc")
+            }
 
-        url.addQueryParameter("limit", "50")
-            .addQueryParameter("page", page.toString())
+            if (preferences.hideNsfw()) {
+                NSFW_GENRE_IDS.forEach {
+                    addQueryParameter("genres[]", "-$it")
+                }
+            }
 
-        return GET(url.build(), headers)
+            addQueryParameter("limit", "50")
+            addQueryParameter("page", page.toString())
+        }.build()
+
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
@@ -255,6 +274,13 @@ class Comix : HttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = NSFW_PREF
+            title = "Hide NSFW content"
+            summary = "Hides NSFW content from popular, latest, and search lists."
+            setDefaultValue(false)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = DEDUPLICATE_CHAPTERS
             title = "Deduplicate Chapters"
             summary = "Remove duplicate chapters from the chapter list.\n" +
@@ -293,10 +319,16 @@ class Comix : HttpSource(), ConfigurableSource {
     private fun SharedPreferences.scorePosition() =
         getString(PREF_SCORE_POSITION, "top") ?: "top"
 
+    private fun SharedPreferences.hideNsfw() =
+        getBoolean(NSFW_PREF, false)
+
     companion object {
         private const val PREF_POSTER_QUALITY = "pref_poster_quality"
+        private const val NSFW_PREF = "nsfw_pref"
         private const val DEDUPLICATE_CHAPTERS = "pref_deduplicate_chapters"
         private const val ALTERNATIVE_NAMES_IN_DESCRIPTION = "pref_alt_names_in_description"
         private const val PREF_SCORE_POSITION = "pref_score_position"
+
+        private val NSFW_GENRE_IDS = listOf("87264", "8", "87265", "13", "87266", "87268")
     }
 }
