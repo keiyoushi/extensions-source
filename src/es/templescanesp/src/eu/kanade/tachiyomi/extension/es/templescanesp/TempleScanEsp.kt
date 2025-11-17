@@ -30,16 +30,6 @@ class TempleScanEsp :
     ConfigurableSource {
 
     override val baseUrl get() = preferences.prefBaseUrl
-    private val preferences = getPreferences {
-        this.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
-            if (domain != super.baseUrl) {
-                this.edit()
-                    .putString(BASE_URL_PREF, super.baseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
-                    .apply()
-            }
-        }
-    }
 
     private val fetchedDomainUrl: String by lazy {
         if (!preferences.fetchDomainPref()) {
@@ -93,6 +83,17 @@ class TempleScanEsp :
         super.client.newBuilder()
             .rateLimitHost(fetchedDomainUrl.toHttpUrl(), 3, 1)
             .build()
+    }
+
+    private val preferences = getPreferences {
+        this.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
+            if (domain != super.baseUrl) {
+                this.edit()
+                    .putString(BASE_URL_PREF, super.baseUrl)
+                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
+                    .apply()
+            }
+        }
     }
 
     override fun popularMangaSelector() = "div.latest-poster"
