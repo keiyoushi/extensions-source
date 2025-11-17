@@ -11,12 +11,9 @@ class AuroraScan : GreenShit(
     "pt-BR",
 ) {
     override val apiUrl = "https://api.sussytoons.wtf"
-    override val cdnUrl = "https://cdn.sussytoons.site"
     override val useWidthInThumbnail = false
     override val defaultOrderBy = "data"
     override val targetAudience = TargetAudience.Shoujo
-    override val popularGenreId = "1"
-    override val latestGenreId = "1"
     override val popularType = "periodo"
     override val popularTypeValue = "geral"
     override val latestEndpoint = "novos-capitulos"

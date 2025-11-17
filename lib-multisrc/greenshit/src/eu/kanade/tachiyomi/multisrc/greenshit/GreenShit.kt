@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.multisrc.greenshit
 
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
@@ -62,7 +61,6 @@ abstract class GreenShit(
 
     override val client by lazy {
         network.cloudflareClient.newBuilder()
-            .addInterceptor(TextInterceptor())
             .rateLimit(rateLimitPerSecond)
             .build()
     }

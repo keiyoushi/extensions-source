@@ -3,8 +3,3 @@ plugins {
 }
 
 baseVersionCode = 7
-
-dependencies {
-    api(project(":lib:textinterceptor"))
-}
-
