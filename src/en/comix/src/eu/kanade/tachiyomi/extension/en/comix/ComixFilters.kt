@@ -105,10 +105,10 @@ class ComixFilters {
     fun getFilterList() = FilterList(
         SortFilter(getSortables()),
         StatusFilter(),
-        MinChapterFilter(),
         GenreFilter(getGenres()),
         TypeFilter(),
         DemographicFilter(getDemographics()),
+        MinChapterFilter(),
         Filter.Separator(),
         Filter.Header("Release Year"),
         YearFromFilter(),
@@ -180,7 +180,7 @@ class ComixFilters {
 
     private class TypeFilter : UriMultiSelectFilter(
         "Type",
-        "type",
+        "types[]",
         arrayOf(
             Pair("Manga", "manga"),
             Pair("Manhwa", "manhwa"),
