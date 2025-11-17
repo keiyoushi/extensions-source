@@ -58,15 +58,7 @@ class Koharu(
     private val searchLang: String = "",
 ) : HttpSource(), ConfigurableSource {
 
-    private val preferences: SharedPreferences by getPreferencesLazy {
-        val server = getString(PREF_MIRROR, MIRROR_PREF_DEFAULT) ?: MIRROR_PREF_DEFAULT
-        val isValidMirror = server in mirrors || server.toIntOrNull() != null
-        if (!isValidMirror) {
-            edit().also { editor ->
-                editor.putString(PREF_MIRROR, MIRROR_PREF_DEFAULT)
-            }.apply()
-        }
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val name = "SchaleNetwork"
 
