@@ -4,6 +4,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import java.text.SimpleDateFormat
 
 @Serializable
@@ -42,14 +43,14 @@ class SearchSectionDto(
 @Serializable
 class MangaDto(
     private val titleId: Int,
-    private val header: String?, // Popular/Finished
-    private val name: String?, // Search
+    @JsonNames("header", "name")
+    private val title: String,
     private val imageUrl: String?,
     val isNovel: Boolean?,
 ) {
     fun toSManga(baseUrl: String): SManga = SManga.create().apply {
         url = "/title/$titleId"
-        title = header ?: name!!
+        title = this@MangaDto.title
         thumbnail_url = baseUrl + imageUrl
     }
 }
@@ -82,7 +83,7 @@ class MangaDetailDefaultDto(
 
 @Serializable
 class ChapterDto(
-    private val id: Int,
+    private val id: Int?,
     val status: Int?,
     private val mainText: String,
     private val subText: String?,
