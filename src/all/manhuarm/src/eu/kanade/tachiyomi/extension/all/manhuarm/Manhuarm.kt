@@ -9,6 +9,7 @@ import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.CloudflareWarmupInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.ComposedImageInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.TranslationInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing.BingTranslator
@@ -114,29 +115,21 @@ class Manhuarm(
     private val provider: String get() =
         preferences.getString(TRANSLATOR_PROVIDER_PREF, translators.first())!!
 
+    private val warmupInterceptor = CloudflareWarmupInterceptor(baseUrl, headers)
+
     /**
      * This ensures that the `OkHttpClient` instance is only created when required, and it is rebuilt
      * when there are configuration changes to ensure that the client uses the most up-to-date settings.
      */
-    private var isClientWarmedUp = false
-
     private var clientInstance: OkHttpClient? = null
         get() {
             if (field == null || isSettingsChanged) {
+                warmupInterceptor.reset()
                 field = clientBuilder().build()
-                isClientWarmedUp = false // Reset warm-up flag when client is rebuilt
-            }
-            if (!isClientWarmedUp) {
-                try {
-                    // Warm up the client by making a request to the base URL to solve Cloudflare challenge
-                    field!!.newCall(GET(baseUrl, headers)).execute().close()
-                    isClientWarmedUp = true
-                } catch (e: Exception) {
-                    // Ignore errors during warm-up
-                }
             }
             return field
         }
+
     private val clientUtils = network.cloudflareClient.newBuilder()
         .rateLimit(3, 2, TimeUnit.SECONDS)
         .build()
@@ -153,6 +146,7 @@ class Manhuarm(
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(2, TimeUnit.MINUTES)
             .rateLimit(2, 1)
+            .addInterceptor(warmupInterceptor)
             .addInterceptorIf(
                 !disableTranslator && language.lang != language.origin,
                 TranslationInterceptor(settings, translator),
@@ -166,7 +160,6 @@ class Manhuarm(
         if (ua.isNotEmpty()) {
             builder.set("User-Agent", ua)
         }
-        // Add headers to mimic browser navigation requests
         builder.set("Accept-Language", "en-US,en;q=0.9")
         builder.set("Upgrade-Insecure-Requests", "1")
         builder.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
