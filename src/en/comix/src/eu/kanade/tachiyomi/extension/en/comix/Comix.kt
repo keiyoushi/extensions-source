@@ -277,7 +277,7 @@ class Comix : HttpSource(), ConfigurableSource {
             key = NSFW_PREF
             title = "Hide NSFW content"
             summary = "Hides NSFW content from popular, latest, and search lists."
-            setDefaultValue(false)
+            setDefaultValue(true)
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -320,7 +320,7 @@ class Comix : HttpSource(), ConfigurableSource {
         getString(PREF_SCORE_POSITION, "top") ?: "top"
 
     private fun SharedPreferences.hideNsfw() =
-        getBoolean(NSFW_PREF, false)
+        getBoolean(NSFW_PREF, true)
 
     companion object {
         private const val PREF_POSTER_QUALITY = "pref_poster_quality"
