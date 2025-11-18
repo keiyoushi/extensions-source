@@ -114,7 +114,7 @@ class LycanToons : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    // =====================Filters===================== 
+    // =====================Filters=====================
 
     private class SeriesTypeFilter : ChoiceFilter(
         "Tipo",
