@@ -36,7 +36,7 @@ class LycanToons : HttpSource() {
     override fun popularMangaParse(response: Response): MangasPage =
         response.parseAs<PopularResponse>().data.toMangasPage()
 
-    // Latest
+    // =====================Latest=====================
 
     override fun latestUpdatesRequest(page: Int): Request = metricsRequest("recently-updated", page)
 
