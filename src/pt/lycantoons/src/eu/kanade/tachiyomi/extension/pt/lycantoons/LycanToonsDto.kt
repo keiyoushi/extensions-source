@@ -53,10 +53,10 @@ data class SearchRequestBody(
 data class ChapterDto(
     val id: Int,
     val numero: JsonElement,
-    @SerialName("createdAt") val createdAt: String? = null,
-    @SerialName("coverUrl") val coverUrl: String? = null,
-    @SerialName("capaUrl") val capaUrl: String? = null,
-    @SerialName("pageCount") val pageCount: Int? = null,
+    val createdAt: String? = null,
+    val coverUrl: String? = null,
+    val capaUrl: String? = null,
+    val pageCount: Int? = null,
 )
 
 fun SeriesDto.toSManga(): SManga = SManga.create().apply {
