@@ -261,6 +261,12 @@ class Kagane : HttpSource(), ConfigurableSource {
             .toBase64()
     }
 
+    private fun getFairPlayCertificate(): String {
+        return client.newCall(GET("$apiUrl/api/v1/static/crt.crt", apiHeaders)).execute()
+            .body.bytes()
+            .toBase64()
+    }
+
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         if (chapter.url.count { it == ';' } != 2) throw Exception("Chapter url error, please refresh chapter list.")
         var (seriesId, chapterId, pageCount) = chapter.url.split(";")
@@ -304,6 +310,10 @@ class Kagane : HttpSource(), ConfigurableSource {
             </head>
             <body>
                 <script>
+                    function detectDRMSupport() {
+                        return "WebKitMediaKeys" in window ? "fairplay" : "MediaKeys" in window && "function" == typeof navigator.requestMediaKeySystemAccess ? "widevine" : null
+                    }
+
                     function base64ToArrayBuffer(base64) {
                         var binaryString = atob(base64);
                         var bytes = new Uint8Array(binaryString.length);
@@ -314,21 +324,39 @@ class Kagane : HttpSource(), ConfigurableSource {
                     }
 
                     async function getData() {
-                        const g = base64ToArrayBuffer("${getCertificate()}");
-                        let t = await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
-                          initDataTypes: ["cenc"],
-                          audioCapabilities: [],
-                          videoCapabilities: [{
-                            contentType: 'video/mp4; codecs="avc1.42E01E"'
-                          }]
+                        let widevine = detectDRMSupport() !== 'fairplay';
+                        const g = base64ToArrayBuffer(widevine ? "${getCertificate()}" : "${getFairPlayCertificate()}");
+                        let t = widevine ? await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
+                            initDataTypes: ["cenc"],
+                            audioCapabilities: [],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.42E01E"'
+                            }]
+                        }]) : await navigator.requestMediaKeySystemAccess("com.apple.fps", [{
+                            initDataTypes: ["skd"],
+                            audioCapabilities: [{
+                                contentType: 'audio/mp4; codecs="mp4a.40.2"'
+                            }],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.42E01E"'
+                            }]
                         }]);
 
                         let e = await t.createMediaKeys();
                         await e.setServerCertificate(g);
+                        let video = widevine ? null : document.createElement("video");
+                        if (video) {
+                            video.style.display = "none";
+                            document.body.appendChild(video);
+                            await video.setMediaKeys(e);
+                        }
                         let n = e.createSession();
                         let i = new Promise((resolve, reject) => {
                           function onMessage(event) {
                             n.removeEventListener("message", onMessage);
+                            if (video) {
+                                document.body.removeChild(video)
+                            }
                             resolve(event.message);
                           }
 
@@ -341,7 +369,18 @@ class Kagane : HttpSource(), ConfigurableSource {
                           n.addEventListener("error", onError);
                         });
 
-                        await n.generateRequest("cenc", base64ToArrayBuffer("${getPssh(f).toBase64()}"));
+                        if (widevine) {
+                            await n.generateRequest("cenc", base64ToArrayBuffer("${getPssh(f).toBase64()}"));
+                        } else {
+                            let oo = base64ToArrayBuffer("${f.toBase64()}")
+                            let c = Array.from(new Uint8Array(oo)).map(t => t.toString(16).padStart(2, "0")).join("");
+                            let d = JSON.stringify({
+                                uri: "skd://" + c,
+                                assetId: "$chapterId",
+                            });
+                            const textEncoder = new TextEncoder();
+                            await n.generateRequest("skd", textEncoder.encode(d));
+                        }
                         let o = await i;
                         let m = new Uint8Array(o);
                         let v = btoa(String.fromCharCode(...m));
