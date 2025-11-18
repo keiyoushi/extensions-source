@@ -65,7 +65,7 @@ fun SeriesDto.toSManga(): SManga = SManga.create().apply {
     thumbnail_url = coverUrl
     author = this@toSManga.author?.takeIf { it.isNotBlank() }
     artist = this@toSManga.artist?.takeIf { it.isNotBlank() }
-    genre = this@toSManga.genre?.takeIf { it.isNotEmpty() }?.joinToString(", ")
+    genre = this@toSManga.genre?.takeIf { it.isNotEmpty() }?.joinToString()
     description = this@toSManga.description
     status = parseStatus(this@toSManga.status)
 }
