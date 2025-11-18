@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manga Livre.to'
+    extClass = '.MangaLivreTo'
+    themePkg = 'madara'
+    baseUrl = 'https://mangalivre.to'
+    overrideVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
