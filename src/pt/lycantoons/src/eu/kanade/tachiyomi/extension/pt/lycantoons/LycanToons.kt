@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.lycantoons
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -12,10 +11,16 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.jsoup.Jsoup
+
+private val TAG = "LycanToons"
 
 class LycanToons : HttpSource() {
 
@@ -28,6 +33,12 @@ class LycanToons : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.cloudflareClient
+
+    private val pageHeaders by lazy {
+        headers.newBuilder()
+            .add("Referer", "$baseUrl/")
+            .build()
+    }
 
     // =====================Popular=====================
 
@@ -62,11 +73,7 @@ class LycanToons : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage =
         response.parseAs<SearchResponse>().series.toMangasPage()
 
-    override fun getFilterList(): FilterList = FilterList(
-        SeriesTypeFilter(),
-        StatusFilter(),
-        TagsFilter(),
-    )
+    override fun getFilterList(): FilterList = LycanToonsFilters.get()
 
     // =====================Details=====================
 
@@ -92,9 +99,7 @@ class LycanToons : HttpSource() {
 
     override fun pageListRequest(chapter: SChapter): Request = GET(
         "$baseUrl${chapter.url}",
-        headers.newBuilder()
-            .add("Referer", "$baseUrl/")
-            .build(),
+        pageHeaders,
     )
 
     override fun pageListParse(response: Response): List<Page> {
@@ -108,84 +113,11 @@ class LycanToons : HttpSource() {
         val chapterPath = "$cdnUrl/$slug/$chapterNumber"
         return List(pageCount) { index ->
             val imageUrl = "$chapterPath/page-$index.jpg"
-            Page(index, imageUrl, imageUrl)
+            Page(index, imageUrl = imageUrl)
         }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-
-    // =====================Filters=====================
-
-    private class SeriesTypeFilter : ChoiceFilter(
-        "Tipo",
-        arrayOf(
-            "" to "Todos",
-            "MANGA" to "Mangá",
-            "MANHWA" to "Manhwa",
-            "MANHUA" to "Manhua",
-            "COMIC" to "Comic",
-            "WEBTOON" to "Webtoon",
-        ),
-    )
-
-    private class StatusFilter : ChoiceFilter(
-        "Status",
-        arrayOf(
-            "" to "Todos",
-            "ONGOING" to "Em andamento",
-            "COMPLETED" to "Completo",
-            "HIATUS" to "Hiato",
-            "CANCELLED" to "Cancelado",
-        ),
-    )
-
-    private open class ChoiceFilter(
-        name: String,
-        private val entries: Array<Pair<String, String>>,
-    ) : Filter.Select<String>(
-        name,
-        entries.map { it.second }.toTypedArray(),
-    ) {
-        fun getValue(): String = entries[state].first
-    }
-
-    private class TagsFilter : Filter.Group<TagCheckBox>(
-        "Tags",
-        listOf(
-            TagCheckBox("Ação", "action"),
-            TagCheckBox("Aventura", "adventure"),
-            TagCheckBox("Comédia", "comedy"),
-            TagCheckBox("Drama", "drama"),
-            TagCheckBox("Fantasia", "fantasy"),
-            TagCheckBox("Terror", "horror"),
-            TagCheckBox("Mistério", "mystery"),
-            TagCheckBox("Romance", "romance"),
-            TagCheckBox("Vida escolar", "school_life"),
-            TagCheckBox("Sci-fi", "sci_fi"),
-            TagCheckBox("Slice of life", "slice_of_life"),
-            TagCheckBox("Esportes", "sports"),
-            TagCheckBox("Sobrenatural", "supernatural"),
-            TagCheckBox("Thriller", "thriller"),
-            TagCheckBox("Tragédia", "tragedy"),
-        ),
-    )
-
-    private class TagCheckBox(
-        name: String,
-        val value: String,
-    ) : Filter.CheckBox(name)
-
-    private inline fun <reified T : Filter<*>> FilterList.find(): T? =
-        this.filterIsInstance<T>().firstOrNull()
-
-    private inline fun <reified T : ChoiceFilter> FilterList.valueOrEmpty(): String =
-        find<T>()?.getValue().orEmpty()
-
-    private fun FilterList.selectedTags(): List<String> =
-        find<TagsFilter>()?.state
-            ?.filter { it.state }
-            ?.map { it.value }
-            .orEmpty()
 
     // =====================Utils=====================
 
@@ -198,14 +130,44 @@ class LycanToons : HttpSource() {
         return slug to chapterNumber
     }
 
-    private fun pageCountFromHtml(html: String, chapterNumber: String): Int? {
-        fun keyPattern(key: String) = """(?:\\?["'])?$key(?:\\?["'])?"""
-        val numeroPattern = """(?:\\?["'])?\Q$chapterNumber\E(?:\\?["'])?"""
-        val regex = Regex(
-            """${keyPattern("chapterData")}\s*:\s*\{.*?${keyPattern("numero")}\s*:\s*$numeroPattern\s*,.*?${keyPattern("pageCount")}\s*:\s*(\d+)""",
-            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE),
-        )
-        return regex.find(html)?.groupValues?.getOrNull(1)?.toIntOrNull()
+    private fun pageCountFromHtml(html: String, chapterNumber: String): Int? = try {
+        val jsonStr = getChapterDataJson(html)
+        val cleanJsonStr = jsonStr.replace(Regex("\\\\\""), "\"")
+        val jsonObj = json.parseToJsonElement(cleanJsonStr).jsonObject
+        val numeroStr = jsonObj["numero"]?.jsonPrimitive?.content ?: ""
+        val pageCount = jsonObj["pageCount"]?.jsonPrimitive?.intOrNull ?: 0
+        if (numeroStr == chapterNumber) pageCount else null
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun getChapterDataJson(html: String): String {
+        val document = Jsoup.parse(html)
+        val script = document.select("script").firstOrNull { it.data().contains("chapterData", ignoreCase = true) }
+            ?: throw Exception("Unable to retrieve chapterData script")
+
+        val data = script.data()
+        val keyIndex = data.indexOf("chapterData", ignoreCase = true)
+        if (keyIndex == -1) {
+            throw Exception("chapterData key not found in script")
+        }
+
+        val start = data.indexOf('{', keyIndex)
+        if (start == -1) {
+            throw Exception("chapterData object start not found")
+        }
+
+        var depth = 1
+        var i = start + 1
+        while (i < data.length && depth > 0) {
+            when (data[i]) {
+                '{' -> depth++
+                '}' -> depth--
+            }
+            i++
+        }
+
+        return data.substring(start, i)
     }
 
     private fun metricsRequest(path: String, page: Int): Request =
