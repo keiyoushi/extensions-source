@@ -1,132 +1,97 @@
 package eu.kanade.tachiyomi.extension.pt.lycantoons
 
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonPrimitive
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
-data class PopularResponseDto(
-    val success: Boolean,
-    val data: List<MangaDto>,
-    val pagination: PaginationDto,
+data class PopularResponse(
+    val data: List<SeriesDto>,
+    val pagination: PaginationDto? = null,
+)
+
+@Serializable
+data class SeriesDto(
+    val title: String,
+    val slug: String,
+    @SerialName("coverUrl")
+    val coverUrl: String? = null,
+    val author: String? = null,
+    val artist: String? = null,
+    val description: String? = null,
+    val genre: List<String>? = null,
+    val status: String? = null,
+    val seriesType: String? = null,
+    val capitulos: List<ChapterDto>? = null,
 )
 
 @Serializable
 data class PaginationDto(
-    val page: Int,
-    val limit: Int,
-    val total: Int,
-    val totalPages: Int,
-    val hasNext: Boolean,
-    val hasPrev: Boolean,
+    val page: Int? = null,
+    val totalPages: Int? = null,
+    val hasNext: Boolean? = null,
 )
 
 @Serializable
-data class MangaDto(
-    val id: Int,
-    val title: String,
-    @SerialName("original_title") val originalTitle: String? = null,
-    val author: String? = null,
-    val description: String? = null,
-    val genres: List<String> = emptyList(),
-    val status: String,
-    @SerialName("coverUrl") val coverUrl: String,
-    val slug: String,
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@MangaDto.title
-        thumbnail_url = coverUrl
-        url = "/series/$slug"
-        author = this@MangaDto.author ?: "Desconhecido"
-        artist = this@MangaDto.author ?: "Desconhecido"
-        description = this@MangaDto.description
-        genre = genres.joinToString(", ")
-        status = parseStatus(this@MangaDto.status)
-    }
-}
-
-@Serializable
-data class SearchBodyDto(
+data class SearchRequestBody(
     val limit: Int,
     val page: Int,
     val search: String,
-    val status: String? = null,
-    val seriesType: String? = null,
-    val tags: List<String>? = null,
-)
-
-@Serializable
-data class SearchResponseDto(
-    val series: List<SearchMangaDto>,
-    val pagination: SearchPaginationDto,
-)
-
-@Serializable
-data class SearchPaginationDto(
-    val currentPage: Int,
-    val totalPages: Int,
-    val totalItems: Int,
-    val itemsPerPage: Int,
-    val hasNextPage: Boolean,
-    val hasPrevPage: Boolean,
-)
-
-@Serializable
-data class SearchMangaDto(
-    val id: String,
-    val title: String,
-    @SerialName("original_title") val originalTitle: String? = null,
-    val author: String? = null,
-    val artist: String? = null,
-    val description: String? = null,
-    val genre: List<String> = emptyList(),
+    val seriesType: String,
     val status: String,
-    @SerialName("coverUrl") val coverUrl: String,
-    val slug: String,
-    val seriesType: String? = null,
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@SearchMangaDto.title
-        thumbnail_url = coverUrl
-        url = "/series/$slug"
-        author = this@SearchMangaDto.author ?: "Desconhecido"
-        artist = this@SearchMangaDto.artist ?: author ?: "Desconhecido"
-        description = this@SearchMangaDto.description
-        genre = this@SearchMangaDto.genre.joinToString(", ")
-        status = parseStatus(this@SearchMangaDto.status)
-    }
-}
+    val tags: List<String>,
+)
 
 @Serializable
 data class ChapterDto(
-    val numero: Float,
-    val createdAt: String = "",
-    val pageCount: Int = 0,
+    val id: Int,
+    val numero: JsonElement,
+    @SerialName("createdAt") val createdAt: String? = null,
+    @SerialName("coverUrl") val coverUrl: String? = null,
+    @SerialName("capaUrl") val capaUrl: String? = null,
+    @SerialName("pageCount") val pageCount: Int? = null,
 )
 
-@Serializable
-data class SeriesDataDto(
-    val title: String,
-    val slug: String,
-    val description: String,
-    val genre: List<String>,
-    val seriesType: String,
-    val coverUrl: String,
-    val capitulos: List<ChapterDto>,
-) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@SeriesDataDto.title
-        thumbnail_url = coverUrl
-        url = "/series/$slug"
-        description = this@SeriesDataDto.description
-        genre = this@SeriesDataDto.genre.joinToString(", ")
-    }
+fun SeriesDto.toSManga(): SManga = SManga.create().apply {
+    title = this@toSManga.title
+    url = "/series/$slug"
+    thumbnail_url = coverUrl
+    author = this@toSManga.author?.takeIf { it.isNotBlank() }
+    artist = this@toSManga.artist?.takeIf { it.isNotBlank() }
+    genre = this@toSManga.genre?.takeIf { it.isNotEmpty() }?.joinToString(", ")
+    description = this@toSManga.description
+    status = parseStatus(this@toSManga.status)
 }
 
-private fun parseStatus(status: String): Int = when (status.uppercase()) {
+fun ChapterDto.toSChapter(slug: String): SChapter = SChapter.create().apply {
+    val numberString = numero.jsonPrimitive.content
+    name = "Capítulo $numberString"
+    val pagesQuery = pageCount?.let { "?pages=$it" }.orEmpty()
+    url = "/series/$slug/$numberString$pagesQuery"
+    date_upload = dateFormat.tryParse(createdAt)
+    chapter_number = numberString.toFloatOrNull() ?: -1f
+}
+
+private fun parseStatus(status: String?): Int = when (status) {
     "ONGOING" -> SManga.ONGOING
     "COMPLETED" -> SManga.COMPLETED
     "HIATUS" -> SManga.ON_HIATUS
     "CANCELLED" -> SManga.CANCELLED
     else -> SManga.UNKNOWN
 }
+
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale("pt", "BR")).apply {
+    timeZone = TimeZone.getTimeZone("UTC")
+}
+
+@Serializable
+data class SearchResponse(
+    val series: List<SeriesDto>,
+)

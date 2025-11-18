@@ -9,21 +9,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class LycanToons : HttpSource() {
 
@@ -35,191 +27,202 @@ class LycanToons : HttpSource() {
 
     override val supportsLatest = true
 
-    private fun parseMangas(response: Response): MangasPage {
-        val result = response.parseAs<PopularResponseDto>()
-        return MangasPage(result.data.map { it.toSManga() }, result.pagination.hasNext)
-    }
+    override val client = network.cloudflareClient
 
-    // ============================== Popular ===============================
+    // =====================Popular=====================
 
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/api/metrics/popular?limit=13", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = metricsRequest("popular", page)
 
-    override fun popularMangaParse(response: Response): MangasPage = parseMangas(response)
+    override fun popularMangaParse(response: Response): MangasPage =
+        response.parseAs<PopularResponse>().data.toMangasPage()
 
-    // ============================== Latest ================================
+    // Latest
 
-    override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/api/metrics/recently-updated?limit=13", headers)
-    }
+    override fun latestUpdatesRequest(page: Int): Request = metricsRequest("recently-updated", page)
 
-    override fun latestUpdatesParse(response: Response): MangasPage = parseMangas(response)
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        response.parseAs<PopularResponse>().data.toMangasPage()
 
-    // ============================== Search ================================
+    // =====================Search=====================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val status = filters.filterIsInstance<StatusFilter>().firstOrNull()?.toApiValue()
-        val seriesType = filters.filterIsInstance<SeriesTypeFilter>().firstOrNull()?.toApiValue()
-        val tags = filters.filterIsInstance<TagsFilter>().flatMap { it.state.filter { it.state }.map { it.apiValue } }.takeIf { it.isNotEmpty() }
-        val body = SearchBodyDto(15, page, query, status, seriesType, tags)
-        return POST("$baseUrl/api/series", headers, Json.encodeToString(body).toRequestBody("application/json; charset=utf-8".toMediaType()))
+        val payload = SearchRequestBody(
+            limit = PAGE_LIMIT,
+            page = page,
+            search = query,
+            seriesType = filters.valueOrEmpty<SeriesTypeFilter>(),
+            status = filters.valueOrEmpty<StatusFilter>(),
+            tags = filters.selectedTags(),
+        )
+
+        val body = json.encodeToString(payload).toRequestBody(JSON_MEDIA_TYPE)
+        return POST("$baseUrl/api/series", headers, body)
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<SearchResponseDto>()
-        return MangasPage(result.series.map { it.toSManga() }, result.pagination.hasNextPage)
-    }
+    override fun searchMangaParse(response: Response): MangasPage =
+        response.parseAs<SearchResponse>().series.toMangasPage()
 
-    override fun getFilterList() = FilterList(
-        Filter.Header("Filtros de busca"),
-        StatusFilter(),
+    override fun getFilterList(): FilterList = FilterList(
         SeriesTypeFilter(),
+        StatusFilter(),
         TagsFilter(),
     )
 
-    // =========================== Manga Details ============================
+    // =====================Details=====================
+
+    override fun mangaDetailsRequest(manga: SManga): Request = seriesRequest(manga.slug())
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val slug = response.request.url.pathSegments.last()
-        val apiResponse = client.newCall(GET("$baseUrl/api/series/$slug")).execute()
-        val result = apiResponse.parseAs<SeriesDataDto>()
-        return result.toSManga()
+        val result = response.parseAs<SeriesDto>()
+        return result.toSManga().apply { initialized = true }
     }
 
-    // ============================== Chapters ==============================
+    // =====================Chapters=====================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val html = response.body.string()
-        val slug = response.request.url.pathSegments.last()
+    override fun chapterListRequest(manga: SManga): Request = seriesRequest(manga.slug())
 
-        val chaptersJson = extractChaptersJson(html)
-        val chapters = json.decodeFromString<List<ChapterDto>>(chaptersJson)
-
-        return chapters.map { chapter ->
-            SChapter.create().apply {
-                val numeroStr = chapter.numero.toString().removeSuffix(".0")
-                name = "Capítulo $numeroStr"
-                chapter_number = chapter.numero
-                date_upload = dateFormat.tryParse(chapter.createdAt)
-                url = "/series/$slug/$numeroStr"
-            }
-        }.sortedByDescending { it.chapter_number }
-    }
-
-    private fun extractChaptersJson(html: String): String {
-        val seriesPagePattern = Regex("\"capitulos\":\\s*(\\[.*?\\])", RegexOption.DOT_MATCHES_ALL)
-        val seriesMatch = seriesPagePattern.find(html)
-        if (seriesMatch != null) {
-            return seriesMatch.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\")
+    override fun chapterListParse(response: Response): List<SChapter> =
+        response.parseAs<SeriesDto>().let { series ->
+            series.capitulos.orEmpty()
+                .map { it.toSChapter(series.slug) }
+                .sortedByDescending { it.chapter_number }
         }
 
-        val chapterPagePattern = Regex("\"chapterData\":\\s*(\\{.*?\\})", RegexOption.DOT_MATCHES_ALL)
-        val chapterMatch = chapterPagePattern.find(html)
-        if (chapterMatch != null) {
-            val chapterJson = chapterMatch.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\")
-            return "[$chapterJson]"
-        }
+    // =====================Pages========================
 
-        throw Exception("Capítulos não encontrados")
-    }
-
-    // =============================== Pages = ===============================
-
-    private val pageListRegex = Regex("""8:\[.*?null,(?<json>\{.*\})\]""")
+    override fun pageListRequest(chapter: SChapter): Request = GET(
+        "$baseUrl${chapter.url}",
+        headers.newBuilder()
+            .add("Referer", "$baseUrl/")
+            .build(),
+    )
 
     override fun pageListParse(response: Response): List<Page> {
         val html = response.body.string()
-        val chapterNumberFromUrl = response.request.url.pathSegments.last()
+        val (slug, chapterNumber) = response.extractSlugAndChapter()
 
-        val match = pageListRegex.find(html)
-            ?: throw Exception("JSON de dados não encontrado")
+        val pageCount = pageCountFromHtml(html, chapterNumber)
+            ?.takeIf { it > 0 }
+            ?: error("Quantidade de páginas não encontrada no HTML para capítulo '$chapterNumber'")
 
-        val jsonString = match.groups["json"]!!.value
-            .replace("\\\"", "\"")
-            .replace("\\\\", "\\")
-
-        val jsonObject = json.parseToJsonElement(jsonString).jsonObject
-        val seriesData = jsonObject["seriesData"]!!.jsonObject
-        val slug = seriesData["slug"]!!.jsonPrimitive.content
-
-        val capitulos = seriesData["capitulos"]!!.jsonArray
-        val currentChapterObject = capitulos.firstOrNull {
-            it.jsonObject["numero"]!!.jsonPrimitive.content.toString() == chapterNumberFromUrl
-        }?.jsonObject ?: throw Exception("Capítulo não encontrado no JSON")
-
-        val numero = currentChapterObject["numero"]!!.jsonPrimitive.content.toString().normalizeChapterNumber()
-        val pageCount = currentChapterObject["pageCount"]!!.jsonPrimitive.int
-
-        return (0 until pageCount).map { index ->
-            val pageUrl = "https://cdn.lycantoons.com/file/lycantoons/$slug/$numero/page-$index.jpg"
-            Page(index = index, url = pageUrl, imageUrl = pageUrl)
+        val chapterPath = "$cdnUrl/$slug/$chapterNumber"
+        return List(pageCount) { index ->
+            val imageUrl = "$chapterPath/page-$index.jpg"
+            Page(index, imageUrl, imageUrl)
         }
     }
 
-    private fun String.normalizeChapterNumber(): String {
-        return replace(Regex("\\.0+$"), "").replace(Regex("\\.$"), "")
-    }
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
-    override fun imageUrlParse(response: Response): String {
-        return response.request.url.toString()
-    }
+    // =====================Filters===================== 
 
-    // ============================== Filters ===============================
-
-    private class StatusFilter : Filter.Select<String>(
-        "Status",
-        arrayOf("Todos", "Em andamento", "Completo", "Hiato", "Cancelado"),
-    ) {
-        fun toApiValue(): String? = when (state) {
-            0 -> null
-            1 -> "ONGOING"
-            2 -> "COMPLETED"
-            3 -> "HIATUS"
-            4 -> "CANCELLED"
-            else -> null
-        }
-    }
-
-    private class SeriesTypeFilter : Filter.Select<String>(
+    private class SeriesTypeFilter : ChoiceFilter(
         "Tipo",
-        arrayOf("Todos", "Manga", "Manhwa", "Manhua", "Novel"),
-    ) {
-        fun toApiValue(): String? = when (state) {
-            0 -> null
-            1 -> "MANGA"
-            2 -> "MANHWA"
-            3 -> "MANHUA"
-            4 -> "NOVEL"
-            else -> null
-        }
-    }
-
-    private class TagsFilter : Filter.Group<TagCheckBox>(
-        "Gêneros",
-        listOf(
-            TagCheckBox("Action", "action"),
-            TagCheckBox("Adventure", "adventure"),
-            TagCheckBox("Comedy", "comedy"),
-            TagCheckBox("Drama", "drama"),
-            TagCheckBox("Fantasy", "fantasy"),
-            TagCheckBox("Horror", "horror"),
-            TagCheckBox("Mystery", "mystery"),
-            TagCheckBox("Romance", "romance"),
-            TagCheckBox("School Life", "school_life"),
-            TagCheckBox("Sci-Fi", "sci_fi"),
-            TagCheckBox("Slice of Life", "slice_of_life"),
-            TagCheckBox("Sports", "sports"),
-            TagCheckBox("Supernatural", "supernatural"),
-            TagCheckBox("Tragedy", "tragedy"),
-            TagCheckBox("Thriller", "thriller"),
+        arrayOf(
+            "" to "Todos",
+            "MANGA" to "Mangá",
+            "MANHWA" to "Manhwa",
+            "MANHUA" to "Manhua",
+            "COMIC" to "Comic",
+            "WEBTOON" to "Webtoon",
         ),
     )
 
-    private class TagCheckBox(name: String, val apiValue: String) : Filter.CheckBox(name)
+    private class StatusFilter : ChoiceFilter(
+        "Status",
+        arrayOf(
+            "" to "Todos",
+            "ONGOING" to "Em andamento",
+            "COMPLETED" to "Completo",
+            "HIATUS" to "Hiato",
+            "CANCELLED" to "Cancelado",
+        ),
+    )
+
+    private open class ChoiceFilter(
+        name: String,
+        private val entries: Array<Pair<String, String>>,
+    ) : Filter.Select<String>(
+        name,
+        entries.map { it.second }.toTypedArray(),
+    ) {
+        fun getValue(): String = entries[state].first
+    }
+
+    private class TagsFilter : Filter.Group<TagCheckBox>(
+        "Tags",
+        listOf(
+            TagCheckBox("Ação", "action"),
+            TagCheckBox("Aventura", "adventure"),
+            TagCheckBox("Comédia", "comedy"),
+            TagCheckBox("Drama", "drama"),
+            TagCheckBox("Fantasia", "fantasy"),
+            TagCheckBox("Terror", "horror"),
+            TagCheckBox("Mistério", "mystery"),
+            TagCheckBox("Romance", "romance"),
+            TagCheckBox("Vida escolar", "school_life"),
+            TagCheckBox("Sci-fi", "sci_fi"),
+            TagCheckBox("Slice of life", "slice_of_life"),
+            TagCheckBox("Esportes", "sports"),
+            TagCheckBox("Sobrenatural", "supernatural"),
+            TagCheckBox("Thriller", "thriller"),
+            TagCheckBox("Tragédia", "tragedy"),
+        ),
+    )
+
+    private class TagCheckBox(
+        name: String,
+        val value: String,
+    ) : Filter.CheckBox(name)
+
+    private inline fun <reified T : Filter<*>> FilterList.find(): T? =
+        this.filterIsInstance<T>().firstOrNull()
+
+    private inline fun <reified T : ChoiceFilter> FilterList.valueOrEmpty(): String =
+        find<T>()?.getValue().orEmpty()
+
+    private fun FilterList.selectedTags(): List<String> =
+        find<TagsFilter>()?.state
+            ?.filter { it.state }
+            ?.map { it.value }
+            .orEmpty()
+
+    // =====================Utils=====================
+
+    private fun Response.extractSlugAndChapter(): Pair<String, String> {
+        val segments = request.url.pathSegments
+        val slug = segments.getOrNull(1)?.trim('/')
+            ?: throw IllegalStateException("Slug da série não encontrado na URL")
+        val chapterNumber = segments.getOrNull(2)?.trim('/')
+            ?: throw IllegalStateException("Número do capítulo não encontrado na URL")
+        return slug to chapterNumber
+    }
+
+    private fun pageCountFromHtml(html: String, chapterNumber: String): Int? {
+        fun keyPattern(key: String) = """(?:\\?["'])?$key(?:\\?["'])?"""
+        val numeroPattern = """(?:\\?["'])?\Q$chapterNumber\E(?:\\?["'])?"""
+        val regex = Regex(
+            """${keyPattern("chapterData")}\s*:\s*\{.*?${keyPattern("numero")}\s*:\s*$numeroPattern\s*,.*?${keyPattern("pageCount")}\s*:\s*(\d+)""",
+            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE),
+        )
+        return regex.find(html)?.groupValues?.getOrNull(1)?.toIntOrNull()
+    }
+
+    private fun metricsRequest(path: String, page: Int): Request =
+        GET("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page", headers)
+
+    private fun List<SeriesDto>.toMangasPage(): MangasPage =
+        MangasPage(map { it.toSManga() }, false)
+
+    private fun seriesRequest(slug: String): Request = GET("$baseUrl/api/series/$slug", headers)
+
+    private fun SManga.slug(): String = url.substringAfterLast("/")
+
+    private val json by lazy { jsonInstance }
 
     companion object {
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
-        private val json = Json { ignoreUnknownKeys = true }
+        private const val PAGE_LIMIT = 13
+        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+        private const val cdnUrl = "https://cdn.lycantoons.com/file/lycantoons"
     }
 }
