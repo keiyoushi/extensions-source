@@ -12,14 +12,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.getPreferencesLazy
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
+import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -43,10 +37,14 @@ class MangaSwat :
 
     private val apiBaseUrl = "https://appswat.com/v2/api/v2"
 
-    private val apiDateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
+    override val versionId = 2
+
+    private val apiHeaders: Headers by lazy {
+        headersBuilder()
+            .add("Accept", "application/json, text/plain, */*")
+            .add("Origin", baseUrl)
+            .add("Referer", "$baseUrl/")
+            .build()
     }
 
     override val client = super.client.newBuilder()
@@ -105,130 +103,62 @@ class MangaSwat :
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        val apiHeaders = headersBuilder()
-            .add("Accept", "application/json, text/plain, */*")
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
-            .build()
         return GET("$apiBaseUrl/series/?status=79&page=$page", apiHeaders)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val data = json.decodeFromString<LatestUpdatesResponse>(response.body.string())
-        val mangas = data.results.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = it.poster.mediumUrl
-                url = "/series/id/${it.id}/"
-            }
-        }
-        return MangasPage(mangas, data.next != null)
+        val data = response.parseAs<LatestUpdatesResponse>()
+        val mangas = data.results.map { it.toSManga() }
+        return MangasPage(mangas, data.hasNext())
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        val apiHeaders = headersBuilder()
-            .add("Accept", "application/json, text/plain, */*")
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
-            .build()
         return GET("$apiBaseUrl/series/?is_hot=true&page=$page", apiHeaders)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val data = json.decodeFromString<LatestUpdatesResponse>(response.body.string())
-        val mangas = data.results.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = it.poster.mediumUrl
-                url = "/series/id/${it.id}/"
-            }
-        }
-        return MangasPage(mangas, data.next != null)
+        val data = response.parseAs<LatestUpdatesResponse>()
+        val mangas = data.results.map { it.toSManga() }
+        return MangasPage(mangas, data.hasNext())
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url.removePrefix("/series/id/").removeSuffix("/")
-        val apiHeaders = headersBuilder()
-            .add("Accept", "application/json, text/plain, */*")
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
-            .build()
+        val id = manga.url
         return GET("$apiBaseUrl/series/$id/", apiHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val manga = json.decodeFromString<MangaDetailsDto>(response.body.string())
-        return SManga.create().apply {
-            title = manga.title
-            description = manga.story
-            author = manga.author?.let {
-                when (it) {
-                    is JsonPrimitive -> it.contentOrNull
-                    is JsonObject -> it["name"]?.jsonPrimitive?.contentOrNull
-                    else -> null
-                }
-            }
-            artist = manga.artist?.let {
-                when (it) {
-                    is JsonPrimitive -> it.contentOrNull
-                    is JsonObject -> it["name"]?.jsonPrimitive?.contentOrNull
-                    else -> null
-                }
-            }
-            genre = manga.genres.joinToString { it.name }
-            status = when (manga.status.name.lowercase()) {
-                "ongoing" -> SManga.ONGOING
-                "completed" -> SManga.COMPLETED
-                else -> SManga.UNKNOWN
-            }
-            thumbnail_url = manga.poster.mediumUrl
-        }
+        return response.parseAs<MangaDetailsDto>().toSManga()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url.removePrefix("/series/id/").removeSuffix("/")
-        val apiHeaders = headersBuilder()
-            .add("Accept", "application/json, text/plain, */*")
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
-            .build()
+        val id = manga.url
         return GET("$apiBaseUrl/chapters/?serie=$id&order_by=-order&page_size=200", apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        var data = json.decodeFromString<ChapterListResponse>(response.body.string())
+        var data = response.parseAs<ChapterListResponse>()
         val chapters = mutableListOf<SChapter>()
-        chapters.addAll(data.results.map { chapterFromDto(it) })
+        chapters.addAll(data.results.map { it.toSChapter() })
 
         var nextPage = data.next
         while (nextPage != null) {
             val nextResponse = client.newCall(GET(nextPage, response.request.headers)).execute()
-            data = json.decodeFromString<ChapterListResponse>(nextResponse.body.string())
-            chapters.addAll(data.results.map { chapterFromDto(it) })
+            data = nextResponse.parseAs<ChapterListResponse>()
+            chapters.addAll(data.results.map { it.toSChapter() })
             nextPage = data.next
         }
 
         return chapters
     }
 
-    private fun chapterFromDto(chapter: ChapterDto): SChapter = SChapter.create().apply {
-        name = chapter.chapter
-        date_upload = runCatching { apiDateFormat.parse(chapter.createdAt)?.time }.getOrNull() ?: 0L
-        url = "/chapters/${chapter.id}/${chapter.slug}/"
-    }
-
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url.removePrefix("/chapters/").substringBefore("/")
-        val apiHeaders = headersBuilder()
-            .add("Accept", "application/json, text/plain, */*")
-            .add("Origin", baseUrl)
-            .add("Referer", "$baseUrl/")
-            .build()
         return GET("$apiBaseUrl/chapters/$id/", apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapter = json.decodeFromString<PageListResponse>(response.body.string())
+        val chapter = response.parseAs<PageListResponse>()
         return chapter.images.map {
             Page(it.order, imageUrl = it.image)
         }
@@ -236,11 +166,6 @@ class MangaSwat :
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
-            val apiHeaders = headersBuilder()
-                .add("Accept", "application/json, text/plain, */*")
-                .add("Origin", baseUrl)
-                .add("Referer", "$baseUrl/")
-                .build()
             return GET("$apiBaseUrl/series/?search=$query&page=$page", apiHeaders)
         }
 
@@ -252,84 +177,17 @@ class MangaSwat :
             return super.searchMangaParse(response)
         }
 
-        val data = json.decodeFromString<LatestUpdatesResponse>(response.body.string())
-        val mangas = data.results.map {
-            SManga.create().apply {
-                title = it.title
-                thumbnail_url = it.poster.mediumUrl
-                url = "/series/id/${it.id}/"
-            }
-        }
-        return MangasPage(mangas, data.next != null)
+        val data = response.parseAs<LatestUpdatesResponse>()
+        val mangas = data.results.map { it.toSManga() }
+        return MangasPage(mangas, data.hasNext())
     }
 
-    @Serializable
-    private data class MangaDetailsDto(
-        @SerialName("title") val title: String,
-        @SerialName("story") val story: String? = null,
-        @SerialName("author") val author: JsonElement? = null,
-        @SerialName("artist") val artist: JsonElement? = null,
-        @SerialName("genres") val genres: List<GenreDto> = emptyList(),
-        @SerialName("status") val status: StatusDto,
-        @SerialName("poster") val poster: PosterDto,
-    )
-
-    @Serializable
-    private data class GenreDto(
-        @SerialName("name") val name: String,
-    )
-
-    @Serializable
-    private data class StatusDto(
-        @SerialName("name") val name: String,
-    )
-
-    @Serializable
-    private data class LatestUpdatesResponse(
-        @SerialName("results") val results: List<LatestMangaDto> = emptyList(),
-        @SerialName("next") val next: String? = null,
-    )
-
-    @Serializable
-    private data class LatestMangaDto(
-        @SerialName("id") val id: Int,
-        @SerialName("slug") val slug: String,
-        @SerialName("title") val title: String,
-        @SerialName("poster") val poster: PosterDto,
-    )
-
-    @Serializable
-    private data class PosterDto(
-        @SerialName("medium") val mediumUrl: String,
-    )
-
-    @Serializable
-    private data class ChapterListResponse(
-        @SerialName("count") val count: Int,
-        @SerialName("next") val next: String? = null,
-        @SerialName("results") val results: List<ChapterDto> = emptyList(),
-    )
-
-    @Serializable
-    private data class ChapterDto(
-        @SerialName("id") val id: Int,
-        @SerialName("slug") val slug: String,
-        @SerialName("chapter") val chapter: String,
-        @SerialName("created_at") val createdAt: String,
-    )
-
-    @Serializable
-    private data class PageListResponse(
-        @SerialName("images") val images: List<PageDto>,
-    )
-
-    @Serializable
-    private data class PageDto(
-        @SerialName("image") val image: String,
-        @SerialName("order") val order: Int,
-    )
-
     companion object {
+        internal val apiDateFormat by lazy {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+        }
         private const val RESTART_APP = "Restart the app to apply the new URL"
         private const val BASE_URL_PREF_TITLE = "Override BaseUrl"
         private const val BASE_URL_PREF = "overrideBaseUrl"
@@ -344,7 +202,7 @@ class MangaSwat :
             summary = BASE_URL_PREF_SUMMARY
             setDefaultValue(super.baseUrl)
             dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: ${super.baseUrl}"
+            dialogMessage = "Default: ${'$'}{super.baseUrl}"
 
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
