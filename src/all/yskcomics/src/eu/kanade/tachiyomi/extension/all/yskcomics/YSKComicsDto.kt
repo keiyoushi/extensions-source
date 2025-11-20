@@ -169,8 +169,8 @@ class DetailsRaw(
                     // The site redirects to the correct language in this case. Not possible here.
                     // The user has to intentionally open an invalid URL to arrive here.
                     val language = runCatching {
-                        Locale(languageCode).getDisplayLanguage(Locale.ENGLISH)
-                    }.getOrDefault(languageCode)
+                        Locale(lang).getDisplayLanguage(Locale.ENGLISH)
+                    }.getOrDefault(lang)
 
                     append("**Sorry, this content is not available in ", language, ".**\n\n")
                 }
