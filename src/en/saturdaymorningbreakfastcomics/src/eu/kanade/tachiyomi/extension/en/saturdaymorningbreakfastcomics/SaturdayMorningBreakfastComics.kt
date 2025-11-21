@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.saturdaymorningbreakfastcomics
 
-import android.net.Uri.encode
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.asObservable
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,8 +11,12 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -28,27 +33,29 @@ class SaturdayMorningBreakfastComics : HttpSource() {
     override val lang = "en"
 
     override val supportsLatest = false
+    override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(TextInterceptor())
+        .addInterceptor { chain ->
+            val request = chain.request()
+            val url = request.url
+            if (url.host != "thumbnail") return@addInterceptor chain.proceed(request)
 
-    private fun String.image() =
-        "https://fakeimg.ryd.tools/1500x2126/ffffff/000000/?font=museo&font_size=42&text=" + encode(
-            this,
-        )
-
-    // Taken from XKCD
-    private fun wordWrap(text: String) = buildString {
-        var charCount = 0
-        text.replace("\r\n", " ").split(' ').forEach { w ->
-            if (charCount > 25) {
-                append("\n")
-                charCount = 0
-            }
-            append(w).append(' ')
-            charCount += w.length + 1
+            val image = this::class.java
+                .getResourceAsStream("/assets/thumbnail.png")!!
+                .readBytes()
+            val responseBody = image.toResponseBody("image/png".toMediaType())
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(responseBody)
+                .build()
         }
-    }
+        .build()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val manga = SManga.create().apply {
+    private fun makeSManga(): SManga =
+        SManga.create().apply {
             title = "Saturday Morning Breakfast Comics"
             artist = "Zach Weinersmith"
             author = "Zach Weinersmith"
@@ -56,9 +63,11 @@ class SaturdayMorningBreakfastComics : HttpSource() {
             url = "/comic/archive"
             description =
                 "SMBC is a daily comic strip about life, philosophy, science, mathematics, and dirty jokes."
-            thumbnail_url = "https://fakeimg.ryd.tools/550x780/ffffff/6e7b91/?font=museo&text=SMBC"
+            thumbnail_url = "https://thumbnail/smbc.png"
         }
 
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        val manga = makeSManga()
         return Observable.just(MangasPage(listOf(manga), false))
     }
 
@@ -68,7 +77,7 @@ class SaturdayMorningBreakfastComics : HttpSource() {
         filters: FilterList,
     ): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(makeSManga())
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return client.newCall(chapterListRequest(manga))
@@ -98,7 +107,7 @@ class SaturdayMorningBreakfastComics : HttpSource() {
         val image = document.select("img#cc-comic")
         pages.add(Page(0, "", image.attr("abs:src")))
         if (image.hasAttr("title")) {
-            pages.add(Page(1, "", wordWrap(image.attr("title")).image()))
+            pages.add(Page(1, "", TextInterceptorHelper.createUrl("", image.attr("title"))))
         }
         pages.add(Page(2, "", document.select("#aftercomic > img").attr("abs:src")))
         return pages
