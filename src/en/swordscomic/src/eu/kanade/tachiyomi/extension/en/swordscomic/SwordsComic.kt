@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.swordscomic
 
-import android.net.Uri
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -25,7 +26,7 @@ class SwordsComic : HttpSource() {
 
     override val supportsLatest = false
 
-    override val client: OkHttpClient = network.cloudflareClient
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder().addInterceptor(TextInterceptor()).build()
 
     private fun createManga(): SManga {
         return SManga.create().apply {
@@ -92,21 +93,9 @@ class SwordsComic : HttpSource() {
         if (!imageElement.hasAttr("title")) {
             return listOf(Page(0, "", imageElement.attr("abs:src")))
         }
+        val titleText = TextInterceptorHelper.createUrl("", imageElement.attr("title"))
 
-        val builder = StringBuilder()
-        var charCount = 0
-
-        for (word in imageElement.attr("title").splitToSequence(" ")) {
-            if (charCount + word.length > 45) {
-                builder.append("%0A")
-                charCount = 0
-            }
-            charCount += word.length + 1
-            builder.append(Uri.encode(word.uppercase()))
-            builder.append("+")
-        }
-
-        return listOf(Page(0, "", imageElement.attr("abs:src")), Page(1, "", "https://fakeimg.ryd.tools/1800x2252/978B65/000000/?text=$builder&font_size=60&font=comic+sans"))
+        return listOf(Page(0, "", imageElement.attr("abs:src")), Page(1, "", titleText))
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
