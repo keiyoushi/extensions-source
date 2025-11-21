@@ -16,7 +16,7 @@ class ClearanceInterceptor : Interceptor {
         if (hasClearanceCookie) return chain.proceed(request)
 
         val response = chain.proceed(request)
-        if (response.code in ERROR_CODES && response.header("Server") in SERVER_CHECK) {
+        if (response.code == 403 && response.header(CF_RAY_HEADER) != null) {
             val hasClearanceInResponse = response.headers("Set-Cookie").any { cookieHeader ->
                 cookieHeader.split(";").any { cookie ->
                     cookie.trim().startsWith("$COOKIE_NAME=")
@@ -39,8 +39,7 @@ class ClearanceInterceptor : Interceptor {
     }
 
     companion object {
-        private val ERROR_CODES = listOf(403, 503)
-        private val SERVER_CHECK = arrayOf("cloudflare-nginx", "cloudflare")
         private const val COOKIE_NAME = "cf_clearance"
+        private const val CF_RAY_HEADER = "cf-ray"
     }
 }
