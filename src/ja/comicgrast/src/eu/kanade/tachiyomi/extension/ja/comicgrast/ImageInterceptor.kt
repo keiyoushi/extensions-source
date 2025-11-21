@@ -7,8 +7,8 @@ import android.graphics.Rect
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import java.io.ByteArrayOutputStream
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -27,20 +27,19 @@ class ImageInterceptor : Interceptor {
         }
 
         val response = chain.proceed(request)
-        val body = response.body
-        val bytes = body.bytes()
-        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val body = response.body.source()
+        val bitmap = BitmapFactory.decodeStream(body.inputStream())
 
         val sliceSize = max(bitmap.width, bitmap.height) / sizeParam.toFloat()
 
         val result = unscrambleImg(bitmap, sliceSize, seed)
-
-        val output = ByteArrayOutputStream()
-        result.compress(Bitmap.CompressFormat.JPEG, 90, output)
-        val resultBytes = output.toByteArray()
+        bitmap.recycle()
+        val buffer = Buffer()
+        result.compress(Bitmap.CompressFormat.JPEG, 90, buffer.outputStream())
+        result.recycle()
 
         return response.newBuilder()
-            .body(resultBytes.toResponseBody("image/jpeg".toMediaType()))
+            .body(buffer.asResponseBody("image/jpeg".toMediaType()))
             .build()
     }
 

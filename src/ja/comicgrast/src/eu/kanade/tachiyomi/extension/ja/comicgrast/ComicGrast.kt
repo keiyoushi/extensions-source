@@ -22,7 +22,7 @@ class ComicGrast : HttpSource() {
     override val lang = "ja"
     override val supportsLatest = false
 
-    private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.JAPAN)
+    private val dateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.ROOT)
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
@@ -60,21 +60,21 @@ class ComicGrast : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         return SManga.create().apply {
-            title = document.selectFirst(".comicTit")?.text()?.trim().toString()
-            description = document.selectFirst(".comicStory .txtAcd_text_inner")?.text()?.trim()
+            title = document.selectFirst(".comicTit")!!.text()
+            description = document.selectFirst(".comicStory .txtAcd_text_inner")?.text()
             author = document.select(".credit li").joinToString { it.text() }
             genre = document.select(".topCategoryTag ul li a").joinToString { it.text().removePrefix("#") }
-            thumbnail_url = document.selectFirst(".serialMainImage")?.attr("src")?.let { "$baseUrl$it" }
+            document.selectFirst(".serialMainImage")?.absUrl("src")?.let { thumbnail_url = it }
         }
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         return document.select(".comicSerialList article a").mapNotNull { element ->
-            val url = element.absUrl("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val chapterUrl = element.absUrl("href").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             SChapter.create().apply {
-                setUrlWithoutDomain(url)
-                name = element.select(".storyTitle").text().trim()
+                setUrlWithoutDomain(chapterUrl)
+                name = element.select(".storyTitle").text()
                 date_upload = element.select(".update").text().let { text ->
                     dateFormat.tryParse(text.replace(" 更新", ""))
                 }
