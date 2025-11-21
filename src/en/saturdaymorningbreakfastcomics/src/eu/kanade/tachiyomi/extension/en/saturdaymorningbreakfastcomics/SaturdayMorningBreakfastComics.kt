@@ -54,8 +54,8 @@ class SaturdayMorningBreakfastComics : HttpSource() {
         }
         .build()
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        val manga = SManga.create().apply {
+    private fun makeSManga(): SManga =
+        SManga.create().apply {
             title = "Saturday Morning Breakfast Comics"
             artist = "Zach Weinersmith"
             author = "Zach Weinersmith"
@@ -66,6 +66,8 @@ class SaturdayMorningBreakfastComics : HttpSource() {
             thumbnail_url = "https://thumbnail/smbc.png"
         }
 
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        val manga = makeSManga()
         return Observable.just(MangasPage(listOf(manga), false))
     }
 
@@ -75,7 +77,7 @@ class SaturdayMorningBreakfastComics : HttpSource() {
         filters: FilterList,
     ): Observable<MangasPage> = Observable.just(MangasPage(emptyList(), false))
 
-    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(manga)
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> = Observable.just(makeSManga())
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return client.newCall(chapterListRequest(manga))

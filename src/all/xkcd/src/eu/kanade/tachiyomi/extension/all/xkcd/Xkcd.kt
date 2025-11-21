@@ -67,7 +67,7 @@ open class Xkcd(
 
     protected open fun String.numbered(number: Any) = "$number - $this"
 
-    final override fun fetchPopularManga(page: Int) =
+    private fun makeSManga(): SManga =
         SManga.create().apply {
             title = name
             artist = creator
@@ -76,13 +76,16 @@ open class Xkcd(
             status = SManga.ONGOING
             thumbnail_url = "https://thumbnail/xkcd.png"
             setUrlWithoutDomain(archive)
-        }.let { Observable.just(MangasPage(listOf(it), false))!! }
+        }
+
+    final override fun fetchPopularManga(page: Int) =
+        Observable.just(MangasPage(listOf(makeSManga()), false))
 
     final override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
         Observable.just(MangasPage(emptyList(), false))!!
 
     final override fun fetchMangaDetails(manga: SManga) =
-        Observable.just(manga.apply { initialized = true })!!
+        Observable.just(makeSManga())!!
 
     override fun chapterListParse(response: Response) =
         response.asJsoup().select(chapterListSelector).map {

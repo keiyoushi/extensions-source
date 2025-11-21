@@ -1,7 +1,7 @@
 ext {
     extName = 'Saturday Morning Breakfast Comics'
     extClass = '.SaturdayMorningBreakfastComics'
-    extVersionCode = 2
+    extVersionCode = 3
     isNsfw = false
 }
 
