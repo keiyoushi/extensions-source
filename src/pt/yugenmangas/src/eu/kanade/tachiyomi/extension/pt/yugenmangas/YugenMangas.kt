@@ -11,8 +11,8 @@ import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -23,16 +23,13 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
+import java.util.Calendar
 
 class YugenMangas : HttpSource(), ConfigurableSource {
 
@@ -45,7 +42,11 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         else -> preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
     }
 
-    private val defaultBaseUrl: String = "https://yugenmangasbr.yocat.xyz"
+    private val defaultBaseUrl: String = "https://yugenmangasbr.dxtg.online"
+
+    private val apiUrl: String = "https://api.yugenweb.com"
+
+    private val imageBaseUrl: String get() = "$baseUrl/_next/image?url=$apiUrl/media"
 
     override val lang = "pt-BR"
 
@@ -60,6 +61,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
         .rateLimit(2)
+        .rateLimitHost(apiUrl.toHttpUrl(), 2)
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
@@ -67,8 +69,6 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         .build()
 
     override val versionId = 2
-
-    private val json: Json by injectLazy()
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { domain ->
@@ -84,47 +84,35 @@ class YugenMangas : HttpSource(), ConfigurableSource {
     // ================================ Popular =======================================
 
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/series?page=$page&order=desc&sort=views", headers)
+        GET("$baseUrl/biblioteca?page=$page&sort_order=desc&sort_by=total_views", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val script = document.selectFirst("script:containsData(initialSeries)")?.data()
-            ?: throw Exception(warning)
-
-        val json = POPULAR_MANGA_REGEX.find(script)?.groups?.get(1)?.value
-            ?.replace(ESCAPE_QUOTATION_MARK_REGEX, "\"")
-            ?: throw Exception("Erro ao analisar lista de mangás/manhwas")
-        val dto = json.parseAs<LibraryWrapper>()
-        return MangasPage(dto.mangas.map(MangaDetailsDto::toSManga), dto.hasNextPage())
+        val dto = response.getJsonBody().parseAs<LibraryWrapper<MangaDto>>()
+        return MangasPage(dto.mangas.map { it.toSManga(imageBaseUrl) }, dto.hasNextPage())
     }
 
     // ================================ Latest =======================================
 
-    override fun latestUpdatesRequest(page: Int): Request =
-        GET("$baseUrl/chapters?page=$page", headers)
+    override fun latestUpdatesRequest(page: Int): Request = GET("$baseUrl/capitulos?page=$page", headers)
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.bg-card a[href*=series]").map { element ->
-            SManga.create().apply {
-                title = element.selectFirst("h3")!!.text()
-                thumbnail_url = element.selectFirst("img")?.attrImageSet()
-                setUrlWithoutDomain(element.absUrl("href").substringBeforeLast("/"))
-            }
-        }.takeIf(List<SManga>::isNotEmpty) ?: throw Exception(warning)
-        return MangasPage(mangas, document.selectFirst("a[aria-label='Próxima página']:not([aria-disabled='true'])") != null)
+        val dto = response.getJsonBody().parseAs<LibraryWrapper<LatestUpdateDto>>()
+        return MangasPage(dto.mangas.map { it.toSManga(imageBaseUrl) }, dto.hasNextPage())
     }
 
     // ================================ Search =======================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val payload = json.encodeToString(SearchDto(query)).toRequestBody(JSON_MEDIA_TYPE)
-        return POST("$baseUrl/api/search", headers, payload)
+        val url = "$apiUrl/api/v2/library/series".toHttpUrl().newBuilder()
+            .addQueryParameter("name", query)
+            .addQueryParameter("per_page", "10")
+            .build()
+        return GET(url, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val mangas = response.parseAs<SearchMangaDto>().series.map(MangaDto::toSManga)
-        return MangasPage(mangas, hasNextPage = false)
+        val dto = response.parseAs<Library<MangaDto>>()
+        return MangasPage(dto.series.map { it.toSManga(imageBaseUrl) }, dto.hasNextPage())
     }
 
     // ================================ Details =======================================
@@ -134,9 +122,17 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         title = document.selectFirst("h1")!!.text()
         description = document.selectFirst("[property='og:description']")?.attr("content")
         thumbnail_url = document.selectFirst("img")?.attrImageSet()
-        author = document.selectFirst("p:contains(Autor) ~ div")?.text()
-        artist = document.selectFirst("p:contains(Artista) ~ div")?.text()
-        genre = document.select("p:contains(Gêneros) ~ div div.inline-flex").joinToString { it.text() }
+        author = document.selectFirst("p:contains(Autor) + p")?.text()
+        artist = document.selectFirst("p:contains(Artista) + p")?.text()
+        genre = document.select("div:has(h1) + div + div [data-slot='badge']").joinToString { it.text() }
+        document.selectFirst("div:has(h1) + div [data-slot='badge']:last-child")?.let {
+            status = when (it.text().lowercase()) {
+                "em lançamento" -> SManga.ONGOING
+                "finalizada" -> SManga.COMPLETED
+                "em hiato" -> SManga.ON_HIATUS
+                else -> SManga.UNKNOWN
+            }
+        }
     }
 
     // ================================ Chapters =======================================
@@ -156,7 +152,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     private fun chapterListRequest(manga: SManga, page: Int): Request {
         val url = super.chapterListRequest(manga).url.newBuilder()
-            .addQueryParameter("reverse", "true")
+            .addQueryParameter("order", "desc")
             .addQueryParameter("page", page.toString())
             .build()
         return GET(url, headers)
@@ -164,20 +160,25 @@ class YugenMangas : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select("a.flex.bg-card[href*=series]").map { element ->
-            SChapter.create().apply {
-                name = element.selectFirst("p")!!.text()
-                setUrlWithoutDomain(element.absUrl("href"))
+        return document.select("""div.md\:hidden a[href*=reader]""")
+            .distinctBy { it.absUrl("href") }
+            .map { element ->
+                SChapter.create().apply {
+                    name = element.selectFirst("p")!!.text()
+                    element.selectFirst("span:has( > .lucide-calendar)")?.let {
+                        date_upload = parseRelativeDate(it.text())
+                    }
+                    setUrlWithoutDomain(element.absUrl("href"))
+                }
             }
-        }
     }
 
     // ================================ Pages =======================================}
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-        return document.select("img[alt^=página]").mapIndexed { index, element ->
-            Page(index, imageUrl = element.absUrl("src"))
+        val pages = response.getJsonBody().parseAs<List<PageDto>>()
+        return pages.sortedBy(PageDto::number).mapIndexed { index, src ->
+            Page(index, imageUrl = "$apiUrl/media/${src.path}")
         }
     }
 
@@ -218,6 +219,29 @@ class YugenMangas : HttpSource(), ConfigurableSource {
             ?.let { "$baseUrl$it" }
     }
 
+    private fun Response.getJsonBody(): String {
+        val document = asJsoup()
+        val script = document.select("script").map(Element::data)
+            .firstOrNull { script -> GET_JSON_BODY_REGEX.containsMatchIn(script) }
+            ?: throw Exception(warning)
+        val values = GET_JSON_BODY_REGEX.find(script)?.groupValues?.filter(String::isNotBlank)
+        return values?.last()
+            ?.let { "\"$it\"".parseAs<String>() }
+            ?: throw Exception("Erro ao analisar os dados")
+    }
+
+    private fun parseRelativeDate(date: String): Long {
+        val number = DATE_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
+        val cal = Calendar.getInstance()
+
+        return when {
+            date.contains("mês") -> cal.apply { add(Calendar.MONTH, -number) }.timeInMillis
+            date.contains("dia") -> cal.apply { add(Calendar.DAY_OF_MONTH, -number) }.timeInMillis
+            date.contains("hora") -> cal.apply { add(Calendar.HOUR, -number) }.timeInMillis
+            else -> 0
+        }
+    }
+
     private val warning = """
         Não foi possível localizar a lista de mangás/manhwas.
         Tente atualizar a URL acessando: Extensões > $name > Configurações.
@@ -230,9 +254,10 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val RESTART_APP_MESSAGE = "Reinicie o aplicativo para aplicar as alterações"
         private const val URL_PREF_SUMMARY = "Para uso temporário, se a extensão for atualizada, a alteração será perdida."
-        private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-        private val POPULAR_MANGA_REGEX = """(\{\\"initialSeries.+\"\})\]""".toRegex()
-        private val ESCAPE_QUOTATION_MARK_REGEX = """\\"""".toRegex()
+        private val MANGA_REGEX = """(\{\\"initialData.+\"\}.+)(?:\]\}){2}\]""".toRegex()
+        private val PAGES_REGEX = """pages\\":(\[.+\])\}\}""".toRegex()
+        private val GET_JSON_BODY_REGEX = """$MANGA_REGEX|$PAGES_REGEX""".toRegex()
+        private val DATE_REGEX = """\d+""".toRegex()
         private val SRCSET_DELIMITER_REGEX = """\d+w,?""".toRegex()
     }
 }
