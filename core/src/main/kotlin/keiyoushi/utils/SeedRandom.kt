@@ -3,6 +3,7 @@ package keiyoushi.utils
 import kotlin.math.floor
 import kotlin.math.pow
 
+// https://github.com/davidbau/seedrandom
 class SeedRandom(seed: String) {
     private val width = 256
     private val chunks = 6
