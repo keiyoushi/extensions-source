@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.lycantoons
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
@@ -21,7 +20,6 @@ data class PopularResponse(
 data class SeriesDto(
     val title: String,
     val slug: String,
-    @SerialName("coverUrl")
     val coverUrl: String? = null,
     val author: String? = null,
     val artist: String? = null,
@@ -59,6 +57,17 @@ data class ChapterDto(
     val pageCount: Int? = null,
 )
 
+@Serializable
+data class PageListDto(
+    val numero: JsonElement,
+    val pageCount: Int,
+)
+
+@Serializable
+data class SearchResponse(
+    val series: List<SeriesDto>,
+)
+
 fun SeriesDto.toSManga(): SManga = SManga.create().apply {
     title = this@toSManga.title
     url = "/series/$slug"
@@ -90,8 +99,3 @@ private fun parseStatus(status: String?): Int = when (status) {
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
     timeZone = TimeZone.getTimeZone("UTC")
 }
-
-@Serializable
-data class SearchResponse(
-    val series: List<SeriesDto>,
-)
