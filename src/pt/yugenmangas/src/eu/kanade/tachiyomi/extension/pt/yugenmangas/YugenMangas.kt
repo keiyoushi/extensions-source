@@ -226,12 +226,12 @@ class YugenMangas : HttpSource(), ConfigurableSource {
             ?: throw Exception(warning)
         val values = GET_JSON_BODY_REGEX.find(script)?.groupValues?.filter(String::isNotBlank)
         return values?.last()
-            ?.replace(ESCAPE_QUOTATION_MARK_REGEX, "\"")
+            ?.let { "\"$it\"".parseAs<String>() }
             ?: throw Exception("Erro ao analisar os dados")
     }
 
     private fun parseRelativeDate(date: String): Long {
-        val number = Regex("""(\d+)""").find(date)?.value?.toIntOrNull() ?: return 0
+        val number = DATE_REGEX.find(date)?.value?.toIntOrNull() ?: return 0
         val cal = Calendar.getInstance()
 
         return when {
@@ -257,7 +257,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         private val MANGA_REGEX = """(\{\\"initialData.+\"\}.+)(?:\]\}){2}\]""".toRegex()
         private val PAGES_REGEX = """pages\\":(\[.+\])\}\}""".toRegex()
         private val GET_JSON_BODY_REGEX = """$MANGA_REGEX|$PAGES_REGEX""".toRegex()
-        private val ESCAPE_QUOTATION_MARK_REGEX = """\\{1,2}"""".toRegex()
+        private val DATE_REGEX = """\d+""".toRegex()
         private val SRCSET_DELIMITER_REGEX = """\d+w,?""".toRegex()
     }
 }
