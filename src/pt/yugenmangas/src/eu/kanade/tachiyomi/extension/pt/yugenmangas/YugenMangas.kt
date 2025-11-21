@@ -42,7 +42,7 @@ class YugenMangas : HttpSource(), ConfigurableSource {
         else -> preferences.getString(BASE_URL_PREF, defaultBaseUrl)!!
     }
 
-    private val defaultBaseUrl: String = "https://yugenmangasbr.yocat.xyz"
+    private val defaultBaseUrl: String = "https://yugenmangasbr.dxtg.online"
 
     private val apiUrl: String = "https://api.yugenweb.com"
 
