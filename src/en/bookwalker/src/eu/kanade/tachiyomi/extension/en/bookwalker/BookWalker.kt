@@ -450,7 +450,8 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     .trim()
                 thumbnail_url = bookUpdate.coverImageUrl
                 genre = getAvailableFilterNames(seriesPage, "side-genre").joinToString()
-                status = parseStatus(seriesPage)
+                val statusIndicators = seriesPage.select("ul.side-others > li > a").map { it.ownText() }
+                status = parseStatus(statusIndicators)
             }
         }.toObservable()
     }
@@ -485,9 +486,9 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         }.toObservable()
     }
 
-    private fun parseStatus(element: Element): Int {
-        return if (element.selectFirst("ul.side-others > li > a:contains(Completed)") != null) {
-            if (element.selectFirst("ul.side-others > li > a:contains(Pre-Order)") != null) {
+    private fun parseStatus(statusIndicators: List<String>): Int {
+        return if (statusIndicators.any { it.startsWith("Completed") }) {
+            if (statusIndicators.any { it.startsWith("Pre-Order") }) {
                 SManga.PUBLISHING_FINISHED
             } else {
                 SManga.COMPLETED
