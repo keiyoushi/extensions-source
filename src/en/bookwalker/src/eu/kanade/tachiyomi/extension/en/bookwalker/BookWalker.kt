@@ -338,12 +338,12 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                             }
                             is SingleDto -> {
                                 val bookUpdate = fetchBookUpdate(entity.uuid)
-                                bookUpdate?.let {
+                                bookUpdate?.let { bookUpdate ->
                                     SManga.create().apply {
                                         url = "/de${entity.uuid}/"
-                                        title = it.seriesName?.cleanTitle() ?: it.productName.cleanTitle()
-                                        thumbnail_url = it.coverImageUrl
-                                        author = it.authors.joinToString { a -> a.authorName }
+                                        title = bookUpdate.seriesName?.cleanTitle() ?: bookUpdate.productName.cleanTitle()
+                                        thumbnail_url = bookUpdate.coverImageUrl
+                                        author = bookUpdate.authors.joinToString { it.authorName }
                                     }
                                 }
                             }
@@ -368,8 +368,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
             url = titleElt.attr("href").substring(baseUrl.length)
             title = titleElt.attr("title").cleanTitle()
             thumbnail_url = getHiResCoverFromLegacyUrl(
-                element.select(".a-tile-thumb-img > img")
-                    .attr("data-srcset").getHighestQualitySrcset(),
+                element.selectFirst(".a-tile-thumb-img > img")?.attr("data-srcset")?.getHighestQualitySrcset(),
             )
         }
     }
@@ -451,8 +450,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
                     .trim()
                 thumbnail_url = bookUpdate.coverImageUrl
                 genre = getAvailableFilterNames(seriesPage, "side-genre").joinToString()
-                val statusIndicators = seriesPage.select("ul.side-others > li > a").map { it.ownText() }
-                status = parseStatus(statusIndicators)
+                status = parseStatus(seriesPage)
             }
         }.toObservable()
     }
@@ -487,9 +485,9 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         }.toObservable()
     }
 
-    private fun parseStatus(statusIndicators: List<String>): Int {
-        return if (statusIndicators.any { it.startsWith("Completed") }) {
-            if (statusIndicators.any { it.startsWith("Pre-Order") }) {
+    private fun parseStatus(element: Element): Int {
+        return if (element.selectFirst("ul.side-others > li > a:contains(Completed)") != null) {
+            if (element.selectFirst("ul.side-others > li > a:contains(Pre-Order)") != null) {
                 SManga.PUBLISHING_FINISHED
             } else {
                 SManga.COMPLETED
