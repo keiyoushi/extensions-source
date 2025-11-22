@@ -21,9 +21,17 @@ class Utoon : Madara(
 
     override fun chapterFromElement(element: Element): SChapter {
         return super.chapterFromElement(element).apply {
+            // Unfortunately Utoon doesn't include the year in the upload date.
+            // As a workaround, assume it's from the current year, or last year
+            // if the date is in the future.
             val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-            date_upload = element.selectFirst("span a")?.attr("title")?.let { parseRelativeDate(it) }
-                ?: parseChapterDate("${element.selectFirst(chapterDateSelector())?.text()} $currentYear")
+            val upload = element.selectFirst("span a")?.attr("title")?.let { parseRelativeDate(it) } ?: parseChapterDate("${element.selectFirst(chapterDateSelector())?.text()} $currentYear")
+            val now = System.currentTimeMillis()
+            date_upload = if (now < upload) {
+                parseChapterDate("${element.selectFirst(chapterDateSelector())?.text()} ${currentYear - 1}")
+            } else {
+                upload
+            }
         }
     }
 }
