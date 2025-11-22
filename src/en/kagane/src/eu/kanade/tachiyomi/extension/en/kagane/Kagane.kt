@@ -255,17 +255,15 @@ class Kagane : HttpSource(), ConfigurableSource {
         add("Referer", "$baseUrl/")
     }.build()
 
-    private fun getCertificate(): String {
-        return client.newCall(GET("$apiUrl/api/v1/static/bin.bin", apiHeaders)).execute()
+    private fun getCertificate(url: String): String {
+        return client.newCall(GET(url, apiHeaders)).execute()
             .body.bytes()
             .toBase64()
     }
 
-    private fun getFairPlayCertificate(): String {
-        return client.newCall(GET("$apiUrl/api/v1/static/crt.crt", apiHeaders)).execute()
-            .body.bytes()
-            .toBase64()
-    }
+    private val windvineCertificate by lazy { getCertificate("$apiUrl/api/v1/static/bin.bin") }
+
+    private val fairPlayCertificate by lazy { getCertificate("$apiUrl/api/v1/static/crt.crt") }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         if (chapter.url.count { it == ';' } != 2) throw Exception("Chapter url error, please refresh chapter list.")
@@ -325,7 +323,7 @@ class Kagane : HttpSource(), ConfigurableSource {
 
                     async function getData() {
                         let widevine = detectDRMSupport() !== 'fairplay';
-                        const g = base64ToArrayBuffer(widevine ? "${getCertificate()}" : "${getFairPlayCertificate()}");
+                        const g = base64ToArrayBuffer(widevine ? "$windvineCertificate" : "$fairPlayCertificate");
                         let t = widevine ? await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
                             initDataTypes: ["cenc"],
                             audioCapabilities: [],
