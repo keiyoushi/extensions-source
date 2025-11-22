@@ -3,41 +3,57 @@ package eu.kanade.tachiyomi.extension.ar.mangaswat
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
+// used for author or artist
+@Serializable(with = PersonDtoSerializer::class)
+internal class PersonDto(val name: String?)
+
+internal object PersonDtoSerializer : KSerializer<PersonDto> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("PersonDto", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: PersonDto) {
+        value.name?.let { encoder.encodeString(it) }
+    }
+
+    override fun deserialize(decoder: Decoder): PersonDto {
+        val json = (decoder as JsonDecoder).decodeJsonElement()
+        val name = when (json) {
+            is JsonPrimitive -> json.contentOrNull
+            is JsonObject -> json["name"]?.jsonPrimitive?.contentOrNull
+            else -> null
+        }
+        return PersonDto(name)
+    }
+}
+
 @Serializable
 internal class MangaDetailsDto(
     private val title: String,
     private val story: String? = null,
-    private val author: JsonElement? = null,
-    private val artist: JsonElement? = null,
-    private val genres: List<GenreDto> = emptyList(),
-    private val status: StatusDto,
+    private val author: PersonDto? = null,
+    private val artist: PersonDto? = null,
+    private val genres: List<AttributesDto> = emptyList(),
+    private val status: AttributesDto,
     private val poster: PosterDto,
 ) {
     fun toSManga(): SManga = SManga.create().apply {
         title = this@MangaDetailsDto.title
         description = story
-        author = this@MangaDetailsDto.author?.let {
-            when (it) {
-                is JsonPrimitive -> it.contentOrNull
-                is JsonObject -> it["name"]?.jsonPrimitive?.contentOrNull
-                else -> null
-            }
-        }
-        artist = this@MangaDetailsDto.artist?.let {
-            when (it) {
-                is JsonPrimitive -> it.contentOrNull
-                is JsonObject -> it["name"]?.jsonPrimitive?.contentOrNull
-                else -> null
-            }
-        }
+        author = this@MangaDetailsDto.author?.name
+        artist = this@MangaDetailsDto.artist?.name
         genre = genres.joinToString { it.name }
         status = when (this@MangaDetailsDto.status.name.lowercase()) {
             "ongoing" -> SManga.ONGOING
@@ -48,13 +64,9 @@ internal class MangaDetailsDto(
     }
 }
 
+// used for genre and status.
 @Serializable
-internal class GenreDto(
-    internal val name: String,
-)
-
-@Serializable
-internal class StatusDto(
+internal class AttributesDto(
     internal val name: String,
 )
 

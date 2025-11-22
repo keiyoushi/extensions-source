@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.ar.mangaswat
 
 import android.widget.Toast
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -11,9 +10,11 @@ import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.Headers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -22,14 +23,13 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class MangaSwat :
-    MangaThemesia(
-        "MangaSwat",
-        "https://appswat.com",
-        "ar",
-        dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("ar")),
-    ),
-    ConfigurableSource {
+class MangaSwat : HttpSource(), ConfigurableSource {
+
+    override val name = "MangaSwat"
+
+    override val lang = "ar"
+
+    override val supportsLatest = true
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -103,7 +103,11 @@ class MangaSwat :
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$apiBaseUrl/series/?status=79&page=$page", apiHeaders)
+        val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
+            .addQueryParameter("status", "79")
+            .addQueryParameter("page", page.toString())
+            .build()
+        return GET(url, apiHeaders)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -113,7 +117,11 @@ class MangaSwat :
     }
 
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiBaseUrl/series/?is_hot=true&page=$page", apiHeaders)
+        val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
+            .addQueryParameter("is_hot", "true")
+            .addQueryParameter("page", page.toString())
+            .build()
+        return GET(url, apiHeaders)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -123,8 +131,10 @@ class MangaSwat :
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val id = manga.url
-        return GET("$apiBaseUrl/series/$id/", apiHeaders)
+        val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
+            .addPathSegment(manga.url)
+            .build()
+        return GET(url, apiHeaders)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -132,8 +142,12 @@ class MangaSwat :
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        val id = manga.url
-        return GET("$apiBaseUrl/chapters/?serie=$id&order_by=-order&page_size=200", apiHeaders)
+        val url = "$apiBaseUrl/chapters/".toHttpUrl().newBuilder()
+            .addQueryParameter("serie", manga.url)
+            .addQueryParameter("order_by", "-order")
+            .addQueryParameter("page_size", "200")
+            .build()
+        return GET(url, apiHeaders)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -154,7 +168,10 @@ class MangaSwat :
 
     override fun pageListRequest(chapter: SChapter): Request {
         val id = chapter.url.removePrefix("/chapters/").substringBefore("/")
-        return GET("$apiBaseUrl/chapters/$id/", apiHeaders)
+        val url = "$apiBaseUrl/chapters/".toHttpUrl().newBuilder()
+            .addPathSegment(id)
+            .build()
+        return GET(url, apiHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -166,21 +183,23 @@ class MangaSwat :
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotBlank()) {
-            return GET("$apiBaseUrl/series/?search=$query&page=$page", apiHeaders)
+            val url = "$apiBaseUrl/series/".toHttpUrl().newBuilder()
+                .addQueryParameter("search", query)
+                .addQueryParameter("page", page.toString())
+                .build()
+            return GET(url, apiHeaders)
         }
 
-        return super.searchMangaRequest(page, query, filters)
+        return popularMangaRequest(page)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if ("appswat.com" !in response.request.url.host) {
-            return super.searchMangaParse(response)
-        }
-
         val data = response.parseAs<LatestUpdatesResponse>()
         val mangas = data.results.map { it.toSManga() }
         return MangasPage(mangas, data.hasNext())
     }
+
+    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
 
     companion object {
         internal val apiDateFormat by lazy {
@@ -193,6 +212,7 @@ class MangaSwat :
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val BASE_URL_PREF_SUMMARY = "For temporary uses. Updating the extension will erase this setting."
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
+        private const val DEFAULT_BASE_URL = "https://appswat.com"
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
@@ -200,9 +220,9 @@ class MangaSwat :
             key = BASE_URL_PREF
             title = BASE_URL_PREF_TITLE
             summary = BASE_URL_PREF_SUMMARY
-            setDefaultValue(super.baseUrl)
+            setDefaultValue(DEFAULT_BASE_URL)
             dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default: ${'$'}{super.baseUrl}"
+            dialogMessage = "Default: $DEFAULT_BASE_URL"
 
             setOnPreferenceChangeListener { _, _ ->
                 Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
@@ -212,14 +232,14 @@ class MangaSwat :
         screen.addPreference(baseUrlPref)
     }
 
-    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, super.baseUrl)!!
+    private fun getPrefBaseUrl(): String = preferences.getString(BASE_URL_PREF, DEFAULT_BASE_URL)!!
 
     init {
         preferences.getString(DEFAULT_BASE_URL_PREF, null).let { prefDefaultBaseUrl ->
-            if (prefDefaultBaseUrl != super.baseUrl) {
+            if (prefDefaultBaseUrl != DEFAULT_BASE_URL) {
                 preferences.edit()
-                    .putString(BASE_URL_PREF, super.baseUrl)
-                    .putString(DEFAULT_BASE_URL_PREF, super.baseUrl)
+                    .putString(BASE_URL_PREF, DEFAULT_BASE_URL)
+                    .putString(DEFAULT_BASE_URL_PREF, DEFAULT_BASE_URL)
                     .apply()
             }
         }
