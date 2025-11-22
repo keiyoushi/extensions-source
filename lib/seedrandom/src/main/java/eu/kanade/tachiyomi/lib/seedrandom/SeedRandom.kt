@@ -1,4 +1,4 @@
-package keiyoushi.utils
+package eu.kanade.tachiyomi.lib.seedrandom
 
 import kotlin.math.floor
 import kotlin.math.pow
