@@ -142,7 +142,8 @@ class YSKComics(
 
     override fun chapterListRequest(manga: SManga): Request = throw UnsupportedOperationException()
 
-    override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
+    override fun chapterListParse(response: Response): List<SChapter> =
+        throw UnsupportedOperationException()
 
     private fun chapterListRequestPaged(manga: SManga, page: Int): Request {
         val slug = extractSlug(manga.url)
