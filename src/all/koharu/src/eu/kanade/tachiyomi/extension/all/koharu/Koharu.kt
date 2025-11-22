@@ -74,7 +74,7 @@ class Koharu(
 
     override val id = if (lang == "en") 1484902275639232927 else super.id
 
-    private val apiUrl = baseUrl.replace("://", "://api.")
+    private val apiUrl = API_DOMAIN
 
     private val apiBooksUrl = "$apiUrl/books"
 
@@ -513,13 +513,13 @@ class Koharu(
         const val PREFIX_ID_KEY_SEARCH = "id:"
         private const val PREF_MIRROR = "pref_mirror"
         private const val MIRROR_PREF_DEFAULT = "schale.network"
+        private const val API_DOMAIN = "https://api.schale.network"
         private val mirrors = arrayOf(
             MIRROR_PREF_DEFAULT,
             "anchira.to",
             "gehenna.jp",
             "niyaniya.moe",
             "shupogaki.moe",
-            "hdoujin.net",
         )
         private const val PREF_IMAGERES = "pref_image_quality"
         private const val PREF_REM_ADD = "pref_remove_additional"
