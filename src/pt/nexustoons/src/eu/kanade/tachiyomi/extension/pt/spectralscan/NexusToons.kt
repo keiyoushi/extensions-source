@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.spectralscan
+package eu.kanade.tachiyomi.extension.pt.nexustoons
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -13,13 +13,13 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.io.IOException
 
-class SpectralScan : ParsedHttpSource() {
+class NexusToons : ParsedHttpSource() {
 
     override val lang = "pt-BR"
 
-    override val name = "Spectral Scan"
+    override val name = "Nexus Toons"
 
-    override val baseUrl = "https://www.spectral.wtf"
+    override val baseUrl = "https://nexustoons.site"
 
     override val supportsLatest = true
 

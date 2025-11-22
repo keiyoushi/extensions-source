@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.spectralscan
+package eu.kanade.tachiyomi.extension.pt.nexustoons
 
 import eu.kanade.tachiyomi.source.model.Filter
 import kotlinx.serialization.SerialName
