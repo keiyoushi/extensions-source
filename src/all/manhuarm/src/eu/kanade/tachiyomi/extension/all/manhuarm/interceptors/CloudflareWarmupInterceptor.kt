@@ -22,7 +22,7 @@ class CloudflareWarmupInterceptor(
         val request = chain.request()
         val response = chain.proceed(request)
 
-        if (response.code > 400 && !isWarmedUp.get()) {
+        if (!response.isSuccessful && !isWarmedUp.get()) {
             response.close()
 
             try {
