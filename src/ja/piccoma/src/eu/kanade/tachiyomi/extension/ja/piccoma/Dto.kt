@@ -20,3 +20,15 @@ class SearchProductDto(
     val title: String,
     val img: String,
 )
+
+@Serializable
+class PDataDto(
+    val img: List<PDataImageDto>?,
+    val contents: List<PDataImageDto>?,
+    val isScrambled: Boolean,
+)
+
+@Serializable
+class PDataImageDto(
+    val path: String,
+)
