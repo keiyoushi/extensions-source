@@ -10,7 +10,9 @@ import okhttp3.Request
 import org.jsoup.nodes.Element
 import java.util.Calendar
 
-class WeLoveMangaOne : FMReader("WeLoveMangaOne", "https://welovemanga.one", "ja") {
+class Love4u : FMReader("Love4u", "https://love4u.net", "ja") {
+    override val id = 1647179844716143786
+
     override fun latestUpdatesRequest(page: Int) =
         GET("$baseUrl/manga-list.html?page=$page&sort=last_update")
 
