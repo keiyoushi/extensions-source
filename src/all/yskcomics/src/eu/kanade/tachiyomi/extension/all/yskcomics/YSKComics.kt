@@ -57,26 +57,25 @@ class YSKComics(
 
     // ---
 
-    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        if (!query.startsWith(SEARCH_PREFIX)) {
-            return super.fetchSearchManga(page, query, filters)
-        }
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        val httpUrl = query.toHttpUrlOrNull()
+            ?: return super.fetchSearchManga(page, query, filters)
 
-        val querySet = query.removePrefix(SEARCH_PREFIX)
-        val slug = querySet.split(".", limit = 2).let { parts ->
-            if (parts.size == 2 && parts[0] != lang) {
-                return Observable.just(
-                    MangasPage(
-                        mangas = emptyList(),
-                        hasNextPage = false,
-                    ),
-                )
-            }
-            parts.lastOrNull() ?: querySet
+        if (httpUrl.pathSegments.firstOrNull() != lang) {
+            return Observable.just(
+                MangasPage(
+                    mangas = emptyList(),
+                    hasNextPage = false,
+                ),
+            )
         }
 
         val manga = SManga.create().apply {
-            url = "/$lang/comic/$slug"
+            setUrlWithoutDomain(httpUrl.toString())
         }
 
         return fetchMangaDetails(manga).map {
@@ -184,9 +183,5 @@ class YSKComics(
             ?.pathSegments
             ?.lastOrNull()
             ?: throw Exception("Unable to parse URL:\n$url")
-    }
-
-    companion object {
-        const val SEARCH_PREFIX = "slug:"
     }
 }

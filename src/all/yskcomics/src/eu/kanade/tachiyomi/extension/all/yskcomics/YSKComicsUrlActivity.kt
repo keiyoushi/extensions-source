@@ -14,14 +14,11 @@ import kotlin.system.exitProcess
 class YSKComicsUrlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val segments = intent?.data?.pathSegments
-        if (segments != null && segments.size > 2) {
+        val data = intent?.data
+        if (data != null) {
             val activity = Intent().apply {
                 action = "eu.kanade.tachiyomi.SEARCH"
-                val prefix = YSKComics.SEARCH_PREFIX
-                val lang = segments[0]
-                val slug = segments[2]
-                putExtra("query", "$prefix$lang.$slug")
+                putExtra("query", data.toString())
                 putExtra("filter", packageName)
             }
             try {
