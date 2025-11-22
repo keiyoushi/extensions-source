@@ -171,6 +171,7 @@ class TempleScanEsp :
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val FETCH_DOMAIN_PREF = "fetchDomain"
 
+        // Obtained from an API call on https://templescanesp.net
         private const val SUPABASE_URL = "https://ysilhsqbtixygcgscvbb.supabase.co/rest/v1/parameters?select=value&name=eq.redirect_url_templescan"
         private const val SUPABASE_API_KEY = "sb_publishable_y5ZlqOnxowq6W7JTSZHSBQ_AQfHg77U"
     }
