@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.mangathemesia.MangaThemesia
 
 class VioletScans : MangaThemesia(
     "Violet Scans",
-    "https://violetscans.com",
+    "https://violetscans.org",
     "en",
     mangaUrlDirectory = "/comics",
 ) {
