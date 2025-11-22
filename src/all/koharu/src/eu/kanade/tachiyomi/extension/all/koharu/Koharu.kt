@@ -519,7 +519,6 @@ class Koharu(
             "gehenna.jp",
             "niyaniya.moe",
             "shupogaki.moe",
-            "hdoujin.net",
         )
         private const val PREF_IMAGERES = "pref_image_quality"
         private const val PREF_REM_ADD = "pref_remove_additional"
