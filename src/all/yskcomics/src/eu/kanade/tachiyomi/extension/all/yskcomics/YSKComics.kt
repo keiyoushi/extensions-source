@@ -132,10 +132,10 @@ class YSKComics(
                 do {
                     val request = chapterListRequestPaged(manga, page)
                     val response = client.newCall(request).execute()
-                    val (pageChapters, hasNext) = chapterListParsePaged(response)
-                    addAll(pageChapters)
+                    val chaptersPage = chapterListParsePaged(response)
+                    addAll(chaptersPage.chapters)
                     page++
-                } while (hasNext)
+                } while (chaptersPage.hasNextPage)
             }.asReversed(),
         )
     }
@@ -150,11 +150,12 @@ class YSKComics(
         return GET(url, headers)
     }
 
-    private fun chapterListParsePaged(response: Response): Pair<List<SChapter>, Boolean> {
+    private fun chapterListParsePaged(response: Response): ChaptersPage {
         val data = response.parseAs<ChapterDto>().data
-        val chapters = data.dataMessages.map { it.toSChapter(lang) }
-        val hasNextPage = data.meta.linkNext != null
-        return Pair(chapters, hasNextPage)
+        return ChaptersPage(
+            chapters = data.dataMessages.map { it.toSChapter(lang) },
+            hasNextPage = data.meta.linkNext != null,
+        )
     }
 
     // ---
@@ -184,4 +185,9 @@ class YSKComics(
             ?.lastOrNull()
             ?: throw Exception("Unable to parse URL:\n$url")
     }
+
+    private class ChaptersPage(
+        val chapters: List<SChapter>,
+        val hasNextPage: Boolean,
+    )
 }
