@@ -30,8 +30,10 @@ class CloudflareWarmupInterceptor(
                 val warmupResponse = chain.proceed(warmupRequest)
                 warmupResponse.close()
                 isWarmedUp.set(true)
-            } catch (e: Exception) {}
-        return chain.proceed(request)
+            } catch (_: Exception) {
+            }
+
+            return chain.proceed(request)
         }
 
         return response
