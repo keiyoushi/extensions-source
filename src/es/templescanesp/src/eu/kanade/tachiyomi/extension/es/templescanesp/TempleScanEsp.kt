@@ -11,8 +11,10 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -21,7 +23,7 @@ import java.util.Locale
 class TempleScanEsp :
     Madara(
         "Temple Scan",
-        "https://aedexnox.vxviral.xyz",
+        "https://aedexnox.kawi.lat",
         "es",
         dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("es")),
     ),
@@ -30,19 +32,44 @@ class TempleScanEsp :
     override val baseUrl get() = preferences.prefBaseUrl
 
     private val fetchedDomainUrl: String by lazy {
-        if (!preferences.fetchDomainPref()) return@lazy preferences.prefBaseUrl
+        if (!preferences.fetchDomainPref()) {
+            return@lazy preferences.prefBaseUrl
+        }
+
         try {
             val initClient = network.cloudflareClient
-            val headers = super.headersBuilder().build()
-            val document = initClient.newCall(GET("https://templescanesp.net", headers)).execute().asJsoup()
-            val domain = document.selectFirst("main a:has(button)")?.attr("abs:href")
-                ?: return@lazy preferences.prefBaseUrl
-            val host = initClient.newCall(GET(domain, headers)).execute().request.url.host
-            val newDomain = "https://$host"
-            preferences.prefBaseUrl = newDomain
-            newDomain
+            val headers = super.headersBuilder()
+                .add("apikey", SUPABASE_API_KEY)
+                .add("Accept", "application/json")
+                .build()
+
+            val fetchedDomain = initClient.newCall(GET(SUPABASE_URL, headers)).execute().use { r ->
+                if (!r.isSuccessful) return@use null
+
+                val body = r.body.string()
+                val value = try {
+                    json.parseToJsonElement(body).jsonArray.first().jsonObject["value"]!!.jsonPrimitive.content
+                } catch (_: Exception) {
+                    null
+                }
+
+                if (value.isNullOrBlank()) return@use null
+
+                val detected = value.trimEnd('/')
+                val newDomain = if (detected.startsWith("http")) detected else "https://$detected"
+
+                preferences.prefBaseUrl = newDomain
+
+                newDomain
+            }
+
+            if (fetchedDomain != null) {
+                return@lazy fetchedDomain
+            }
+
+            return@lazy preferences.prefBaseUrl
         } catch (_: Exception) {
-            preferences.prefBaseUrl
+            return@lazy preferences.prefBaseUrl
         }
     }
 
@@ -143,5 +170,9 @@ class TempleScanEsp :
         private const val BASE_URL_PREF = "overrideBaseUrl"
         private const val DEFAULT_BASE_URL_PREF = "defaultBaseUrl"
         private const val FETCH_DOMAIN_PREF = "fetchDomain"
+
+        // Obtained from an API call on https://templescanesp.net
+        private const val SUPABASE_URL = "https://ysilhsqbtixygcgscvbb.supabase.co/rest/v1/parameters?select=value&name=eq.redirect_url_templescan"
+        private const val SUPABASE_API_KEY = "sb_publishable_y5ZlqOnxowq6W7JTSZHSBQ_AQfHg77U"
     }
 }
