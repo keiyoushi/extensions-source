@@ -11,6 +11,10 @@ class MangaStop : MangaThemesia(
     "pt-BR",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale("pt", "BR")),
 ) {
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", "$baseUrl/")
+        .set("Accept", "application/xhtml+xml")
+
     override val client = super.client.newBuilder()
         .rateLimit(3)
         .build()
