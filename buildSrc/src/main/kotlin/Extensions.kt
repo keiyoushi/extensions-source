@@ -7,30 +7,58 @@ var ExtensionAware.baseVersionCode: Int
     get() = extra.get("baseVersionCode") as Int
     set(value) = extra.set("baseVersionCode", value)
 
-fun Project.getDependents(): Set<Project> {
-    val dependentProjects = mutableSetOf<Project>()
+private val reverseDependencyCache = mutableMapOf<String, Set<Project>>()
+private var reverseDependencyCacheInitialized = false
 
-    rootProject.allprojects.forEach { project ->
-        project.configurations.forEach { configuration ->
-            configuration.dependencies.forEach { dependency ->
-                if (dependency is ProjectDependency && dependency.path == path) {
-                    dependentProjects.add(project)
+private fun Project.buildReverseDependencyCache() {
+    if (reverseDependencyCacheInitialized) return
+    reverseDependencyCacheInitialized = true
+
+    // Build reverse dependency map
+    val map = mutableMapOf<String, MutableSet<Project>>()
+
+    rootProject.allprojects.forEach { p ->
+        p.configurations.forEach { config ->
+            config.dependencies.forEach { dep ->
+                if (dep is ProjectDependency) {
+                    val dependents = map.getOrPut(dep.path) { mutableSetOf() }
+                    dependents.add(p)
                 }
             }
         }
     }
 
-    return dependentProjects
+    // finalize cache
+    map.forEach { (k, v) -> reverseDependencyCache[k] = v }
 }
 
-fun Project.printDependentExtensions() {
+fun Project.getDependents(): Set<Project> {
+    buildReverseDependencyCache()
+    return reverseDependencyCache[path] ?: emptySet()
+}
+
+fun Project.printDependentExtensions() =
+    printDependentExtensions(mutableSetOf())
+
+private fun Project.printDependentExtensions(visited: MutableSet<String>) {
+    if (!visited.add(this.path)) return
+
     getDependents().forEach { project ->
-        if (project.path.startsWith(":src:")) {
-            println(project.path)
-        } else if (project.path.startsWith(":lib-multisrc:")) {
-            project.getDependents().forEach { println(it.path) }
-        } else if (project.path.startsWith(":lib:")) {
-            project.printDependentExtensions()
+        when {
+            project.path.startsWith(":src:") -> {
+                println(project.path)
+            }
+
+            project.path.startsWith(":lib-multisrc:") -> {
+                project.getDependents().forEach {
+                    if (visited.add(it.path)) println(it.path)
+                }
+            }
+
+            project.path.startsWith(":lib:") -> {
+                project.printDependentExtensions(visited)
+            }
         }
     }
 }
+
