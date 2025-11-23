@@ -1,9 +1,8 @@
 ext {
     extName = 'MangaSwat'
     extClass = '.MangaSwat'
-    themePkg = 'mangathemesia'
     baseUrl = 'https://appswat.com'
-    overrideVersionCode = 27
+    extVersionCode = 57
     isNsfw = false
 }
 
