@@ -133,7 +133,7 @@ class Piccoma : HttpSource() {
             val isWaitFree = statusElement?.selectFirst(".PCM-epList_status_waitfree") != null
             val isZeroPlus = statusElement?.selectFirst(".PCM-epList_status_zeroPlus") != null
 
-            val prefix = when {
+            val icon = when {
                 isPoint -> "🔒 "
                 isWaitFree || isZeroPlus -> "➡️ "
                 else -> ""
@@ -141,7 +141,7 @@ class Piccoma : HttpSource() {
 
             SChapter.create().apply {
                 url = "/web/viewer/$productId/$episodeId"
-                name = "$titleElement $prefix"
+                name = "$titleElement $icon"
             }
         }.reversed()
     }
@@ -155,8 +155,8 @@ class Piccoma : HttpSource() {
             }
             .onErrorResumeNext {
                 val message = when {
-                    chapter.name.startsWith("🔒") -> "Log in via WebView and purchase this chapter to read."
-                    chapter.name.startsWith("➡️") -> "Log in via WebView and ensure your charge is full to read this chapter."
+                    chapter.name.endsWith("🔒") -> "Log in via WebView and purchase this chapter to read."
+                    chapter.name.endsWith("➡️") -> "Log in via WebView and ensure your charge is full to read this chapter."
                     else -> "PData not found"
                 }
                 Observable.error(Exception(message, it.cause))
