@@ -3,8 +3,13 @@ ext {
     extClass = '.ImperioDaBritannia'
     themePkg = 'madara'
     baseUrl = 'https://imperiodabritannia.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = false
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation project(':lib:randomua')
+}
+
