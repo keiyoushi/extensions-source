@@ -7,34 +7,23 @@ var ExtensionAware.baseVersionCode: Int
     get() = extra.get("baseVersionCode") as Int
     set(value) = extra.set("baseVersionCode", value)
 
-private val reverseDependencyCache = mutableMapOf<String, Set<Project>>()
-private var reverseDependencyCacheInitialized = false
-
-private fun Project.buildReverseDependencyCache() {
-    if (reverseDependencyCacheInitialized) return
-    reverseDependencyCacheInitialized = true
-
-    // Build reverse dependency map
-    val map = mutableMapOf<String, MutableSet<Project>>()
-
-    rootProject.allprojects.forEach { p ->
-        p.configurations.forEach { config ->
-            config.dependencies.forEach { dep ->
-                if (dep is ProjectDependency) {
-                    val dependents = map.getOrPut(dep.path) { mutableSetOf() }
-                    dependents.add(p)
-                }
-            }
-        }
-    }
-
-    // finalize cache
-    map.forEach { (k, v) -> reverseDependencyCache[k] = v }
-}
+private var reverseDependencyCache: Map<String, Set<Project>>? = null
 
 fun Project.getDependents(): Set<Project> {
-    buildReverseDependencyCache()
-    return reverseDependencyCache[path] ?: emptySet()
+    if (reverseDependencyCache == null) {
+        reverseDependencyCache = rootProject.allprojects
+            .flatMap { p ->
+                p.configurations.flatMap { config ->
+                    config.dependencies
+                        .filterIsInstance<ProjectDependency>()
+                        .map { dep -> dep.path to p }
+                }
+            }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, projects) -> projects.toSet() }
+    }
+
+    return reverseDependencyCache?.get(path).orEmpty()
 }
 
 fun Project.printDependentExtensions() =
@@ -61,4 +50,3 @@ private fun Project.printDependentExtensions(visited: MutableSet<String>) {
         }
     }
 }
-
