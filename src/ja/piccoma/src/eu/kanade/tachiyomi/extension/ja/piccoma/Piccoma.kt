@@ -140,7 +140,7 @@ class Piccoma : HttpSource() {
 
             SChapter.create().apply {
                 url = "/web/viewer/${link.attr("data-product_id")}/$episodeId"
-                name = "$prefix${titleElement.text()}"
+                name = titleElement.text() + " $prefix"
             }
         }.reversed()
     }
@@ -155,7 +155,7 @@ class Piccoma : HttpSource() {
             .onErrorResumeNext {
                 val message = when {
                     chapter.name.startsWith("🔒") -> "Log in via WebView and purchase this chapter to read."
-                    chapter.name.startsWith("➡️") -> "Log in via WebView to read this chapter."
+                    chapter.name.startsWith("➡️") -> "Log in via WebView and ensure your charge is full to read this chapter."
                     else -> "PData not found"
                 }
                 Observable.error(Exception(message, it.cause))

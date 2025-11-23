@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Rect
-import keiyoushi.utils.SeedRandom
+import eu.kanade.tachiyomi.lib.seedrandom.SeedRandom
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -60,9 +60,10 @@ class ImageInterceptor : Interceptor {
         return dd(rotated)
     }
 
+    // Example
     // originalHash: "GB0G[TQ3FPT7ECYJCSONTG"
-    // rotatedSeed: "SONTGGB0G[TQ3FPT7ECYJC"
-    // finalKey: "RNOTGGC1GZTQ3GQT6ECYKB"
+    // rotatedSeed:  "SONTGGB0G[TQ3FPT7ECYJC"
+    // finalKey:     "RNOTGGC1GZTQ3GQT6ECYKB"
     // If character changed, the bit is 1. If it's the same, the bit is 0.
     // 001100010110001011000111
     // WASM bitmask 0x3162C7 = 3236551
