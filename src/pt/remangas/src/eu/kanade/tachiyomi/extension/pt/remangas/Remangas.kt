@@ -135,14 +135,6 @@ class Remangas :
         }
     }
 
-    override fun searchMangaFromElement(element: Element): SManga {
-        return super.searchMangaFromElement(element).apply {
-            title = title.cleanTitleIfNeeded()
-        }
-    }
-
-    override fun searchMangaSelector() = "#loop-content div.page-listing-item"
-
     override val chapterUrlSuffix = ""
 
     override fun mangaDetailsParse(document: Document): SManga {
