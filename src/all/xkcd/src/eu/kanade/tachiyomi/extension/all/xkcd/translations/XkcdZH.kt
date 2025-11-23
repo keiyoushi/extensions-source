@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.all.xkcd.translations
 
 import eu.kanade.tachiyomi.extension.all.xkcd.Xkcd
+import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -22,8 +23,6 @@ class XkcdZH : Xkcd("https://xkcd.tw", "zh", "yyyy-MM-dd HH:mm:ss") {
     // Google translated, sorry
     override val interactiveText =
         "要體驗本漫畫的互動版請在WebView/瀏覽器中打開。"
-
-    override val altTextUrl = CJK_ALT_TEXT_URL
 
     override val imageSelector = "#content > img:not([id])"
 
@@ -54,9 +53,9 @@ class XkcdZH : Xkcd("https://xkcd.tw", "zh", "yyyy-MM-dd HH:mm:ss") {
         val image = img.attr("abs:src")
 
         // create a text image for the alt text
-        val text = img.attr("alt") + "\n\n" + img.attr("title")
+        val text = TextInterceptorHelper.createUrl(img.attr("alt"), img.attr("title"))
 
-        return listOf(Page(0, "", image), Page(1, "", text.image()))
+        return listOf(Page(0, "", image), Page(1, "", text))
     }
 
     override val chapterListSelector: String

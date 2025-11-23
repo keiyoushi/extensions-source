@@ -31,7 +31,7 @@ class LeerCapitulo : ParsedHttpSource() {
 
     private val json: Json by injectLazy()
 
-    override val baseUrl = "https://www.leercapitulo.co"
+    override val baseUrl = "https://www.leercapitulo.re"
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimitHost(baseUrl.toHttpUrl(), 1, 3)
@@ -192,7 +192,7 @@ class LeerCapitulo : ParsedHttpSource() {
 
         for (scriptUrl in scripts) {
             val scriptData = notRateLimitClient.newCall(GET(scriptUrl, headers)).execute().body.string()
-            val deobfuscatedScript = Deobfuscator.deobfuscateScript(scriptData)
+            val deobfuscatedScript = runCatching { Deobfuscator.deobfuscateScript(scriptData) }.getOrNull()
             if (deobfuscatedScript != null && deobfuscatedScript.contains("#array_data")) {
                 dataScript = deobfuscatedScript
                 cachedScriptUrl = scriptUrl

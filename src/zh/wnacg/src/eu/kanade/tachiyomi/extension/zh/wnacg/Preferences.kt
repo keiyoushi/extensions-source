@@ -9,7 +9,7 @@ import okhttp3.Response
 import java.io.IOException
 import kotlin.random.Random
 
-private const val DEFAULT_LIST = "https://www.wn01.uk,https://www.wn05.cc,https://www.wn04.cc,https://www.wn03.cc"
+private const val DEFAULT_LIST = "https://www.wn05.ru,https://www.wn04.ru,https://www.wnacg05.cc"
 
 fun getPreferencesInternal(
     context: Context,

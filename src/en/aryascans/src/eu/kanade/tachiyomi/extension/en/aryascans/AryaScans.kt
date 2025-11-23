@@ -4,7 +4,7 @@ import eu.kanade.tachiyomi.multisrc.madara.Madara
 
 class AryaScans : Madara(
     "Arya Scans",
-    "https://aryascans.com",
+    "https://brainrotcomics.com",
     "en",
 ) {
     override val useNewChapterEndpoint = true

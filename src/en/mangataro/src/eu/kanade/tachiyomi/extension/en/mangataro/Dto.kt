@@ -68,7 +68,7 @@ class BrowseManga(
 )
 
 @Serializable
-class MangaUrl(
+data class MangaUrl(
     val id: String,
     val slug: String,
 )
@@ -79,20 +79,10 @@ class MangaDetails(
     val slug: String,
     val title: Rendered,
     val content: Rendered,
-    @SerialName("class_list")
-    private val classList: List<String>,
+    val type: String,
     @SerialName("_embedded")
     val embedded: Embedded,
-) {
-    fun getFromClassList(type: String): List<String> {
-        return classList.filter { it.startsWith("$type-") }
-            .map {
-                it.substringAfter("$type-")
-                    .split("-")
-                    .joinToString(" ") { word -> word.replaceFirstChar { it.titlecase() } }
-            }
-    }
-}
+)
 
 @Serializable
 class Embedded(
@@ -121,4 +111,20 @@ class Thumbnail(
 @Serializable
 class Rendered(
     val rendered: String,
+)
+
+@Serializable
+class ChapterList(
+    val chapters: List<Chapter>,
+)
+
+@Serializable
+class Chapter(
+    val url: String,
+    val chapter: String,
+    val title: String? = null,
+    val date: String,
+    @SerialName("group_name")
+    val groupName: String? = null,
+    val language: String,
 )

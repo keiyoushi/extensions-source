@@ -37,6 +37,7 @@ class Hiperdex :
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val client = super.client.newBuilder()
+        .addNetworkInterceptor(ClearanceInterceptor())
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
@@ -44,7 +45,7 @@ class Hiperdex :
         .rateLimit(3)
         .build()
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
@@ -132,6 +133,8 @@ class Hiperdex :
     }
 
     override fun searchMangaSelector() = "#loop-content div.page-listing-item"
+
+    override val chapterUrlSuffix = ""
 
     override fun mangaDetailsParse(document: Document): SManga {
         return super.mangaDetailsParse(document).apply {

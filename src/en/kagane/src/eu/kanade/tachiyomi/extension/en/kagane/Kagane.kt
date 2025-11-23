@@ -13,6 +13,7 @@ import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import androidx.preference.ListPreference
+import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -30,13 +31,13 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.CacheControl
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -125,7 +126,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
-                ScanlationsFilter(),
+                GenresFilter(emptyList()),
             ),
         )
 
@@ -142,7 +143,7 @@ class Kagane : HttpSource(), ConfigurableSource {
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
-                ScanlationsFilter(),
+                GenresFilter(emptyList()),
             ),
         )
 
@@ -154,6 +155,9 @@ class Kagane : HttpSource(), ConfigurableSource {
         val body = buildJsonObject {
             filters.forEach { filter ->
                 when (filter) {
+                    is GenresFilter -> {
+                        filter.addToJsonObject(this, preferences.excludedGenres.toList())
+                    }
                     is JsonFilter -> {
                         filter.addToJsonObject(this)
                     }
@@ -175,15 +179,17 @@ class Kagane : HttpSource(), ConfigurableSource {
                     is SortFilter -> {
                         filter.toUriPart().takeIf { it.isNotEmpty() }
                             ?.let { uriPart -> addQueryParameter("sort", uriPart) }
-                    }
-
-                    is ScanlationsFilter -> {
-                        addQueryParameter("scanlations", filter.state.toString())
+                            ?: run {
+                                if (query.isBlank()) {
+                                    addQueryParameter("sort", "updated_at,desc")
+                                }
+                            }
                     }
 
                     else -> {}
                 }
             }
+            addQueryParameter("scanlations", preferences.showScanlations.toString())
         }
 
         return POST(url.toString(), headers, body)
@@ -203,7 +209,11 @@ class Kagane : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiUrl/api/v1/series/${manga.url}", apiHeaders)
+        return mangaDetailsRequest(manga.url)
+    }
+
+    private fun mangaDetailsRequest(seriesId: String): Request {
+        return GET("$apiUrl/api/v1/series/$seriesId", apiHeaders)
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -213,8 +223,25 @@ class Kagane : HttpSource(), ConfigurableSource {
     // ============================== Chapters ==============================
 
     override fun chapterListParse(response: Response): List<SChapter> {
+        val seriesId = response.request.url.toString()
+            .substringAfterLast("/")
+
         val dto = response.parseAs<ChapterDto>()
-        return dto.content.map { it -> it.toSChapter() }.reversed()
+
+        val source = runCatching {
+            client.newCall(mangaDetailsRequest(seriesId))
+                .execute()
+                .parseAs<DetailsDto>()
+                .source
+        }.getOrDefault("")
+        val useSourceChapterNumber = source in setOf(
+            "Dark Horse Comics",
+            "Flame Comics",
+            "MangaDex",
+            "Square Enix Manga",
+        )
+
+        return dto.content.map { it -> it.toSChapter(useSourceChapterNumber) }.reversed()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
@@ -228,11 +255,15 @@ class Kagane : HttpSource(), ConfigurableSource {
         add("Referer", "$baseUrl/")
     }.build()
 
-    private fun getCertificate(): String {
-        return client.newCall(GET("$apiUrl/api/v1/static/bin.bin", apiHeaders)).execute()
+    private fun getCertificate(url: String): String {
+        return client.newCall(GET(url, apiHeaders)).execute()
             .body.bytes()
             .toBase64()
     }
+
+    private val windvineCertificate by lazy { getCertificate("$apiUrl/api/v1/static/bin.bin") }
+
+    private val fairPlayCertificate by lazy { getCertificate("$apiUrl/api/v1/static/crt.crt") }
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         if (chapter.url.count { it == ';' } != 2) throw Exception("Chapter url error, please refresh chapter list.")
@@ -277,6 +308,10 @@ class Kagane : HttpSource(), ConfigurableSource {
             </head>
             <body>
                 <script>
+                    function detectDRMSupport() {
+                        return "WebKitMediaKeys" in window ? "fairplay" : "MediaKeys" in window && "function" == typeof navigator.requestMediaKeySystemAccess ? "widevine" : null
+                    }
+
                     function base64ToArrayBuffer(base64) {
                         var binaryString = atob(base64);
                         var bytes = new Uint8Array(binaryString.length);
@@ -287,21 +322,39 @@ class Kagane : HttpSource(), ConfigurableSource {
                     }
 
                     async function getData() {
-                        const g = base64ToArrayBuffer("${getCertificate()}");
-                        let t = await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
-                          initDataTypes: ["cenc"],
-                          audioCapabilities: [],
-                          videoCapabilities: [{
-                            contentType: 'video/mp4; codecs="avc1.42E01E"'
-                          }]
+                        let widevine = detectDRMSupport() !== 'fairplay';
+                        const g = base64ToArrayBuffer(widevine ? "$windvineCertificate" : "$fairPlayCertificate");
+                        let t = widevine ? await navigator.requestMediaKeySystemAccess("com.widevine.alpha", [{
+                            initDataTypes: ["cenc"],
+                            audioCapabilities: [],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.42E01E"'
+                            }]
+                        }]) : await navigator.requestMediaKeySystemAccess("com.apple.fps", [{
+                            initDataTypes: ["skd"],
+                            audioCapabilities: [{
+                                contentType: 'audio/mp4; codecs="mp4a.40.2"'
+                            }],
+                            videoCapabilities: [{
+                                contentType: 'video/mp4; codecs="avc1.42E01E"'
+                            }]
                         }]);
 
                         let e = await t.createMediaKeys();
                         await e.setServerCertificate(g);
+                        let video = widevine ? null : document.createElement("video");
+                        if (video) {
+                            video.style.display = "none";
+                            document.body.appendChild(video);
+                            await video.setMediaKeys(e);
+                        }
                         let n = e.createSession();
                         let i = new Promise((resolve, reject) => {
                           function onMessage(event) {
                             n.removeEventListener("message", onMessage);
+                            if (video) {
+                                document.body.removeChild(video)
+                            }
                             resolve(event.message);
                           }
 
@@ -314,7 +367,18 @@ class Kagane : HttpSource(), ConfigurableSource {
                           n.addEventListener("error", onError);
                         });
 
-                        await n.generateRequest("cenc", base64ToArrayBuffer("${getPssh(f).toBase64()}"));
+                        if (widevine) {
+                            await n.generateRequest("cenc", base64ToArrayBuffer("${getPssh(f).toBase64()}"));
+                        } else {
+                            let oo = base64ToArrayBuffer("${f.toBase64()}")
+                            let c = Array.from(new Uint8Array(oo)).map(t => t.toString(16).padStart(2, "0")).join("");
+                            let d = JSON.stringify({
+                                uri: "skd://" + c,
+                                assetId: "$chapterId",
+                            });
+                            const textEncoder = new TextEncoder();
+                            await n.generateRequest("skd", textEncoder.encode(d));
+                        }
                         let o = await i;
                         let m = new Uint8Array(o);
                         let v = btoa(String.fromCharCode(...m));
@@ -430,6 +494,12 @@ class Kagane : HttpSource(), ConfigurableSource {
             return CONTENT_RATINGS.slice(0..index.coerceAtLeast(0))
         }
 
+    private val SharedPreferences.excludedGenres: Set<String>
+        get() = this.getStringSet(GENRES_PREF, emptySet()) ?: emptySet()
+
+    private val SharedPreferences.showScanlations: Boolean
+        get() = this.getBoolean(SHOW_SCANLATIONS, SHOW_SCANLATIONS_DEFAULT)
+
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
@@ -441,6 +511,27 @@ class Kagane : HttpSource(), ConfigurableSource {
             entryValues = CONTENT_RATINGS
             summary = "%s"
             setDefaultValue(CONTENT_RATING_DEFAULT)
+        }.let(screen::addPreference)
+
+        MultiSelectListPreference(screen.context).apply {
+            key = GENRES_PREF
+            title = "Exclude Genres"
+            entries = GenresList.map { it.replaceFirstChar { c -> c.uppercase() } }.toTypedArray()
+            entryValues = GenresList
+            summary = preferences.excludedGenres.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+            setDefaultValue(emptySet<String>())
+
+            setOnPreferenceChangeListener { _, values ->
+                val selected = values as Set<String>
+                this.summary = selected.joinToString { it.replaceFirstChar { c -> c.uppercase() } }
+                true
+            }
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_SCANLATIONS
+            title = "Show scanlations"
+            setDefaultValue(SHOW_SCANLATIONS_DEFAULT)
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
@@ -461,6 +552,10 @@ class Kagane : HttpSource(), ConfigurableSource {
             "erotica",
             "pornographic",
         )
+
+        private const val GENRES_PREF = "pref_genres_exclude"
+        private const val SHOW_SCANLATIONS = "pref_show_scanlations"
+        private const val SHOW_SCANLATIONS_DEFAULT = true
 
         private const val DATA_SAVER = "data_saver_default"
     }
@@ -486,7 +581,6 @@ class Kagane : HttpSource(), ConfigurableSource {
             // TagsFilter(),
             // SourcesFilter(),
             Filter.Separator(),
-            ScanlationsFilter(),
         )
 
         val response = metadataClient.newCall(
@@ -495,11 +589,18 @@ class Kagane : HttpSource(), ConfigurableSource {
 
         // the cache only request fails if it was not cached already
         if (!response.isSuccessful) {
-            CoroutineScope(Dispatchers.IO).launch {
-                metadataClient.newCall(
-                    GET("$apiUrl/api/v1/metadata", headers, CacheControl.FORCE_NETWORK),
-                ).await().closeQuietly()
-            }
+            metadataClient.newCall(
+                GET("$apiUrl/api/v1/metadata", headers, CacheControl.FORCE_NETWORK),
+            ).enqueue(
+                object : Callback {
+                    override fun onResponse(call: Call, response: Response) {
+                        response.closeQuietly()
+                    }
+                    override fun onFailure(call: Call, e: IOException) {
+                        Log.e(name, "Failed to fetch filters", e)
+                    }
+                },
+            )
 
             filters.addAll(
                 index = 0,

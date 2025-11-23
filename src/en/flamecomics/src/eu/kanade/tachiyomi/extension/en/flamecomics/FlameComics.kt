@@ -57,7 +57,7 @@ class FlameComics : HttpSource() {
         imageApiUrlBuilder().apply {
             addPathSegment(seriesData.series_id.toString())
             addPathSegment(seriesData.cover)
-            addQueryParameter(seriesData.last_edit, null)
+            addQueryParameter(seriesData.last_edit.toString(), null)
         }.build().toString()
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request =
@@ -133,6 +133,7 @@ class FlameComics : HttpSource() {
     ): MangasPage {
         val searchedSeriesData =
             json.decodeFromString<SearchPageData>(response.body.string()).pageProps.series
+                .filter { series -> series.series_id != null }
 
         val page = if (!response.request.url.fragment?.contains("&")!!) {
             response.request.url.fragment!!.toInt()
@@ -176,10 +177,11 @@ class FlameComics : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga = SManga.create().apply {
         val seriesData =
-            json.decodeFromString<MangaPageData>(response.body.string()).pageProps.series
+            json.decodeFromString<MangaDetailsResponseData>(response.body.string()).pageProps.series
         title = seriesData.title
         thumbnail_url = thumbnailUrl(seriesData)
-        description = Jsoup.parseBodyFragment(seriesData.description).wholeText()
+        description = seriesData.description
+            ?.let { Jsoup.parseBodyFragment(it).wholeText() }
 
         genre = seriesData.tags?.let { tags ->
             (listOf(seriesData.type) + tags).joinToString()
@@ -197,8 +199,9 @@ class FlameComics : HttpSource() {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val mangaPageData = json.decodeFromString<MangaPageData>(response.body.string())
-        return mangaPageData.pageProps.chapters.map { chapter ->
+        val chaptersListResponseData =
+            json.decodeFromString<ChapterListResponseData>(response.body.string())
+        return chaptersListResponseData.pageProps.chapters.map { chapter ->
             SChapter.create().apply {
                 setUrlWithoutDomain(
                     baseUrl.toHttpUrl().newBuilder().apply {
