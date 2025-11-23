@@ -33,11 +33,11 @@ class Piccoma : HttpSource() {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
-        val mangas = document.select("section.PCM-productRanking li > a").map { mangaElement ->
+        val mangas = document.select("section.PCM-productRanking li > a").map { element ->
             SManga.create().apply {
-                url = mangaElement.attr("href")
-                title = mangaElement.selectFirst(".PCM-rankingProduct_title p")!!.text()
-                mangaElement.selectFirst("img.js_lazy")?.absUrl("data-original")?.let { thumbnail_url = it }
+                url = element.attr("href")
+                title = element.selectFirst(".PCM-rankingProduct_title p")!!.text()
+                element.selectFirst("img.js_lazy")?.absUrl("data-original")?.let { thumbnail_url = it }
             }
         }
         return MangasPage(mangas, false)
@@ -70,7 +70,7 @@ class Piccoma : HttpSource() {
                 .addQueryParameter("page", page.toString())
                 .addQueryParameter("tab_type", "T")
                 .build()
-            return GET(url, headers.newBuilder().add("x-requested-with", "XMLHttpRequest").build())
+            return GET(url, super.headers.newBuilder().add("x-requested-with", "XMLHttpRequest").build())
         }
         val rankingPath = filters.firstInstance<RankingFilter>().toUriPart()
         return GET("$baseUrl/web/ranking/$rankingPath", headers)
@@ -122,15 +122,16 @@ class Piccoma : HttpSource() {
         val document = response.asJsoup()
         val episodes = document.selectFirst("ul#js_episodeList")!!
 
-        return episodes.select("li").map { element ->
-            val link = element.selectFirst("a")!!
+        return episodes.select("li").map {
+            val link = it.selectFirst("a")!!
+            val productId = link.attr("data-product_id")
             val episodeId = link.attr("data-episode_id")
-            val titleElement = element.selectFirst("div.PCM-epList_title h2")!!
-            val statusElement = element.selectFirst("div.PCM-epList_status")!!
+            val titleElement = it.selectFirst("div.PCM-epList_title h2")?.text()
+            val statusElement = it.selectFirst("div.PCM-epList_status")
 
-            val isPoint = statusElement.selectFirst(".PCM-epList_status_point") != null
-            val isWaitFree = statusElement.selectFirst(".PCM-epList_status_waitfree") != null
-            val isZeroPlus = statusElement.selectFirst(".PCM-epList_status_zeroPlus") != null
+            val isPoint = statusElement?.selectFirst(".PCM-epList_status_point") != null
+            val isWaitFree = statusElement?.selectFirst(".PCM-epList_status_waitfree") != null
+            val isZeroPlus = statusElement?.selectFirst(".PCM-epList_status_zeroPlus") != null
 
             val prefix = when {
                 isPoint -> "🔒 "
@@ -139,8 +140,8 @@ class Piccoma : HttpSource() {
             }
 
             SChapter.create().apply {
-                url = "/web/viewer/${link.attr("data-product_id")}/$episodeId"
-                name = titleElement.text() + " $prefix"
+                url = "/web/viewer/$productId/$episodeId"
+                name = "$titleElement $prefix"
             }
         }.reversed()
     }
