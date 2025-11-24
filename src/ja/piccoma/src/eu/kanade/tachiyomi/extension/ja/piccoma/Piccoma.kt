@@ -35,7 +35,7 @@ class Piccoma : HttpSource() {
         val document = response.asJsoup()
         val mangas = document.select("section.PCM-productRanking li > a").map { element ->
             SManga.create().apply {
-                url = element.attr("href")
+                setUrlWithoutDomain(element.absUrl("href"))
                 title = element.selectFirst(".PCM-rankingProduct_title p")!!.text()
                 element.selectFirst("img.js_lazy")?.absUrl("data-original")?.let { thumbnail_url = it }
             }
@@ -54,12 +54,12 @@ class Piccoma : HttpSource() {
         val document = response.asJsoup()
         val mangas = document.select("li a:has(div.PCOM-prdList_info)").map { element ->
             SManga.create().apply {
-                url = element.attr("href")
+                setUrlWithoutDomain(element.absUrl("href"))
                 title = element.selectFirst(".PCOM-prdList_title span")!!.text()
                 element.selectFirst("img")?.absUrl("src")?.let { thumbnail_url = it }
             }
         }
-        val hasNextPage = document.select("#js_nextPage").isNotEmpty()
+        val hasNextPage = document.selectFirst("#js_nextPage") != null
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -77,7 +77,7 @@ class Piccoma : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        if (response.request.url.toString().contains("/ranking/")) {
+        if (response.request.url.pathSegments.contains("ranking")) {
             return popularMangaParse(response)
         }
 
@@ -96,6 +96,8 @@ class Piccoma : HttpSource() {
 
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
+        val statusText = document.selectFirst("ul.PCM-productStatus")?.text()
+        
         return SManga.create().apply {
             title = document.selectFirst("h1.PCM-productTitle")!!.text()
             author = document.select("ul.PCM-productAuthor li a").joinToString { it.text() }
@@ -103,12 +105,8 @@ class Piccoma : HttpSource() {
             description = document.selectFirst("div.PCM-productDesc > p")?.text()
             document.selectFirst("img.PCM-productThum_img")?.absUrl("src")?.let { thumbnail_url = it }
             status = when {
-                document.selectFirst("ul.PCM-productStatus")?.text()
-                    ?.contains("連載中") == true -> SManga.ONGOING
-
-                document.selectFirst("ul.PCM-productStatus")?.text()
-                    ?.contains("完結") == true -> SManga.COMPLETED
-
+                statusText?.contains("連載中") == true -> SManga.ONGOING
+                statusText?.contains("完結") == true -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
         }
@@ -121,6 +119,7 @@ class Piccoma : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
         val episodes = document.selectFirst("ul#js_episodeList")!!
+        val mangaTitle = document.selectFirst(".PCM-headTitle_name")?.text()
 
         return episodes.select("li").map {
             val link = it.selectFirst("a")!!
@@ -139,9 +138,14 @@ class Piccoma : HttpSource() {
                 else -> ""
             }
 
+            var chapterName = titleElement
+            if (mangaTitle != null) {
+                chapterName = chapterName?.replace(mangaTitle, "")?.trim()
+            }
+
             SChapter.create().apply {
                 url = "/web/viewer/$productId/$episodeId"
-                name = "$titleElement $icon"
+                name = "$icon$chapterName"
             }
         }.reversed()
     }
@@ -155,8 +159,8 @@ class Piccoma : HttpSource() {
             }
             .onErrorResumeNext {
                 val message = when {
-                    chapter.name.endsWith("🔒") -> "Log in via WebView and purchase this chapter to read."
-                    chapter.name.endsWith("➡️") -> "Log in via WebView and ensure your charge is full to read this chapter."
+                    chapter.name.startsWith("🔒") -> "Log in via WebView and purchase this chapter to read."
+                    chapter.name.startsWith("➡️") -> "Log in via WebView and ensure your charge is full to read this chapter."
                     else -> "PData not found"
                 }
                 Observable.error(Exception(message, it.cause))
@@ -171,9 +175,9 @@ class Piccoma : HttpSource() {
             .substringBefore("var _rcm_")
             .trim()
             .removeSuffix(";")
-            .replace(Regex("['\"]?title['\"]?\\s*:\\s*'.*?',?"), "")
+            .replace(TITLE_REGEX, "")
             .replace("'", "\"")
-            .replace(Regex(",\\s*([}\\]])"), "$1")
+            .replace(TRAILING_COMMA_REGEX, "$1")
 
         val pData = pDataJson.parseAs<PDataDto>()
         val images = pData.img ?: pData.contents ?: emptyList()
@@ -183,7 +187,7 @@ class Piccoma : HttpSource() {
 
             val pageUrl = if (pData.isScrambled) {
                 fixedUrl.toHttpUrl().newBuilder()
-                    .addQueryParameter("scrambled", "true")
+                    .fragment("scrambled")
                     .build()
                     .toString()
             } else {
@@ -240,6 +244,11 @@ class Piccoma : HttpSource() {
             Pair("(ノベル) BL", "N/P/14"),
         ),
     )
+
+    companion object {
+        private val TITLE_REGEX = Regex("['\"]?title['\"]?\\s*:\\s*'.*?',?")
+        private val TRAILING_COMMA_REGEX = Regex(",\\s*([}\\]])")
+    }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 }

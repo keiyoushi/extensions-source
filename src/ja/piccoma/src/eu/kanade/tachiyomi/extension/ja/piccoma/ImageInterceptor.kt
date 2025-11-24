@@ -18,22 +18,16 @@ class ImageInterceptor : Interceptor {
         val request = chain.request()
         val url = request.url
 
-        val isScrambled = url.queryParameter("scrambled") == "true"
+        val isScrambled = url.fragment == "scrambled"
         if (!isScrambled) {
             return chain.proceed(request)
         }
 
-        val newUrl = url.newBuilder()
-            .removeAllQueryParameters("scrambled")
-            .build()
-
-        val newRequest = request.newBuilder().url(newUrl).build()
-        val response = chain.proceed(newRequest)
-
+        val response = chain.proceed(request)
         val body = response.body.source()
         val bitmap = BitmapFactory.decodeStream(body.inputStream())
 
-        val seed = extractSeed(newUrl)
+        val seed = extractSeed(url)
         val result = unscrambleImg(bitmap, seed, bitmap.width, bitmap.height)
         bitmap.recycle()
         val buffer = Buffer()
