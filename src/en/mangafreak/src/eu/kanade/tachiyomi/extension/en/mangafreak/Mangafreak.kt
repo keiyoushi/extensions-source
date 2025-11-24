@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -72,9 +73,20 @@ class Mangafreak : ParsedHttpSource() {
     override fun latestUpdatesSelector(): String = "div.latest_item, div.latest_releases_item"
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
         // Fix thumbnail URL: replace "mini_images" with "manga_images" and remove dimensions (e.g. /175x245)
-        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
-            ?.replace("mini_images", "manga_images")
-            ?.replace(Regex("/\\d+x\\d+$"), ".jpg")
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")?.let {
+            val url = it.toHttpUrlOrNull()
+            if (url != null && url.pathSegments.firstOrNull() == "mini_images" && url.pathSegments.size >= 2) {
+                val slug = url.pathSegments[1]
+                url.newBuilder()
+                    .encodedPath("/")
+                    .addPathSegment("manga_images")
+                    .addPathSegment("$slug.jpg")
+                    .build()
+                    .toString()
+            } else {
+                it
+            }
+        }
 
         if (element.hasClass("latest_item")) {
             // Home page structure
