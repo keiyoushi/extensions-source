@@ -5,8 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Response
-import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -24,21 +23,18 @@ class MangaStop : MangaThemesia(
         .rateLimit(3)
         .build()
 
-    override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
+    override fun pageListParse(document: Document): List<Page> {
+        val pages = super.pageListParse(document)
+            .filterNot { it.imageUrl?.contains("mihon", true) == true }
 
-        MangaThemesia.JSON_IMAGE_LIST_REGEX.find(html)?.groupValues?.get(1)?.let {
-            runCatching {
-                val pages = json.parseToJsonElement(it).jsonArray.mapIndexed { i, jsonEl ->
-                    Page(i, response.request.url.toString(), jsonEl.jsonPrimitive.content)
-                }
-                if (pages.isNotEmpty()) return pages
+        if (pages.isNotEmpty()) return pages
+
+        return MangaThemesia.JSON_IMAGE_LIST_REGEX.find(document.toString())
+            ?.groupValues?.get(1)
+            ?.let { json.parseToJsonElement(it).jsonArray }
+            ?.mapIndexed { i, el ->
+                Page(i, document.location(), el.jsonPrimitive.content) 
             }
-        }
-
-        val document = Jsoup.parse(html, response.request.url.toString())
-        return super.pageListParse(document).filterNot {
-            it.imageUrl?.contains("mihon", true) == true
-        }
+            .orEmpty()
     }
 }
