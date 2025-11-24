@@ -63,7 +63,7 @@ data class MediocreChapterSimpleDto(
 @Serializable
 data class MediocreMangaDto(
     val id: Int = 0,
-    val slug: String = "",
+    val slug: String? = null,
     @SerialName("nome") val name: String = "",
     @SerialName("descricao") val description: String? = null,
     @SerialName("imagem") val image: String? = null,
@@ -91,7 +91,7 @@ data class MediocreChapterDetailDto(
     @SerialName("obra") val manga: MediocreMangaDto? = null,
 )
 
-fun MediocreMangaDto.toSManga(): SManga {
+fun MediocreMangaDto.toSManga(isDetails: Boolean = false): SManga {
     val sManga = SManga.create().apply {
         title = name
         thumbnail_url = image?.let {
@@ -100,16 +100,19 @@ fun MediocreMangaDto.toSManga(): SManga {
                 else -> "${MediocreToons.CDN_URL}/obras/${this@toSManga.id}/$it?v=3"
             }
         }
-        initialized = true
+        initialized = isDetails
         url = "/obra/$id"
         genre = tags.joinToString { it.name }
     }
-    description?.let { Jsoup.parseBodyFragment(it).let { sManga.description = it.text() } }
+
+    description?.let { sManga.description = Jsoup.parseBodyFragment(it).text() }
+
     status?.let {
         sManga.status = when (it.name.lowercase()) {
-            "em andamento" -> SManga.ONGOING
-            "completo" -> SManga.COMPLETED
+            "em andamento", "ativo" -> SManga.ONGOING
+            "completo", "concluído" -> SManga.COMPLETED
             "hiato" -> SManga.ON_HIATUS
+            "cancelada" -> SManga.CANCELLED
             else -> SManga.UNKNOWN
         }
     }
