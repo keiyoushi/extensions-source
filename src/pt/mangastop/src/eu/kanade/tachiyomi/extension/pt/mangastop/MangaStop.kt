@@ -33,7 +33,7 @@ class MangaStop : MangaThemesia(
             ?.groupValues?.get(1)
             ?.let { json.parseToJsonElement(it).jsonArray }
             ?.mapIndexed { i, el ->
-                Page(i, document.location(), el.jsonPrimitive.content) 
+                Page(i, document.location(), el.jsonPrimitive.content)
             }
             .orEmpty()
     }
