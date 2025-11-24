@@ -2,9 +2,13 @@ ext {
     extName = 'Manga TV'
     extClass = '.MangaTV'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://www.mangatv.net'
-    overrideVersionCode = 0
+    baseUrl = 'https://mangatv.net'
+    overrideVersionCode = 1
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:unpacker'))
+}

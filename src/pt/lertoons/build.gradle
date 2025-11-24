@@ -2,8 +2,8 @@ ext {
     extName = 'Ler Toons'
     extClass = '.LerToons'
     themePkg = 'zerotheme'
-    baseUrl = 'https://lertoons.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://www.readmangas.org'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

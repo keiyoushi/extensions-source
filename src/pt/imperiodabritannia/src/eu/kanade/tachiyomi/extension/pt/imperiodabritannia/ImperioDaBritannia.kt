@@ -22,7 +22,7 @@ class ImperioDaBritannia : Madara(
 
     override val useNewChapterEndpoint = true
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
 
     override val mangaDetailsSelectorTag = ""
 

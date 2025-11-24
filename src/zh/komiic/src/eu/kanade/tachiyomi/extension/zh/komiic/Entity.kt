@@ -3,73 +3,86 @@ package eu.kanade.tachiyomi.extension.zh.komiic
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
 
 @Serializable
-class Data<T>(val data: Result<T>)
+class ResponseDto(private val data: DataDto?, private val errors: List<ErrorDto>?) {
+    fun getData() = data ?: throw Exception(errors!!.joinToString("\n") { it.message })
+}
 
 @Serializable
-class MultiData<T, V>(val data: MultiResult<T, V>)
+class ErrorDto(val message: String)
 
 @Serializable
-class Result<T>(val result: T)
-
-@Serializable
-class MultiResult<T, V>(val result1: T, val result2: V)
-
-@Serializable
-data class Item(val id: String, val name: String)
-
-@Serializable
-data class Comic(
-    val id: String,
-    val title: String,
-    val description: String,
-    val status: String,
-    val imageUrl: String,
-    var authors: List<Item>,
-    val categories: List<Item>,
+class DataDto(
+    private val comics: List<MangaDto>?,
+    val allCategory: List<ItemDto>?,
+    private val searchComicsAndAuthors: DataDto?,
+    val comicById: MangaDto?,
+    val chaptersByComicId: List<ChapterDto>?,
+    val reachedImageLimit: Boolean?,
+    val imagesByChapterId: List<PageDto>?,
 ) {
+    fun getListing(): List<MangaDto> = comics ?: searchComicsAndAuthors!!.comics!!
+}
+
+@Serializable
+class JwtPayload(val exp: Long)
+
+@Serializable
+class ItemDto(val id: String, val name: String)
+
+@Serializable
+class MangaDto(
+    private val id: String,
+    private val title: String,
+    private val description: String,
+    private val status: String,
+    private val imageUrl: String,
+    private val authors: List<ItemDto>,
+    private val categories: List<ItemDto>,
+) {
+    val url get() = "/comic/$id"
+
     fun toSManga() = SManga.create().apply {
-        url = "/comic/$id"
-        title = this@Comic.title
-        thumbnail_url = this@Comic.imageUrl
-        author = this@Comic.authors.joinToString { it.name }
-        genre = this@Comic.categories.joinToString { it.name }
-        description = this@Comic.description
-        status = when (this@Comic.status) {
+        url = this@MangaDto.url
+        title = this@MangaDto.title
+        thumbnail_url = this@MangaDto.imageUrl
+        author = this@MangaDto.authors.joinToString { it.name }
+        genre = this@MangaDto.categories.joinToString { it.name }
+        description = this@MangaDto.description
+        status = when (this@MangaDto.status) {
             "ONGOING" -> SManga.ONGOING
             "END" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        initialized = this@Comic.description.isNotEmpty()
+        initialized = this@MangaDto.description.isNotEmpty()
     }
 }
 
 @Serializable
-data class Chapter(
-    val id: String,
+class ChapterDto(
+    private val id: String,
     val serial: String,
     val type: String,
-    val size: Int,
-    val dateCreated: String,
+    private val size: Int,
+    private val dateCreated: String,
 ) {
-    fun toSChapter(comicUrl: String, parseDate: (String) -> Long) = SChapter.create().apply {
-        url = "$comicUrl/chapter/${this@Chapter.id}"
-        name = when (this@Chapter.type) {
-            "chapter" -> "第 ${this@Chapter.serial} 話"
-            "book" -> "第 ${this@Chapter.serial} 卷"
-            else -> this@Chapter.serial
+    fun toSChapter(mangaUrl: String, dateFormat: SimpleDateFormat) = SChapter.create().apply {
+        val (suffix, typeName) = when (val type = this@ChapterDto.type) {
+            "chapter" -> Pair("話", "連載")
+            "book" -> Pair("卷", "單行本")
+            else -> throw Exception("未知章節類型：$type")
         }
-        scanlator = "${this@Chapter.size}P"
-        date_upload = parseDate(this@Chapter.dateCreated)
-        chapter_number = if (this@Chapter.type == "book") 0F else this@Chapter.serial.toFloatOrNull() ?: -1f
+        url = "$mangaUrl/chapter/${this@ChapterDto.id}"
+        name = "${this@ChapterDto.serial}$suffix（${this@ChapterDto.size}P）"
+        scanlator = typeName
+        date_upload = dateFormat.parse(this@ChapterDto.dateCreated)!!.time
+        chapter_number = this@ChapterDto.serial.toFloatOrNull() ?: -1f
     }
 }
 
 @Serializable
-data class Image(
-    val id: String,
+class PageDto(
     val kid: String,
-    val height: Int,
-    val width: Int,
 )

@@ -41,6 +41,8 @@ class ChapterData(
     val title: String? = null,
     val createdAt: String,
     val isPremium: Boolean? = false,
+    val premiumUntil: String? = null,
+    val isVolume: Boolean? = false,
 )
 
 @Serializable

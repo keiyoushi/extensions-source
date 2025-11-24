@@ -107,7 +107,7 @@ class Chapter(
     fun isLocked() = (isLocked == true) || (isTimeLocked == true)
 
     fun toSChapter(mangaSlug: String?) = SChapter.create().apply {
-        val prefix = if (isLocked()) "🔒 " else ""
+        val prefix = if (!isAccessible()) "🔒 " else ""
         val seriesSlug = mangaSlug ?: mangaPost.slug
         url = "/series/$seriesSlug/$slug#$id"
         name = "${prefix}Chapter $number"

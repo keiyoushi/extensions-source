@@ -401,6 +401,6 @@ class Desu : ConfigurableSource, HttpSource() {
 
         private const val DOMAIN_TITLE = "Домен"
         private const val DEFAULT_DOMAIN_PREF = "default_domain"
-        private const val DOMAIN_DEFAULT = "https://desu.store"
+        private const val DOMAIN_DEFAULT = "https://desu.city"
     }
 }

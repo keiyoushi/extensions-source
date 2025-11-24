@@ -18,6 +18,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -31,7 +32,7 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
 
     override val lang = "vi"
 
-    private val defaultBaseUrl = "https://goctruyentranh.org"
+    private val defaultBaseUrl = "https://goctruyentranh.net"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -57,7 +58,13 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
             setUrlWithoutDomain(it!!.absUrl("href"))
             title = it.text()
         }
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        thumbnail_url = element.selectFirst("img")
+            ?.absUrl("src")
+            ?.let { url ->
+                url.toHttpUrlOrNull()
+                    ?.queryParameter("url")
+                    ?: url
+            }
     }
 
     override fun latestUpdatesNextPageSelector(): String = "nav ul li"
@@ -85,7 +92,8 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
     private fun parseDate(date: String): Long = runCatching {
         val calendar = Calendar.getInstance()
         val number = date.replace(Regex("[^0-9]"), "").trim().toInt()
-        when (date.replace(Regex("[0-9]"), "").trim()) {
+        when (date.replace(Regex("[0-9]"), "").lowercase().trim()) {
+            "giây trước" -> calendar.apply { add(Calendar.SECOND, -number) }.timeInMillis
             "phút trước" -> calendar.apply { add(Calendar.MINUTE, -number) }.timeInMillis
             "giờ trước" -> calendar.apply { add(Calendar.HOUR, -number) }.timeInMillis
             "ngày trước" -> calendar.apply { add(Calendar.DAY_OF_YEAR, -number) }.timeInMillis
@@ -96,18 +104,28 @@ class GocTruyenTranh : ParsedHttpSource(), ConfigurableSource {
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst("section aside:first-child h1")!!.text()
+        title = document.select("section aside:first-child h1").text()
         genre = document.select("span:contains(Thể loại:) ~ a").joinToString { it.text().trim(',', ' ') }
-        description = document.selectFirst("div.mt-3")?.text()
-        thumbnail_url = document.selectFirst("section aside:first-child img")?.absUrl("src")
+        description = document.select("div.mt-3").joinToString {
+            it.select("a, strong").unwrap()
+            it.wholeText().trim()
+        }
+        thumbnail_url = document.selectFirst("section aside:first-child img")
+            ?.absUrl("src")
+            ?.let { url ->
+                url.toHttpUrlOrNull()
+                    ?.queryParameter("url")
+                    ?: url
+            }
         status = parseStatus(document.selectFirst("span:contains(Trạng thái:) + b")?.text())
-        author = document.select("span:contains(Tác giả:) + b").joinToString { it.text() }
+        author = document.selectFirst("span:contains(Tác giả:) + b")?.text()
     }
 
     private fun parseStatus(status: String?) = when {
         status == null -> SManga.UNKNOWN
-        status.contains("Đang tiến hành", ignoreCase = true) -> SManga.ONGOING
-        status.contains("Hoàn thành", ignoreCase = true) -> SManga.COMPLETED
+        listOf("Đang Tiến Hành", "Đang Cập Nhật").any { status.contains(it, ignoreCase = true) } -> SManga.ONGOING
+        listOf("Hoàn Thành", "Đã Hoàn Thành").any { status.contains(it, ignoreCase = true) } -> SManga.COMPLETED
+        listOf("Tạm Ngưng", "Tạm Hoãn").any { status.contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
         else -> SManga.UNKNOWN
     }
 

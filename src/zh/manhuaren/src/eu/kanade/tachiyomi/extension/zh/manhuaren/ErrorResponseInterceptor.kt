@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.extension.zh.manhuaren
 
 import android.content.SharedPreferences
+import eu.kanade.tachiyomi.extension.zh.manhuaren.Manhuaren.Companion.TOKEN_PREF
+import eu.kanade.tachiyomi.extension.zh.manhuaren.Manhuaren.Companion.USER_ID_PREF
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import okhttp3.Interceptor
@@ -21,7 +23,7 @@ class ErrorResponseInterceptor(private val baseUrl: String, private val preferen
                 .remove(TOKEN_PREF)
                 .remove(USER_ID_PREF)
                 .apply()
-            throw IOException("用户ID已自动清除，请再試一次")
+            throw IOException("请求出错，用户ID已自动清除。请尝试以下其一后再试：\n选项1：打开漫画人官方APP（不用登录账号）\n选项2：从其他设备拷贝用户ID和Token到本插件设置里")
         }
 
         return response.newBuilder()

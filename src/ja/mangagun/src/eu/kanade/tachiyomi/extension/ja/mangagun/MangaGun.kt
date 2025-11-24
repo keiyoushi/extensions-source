@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.mangagun
 
-import android.util.Base64
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.multisrc.fmreader.FMReader
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -8,18 +8,27 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
-import okhttp3.Cookie
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import java.util.Calendar
 
-private const val DOMAIN = "mangagun.net"
+private const val DOMAIN = "nihonkuni.com"
 
-class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
+/**
+ * This plugin is for the website originally named MangaGun(漫画軍), which was later renamed to NihonKuni(日本国). Please do not be confused by the names.
+ */
+class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
+
+    // Formerly "MangaGun(漫画軍)"
+    override val id = 3811800324362294701
+
     override val infoElementSelector = "div.row div.row"
+
+    override val client = super.client.newBuilder()
+        .addNetworkInterceptor(CookieInterceptor(DOMAIN, "smartlink_shown" to "1")).build()
 
     // source is picky about URL format
     private fun mangaRequest(sortBy: String, page: Int): Request {
@@ -31,17 +40,6 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
 
     override fun popularMangaRequest(page: Int): Request = mangaRequest("views", page)
 
-    override fun popularMangaFromElement(element: Element): SManga {
-        return SManga.create().apply {
-            element.select(headerSelector).let {
-                setUrlWithoutDomain(it.attr("abs:href"))
-                title = it.text()
-            }
-            thumbnail_url = element.select("img, .thumb-wrapper .img-in-ratio").attr("style")
-                .substringAfter("background-image:url(").substringBefore(")")
-        }
-    }
-
     override fun latestUpdatesRequest(page: Int): Request = mangaRequest("last_update", page)
 
     override fun getImgAttr(element: Element?): String? {
@@ -51,15 +49,21 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
             element.hasAttr("data-src") -> element.attr("abs:data-src")
             element.hasAttr("data-bg") -> element.attr("abs:data-bg")
             element.hasAttr("data-srcset") -> element.attr("abs:data-srcset")
-            element.hasAttr("style") -> element.attr("style").substringAfter("('")
-                .substringBefore("')")
+            element.hasAttr("style") -> element.attr("style").substringAfter("url(")
+                .substringBefore(")").trim('\'', '"')
 
             else -> element.attr("abs:src")
         }
     }
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        val slug = manga.url.substringAfter("raw-").substringBefore(".html")
+        val index = manga.url.indexOf("manga-")
+        // Handling version compatibility, previous version used the 'raw-' prefix.
+        val slug = if (index >= 0) {
+            manga.url.substring(index + 6)
+        } else {
+            manga.url.substringAfter("raw-")
+        }.substringBefore(".html")
 
         return client.newCall(
             GET(
@@ -99,39 +103,14 @@ class MangaGun : FMReader("MangaGun", "https://$DOMAIN", "ja") {
         return chapterDate.timeInMillis
     }
 
-    private fun handleDdosProtect(document: Document): Document {
-        val key = document.select("script:containsData(document.cookie)").first()?.html()
-            ?.substringAfter("escape('")?.substringBefore("'")
-        if (key != null) {
-            // save cookie ct_anti_ddos_key
-            client.cookieJar.saveFromResponse(
-                baseUrl.toHttpUrl(),
-                listOf(
-                    Cookie.Builder()
-                        .name("ct_anti_ddos_key")
-                        .value(key)
-                        .domain(DOMAIN)
-                        .path("/")
-                        .build(),
-                ),
-            )
-        }
-        return document.select("noscript div a").attr("abs:href").let { url ->
-            client.newCall(GET(url, headers)).execute().asJsoup()
-        }
-    }
-
     override fun pageListParse(document: Document): List<Page> {
-        val ddosProtect = document.select("title").first()?.text()
-            ?.contains("Manga Gun - DDoS protection") ?: false
-        return if (ddosProtect) {
-            handleDdosProtect(document)
-        } else {
-            document
-        }.select(".chapter-content img.chapter-img")
-            .eachAttr("data-img")
-            .mapIndexed { index, img ->
-                Page(index, "", Base64.decode(img, Base64.DEFAULT).decodeToString())
-            }
+        val html = document.select("script:containsData(window.chapterImages)").first()!!.data()
+            .substringAfter("window.chapterImages=\"").substringBefore("\"")
+            .replace("\\/", "/")
+            .replace("\\n", "")
+            .replace("\\r", "")
+        return Jsoup.parse(html).select("img.chapter-img").mapIndexed { index, element ->
+            Page(index, imageUrl = element.attr("abs:data-srcset").trim())
+        }
     }
 }

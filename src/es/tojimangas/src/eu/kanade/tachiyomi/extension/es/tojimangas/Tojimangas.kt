@@ -17,7 +17,7 @@ import java.util.Calendar
 class Tojimangas : ParsedHttpSource() {
 
     override val lang = "es"
-    override val baseUrl = "https://tojimangas.xyz"
+    override val baseUrl = "https://manhwass.com"
     override val name = "Tojimangas"
     override val supportsLatest = true
 

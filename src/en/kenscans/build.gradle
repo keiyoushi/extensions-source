@@ -1,9 +1,9 @@
 ext {
     extName = 'Ken Scans'
     extClass = '.KenScans'
-    themePkg = 'keyoapp'
-    baseUrl = 'https://kenscans.com'
-    overrideVersionCode = 0
+    themePkg = 'iken'
+    baseUrl = 'https://kencomics.com'
+    overrideVersionCode = 9
     isNsfw = false
 }
 

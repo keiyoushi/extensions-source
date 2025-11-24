@@ -1,0 +1,7 @@
+ext {
+    extName = 'Gangan Online'
+    extClass = '.GanganOnline'
+    extVersionCode = 2
+    isNsfw = false
+}
+apply from: "$rootDir/common.gradle"

@@ -69,10 +69,12 @@ class BiliManga : HttpSource(), ConfigurableSource {
                 val cur = doc.selectFirst("#pagelink > strong")!!.text().toInt()
                 cur < total
             }
+
             url.contains("search") -> {
                 val find = PAGE_REGEX.find(doc.selectFirst("#pagelink > span")!!.text())!!
                 find.groups[1]!!.value.toInt() < find.groups[1]!!.value.toInt()
             }
+
             else -> size == 50
         }
     }
@@ -137,11 +139,12 @@ class BiliManga : HttpSource(), ConfigurableSource {
         val doc = response.asJsoup()
         val meta = doc.selectFirst(".book-meta")!!.text().split("|")
         val extra = meta.filterNot(META_REGEX::containsMatchIn)
-        val backupname = doc.selectFirst(".backupname")?.let { "【別名：${it.text()}】\n\n" } ?: ""
+        val bkname =
+            doc.selectFirst(".backupname")?.let { "**別名**：${it.text()}\n\n---\n\n" } ?: ""
         setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
-        description = backupname + doc.selectFirst("#bookSummary > content")?.wholeText()?.trim()
+        description = bkname + doc.selectFirst("#bookSummary > content")?.wholeText()?.trim()
         artist = doc.selectFirst(".authorname")?.text()
         author = doc.selectFirst(".illname")?.text() ?: artist
         status = when (meta.firstOrNull()) {
@@ -182,7 +185,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
         val images = it.select(".imagecontent")
         check(images.isNotEmpty()) {
             it.selectFirst("#acontentz")?.let { e ->
-                if ("電腦端" in e.text()) "不支持電腦端查看，請在高級設置中更換移動端UA標識" else "漫畫可能已下架或需要登錄查看"
+                if ("電腦端" in e.text()) "不支持電腦端查看，請在高級設置中更換移動端UA標識" else "漫畫可能已下架或需要足夠的權限"
             } ?: "章节鏈接错误"
         }
         images.mapIndexed { i, image ->

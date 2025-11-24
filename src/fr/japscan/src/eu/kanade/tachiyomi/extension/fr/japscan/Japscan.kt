@@ -52,7 +52,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
 
     // Sometimes an adblock blocker will pop up, preventing the user from opening
     // a cloudflare protected page
-    private val internalBaseUrl = "https://www.japscan.si"
+    private val internalBaseUrl = "https://www.japscan.vip"
     override val baseUrl = "$internalBaseUrl/mangas/?sort=popular&p=1"
 
     override val lang = "fr"
@@ -227,13 +227,51 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
     // Those have a span.badge "SPOILER" or "RAW". The additional pseudo selector makes sure to exclude these from the chapter list.
 
     override fun chapterFromElement(element: Element): SChapter {
-        val urlElement = element.selectFirst("*[href~=manga]")!!
+        // Only search for a tag with any attribute containing manga/manhua/manhwa
+        val urlPairs = element.getElementsByTag("a")
+            .mapNotNull { el ->
+                // Find the first attribute whose value matches the chapter URL pattern
+                val attrMatch = el.attributes().asList().firstOrNull { attr ->
+                    val value = attr.value
+                    value.startsWith("/manga/") || value.startsWith("/manhua/") || value.startsWith("/manhwa/")
+                }
+                if (attrMatch != null) {
+                    val name = el.ownText().ifBlank { el.text() }
+                    // Mark if the attribute is not "href"
+                    val isNonHref = attrMatch.key != "href"
+                    Triple(name, attrMatch.value, isNonHref)
+                } else {
+                    null
+                }
+            }
+            .distinctBy { it.second }
+            .sortedWith(
+                compareByDescending<Triple<String, String, Boolean>> { it.third }
+                    .thenBy { it.second.length },
+            ) // Prefer non-href first, then shorter URLs
+            .map { Pair(it.first, it.second) }
+
+        var foundPair: Pair<String, String>? = urlPairs.firstOrNull()
+        // var log = urlPairs.size.toString() + " URLs found:\n"
+        // for ((name, url) in urlPairs) {
+        //     val testUrl = internalBaseUrl + url
+        //     val response = client.newCall(GET(testUrl, headers)).execute()
+        //     log += "$name: $testUrl => ${response}\n"
+        //     if (response.isSuccessful) {
+        //         foundPair = Pair(name, url)
+        //         response.close()
+        //         break
+        //     }
+        //     response.close()
+        // }
+        if (foundPair == null) {
+            throw Exception("Impossible de trouver l'URL du chapitre")
+        }
 
         val chapter = SChapter.create()
-        chapter.setUrlWithoutDomain(urlElement.attr("href"))
-        chapter.name = urlElement.ownText()
-        // Using ownText() doesn't include childs' text, like "VUS" or "RAW" badges, in the chapter name.
-        chapter.date_upload = element.selectFirst("span")!!.text().trim().let { parseChapterDate(it) }
+        chapter.setUrlWithoutDomain(foundPair.second)
+        chapter.name = foundPair.first
+        chapter.date_upload = element.selectFirst("span")?.text()?.trim()?.let { parseChapterDate(it) } ?: 0L
         return chapter
     }
 
@@ -296,7 +334,7 @@ class Japscan : ConfigurableSource, ParsedHttpSource() {
         handler.post { webView?.destroy() }
 
         if (latch.count == 1L) {
-            throw Exception("Timed out decrypting image links")
+            throw Exception("Erreur lors de la récupération des pages")
         }
 
         val baseUrlHost = internalBaseUrl.toHttpUrl().host.substringAfter("www.")

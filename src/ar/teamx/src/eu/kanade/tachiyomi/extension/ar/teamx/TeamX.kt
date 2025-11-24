@@ -180,19 +180,19 @@ class TeamX : ParsedHttpSource(), ConfigurableSource {
 
     private val chapterFormat = SimpleDateFormat("yyyy-MM-dd hh:mm:ss", Locale.getDefault())
 
-    override fun chapterListSelector() = "div.eplister ul a"
+    override fun chapterListSelector() = "div.chapter-card a"
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-            val chpNum = element.select("div.epl-num").text()
-            val chpTitle = element.select("div.epl-title").text()
+            val chpNum = element.select("div.chapter-info div.chapter-number").text()
+            val chpTitle = element.select("div.chapter-info div.chapter-title").text()
 
             name = when (chpNum.isNullOrBlank()) {
                 true -> chpTitle
                 false -> "$chpNum - $chpTitle"
             }
 
-            date_upload = parseChapterDate(element.select("div.epl-date").text())
+            date_upload = parseChapterDate(element.select("div.chapter-info div.chapter-date").text())
 
             setUrlWithoutDomain(element.attr("href"))
         }

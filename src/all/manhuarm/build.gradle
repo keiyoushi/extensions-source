@@ -1,0 +1,10 @@
+ext {
+    extName = 'Manhuarm'
+    extClass = '.ManhuarmFactory'
+    themePkg = 'madara'
+    baseUrl = 'https://manhuarmmtl.com'
+    overrideVersionCode = 6
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

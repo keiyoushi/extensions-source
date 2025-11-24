@@ -56,5 +56,5 @@ class SakuraMangaInfoDto(
 
 @Serializable
 class SakuraMangaChapterReadDto(
-    val imageUrls: List<String>,
+    val imageUrls: String,
 )

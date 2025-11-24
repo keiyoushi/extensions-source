@@ -2,92 +2,132 @@ package eu.kanade.tachiyomi.extension.en.atsumaru
 
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNames
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Serializable
 class BrowseMangaDto(
-    val items: List<MangaObjectDto>,
+    val items: List<MangaDto>,
 )
 
 @Serializable
 class MangaObjectDto(
-    val manga: MangaDto,
+    val mangaPage: MangaDto,
 )
 
 @Serializable
 class SearchResultsDto(
+    val page: Int,
+    val found: Int,
     val hits: List<SearchMangaDto>,
+    @SerialName("request_params") val requestParams: RequestParamsDto,
 ) {
+    fun hasNextPage(): Boolean {
+        return page * requestParams.perPage < found
+    }
+
     @Serializable
     class SearchMangaDto(
-        val info: MangaDto,
+        val document: MangaDto,
+    )
+
+    @Serializable
+    class RequestParamsDto(
+        @SerialName("per_page") val perPage: Int,
     )
 }
 
 @Serializable
 class MangaDto(
     // Common
+    private val id: String,
     private val title: String,
-    private val cover: String,
-    private val slug: String,
+    @JsonNames("poster", "image")
+    private val imagePath: JsonElement,
 
     // Details
-    private val authors: List<String>? = null,
-    private val description: String? = null,
-    private val genres: List<String>? = null,
-    private val statuses: List<String>? = null,
+    private val authors: List<AuthorDto>? = null,
+    private val synopsis: String? = null,
+    private val tags: List<TagDto>? = null,
+    private val status: String? = null,
+    private val type: String? = null,
 
     // Chapters
     val chapters: List<ChapterDto>? = null,
 ) {
-    fun toSManga(): SManga = SManga.create().apply {
-        title = this@MangaDto.title
-        thumbnail_url = cover
-        url = "/manga/s1/$slug"
+    private fun getImagePath(): String? {
+        val url = when (imagePath) {
+            is JsonPrimitive -> imagePath.content
+            is JsonObject -> imagePath["image"]?.jsonPrimitive?.content
+            else -> null
+        }
+        return url?.removePrefix("/")?.removePrefix("static/")
+    }
 
+    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+        url = id
+        title = this@MangaDto.title
+        thumbnail_url = getImagePath().let { it -> "$baseUrl/static/$it" }
+        description = synopsis
+        genre = buildList {
+            type?.let { add(it) }
+            tags?.forEach { add(it.name) }
+        }.joinToString()
         authors?.let {
-            author = it.joinToString()
+            author = it.joinToString { author -> author.name }
         }
-        description = this@MangaDto.description
-        genres?.let {
-            genre = it.joinToString()
-        }
-        statuses?.let {
-            status = when (it.first().lowercase().substringBefore(" ")) {
+        this@MangaDto.status?.let {
+            status = when (it.lowercase().trim()) {
                 "ongoing" -> SManga.ONGOING
-                "complete" -> SManga.COMPLETED
+                "completed" -> SManga.COMPLETED
+                "hiatus" -> SManga.ON_HIATUS
+                "canceled" -> SManga.CANCELLED
                 else -> SManga.UNKNOWN
             }
         }
+    }
+
+    @Serializable
+    class TagDto(
+        val name: String,
+    )
+
+    @Serializable
+    class AuthorDto(
+        val name: String,
+    )
+}
+
+@Serializable
+class ChapterListDto(
+    val chapters: List<ChapterDto>,
+    val pages: Int,
+    val page: Int,
+) {
+    fun hasNextPage(): Boolean {
+        return page + 1 < pages
     }
 }
 
 @Serializable
 class ChapterDto(
-    val pages: List<PageDto>,
-    val name: String,
-    private val type: String,
-    private val title: String? = null,
-    private val date: String? = null,
+    private val id: String,
+    private val number: Float,
+    private val title: String,
+    @SerialName("createdAt") private val date: String? = null,
 ) {
     fun toSChapter(slug: String): SChapter = SChapter.create().apply {
-        val chapterNumber = this@ChapterDto.name.replace("_", ".")
-            .filter { it.isDigit() || it == '.' }
-
-        name = buildString {
-            append("Chapter ")
-            append(chapterNumber)
-            if (title != null) {
-                append(" - ")
-                append(title)
-            }
-        }
-        url = "$slug/${this@ChapterDto.name}"
-        chapter_number = chapterNumber.toFloat()
-        scanlator = type.takeUnless { it == "Chapter" }
+        url = "$slug/$id"
+        chapter_number = number
+        name = title
         date?.let {
             date_upload = parseDate(it)
         }
@@ -109,7 +149,16 @@ class ChapterDto(
 }
 
 @Serializable
+class PageObjectDto(
+    val readChapter: PageDto,
+)
+
+@Serializable
 class PageDto(
-    val pageURLs: List<String>,
-    val name: String,
+    val pages: List<PageDataDto>,
+)
+
+@Serializable
+class PageDataDto(
+    val image: String,
 )
