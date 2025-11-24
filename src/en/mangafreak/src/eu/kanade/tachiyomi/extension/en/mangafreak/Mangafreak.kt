@@ -58,19 +58,36 @@ class Mangafreak : ParsedHttpSource() {
 
     override fun latestUpdatesRequest(page: Int): Request {
         val url = if (page == 1) {
-            "$baseUrl/Latest_Releases"
+            baseUrl
         } else {
+            // Page 2 on Latest_Releases is actually /Latest_Releases/2
+            // But since we use Home for page 1, we might miss some items or have duplicates
+            // if we jump straight to page 2 of Latest_Releases.
+            // However, typically users just want the latest stuff.
             "$baseUrl/Latest_Releases/$page"
         }
         return GET(url, headers)
     }
     override fun latestUpdatesNextPageSelector(): String = popularMangaNextPageSelector()
-    override fun latestUpdatesSelector(): String = "div.latest_releases_item"
+    override fun latestUpdatesSelector(): String = "div.latest_item, div.latest_releases_item"
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        thumbnail_url = element.select("img").attr("abs:src").replace("mini", "manga").substringBeforeLast("/") + ".jpg"
-        element.select("a").apply {
-            title = first()!!.text()
-            url = attr("href")
+        // Fix thumbnail URL: replace "mini_images" with "manga_images" and remove dimensions (e.g. /175x245)
+        thumbnail_url = element.select("img").attr("abs:src")
+            .replace("mini_images", "manga_images")
+            .replace(Regex("/\\d+x\\d+$"), ".jpg")
+
+        if (element.hasClass("latest_item")) {
+            // Home page structure
+            element.select("a.name").apply {
+                title = text()
+                url = attr("href")
+            }
+        } else {
+            // Latest_Releases page structure
+            element.select("a").apply {
+                title = first()!!.text()
+                url = attr("href")
+            }
         }
     }
 
