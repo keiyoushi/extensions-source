@@ -10,7 +10,7 @@ class MeiToon : Keyoapp(
     "en",
 ) {
     override fun popularMangaSelector(): String = ".series-splide .splide__slide:not(.splide__slide--clone)"
-    
+
     override fun mangaDetailsParse(document: Document): SManga = super.mangaDetailsParse(document).apply {
         document.select("div:has(h1) a[href*='?genre=']")
             .joinToString { it.attr("title") }
