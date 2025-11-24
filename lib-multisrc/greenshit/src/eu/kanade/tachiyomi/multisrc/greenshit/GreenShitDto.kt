@@ -49,7 +49,7 @@ class MangaDto(
     @JsonNames("obr_id", "id")
     val id: Int,
     @JsonNames("obr_nome", "name")
-    val name: String? = null,
+    val name: String,
     @JsonNames("obr_slug", "slug")
     var slug: String? = null,
     @JsonNames("obr_imagem", "image", "thumbnail")
@@ -67,8 +67,8 @@ class MangaDto(
     val type: String? = null,
 ) {
     fun toSManga(cdnUrl: String, useWidth: Boolean, includeSlug: Boolean = false, defaultScanId: Int? = null) = SManga.create().apply {
-        title = name ?: throw IllegalArgumentException("Name is required for title")
-        val finalSlug = slug?.takeIf { it.isNotEmpty() } ?: name?.toSlug() ?: throw IllegalArgumentException("Slug is required")
+        title = name
+        val finalSlug = slug?.takeIf { it.isNotEmpty() } ?: name?.toSlug()
         url = if (includeSlug) {
             "/obra/$id/$finalSlug"
         } else {
@@ -228,32 +228,44 @@ class PageDto(
     fun toPageOrNull(cdnUrl: String, mangaId: Int?, chapterNumber: String?): Page? = runCatching { toPage(cdnUrl, mangaId, chapterNumber) }.getOrNull()
 
     fun toPage(cdnUrl: String, mangaId: Int?, chapterNumber: String?): Page {
-        require(src.isNotBlank()) { "Page src cannot be empty" }
+        val cleanSrc = src.trim()
+        require(cleanSrc.isNotBlank()) { "Page src cannot be empty" }
 
-        if (src.startsWith("http://") || src.startsWith("https://")) {
-            return Page(0, "", src)
+        if (cleanSrc.startsWith("http://") || cleanSrc.startsWith("https://")) {
+            return Page(0, imageUrl = cleanSrc)
         }
 
-        val normalizedSrc = src.removePrefix("/")
+        val normalizedSrc = cleanSrc.removePrefix("/")
+
         val imageUrl = when {
             mime != null -> "$cdnUrl/wp-content/uploads/WP-manga/data/$normalizedSrc"
             path != null -> {
-                val normalizedPath = path!!.removeSuffix("/").let { if (it.startsWith('/')) it else "/$it" }
-                "$cdnUrl$normalizedPath/$normalizedSrc"
+                val cleanPath = path!!.trim()
+                val absolutePath = if (cleanPath.startsWith("/")) cleanPath else "/$cleanPath"
+                if (absolutePath.endsWith(normalizedSrc, ignoreCase = true)) {
+                    "$cdnUrl$absolutePath"
+                } else {
+                    val pathWithoutTrailing = absolutePath.removeSuffix("/")
+                    "$cdnUrl$pathWithoutTrailing/$normalizedSrc"
+                }
             }
             else -> "$cdnUrl/scans/1/obras/${mangaId ?: 0}/capitulos/$chapterNumber/$normalizedSrc"
         }
 
-        return Page(0, "", imageUrl)
+        return Page(0, imageUrl = imageUrl)
     }
 }
+
+private val DiacriticsRegex = "\\p{InCombiningDiacriticalMarks}+".toRegex()
+private val NonAlfaRegex = "[^a-z0-9\\s-]".toRegex()
+private val WhitespaceRegex = "\\s+".toRegex()
 
 fun String?.toSlug(slugSeparator: String = "-"): String {
     if (this == null) return ""
     return Normalizer.normalize(this, Normalizer.Form.NFD)
-        .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+        .replace(DiacriticsRegex, "")
         .lowercase()
-        .replace("[^a-z0-9\\s-]".toRegex(), "")
-        .replace("\\s+".toRegex(), slugSeparator)
+        .replace(NonAlfaRegex, "")
+        .replace(WhitespaceRegex, slugSeparator)
         .trim(*slugSeparator.toCharArray())
 }
