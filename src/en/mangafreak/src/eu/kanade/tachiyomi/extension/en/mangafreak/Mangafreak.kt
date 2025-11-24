@@ -72,9 +72,9 @@ class Mangafreak : ParsedHttpSource() {
     override fun latestUpdatesSelector(): String = "div.latest_item, div.latest_releases_item"
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
         // Fix thumbnail URL: replace "mini_images" with "manga_images" and remove dimensions (e.g. /175x245)
-        thumbnail_url = element.select("img").attr("abs:src")
-            .replace("mini_images", "manga_images")
-            .replace(Regex("/\\d+x\\d+$"), ".jpg")
+        thumbnail_url = element.selectFirst("img")?.attr("abs:src")
+            ?.replace("mini_images", "manga_images")
+            ?.replace(Regex("/\\d+x\\d+$"), ".jpg")
 
         if (element.hasClass("latest_item")) {
             // Home page structure
