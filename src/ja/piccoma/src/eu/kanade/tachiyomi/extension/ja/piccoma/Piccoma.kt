@@ -97,7 +97,7 @@ class Piccoma : HttpSource() {
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
         val statusText = document.selectFirst("ul.PCM-productStatus")?.text()
-        
+
         return SManga.create().apply {
             title = document.selectFirst("h1.PCM-productTitle")!!.text()
             author = document.select("ul.PCM-productAuthor li a").joinToString { it.text() }
