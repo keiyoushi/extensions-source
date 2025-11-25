@@ -2,7 +2,7 @@ ext {
     extName = 'Taurus Fansub'
     extClass = '.TaurusFansub'
     themePkg = 'madara'
-    baseUrl = 'https://taurus.topmanhuas.org'
+    baseUrl = 'https://lectortaurus.com'
     overrideVersionCode = 6
     isNsfw = false
 }
