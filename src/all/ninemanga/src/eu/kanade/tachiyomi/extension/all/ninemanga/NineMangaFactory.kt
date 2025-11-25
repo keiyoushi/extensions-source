@@ -9,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -66,15 +68,15 @@ class NineMangaEs : NineManga("NineMangaEs", "https://es.ninemanga.com", "es") {
         val redirectScript = document.selectFirst("body > script:containsData(window.location.href)")?.data()
 
         if (redirectScript != null) {
-            var redirectUrl = redirectRegex.find(redirectScript)?.groupValues?.get(1)
-                ?: return super.pageListParse(document)
-
             val documentLocation = document.location()
-
-            if (!redirectUrl.startsWith("http")) {
-                val documentDomain = documentLocation.substringAfter("://").substringBefore("/")
-                redirectUrl = "https://$documentDomain/${redirectUrl.removePrefix("/")}"
-            }
+            val redirectUrl = redirectRegex.find(redirectScript)
+                ?.groupValues?.get(1)
+                ?.let { path ->
+                    path.toHttpUrlOrNull()
+                        ?: documentLocation.toHttpUrl().newBuilder()
+                            .encodedPath(path)
+                            .build()
+                } ?: return super.pageListParse(document)
 
             val headers = headers.newBuilder()
                 .set("Referer", documentLocation)
