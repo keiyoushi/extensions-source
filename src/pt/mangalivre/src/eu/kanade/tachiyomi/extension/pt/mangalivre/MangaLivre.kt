@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
@@ -32,12 +33,14 @@ class MangaLivre :
 
     override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
 
-    private val preferences = getPreferences()
-
     override val baseUrl by lazy { getPrefBaseUrl() }
 
+    private val preferences = getPreferences()
+
+    private val cookieInterceptor = CookieInterceptor(baseUrl.substringAfter("://"), "manga_reading_pass" to "verified")
+
     override val client = super.client.newBuilder()
-        .addNetworkInterceptor(ClearanceInterceptor())
+        .addNetworkInterceptor(cookieInterceptor)
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
