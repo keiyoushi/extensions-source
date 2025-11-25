@@ -40,7 +40,6 @@ class Remangas :
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val client = super.client.newBuilder()
-        .addNetworkInterceptor(ClearanceInterceptor())
         .setRandomUserAgent(
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
