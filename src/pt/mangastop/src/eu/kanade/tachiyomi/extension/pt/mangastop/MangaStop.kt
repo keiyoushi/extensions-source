@@ -17,7 +17,7 @@ class MangaStop : MangaThemesia(
 ) {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-        .set("Accept", "application/xhtml+xml")
+        .set("Accept", "text/html,application/xhtml+xml")
 
     override val client = super.client.newBuilder()
         .rateLimit(3)
