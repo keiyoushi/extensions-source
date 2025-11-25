@@ -11,7 +11,7 @@ class TaurusFansub : Madara(
     "Taurus Fansub",
     "https://lectortaurus.com",
     "es",
-    dateFormat = SimpleDateFormat("dd/MM/yyy", Locale.ROOT),
+    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
     override val client = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
