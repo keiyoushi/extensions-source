@@ -6,6 +6,8 @@ import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
@@ -17,12 +19,15 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -60,6 +65,8 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
     }
 
     private val apiBaseUrl: String = "https://panel.ikigaimangas.com"
+
+    private val imageCdnUrl: String = "https://image.ikigaimangas.cloud"
 
     override val lang: String = "es"
 
@@ -146,12 +153,30 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return MangasPage(mangaList, result.hasNextPage())
     }
 
+    private var seriesCache: List<QwikSeriesDto>? = null
+
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        if (query.isNotEmpty()) {
+            if (seriesCache != null) {
+                return Observable.just(qwikDataParse(query, seriesCache!!, page))
+            }
+            val series = getQuerySeriesList()
+            return Observable.just(qwikDataParse(query, series, page))
+        }
+
+        return client.newCall(searchMangaRequest(page, query, filters))
+            .asObservableSuccess()
+            .map { response -> searchMangaParse(response) }
+    }
+
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val sortByFilter = filters.firstInstanceOrNull<SortByFilter>()
 
         val apiUrl = "$apiBaseUrl/api/swf/series".toHttpUrl().newBuilder()
-
-        if (query.isNotEmpty()) apiUrl.addQueryParameter("search", query)
 
         apiUrl.addQueryParameter("page", page.toString())
         apiUrl.addQueryParameter("type", "comic")
@@ -176,10 +201,65 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return GET(apiUrl.build(), lazyHeaders)
     }
 
+    val scriptUrlRegex = """from"(.*?.js)"""".toRegex()
+    val seriesChunkRegex = """PUBLIC_BACKEND_API.*?"s_(.*?)"""".toRegex()
+
+    private fun getQuerySeriesList(): List<QwikSeriesDto> {
+        val baseUrl = preferences.prefBaseUrl
+        val homeDocument = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
+        val mainScript =
+            homeDocument.selectFirst("input[type=search][on:input]")?.attr("on:input")
+                ?: throw Exception("No se pudo encontrar la lista de series.")
+
+        val mainScriptData =
+            client.newCall(GET("$baseUrl/build/$mainScript", headers)).execute().body.string()
+
+        val scriptsUrls = scriptUrlRegex.findAll(mainScriptData).map { it.groupValues[1] }.toList()
+
+        scriptsUrls.forEach {
+            val scriptData =
+                client.newCall(GET("$baseUrl/build/$it", headers)).execute().body.string()
+            val seriesChunkMatch = seriesChunkRegex.find(scriptData)
+            if (seriesChunkMatch != null) {
+                val chunkId = seriesChunkMatch.groupValues[1]
+                val url = "$baseUrl/series".toHttpUrl().newBuilder()
+                    .addQueryParameter("qfunc", chunkId)
+                    .build()
+                val payload = """{"_entry":"1","_objs":["\u0002_#s_$chunkId",["0"]]}"""
+                val body = payload.toRequestBody()
+                val headers = headersBuilder()
+                    .set("X-QRL", chunkId)
+                    .set("Content-Type", "application/qwik-json")
+                    .build()
+                val response = client.newCall(POST(url.toString(), headers, body)).execute()
+                return response.parseAs<QwikData>().parseAsList<QwikSeriesDto>()
+                    .also { series -> seriesCache = series }
+            }
+        }
+
+        throw Exception("No se pudo encontrar la lista de series.")
+    }
+
     override fun searchMangaParse(response: Response): MangasPage {
         val result = json.decodeFromString<PayloadSeriesDto>(response.body.string())
         val mangaList = result.data.filter { it.type == "comic" }.map { it.toSManga() }
         return MangasPage(mangaList, result.hasNextPage())
+    }
+
+    private fun qwikDataParse(query: String, seriesList: List<QwikSeriesDto>, page: Int): MangasPage {
+        val nsfwEnabled = preferences.showNsfwPref
+
+        val filteredSeries = seriesList
+            .filter { it.type == "comic" }
+            .filter { nsfwEnabled || !it.isMature }
+            .filter { it.name.contains(query, ignoreCase = true) }
+
+        val pagedSeries = filteredSeries
+            .drop((page - 1) * PAGE_SIZE)
+            .take(PAGE_SIZE)
+            .map { it.toSManga(imageCdnUrl) }
+
+        return MangasPage(pagedSeries, false)
     }
 
     override fun getMangaUrl(manga: SManga) = preferences.prefBaseUrl + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
@@ -244,6 +324,8 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         fetchFilters()
 
         val filters = mutableListOf<Filter<*>>(
+            Filter.Header("Nota: Los filtros son ignorados si se realiza una búsqueda por texto."),
+            Filter.Separator(),
             SortByFilter("Ordenar por", getSortProperties()),
         )
 
@@ -377,6 +459,8 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         private const val FETCH_DOMAIN_PREF_TITLE = "Buscar dominio automáticamente"
         private const val FETCH_DOMAIN_PREF_SUMMARY = "Intenta buscar el dominio automáticamente al abrir la fuente."
         private const val FETCH_DOMAIN_PREF_DEFAULT = true
+
+        private const val PAGE_SIZE = 20
     }
 
     init {
