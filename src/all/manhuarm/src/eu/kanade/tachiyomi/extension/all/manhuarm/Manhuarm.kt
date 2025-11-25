@@ -190,6 +190,12 @@ class Manhuarm(
         val pages = super.pageListParse(document)
         val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
 
+        val headers = headersBuilder()
+            .set("Sec-Fetch-Site", "same-origin")
+            .set("Sec-Fetch-Mode", "cors")
+            .set("Sec-Fetch-Dest", "empty")
+            .build()
+
         val dialog = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data/$chapterId.json", headers))
             .execute()
             .parseAs<List<PageDto>>()
