@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
 import okhttp3.Request
 import org.jsoup.nodes.Document
@@ -59,10 +60,35 @@ class NineMangaEs : NineManga("NineMangaEs", "https://es.ninemanga.com", "es") {
     }
 
     private val imgRegex = Regex("""all_imgs_url\s*:\s*\[\s*([^]]*)\s*,\s*]""")
+    private val redirectRegex = Regex("""window\.location\.href\s*=\s*["'](.*?)["']""")
 
     override fun pageListParse(document: Document): List<Page> {
+        val redirectScript = document.selectFirst("body > script:containsData(window.location.href)")?.data()
+
+        if (redirectScript != null) {
+            var redirectUrl = redirectRegex.find(redirectScript)?.groupValues?.get(1)
+                ?: return super.pageListParse(document)
+
+            val documentLocation = document.location()
+
+            if (!redirectUrl.startsWith("http")) {
+                val documentDomain = documentLocation.substringAfter("://").substringBefore("/")
+                redirectUrl = "https://$documentDomain/${redirectUrl.removePrefix("/")}"
+            }
+
+            val headers = headers.newBuilder()
+                .set("Referer", documentLocation)
+                .build()
+
+            val redirectedDocument = client.newCall(
+                GET(redirectUrl, headers),
+            ).execute().asJsoup()
+
+            return pageListParse(redirectedDocument)
+        }
+
         val script = document.selectFirst("script:containsData(all_imgs_url)")?.data()
-            ?: throw Exception("Image data not found")
+            ?: return super.pageListParse(document)
 
         val images = imgRegex.find(script)?.groupValues?.get(1)
             ?.let { "[$it]".parseAs<List<String>>() }
