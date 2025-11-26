@@ -42,6 +42,7 @@ abstract class ManhwaZ(
         "en",
         this::class.java.classLoader!!,
     )
+    protected open val searchPath = "search"
 
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
 
@@ -74,7 +75,7 @@ abstract class ManhwaZ(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
             val url = baseUrl.toHttpUrl().newBuilder().apply {
-                addPathSegment("search")
+                addPathSegment(searchPath)
                 addQueryParameter("s", query)
                 addQueryParameter("page", page.toString())
             }.build()
@@ -125,8 +126,8 @@ abstract class ManhwaZ(
         description = document.selectFirst("div.summary__content")?.text()
         genre = document.select("div.genres-content a[rel=tag]").joinToString { it.text() }
         status = when {
-            ongoingStatusList.any { it.contains(statusText, ignoreCase = true) } -> SManga.ONGOING
-            completedStatusList.any { it.contains(statusText, ignoreCase = true) } -> SManga.COMPLETED
+            ongoingStatusList.any { statusText.contains(it, ignoreCase = true) } -> SManga.ONGOING
+            completedStatusList.any { statusText.contains(it, ignoreCase = true) } -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
         thumbnail_url = document.selectFirst("div.summary_image img")?.imgAttr()
