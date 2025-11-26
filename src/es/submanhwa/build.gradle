@@ -1,0 +1,8 @@
+ext {
+    extName = 'Submanhwa'
+    extClass = '.Submanhwa'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"

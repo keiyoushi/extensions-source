@@ -6,7 +6,7 @@ import eu.kanade.tachiyomi.source.model.FilterList
 
 fun getFilters(): FilterList {
     return FilterList(
-        SortFilter("Sort by", Selection(0, false), getSortsList),
+        SortFilter("Sort by", Selection(3, false), getSortsList),
         SelectFilter("Per page", getLimits),
         Filter.Separator(),
         Filter.Header("Separate tags with commas (,)"),

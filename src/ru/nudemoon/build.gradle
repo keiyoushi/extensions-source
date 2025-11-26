@@ -1,7 +1,7 @@
 ext {
     extName = 'Nude-Moon'
     extClass = '.Nudemoon'
-    extVersionCode = 24
+    extVersionCode = 26
     isNsfw = true
 }
 

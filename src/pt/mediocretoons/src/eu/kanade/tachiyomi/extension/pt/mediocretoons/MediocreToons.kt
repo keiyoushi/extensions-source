@@ -39,27 +39,25 @@ class MediocreToons : HttpSource() {
 
     // ============================== Popular ================================
     override fun popularMangaRequest(page: Int): Request {
-        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
-            .addQueryParameter("ordenarPor", "views_hoje")
-            .addQueryParameter("limite", "20")
-            .addQueryParameter("pagina", page.toString())
+        val url = "$apiUrl/obras/ranking".toHttpUrl().newBuilder()
+            .addQueryParameter("ordenarPor", "view_geral")
+            .addQueryParameter("limite", "100")
             .build()
         return GET(url, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
-        val mangas = dto.data.map { it.toSManga() }
-        val hasNext = dto.pagination?.hasNextPage ?: false
-        return MangasPage(mangas, hasNextPage = hasNext)
+        val result = response.parseAs<List<MediocreMangaDto>>()
+        val mangas = result.map { it.toSManga() }
+        return MangasPage(mangas, hasNextPage = false)
     }
 
     // ============================= Latest Updates ==========================
     override fun latestUpdatesRequest(page: Int): Request {
-        val url = "$apiUrl/obras/novos".toHttpUrl().newBuilder()
+        val url = "$apiUrl/obras/recentes".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "24")
-            .addQueryParameter("formato", "4")
+            .addQueryParameter("formato", "5")
             .build()
         return GET(url, headers)
     }
@@ -94,10 +92,8 @@ class MediocreToons : HttpSource() {
                         url.addQueryParameter("status", filter.selected)
                     }
                 }
-                is TagsFilter -> {
-                    filter.state
-                        .filter { it.state }
-                        .forEach { url.addQueryParameter("tags[]", it.value) }
+                is SortFilter -> {
+                    url.addQueryParameter("ordenarPor", filter.selected)
                 }
                 else -> {}
             }
@@ -117,7 +113,7 @@ class MediocreToons : HttpSource() {
     override fun getFilterList() = FilterList(
         FormatoFilter(),
         StatusFilter(),
-        TagsFilter(),
+        SortFilter(),
     )
 
     private class FormatoFilter : UriSelectFilter(
@@ -204,7 +200,15 @@ class MediocreToons : HttpSource() {
         ),
     )
 
-    private class TagCheckBox(name: String, val value: String) : Filter.CheckBox(name)
+    private class SortFilter : UriSelectFilter(
+        "Ordenar Por",
+        arrayOf(
+            Pair("Mais Recentes", "criada_em_desc"),
+            Pair("Mais Populares", "view_geral"),
+            Pair("A-Z", "nome"),
+        ),
+        defaultValue = 0,
+    ) private class TagCheckBox(name: String, val value: String) : Filter.CheckBox(name)
 
     private open class UriSelectFilter(
         displayName: String,
@@ -220,7 +224,6 @@ class MediocreToons : HttpSource() {
 
     // ============================ Manga Details ============================
     override fun getMangaUrl(manga: SManga): String {
-        // manga.url is "/obra/{id}" for API/internal use. Build webview URL with slug from title.
         val id = manga.url.substringAfter("/obra/").substringBefore('/')
         val slug = manga.title.toSlug()
         return "$baseUrl/obra/$id/$slug"
@@ -232,7 +235,7 @@ class MediocreToons : HttpSource() {
     }
 
     override fun mangaDetailsParse(response: Response) =
-        response.parseAs<MediocreMangaDto>().toSManga()
+        response.parseAs<MediocreMangaDto>().toSManga(isDetails = true)
 
     // ============================== Chapters ===============================
     override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
@@ -262,7 +265,7 @@ class MediocreToons : HttpSource() {
     }
 
     companion object {
-        const val CDN_URL = "https://cdn2.fufutebol.com.br"
+        const val CDN_URL = "https://cdn.mediocretoons.site"
     }
 }
 

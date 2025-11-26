@@ -2,7 +2,7 @@ ext {
     extName = 'Mediocre Toons'
     extClass = '.MediocreToons'
     baseUrl = 'https://mediocretoons.site'
-    extVersionCode = 7
+    extVersionCode = 9
     isNsfw = true
 }
 

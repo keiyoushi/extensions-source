@@ -1,10 +1,18 @@
 package eu.kanade.tachiyomi.extension.all.ninemanga
 
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -43,6 +51,54 @@ class NineMangaEs : NineManga("NineMangaEs", "https://es.ninemanga.com", "es") {
         status.contains("En curso") -> SManga.ONGOING
         status.contains("Completado") -> SManga.COMPLETED
         else -> SManga.UNKNOWN
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val headers = headers.newBuilder()
+            .set("Referer", "$baseUrl/")
+            .build()
+
+        return GET(baseUrl + chapter.url, headers)
+    }
+
+    private val imgRegex = Regex("""all_imgs_url\s*:\s*\[\s*([^]]*)\s*,\s*]""")
+    private val redirectRegex = Regex("""window\.location\.href\s*=\s*["'](.*?)["']""")
+
+    override fun pageListParse(document: Document): List<Page> {
+        val redirectScript = document.selectFirst("body > script:containsData(window.location.href)")?.data()
+
+        if (redirectScript != null) {
+            val documentLocation = document.location()
+            val redirectUrl = redirectRegex.find(redirectScript)
+                ?.groupValues?.get(1)
+                ?.let { path ->
+                    path.toHttpUrlOrNull()
+                        ?: documentLocation.toHttpUrl().newBuilder()
+                            .encodedPath(path)
+                            .build()
+                } ?: return super.pageListParse(document)
+
+            val headers = headers.newBuilder()
+                .set("Referer", documentLocation)
+                .build()
+
+            val redirectedDocument = client.newCall(
+                GET(redirectUrl, headers),
+            ).execute().asJsoup()
+
+            return pageListParse(redirectedDocument)
+        }
+
+        val script = document.selectFirst("script:containsData(all_imgs_url)")?.data()
+            ?: return super.pageListParse(document)
+
+        val images = imgRegex.find(script)?.groupValues?.get(1)
+            ?.let { "[$it]".parseAs<List<String>>() }
+            ?: throw Exception("Image list not found")
+
+        return images.mapIndexed { idx, img ->
+            Page(idx, imageUrl = img)
+        }
     }
 
     override fun parseChapterDate(date: String) = parseChapterDateByLang(date)
