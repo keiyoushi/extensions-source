@@ -1,8 +1,12 @@
 package eu.kanade.tachiyomi.extension.pt.aurorascan
 
 import eu.kanade.tachiyomi.multisrc.greenshit.GreenShit
+import eu.kanade.tachiyomi.multisrc.greenshit.addQueryParameterIfNotEmpty
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 class AuroraScan : GreenShit(
@@ -19,6 +23,16 @@ class AuroraScan : GreenShit(
     override val latestEndpoint = "novos-capitulos"
     override val includeSlugInUrl = true
     override val defaultScanId = 4
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
+            .addQueryParameter("pagina", page.toString())
+            .addQueryParameter("limite", "24")
+            .addQueryParameter("todos_generos", "true")
+            .addQueryParameterIfNotEmpty("obr_nome", query)
+
+        return GET(url.build(), headers)
+    }
 
     override fun headersBuilder() = super.headersBuilder()
         .set("scan-id", "serenitytoons.win")

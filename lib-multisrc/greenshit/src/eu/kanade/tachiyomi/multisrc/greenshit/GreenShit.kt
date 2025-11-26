@@ -87,7 +87,7 @@ abstract class GreenShit(
     // ============================= Search ===================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = "$apiUrl/obras".toHttpUrl().newBuilder()
+        val url = "$apiUrl/obras/search".toHttpUrl().newBuilder()
             .addQueryParameter("pagina", page.toString())
             .addQueryParameter("limite", "24")
             .addQueryParameter("todos_generos", "1")
