@@ -8,4 +8,6 @@ class MeHentai : ManhwaZ(
     "vi",
     mangaDetailsAuthorHeading = "Tác giả",
     mangaDetailsStatusHeading = "Trạng thái",
-)
+) {
+    override val searchPath = "tim-kiem"
+}
