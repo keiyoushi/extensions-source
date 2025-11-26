@@ -27,7 +27,7 @@ import java.util.Locale
 class TruyenTranh3Q : ParsedHttpSource() {
     override val name: String = "TruyenTranh3Q"
     override val lang: String = "vi"
-    override val baseUrl: String = "https://truyentranh3qc.com"
+    override val baseUrl: String = "https://truyentranh3qe.com"
     override val supportsLatest: Boolean = true
 
     override val client: OkHttpClient = network.cloudflareClient.newBuilder()
