@@ -5,7 +5,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 
 class SpiderScans : Madara(
     "Spider Scans",
-    "https://spidyscans.xyz",
+    "https://spiderscans.xyz",
     "en",
 ) {
     override val client = super.client.newBuilder()
