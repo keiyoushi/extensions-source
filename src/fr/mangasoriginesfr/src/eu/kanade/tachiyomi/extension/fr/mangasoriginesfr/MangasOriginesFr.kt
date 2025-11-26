@@ -12,7 +12,7 @@ class MangasOriginesFr : Madara(
     "Mangas-Origines.fr",
     "https://mangas-origines.fr",
     "fr",
-    SimpleDateFormat("dd/MM/yyyy", Locale("fr")),
+    SimpleDateFormat("MMMM d, yyyy", Locale("fr")),
 ) {
     override val mangaSubString = "catalogues"
 
