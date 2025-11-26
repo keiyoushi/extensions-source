@@ -47,11 +47,11 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            element.select(".manga-title").let {
+            element.selectFirst(".manga-title")!!.let {
                 setUrlWithoutDomain(it.attr("abs:href"))
                 title = it.text()
             }
-            thumbnail_url = element.select(".manga-cover").imgAttr()
+            thumbnail_url = getImgAttr(element.selectFirst(".manga-cover"))
         }
     }
 
