@@ -25,7 +25,8 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
     // Formerly "MangaGun(漫画軍)"
     override val id = 3811800324362294701
 
-    override val infoElementSelector = "div.row div.row"
+    override val infoElementSelector = "div.manga-detail-container"
+    override val mangaDetailsSelectorDescription = ".description-text-content, .manga-info-list > li:nth-child(1) .info-field-value"
 
     override val client = super.client.newBuilder()
         .addNetworkInterceptor(CookieInterceptor(DOMAIN, "smartlink_shown" to "1")).build()
@@ -41,6 +42,18 @@ class MangaGun : FMReader("NihonKuni", "https://$DOMAIN", "ja") {
     override fun popularMangaRequest(page: Int): Request = mangaRequest("views", page)
 
     override fun latestUpdatesRequest(page: Int): Request = mangaRequest("last_update", page)
+
+    override fun popularMangaSelector() = "div.manga-grid div.manga-card"
+
+    override fun popularMangaFromElement(element: Element): SManga {
+        return SManga.create().apply {
+            element.selectFirst(".manga-title")!!.let {
+                setUrlWithoutDomain(it.attr("abs:href"))
+                title = it.text()
+            }
+            thumbnail_url = getImgAttr(element.selectFirst(".manga-cover"))
+        }
+    }
 
     override fun getImgAttr(element: Element?): String? {
         return when {
