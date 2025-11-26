@@ -2,7 +2,7 @@ package eu.kanade.tachiyomi.extension.es.taurusfansub
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.model.SManga
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -10,9 +10,9 @@ import java.util.concurrent.TimeUnit
 
 class TaurusFansub : Madara(
     "Taurus Fansub",
-    "https://taurus.topmanhuas.org",
+    "https://lectortaurus.com",
     "es",
-    dateFormat = SimpleDateFormat("dd/MM/yyy", Locale.ROOT),
+    dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
     override val client = super.client.newBuilder()
         .rateLimit(2, 1, TimeUnit.SECONDS)
@@ -21,21 +21,20 @@ class TaurusFansub : Madara(
     override val useNewChapterEndpoint = true
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val manga = SManga.create()
+    override val popularMangaUrlSelectorImg = ".manga__thumb_item img"
 
-        manga.description = document.select("div.site-content div.summary_content p").text()
-        manga.genre = document.select("div.site-content div.summary_content div.genres-content").joinToString { it.text() }
-        manga.author = document.select("div.site-content div.summary_content div.tags-content").text()
+    override val mangaDetailsSelectorTitle = "h1.post-title"
+    override val mangaDetailsSelectorStatus = "div.manga-status span:last-child"
+    override val mangaDetailsSelectorDescription = "div.summary__content p"
 
-        val stado = document.select("div.site-content div.summary_content div.manga-title div.post-content_item div.summary-content").first()?.text()
-        manga.status = when (stado) {
-            "En Curso" -> { SManga.ONGOING }
-            "Completado" -> { SManga.COMPLETED }
-            else -> { SManga.UNKNOWN }
-        }
-        manga.artist = document.select("div.site-content div.summary_content div.tags-content").text()
+    override fun parseGenres(document: Document): List<Genre> {
+        return document.select(".genres-filter .options a")
+            .mapNotNull { element ->
+                val id = element.absUrl("href").toHttpUrlOrNull()?.queryParameter("genre")
+                val name = element.text()
 
-        return manga
+                id?.takeIf { it.isNotEmpty() && name.isNotBlank() }
+                    ?.let { Genre(name, it) }
+            }
     }
 }
