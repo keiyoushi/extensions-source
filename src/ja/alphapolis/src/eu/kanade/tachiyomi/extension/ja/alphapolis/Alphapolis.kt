@@ -35,6 +35,20 @@ class Alphapolis : HttpSource() {
 
     private val dateFormat = SimpleDateFormat("yyyy.MM.dd'更新'", Locale.ROOT)
 
+    private var xsrfToken: String? = null
+
+    override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            response.headers("Set-Cookie").firstOrNull { it.startsWith("XSRF-TOKEN=") }?.let {
+                xsrfToken = it.substringAfter("XSRF-TOKEN=").substringBefore(";").let { encoded ->
+                    URLDecoder.decode(encoded, "UTF-8")
+                }
+            }
+            response
+        }
+        .build()
+
     override fun popularMangaRequest(page: Int): Request {
         return GET("$baseUrl/manga/official/ranking?category=total", headers)
     }
@@ -151,22 +165,18 @@ class Alphapolis : HttpSource() {
 
     override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
         return Observable.fromCallable {
-            val parts = chapter.url.split("/")
+            val parts = (baseUrl + chapter.url).toHttpUrl().pathSegments
             val mangaId = parts[parts.size - 2].toInt()
             val episodeId = parts.last().toInt()
 
-            val xsrfToken = getXsrfToken() ?: run {
-                client.newCall(GET(baseUrl + chapter.url, headers)).execute().close()
-                getXsrfToken()
-                    ?: throw Exception("XSRF-Token not found")
-            }
+            val token = xsrfToken ?: getXsrfToken() ?: throw Exception("XSRF-Token not found")
 
             val viewerUrl = "$baseUrl/manga/official/viewer.json"
 
             val newHeaders = super.headersBuilder()
                 .add("X-Requested-With", "XMLHttpRequest")
-                .add("X-XSRF-TOKEN", xsrfToken)
-                .set("Referer", baseUrl + chapter.url)
+                .add("X-XSRF-TOKEN", token)
+                .set("Referer", getChapterUrl(chapter))
                 .build()
 
             fun getPages(resolution: String): List<Page> {
