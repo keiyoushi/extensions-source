@@ -1,21 +1,26 @@
 package eu.kanade.tachiyomi.extension.pt.egotoons
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 
-class EgoToons : HttpSource() {
+class EgoToons : HttpSource(), ConfigurableSource {
 
     override val name = "Ego Toons"
 
@@ -25,9 +30,13 @@ class EgoToons : HttpSource() {
 
     override val supportsLatest = true
 
+    override val versionId = 3
+
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
         .build()
+
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
@@ -50,10 +59,12 @@ class EgoToons : HttpSource() {
     override fun latestUpdatesRequest(page: Int): Request {
         val limit = 20
         val offset = (page - 1) * limit
+        val withHentai = preferences.getBoolean(PREF_HENTAI_KEY, PREF_HENTAI_DEFAULT)
+
         val url = "$baseUrl/api/releases".toHttpUrl().newBuilder()
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", limit.toString())
-            .addQueryParameter("withHentai", "true")
+            .addQueryParameter("withHentai", withHentai.toString())
             .build()
         return GET(url, headers)
     }
@@ -68,11 +79,13 @@ class EgoToons : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val limit = 20
         val offset = (page - 1) * limit
+        val withHentai = preferences.getBoolean(PREF_HENTAI_KEY, PREF_HENTAI_DEFAULT)
+
         val url = "$baseUrl/api/manga/search".toHttpUrl().newBuilder()
             .addQueryParameter("query", query)
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", limit.toString())
-            .addQueryParameter("withHentai", "true")
+            .addQueryParameter("withHentai", withHentai.toString())
 
         filters.forEach { filter ->
             when (filter) {
@@ -107,7 +120,12 @@ class EgoToons : HttpSource() {
 
     // ============================ Manga Details ============================
     override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/manga/${getMangaId(manga.url)}", headers)
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/manga")
+            .addPathSegment(getMangaId(manga.url))
+            .build()
+
+        return GET(url, headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -132,14 +150,18 @@ class EgoToons : HttpSource() {
                 } else {
                     val totalPages = (total + pageSize - 1) / pageSize
                     val remainingRequests = (1 until totalPages).map { page ->
-                        val request = GET(
-                            "$baseUrl/api/manga/$mangaId/chapter?limit=$pageSize&offset=${page * pageSize}",
-                            headers,
-                        )
+                        val url = baseUrl.toHttpUrl().newBuilder()
+                            .addPathSegments("api/manga")
+                            .addPathSegment(mangaId)
+                            .addPathSegment("chapter")
+                            .addQueryParameter("limit", pageSize.toString())
+                            .addQueryParameter("offset", (page * pageSize).toString())
+                            .build()
+
+                        val request = GET(url, headers)
                         client.newCall(request).asObservableSuccess()
                             .map { chapterListParse(it) }
                     }
-
                     Observable.concat(
                         Observable.just(firstPageChapters),
                         Observable.concat(remainingRequests),
@@ -149,9 +171,16 @@ class EgoToons : HttpSource() {
     }
 
     override fun chapterListRequest(manga: SManga): Request {
-        return GET("$baseUrl/api/manga/${getMangaId(manga.url)}/chapter?limit=20&offset=0", headers)
-    }
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/manga")
+            .addPathSegment(getMangaId(manga.url))
+            .addPathSegment("chapter")
+            .addQueryParameter("limit", "20")
+            .addQueryParameter("offset", "0")
+            .build()
 
+        return GET(url, headers)
+    }
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaId = response.request.url.pathSegments[2].toInt()
         val result = response.parseAs<EgoToonsPaginatedDto<EgoToonsChapterDto>>()
@@ -163,8 +192,16 @@ class EgoToons : HttpSource() {
         val mangaId = getMangaId(chapter.url)
         val number = chapter.chapter_number.toString().removeSuffix(".0")
 
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegments("api/manga")
+            .addPathSegment(mangaId)
+            .addPathSegment("chapter")
+            .addPathSegment(number)
+            .addPathSegment("images")
+            .build()
+
         return GET(
-            "$baseUrl/api/manga/$mangaId/chapter/$number/images",
+            url,
             headersBuilder()
                 .add("x-mymangas-csrf-secure", "true")
                 .add("x-mymangas-secure-panel-domain", "true")
@@ -186,20 +223,64 @@ class EgoToons : HttpSource() {
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
+    // ============================== Settings ===============================
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_HENTAI_KEY
+            title = "Exibir conteúdo Hentai (+18)"
+            summary = "Habilita a visualização de conteúdo adulto nas listas."
+            setDefaultValue(PREF_HENTAI_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                val checked = newValue as Boolean
+                preferences.edit().putBoolean(PREF_HENTAI_KEY, checked).apply()
+                true
+            }
+        }.also(screen::addPreference)
+    }
+
     // =============================== Utils =================================
 
     override fun getMangaUrl(manga: SManga): String {
-        return "$baseUrl/${manga.url.replace("api/manga", "obra")}"
+        val id = getMangaId(manga.url)
+        return baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("obra")
+            .addPathSegment(id)
+            .build()
+            .toString()
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return "$baseUrl/${chapter.url.replace("api/manga", "obra").replace("chapter", "capitulo")}"
+        val mangaId = getMangaId(chapter.url)
+        val chapterSlug = if (chapter.url.startsWith("http")) {
+            chapter.url.toHttpUrl().pathSegments.last()
+        } else {
+            chapter.url.trimEnd('/').substringAfterLast('/')
+        }
+
+        return baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("obra")
+            .addPathSegment(mangaId)
+            .addPathSegment("capitulo")
+            .addPathSegment(chapterSlug)
+            .build()
+            .toString()
     }
 
     private fun getMangaId(url: String): String {
-        return url.trim('/')
-            .substringAfter("manga/")
-            .substringAfter("obra/")
-            .substringBefore("/")
+        val absoluteUrl = if (url.startsWith("http")) {
+            url
+        } else {
+            "$baseUrl/${url.trimStart('/')}"
+        }
+
+        val segments = absoluteUrl.toHttpUrl().pathSegments
+        val index = segments.indexOfFirst { it == "obra" || it == "manga" }
+
+        return segments[index + 1]
+    }
+
+    companion object {
+        private const val PREF_HENTAI_KEY = "pref_hentai"
+        private const val PREF_HENTAI_DEFAULT = false
     }
 }

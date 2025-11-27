@@ -84,6 +84,6 @@ data class EgoToonsChapterDto(
             else -> "$chapterName - $title"
         }
         chapter_number = chapter
-        url = "obra/$mangaId/capitulo/${chapter.toString().removeSuffix(".0")}"
+        url = "obra/$mangaId/capitulo/$formattedNum"
     }
 }
