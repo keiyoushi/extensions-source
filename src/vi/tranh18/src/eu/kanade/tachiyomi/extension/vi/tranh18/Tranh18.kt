@@ -63,19 +63,15 @@ class Tranh18 : ParsedHttpSource() {
     override fun popularMangaNextPageSelector(): String = latestUpdatesNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val infoMobile = document.selectFirst(".detail-main")
         title = document.select(".info h1, .detail-main-info-title").text()
-        genre = document.select("p.tip:contains(Từ khóa) span a").takeIf { it.isNotEmpty() }
-            ?.joinToString { it.text() }
-            ?: infoMobile?.select(".detail-main-info-class span a")?.joinToString { it.text() }
+        genre = document.select("p.tip:contains(Từ khóa) span a, .detail-main-info-class span a")
+            .joinToString { it.text() }
         description = document.select("p.content").takeIf { it.isNotEmpty() }
             ?.joinToString("\n") { it.wholeText().trim().substringBefore("#").trim() }
             ?: document.select("p.detail-desc")
                 .joinToString("\n") { it.wholeText().trim().substringBefore("#").trim() }
-        author = document.select(".subtitle:contains(Tác giả：)").takeIf { it.isNotEmpty() }
+        author = document.selectFirst(".subtitle:contains(Tác giả：), .detail-main-info-author:contains(Tác giả：) a")
             ?.text()?.removePrefix("Tác giả：")
-            ?: infoMobile?.select(".detail-main-info-author:contains(Tác giả：) a")?.text()
-                ?.removePrefix("Tác giả：")
         status = parseStatus(
             document.select(".block:contains(Trạng thái)").takeIf { it.isNotEmpty() }
                 ?.text()
