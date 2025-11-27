@@ -243,8 +243,8 @@ class ComixFilters {
         Sortable("Created Date", "created_at"),
         Sortable("Title", "title"),
         Sortable("Year", "year"),
-        Sortable("Total Views", "total_views"),
-        Sortable("Most Follows", "followed_count"),
+        Sortable("Total Views", "views_total"),
+        Sortable("Most Follows", "follows_total"),
     )
 
     private class SortFilter(private val sortables: Array<Sortable>) :
