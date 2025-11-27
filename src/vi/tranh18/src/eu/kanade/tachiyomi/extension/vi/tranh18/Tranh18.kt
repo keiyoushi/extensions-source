@@ -71,8 +71,10 @@ class Tranh18 : ParsedHttpSource() {
             ?.joinToString { it.text() }
             ?: infoMobile?.select(".detail-main-info-class span a")?.joinToString { it.text() }
         description = document.select("p.content").takeIf { it.isNotEmpty() }
-            ?.joinToString("\n") { it.text() }
-            ?: document.select("p.detail-desc").joinToString("\n") { it.text() }
+            ?.joinToString { it.wholeText().trim().substringBefore("#", "") }
+            ?: document.select("p.detail-desc").joinToString {
+                it.wholeText().trim().substringBefore("#", "")
+            }
         author = document.select(".subtitle:contains(Tác giả：)").takeIf { it.isNotEmpty() }
             ?.text()?.removePrefix("Tác giả：")
             ?: infoMobile?.select(".detail-main-info-author:contains(Tác giả：) a")?.text()
