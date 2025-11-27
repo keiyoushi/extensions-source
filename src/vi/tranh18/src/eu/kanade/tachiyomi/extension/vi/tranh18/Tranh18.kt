@@ -64,9 +64,7 @@ class Tranh18 : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
         val infoMobile = document.selectFirst(".detail-main")
-        title = document.select(".info h1").takeIf { it.isNotEmpty() }
-            ?.text()
-            ?: infoMobile!!.select(".detail-main-info-title").text()
+        title = document.select(".info h1, .detail-main-info-title").text()
         genre = document.select("p.tip:contains(Từ khóa) span a").takeIf { it.isNotEmpty() }
             ?.joinToString { it.text() }
             ?: infoMobile?.select(".detail-main-info-class span a")?.joinToString { it.text() }
