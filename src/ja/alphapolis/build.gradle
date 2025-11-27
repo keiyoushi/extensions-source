@@ -1,0 +1,7 @@
+ext {
+    extName = 'Alphapolis'
+    extClass = '.Alphapolis'
+    extVersionCode = 1
+    isNsfw = true
+}
+apply from: "$rootDir/common.gradle"
