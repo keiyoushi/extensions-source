@@ -41,13 +41,13 @@ class Tranh18 : ParsedHttpSource() {
     override fun latestUpdatesSelector(): String = ".box-body ul li, .manga-list ul li"
 
     override fun latestUpdatesFromElement(element: Element): SManga = SManga.create().apply {
-        val sel = element.select(".mh-item, .manga-list-2-cover")
-        setUrlWithoutDomain(sel.select("a").attr("href"))
+        val sel = element.selectFirst(".mh-item, .manga-list-2-cover")
+        setUrlWithoutDomain(sel!!.selectFirst("a")!!.absUrl("href"))
         title = sel.select("a").attr("title")
-        thumbnail_url = baseUrl + sel.select("p.mh-cover").attr("style")
+        thumbnail_url = baseUrl + sel.selectFirst("p.mh-cover")?.attr("style")!!
             .substringAfter("url(")
             .substringBefore(")")
-            .ifEmpty { baseUrl + sel.select("img").attr("data-original") }
+            .ifEmpty { baseUrl + sel.selectFirst("img")?.absUrl("data-original") }
     }
 
     override fun latestUpdatesNextPageSelector(): String = ".mt20"
@@ -63,27 +63,29 @@ class Tranh18 : ParsedHttpSource() {
     override fun popularMangaNextPageSelector(): String = latestUpdatesNextPageSelector()
 
     override fun mangaDetailsParse(document: Document): SManga = SManga.create().apply {
-        val infoMobile = document.select(".detail-main")
+        val infoMobile = document.selectFirst(".detail-main")
         title = document.select(".info h1").takeIf { it.isNotEmpty() }
             ?.text()
-            ?: infoMobile.select(".detail-main-info-title").text()
+            ?: infoMobile!!.select(".detail-main-info-title").text()
         genre = document.select("p.tip:contains(Từ khóa) span a").takeIf { it.isNotEmpty() }
             ?.joinToString { it.text() }
-            ?: infoMobile.select(".detail-main-info-class span a").joinToString { it.text() }
+            ?: infoMobile?.select(".detail-main-info-class span a")?.joinToString { it.text() }
         description = document.select("p.content").takeIf { it.isNotEmpty() }
             ?.joinToString("\n") { it.text() }
-            ?: document.select("p.detail-desc").joinToString("\n") { it.wholeText() }
+            ?: document.select("p.detail-desc").joinToString("\n") { it.text() }
         author = document.select(".subtitle:contains(Tác giả：)").takeIf { it.isNotEmpty() }
             ?.text()?.removePrefix("Tác giả：")
-            ?: infoMobile.select(".detail-main-info-author:contains(Tác giả：) a").text().removePrefix("Tác giả：")
+            ?: infoMobile?.select(".detail-main-info-author:contains(Tác giả：) a")?.text()
+                ?.removePrefix("Tác giả：")
         status = parseStatus(
             document.select(".block:contains(Trạng thái)").takeIf { it.isNotEmpty() }
                 ?.text()
                 ?: document.select(".detail-list-title-1").text(),
         )
-        thumbnail_url = document.select(".banner_detail_form .cover img").attr("abs:src").ifEmpty {
-            document.select(".detail-main-cover img").attr("data-original")
-        }
+        thumbnail_url = document.selectFirst(".banner_detail_form .cover img")?.absUrl("src")
+            ?.ifEmpty {
+                document.selectFirst(".detail-main-cover img")?.absUrl("data-original")
+            }
     }
 
     private fun parseStatus(status: String?) = when {
@@ -140,7 +142,7 @@ class Tranh18 : ParsedHttpSource() {
                     }
                 }
             }
-            addQueryParameter("page", "$page")
+            addQueryParameter("page", page.toString())
         }.build()
         return GET(url, headers)
     }
