@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.vi.tranh18
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
@@ -66,9 +67,9 @@ class Tranh18 : ParsedHttpSource() {
         title = document.select(".info h1").takeIf { it.isNotEmpty() }
             ?.text()
             ?: infoMobile.select(".detail-main-info-title").text()
-        genre = document.select(".ticai:contains(Thể loại) a").takeIf { it.isNotEmpty() }
+        genre = document.select("p.tip:contains(Từ khóa) span a").takeIf { it.isNotEmpty() }
             ?.joinToString { it.text() }
-            ?: infoMobile.select(".detail-main-info-author:contains(Thể loại) a").joinToString { it.text() }
+            ?: infoMobile.select(".detail-main-info-class span a").joinToString { it.text() }
         description = document.select("p.content").takeIf { it.isNotEmpty() }
             ?.joinToString("\n") { it.text() }
             ?: document.select("p.detail-desc").joinToString("\n") { it.wholeText() }
@@ -129,8 +130,17 @@ class Tranh18 : ParsedHttpSource() {
                 addPathSegment("search")
                 addQueryParameter("keyword", query)
             } else {
-                latestUpdatesRequest(page)
+                addPathSegment("comics")
+                (if (filters.isEmpty()) getFilterList() else filters).forEach {
+                    when (it) {
+                        is KeywordList -> addQueryParameter("tag", it.values[it.state].genre)
+                        is StatusList -> addQueryParameter("end", it.values[it.state].genre)
+                        is GenreList -> addQueryParameter("area", it.values[it.state].genre)
+                        else -> {}
+                    }
+                }
             }
+            addQueryParameter("page", "$page")
         }.build()
         return GET(url, headers)
     }
@@ -140,4 +150,64 @@ class Tranh18 : ParsedHttpSource() {
     override fun searchMangaSelector(): String = latestUpdatesSelector()
 
     override fun searchMangaNextPageSelector(): String = latestUpdatesNextPageSelector()
+
+    override fun getFilterList() = FilterList(
+        Filter.Header("Không dùng chung với tìm kiếm bằng từ khóa."),
+        GenreList(),
+        StatusList(),
+        KeywordList(getGenreList()),
+    )
+
+    private class GenreList : Filter.Select<Genre>(
+        "Thể loại",
+        arrayOf(
+            Genre("Tất cả", "-1"),
+            Genre("Manhua", "1"),
+            Genre("Manhwa", "2"),
+            Genre("Manga", "3"),
+        ),
+    )
+
+    private class StatusList : Filter.Select<Genre>(
+        "Tiến độ",
+        arrayOf(
+            Genre("Tất cả", "-1"),
+            Genre("Đang tiến thành", "2"),
+            Genre("Đã hoàn tất", "1"),
+        ),
+    )
+
+    private class KeywordList(genre: Array<Genre>) : Filter.Select<Genre>("Từ khóa", genre)
+
+    private class Genre(val name: String, val genre: String) {
+        override fun toString() = name
+    }
+
+    private fun getGenreList() = arrayOf(
+        Genre("All", "All"),
+        Genre("Adult", "Adult"),
+        Genre("Action", "Action"),
+        Genre("Comedy", "Comedy"),
+        Genre("Drama", "Drama"),
+        Genre("Fantasy", "Fantasy"),
+        Genre("Harem", "Harem"),
+        Genre("Historical", "Historical"),
+        Genre("Horror", "Horror"),
+        Genre("Ecchi", "Ecchi"),
+        Genre("School Life", "School Life"),
+        Genre("Seinen", "Seinen"),
+        Genre("Shoujo", "Shoujo"),
+        Genre("Shoujo Ai", "Shoujo Ai"),
+        Genre("Shounen", "Shounen"),
+        Genre("Shounen Ai", "Shounen Ai"),
+        Genre("Mystery", "Mystery"),
+        Genre("Sci-fi", "Sci-fi"),
+        Genre("Webtoon", "Webtoon"),
+        Genre("Chuyển Sinh", "Chuyển Sinh"),
+        Genre("Xuyên Không", "Xuyên Không"),
+        Genre("Truyện Màu", "Truyện Màu"),
+        Genre("18", "18"),
+        Genre("Truyện Tranh 18", "Truyện Tranh 18"),
+        Genre("Big Boobs", "Big Boobs"),
+    )
 }
