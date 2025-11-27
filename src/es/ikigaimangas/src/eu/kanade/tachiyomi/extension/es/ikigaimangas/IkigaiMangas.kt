@@ -259,7 +259,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             .take(PAGE_SIZE)
             .map { it.toSManga(imageCdnUrl) }
 
-        return MangasPage(pagedSeries, false)
+        return MangasPage(pagedSeries, filteredSeries.size > page * PAGE_SIZE)
     }
 
     override fun getMangaUrl(manga: SManga) = preferences.prefBaseUrl + manga.url.substringBefore("#").replace("/series/comic-", "/series/")
