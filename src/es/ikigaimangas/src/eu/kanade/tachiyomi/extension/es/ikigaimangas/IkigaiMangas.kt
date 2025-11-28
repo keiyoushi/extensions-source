@@ -113,7 +113,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences = getPreferences()
 
     override fun headersBuilder() = super.headersBuilder()
-        .set("Referer", fetchedDomainUrl)
+        .set("Referer", "$fetchedDomainUrl/")
 
     private val json: Json by injectLazy()
 
