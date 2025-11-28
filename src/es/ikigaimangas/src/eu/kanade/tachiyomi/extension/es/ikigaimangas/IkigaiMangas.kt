@@ -198,7 +198,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         return GET(apiUrl.build(), headers)
     }
 
-    val scriptUrlRegex = """from"(.*?.js)"""".toRegex()
+    val scriptUrlRegex = """from"(.*?\.js)"""".toRegex()
     val seriesChunkRegex = """PUBLIC_BACKEND_API.*?"s_(.*?)"""".toRegex()
 
     private fun getQuerySeriesList(): List<QwikSeriesDto> {
