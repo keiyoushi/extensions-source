@@ -112,11 +112,8 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences = getPreferences()
 
-    private val lazyHeaders by lazy {
-        headersBuilder()
-            .set("Referer", fetchedDomainUrl)
-            .build()
-    }
+    override fun headersBuilder() = super.headersBuilder()
+        .set("Referer", fetchedDomainUrl)
 
     private val json: Json by injectLazy()
 
@@ -130,7 +127,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             .addQueryParameter("series_type", "comic")
             .addQueryParameter("nsfw", if (preferences.showNsfwPref) "true" else "false")
 
-        return GET(apiUrl.build(), lazyHeaders)
+        return GET(apiUrl.build(), headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -144,7 +141,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             .addQueryParameter("nsfw", if (preferences.showNsfwPref) "true" else "false")
             .addQueryParameter("page", page.toString())
 
-        return GET(apiUrl.build(), lazyHeaders)
+        return GET(apiUrl.build(), headers)
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
@@ -198,7 +195,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         apiUrl.addQueryParameter("column", sortByFilter?.selected ?: "name")
         apiUrl.addQueryParameter("direction", if (sortByFilter?.state?.ascending == true) "asc" else "desc")
 
-        return GET(apiUrl.build(), lazyHeaders)
+        return GET(apiUrl.build(), headers)
     }
 
     val scriptUrlRegex = """from"(.*?.js)"""".toRegex()
@@ -269,7 +266,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
             .substringAfter("/series/comic-")
             .substringBefore("#")
 
-        return GET("$apiBaseUrl/api/swf/series/$slug", lazyHeaders)
+        return GET("$apiBaseUrl/api/swf/series/$slug", headers)
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -281,7 +278,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
 
     override fun chapterListRequest(manga: SManga): Request {
         val slug = manga.url.substringAfter("/series/comic-").substringBefore("#")
-        return GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=1", lazyHeaders)
+        return GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=1", headers)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -293,7 +290,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         mangas.addAll(result.data.map { it.toSChapter(dateFormat) })
         var page = 2
         while (result.meta.hasNextPage()) {
-            val newResponse = client.newCall(GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=$page", lazyHeaders)).execute()
+            val newResponse = client.newCall(GET("$apiBaseUrl/api/swf/series/$slug/chapters?page=$page", headers)).execute()
             result = json.decodeFromString<PayloadChaptersDto>(newResponse.body.string())
             mangas.addAll(result.data.map { it.toSChapter(dateFormat) })
             page++
@@ -302,7 +299,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListRequest(chapter: SChapter): Request =
-        GET(fetchedDomainUrl + chapter.url.substringBefore("#"), lazyHeaders)
+        GET(fetchedDomainUrl + chapter.url.substringBefore("#"), headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val request = response.request
@@ -366,7 +363,7 @@ class IkigaiMangas : HttpSource(), ConfigurableSource {
         fetchFiltersAttempts++
         thread {
             try {
-                val response = client.newCall(GET("$apiBaseUrl/api/swf/filter-options", lazyHeaders)).execute()
+                val response = client.newCall(GET("$apiBaseUrl/api/swf/filter-options", headers)).execute()
                 val filters = json.decodeFromString<PayloadFiltersDto>(response.body.string())
 
                 genresList = filters.data.genres.map { it.name.trim() to it.id }
