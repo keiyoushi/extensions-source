@@ -17,9 +17,7 @@ class RokariComics : MangaThemesia(
     "en",
 ) {
     // Popular - Use homepage "Popular Today" section (first page only, no pagination)
-    override fun popularMangaRequest(page: Int): Request {
-        GET(baseUrl, headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val document = response.asJsoup()
