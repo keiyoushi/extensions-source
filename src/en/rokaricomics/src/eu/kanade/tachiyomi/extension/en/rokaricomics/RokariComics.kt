@@ -22,27 +22,24 @@ class RokariComics : MangaThemesia(
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        if (!response.request.url.toString().endsWith("/page/0/")) {
-            val document = response.asJsoup()
-            // Select manga from "Popular Today" section (first listupd on homepage)
-            val mangas = document.select(".bixbox:has(h2:contains(Popular)) .bs .bsx").map { element ->
-                SManga.create().apply {
-                    element.select("a").first()?.let {
-                        setUrlWithoutDomain(it.attr("href"))
-                        title = it.attr("title")
-                    }
-                    thumbnail_url = element.select("img").firstOrNull()?.let { img ->
-                        img.attr("abs:data-lazy-src").ifEmpty {
-                            img.attr("abs:data-src").ifEmpty {
-                                img.attr("abs:src")
-                            }
+        val document = response.asJsoup()
+        // Select manga from "Popular Today" section (first listupd on homepage)
+        val mangas = document.select(".bixbox:has(h2:contains(Popular)) .bs .bsx").map { element ->
+            SManga.create().apply {
+                element.select("a").first()?.let {
+                    setUrlWithoutDomain(it.attr("href"))
+                    title = it.attr("title")
+                }
+                thumbnail_url = element.select("img").firstOrNull()?.let { img ->
+                    img.attr("abs:data-lazy-src").ifEmpty {
+                        img.attr("abs:data-src").ifEmpty {
+                            img.attr("abs:src")
                         }
                     }
                 }
             }
-            return MangasPage(mangas, false)
         }
-        return MangasPage(emptyList(), false)
+        return MangasPage(mangas, false)
     }
 
     // Latest - Use homepage pagination which shows latest updates
