@@ -11,9 +11,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.getPreferences
-import keiyoushi.utils.jsonInstance
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -239,10 +238,6 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
             summary = "Hides NSFW entries"
             setDefaultValue(false)
         }.also(screen::addPreference)
-    }
-
-    private inline fun <reified T> Response.parseAs(): T {
-        return jsonInstance.decodeFromString(body.string())
     }
 
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
