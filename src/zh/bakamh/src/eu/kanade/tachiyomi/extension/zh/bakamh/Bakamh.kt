@@ -45,17 +45,18 @@ class Bakamh :
     }
 
     override val mangaDetailsSelectorStatus = ".post-content_item:contains(状态) .summary-content"
-    override fun chapterListSelector() = ".chapter-loveYou, li a[onclick], li a"
+    override fun chapterListSelector() =
+        ".chapter-loveYou a, li:not(.menu-item) a[onclick], li:not(.menu-item) a"
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val mangaUrl = response.request.url.toString().lowercase()
-        val doc = response.asJsoup()
-        return doc.select(chapterListSelector())
-            .mapNotNull { paresChapter(it, mangaUrl) }
+        return response.asJsoup()
+            .select(chapterListSelector())
+            .mapNotNull { parseChapter(it, mangaUrl) }
     }
 
-    fun paresChapter(element: Element, mangaUrl: String): SChapter? {
-        // current url attribute
+    private fun parseChapter(element: Element, mangaUrl: String): SChapter? {
+        // Current URL attribute
         if (element.hasAttr("storage-chapter-url")) {
             return SChapter.create().apply {
                 url = element.absUrl("storage-chapter-url")
@@ -64,11 +65,13 @@ class Bakamh :
             }
         }
 
-        // compatibility operation for modified versions
+        // Compatibility operation for modified versions
         return element.attributes()
-            .find { attr ->
+            .firstOrNull { attr ->
                 val value = attr.value.lowercase()
-                value.startsWith(mangaUrl) && value != mangaUrl
+                value.startsWith(mangaUrl)
+                    && value != mangaUrl  // Not current URL
+                    && !value.startsWith("$mangaUrl#comment") // Not comment
             }
             ?.let { attr ->
                 SChapter.create().apply {
