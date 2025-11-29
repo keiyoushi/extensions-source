@@ -25,17 +25,19 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class SakuraManhwa(
+class BlossomManhwa(
     override val lang: String = "all",
 ) : HttpSource(), ConfigurableSource {
-    override val name = "SakuraManhwa"
+    override val name = "BlossomManhwa"
+
+    override val id = 1781921631032816989
 
     override val supportsLatest = true
 
-    override val baseUrl = "https://api.sakuramanhwa.com"
+    override val baseUrl = "https://api.blossommanhwa.com"
 
-    private val apiImageUrl = "https://api.sakuramanhwa.com/v1/images"
-    private val cdnImageUrl = "https://cdn.sakuramanhwa.com/v1/images"
+    private val apiImageUrl = "https://api.blossommanhwa.com/v1/images"
+    private val cdnImageUrl = "https://cdn.blossommanhwa.com/v1/images"
 
     private val secretKey = "EA^UfBOF9lNdQDS3i2qAnsqxIrTpH%"
     private val encryptKey = "6dFGd4Laa3vE%kLpr5eCtSEaAL%wJm"
@@ -55,7 +57,7 @@ class SakuraManhwa(
 
     private val preference = getPreferences()
 
-    private val i18nHelper: I18nHelper = I18nHelper("https://sakuramanhwa.com", client, preference)
+    private val i18nHelper: I18nHelper = I18nHelper("https://blossommanhwa.com", client, preference)
 
     // Chapter
 
@@ -63,7 +65,7 @@ class SakuraManhwa(
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<ApiMangaInfo>()
-        val tag = when (data.manga.details.type) {
+        val tag = when (data.manga.type) {
             "manhwa" -> "api"
             "manga" -> "cdn"
             else -> throw UnsupportedOperationException()
@@ -74,7 +76,7 @@ class SakuraManhwa(
             val chapterName = getChapterName(it.number)
             lis.add(
                 SChapter.create().apply {
-                    url = "$tag/v1/manga/${data.manga.details.slug}/chapter/$chapterName"
+                    url = "$tag/v1/manga/${data.manga.slug}/chapter/$chapterName"
                     name = "${chapterName}${if (it.title != null) " ${it.title}" else ""}"
                     date_upload = dateFormat.tryParse(it.create_at)
                     chapter_number = it.number
@@ -122,11 +124,11 @@ class SakuraManhwa(
     override fun mangaDetailsParse(response: Response): SManga {
         val data = response.parseAs<ApiMangaInfo>()
 
-        return mangaDetailsToSManga(data.manga.details).apply {
+        return mangaDetailsToSManga(data.manga).apply {
             genre = listOf(
                 genre!!,
-                "follows: ${data.manga.follows}",
-                "views:  ${data.manga.views}",
+                "follows: ${data.metaData.follows}",
+                "views:  ${data.metaData.views}",
             ).joinToString()
         }
     }
@@ -135,12 +137,12 @@ class SakuraManhwa(
         return SManga.create().apply {
             url = "/v1/manga/findBySlug/${details.slug}"
             title = getTitle(details.title, details.language)
-            genre = listOf(
-                "lang: ${details.language}",
-                "type: ${details.type}",
-                "author: ${details.author}",
-                "rating: ${details.rating}",
-            ).joinToString()
+            genre = buildList {
+                add("lang: ${details.language}")
+                add("type: ${details.type}")
+                details.authors?.forEach { add("author: $it") }
+                details.rating?.also { add("rating: $it") }
+            }.joinToString()
             status = if (details.status == "ongoing") SManga.ONGOING else SManga.COMPLETED
             thumbnail_url = "$baseUrl/v1/images/manga${details.img}"
         }
