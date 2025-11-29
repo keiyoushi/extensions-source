@@ -18,12 +18,7 @@ class RokariComics : MangaThemesia(
 ) {
     // Popular - Use homepage "Popular Today" section (first page only, no pagination)
     override fun popularMangaRequest(page: Int): Request {
-        return if (page == 1) {
-            GET(baseUrl, headers)
-        } else {
-            // Return empty page for page > 1 since Popular Today is not paginated
-            GET("$baseUrl/page/0/", headers)
-        }
+        GET(baseUrl, headers)
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
