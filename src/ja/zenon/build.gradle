@@ -3,7 +3,7 @@ ext {
     extClass = '.Zenon'
     themePkg = 'gigaviewer'
     baseUrl = 'https://comic-zenon.com'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 
