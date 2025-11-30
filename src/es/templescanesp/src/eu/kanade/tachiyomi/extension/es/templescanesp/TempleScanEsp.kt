@@ -131,19 +131,24 @@ class TempleScanEsp :
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        var doc = document
-        val form = doc.selectFirst("form#redirect-form[method=post]")
-        if (form != null) {
-            val url = form.attr("action")
-            val headers = headersBuilder().set("Referer", doc.location()).build()
-            val body = FormBody.Builder()
-            form.select("input").forEach {
-                body.add(it.attr("name"), it.attr("value"))
-            }
-            doc = client.newCall(POST(url, headers, body.build())).execute().asJsoup()
-        }
+        val form = document.selectFirst("form#redirect-form[method=post]")
+            ?: return super.pageListParse(document)
 
-        return super.pageListParse(doc)
+        val url = form.attr("action")
+
+        val headers = headersBuilder()
+            .set("Referer", document.location())
+            .build()
+
+        val body = FormBody.Builder().apply {
+            form.select("input[name]").forEach {
+                add(it.attr("name"), it.attr("value"))
+            }
+        }.build()
+
+        val redirectedDoc = client.newCall(POST(url, headers, body)).execute().asJsoup()
+
+        return super.pageListParse(redirectedDoc)
     }
 
     private fun Element.imageFromStyle(): String {
