@@ -1,21 +1,30 @@
 package eu.kanade.tachiyomi.extension.en.mangarawclub
 
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MangaRawClub : ParsedHttpSource() {
+class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
 
     override val id = 734865402529567092
     override val name = "MangaGeko"
@@ -26,22 +35,24 @@ class MangaRawClub : ParsedHttpSource() {
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
+    private val preferences = getPreferences()
+    private fun nsfw() = preferences.getBoolean(PREF_HIDE_NSFW, false)
 
     companion object {
         private const val altName = "Alternative Name:"
-
+        private const val PREF_HIDE_NSFW = "pref_hide_nsfw"
         private val DATE_FORMATTER by lazy { SimpleDateFormat("MMMMM dd, yyyy, h:mm a", Locale.ENGLISH) }
         private val DATE_FORMATTER_2 by lazy { SimpleDateFormat("MMMMM dd, yyyy, h a", Locale.ENGLISH) }
     }
 
     // Popular
     override fun popularMangaRequest(page: Int): Request {
-        return GET("$baseUrl/browse-comics/?results=$page&filter=views", headers)
+        return GET("$baseUrl/browse-comics/data/?page=$page&sort=popular_all_time&safe_mode=${if (!nsfw()) "0" else "1"}", headers)
     }
 
     // Latest
     override fun latestUpdatesRequest(page: Int): Request {
-        return GET("$baseUrl/jumbo/manga/?results=$page", headers)
+        return GET("$baseUrl/browse-comics/data/?page=$page&sort=latest&safe_mode=${if (!nsfw()) "0" else "1"}", headers)
     }
 
     // Search
@@ -56,14 +67,17 @@ class MangaRawClub : ParsedHttpSource() {
         }
 
         // Filter search
-        val url = "$baseUrl/browse-comics/".toHttpUrl().newBuilder().apply {
+        val url = "$baseUrl/browse-comics/data/".toHttpUrl().newBuilder().apply {
             val tagsIncl: MutableList<String> = mutableListOf()
-            val tagsExcl: MutableList<String> = mutableListOf()
             val genreIncl: MutableList<String> = mutableListOf()
             val genreExcl: MutableList<String> = mutableListOf()
             filters.forEach { filter ->
+                if (!nsfw()) addQueryParameter("safe_mode", "0")
+
                 when (filter) {
-                    is SelectFilter -> addQueryParameter("filter", filter.vals[filter.state])
+                    is SortFilter -> {
+                        addQueryParameter("sort", filter.selected)
+                    }
                     is GenreFilter -> {
                         filter.state.forEach {
                             when {
@@ -72,44 +86,81 @@ class MangaRawClub : ParsedHttpSource() {
                             }
                         }
                     }
-                    is ChapterFilter -> addQueryParameter("minchap", filter.state)
+                    is StatusFilter -> {
+                        addQueryParameter("status", filter.selected)
+                    }
+                    is TypeFilter -> {
+                        addQueryParameter("type", filter.selected)
+                    }
+                    is ChapterMinFilter -> {
+                        val trimmed = filter.state.trim()
+                        if (trimmed.isNotBlank()) {
+                            addQueryParameter("min_chapters", trimmed)
+                        }
+                    }
+                    is ChapterMaxFilter -> {
+                        val trimmed = filter.state.trim()
+                        if (trimmed.isNotBlank()) {
+                            addQueryParameter("max_chapters", trimmed)
+                        }
+                    }
+                    is RatingFilter -> {
+                        val trimmed = filter.state.trim()
+                        if (trimmed.isNotBlank()) {
+                            val value = trimmed.toDoubleOrNull() ?: 0.0
+                            addQueryParameter("min_rating", (value * 10).toInt().toString())
+                        }
+                    }
                     is TextFilter -> {
                         if (filter.state.isNotEmpty()) {
                             filter.state.split(",").filter(String::isNotBlank).map { tag ->
-                                val trimmed = tag.trim()
-                                when {
-                                    trimmed.startsWith('-') -> tagsExcl.add(trimmed.removePrefix("-"))
-                                    else -> tagsIncl.add(trimmed)
-                                }
+                                tagsIncl.add(tag.trim())
                             }
+                        }
+                    }
+                    is ExtraFilter -> {
+                        val (activeFilters, _) = filter.state.partition { stIt -> stIt.state }
+                        activeFilters.forEach {
+                            addQueryParameter(it.value, "1")
                         }
                     }
                     else -> {}
                 }
             }
-            addQueryParameter("results", page.toString())
-            addQueryParameter("genre_included", genreIncl.joinToString(","))
-            addQueryParameter("genre_excluded", genreExcl.joinToString(","))
-            addQueryParameter("tags_include", tagsIncl.joinToString(","))
-            addQueryParameter("tags_exclude", tagsExcl.joinToString(","))
+            addQueryParameter("page", page.toString())
+            addQueryParameter("include_genres", genreIncl.joinToString(","))
+            addQueryParameter("exclude_genres", genreExcl.joinToString(","))
+            addQueryParameter("tags", tagsIncl.joinToString(","))
         }.build()
 
         return GET(url, headers)
     }
 
     // Selectors
-    override fun searchMangaSelector() = "ul.novel-list > li.novel-item"
+    override fun searchMangaSelector() = ".comic-card"
     override fun popularMangaSelector() = searchMangaSelector()
-    override fun latestUpdatesSelector() = "ul.novel-list.chapters > li.novel-item"
+    override fun latestUpdatesSelector() = searchMangaSelector()
 
-    override fun searchMangaNextPageSelector() = ".paging .mg-pagination-chev:last-child:not(.chev-disabled)"
-    override fun popularMangaNextPageSelector() = searchMangaNextPageSelector()
-    override fun latestUpdatesNextPageSelector() = searchMangaNextPageSelector()
+    override fun searchMangaParse(response: Response): MangasPage {
+        val data = response.parseAs<Data>()
+
+        with(data) {
+            val document = Jsoup.parse(results_html)
+            val mangas = document.select(searchMangaSelector()).map { element ->
+                searchMangaFromElement(element)
+            }
+
+            val hasNextPage = page < num_pages
+            return MangasPage(mangas, hasNextPage)
+        }
+    }
+    override fun popularMangaParse(response: Response): MangasPage = searchMangaParse(response)
+    override fun latestUpdatesParse(response: Response): MangasPage = searchMangaParse(response)
 
     // Manga from Element
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst(".novel-title")!!.ownText()
-        thumbnail_url = element.select(".novel-cover img").attr("abs:data-src")
+        title = element.selectFirst(".comic-card__title")!!.ownText()
+        thumbnail_url = element.select(".comic-card__cover img").attr("abs:data-src")
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
@@ -179,5 +230,25 @@ class MangaRawClub : ParsedHttpSource() {
         }
     }
 
+    // Settings
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_HIDE_NSFW
+            title = "Hide NSFW"
+            summary = "Hides NSFW entries"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
+    override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun popularMangaNextPageSelector() = throw UnsupportedOperationException()
+    override fun latestUpdatesNextPageSelector() = throw UnsupportedOperationException()
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
 }
+
+@Serializable
+class Data(
+    val results_html: String,
+    val page: Int,
+    val num_pages: Int,
+)
