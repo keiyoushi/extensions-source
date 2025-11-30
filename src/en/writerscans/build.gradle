@@ -1,0 +1,9 @@
+ext {
+    extName = 'Writer Scans'
+    extClass = '.WriterScans'
+    themePkg = 'keyoapp'
+    baseUrl = 'https://writerscans.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+apply from: "$rootDir/common.gradle"
