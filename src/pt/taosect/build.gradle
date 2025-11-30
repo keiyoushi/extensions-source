@@ -1,8 +1,0 @@
-ext {
-    extName = 'Tao Sect'
-    extClass = '.TaoSect'
-    extVersionCode = 20
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"
