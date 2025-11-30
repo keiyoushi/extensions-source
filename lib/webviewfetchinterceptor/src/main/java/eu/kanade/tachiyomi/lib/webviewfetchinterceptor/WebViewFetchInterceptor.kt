@@ -7,6 +7,7 @@ import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import keiyoushi.utils.jsonInstance
@@ -78,7 +79,7 @@ class WebViewFetchInterceptor(
     private val context: Application by lazy { Injekt.get() }
 
     companion object {
-        private const val TIMEOUT_SEC: Long = 30
+        private const val TIMEOUT_SEC: Long = 60
         private const val DELAY_MILLIS: Long = 1000
     }
 
@@ -223,7 +224,8 @@ class WebViewFetchInterceptor(
                     headers: headers,
                     body: body,
                     credentials: 'include',
-                    mode: 'cors'
+                    mode: 'cors',
+                    cache: 'no-store',
                 })
                 .then(async (response) => {
                     // Read body as ArrayBuffer
@@ -269,6 +271,7 @@ class WebViewFetchInterceptor(
                 useWideViewPort = false
                 loadWithOverviewMode = false
                 userAgentString = request.header("User-Agent")
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             }
 
             webview.addJavascriptInterface(jsInterface, "android")
@@ -287,7 +290,8 @@ class WebViewFetchInterceptor(
             }
 
             // Load baseUrl first to establish context
-            webview.loadUrl(loadUrl)
+            val baseUrl = "${request.url.scheme}://${request.url.host}/"
+            webview.loadDataWithBaseURL("$baseUrl/", " ", "text/html", null, null)
         }
 
         // Wait for response
