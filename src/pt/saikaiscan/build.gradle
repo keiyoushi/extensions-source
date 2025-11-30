@@ -1,7 +1,0 @@
-ext {
-    extName = 'Saikai Scan'
-    extClass = '.SaikaiScan'
-    extVersionCode = 12
-}
-
-apply from: "$rootDir/common.gradle"
