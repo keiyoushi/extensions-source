@@ -4,13 +4,7 @@ import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -26,7 +20,7 @@ class Zenon : GigaViewer(
     true,
 ) {
 
-    override val supportsLatest: Boolean = false
+    override val supportsLatest: Boolean = true
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageIntercept)
@@ -40,7 +34,7 @@ class Zenon : GigaViewer(
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
-    override fun popularMangaSelector(): String = "div.kyujosho-series > a, ul.panels li.panel a:has(h4)"
+    override fun popularMangaSelector(): String = "div.kyujosho-series > a"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst("h4, p")!!.text()
@@ -50,6 +44,19 @@ class Zenon : GigaViewer(
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangasPage = super.popularMangaParse(response)
+        val distinctMangas = mangasPage.mangas.distinctBy { it.url }
+        return MangasPage(distinctMangas, mangasPage.hasNextPage)
+    }
+
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
+
+    override fun latestUpdatesSelector(): String = "ul.panels li.panel a:has(h4)"
+
+    override fun latestUpdatesFromElement(element: Element): SManga =
+        popularMangaFromElement(element)
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val mangasPage = super.latestUpdatesParse(response)
         val distinctMangas = mangasPage.mangas.distinctBy { it.url }
         return MangasPage(distinctMangas, mangasPage.hasNextPage)
     }
