@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Page
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -18,27 +19,17 @@ class MangaStop : MangaThemesia(
 ) {
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
-//        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
         .set("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
-//        .set("Sec-Fetch-Dest", "document")
-//        .set("Sec-Fetch-Mode", "navigate")
-//        .set("Sec-Fetch-Site", "none")
-//        .set("Sec-Fetch-User", "?1")
-//        .set("Upgrade-Insecure-Requests", "1")
-        .set("Cache-Control", "no-cache, no-store, must-revalidate")
-        .set("Pragma", "no-cache")
-        .set("Expires", "0")
 
     override val client = super.client.newBuilder()
         .addInterceptor(
             WebViewFetchInterceptor(
-                loadUrl = "$baseUrl/robots.txt", // Lightweight file from same domain
                 filter = { request ->
-                    // Only intercept requests from the same domain to avoid CORS issues
-                    // request.url.toString().startsWith(baseUrl)  ||
-                    // request.url.toString().startsWith("https://images.mangastop.net")
-                    true
+                    // Only intercept requests from the same domain
+                    // MangaStop use a subdomain for the images, so we need to intercept the request from the subdomain.
+                    request.url.host.endsWith(baseUrl.toHttpUrl().host)
                 },
+                timeout = 60,
             ),
         )
         .rateLimit(3)

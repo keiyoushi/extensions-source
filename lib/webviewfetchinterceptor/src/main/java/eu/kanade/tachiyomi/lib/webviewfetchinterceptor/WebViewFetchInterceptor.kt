@@ -10,10 +10,8 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
-import kotlinx.serialization.encodeToString
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -31,55 +29,69 @@ import java.util.concurrent.TimeUnit
 /**
  * An OkHttp interceptor that executes HTTP requests through a WebView using JavaScript `fetch` API.
  *
- * This interceptor is useful for bypassing certain protections or when you need to execute requests
- * in a browser context. It works by:
- * 1. Loading a lightweight file from the same domain (e.g., `/robots.txt`, `/favicon.ico`)
+ * This interceptor is useful for bypassing certain protections (like Cloudflare Turnstile) or when you need
+ * to execute requests in a browser context. It works by:
+ * 1. Optionally loading a URL in the WebView to establish a specific domain context
  * 2. Executing a JavaScript `fetch` with the original request details via `evaluateJavascript`
  * 3. Encoding the response in base64 and sending it back via a JavaScript interface
  * 4. Building an OkHttp Response from the WebView response
  *
  * **Best Practices:**
- * - Use a lightweight file from your `baseUrl` (like `/robots.txt` or `/favicon.ico`) for fast loading
+ * - In most cases, you don't need to specify `loadUrl` - the interceptor will work without it
+ * - Only use `loadUrl` in special cases when you need a specific URL/domain context for the fetch
  * - Always use the `filter` parameter to only intercept requests from the same domain to avoid CORS issues
  * - The same-domain context allows JavaScript execution and avoids Cross-Origin Resource Sharing problems
  *
- * @param loadUrl The URL to load in the WebView to establish context before executing the fetch.
- *   For best results, use a lightweight file from the same `baseUrl` domain:
+ * @param filter Optional function that determines which requests should be intercepted.
+ *   Returns `true` to intercept the request via WebView, `false` to proceed normally.
+ *   If `null`, all requests are intercepted.
+ *   **Recommended**: Filter by domain to only intercept requests from the same domain:
+ *   ```kotlin
+ *   filter = { request -> request.url.toString().startsWith(baseUrl) }
+ *   ```
+ *
+ * @param timeout Timeout in seconds for waiting for the WebView response. Default is 60 seconds.
+ *
+ * @param loadUrl Optional URL to load in the WebView to establish a specific domain context before executing the fetch.
+ *   **Only use in special cases** when you need a specific URL/domain context. In most cases, this can be `null`.
+ *   If provided, use a lightweight file from the same `baseUrl` domain:
  *   - `/robots.txt` (recommended - very lightweight)
  *   - `/favicon.ico` (small image file)
  *   - A small CSS file
  *   This ensures fast loading, same domain context (avoiding CORS), and proper JavaScript execution.
  *
- * @param filter Optional function that determines which requests should be intercepted.
- *   Returns `true` to intercept the request via WebView, `false` to proceed normally.
- *   If `null`, all requests are intercepted.
- *   **Recommended**: Filter by domain to only intercept requests from the same domain as `loadUrl`:
- *   ```kotlin
- *   filter = { request -> request.url.toString().startsWith(baseUrl) }
- *   ```
- *
  * @sample
  * ```kotlin
+ * // Basic usage without loadUrl
  * override val client = network.client.newBuilder()
  *     .addInterceptor(
  *         WebViewFetchInterceptor(
- *             loadUrl = "$baseUrl/robots.txt",
  *             filter = { request -> request.url.toString().startsWith(baseUrl) }
+ *         )
+ *     )
+ *     .build()
+ *
+ * // Special case: with loadUrl for specific domain context
+ * override val client = network.client.newBuilder()
+ *     .addInterceptor(
+ *         WebViewFetchInterceptor(
+ *             filter = { request -> request.url.toString().startsWith(baseUrl) },
+ *             loadUrl = "$baseUrl/robots.txt"
  *         )
  *     )
  *     .build()
  * ```
  */
 class WebViewFetchInterceptor(
-    private val loadUrl: String,
     private val filter: ((Request) -> Boolean)? = null,
+    private val timeout: Long = 60,
+    private val loadUrl: String? = null,
 ) : Interceptor {
 
     private val handler = Handler(Looper.getMainLooper())
     private val context: Application by lazy { Injekt.get() }
 
     companion object {
-        private const val TIMEOUT_SEC: Long = 60
         private const val DELAY_MILLIS: Long = 1000
     }
 
@@ -106,7 +118,10 @@ class WebViewFetchInterceptor(
             response.statusMessage = statusMessage
             response.headers = headers
             response.bodyBase64 = bodyBase64
-            Log.d("WebViewFetchInterceptor", "WebView fetch response: status=$statusCode, message=$statusMessage, bodySize=${bodyBase64.length} bytes (base64), headersLength=${headers.length}")
+            Log.d(
+                "WebViewFetchInterceptor",
+                "WebView fetch response: status=$statusCode, message=$statusMessage, bodySize=${bodyBase64.length} bytes (base64), headersLength=${headers.length}",
+            )
             latch.countDown()
         }
 
@@ -149,9 +164,11 @@ class WebViewFetchInterceptor(
      *
      * This method:
      * 1. Prepares the request data (URL, method, headers, body)
-     * 2. Creates a WebView and loads the `loadUrl` to establish context
+     * 2. Creates a WebView and establishes context:
+     *    - If `loadUrl` is provided, loads that URL
+     *    - Otherwise, uses the request's domain as base URL with empty HTML content
      * 3. Executes a JavaScript `fetch` with the original request details
-     * 4. Waits for the response (with a 30-second timeout)
+     * 4. Waits for the response (with configurable timeout)
      * 5. Decodes the base64-encoded response and builds an OkHttp Response
      *
      * @param request The original OkHttp request to execute
@@ -189,17 +206,19 @@ class WebViewFetchInterceptor(
             buffer.readUtf8()
         } ?: ""
 
-        Log.d("WebViewFetchInterceptor", "Starting WebView fetch: method=$requestMethod, url=$requestUrl, contentType=$contentType, hasBody=${bodyString.isNotEmpty()}, bodySize=${bodyString.length} chars")
+        Log.d(
+            "WebViewFetchInterceptor",
+            "Starting WebView fetch: method=$requestMethod, url=$requestUrl, contentType=$contentType, hasBody=${bodyString.isNotEmpty()}, bodySize=${bodyString.length} chars",
+        )
 
         // JavaScript script that performs the fetch
         val jsScript = """
             (function() {
-                const requestUrl = ${escapeJsString(requestUrl)};
-                const requestMethod = ${escapeJsString(requestMethod)};
+                const requestUrl = ${requestUrl.toJsonString()};
+                const requestMethod = ${requestMethod.toJsonString()};
                 const requestHeaders = ${requestHeaders.toJsonString()};
-                const bodyString = ${escapeJsString(bodyString)};
-                const contentType = ${escapeJsString(contentType)};
-                const userAgent = ${escapeJsString(userAgent)};
+                const bodyString = ${bodyString.toJsonString()};
+                const userAgent = ${userAgent.toJsonString()};
 
                 // Prepare body (always use string format)
                 let body = null;
@@ -289,13 +308,13 @@ class WebViewFetchInterceptor(
                 }
             }
 
-            // Load baseUrl first to establish context
-            val baseUrl = "${request.url.scheme}://${request.url.host}/"
-            webview.loadDataWithBaseURL("$baseUrl/", " ", "text/html", null, null)
+            // Establish context by using the same domain as the request
+            val baseUrl = loadUrl ?: "${request.url.scheme}://${request.url.host}/"
+            webview.loadDataWithBaseURL(baseUrl, " ", "text/html", null, null)
         }
 
         // Wait for response
-        val success = latch.await(TIMEOUT_SEC, TimeUnit.SECONDS)
+        val success = latch.await(timeout, TimeUnit.SECONDS)
 
         handler.postDelayed(
             { webView?.destroy() },
@@ -303,7 +322,10 @@ class WebViewFetchInterceptor(
         )
 
         if (!success) {
-            Log.e("WebViewFetchInterceptor", "Timeout waiting for WebView response after ${TIMEOUT_SEC}s")
+            Log.e(
+                "WebViewFetchInterceptor",
+                "Timeout waiting for WebView response after ${timeout}s",
+            )
             throw IOException("Timeout executing request in WebView")
         }
 
@@ -334,7 +356,10 @@ class WebViewFetchInterceptor(
         val contentTypeHeader = responseHeaders["Content-Type"]
         val mediaType = contentTypeHeader?.toMediaType() ?: "application/octet-stream".toMediaType()
 
-        Log.d("WebViewFetchInterceptor", "Building response: statusCode=${fetchResponse.statusCode}, statusMessage=${fetchResponse.statusMessage}, bodySize=${bodyBytes.size} bytes, contentType=$contentTypeHeader")
+        Log.d(
+            "WebViewFetchInterceptor",
+            "Building response: statusCode=${fetchResponse.statusCode}, statusMessage=${fetchResponse.statusMessage}, bodySize=${bodyBytes.size} bytes, contentType=$contentTypeHeader",
+        )
 
         // Build Response
         return Response.Builder()
@@ -345,18 +370,6 @@ class WebViewFetchInterceptor(
             .headers(responseHeaders)
             .body(bodyBytes.toResponseBody(mediaType))
             .build()
-    }
-
-    /**
-     * Escapes a string for safe use in JavaScript code.
-     *
-     * Uses JSON encoding to properly escape special characters, quotes, and control characters.
-     *
-     * @param str The string to escape
-     * @return The JSON-encoded string (includes surrounding quotes)
-     */
-    private fun escapeJsString(str: String): String {
-        return jsonInstance.encodeToString(str)
     }
 }
 
