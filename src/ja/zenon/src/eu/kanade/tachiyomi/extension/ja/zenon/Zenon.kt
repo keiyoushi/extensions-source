@@ -59,7 +59,7 @@ class Zenon : GigaViewer(
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst(".series-title")!!.text()
         thumbnail_url = element.selectFirst("img")?.attr("src")
-        setUrlWithoutDomain(getCanonicalUrl(element.selectFirst("a")!!.attr("href"), thumbnail_url))
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
     private fun getCanonicalUrl(href: String, thumbnailUrl: String?): String {
