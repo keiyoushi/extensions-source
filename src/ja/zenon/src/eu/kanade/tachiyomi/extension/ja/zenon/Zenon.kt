@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.ja.zenon
 
 import eu.kanade.tachiyomi.multisrc.gigaviewer.GigaViewer
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SManga
@@ -20,7 +21,7 @@ class Zenon : GigaViewer(
     true,
 ) {
 
-    override val supportsLatest: Boolean = true
+    override val supportsLatest: Boolean = false
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageIntercept)
@@ -32,48 +33,61 @@ class Zenon : GigaViewer(
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
-    override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series/zenyon", headers)
 
-    override fun popularMangaSelector(): String = "div.kyujosho-series > a"
+    override fun popularMangaSelector(): String = ".series-item"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("h4, p")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
-        setUrlWithoutDomain(getCanonicalUrl(element.absUrl("href"), thumbnail_url))
+        title = element.selectFirst(".item-series-title")!!.text()
+        thumbnail_url = element.selectFirst(".img-wrapper img")?.let { img ->
+            img.attr("data-src").ifEmpty { img.attr("src") }
+        }
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangasPage = super.popularMangaParse(response)
-        val distinctMangas = mangasPage.mangas.distinctBy { it.url }
-        return MangasPage(distinctMangas, mangasPage.hasNextPage)
-    }
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        if (query.isNotEmpty()) {
+            return super.searchMangaRequest(page, query, filters)
+        }
 
-    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl, headers)
+        val collectionFilter = filters.filterIsInstance<CollectionFilter>().firstOrNull()
+        val collection = collectionFilter?.toUriPart() ?: "zenyon"
 
-    override fun latestUpdatesSelector(): String = "ul.panels li.panel a:has(h4)"
-
-    override fun latestUpdatesFromElement(element: Element): SManga =
-        popularMangaFromElement(element)
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        val mangasPage = super.latestUpdatesParse(response)
-        val distinctMangas = mangasPage.mangas.distinctBy { it.url }
-        return MangasPage(distinctMangas, mangasPage.hasNextPage)
+        return GET("$baseUrl/series/$collection", headers)
     }
 
     override fun searchMangaSelector(): String = "ul.series-list > li"
 
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst(".series-title")!!.text()
-        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        thumbnail_url = element.selectFirst("img")?.attr("src")
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
-    private fun getCanonicalUrl(href: String, thumbnailUrl: String?): String {
-        return thumbnailUrl?.let { Regex("""series-thumbnail/(\d+)""").find(it) }
-            ?.let { "/series/${it.groupValues[1]}" }
-            ?: href
+    override fun searchMangaParse(response: Response): MangasPage {
+        if (response.request.url.pathSegments.contains("search")) {
+            return super.searchMangaParse(response)
+        }
+
+        return popularMangaParse(response)
     }
 
-    override fun getFilterList(): FilterList = FilterList()
+    override fun getFilterList(): FilterList = FilterList(
+        Filter.Header("検索時はコレクション間を横断して検索します"),
+        CollectionFilter(),
+    )
+
+    private class CollectionFilter : Filter.Select<String>(
+        "コレクション",
+        arrayOf("コミックぜにょん", "月刊コミックゼノン", "コミックタタン", "読切作品", "漫画賞"),
+    ) {
+        fun toUriPart() = when (state) {
+            0 -> "zenyon"
+            1 -> "zenon"
+            2 -> "tatan"
+            3 -> "oneshot"
+            4 -> "newcomer"
+            else -> "zenyon"
+        }
+    }
 }
