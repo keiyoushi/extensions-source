@@ -28,7 +28,7 @@ class Zenon : GigaViewer(
 
     override val supportsLatest: Boolean = false
 
-    override val client: OkHttpClient = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(::imageIntercept)
         .build()
 
