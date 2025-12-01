@@ -7,15 +7,20 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferences
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -123,6 +128,27 @@ class TempleScanEsp :
         name = element.selectFirst("div.grid > span")!!.text()
         date_upload = element.selectFirst("div.grid > div")?.text()?.let { parseChapterDate(it) } ?: 0
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        val form = document.selectFirst("form#redirect-form[method=post]")
+            ?: return super.pageListParse(document)
+
+        val url = form.attr("action")
+
+        val headers = headersBuilder()
+            .set("Referer", document.location())
+            .build()
+
+        val body = FormBody.Builder().apply {
+            form.select("input[name]").forEach {
+                add(it.attr("name"), it.attr("value"))
+            }
+        }.build()
+
+        val redirectedDoc = client.newCall(POST(url, headers, body)).execute().asJsoup()
+
+        return super.pageListParse(redirectedDoc)
     }
 
     private fun Element.imageFromStyle(): String {

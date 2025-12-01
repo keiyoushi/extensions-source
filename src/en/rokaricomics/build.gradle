@@ -3,7 +3,7 @@ ext {
     extClass = '.RokariComics'
     themePkg = 'mangathemesia'
     baseUrl = 'https://rokaricomics.com'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = false
 }
 
