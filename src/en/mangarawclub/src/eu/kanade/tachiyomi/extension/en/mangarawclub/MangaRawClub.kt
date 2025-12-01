@@ -58,15 +58,6 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
     // Search
     override fun getFilterList(): FilterList = getFilters()
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        if (query.isNotEmpty()) {
-            // Query search
-            val url = "$baseUrl/search/".toHttpUrl().newBuilder()
-                .addQueryParameter("search", query)
-                .build()
-            return GET(url, headers)
-        }
-
-        // Filter search
         val url = "$baseUrl/browse-comics/data/".toHttpUrl().newBuilder().apply {
             val tagsIncl: MutableList<String> = mutableListOf()
             val genreIncl: MutableList<String> = mutableListOf()
@@ -131,6 +122,7 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
             addQueryParameter("include_genres", genreIncl.joinToString(","))
             addQueryParameter("exclude_genres", genreExcl.joinToString(","))
             addQueryParameter("tags", tagsIncl.joinToString(","))
+            addQueryParameter("q", query)
         }.build()
 
         return GET(url, headers)
@@ -159,8 +151,8 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
 
     // Manga from Element
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst(".comic-card__title")!!.ownText()
-        thumbnail_url = element.select(".comic-card__cover img").attr("abs:data-src")
+        title = element.selectFirst(".comic-card__title a")!!.text().trim()
+        thumbnail_url = element.selectFirst(".comic-card__cover img")!!.absUrl("src")
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
     override fun popularMangaFromElement(element: Element): SManga = searchMangaFromElement(element)
@@ -176,8 +168,13 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
             document.selectFirst(".description")?.text()?.substringAfter("Summary is")?.trim()?.let {
                 append(it)
             }
-            document.selectFirst(".alternative-title")?.ownText()?.trim()?.takeIf { it.isNotEmpty() && it.lowercase() != "updating" }?.let {
-                append("\n\n$altName ${it.trim()}")
+            document.selectFirst(".alternative-title")?.let {
+                if (it.ownText().isNotBlank()) {
+                    append("\n\n", altName)
+                    it.ownText().split(",").filter { t -> t.isNotBlank() && t.trim().lowercase() != "updating" }.forEach { name ->
+                        append("\n", "- ${name.trim()}")
+                    }
+                }
             }
         }
 
