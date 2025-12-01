@@ -43,9 +43,9 @@ class Zenon : GigaViewer(
     override fun popularMangaSelector(): String = "div.kyujosho-series > a, ul.panels li.panel a:has(h4)"
 
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst("h4")?.text() ?: element.selectFirst("p")!!.text()
-        thumbnail_url = element.selectFirst("img")?.attr("data-src")
-        setUrlWithoutDomain(getCanonicalUrl(element.attr("href"), thumbnail_url))
+        title = element.selectFirst("h4, p")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("data-src")
+        setUrlWithoutDomain(getCanonicalUrl(element.absUrl("href"), thumbnail_url))
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
