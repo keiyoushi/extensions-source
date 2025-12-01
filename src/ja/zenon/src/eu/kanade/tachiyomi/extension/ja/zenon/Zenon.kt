@@ -23,7 +23,7 @@ class Zenon : GigaViewer(
     "https://comic-zenon.com",
     "ja",
     "https://cdn-img.comic-zenon.com/public/page",
-    isPaginated = false,
+    true,
 ) {
 
     override val supportsLatest: Boolean = false
