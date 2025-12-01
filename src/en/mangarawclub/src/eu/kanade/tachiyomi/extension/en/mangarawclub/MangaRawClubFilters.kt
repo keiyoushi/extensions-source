@@ -5,8 +5,6 @@ import eu.kanade.tachiyomi.source.model.FilterList
 
 fun getFilters(): FilterList {
     return FilterList(
-        Filter.Header("NOTE: Ignored if using text search!"),
-        Filter.Separator(),
         SortFilter("Sort by", getSortsList),
         StatusFilter("Status", getStatusList),
         TypeFilter("Types", getTypeList),
