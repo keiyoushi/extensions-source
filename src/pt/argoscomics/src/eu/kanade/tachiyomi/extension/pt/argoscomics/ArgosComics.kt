@@ -1,63 +1,253 @@
 package eu.kanade.tachiyomi.extension.pt.argoscomics
 
-import android.annotation.SuppressLint
-import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import okhttp3.MediaType.Companion.toMediaType
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.toJsonString
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
-import okhttp3.ResponseBody.Companion.asResponseBody
-import java.security.SecureRandom
-import java.security.cert.X509Certificate
-import java.text.SimpleDateFormat
-import java.util.Locale
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okio.IOException
 
-class ArgosComics : Madara(
-    "Argos Comics",
-    "https://argoscomic.com",
-    "pt-BR",
-    SimpleDateFormat("MMM dd, yyyy", Locale("pt", "BR")),
-) {
+class ArgosComics : HttpSource() {
 
-    private fun OkHttpClient.Builder.ignoreAllSSLErrors(): OkHttpClient.Builder {
-        val naiveTrustManager = @SuppressLint("CustomX509TrustManager")
-        object : X509TrustManager {
-            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-            override fun checkClientTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-            override fun checkServerTrusted(certs: Array<X509Certificate>, authType: String) = Unit
-        }
+    override val name: String = "Argos Comics"
 
-        val insecureSocketFactory = SSLContext.getInstance("TLSv1.2").apply {
-            val trustAllCerts = arrayOf<TrustManager>(naiveTrustManager)
-            init(null, trustAllCerts, SecureRandom())
-        }.socketFactory
+    override val baseUrl: String = "https://argoscomic.com"
 
-        sslSocketFactory(insecureSocketFactory, naiveTrustManager)
-        hostnameVerifier { _, _ -> true }
-        return this
-    }
+    override val lang: String = "pt-BR"
 
-    override val client = super.client.newBuilder()
-        .rateLimit(3)
-        .ignoreAllSSLErrors()
-        .addInterceptor { chain ->
-            val response = chain.proceed(chain.request())
-            val mime = response.headers["Content-Type"]
-            if (response.isSuccessful) {
-                if (mime == "application/octet-stream" || mime == null) {
-                    // Fix image content type
-                    val type = "image/jpeg".toMediaType()
-                    val body = response.body.source().asResponseBody(type)
-                    return@addInterceptor response.newBuilder().body(body).build()
-                }
-            }
-            response
-        }
+    override val supportsLatest: Boolean = true
+
+    override val versionId: Int = 2
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(3, 2)
         .build()
 
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
+    private val popularToken: String by lazy {
+        getActioNextToken(getScriptUrlFrom("$baseUrl/projetos", "script[src*=projetos]"))
+    }
 
-    override val useNewChapterEndpoint = true
+    private val latestToken: String by lazy {
+        getActioNextToken(getScriptUrlFrom(baseUrl, "script[src*=page-]"))
+    }
+
+    private val searchToken: String by lazy {
+        val document = client.newCall(GET("$baseUrl/projetos")).execute().asJsoup()
+        val urls = document.select("script[async]:not([src*=app]):not([src*=webpack])")
+            .map { it.absUrl("src") }
+            .sortedDescending()
+
+        urls.forEach {
+            try { return@lazy getActioNextToken(it) } catch (_: Exception) { /* ignored */ }
+        }
+
+        throw IOException("Não foi possível encontrar token para pesquisar")
+    }
+
+    private var detailsToken: String? = null
+    private fun getDetailsToken(pageUrl: String): String =
+        detailsToken.takeIf { !it.isNullOrBlank() }
+            ?: getActioNextToken(getScriptUrlFrom(pageUrl, "script[src*=projectId]")).also { detailsToken = it }
+
+    private var chaptersToken: String? = null
+    private fun getChaptersToken(pageUrl: String): String =
+        chaptersToken.takeIf { !it.isNullOrBlank() }
+            ?: getActioNextToken(getScriptUrlFrom(pageUrl, "script[src*=projectId]"), CHAPTERS_TOKEN_REGEX).also { chaptersToken = it }
+
+    private var pagesToken: String? = null
+    private fun getPagesToken(pageUrl: String): String =
+        pagesToken.takeIf { !it.isNullOrBlank() }
+            ?: getActioNextToken(getScriptUrlFrom(pageUrl, "script[src*=capitulo]")).also { pagesToken = it }
+
+    // ======================== Popular =============================
+
+    override fun popularMangaRequest(page: Int): Request {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        val popularHeaders = headers.newBuilder()
+            .set("Next-Action", popularToken)
+            .build()
+
+        val payload = listOf(page)
+            .toJsonString()
+            .toRequestBody(TEXT_PLAIN_MEDIA_TYPE)
+
+        return POST(url.toString(), popularHeaders, payload)
+    }
+
+    override fun popularMangaParse(response: Response): MangasPage =
+        getJsonBody(response).parseAs<MangasListDto>().toMangasPage()
+
+    // ======================== Latest =============================
+
+    override fun latestUpdatesRequest(page: Int): Request {
+        val latestHeaders = headers.newBuilder()
+            .set("Next-Action", latestToken)
+            .build()
+
+        val payload = emptyList<String>()
+            .toJsonString()
+            .toRequestBody(TEXT_PLAIN_MEDIA_TYPE)
+
+        return POST(baseUrl, latestHeaders, payload)
+    }
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val dto = getJsonBody(response).parseAs<List<MangaDto>>()
+        return MangasPage(dto.map(MangaDto::toSManga), false)
+    }
+
+    // ======================== Search =============================
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val url = "$baseUrl/projetos".toHttpUrl().newBuilder()
+            .addQueryParameter("page", page.toString())
+            .build()
+
+        val payload = listOf(query)
+            .toJsonString()
+            .toRequestBody(TEXT_PLAIN_MEDIA_TYPE)
+
+        val searchHeaders = headers.newBuilder()
+            .set("Next-Action", searchToken)
+            .build()
+
+        return POST(url.toString(), searchHeaders, payload)
+    }
+
+    override fun searchMangaParse(response: Response) = latestUpdatesParse(response)
+
+    // ======================== Details =============================
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/${manga.url}"
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val payload = manga.url.split("/").filter(String::isNotBlank)
+            .toJsonString()
+            .toRequestBody(TEXT_PLAIN_MEDIA_TYPE)
+
+        val detailsHeaders = headers.newBuilder()
+            .set("Next-Action", getDetailsToken(getMangaUrl(manga)))
+            .build()
+
+        return POST("$baseUrl${manga.url}", detailsHeaders, payload)
+    }
+
+    override fun mangaDetailsParse(response: Response) =
+        getJsonBody(response).parseAs<MangaDetailsDto>().toSManga()
+
+    // ======================== Chapters =============================
+
+    override fun chapterListRequest(manga: SManga): Request {
+        val chaptersHeaders = headers.newBuilder()
+            .set("Next-Action", getChaptersToken(getMangaUrl(manga)))
+            .build()
+
+        return mangaDetailsRequest(manga).newBuilder()
+            .headers(chaptersHeaders)
+            .build()
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val pathSegment = response.request.url.toString().substringAfter(baseUrl)
+        return getJsonBody(response).parseAs<VolumeChapterDto>().toChapterList(pathSegment)
+    }
+
+    // ======================== Pages =============================
+
+    override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        val segments = chapter.url.split("/").filter(String::isNotBlank)
+        val payload = buildList {
+            add(segments.first())
+            add(segments.last())
+        }.toJsonString().toRequestBody(TEXT_PLAIN_MEDIA_TYPE)
+
+        val pagesHeaders = headers.newBuilder()
+            .set("Next-Action", getPagesToken(getChapterUrl(chapter)))
+            .build()
+
+        return POST("$baseUrl${chapter.url}", pagesHeaders, payload)
+    }
+
+    override fun pageListParse(response: Response): List<Page> =
+        getJsonBody(response).parseAs<PagesDto>().toPageList()
+
+    override fun imageUrlParse(response: Response) = ""
+
+    // ======================== Utils =============================
+
+    private fun getActioNextToken(url: String?, regex: Regex = NEXT_ACTION_REGEX): String {
+        url ?: throw IOException("Url não encontrada")
+        val script = client.newCall(GET(url, headers))
+            .execute().body.string()
+        return regex.find(script)?.groupValues?.last(String::isNotBlank)
+            ?: throw IOException("Não foi possível encontrar token")
+    }
+
+    private fun getJsonBody(response: Response): String {
+        return MANGA_DATA_REGEX.find(response.body.string())?.groupValues?.last(String::isNotBlank)
+            ?: throw IOException("Não foi possível encontrar a lista de mangás")
+    }
+
+    private fun getScriptUrlFrom(url: String, cssSelector: String): String? {
+        val document = client.newCall(GET(url)).execute().asJsoup()
+        return document.selectFirst(cssSelector)?.absUrl("src")
+    }
+
+    companion object {
+        private val TEXT_PLAIN_MEDIA_TYPE = "text/plain;charset=UTF-8".toMediaTypeOrNull()
+        private val CHAPTERS_TOKEN_REGEX = """(?:unfavorite"[^\.]+.createServerReference\)\(")([^"]+)"(?:,.+getAllChapters)""".toRegex()
+
+        /**
+         * Combines multiple individual regular expressions to capture the "Next-Action"
+         * needed to call various API endpoints (popular, latest, search, details, pages).
+         *
+         * The token is a unique identifier (a string) found inside the 'createServerReference'
+         * function call within the page's JavaScript source, immediately preceding the
+         * corresponding backend function name (e.g., 'getAllWithoutFilters' for popular).
+         */
+        private val NEXT_ACTION_REGEX = buildList {
+            add("""(?:createServerReference\)\(")([^"]+)"(?:,.+getAllWithoutFilters)""".toRegex()) // popular token
+            add("""(?:"[^\.]+.createServerReference\)\(")([^"]+)"(?:,.+getLastUpdates)""".toRegex()) // latest token
+            add("""(?:(?:,.=.{2}\d+.){4}[^\.]+.createServerReference\)\(")([^"]+)"(?:,.+search)""".toRegex()) // search token
+            add("""(?:getAllChapters"[^\.]+.createServerReference\)\(")([^"]+)"(?:,.+getOne)""".toRegex()) // details token
+            add("""(?:"[^\.]+.createServerReference\)\(")([^"]+)"(?:,.+getPages)""".toRegex()) // pages token
+        }.joinToString("|").toRegex()
+
+        /**
+         * Combines regular expressions to identify and extract the **JSON string** containing
+         * the manga data (list, details, chapters, pages) from an HTTP response body.
+         *
+         * The purpose is to find the beginning of the valid JSON data, ignoring any
+         * preceding code or text. The pattern is defined by the expected first key-field
+         * of the JSON for each response type:
+         *
+         * - 'id': Starts the list of latest projects or search results (e.g., [{"id"...).
+         * - 'projects', 'title', 'groupName', 'pages': Starts other responses (e.g., {"projects"...).
+         *
+         * The 'joinToString("|")' creates a single Regex that matches ANY of these JSON
+         * starting points, simplifying the logic in the 'getJsonBody' function.
+         */
+        private val MANGA_DATA_REGEX = buildList {
+            add("""\[\{"id".+""".toRegex())
+            add("""\{"(?:${listOf("projects", "title", "groupName", "pages").joinToString("|")})".+""".toRegex())
+        }.joinToString("|").toRegex()
+    }
 }
