@@ -241,9 +241,6 @@ class ArgosComics : HttpSource() {
          *
          * - 'id': Starts the list of latest projects or search results (e.g., [{"id"...).
          * - 'projects', 'title', 'groupName', 'pages': Starts other responses (e.g., {"projects"...).
-         *
-         * The 'joinToString("|")' creates a single Regex that matches ANY of these JSON
-         * starting points, simplifying the logic in the 'getJsonBody' function.
          */
         private val MANGA_DATA_REGEX = buildList {
             add("""\[\{"id".+""".toRegex())
