@@ -37,11 +37,11 @@ class ArgosComics : HttpSource() {
         .build()
 
     private val popularToken: String by lazy {
-        getActioNextToken(getScriptUrlFrom("$baseUrl/projetos", "script[src*=projetos]"))
+        getActionNextToken(getScriptUrlFrom("$baseUrl/projetos", "script[src*=projetos]"))
     }
 
     private val latestToken: String by lazy {
-        getActioNextToken(getScriptUrlFrom(baseUrl, "script[src*=page-]"))
+        getActionNextToken(getScriptUrlFrom(baseUrl, "script[src*=page-]"))
     }
 
     private val searchToken: String by lazy {
@@ -51,7 +51,7 @@ class ArgosComics : HttpSource() {
             .sortedDescending()
 
         urls.forEach {
-            try { return@lazy getActioNextToken(it) } catch (_: Exception) { /* ignored */ }
+            try { return@lazy getActionNextToken(it) } catch (_: Exception) { /* ignored */ }
         }
 
         throw IOException("Não foi possível encontrar token para pesquisar")
@@ -60,17 +60,17 @@ class ArgosComics : HttpSource() {
     private var detailsToken: String? = null
     private fun getDetailsToken(pageUrl: String): String =
         detailsToken.takeIf { !it.isNullOrBlank() }
-            ?: getActioNextToken(getScriptUrlFrom(pageUrl, "script[src*=projectId]")).also { detailsToken = it }
+            ?: getActionNextToken(getScriptUrlFrom(pageUrl, "script[src*=projectId]")).also { detailsToken = it }
 
     private var chaptersToken: String? = null
     private fun getChaptersToken(pageUrl: String): String =
         chaptersToken.takeIf { !it.isNullOrBlank() }
-            ?: getActioNextToken(getScriptUrlFrom(pageUrl, "script[src*=projectId]"), CHAPTERS_TOKEN_REGEX).also { chaptersToken = it }
+            ?: getActionNextToken(getScriptUrlFrom(pageUrl, "script[src*=projectId]"), CHAPTERS_TOKEN_REGEX).also { chaptersToken = it }
 
     private var pagesToken: String? = null
     private fun getPagesToken(pageUrl: String): String =
         pagesToken.takeIf { !it.isNullOrBlank() }
-            ?: getActioNextToken(getScriptUrlFrom(pageUrl, "script[src*=capitulo]")).also { pagesToken = it }
+            ?: getActionNextToken(getScriptUrlFrom(pageUrl, "script[src*=capitulo]")).also { pagesToken = it }
 
     // ======================== Popular =============================
 
@@ -193,7 +193,7 @@ class ArgosComics : HttpSource() {
 
     // ======================== Utils =============================
 
-    private fun getActioNextToken(url: String?, regex: Regex = NEXT_ACTION_REGEX): String {
+    private fun getActionNextToken(url: String?, regex: Regex = NEXT_ACTION_REGEX): String {
         url ?: throw IOException("Url não encontrada")
         val script = client.newCall(GET(url, headers))
             .execute().body.string()
