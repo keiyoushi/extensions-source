@@ -276,6 +276,7 @@ class WebViewFetchInterceptor(
                 .catch((error) => {
                     window.android.onError(error.toString());
                 });
+                return true;
             })();
         """.trimIndent()
 
