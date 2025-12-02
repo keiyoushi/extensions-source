@@ -29,10 +29,6 @@ class Zenon : GigaViewer(
 
     override val publisher: String = "ゼノン編集部"
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-
     override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/series/zenyon", headers)
 
     override fun popularMangaSelector(): String = ".series-item"
