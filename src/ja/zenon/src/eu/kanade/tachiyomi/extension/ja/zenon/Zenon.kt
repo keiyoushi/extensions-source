@@ -79,15 +79,11 @@ class Zenon : GigaViewer(
 
     private class CollectionFilter : Filter.Select<String>(
         "コレクション",
-        arrayOf("コミックぜにょん", "月刊コミックゼノン", "コミックタタン", "読切作品", "漫画賞"),
-    ) {
-        fun toUriPart() = when (state) {
-            0 -> "zenyon"
-            1 -> "zenon"
-            2 -> "tatan"
-            3 -> "oneshot"
-            4 -> "newcomer"
-            else -> "zenyon"
-        }
-    }
+        override fun getCollections(): List<Collection> = listOf(
+        Collection("コミックぜにょん", "zenyon"),
+        Collection("月刊コミックゼノン", "zenon"),
+        Collection("コミックタタン", "tatan"),
+        Collection("読切作品", "oneshot"),
+        Collection("漫画賞", "newcomer"),
+    )
 }
