@@ -13,12 +13,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class MHScans : Madara(
-    "MHScans",
-    "https://curiosidadtop.com",
-    "es",
-    dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
-), ConfigurableSource {
+class MHScans :
+    Madara(
+        "MHScans",
+        "https://curiosidadtop.com",
+        "es",
+        dateFormat = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
+    ),
+    ConfigurableSource {
     override val mangaSubString = "series"
 
     override val client: OkHttpClient = super.client.newBuilder()
