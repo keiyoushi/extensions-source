@@ -3,6 +3,8 @@ package keiyoushi.utils
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Response
 import uy.kohesive.injekt.injectLazy
@@ -38,6 +40,14 @@ inline fun <reified T> Response.parseAs(json: Json = jsonInstance): T =
  */
 inline fun <reified T> Response.parseAs(json: Json = jsonInstance, transform: (String) -> String): T =
     body.string().parseAs(json, transform)
+
+/**
+ * Parses a [JsonElement] into an object of type [T].
+ *
+ * @param json The [Json] instance to use for parsing. Defaults to the injected instance.
+ */
+inline fun <reified T> JsonElement.parseAs(json: Json = jsonInstance): T =
+    json.decodeFromJsonElement(this)
 
 /**
  * Serializes the object to a JSON string.

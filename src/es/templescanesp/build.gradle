@@ -3,7 +3,7 @@ ext {
     extClass = '.TempleScanEsp'
     themePkg = 'madara'
     baseUrl = 'https://aedexnox.kawi.lat'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 

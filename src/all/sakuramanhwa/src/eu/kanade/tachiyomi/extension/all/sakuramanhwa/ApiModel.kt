@@ -4,13 +4,13 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 internal class ApiMangaInfo(
-    val manga: MangaInfo,
+    val manga: MangaDetails,
+    val metaData: MetaDataInfo,
     val chapters: List<ChapterInfo>,
 )
 
 @Serializable
-internal class MangaInfo(
-    val details: MangaDetails,
+internal class MetaDataInfo(
     val follows: Int,
     val views: Int,
 )
@@ -25,7 +25,7 @@ internal class MangaDetails(
     val slug: String,
     val type: String,
     val status: String?,
-    val author: String,
+    val authors: List<String>?,
     val rating: Float?,
     val create_at: String?,
 )
