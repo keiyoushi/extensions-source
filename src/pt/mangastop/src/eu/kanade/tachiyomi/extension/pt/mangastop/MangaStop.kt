@@ -1,4 +1,3 @@
-
 package eu.kanade.tachiyomi.extension.pt.mangastop
 
 import androidx.preference.PreferenceScreen
