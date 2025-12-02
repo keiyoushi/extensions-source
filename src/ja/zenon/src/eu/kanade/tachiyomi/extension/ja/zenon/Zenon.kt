@@ -36,7 +36,7 @@ class Zenon : GigaViewer(
     override fun popularMangaFromElement(element: Element): SManga = SManga.create().apply {
         title = element.selectFirst(".item-series-title")!!.text()
         thumbnail_url = element.selectFirst(".img-wrapper img")?.let { img ->
-            img.attr("data-src").ifEmpty { img.attr("src") }
+            img.absUrl("data-src").ifEmpty { img.absUrl("src") }
         }
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
