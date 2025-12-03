@@ -1,17 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
-import android.text.Editable
-import android.text.TextWatcher
-import android.widget.Button
-import android.widget.Toast
-import androidx.preference.CheckBoxPreference
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -35,87 +25,25 @@ class MangaLivre :
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
+    private val cookieInterceptor by lazy {
+        CookieInterceptor(
+            baseUrl.substringAfter("://"),
+            listOf(
+                "manga_reading_pass" to "verified",
+                "manga_reading_ml" to "verified",
+            ),
+        )
+    }
     private val preferences = getPreferences()
 
-    private val cookieInterceptor = CookieInterceptor(baseUrl.substringAfter("://"), "manga_reading_pass" to "verified")
-
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .addNetworkInterceptor(cookieInterceptor)
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .rateLimit(3)
         .build()
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default URL:\n\t${super.baseUrl}"
-            setDefaultValue(super.baseUrl)
-            setOnPreferenceChangeListener { _, newValue ->
-                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also { screen.addPreference(it) }
-
-        CheckBoxPreference(screen.context).apply {
-            key = "${REMOVE_TITLE_VERSION_PREF}_$lang"
-            title = "Remove version information from entry titles"
-            summary = "This removes version tags like '(Official)' or '(Uncensored)' from entry titles " +
-                "and helps identify duplicate entries in your library. " +
-                "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
-                "You might also want to clear the database in advanced settings."
-            setDefaultValue(false)
-        }.also { screen.addPreference(it) }
-
-        EditTextPreference(screen.context).apply {
-            key = "${REMOVE_TITLE_CUSTOM_PREF}_$lang"
-            title = "Custom regex to be removed from title"
-            summary = customRemoveTitle()
-            setDefaultValue("")
-
-            val validate = { str: String ->
-                runCatching { Regex(str) }
-                    .map { true to "" }
-                    .getOrElse { false to it.message }
-            }
-
-            setOnBindEditTextListener { editText ->
-                editText.addTextChangedListener(
-                    object : TextWatcher {
-                        override fun beforeTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
-                        override fun onTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
-
-                        override fun afterTextChanged(editable: Editable?) {
-                            editable ?: return
-                            val text = editable.toString()
-                            val valid = validate(text)
-                            editText.error = if (!valid.first) valid.second else null
-                            editText.rootView.findViewById<Button>(android.R.id.button1)?.isEnabled = editText.error == null
-                        }
-                    },
-                )
-            }
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val (isValid, message) = validate(newValue as String)
-                if (isValid) {
-                    summary = newValue
-                } else {
-                    Toast.makeText(screen.context, message, Toast.LENGTH_LONG).show()
-                }
-                isValid
-            }
-        }.also { screen.addPreference(it) }
-
-        addRandomUAPreferenceToScreen(screen)
-    }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {}
 
     override fun popularMangaFromElement(element: Element): SManga {
         return super.popularMangaFromElement(element).apply {
