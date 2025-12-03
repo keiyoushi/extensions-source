@@ -1,16 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.imperiodabritannia
 
-import android.text.Editable
-import android.text.TextWatcher
-import android.widget.Button
-import android.widget.Toast
-import androidx.preference.CheckBoxPreference
-import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
-import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
-import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
-import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -29,104 +19,29 @@ class ImperioDaBritannia :
         SimpleDateFormat("dd 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
     ),
     ConfigurableSource {
-
-    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
-
     private val preferences = getPreferences()
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
     override val client = super.client.newBuilder()
-        .setRandomUserAgent(
-            preferences.getPrefUAType(),
-            preferences.getPrefCustomUA(),
-        )
         .rateLimit(3)
         .build()
 
     override val useLoadMoreRequest = LoadMoreStrategy.Always
 
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        EditTextPreference(screen.context).apply {
-            key = BASE_URL_PREF
-            title = BASE_URL_PREF_TITLE
-            summary = BASE_URL_PREF_SUMMARY
-            dialogTitle = BASE_URL_PREF_TITLE
-            dialogMessage = "Default URL:\n\t${super.baseUrl}"
-            setDefaultValue(super.baseUrl)
-            setOnPreferenceChangeListener { _, newValue ->
-                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.also { screen.addPreference(it) }
-
-        CheckBoxPreference(screen.context).apply {
-            key = "${REMOVE_TITLE_VERSION_PREF}_$lang"
-            title = "Remove version information from entry titles"
-            summary = "This removes version tags like '(Official)' or '(Uncensored)' from entry titles " +
-                "and helps identify duplicate entries in your library. " +
-                "To update existing entries, remove them from your library (unfavorite) and refresh manually. " +
-                "You might also want to clear the database in advanced settings."
-            setDefaultValue(false)
-        }.also { screen.addPreference(it) }
-
-        EditTextPreference(screen.context).apply {
-            key = "${REMOVE_TITLE_CUSTOM_PREF}_$lang"
-            title = "Custom regex to be removed from title"
-            summary = customRemoveTitle()
-            setDefaultValue("")
-
-            val validate = { str: String ->
-                runCatching { Regex(str) }
-                    .map { true to "" }
-                    .getOrElse { false to it.message }
-            }
-
-            setOnBindEditTextListener { editText ->
-                editText.addTextChangedListener(
-                    object : TextWatcher {
-                        override fun beforeTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
-                        override fun onTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
-
-                        override fun afterTextChanged(editable: Editable?) {
-                            editable ?: return
-                            val text = editable.toString()
-                            val valid = validate(text)
-                            editText.error = if (!valid.first) valid.second else null
-                            editText.rootView.findViewById<Button>(android.R.id.button1)?.isEnabled = editText.error == null
-                        }
-                    },
-                )
-            }
-
-            setOnPreferenceChangeListener { _, newValue ->
-                val (isValid, message) = validate(newValue as String)
-                if (isValid) {
-                    summary = newValue
-                } else {
-                    Toast.makeText(screen.context, message, Toast.LENGTH_LONG).show()
-                }
-                isValid
-            }
-        }.also { screen.addPreference(it) }
-
-        addRandomUAPreferenceToScreen(screen)
-    }
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {}
 
     override fun popularMangaFromElement(element: Element): SManga {
         return super.popularMangaFromElement(element).apply {
             title = title.cleanTitleIfNeeded()
         }
     }
-
     override fun latestUpdatesFromElement(element: Element): SManga {
         return super.latestUpdatesFromElement(element).apply {
             title = title.cleanTitleIfNeeded()
         }
     }
-
     override val chapterUrlSuffix = ""
-
     override fun mangaDetailsParse(document: Document): SManga {
         return super.mangaDetailsParse(document).apply {
             val cleanedTitle = title.cleanTitleIfNeeded()
