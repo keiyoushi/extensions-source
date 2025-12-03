@@ -16,7 +16,7 @@ import org.jsoup.nodes.Element
 class CatharsisWorld :
     Madara(
         "Catharsis World",
-        "https://catharsisworld.dig-it.info",
+        "https://catharsisworld.vxviral.xyz",
         "es",
     ),
     ConfigurableSource {

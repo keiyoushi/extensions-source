@@ -9,6 +9,7 @@ import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.CloudflareWarmupInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.ComposedImageInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.interceptors.TranslationInterceptor
 import eu.kanade.tachiyomi.extension.all.manhuarm.translator.bing.BingTranslator
@@ -114,6 +115,8 @@ class Manhuarm(
     private val provider: String get() =
         preferences.getString(TRANSLATOR_PROVIDER_PREF, translators.first())!!
 
+    private val warmupInterceptor = CloudflareWarmupInterceptor(baseUrl, headers)
+
     /**
      * This ensures that the `OkHttpClient` instance is only created when required, and it is rebuilt
      * when there are configuration changes to ensure that the client uses the most up-to-date settings.
@@ -121,10 +124,12 @@ class Manhuarm(
     private var clientInstance: OkHttpClient? = null
         get() {
             if (field == null || isSettingsChanged) {
+                warmupInterceptor.reset()
                 field = clientBuilder().build()
             }
             return field
         }
+
     private val clientUtils = network.cloudflareClient.newBuilder()
         .rateLimit(3, 2, TimeUnit.SECONDS)
         .build()
@@ -141,6 +146,7 @@ class Manhuarm(
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(2, TimeUnit.MINUTES)
             .rateLimit(2, 1)
+            .addInterceptor(warmupInterceptor)
             .addInterceptorIf(
                 !disableTranslator && language.lang != language.origin,
                 TranslationInterceptor(settings, translator),
@@ -154,6 +160,14 @@ class Manhuarm(
         if (ua.isNotEmpty()) {
             builder.set("User-Agent", ua)
         }
+        builder.set("Accept-Language", "en-US,en;q=0.9")
+        builder.set("Upgrade-Insecure-Requests", "1")
+        builder.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8")
+        builder.set("Sec-Fetch-Site", "none")
+        builder.set("Sec-Fetch-Mode", "navigate")
+        builder.set("Sec-Fetch-User", "?1")
+        builder.set("Sec-Fetch-Dest", "document")
+        builder.set("Priority", "u=0, i")
         return builder
     }
 
@@ -175,6 +189,12 @@ class Manhuarm(
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
         val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
+
+        val headers = headersBuilder()
+            .set("Sec-Fetch-Site", "same-origin")
+            .set("Sec-Fetch-Mode", "cors")
+            .set("Sec-Fetch-Dest", "empty")
+            .build()
 
         val dialog = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data/$chapterId.json", headers))
             .execute()
@@ -214,7 +234,7 @@ class Manhuarm(
         val thumbEl = element.selectFirst(".item-thumb img, .manga-thumb img, img")
         manga.setUrlWithoutDomain(titleEl!!.attr("href"))
         manga.title = titleEl.text()
-        manga.thumbnail_url = thumbEl?.absUrl("data-src") ?: thumbEl?.absUrl("src")
+        manga.thumbnail_url = thumbEl?.extractCoverUrl()
         return manga
     }
 
@@ -239,11 +259,58 @@ class Manhuarm(
             ?: element.selectFirst(".item-thumb img, img")
         manga.setUrlWithoutDomain(titleEl!!.attr("href"))
         manga.title = titleEl.text()
-        manga.thumbnail_url = thumbEl?.absUrl("src")
+        manga.thumbnail_url = thumbEl?.extractCoverUrl()
         return manga
     }
 
     override fun latestUpdatesNextPageSelector(): String? = "a.next, a.nextpostslink, .pagination a.next, .navigation-ajax #navigation-ajax"
+
+    /**
+     * Extracts the cover image URL from an image element, checking multiple attributes
+     * to handle lazy loading and different image formats.
+     */
+    private fun Element?.extractCoverUrl(): String? {
+        if (this == null) return null
+
+        // Try data-src first (lazy loading)
+        absUrl("data-src").takeIf { it.isNotBlank() && !it.contains("data:image") }?.let { return it }
+
+        // Try src attribute
+        absUrl("src").takeIf { it.isNotBlank() && !it.contains("data:image") && !it.contains("placeholder") }?.let { return it }
+
+        // Try srcset attribute (parse first URL)
+        attr("srcset").takeIf { it.isNotBlank() }?.let { srcset ->
+            srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()?.let { url ->
+                if (url.startsWith("http")) {
+                    return url
+                } else {
+                    absUrl(url).takeIf { it.isNotBlank() && !it.contains("data:image") }?.let { return it }
+                }
+            }
+        }
+
+        return null
+    }
+
+    override fun mangaDetailsParse(document: Document): SManga {
+        val manga = super.mangaDetailsParse(document)
+
+        // Ensure cover is always set from detail page if it wasn't set from listing
+        if (manga.thumbnail_url.isNullOrBlank()) {
+            val coverEl = document.selectFirst(".summary_image img, .wp-post-image, .item-thumb img, .manga-thumb img, img.wp-post-image")
+            manga.thumbnail_url = coverEl?.extractCoverUrl()
+        } else {
+            // Even if cover was set, try to get a better quality version from detail page
+            val coverEl = document.selectFirst(".summary_image img, .wp-post-image, .item-thumb img, .manga-thumb img, img.wp-post-image")
+            coverEl?.extractCoverUrl()?.let {
+                if (it.isNotBlank() && !it.contains("placeholder")) {
+                    manga.thumbnail_url = it
+                }
+            }
+        }
+
+        return manga
+    }
 
     // Prevent bad fragments
     fun String.toFragment(): String = "#${this.replace("#", "*")}"
