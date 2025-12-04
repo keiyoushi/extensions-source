@@ -45,14 +45,14 @@ class Desu : ConfigurableSource, HttpSource() {
         preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
             if (prefDefaultDomain != DOMAIN_DEFAULT) {
                 preferences.edit()
-                    .putString(DOMAIN_TITLE, DOMAIN_DEFAULT)
+                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
                     .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
                     .apply()
             }
         }
     }
 
-    override val baseUrl = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
+    override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
 
     override val lang = "ru"
 
@@ -376,7 +376,7 @@ class Desu : ConfigurableSource, HttpSource() {
             }
         }.let(screen::addPreference)
         EditTextPreference(screen.context).apply {
-            key = DEFAULT_DOMAIN_PREF
+            key = DOMAIN_PREF
             title = DOMAIN_TITLE
             summary = baseUrl
             setDefaultValue(DOMAIN_DEFAULT)
@@ -398,6 +398,8 @@ class Desu : ConfigurableSource, HttpSource() {
 
         private const val DOMAIN_TITLE = "Домен"
         private const val DEFAULT_DOMAIN_PREF = "default_domain"
+        private const val DOMAIN_PREF = "DOMAIN_PREF"
+
         private const val DOMAIN_DEFAULT = "https://desu.city"
     }
 }
