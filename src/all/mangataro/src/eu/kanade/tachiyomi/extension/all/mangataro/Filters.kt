@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.mangataro
+package eu.kanade.tachiyomi.extension.all.mangataro
 
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList

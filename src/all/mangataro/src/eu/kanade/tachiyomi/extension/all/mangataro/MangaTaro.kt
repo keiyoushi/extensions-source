@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.mangataro
+package eu.kanade.tachiyomi.extension.all.mangataro
 
 import android.util.Log
 import eu.kanade.tachiyomi.network.GET
@@ -35,13 +35,13 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-class MangaTaro : HttpSource() {
+open class MangaTaro(
+    override val lang: String,
+) : HttpSource() {
 
     override val name = "MangaTaro"
 
     override val baseUrl = "https://mangataro.org"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
@@ -241,15 +241,19 @@ class MangaTaro : HttpSource() {
         val token = md5(
             "${timestamp}mng_ch_${isoDateFormatter.format(Date())}",
         ).substring(0, 16)
-        val mangaId = manga.url.parseAs<MangaUrl>().id
+
+        val dto = manga.url.parseAs<MangaUrl>()
 
         val url = "$baseUrl/auth/manga-chapters".toHttpUrl().newBuilder().apply {
-            addQueryParameter("manga_id", mangaId)
+            addQueryParameter("manga_id", dto.id)
             addQueryParameter("offset", "0")
             addQueryParameter("limit", "9999")
             addQueryParameter("order", "DESC")
             addQueryParameter("_t", token)
             addQueryParameter("_ts", timestamp.toString())
+            dto.group?.let {
+                addQueryParameter("group_id", it.toString())
+            }
         }.build()
 
         return GET(url, headers)
@@ -266,7 +270,7 @@ class MangaTaro : HttpSource() {
         // currently there is only English chapters on the site, at least from a quick look.
         // if they ever have multiple languages, we would need to make this a source factory
         val chapters = data.chapters.filter {
-            it.language == "en"
+            it.language.equals(lang, ignoreCase = true)
         }.map {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.url)
@@ -369,5 +373,21 @@ class MangaTaro : HttpSource() {
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
+    }
+}
+
+// Map groups by language
+class MangaTatoGroup(lang: String, val groups: List<Long>) : MangaTaro(lang) {
+
+    override val supportsLatest: Boolean = false
+
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseUrl/auth/groups/${groups[page - 1]}/titles?page=$page", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val page = response.request.url.queryParameter("page")!!.toLong()
+        return response.parseAs<ProjectList>().titles
+            .map(ProjectList.MangaDto::toSManga)
+            .let { MangasPage(it, hasNextPage = page < groups.size) }
     }
 }
