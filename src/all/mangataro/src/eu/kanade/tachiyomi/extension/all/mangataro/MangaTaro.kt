@@ -415,12 +415,14 @@ class MangaTatoGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
             key = GROUP_PREF
             title = "My groups"
             summary = "Add the group number to view the list of projects"
-            dialogMessage = """
-                Visit $baseUrl/groups and add the group number here.
-                    Ex.: $baseUrl/groups/50. The group number is 50.
-                Use a comma to add multiple groups.
-                    Ex.: 50, 60, 12
-            """.trimIndent()
+            dialogMessage = buildString {
+                appendLine("* Visit '$baseUrl/groups' and add the group number here.")
+                appendLine("\t\tEx.: $baseUrl/groups/50. The group number is 50.")
+                appendLine("\n* Use a comma to add multiple groups.")
+                appendLine("\t\tEx.: 50, 60, 12")
+                appendLine("\n⚠  Groups added here may not appear due to typos. Also, check if the group actually publishes in your language.")
+            }
+
             setDefaultValue("")
 
             setOnPreferenceChangeListener { preference, newValue ->
