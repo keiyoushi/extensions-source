@@ -425,7 +425,7 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
                 appendLine("\n⚠  Groups added here may not appear due to typos. Also, check if the group actually publishes in your language.")
             }
 
-            setDefaultValue("")
+            setDefaultValue(groups.joinToString())
 
             setOnPreferenceChangeListener { preference, newValue ->
                 Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
