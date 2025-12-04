@@ -34,11 +34,12 @@ class MagazinePocket : HttpSource() {
     override val versionId = 2
 
     private val apiUrl = "https://api.pocket.shonenmagazine.com"
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.JAPAN)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
     private val pageLimit = 25
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
+        .add("x-manga-platform", "3")
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
@@ -49,7 +50,6 @@ class MagazinePocket : HttpSource() {
         val offset = (page - 1) * pageLimit
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegments("ranking/all")
-            .addQueryParameter("platform", "3")
             .addQueryParameter("ranking_id", "30")
             .addQueryParameter("offset", offset.toString())
             .addQueryParameter("limit", "26")
@@ -69,7 +69,6 @@ class MagazinePocket : HttpSource() {
         val mangaIdsToFetch = if (hasNextPage) titleIds.dropLast(1) else titleIds
         val detailsUrl = apiUrl.toHttpUrl().newBuilder()
             .addPathSegments("title/list")
-            .addQueryParameter("platform", "3")
             .addQueryParameter("title_id_list", mangaIdsToFetch.joinToString(","))
             .build()
 
@@ -106,7 +105,6 @@ class MagazinePocket : HttpSource() {
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegments("web/top/updated/title")
             .addQueryParameter("base_date", dateString)
-            .addQueryParameter("platform", "3")
             .build()
         return hashedGet(url)
     }
@@ -123,7 +121,6 @@ class MagazinePocket : HttpSource() {
                 .addPathSegments("web/search/title")
                 .addQueryParameter("keyword", query)
                 .addQueryParameter("limit", "99999")
-                .addQueryParameter("platform", "3")
                 .build()
             return hashedGet(url)
         }
@@ -134,7 +131,6 @@ class MagazinePocket : HttpSource() {
             val genreId = uriPart.substringAfter("/genre/")
             apiUrl.toHttpUrl().newBuilder()
                 .addPathSegments("search/title")
-                .addQueryParameter("platform", "3")
                 .addQueryParameter("genre_id", genreId)
                 .addQueryParameter("limit", "99999")
                 .build()
@@ -143,7 +139,6 @@ class MagazinePocket : HttpSource() {
             val offset = (page - 1) * pageLimit
             apiUrl.toHttpUrl().newBuilder()
                 .addPathSegments("ranking/all")
-                .addQueryParameter("platform", "3")
                 .addQueryParameter("ranking_id", rankingId)
                 .addQueryParameter("offset", offset.toString())
                 .addQueryParameter("limit", "26")
@@ -171,7 +166,6 @@ class MagazinePocket : HttpSource() {
         val titleId = manga.url.substringAfter("/title/")
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegments("web/title/detail")
-            .addQueryParameter("platform", "3")
             .addQueryParameter("title_id", titleId)
             .build()
         return hashedGet(url)
@@ -187,7 +181,6 @@ class MagazinePocket : HttpSource() {
             if (result.genreIdList.isNotEmpty()) {
                 val genreApiUrl = apiUrl.toHttpUrl().newBuilder()
                     .addPathSegments("genre/list")
-                    .addQueryParameter("platform", "3")
                     .addQueryParameter("genre_id_list", result.genreIdList.joinToString(","))
                     .build()
 
@@ -216,7 +209,6 @@ class MagazinePocket : HttpSource() {
         }
 
         val formBody = FormBody.Builder()
-            .add("platform", "3")
             .add("episode_id_list", episodeIds.joinToString(","))
             .build()
 
@@ -273,7 +265,6 @@ class MagazinePocket : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val episodeId = chapter.url.substringAfter("episode/")
         val url = "$apiUrl/web/episode/viewer".toHttpUrl().newBuilder()
-            .addQueryParameter("platform", "3")
             .addQueryParameter("episode_id", episodeId)
             .build()
         return hashedGet(url)
