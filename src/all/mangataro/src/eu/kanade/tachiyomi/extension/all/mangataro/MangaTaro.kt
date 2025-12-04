@@ -389,6 +389,8 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
 
     private val preferences: SharedPreferences = getPreferences()
 
+    private val libraryCached: MutableList<SManga> = mutableListOf()
+
     private val userGroups: List<Long> by lazy {
         val myGroups = preferences.getString(GROUP_PREF, "")?.takeIf(String::isNotBlank)
             ?: return@lazy emptyList()
@@ -411,6 +413,27 @@ class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
             .map(ProjectList.MangaDto::toSManga)
             .let { MangasPage(it, hasNextPage = page < groupsMapped.size) }
     }
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return libraryCached.takeIf(List<SManga>::isNotEmpty)?.let {
+            Observable.just(MangasPage(libraryCached, hasNextPage = false))
+        } ?: super.fetchPopularManga(page)
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return Observable.fromCallable {
+            if (libraryCached.isEmpty()) {
+                do {
+                    val mangasPage = fetchPopularManga(page)
+                        .toBlocking().first()
+                    libraryCached += mangasPage.mangas
+                } while (mangasPage.hasNextPage)
+            }
+            MangasPage(libraryCached.filter { it.title.contains(query, ignoreCase = true) }, false)
+        }
+    }
+
+    override fun getFilterList(): FilterList = FilterList()
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
