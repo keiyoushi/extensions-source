@@ -1,9 +1,14 @@
 package eu.kanade.tachiyomi.extension.all.mangataro
 
+import android.content.SharedPreferences
 import android.util.Log
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,6 +19,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.Callback
@@ -377,17 +383,55 @@ open class MangaTaro(
 }
 
 // Map groups by language
-class MangaTatoGroup(lang: String, val groups: List<Long>) : MangaTaro(lang) {
+class MangaTatoGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), ConfigurableSource {
 
     override val supportsLatest: Boolean = false
 
+    private val preferences: SharedPreferences = getPreferences()
+
+    private val userGroups: List<Long> by lazy {
+        val myGroups = preferences.getString(GROUP_PREF, "") ?: return@lazy emptyList()
+        return@lazy try {
+            myGroups.split(",").map { it.trim().toLong() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    val groupsMapped: List<Long> by lazy { (groups + userGroups).distinct() }
+
     override fun popularMangaRequest(page: Int): Request =
-        GET("$baseUrl/auth/groups/${groups[page - 1]}/titles?page=$page", headers)
+        GET("$baseUrl/auth/groups/${groupsMapped[page - 1]}/titles?page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val page = response.request.url.queryParameter("page")!!.toLong()
         return response.parseAs<ProjectList>().titles
             .map(ProjectList.MangaDto::toSManga)
-            .let { MangasPage(it, hasNextPage = page < groups.size) }
+            .let { MangasPage(it, hasNextPage = page < groupsMapped.size) }
+    }
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = GROUP_PREF
+            title = "My groups"
+            summary = "Add the group number to view the list of projects"
+            dialogMessage = """
+                Visit $baseUrl/groups and add the group number here.
+                    Ex.: $baseUrl/groups/50. The group number is 50.
+                Use a comma to add multiple groups.
+                    Ex.: 50, 60, 12
+            """.trimIndent()
+            setDefaultValue("")
+
+            setOnPreferenceChangeListener { preference, newValue ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private val GROUP_PREF = "groupPref"
+        private const val RESTART_APP = "Restart app to apply new setting."
     }
 }
