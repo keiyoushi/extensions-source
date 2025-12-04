@@ -390,7 +390,9 @@ class MangaTatoGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), Co
     private val preferences: SharedPreferences = getPreferences()
 
     private val userGroups: List<Long> by lazy {
-        val myGroups = preferences.getString(GROUP_PREF, "") ?: return@lazy emptyList()
+        val myGroups = preferences.getString(GROUP_PREF, "")?.takeIf(String::isNotBlank)
+            ?: return@lazy emptyList()
+
         return@lazy try {
             myGroups.split(",").map { it.trim().toLong() }
         } catch (_: Exception) {
