@@ -5,6 +5,6 @@ import eu.kanade.tachiyomi.source.SourceFactory
 class MangaTaroFactory : SourceFactory {
     override fun createSources() = listOf(
         MangaTaro("en"),
-        MangaTatoGroup("pt-BR", groups = listOf(9)),
+        MangaTaroGroup("pt-BR", groups = listOf(9)),
     )
 }

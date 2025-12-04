@@ -383,7 +383,7 @@ open class MangaTaro(
 }
 
 // Map groups by language
-class MangaTatoGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), ConfigurableSource {
+class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), ConfigurableSource {
 
     override val supportsLatest: Boolean = false
 
