@@ -53,6 +53,17 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
+    init {
+        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
+            if (prefDefaultDomain != DOMAIN_DEFAULT) {
+                preferences.edit()
+                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .apply()
+            }
+        }
+    }
+
     override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
 
     override val lang = "ru"
@@ -597,7 +608,10 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         EditTextPreference(screen.context).apply {
             key = FORCE_IMG_DOMAIN_PREF
             title = "Домен картинок"
-            summary = "Переопределение домена картинок"
+            summary = "Если изображения не грузяться очистите всевозможные данные в настройках приложения  (Настройки -> Дополнительно) \nи перезапустите приложение с полной остановкой" +
+                "\n\nНастройка переопределяет домен картинок." +
+                "\nПо умолчанию домент картинок берётся автоматически." +
+                "\nЧтобы узнать домен изображения откройте главу в браузере и после долгим тапом откройте изображение в новом окне."
             setDefaultValue("")
             setOnPreferenceChangeListener { _, newValue ->
                 try {
@@ -617,21 +631,10 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
     }
 
-    init {
-        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
-            if (prefDefaultDomain != DOMAIN_DEFAULT) {
-                preferences.edit()
-                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .apply()
-            }
-        }
-    }
-
     companion object {
         private val simpleDateFormat by lazy { SimpleDateFormat("dd.MM.yyyy", Locale.US) }
 
-        private const val DOMAIN_DEFAULT = "https://comxlife.com"
+        private const val DOMAIN_DEFAULT = "https://com-x.life"
 
         private const val DEFAULT_DOMAIN_PREF = "DEFAULT_DOMAIN_PREF"
 
