@@ -589,19 +589,9 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
             summary = baseUrl
             setDefaultValue(DOMAIN_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res =
-                        preferences.edit().putString(DOMAIN_PREF, newValue as String).commit()
-                    Toast.makeText(
-                        screen.context,
-                        "Для смены домена необходимо перезапустить приложение с полной остановкой.",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
+                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
             }
         }.let(screen::addPreference)
 
@@ -614,19 +604,9 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
                 "\nЧтобы узнать домен изображения откройте главу в браузере и после долгим тапом откройте изображение в новом окне."
             setDefaultValue("")
             setOnPreferenceChangeListener { _, newValue ->
-                try {
-                    val res =
-                        preferences.edit().putString(FORCE_IMG_DOMAIN_PREF, newValue as String).commit()
-                    Toast.makeText(
-                        screen.context,
-                        "Для смены домена необходимо перезапустить приложение с полной остановкой.",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    res
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    false
-                }
+                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
             }
         }.let(screen::addPreference)
     }
