@@ -96,7 +96,8 @@ class Kagane : HttpSource(), ConfigurableSource {
                 .url(url.newBuilder().setQueryParameter("token", accessToken).build())
                 .build(),
         )
-        if (response.code == 401) {
+
+        if (response.code == 401 || response.code == 507) {
             response.close()
             val challenge = try {
                 getChallengeResponse(seriesId, chapterId)
@@ -139,7 +140,7 @@ class Kagane : HttpSource(), ConfigurableSource {
             page,
             "",
             FilterList(
-                SortFilter(Filter.Sort.Selection(2, false)),
+                SortFilter(Filter.Sort.Selection(6, false)),
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
@@ -281,8 +282,9 @@ class Kagane : HttpSource(), ConfigurableSource {
                 addPathSegment(seriesId)
                 addPathSegment("file")
                 addPathSegment(chapterId)
-                addPathSegment((page + 1).toString())
+                addPathSegment(challengeResp.pageMapping.getValue(page + 1))
                 addQueryParameter("token", accessToken)
+                addQueryParameter("index", (page + 1).toString())
             }.build().toString()
 
             Page(page, imageUrl = pageUrl)
@@ -291,7 +293,7 @@ class Kagane : HttpSource(), ConfigurableSource {
         return Observable.just(pages)
     }
 
-    private var cacheUrl = "https://kazana.$domain"
+    private var cacheUrl = "https://yukine.$domain"
     private var accessToken: String = ""
 
     @SuppressLint("SetJavaScriptEnabled")

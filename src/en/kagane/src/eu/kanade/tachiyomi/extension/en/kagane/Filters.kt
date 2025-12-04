@@ -50,7 +50,11 @@ internal class SortFilter(
 
 private fun getSortFilter() = listOf(
     SelectFilterOption("Relevance", ""),
-    SelectFilterOption("Popular", "avg_views"),
+    SelectFilterOption("Popular (Total Views)", "total_views"),
+    SelectFilterOption("Popular (Average Views)", "avg_views"),
+    SelectFilterOption("Popular (Today)", "avg_views_today"),
+    SelectFilterOption("Popular (Week)", "avg_views_week"),
+    SelectFilterOption("Popular (Month)", "avg_views_month"),
     SelectFilterOption("Latest", "updated_at"),
     SelectFilterOption("By Name", "series_name"),
     SelectFilterOption("Books count", "books_count"),

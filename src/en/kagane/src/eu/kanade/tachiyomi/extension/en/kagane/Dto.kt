@@ -108,4 +108,6 @@ class ChallengeDto(
     val accessToken: String,
     @SerialName("cache_url")
     val cacheUrl: String,
+    @SerialName("page_mapping")
+    val pageMapping: Map<Int, String>,
 )
