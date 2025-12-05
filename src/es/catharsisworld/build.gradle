@@ -2,8 +2,8 @@ ext {
     extName = 'Catharsis World'
     extClass = '.CatharsisWorld'
     themePkg = 'madara'
-    baseUrl = 'https://catharsisworld.vxviral.xyz'
-    overrideVersionCode = 9
+    baseUrl = 'https://catharsisworld.dig-it.info'
+    overrideVersionCode = 10
     isNsfw = true
 }
 
