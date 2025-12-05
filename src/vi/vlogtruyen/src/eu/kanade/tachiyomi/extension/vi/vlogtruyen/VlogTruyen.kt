@@ -118,7 +118,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        name = element.select("h3").first()!!.text().trim()
+        name = element.select("h3").first()!!.text()
         if (element.select("li > b").text().isNotBlank()) {
             name += " " + element.select("li > b").text() +
                 when (element.select("li > b > i").attr("class")) {
