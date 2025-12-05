@@ -11,16 +11,17 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class ImageInterceptor : Interceptor {
+open class ImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val url = chain.request().url
         return if (url.queryParameterNames.contains("token")) {
             val seriesId = url.pathSegments[3]
             val chapterId = url.pathSegments[5]
-            val index = url.pathSegments.last().toInt()
+            val index = url.queryParameter("index")!!.toInt()
 
             val imageResp = chain.proceed(chain.request())
             val imageBytes = imageResp.body.bytes()
+
             val decrypted = decryptImage(imageBytes, seriesId, chapterId)
                 ?: throw IOException("Unable to decrypt data")
             val unscrambled = processData(decrypted, index, seriesId, chapterId)
