@@ -58,7 +58,6 @@ class MagazinePocket : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val requestUrl = response.request.url.toString()
         val rankingResult = response.parseAs<RankingApiResponse>()
         val titleIds = rankingResult.rankingTitleList.map { it.id.toString().padStart(5, '0') }
         if (titleIds.isEmpty()) {
@@ -69,7 +68,7 @@ class MagazinePocket : HttpSource() {
         val mangaIdsToFetch = if (hasNextPage) titleIds.dropLast(1) else titleIds
         val detailsUrl = apiUrl.toHttpUrl().newBuilder()
             .addPathSegments("title/list")
-            .addQueryParameter("title_id_list", mangaIdsToFetch.joinToString(","))
+            .addQueryParameter("title_id_list", mangaIdsToFetch.joinToString())
             .build()
 
         val detailsRequest = hashedGet(detailsUrl)
@@ -80,10 +79,6 @@ class MagazinePocket : HttpSource() {
 
         val detailsResult = detailsResponse.parseAs<TitleListResponse>()
         val mangas = detailsResult.titleList.map { it.toSManga() }
-
-        if (requestUrl.contains("/genre/")) {
-            return MangasPage(mangas.reversed(), hasNextPage)
-        }
         return MangasPage(mangas, hasNextPage)
     }
 
@@ -148,10 +143,10 @@ class MagazinePocket : HttpSource() {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val requestUrl = response.request.url.toString()
-        if (requestUrl.contains("/web/search/")) {
+        val requestUrl = response.request.url
+        if (requestUrl.pathSegments.contains("search")) {
             val result = response.parseAs<TitleListResponse>()
-            val mangas = result.titleList.map { it.toSManga() }
+            val mangas = result.titleList.map { it.toSManga() }.reversed()
             return MangasPage(mangas, false)
         }
         return popularMangaParse(response)
@@ -181,7 +176,7 @@ class MagazinePocket : HttpSource() {
             if (result.genreIdList.isNotEmpty()) {
                 val genreApiUrl = apiUrl.toHttpUrl().newBuilder()
                     .addPathSegments("genre/list")
-                    .addQueryParameter("genre_id_list", result.genreIdList.joinToString(","))
+                    .addQueryParameter("genre_id_list", result.genreIdList.joinToString())
                     .build()
 
                 val genreRequest = hashedGet(genreApiUrl)
@@ -209,7 +204,7 @@ class MagazinePocket : HttpSource() {
         }
 
         val formBody = FormBody.Builder()
-            .add("episode_id_list", episodeIds.joinToString(","))
+            .add("episode_id_list", episodeIds.joinToString())
             .build()
 
         val params = (0 until formBody.size).associate { formBody.name(it) to formBody.value(it) }
