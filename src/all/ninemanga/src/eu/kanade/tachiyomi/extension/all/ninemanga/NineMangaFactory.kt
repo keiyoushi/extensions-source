@@ -65,7 +65,7 @@ class NineMangaEs : NineManga("NineMangaEs", "https://es.ninemanga.com", "es") {
     private val redirectRegex = Regex("""window\.location\.href\s*=\s*["'](.*?)["']""")
 
     override fun pageListParse(document: Document): List<Page> {
-        val serverUrl = document.selectFirst("section.section div.post-content-body > a")?.attr("href")
+        val serverUrl = document.selectFirst("section.section div.post-content-body > a")?.absUrl("href")
 
         if (serverUrl != null) {
             val serverHeaders = headers.newBuilder()
