@@ -186,7 +186,7 @@ class Chapter(
     @SerialName("scanlation_group")
     private val scanlationGroup: ScanlationGroup?,
     @SerialName("is_official")
-    val isOfficial: Boolean,
+    val isOfficial: Int,
 ) {
     @Serializable
     class ScanlationGroup(
@@ -204,7 +204,7 @@ class Chapter(
         chapter_number = this@Chapter.number.toFloat()
         scanlator = if (this@Chapter.scanlationGroup != null) {
             this@Chapter.scanlationGroup.name
-        } else if (this@Chapter.isOfficial) {
+        } else if (this@Chapter.isOfficial == 1) {
             "Official"
         } else {
             "Unknown"
