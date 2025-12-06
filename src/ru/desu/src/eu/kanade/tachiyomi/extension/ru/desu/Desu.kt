@@ -15,7 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferences
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -39,21 +39,20 @@ class Desu : ConfigurableSource, HttpSource() {
 
     override val id: Long = 6684416167758830305
 
-    private val preferences: SharedPreferences = getPreferences()
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     init {
         preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
             if (prefDefaultDomain != DOMAIN_DEFAULT) {
                 preferences.edit()
-                    .putString(DOMAIN_TITLE, DOMAIN_DEFAULT)
+                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
                     .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
                     .apply()
             }
         }
     }
 
-    private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
-    override val baseUrl: String = domain
+    override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
 
     override val lang = "ru"
 
@@ -363,7 +362,7 @@ class Desu : ConfigurableSource, HttpSource() {
     private var isEng: String? = preferences.getString(LANGUAGE_PREF, "eng")
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val titleLanguagePref = ListPreference(screen.context).apply {
+        ListPreference(screen.context).apply {
             key = LANGUAGE_PREF
             title = "Выбор языка на обложке"
             entries = arrayOf("Английский", "Русский")
@@ -375,21 +374,19 @@ class Desu : ConfigurableSource, HttpSource() {
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                 true
             }
-        }
-        val domainDesuPref = EditTextPreference(screen.context).apply {
-            key = DOMAIN_TITLE
+        }.let(screen::addPreference)
+        EditTextPreference(screen.context).apply {
+            key = DOMAIN_PREF
             title = DOMAIN_TITLE
-            summary = domain
+            summary = baseUrl
             setDefaultValue(DOMAIN_DEFAULT)
             dialogTitle = DOMAIN_TITLE
-            setOnPreferenceChangeListener { _, _ ->
+            setOnPreferenceChangeListener { _, newValue ->
                 val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                 true
             }
-        }
-        screen.addPreference(titleLanguagePref)
-        screen.addPreference(domainDesuPref)
+        }.let(screen::addPreference)
     }
 
     companion object {
@@ -401,6 +398,8 @@ class Desu : ConfigurableSource, HttpSource() {
 
         private const val DOMAIN_TITLE = "Домен"
         private const val DEFAULT_DOMAIN_PREF = "default_domain"
+        private const val DOMAIN_PREF = "DOMAIN_PREF"
+
         private const val DOMAIN_DEFAULT = "https://desu.city"
     }
 }
