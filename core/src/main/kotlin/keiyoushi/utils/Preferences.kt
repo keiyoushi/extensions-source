@@ -23,6 +23,5 @@ inline fun HttpSource.getPreferencesLazy(
 /**
  * Returns the [SharedPreferences] associated with passed source id
  */
-@Suppress("NOTHING_TO_INLINE")
-inline fun getPreferences(sourceId: Long): SharedPreferences =
+fun getPreferences(sourceId: Long): SharedPreferences =
     Injekt.get<Application>().getSharedPreferences("source_$sourceId", 0x0000)
