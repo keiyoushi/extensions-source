@@ -43,7 +43,7 @@ class ScanR : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$cdnUrl/index.json".toHttpUrl().newBuilder()
         if (query.isNotBlank()) {
-            url.addQueryParameter("query", query)
+            url.fragment(query)
         }
         filters.filterIsInstance<UriFilter>().forEach {
             it.addToUri(url)
@@ -59,7 +59,7 @@ class ScanR : HttpSource() {
         val types = response.request.url.queryParameter("type") ?: "all"
         val status = response.request.url.queryParameter("status") ?: "all"
         val adult = response.request.url.queryParameter("adult") ?: "all"
-        val searchQuery = response.request.url.queryParameter("query") ?: ""
+        val searchQuery = response.request.url.fragment ?: ""
 
         if (searchQuery.startsWith("SLUG:")) {
             val filename = series.get(searchQuery.removePrefix("SLUG:"))
