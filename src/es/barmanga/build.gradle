@@ -3,7 +3,7 @@ ext {
     extClass = '.BarManga'
     themePkg = 'madara'
     baseUrl = 'https://libribar.com'
-    overrideVersionCode = 7
+    overrideVersionCode = 8
     isNsfw = true
 }
 
