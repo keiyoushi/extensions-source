@@ -7,9 +7,10 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.decodeFromStream
 import okhttp3.Response
-import uy.kohesive.injekt.injectLazy
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
-val jsonInstance: Json by injectLazy()
+val jsonInstance: Json = Injekt.get()
 
 /**
  * Parses JSON string into an object of type [T].
