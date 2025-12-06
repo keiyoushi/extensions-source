@@ -31,7 +31,7 @@ class NineMangaFactory : SourceFactory {
     )
 }
 
-class NineMangaEn : NineManga("NineMangaEn", "https://ninemanga.com", "en") {
+class NineMangaEn : NineManga("NineMangaEn", "https://www.ninemanga.com", "en") {
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         element.select("a.bookname").let {
             url = it.attr("abs:href").substringAfter("ninemanga.com")
@@ -65,6 +65,15 @@ class NineMangaEs : NineManga("NineMangaEs", "https://es.ninemanga.com", "es") {
     private val redirectRegex = Regex("""window\.location\.href\s*=\s*["'](.*?)["']""")
 
     override fun pageListParse(document: Document): List<Page> {
+        val serverUrl = document.selectFirst("section.section div.post-content-body > a")?.absUrl("href")
+
+        if (serverUrl != null) {
+            val serverHeaders = headers.newBuilder()
+                .set("Referer", document.baseUri())
+                .build()
+            return pageListParse(client.newCall(GET(serverUrl, serverHeaders)).execute().asJsoup())
+        }
+
         val redirectScript = document.selectFirst("body > script:containsData(window.location.href)")?.data()
 
         if (redirectScript != null) {
