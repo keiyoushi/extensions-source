@@ -88,7 +88,7 @@ class Zaimanhua : HttpSource(), ConfigurableSource {
         if (!request.url.toString().contains(checkTokenRegex)) return response
 
         // If chapter can read, return directly
-        val canRead = response.peekBody(Long.MAX_VALUE).string()
+        val canRead = response.peekBody(Long.MAX_VALUE).stringCompat(response.header("Content-Encoding"))
             .parseAs<ResponseDto<DataWrapperDto<CanReadDto>>>().data.data?.canRead != false
         if (canRead) return response
 
