@@ -32,6 +32,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.text.Regex
 
 class MangaPark(
     override val lang: String,
@@ -59,6 +60,7 @@ class MangaPark(
             addNetworkInterceptor(CookieInterceptor(domain, "nsfw" to "2"))
         }
         rateLimitHost(apiUrl.toHttpUrl(), 1)
+        addInterceptor(::imageFallbackInterceptor)
         // intentionally after rate limit interceptor so thumbnails are not rate limited
         addInterceptor(::thumbnailDomainInterceptor)
     }.build()
@@ -267,6 +269,55 @@ class MangaPark(
 
     private val cookiesNotSet = AtomicBoolean(true)
     private val latch = CountDownLatch(1)
+
+    private fun imageFallbackInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        var response = chain.proceed(request)
+
+        if (response.isSuccessful) return response
+
+        val urlString = request.url.toString()
+        val serverPattern = Regex("https://s\\d{2}")
+
+        if (serverPattern.containsMatchIn(urlString)) {
+            // Close the failed response to avoid leaks
+            response.close()
+
+            // Sorted list: Most reliable servers FIRST
+            val servers = listOf("s01", "s03", "s04", "s00", "s05", "s06", "s07", "s08", "s09", "s10", "s02")
+
+            for (server in servers) {
+                val newUrl = urlString.replace(serverPattern, "https://$server")
+
+                // Skip if we are about to try the exact same URL that just failed
+                if (newUrl == urlString) continue
+
+                val newRequest = request.newBuilder()
+                    .url(newUrl)
+                    .build()
+
+                try {
+                    // FORCE SHORT TIMEOUTS FOR FALLBACKS
+                    // If a fallback server doesn't answer in 5 seconds, kill it and move to next.
+                    val newResponse = chain
+                        .withConnectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                        .withReadTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                        .proceed(newRequest)
+
+                    if (newResponse.isSuccessful) {
+                        return newResponse
+                    }
+                    // If this server also failed, close and loop to the next one
+                    newResponse.close()
+                } catch (e: Exception) {
+                    // Connection error on this mirror, ignore and loop to next
+                }
+            }
+        }
+
+        // If everything failed, re-run original request to return the standard error
+        return chain.proceed(request)
+    }
 
     // sets necessary cookies to not block genres like `Hentai`
     private fun siteSettingsInterceptor(chain: Interceptor.Chain): Response {
