@@ -202,12 +202,12 @@ class Chapter(
         }
         date_upload = this@Chapter.updatedAt * 1000
         chapter_number = this@Chapter.number.toFloat()
-        if (this@Chapter.scanlationGroup != null) {
-            scanlator = this@Chapter.scanlationGroup.name
-        } else if this@Chapter.isOfficial {
-            scanlator = "Official"
+        scanlator = if (this@Chapter.scanlationGroup != null) {
+            this@Chapter.scanlationGroup.name
+        } else if (this@Chapter.isOfficial) {
+            "Official"
         } else {
-            scanlator = "Unknown"
+            "Unknown"
         }
     }
 }
