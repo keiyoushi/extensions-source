@@ -7,15 +7,15 @@ interface UriFilter {
     fun addToUri(builder: HttpUrl.Builder)
 }
 
-open class UriMultiSelectOption(name: String, val value: String) : Filter.CheckBox(name)
+open class UriMultiSelectOption(name: String, val value: String, state: Boolean) : Filter.CheckBox(name, state)
 
 open class UriMultiSelectFilter(
     name: String,
     private val param: String,
-    private val options: Array<Pair<String, String>>,
+    options: List<UriMultiSelectOption>,
 ) : UriFilter, Filter.Group<UriMultiSelectOption>(
     name,
-    options.map { UriMultiSelectOption(it.first, it.second).apply { state = true } },
+    options,
 ) {
     override fun addToUri(builder: HttpUrl.Builder) {
         val selected = state.filter { it.state }.map { it.value }
@@ -28,17 +28,26 @@ open class UriMultiSelectFilter(
 class TypeFilter : UriMultiSelectFilter(
     "Type",
     "type",
-    arrayOf(
-        Pair("OS", "os"),
-        Pair("Séries", "series"),
+    listOf(
+        UriMultiSelectOption("OS", "os", true),
+        UriMultiSelectOption("Séries", "series", true),
     ),
 )
 
 class StatusFilter : UriMultiSelectFilter(
     "Status",
     "status",
-    arrayOf(
-        Pair("Terminé", "completed"),
-        Pair("En cours", "ongoing"),
+    listOf(
+        UriMultiSelectOption("Terminé", "completed", true),
+        UriMultiSelectOption("En cours", "ongoing", true),
+    ),
+)
+
+class AdultFilter : UriMultiSelectFilter(
+    "Adulte ?",
+    "adult",
+    listOf(
+        UriMultiSelectOption("+18", "18", true),
+        UriMultiSelectOption("Normal", "normal", true),
     ),
 )

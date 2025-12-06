@@ -28,6 +28,7 @@ class ScanR : HttpSource() {
         return FilterList(
             TypeFilter(),
             StatusFilter(),
+            AdultFilter(),
         )
     }
 
@@ -57,6 +58,7 @@ class ScanR : HttpSource() {
 
         val types = response.request.url.queryParameter("type") ?: "all"
         val status = response.request.url.queryParameter("status") ?: "all"
+        val adult = response.request.url.queryParameter("adult") ?: "all"
         val searchQuery = response.request.url.queryParameter("query") ?: ""
 
         if (searchQuery.startsWith("SLUG:")) {
@@ -74,7 +76,8 @@ class ScanR : HttpSource() {
             if (searchQuery.isBlank() || serie.title.contains(searchQuery, ignoreCase = true)) {
                 val details = serie.toDetailedSManga()
                 if (((serie.os && types.contains("os")) || (!serie.os && types.contains("series")) || types.contains("all")) &&
-                    (details.status == SManga.ONGOING && status.contains("ongoing") || (details.status == SManga.COMPLETED && status.contains("completed")) || status.contains("all"))
+                    (details.status == SManga.ONGOING && status.contains("ongoing") || (details.status == SManga.COMPLETED && status.contains("completed")) || status.contains("all")) &&
+                    (serie.konami && adult.contains("18") || (!serie.konami && adult.contains("normal")) || adult.contains("all"))
                 ) {
                     mangaList.add(details)
                 }
