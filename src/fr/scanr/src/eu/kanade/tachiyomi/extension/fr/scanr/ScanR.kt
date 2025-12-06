@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -23,6 +24,14 @@ class ScanR : HttpSource() {
     override val supportsLatest = false
     private val seriesDataCache = mutableMapOf<String, Serie>()
 
+    override fun getFilterList(): FilterList {
+        return FilterList(
+            TypeFilter(),
+            StatusFilter(),
+            AdultFilter(),
+        )
+    }
+
     // Popular
     override fun popularMangaRequest(page: Int): Request {
         return GET("$cdnUrl/index.json", headers)
@@ -32,20 +41,25 @@ class ScanR : HttpSource() {
 
     // Search
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = if (query.isNotBlank()) {
-            "$cdnUrl/index.json#$query"
-        } else {
-            "$cdnUrl/index.json"
+        val url = "$cdnUrl/index.json".toHttpUrl().newBuilder()
+        if (query.isNotBlank()) {
+            url.fragment(query)
         }
-        return GET(url, headers)
+        filters.filterIsInstance<UriFilter>().forEach {
+            it.addToUri(url)
+        }
+
+        return GET(url.build(), headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val series = response.parseAs<Map<String, String>>()
         val mangaList = mutableListOf<SManga>()
 
-        val fragment = response.request.url.fragment
-        val searchQuery = fragment ?: ""
+        val types = response.request.url.queryParameter("type") ?: "all"
+        val status = response.request.url.queryParameter("status") ?: "all"
+        val adult = response.request.url.queryParameter("adult") ?: "all"
+        val searchQuery = response.request.url.fragment ?: ""
 
         if (searchQuery.startsWith("SLUG:")) {
             val filename = series.get(searchQuery.removePrefix("SLUG:"))
@@ -60,7 +74,13 @@ class ScanR : HttpSource() {
             val serie = fetchSeriesData(filename)
 
             if (searchQuery.isBlank() || serie.title.contains(searchQuery, ignoreCase = true)) {
-                mangaList.add(serie.toDetailedSManga())
+                val details = serie.toDetailedSManga()
+                if (((serie.os && types.contains("os")) || (!serie.os && types.contains("series")) || types.contains("all")) &&
+                    (details.status == SManga.ONGOING && status.contains("ongoing") || (details.status == SManga.COMPLETED && status.contains("completed")) || status.contains("all")) &&
+                    (serie.konami && adult.contains("18") || (!serie.konami && adult.contains("normal")) || adult.contains("all"))
+                ) {
+                    mangaList.add(details)
+                }
             }
         }
 
