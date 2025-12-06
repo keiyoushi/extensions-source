@@ -64,7 +64,7 @@ class AnimeSama : ParsedHttpSource() {
     private fun parseFilters(document: Document) {
         genreList = document.select("#list_genres #genreList label").mapNotNull { labelElement ->
             val input = labelElement.selectFirst("input[name=genre[]]") ?: return@mapNotNull null
-            val labelText = labelElement.selectFirst("span")?.text() ?: ""
+            val labelText = labelElement.selectFirst("span")?.text() ?: return@mapNotNull null
             val value = input.attr("value")
             labelText to value
         }
