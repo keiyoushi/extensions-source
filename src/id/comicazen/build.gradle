@@ -1,0 +1,10 @@
+ext {
+    extName = 'Comicazen'
+    extClass = '.Comicazen'
+    themePkg = 'comicaso'
+    baseUrl = 'https://comicazen.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
