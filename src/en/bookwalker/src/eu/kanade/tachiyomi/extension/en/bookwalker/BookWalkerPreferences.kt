@@ -6,6 +6,7 @@ interface BookWalkerPreferences {
     val imageQuality: ImageQualityPref
     val filterChapters: FilterChaptersPref
     val attemptToReadPreviews: Boolean
+    val useEarliestThumbnail: Boolean
     val excludeCategoryFilters: Regex
     val excludeGenreFilters: Regex
 }
