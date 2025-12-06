@@ -75,7 +75,7 @@ class OnePunchManOnline : ParsedHttpSource() {
         return SManga.create().apply {
             title = "One Punch Man"
             url = "/"
-            thumbnail_url = "https://upload.wikimedia.org/wikipedia/en/c/c3/OnePunchMan_manga_cover.png"
+            thumbnail_url = "https://comicvine.gamespot.com/a/uploads/original/11111/111114608/3458824-8589005300-YICcI.jpg"
             author = "ONE"
             artist = "Murata Yusuke"
             status = SManga.ONGOING
@@ -96,7 +96,7 @@ class OnePunchManOnline : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element): SChapter {
         return SChapter.create().apply {
-            setUrlWithoutDomain(element.attr("href"))
+            setUrlWithoutDomain(element.attr("abs:href"))
             name = element.text()
         }
     }
@@ -108,7 +108,7 @@ class OnePunchManOnline : ParsedHttpSource() {
         val images = document.select("div.entry-content img, .separator img, p img")
 
         return images.mapIndexed { index, img ->
-            Page(index, "", img.attr("abs:src"))
+            Page(index, imageUrl = img.attr("abs:src"))
         }
     }
 
