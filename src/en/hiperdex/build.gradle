@@ -3,7 +3,7 @@ ext {
     extClass = '.Hiperdex'
     themePkg = 'madara'
     baseUrl = 'https://hiperdex.com'
-    overrideVersionCode = 24
+    overrideVersionCode = 25
     isNsfw = true
 }
 
