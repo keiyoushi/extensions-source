@@ -16,9 +16,12 @@ import okhttp3.Response
 
 class ComicRyu : HttpSource() {
     override val name = "Comic Ryu"
-    override val baseUrl = "https://www.comic-ryu.jp"
+    private val domain = "comic-ryu.jp"
+    override val baseUrl = "https://www.$domain"
     override val lang = "ja"
     override val supportsLatest = true
+
+    private val subDomain = "https://unicorn.$domain"
 
     override fun popularMangaRequest(page: Int): Request = GET(baseUrl, headers)
 
@@ -51,9 +54,13 @@ class ComicRyu : HttpSource() {
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val filter = filters.firstInstance<StatusFilter>()
         val path = filter.values[filter.state].value
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment(path)
-            .build()
+        val url = if (path.startsWith(subDomain)) {
+            path.toHttpUrl()
+        } else {
+            baseUrl.toHttpUrl().newBuilder()
+                .addPathSegment(path)
+                .build()
+        }
         return GET(url, headers)
     }
 
@@ -62,11 +69,24 @@ class ComicRyu : HttpSource() {
         val mangas = document.select(".m-series-list .m-list-sakuhin-list-item").map {
             SManga.create().apply {
                 title = it.selectFirst(".sakuhin-article-title")!!.text()
-                setUrlWithoutDomain(it.selectFirst("a")!!.absUrl("href"))
+                val href = it.selectFirst("a")!!.absUrl("href")
+                if (href.startsWith(baseUrl)) {
+                    setUrlWithoutDomain(href)
+                } else {
+                    url = href
+                }
                 thumbnail_url = it.selectFirst(".sakuhin-article-thumbnail")?.absUrl("src")
             }
         }
         return MangasPage(mangas, false)
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        return if (manga.url.startsWith(subDomain)) {
+            GET(manga.url, headers)
+        } else {
+            super.mangaDetailsRequest(manga)
+        }
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -88,16 +108,36 @@ class ComicRyu : HttpSource() {
         }
     }
 
+    override fun chapterListRequest(manga: SManga): Request = mangaDetailsRequest(manga)
+
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        return document.select(".m-main a.sakuhin-episode-link").mapNotNull {
+        val chapters = document.select(".m-main a.sakuhin-episode-link").mapNotNull {
             val article = it.selectFirst("article.sakuhin-episode") ?: return@mapNotNull null
             if (article.hasClass("is-episode-publish-end")) return@mapNotNull null
             SChapter.create().apply {
                 name = article.selectFirst(".sakuhin-episode-title")!!.text()
-                setUrlWithoutDomain(it.absUrl("href"))
+                val href = it.absUrl("href")
+                if (href.startsWith(baseUrl)) {
+                    setUrlWithoutDomain(href)
+                } else {
+                    url = href
+                }
             }
-        }.reversed()
+        }
+        return if (response.request.url.host.contains("unicorn")) {
+            chapters
+        } else {
+            chapters.reversed()
+        }
+    }
+
+    override fun pageListRequest(chapter: SChapter): Request {
+        return if (chapter.url.startsWith(subDomain)) {
+            GET(chapter.url, headers)
+        } else {
+            super.pageListRequest(chapter)
+        }
     }
 
     override fun pageListParse(response: Response): List<Page> {
@@ -114,11 +154,12 @@ class ComicRyu : HttpSource() {
         StatusFilter(),
     )
 
-    private class StatusFilter : Filter.Select<FilterOption>(
+    private inner class StatusFilter : Filter.Select<FilterOption>(
         "Status",
         arrayOf(
             FilterOption("連載中", "シリーズ一覧-連載中"),
             FilterOption("完結作品", "完結作品"),
+            FilterOption("(ユニコーン) 連載中", "$subDomain/シリーズ一覧-連載中"),
         ),
     )
 
