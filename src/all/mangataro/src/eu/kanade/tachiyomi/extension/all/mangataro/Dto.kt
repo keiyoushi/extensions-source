@@ -1,5 +1,6 @@
-package eu.kanade.tachiyomi.extension.en.mangataro
+package eu.kanade.tachiyomi.extension.all.mangataro
 
+import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.toJsonString
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -71,6 +72,7 @@ class BrowseManga(
 data class MangaUrl(
     val id: String,
     val slug: String,
+    val group: Long? = null,
 )
 
 @Serializable
@@ -128,3 +130,28 @@ class Chapter(
     val groupName: String? = null,
     val language: String,
 )
+
+@Serializable
+class ProjectList(
+    val titles: List<MangaDto>,
+) {
+    @Serializable
+    class MangaDto(
+        @SerialName("manga_id")
+        val id: Long,
+        @SerialName("manga_title")
+        val title: String,
+        @SerialName("group_id")
+        val group: Long,
+        @SerialName("manga_slug")
+        val slug: String,
+        @SerialName("cover_url")
+        val cover: String,
+    ) {
+        fun toSManga() = SManga.create().apply {
+            title = this@MangaDto.title
+            url = MangaUrl(id.toString(), slug, group).toJsonString()
+            thumbnail_url = cover
+        }
+    }
+}

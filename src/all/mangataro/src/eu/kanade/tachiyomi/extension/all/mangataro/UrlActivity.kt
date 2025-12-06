@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.en.mangataro
+package eu.kanade.tachiyomi.extension.all.mangataro
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
