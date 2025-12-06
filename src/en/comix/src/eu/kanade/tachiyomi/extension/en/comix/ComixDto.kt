@@ -185,6 +185,8 @@ class Chapter(
     val updatedAt: Long,
     @SerialName("scanlation_group")
     private val scanlationGroup: ScanlationGroup?,
+    @SerialName("is_official")
+    val isOfficial: Boolean,
 ) {
     @Serializable
     class ScanlationGroup(
@@ -200,7 +202,13 @@ class Chapter(
         }
         date_upload = this@Chapter.updatedAt * 1000
         chapter_number = this@Chapter.number.toFloat()
-        scanlator = this@Chapter.scanlationGroup?.name ?: "Unknown"
+        if (this@Chapter.scanlationGroup != null) {
+            scanlator = this@Chapter.scanlationGroup.name
+        } else if this@Chapter.isOfficial {
+            scanlator = "Official"
+        } else {
+            scanlator = "Unknown"
+        }
     }
 }
 
