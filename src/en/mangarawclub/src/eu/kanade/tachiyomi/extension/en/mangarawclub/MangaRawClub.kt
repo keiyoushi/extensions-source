@@ -151,7 +151,7 @@ class MangaRawClub : ParsedHttpSource(), ConfigurableSource {
 
     // Manga from Element
     override fun searchMangaFromElement(element: Element): SManga = SManga.create().apply {
-        title = element.selectFirst(".comic-card__title a")!!.text().trim()
+        title = element.selectFirst(".comic-card__title a")!!.text()
         thumbnail_url = element.selectFirst(".comic-card__cover img")!!.absUrl("src")
         setUrlWithoutDomain(element.selectFirst("a")!!.attr("href"))
     }
