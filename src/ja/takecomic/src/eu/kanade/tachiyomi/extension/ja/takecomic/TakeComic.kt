@@ -17,7 +17,6 @@ import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.CacheControl
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import okhttp3.Response
 import kotlin.getValue
@@ -40,9 +39,9 @@ class TakeComic : ComiciViewer(
         val document = response.asJsoup()
         val mangas = document.select("div.series-list-item").map { element ->
             SManga.create().apply {
-                setUrlWithoutDomain(element.selectFirst("a.series-list-item-link")!!.attr("href"))
+                setUrlWithoutDomain(element.selectFirst("a.series-list-item-link")!!.absUrl("href"))
                 title = element.selectFirst("div.series-list-item-h span")!!.text()
-                thumbnail_url = element.selectFirst("img.series-list-item-img")?.attr("src")?.let { baseUrl.toHttpUrlOrNull()?.newBuilder(it)?.build()?.queryParameter("url") }
+                thumbnail_url = element.selectFirst("img.series-list-item-img")?.absUrl("src")
             }
         }
         val hasNextPage = document.selectFirst("a.g-pager-link.mode-active + a.g-pager-link") != null
