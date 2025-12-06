@@ -1,9 +1,14 @@
-package eu.kanade.tachiyomi.extension.en.mangataro
+package eu.kanade.tachiyomi.extension.all.mangataro
 
+import android.content.SharedPreferences
 import android.util.Log
+import android.widget.Toast
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,6 +19,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import okhttp3.Callback
@@ -35,13 +41,13 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-class MangaTaro : HttpSource() {
+open class MangaTaro(
+    override val lang: String,
+) : HttpSource() {
 
     override val name = "MangaTaro"
 
     override val baseUrl = "https://mangataro.org"
-
-    override val lang = "en"
 
     override val supportsLatest = true
 
@@ -241,15 +247,19 @@ class MangaTaro : HttpSource() {
         val token = md5(
             "${timestamp}mng_ch_${isoDateFormatter.format(Date())}",
         ).substring(0, 16)
-        val mangaId = manga.url.parseAs<MangaUrl>().id
+
+        val dto = manga.url.parseAs<MangaUrl>()
 
         val url = "$baseUrl/auth/manga-chapters".toHttpUrl().newBuilder().apply {
-            addQueryParameter("manga_id", mangaId)
+            addQueryParameter("manga_id", dto.id)
             addQueryParameter("offset", "0")
             addQueryParameter("limit", "9999")
             addQueryParameter("order", "DESC")
             addQueryParameter("_t", token)
             addQueryParameter("_ts", timestamp.toString())
+            dto.group?.let {
+                addQueryParameter("group_id", it.toString())
+            }
         }.build()
 
         return GET(url, headers)
@@ -266,7 +276,7 @@ class MangaTaro : HttpSource() {
         // currently there is only English chapters on the site, at least from a quick look.
         // if they ever have multiple languages, we would need to make this a source factory
         val chapters = data.chapters.filter {
-            it.language == "en"
+            it.language.equals(lang, ignoreCase = true)
         }.map {
             SChapter.create().apply {
                 setUrlWithoutDomain(it.url)
@@ -369,5 +379,86 @@ class MangaTaro : HttpSource() {
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
+    }
+}
+
+// Map groups by language
+class MangaTaroGroup(lang: String, val groups: List<Long>) : MangaTaro(lang), ConfigurableSource {
+
+    override val supportsLatest: Boolean = false
+
+    private val preferences: SharedPreferences = getPreferences()
+
+    private val libraryCached: MutableList<SManga> = mutableListOf()
+
+    private val userGroups: List<Long> by lazy {
+        val myGroups = preferences.getString(GROUP_PREF, "")?.takeIf(String::isNotBlank)
+            ?: return@lazy emptyList()
+
+        return@lazy try {
+            myGroups.split(",").map { it.trim().toLong() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    val groupsMapped: List<Long> by lazy { (groups + userGroups).distinct() }
+
+    override fun popularMangaRequest(page: Int): Request =
+        GET("$baseUrl/auth/groups/${groupsMapped[page - 1]}/titles?page=$page", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val page = response.request.url.queryParameter("page")!!.toLong()
+        return response.parseAs<ProjectList>().titles
+            .map(ProjectList.MangaDto::toSManga)
+            .let { MangasPage(it, hasNextPage = page < groupsMapped.size) }
+    }
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return libraryCached.takeIf(List<SManga>::isNotEmpty)?.let {
+            Observable.just(MangasPage(libraryCached, hasNextPage = false))
+        } ?: super.fetchPopularManga(page)
+    }
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        return Observable.fromCallable {
+            if (libraryCached.isEmpty()) {
+                do {
+                    val mangasPage = fetchPopularManga(page)
+                        .toBlocking().first()
+                    libraryCached += mangasPage.mangas
+                } while (mangasPage.hasNextPage)
+            }
+            MangasPage(libraryCached.filter { it.title.contains(query, ignoreCase = true) }, false)
+        }
+    }
+
+    override fun getFilterList(): FilterList = FilterList()
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = GROUP_PREF
+            title = "My groups"
+            summary = "Add the group number to view the list of projects"
+            dialogMessage = buildString {
+                appendLine("* Visit '$baseUrl/groups' and add the group number here.")
+                appendLine("\t\tEx.: $baseUrl/groups/50. The group number is 50.")
+                appendLine("\n* Use a comma to add multiple groups.")
+                appendLine("\t\tEx.: 50, 60, 12")
+                appendLine("\n⚠  Groups added here may not appear due to typos. Also, check if the group actually publishes in your language.")
+            }
+
+            setDefaultValue(groups.joinToString())
+
+            setOnPreferenceChangeListener { preference, newValue ->
+                Toast.makeText(screen.context, RESTART_APP, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+
+    companion object {
+        private val GROUP_PREF = "groupPref"
+        private const val RESTART_APP = "Restart app to apply new setting."
     }
 }
