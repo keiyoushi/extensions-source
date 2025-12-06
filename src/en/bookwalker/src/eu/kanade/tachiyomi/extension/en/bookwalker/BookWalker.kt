@@ -852,7 +852,7 @@ class BookWalker : ConfigurableSource, ParsedHttpSource(), BookWalkerPreferences
         private const val TILE_READ_SELECTOR = ".a-read-btn-s"
         private const val TILE_FREE_SELECTOR = ".a-label-free"
         private const val TILE_BUY_SELECTOR = ".a-cart-btn-s, .a-cart-btn-s--on"
-        private const val TILE_PREORDER_SELECTOR = ".a-order-btn-s"
+        private const val TILE_PREORDER_SELECTOR = ".a-order-btn-s, .a-order-btn-s--on"
         private const val TILE_BUNDLE_SELECTOR = ".a-ribbon-bundle"
 
         private val CHAPTER_NUMBER_PATTERNS = listOf(
