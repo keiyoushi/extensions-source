@@ -1,23 +1,23 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
-import android.app.Application
-import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferences
+import keiyoushi.utils.parseAs
 import okhttp3.FormBody
-import okhttp3.Response
-import org.json.JSONArray
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
+import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -27,7 +27,7 @@ class MangaLivre :
         "Manga Livre",
         "https://mangalivre.tv",
         "pt-BR",
-        SimpleDateFormat("dd.MM.yyyy", Locale("pt")),
+        SimpleDateFormat("dd.MM.yyyy", Locale.ROOT),
     ),
     ConfigurableSource {
 
@@ -35,8 +35,8 @@ class MangaLivre :
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val baseUrl by lazy { getPrefBaseUrl() }
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    private val preferences by lazy {
+        getPreferences()
     }
 
     override val client = super.client.newBuilder()
@@ -47,32 +47,34 @@ class MangaLivre :
         .set("Origin", baseUrl)
         .set("X-Requested-With", "XMLHttpRequest")
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val html = response.body.string()
-        var document = Jsoup.parse(html)
-
-        if (document.selectFirst("li.wp-manga-chapter") == null) {
-            val mangaUrl = response.request.url.toString().trimEnd('/')
-            val headers = headersBuilder().set("Referer", mangaUrl).build()
-            val request = POST("$mangaUrl/ajax/chapters/", headers, FormBody.Builder().build())
-
-            client.newCall(request).execute().use { xhr ->
-                if (!xhr.isSuccessful) {
-                    throw IOException("Failed to fetch chapters via AJAX: ${xhr.code}. Open in WebView.")
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        val fullUrl = if (manga.url.startsWith("http")) manga.url else baseUrl + manga.url
+        return client.newCall(GET(fullUrl, headers))
+            .asObservableSuccess()
+            .flatMap { response ->
+                val document = response.asJsoup()
+                val elements = document.select(chapterListSelector()).ifEmpty {
+                    document.select("li.chapter-li")
                 }
-                document = Jsoup.parse(xhr.body.string())
+
+                if (elements.isNotEmpty()) {
+                    return@flatMap Observable.just(elements.map { chapterFromElement(it) })
+                }
+
+                val ajaxUrl = "${fullUrl.trimEnd('/')}/ajax/chapters/"
+                val request = POST(ajaxUrl, xhrHeaders, FormBody.Builder().build())
+
+                client.newCall(request)
+                    .asObservableSuccess()
+                    .map { ajaxResponse ->
+                        val ajaxDocument = ajaxResponse.asJsoup()
+                        val ajaxElements = ajaxDocument.select(chapterListSelector()).ifEmpty {
+                            ajaxDocument.select("li.chapter-li")
+                        }
+
+                        ajaxElements.map { chapterFromElement(it) }
+                    }
             }
-        }
-
-        val elements = document.select("li.wp-manga-chapter").ifEmpty {
-            document.select("li.chapter-li")
-        }
-
-        if (elements.isEmpty()) {
-            throw IOException("No chapters found. Open in WebView to solve Cloudflare/Turnstile.")
-        }
-
-        return elements.map { chapterFromElement(it) }
     }
 
     override fun pageListParse(document: Document): List<Page> {
@@ -82,16 +84,11 @@ class MangaLivre :
         val jsonString = IMAGES_REGEX.find(script)?.groupValues?.get(1)
             ?: throw IOException("Image list not found in script.")
 
-        val jsonArray = JSONArray(jsonString)
-
-        return buildList(jsonArray.length()) {
-            for (i in 0 until jsonArray.length()) {
-                val url = jsonArray.getString(i).trim()
-                if (url.startsWith("http")) {
-                    add(Page(size, "", url))
-                }
+        return jsonString.parseAs<List<String>>()
+            .mapIndexed { idx, url ->
+                Page(idx, imageUrl = url.trim())
             }
-        }.ifEmpty { throw IOException("Image list is empty.") }
+            .filter { it.imageUrl!!.startsWith("http") }
     }
 
     override val pageListParseSelector = ""
