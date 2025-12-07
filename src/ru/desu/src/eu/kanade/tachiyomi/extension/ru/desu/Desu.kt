@@ -375,9 +375,6 @@ class Desu : ConfigurableSource, HttpSource() {
             summary = "%s"
             setDefaultValue("eng")
             setOnPreferenceChangeListener { _, newValue ->
-                if (!newValue.toString().contains("://")) {
-                    return@setOnPreferenceChangeListener false
-                }
                 val warning = "Если язык обложки не изменился очистите базу данных в приложении (Настройки -> Дополнительно -> Очистить базу данных)"
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                 true
@@ -386,10 +383,14 @@ class Desu : ConfigurableSource, HttpSource() {
         EditTextPreference(screen.context).apply {
             key = DOMAIN_PREF
             title = DOMAIN_TITLE
-            summary = baseUrl
+            summary = baseUrl + "\n\nПо умолчанию: $DOMAIN_DEFAULT"
             setDefaultValue(DOMAIN_DEFAULT)
-            dialogTitle = DOMAIN_TITLE
             setOnPreferenceChangeListener { _, newValue ->
+                if (!newValue.toString().contains("://")) {
+                    val warning = "Домен должен содаржать https:// или http://"
+                    Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                    return@setOnPreferenceChangeListener false
+                }
                 val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                 true
