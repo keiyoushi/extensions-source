@@ -15,7 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.getPreferences
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -39,12 +39,17 @@ class Desu : ConfigurableSource, HttpSource() {
 
     override val id: Long = 6684416167758830305
 
-    private val preferences: SharedPreferences by getPreferencesLazy()
-
-    init {
-        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
+    private val preferences: SharedPreferences = getPreferences {
+        this.getString(DOMAIN_PREF, DOMAIN_DEFAULT)?.let { domain ->
+            if (!domain.contains("://")) {
+                this.edit()
+                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .apply()
+            }
+        }
+        this.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
             if (prefDefaultDomain != DOMAIN_DEFAULT) {
-                preferences.edit()
+                this.edit()
                     .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
                     .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
                     .apply()
@@ -370,6 +375,9 @@ class Desu : ConfigurableSource, HttpSource() {
             summary = "%s"
             setDefaultValue("eng")
             setOnPreferenceChangeListener { _, newValue ->
+                if (!newValue.toString().contains("://")) {
+                    return@setOnPreferenceChangeListener false
+                }
                 val warning = "Если язык обложки не изменился очистите базу данных в приложении (Настройки -> Дополнительно -> Очистить базу данных)"
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                 true
