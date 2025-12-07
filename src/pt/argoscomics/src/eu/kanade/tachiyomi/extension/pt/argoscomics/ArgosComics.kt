@@ -213,23 +213,11 @@ class ArgosComics : HttpSource() {
 
     companion object {
         private val TEXT_PLAIN_MEDIA_TYPE = "text/plain;charset=UTF-8".toMediaTypeOrNull()
-        private val CHAPTERS_TOKEN_REGEX = """(?:unfavorite"[^\.]+.createServerReference\)\(")([^"]+)"(?:,.+getAllChapters)""".toRegex()
 
-        /**
-         * Combines multiple individual regular expressions to capture the "Next-Action"
-         * needed to call various API endpoints (popular, latest, search, details, pages).
-         *
-         * The token is a unique identifier (a string) found inside the 'createServerReference'
-         * function call within the page's JavaScript source, immediately preceding the
-         * corresponding backend function name (e.g., 'getAllWithoutFilters' for popular).
-         */
-        private val NEXT_ACTION_REGEX = buildList {
-            add("""(?:createServerReference\)\(")([^"]+)"(?:,.+getAllWithoutFilters)""".toRegex()) // popular token
-            add("""(?:"[^\.]+.createServerReference\)\(")([^"]+)"(?:,.+getLastUpdates)""".toRegex()) // latest token
-            add("""(?:(?:,.=.{2}\d+.){4}[^\.]+.createServerReference\)\(")([^"]+)"(?:,.+search)""".toRegex()) // search token
-            add("""(?:getAllChapters"[^\.]+.createServerReference\)\(")([^"]+)"(?:,.+getOne)""".toRegex()) // details token
-            add("""(?:"[^\.]+.createServerReference\)\(")([^"]+)"(?:,.+getPages)""".toRegex()) // pages token
-        }.joinToString("|").toRegex()
+        //  Use isolated regex for chapters, as the  manga details token is in the same script as the chapters token.
+        private val CHAPTERS_TOKEN_REGEX = """createServerReference[^"]*"([^"]+)"[^)]*getAllChapters""".toRegex()
+        private val NEXT_ACTION_REGEX =
+            """createServerReference[^"]*"([^"]+)"[^)]*(?:getAllWithoutFilters|getLastUpdates|search|getOne|getPages)""".toRegex()
 
         /**
          * Combines regular expressions to identify and extract the **JSON string** containing

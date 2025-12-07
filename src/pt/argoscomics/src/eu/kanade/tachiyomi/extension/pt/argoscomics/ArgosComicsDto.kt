@@ -8,6 +8,7 @@ import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Serializable
 class MangasListDto(
