@@ -1,7 +1,7 @@
 ext {
     extName = 'Magazine Pocket'
     extClass = '.MagazinePocket'
-    extVersionCode = 10
+    extVersionCode = 11
     isNsfw = false
 }
 
