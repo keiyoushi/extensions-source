@@ -1,0 +1,8 @@
+ext {
+    extName = 'Luvyaa - Baca Komik Bahasa Indonesia'
+    extClass = '.Luvyaa'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
