@@ -1,0 +1,8 @@
+ext {
+    extName = 'Rinko Comics'
+    extClass = '.RinkoComics' // [FIX] Capital C to match the class
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

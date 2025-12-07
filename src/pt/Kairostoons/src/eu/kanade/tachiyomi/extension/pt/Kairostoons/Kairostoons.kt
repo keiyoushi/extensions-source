@@ -2,11 +2,13 @@ package eu.kanade.tachiyomi.extension.pt.Kairostoons
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -39,11 +41,14 @@ class Kairostoons : ParsedHttpSource() {
     override fun popularMangaSelector() = "article.comic-card, div.bsx"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        val anchor = element.selectFirst("a")!!
-        setUrlWithoutDomain(anchor.attr("href"))
+        val anchor = element.selectFirst("a")
 
-        title = element.selectFirst("h3.comic-card-title, .tt")?.text()?.trim()
-            ?: anchor.attr("title")
+        if (anchor != null) {
+            setUrlWithoutDomain(anchor.attr("href"))
+
+            title = element.selectFirst("h3.comic-card-title, .tt")?.text()?.trim()
+                ?: anchor.attr("title")
+        }
 
         thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
@@ -68,18 +73,30 @@ class Kairostoons : ParsedHttpSource() {
     //  Search
     // =========================================================================
 
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        return GET("$baseUrl/?s=$query", headers)
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+    override fun fetchSearchManga(
+        page: Int,
+        query: String,
+        filters: FilterList,
+    ): Observable<MangasPage> {
+        return Observable.fromCallable {
+            val response = client.newCall(popularMangaRequest(page)).execute()
+            val details = popularMangaParse(response)
+            val filteredMangas = details.mangas.filter {
+                it.title.contains(query, true)
+            }
+
+            MangasPage(filteredMangas, details.hasNextPage)
+        }
     }
 
     override fun searchMangaSelector() = "div.bsx, div.bs"
-
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
-
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================================================================
-    //  Manga Details (Honestly a bit messy)
+    //  Manga Details
     // =========================================================================
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
@@ -107,27 +124,23 @@ class Kairostoons : ParsedHttpSource() {
     }
 
     // =========================================================================
-    //  Chapter List (This section is by far the biggest piece of shit I have ever made)
+    //  Chapter List
     // =========================================================================
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return Observable.fromCallable {
             val chapters = mutableListOf<SChapter>()
-            // Use a Set to prevent duplicates if the loop messes up
             val visitedUrls = mutableSetOf<String>()
 
             var page = 1
 
             while (true) {
-                // Let's not question this mess of a code to handle pagination
                 val pageUrl = if (page == 1) "$baseUrl${manga.url}" else "$baseUrl${manga.url}?page=$page"
-
                 val response = client.newCall(GET(pageUrl, headers)).execute()
                 val document = Jsoup.parse(response.body.string(), response.request.url.toString())
-
                 val pageChapters = document.select(chapterListSelector())
                     .map { chapterFromElement(it) }
-                    .filter { visitedUrls.add(it.url) } // Only add if URL is new
+                    .filter { visitedUrls.add(it.url) }
 
                 if (pageChapters.isEmpty()) break
 
@@ -155,16 +168,13 @@ class Kairostoons : ParsedHttpSource() {
     // =========================================================================
 
     override fun pageListParse(document: Document): List<Page> {
-        // Try the canvas method first because this site loves making things difficult
         val canvasElements = document.select("canvas.chapter-image-canvas")
-
         if (canvasElements.isNotEmpty()) {
             return canvasElements.mapIndexed { index, element ->
                 Page(index, "", element.attr("abs:data-src-url"))
             }
         }
 
-        // Fallback for normal images
         return document.select("#readerarea img").mapIndexed { index, img ->
             val url = img.attr("abs:data-src").ifBlank { img.attr("abs:src") }
             Page(index, "", url)
