@@ -591,10 +591,12 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         EditTextPreference(screen.context).apply {
             key = DOMAIN_PREF
             title = "Домен"
-            summary = baseUrl
+            summary = baseUrl + "\n\nПо умолчанию: $DOMAIN_DEFAULT"
             setDefaultValue(DOMAIN_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
                 if (!newValue.toString().contains("://")) {
+                    val warning = "Домен должен содаржать https:// или http://"
+                    Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                     return@setOnPreferenceChangeListener false
                 }
                 val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
