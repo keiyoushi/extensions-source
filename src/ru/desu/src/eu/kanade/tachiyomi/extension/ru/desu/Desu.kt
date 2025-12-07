@@ -410,7 +410,7 @@ class Desu : ConfigurableSource, HttpSource() {
         private const val DEFAULT_DOMAIN_PREF = "default_domain"
         private const val DOMAIN_PREF = "DOMAIN_PREF"
 
-        val URL_REGEX = Regex("^https?://.+")
+        private val URL_REGEX = Regex("^https?://.+")
 
         private const val DOMAIN_DEFAULT = "https://desu.city"
     }
