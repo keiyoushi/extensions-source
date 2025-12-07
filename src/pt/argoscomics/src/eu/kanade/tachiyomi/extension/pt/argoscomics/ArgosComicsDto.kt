@@ -117,7 +117,7 @@ class VolumeChapterDto(
         }
     }
     companion object {
-        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd")
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
     }
 }
 
