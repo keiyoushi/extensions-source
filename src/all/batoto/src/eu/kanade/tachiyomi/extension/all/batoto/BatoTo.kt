@@ -636,48 +636,34 @@ open class BatoTo(
         // Parse original URL to do safer host replacements when possible.
         val originalUrl = runCatching { original.toHttpUrl() }.getOrNull()
 
-        if (originalUrl != null) {
-            // If host starts with any known prefix, swap that prefix with others.
+        // Build a safe list of candidate hosts to probe.
+        val allowedHosts = mutableSetOf<String>()
+        originalUrl?.host?.let { allowedHosts.add(it) }
+        runCatching { baseUrl.toHttpUrl().host }.getOrNull()?.let { allowedHosts.add(it) }
+        runCatching { getMirrorPref().toHttpUrl().host }.getOrNull()?.let { allowedHosts.add(it) }
+
+        // If original host matches a known prefix, allow swapping that prefix with other prefixes
+        val originalHost = originalUrl?.host
+        if (originalHost != null) {
             for (from in prefixes) {
-                if (!originalUrl.host.startsWith(from)) continue
+                if (!originalHost.startsWith(from)) continue
                 for (to in prefixes) {
                     if (from == to) continue
-                    val newHost = originalUrl.host.replaceFirst(from, to)
-                    val cand = originalUrl.newBuilder().host(newHost).build().toString()
-                    if (!tried.add(cand)) continue
-                    try {
-                        val req = GET(cand, headers)
-                        client.newCall(req).execute().use { resp ->
-                            if (resp.isSuccessful && resp.body != null) return req
-                        }
-                    } catch (_: Exception) {
-                    }
+                    allowedHosts.add(originalHost.replaceFirst(from, to))
                 }
             }
         }
 
-        // As a last resort, attempt simple prefix-based string replacements (http/https).
-        for (a in prefixes) {
-            for (b in prefixes) {
-                if (a == b) continue
-                val cand1 = original.replaceFirst("https://$a", "https://$b")
-                if (tried.add(cand1)) {
-                    try {
-                        val req = GET(cand1, headers)
-                        client.newCall(req).execute().use { resp ->
-                            if (resp.isSuccessful && resp.body != null) return req
-                        }
-                    } catch (_: Exception) {}
+        // Probe allowed hosts by reconstructing the URL with the candidate host.
+        for (host in allowedHosts) {
+            val cand = originalUrl?.newBuilder()?.host(host)?.build()?.toString() ?: continue
+            if (!tried.add(cand)) continue
+            try {
+                val req = GET(cand, headers)
+                client.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful && resp.body != null) return req
                 }
-                val cand2 = original.replaceFirst("http://$a", "http://$b")
-                if (tried.add(cand2)) {
-                    try {
-                        val req = GET(cand2, headers)
-                        client.newCall(req).execute().use { resp ->
-                            if (resp.isSuccessful && resp.body != null) return req
-                        }
-                    } catch (_: Exception) {}
-                }
+            } catch (_: Exception) {
             }
         }
 
