@@ -277,9 +277,9 @@ class MangaPark(
         if (response.isSuccessful) return response
 
         val urlString = request.url.toString()
-        val serverPattern = Regex("https://s\\d{2}")
+													
 
-        if (serverPattern.containsMatchIn(urlString)) {
+        if (SERVER_PATTERN.containsMatchIn(urlString)) {
             // Close the failed response to avoid leaks
             response.close()
 
@@ -287,7 +287,7 @@ class MangaPark(
             val servers = listOf("s01", "s03", "s04", "s00", "s05", "s06", "s07", "s08", "s09", "s10", "s02")
 
             for (server in servers) {
-                val newUrl = urlString.replace(serverPattern, "https://$server")
+                val newUrl = urlString.replace(SERVER_PATTERN, "https://$server")
 
                 // Skip if we are about to try the exact same URL that just failed
                 if (newUrl == urlString) continue
@@ -369,6 +369,8 @@ class MangaPark(
     }
 
     companion object {
+        private val SERVER_PATTERN = Regex("https://s\\d{2}")
+
         private const val size = 24
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
 
