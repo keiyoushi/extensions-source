@@ -220,9 +220,6 @@ class ArgosComics : HttpSource() {
             """createServerReference[^"]*"([^"]+)"[^)]*(?:getAllWithoutFilters|getLastUpdates|search|getOne|getPages)""".toRegex()
 
         /**
-         * Combines regular expressions to identify and extract the **JSON string** containing
-         * the manga data (list, details, chapters, pages) from an HTTP response body.
-         *
          * The purpose is to find the beginning of the valid JSON data, ignoring any
          * preceding code or text. The pattern is defined by the expected first key-field
          * of the JSON for each response type:
