@@ -134,7 +134,7 @@ class ArgosComics : HttpSource() {
 
     // ======================== Details =============================
 
-    override fun getMangaUrl(manga: SManga) = "$baseUrl/${manga.url}"
+    override fun getMangaUrl(manga: SManga) = "$baseUrl${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request {
         val payload = manga.url.split("/").filter(String::isNotBlank)
