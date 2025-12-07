@@ -53,7 +53,7 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences = getPreferences {
         this.getString(DOMAIN_PREF, DOMAIN_DEFAULT)?.let { domain ->
-            if (!domain.contains("://")) {
+            if (!domain.matches(URL_REGEX)) {
                 this.edit()
                     .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
                     .apply()
@@ -594,7 +594,7 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
             summary = baseUrl + "\n\nПо умолчанию: $DOMAIN_DEFAULT"
             setDefaultValue(DOMAIN_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                if (!newValue.toString().contains("://")) {
+                if (!newValue.toString().matches(URL_REGEX)) {
                     val warning = "Домен должен содаржать https:// или http://"
                     Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                     return@setOnPreferenceChangeListener false
@@ -631,6 +631,8 @@ class ComX : ParsedHttpSource(), ConfigurableSource {
         private const val DOMAIN_PREF = "DOMAIN_PREF"
 
         private const val FORCE_IMG_DOMAIN_PREF = "FORCE_IMG_DOMAIN_PREF"
+
+        private val URL_REGEX = Regex("^https?://.+")
 
         private val IMG_DOMAIN_REGEX = "\"host\":\"(.+?)\"".toRegex()
     }
