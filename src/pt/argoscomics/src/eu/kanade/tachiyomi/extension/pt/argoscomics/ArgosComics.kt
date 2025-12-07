@@ -244,7 +244,7 @@ class ArgosComics : HttpSource() {
          */
         private val MANGA_DATA_REGEX = buildList {
             add("""\[\{"id".+""".toRegex())
-            add("""\{"(?:${listOf("projects", "title", "groupName", "pages").joinToString("|")})".+""".toRegex())
+            add("""\{"(?:projects|title|groupName|pages)".+""".toRegex())
         }.joinToString("|").toRegex()
     }
 }
