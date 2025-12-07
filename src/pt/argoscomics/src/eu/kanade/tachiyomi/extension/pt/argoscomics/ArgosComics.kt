@@ -173,7 +173,7 @@ class ArgosComics : HttpSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val segments = "$baseUrl${chapter.url}".toHttpUrl()!!.pathSegments
+        val segments = getChapterUrl(chapter).toHttpUrl().pathSegments
         val payload = buildList {
             add(segments.first())
             add(segments.last())
@@ -183,7 +183,7 @@ class ArgosComics : HttpSource() {
             .set("Next-Action", getPagesToken(getChapterUrl(chapter)))
             .build()
 
-        return POST("$baseUrl${chapter.url}", pagesHeaders, payload)
+        return POST(getChapterUrl(chapter), pagesHeaders, payload)
     }
 
     override fun pageListParse(response: Response): List<Page> =
