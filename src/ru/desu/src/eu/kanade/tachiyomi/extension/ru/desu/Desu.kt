@@ -33,27 +33,32 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import kotlin.text.matches
 
 class Desu : ConfigurableSource, HttpSource() {
     override val name = "Desu"
 
     override val id: Long = 6684416167758830305
 
-    private val preferences: SharedPreferences = getPreferences()
-
-    init {
-        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
+    private val preferences: SharedPreferences = getPreferences {
+        this.getString(DOMAIN_PREF, DOMAIN_DEFAULT)?.let { domain ->
+            if (!domain.matches(URL_REGEX)) {
+                this.edit()
+                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
+                    .apply()
+            }
+        }
+        this.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
             if (prefDefaultDomain != DOMAIN_DEFAULT) {
-                preferences.edit()
-                    .putString(DOMAIN_TITLE, DOMAIN_DEFAULT)
+                this.edit()
+                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
                     .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
                     .apply()
             }
         }
     }
 
-    private var domain: String = preferences.getString(DOMAIN_TITLE, DOMAIN_DEFAULT)!!
-    override val baseUrl: String = domain
+    override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
 
     override val lang = "ru"
 
@@ -363,7 +368,7 @@ class Desu : ConfigurableSource, HttpSource() {
     private var isEng: String? = preferences.getString(LANGUAGE_PREF, "eng")
 
     override fun setupPreferenceScreen(screen: androidx.preference.PreferenceScreen) {
-        val titleLanguagePref = ListPreference(screen.context).apply {
+        ListPreference(screen.context).apply {
             key = LANGUAGE_PREF
             title = "Выбор языка на обложке"
             entries = arrayOf("Английский", "Русский")
@@ -375,21 +380,23 @@ class Desu : ConfigurableSource, HttpSource() {
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                 true
             }
-        }
-        val domainDesuPref = EditTextPreference(screen.context).apply {
-            key = DOMAIN_TITLE
+        }.let(screen::addPreference)
+        EditTextPreference(screen.context).apply {
+            key = DOMAIN_PREF
             title = DOMAIN_TITLE
-            summary = domain
+            summary = baseUrl + "\n\nПо умолчанию: $DOMAIN_DEFAULT"
             setDefaultValue(DOMAIN_DEFAULT)
-            dialogTitle = DOMAIN_TITLE
-            setOnPreferenceChangeListener { _, _ ->
+            setOnPreferenceChangeListener { _, newValue ->
+                if (!newValue.toString().matches(URL_REGEX)) {
+                    val warning = "Домен должен содаржать https:// или http://"
+                    Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                    return@setOnPreferenceChangeListener false
+                }
                 val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
                 Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                 true
             }
-        }
-        screen.addPreference(titleLanguagePref)
-        screen.addPreference(domainDesuPref)
+        }.let(screen::addPreference)
     }
 
     companion object {
@@ -401,6 +408,10 @@ class Desu : ConfigurableSource, HttpSource() {
 
         private const val DOMAIN_TITLE = "Домен"
         private const val DEFAULT_DOMAIN_PREF = "default_domain"
+        private const val DOMAIN_PREF = "DOMAIN_PREF"
+
+        private val URL_REGEX = Regex("^https?://.+")
+
         private const val DOMAIN_DEFAULT = "https://desu.city"
     }
 }
