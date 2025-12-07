@@ -612,7 +612,7 @@ open class BatoTo(
                 it
             }
 
-            Page(i, imageUrl = url)
+            Page(i, imageUrl = url.replace("https://k", "https://n"))
         }
     }
 
