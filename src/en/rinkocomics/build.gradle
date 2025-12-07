@@ -1,6 +1,6 @@
 ext {
     extName = 'Rinko Comics'
-    extClass = '.RinkoComics' // [FIX] Capital C to match the class
+    extClass = '.RinkoComics'
     extVersionCode = 1
     isNsfw = false
 }

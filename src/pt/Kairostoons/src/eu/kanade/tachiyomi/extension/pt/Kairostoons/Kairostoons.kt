@@ -26,7 +26,7 @@ class Kairostoons : ParsedHttpSource() {
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
 
     // =========================================================================
-    //  Popular (The "Todos" Page)
+    //  Popular
     // =========================================================================
 
     override fun popularMangaRequest(page: Int): Request {

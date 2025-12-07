@@ -27,7 +27,7 @@ class RinkoComics : ParsedHttpSource() {
     private val dateFormatShort = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
     // =========================================================================
-    //  Popular (Used for listing AND Search)
+    //  Popular
     // =========================================================================
 
     override fun popularMangaRequest(page: Int): Request {
@@ -173,7 +173,6 @@ class RinkoComics : ParsedHttpSource() {
         }
     }
 
-    // [FIX] Updated selector to exclude items with class 'locked-chapter'
     override fun chapterListSelector() = "ul.chapters-list li.chapter:not(.locked-chapter)"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
