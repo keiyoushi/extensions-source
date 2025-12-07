@@ -30,7 +30,7 @@ class AnimeSama : ParsedHttpSource() {
 
     override val name = "AnimeSama"
 
-    override val baseUrl = "https://anime-sama.org"
+    override val baseUrl = "https://anime-sama.eu"
 
     private val cdn = "$baseUrl/s2/scans/"
 
@@ -62,9 +62,9 @@ class AnimeSama : ParsedHttpSource() {
     private fun filtersRequest() = GET("$baseUrl/catalogue", headers)
 
     private fun parseFilters(document: Document) {
-        genreList = document.select("#list_genres label").mapNotNull { labelElement ->
+        genreList = document.select("#list_genres #genreList label").mapNotNull { labelElement ->
             val input = labelElement.selectFirst("input[name=genre[]]") ?: return@mapNotNull null
-            val labelText = labelElement.ownText()
+            val labelText = labelElement.selectFirst("span")?.text() ?: return@mapNotNull null
             val value = input.attr("value")
             labelText to value
         }
@@ -99,7 +99,7 @@ class AnimeSama : ParsedHttpSource() {
 
     override fun popularMangaFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("h1").text()
+            title = element.select(".card-title").text()
             setUrlWithoutDomain(element.select("a").attr("href"))
             thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
@@ -116,7 +116,7 @@ class AnimeSama : ParsedHttpSource() {
 
     override fun latestUpdatesFromElement(element: Element): SManga {
         return SManga.create().apply {
-            title = element.select("h1").text()
+            title = element.select(".card-title").text()
             setUrlWithoutDomain(element.select("a").attr("href").removeSuffix("scan/vf/"))
             thumbnail_url = element.selectFirst("img")?.absUrl("src")
         }
