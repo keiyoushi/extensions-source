@@ -612,8 +612,77 @@ open class BatoTo(
                 it
             }
 
-            Page(i, imageUrl = url.replace("https://k", "https://n"))
+            Page(i, imageUrl = url)
         }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val original = page.imageUrl ?: throw IllegalArgumentException("Null imageUrl for page: ${'$'}{page.index}")
+
+        // Try the original URL first to avoid generating fallback candidates unnecessarily.
+        try {
+            val req = GET(original, headers)
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful && resp.body != null) return req
+            }
+        } catch (_: Exception) {
+            // fall through to probes
+        }
+
+        // Define an extendable list of host prefixes to try as fallbacks.
+        val prefixes = listOf("k", "n", "b", "d")
+        val tried = mutableSetOf<String>()
+
+        // Parse original URL to do safer host replacements when possible.
+        val originalUrl = runCatching { original.toHttpUrl() }.getOrNull()
+
+        if (originalUrl != null) {
+            // If host starts with any known prefix, swap that prefix with others.
+            for (from in prefixes) {
+                if (!originalUrl.host.startsWith(from)) continue
+                for (to in prefixes) {
+                    if (from == to) continue
+                    val newHost = originalUrl.host.replaceFirst(from, to)
+                    val cand = originalUrl.newBuilder().host(newHost).build().toString()
+                    if (!tried.add(cand)) continue
+                    try {
+                        val req = GET(cand, headers)
+                        client.newCall(req).execute().use { resp ->
+                            if (resp.isSuccessful && resp.body != null) return req
+                        }
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+
+        // As a last resort, attempt simple prefix-based string replacements (http/https).
+        for (a in prefixes) {
+            for (b in prefixes) {
+                if (a == b) continue
+                val cand1 = original.replaceFirst("https://$a", "https://$b")
+                if (tried.add(cand1)) {
+                    try {
+                        val req = GET(cand1, headers)
+                        client.newCall(req).execute().use { resp ->
+                            if (resp.isSuccessful && resp.body != null) return req
+                        }
+                    } catch (_: Exception) {}
+                }
+                val cand2 = original.replaceFirst("http://$a", "http://$b")
+                if (tried.add(cand2)) {
+                    try {
+                        val req = GET(cand2, headers)
+                        client.newCall(req).execute().use { resp ->
+                            if (resp.isSuccessful && resp.body != null) return req
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+
+        // If nothing worked, fall back to original request.
+        return GET(original, headers)
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
