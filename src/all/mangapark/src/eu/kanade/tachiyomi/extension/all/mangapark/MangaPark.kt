@@ -277,7 +277,6 @@ class MangaPark(
         if (response.isSuccessful) return response
 
         val urlString = request.url.toString()
-													
 
         if (SERVER_PATTERN.containsMatchIn(urlString)) {
             // Close the failed response to avoid leaks
