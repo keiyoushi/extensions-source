@@ -33,6 +33,7 @@ import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import kotlin.text.matches
 
 class Desu : ConfigurableSource, HttpSource() {
     override val name = "Desu"
@@ -41,7 +42,7 @@ class Desu : ConfigurableSource, HttpSource() {
 
     private val preferences: SharedPreferences = getPreferences {
         this.getString(DOMAIN_PREF, DOMAIN_DEFAULT)?.let { domain ->
-            if (!domain.contains("://")) {
+            if (!domain.matches(URL_REGEX)) {
                 this.edit()
                     .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
                     .apply()
@@ -386,7 +387,7 @@ class Desu : ConfigurableSource, HttpSource() {
             summary = baseUrl + "\n\nПо умолчанию: $DOMAIN_DEFAULT"
             setDefaultValue(DOMAIN_DEFAULT)
             setOnPreferenceChangeListener { _, newValue ->
-                if (!newValue.toString().contains("://")) {
+                if (!newValue.toString().matches(URL_REGEX)) {
                     val warning = "Домен должен содаржать https:// или http://"
                     Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
                     return@setOnPreferenceChangeListener false
@@ -408,6 +409,8 @@ class Desu : ConfigurableSource, HttpSource() {
         private const val DOMAIN_TITLE = "Домен"
         private const val DEFAULT_DOMAIN_PREF = "default_domain"
         private const val DOMAIN_PREF = "DOMAIN_PREF"
+
+        val URL_REGEX = Regex("^https?://.+")
 
         private const val DOMAIN_DEFAULT = "https://desu.city"
     }
