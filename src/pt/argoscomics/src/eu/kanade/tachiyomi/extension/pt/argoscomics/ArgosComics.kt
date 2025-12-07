@@ -173,7 +173,7 @@ class ArgosComics : HttpSource() {
     override fun getChapterUrl(chapter: SChapter): String = "$baseUrl${chapter.url}"
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val segments = chapter.url.split("/").filter(String::isNotBlank)
+        val segments = "$baseUrl${chapter.url}".toHttpUrl()!!.pathSegments
         val payload = buildList {
             add(segments.first())
             add(segments.last())
