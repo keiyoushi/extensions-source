@@ -8,77 +8,53 @@ import org.jsoup.nodes.Document
 
 object MangaLivreImageExtractor {
 
-    private val PUSH_ARRAY_REGEX = Regex("""_27d3ae\[_0bf0\]\s*\(\s*['"]([A-Za-z0-9+/=]+)['"]\s*\)""")
-    private val GENERIC_PUSH_REGEX = Regex("""_[a-f0-9]+\[_[a-f0-9]+\]\s*\(\s*['"]([A-Za-z0-9+/=]+)['"]\s*\)""")
     private val PLACEHOLDER_PATTERNS = listOf("hi.png", "placeholder", "loading")
+    private val XOR_DATA_REGEX = Regex("""_[a-f0-9]+\[idx\+\+\]\s*=\s*['"]([A-Za-z0-9+/=]+)['"];""")
+    private val XOR_KEY_REGEX = Regex("""var\s+_[a-f0-9]+\s*=\s*["']([a-f0-9]+)["'];""")
 
     fun extractImageUrls(document: Document, json: Json): List<String>? {
-        val scripts = document.select("script:not([src])")
-
-        for (script in scripts) {
+        for (script in document.select("script:not([src])")) {
             val data = script.data()
             if (data.length < 100) continue
 
-            if (containsObfuscationPattern(data)) {
-                val urls = extractFromPushArray(data, json)
-                if (urls != null && urls.isNotEmpty()) {
-                    return urls
-                }
+            if (data.contains("idx++") && data.contains("var _x = [")) {
+                extractFromXorEncryption(data, json)?.let { return it }
             }
         }
-
         return null
     }
 
-    private fun containsObfuscationPattern(scriptData: String): Boolean {
-        val hasPushVar = scriptData.contains("\\x70\\x75\\x73\\x68") ||
-            scriptData.contains("_0bf0")
-        val hasArrayDecl = scriptData.contains("var _27d3ae") ||
-            scriptData.contains("= []")
-        val hasBracketPush = scriptData.contains("[_0bf0]") ||
-            GENERIC_PUSH_REGEX.containsMatchIn(scriptData)
+    private fun extractFromXorEncryption(scriptData: String, json: Json): List<String>? {
+        val dataMatches = XOR_DATA_REGEX.findAll(scriptData).toList()
+        if (dataMatches.isEmpty()) return null
 
-        return hasPushVar && hasArrayDecl && hasBracketPush
-    }
+        val joinedBase64 = dataMatches.joinToString("") { it.groupValues[1] }
+        if (joinedBase64.isEmpty()) return null
 
-    private fun extractFromPushArray(scriptData: String, json: Json): List<String>? {
-        var matches = PUSH_ARRAY_REGEX.findAll(scriptData).toList()
+        val xorKey = XOR_KEY_REGEX.findAll(scriptData)
+            .map { it.groupValues[1] }
+            .find { it.length == 8 }
+            ?: return null
 
-        if (matches.isEmpty()) {
-            matches = GENERIC_PUSH_REGEX.findAll(scriptData).toList()
-        }
-
-        if (matches.isEmpty()) {
-            return null
-        }
-
-        val joinedBase64 = matches.joinToString("") { it.groupValues[1] }
-
-        if (joinedBase64.isEmpty()) {
-            return null
-        }
-
-        return decodeBase64ToUrls(joinedBase64, json)
-    }
-
-    private fun decodeBase64ToUrls(base64: String, json: Json): List<String>? {
         return try {
-            val decoded = String(Base64.decode(base64, Base64.DEFAULT))
-            val jsonArray = json.parseToJsonElement(decoded).jsonArray
-            val urls = jsonArray
-                .map { it.jsonPrimitive.content.trim() }
-                .filter { url -> isValidImageUrl(url) }
+            val decodedBytes = Base64.decode(joinedBase64, Base64.DEFAULT)
 
-            urls.ifEmpty { null }
-        } catch (e: Exception) {
+            val decrypted = buildString {
+                for (i in decodedBytes.indices) {
+                    append((decodedBytes[i].toInt() xor xorKey[i % xorKey.length].code).toChar())
+                }
+            }
+
+            json.parseToJsonElement(decrypted).jsonArray
+                .map { it.jsonPrimitive.content.trim() }
+                .filter { it.isNotBlank() && isValidImageUrl(it) }
+                .ifEmpty { null }
+        } catch (_: Exception) {
             null
         }
     }
 
     private fun isValidImageUrl(url: String): Boolean {
-        if (url.isBlank()) return false
-        return PLACEHOLDER_PATTERNS.none { placeholder ->
-            url.contains(placeholder, ignoreCase = true)
-        }
+        return PLACEHOLDER_PATTERNS.none { url.contains(it, ignoreCase = true) }
     }
 }
