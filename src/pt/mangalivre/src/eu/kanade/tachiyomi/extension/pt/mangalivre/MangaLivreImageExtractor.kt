@@ -8,9 +8,11 @@ import org.jsoup.nodes.Document
 
 object MangaLivreImageExtractor {
 
-    private val PUSH_ARRAY_REGEX = Regex("""_27d3ae\[_0bf0\]\s*\(\s*['"]([A-Za-z0-9+/=]+)['"]\s*\)""")
-    private val GENERIC_PUSH_REGEX = Regex("""_[a-f0-9]+\[_[a-f0-9]+\]\s*\(\s*['"]([A-Za-z0-9+/=]+)['"]\s*\)""")
     private val PLACEHOLDER_PATTERNS = listOf("hi.png", "placeholder", "loading")
+
+    private val INDEXED_ARRAY_REGEX = Regex("""(_[a-f0-9]+)\[(\d+)\]\s*=\s*['"]([A-Za-z0-9+/=]+)['"];""")
+
+    private val PUSH_VAR_REGEX = Regex("""_[a-f0-9]+\[_[a-f0-9]+\]\s*\(\s*['"]([A-Za-z0-9+/=]+)['"]\s*\)""")
 
     fun extractImageUrls(document: Document, json: Json): List<String>? {
         val scripts = document.select("script:not([src])")
@@ -20,7 +22,7 @@ object MangaLivreImageExtractor {
             if (data.length < 100) continue
 
             if (containsObfuscationPattern(data)) {
-                val urls = extractFromPushArray(data, json)
+                val urls = extractFromReversedBase64(data, json)
                 if (urls != null && urls.isNotEmpty()) {
                     return urls
                 }
@@ -31,34 +33,45 @@ object MangaLivreImageExtractor {
     }
 
     private fun containsObfuscationPattern(scriptData: String): Boolean {
-        val hasPushVar = scriptData.contains("\\x70\\x75\\x73\\x68") ||
-            scriptData.contains("_0bf0")
-        val hasArrayDecl = scriptData.contains("var _27d3ae") ||
-            scriptData.contains("= []")
-        val hasBracketPush = scriptData.contains("[_0bf0]") ||
-            GENERIC_PUSH_REGEX.containsMatchIn(scriptData)
+        val hasPushHex = scriptData.contains("\\x70\\x75\\x73\\x68")
+        val hasArrayDecl = scriptData.contains("= []") || scriptData.contains("= [];")
+        val hasReverse = scriptData.contains(".reverse()") || scriptData.contains("chapter-images-render")
 
-        return hasPushVar && hasArrayDecl && hasBracketPush
+        return hasPushHex && hasArrayDecl && hasReverse
     }
 
-    private fun extractFromPushArray(scriptData: String, json: Json): List<String>? {
-        var matches = PUSH_ARRAY_REGEX.findAll(scriptData).toList()
+    private fun extractFromReversedBase64(scriptData: String, json: Json): List<String>? {
+        val indexedMatches = INDEXED_ARRAY_REGEX.findAll(scriptData).toList()
 
-        if (matches.isEmpty()) {
-            matches = GENERIC_PUSH_REGEX.findAll(scriptData).toList()
+        if (indexedMatches.isNotEmpty()) {
+            val groupedByArray = indexedMatches.groupBy { it.groupValues[1] }
+
+            val largestArray = groupedByArray.maxByOrNull { it.value.size }?.value ?: return null
+
+            val sortedParts = largestArray
+                .sortedBy { it.groupValues[2].toIntOrNull() ?: 0 }
+                .map { it.groupValues[3] }
+
+            val joinedBase64 = sortedParts.joinToString("")
+
+            if (joinedBase64.isNotEmpty()) {
+                val reversedBase64 = joinedBase64.reversed()
+                val urls = decodeBase64ToUrls(reversedBase64, json)
+                if (urls != null && urls.isNotEmpty()) {
+                    return urls
+                }
+            }
         }
 
-        if (matches.isEmpty()) {
-            return null
+        val pushMatches = PUSH_VAR_REGEX.findAll(scriptData).toList()
+        if (pushMatches.isNotEmpty()) {
+            val joinedBase64 = pushMatches.joinToString("") { it.groupValues[1] }
+            if (joinedBase64.isNotEmpty()) {
+                return decodeBase64ToUrls(joinedBase64, json)
+            }
         }
 
-        val joinedBase64 = matches.joinToString("") { it.groupValues[1] }
-
-        if (joinedBase64.isEmpty()) {
-            return null
-        }
-
-        return decodeBase64ToUrls(joinedBase64, json)
+        return null
     }
 
     private fun decodeBase64ToUrls(base64: String, json: Json): List<String>? {
