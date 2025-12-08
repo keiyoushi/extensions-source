@@ -12,6 +12,10 @@ object MangaLivreImageExtractor {
     private val XOR_DATA_REGEX = Regex("""_[a-f0-9]+\[idx\+\+\]\s*=\s*['"]([A-Za-z0-9+/=]+)['"];""")
     private val XOR_KEY_REGEX = Regex("""var\s+_[a-f0-9]+\s*=\s*["']([a-f0-9]+)["'];""")
 
+    private val INDEXED_ARRAY_REGEX = Regex("""(_[a-f0-9]+)\[(\d+)\]\s*=\s*['"]([A-Za-z0-9+/=]+)['"];""")
+
+    private val PUSH_VAR_REGEX = Regex("""_[a-f0-9]+\[_[a-f0-9]+\]\s*\(\s*['"]([A-Za-z0-9+/=]+)['"]\s*\)""")
+
     fun extractImageUrls(document: Document, json: Json): List<String>? {
         for (script in document.select("script:not([src])")) {
             val data = script.data()
