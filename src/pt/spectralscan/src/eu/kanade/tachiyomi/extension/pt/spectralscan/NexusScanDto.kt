@@ -1,24 +1,14 @@
 package eu.kanade.tachiyomi.extension.pt.spectralscan
 
 import eu.kanade.tachiyomi.source.model.Filter
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 
-class SelectFilter(displayName: String = "", val parameter: String = "", private val vals: Array<Pair<String, String>>, state: Int = 0) :
-    Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
+class SelectFilter(
+    displayName: String = "",
+    val parameter: String = "",
+    private val vals: Array<Pair<String, String>>,
+    state: Int = 0,
+) : Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray(), state) {
     fun selected() = vals[state].second
-}
-
-@Serializable
-class ImageSrc(
-    @SerialName("image_data")
-    val base64: String = "",
-    @SerialName("mime_type")
-    val mimeType: String = "",
-    @SerialName("image_url")
-    val url: String = "",
-) {
-    fun isBase64() = base64.isNotBlank()
 }
 
 val sortList = arrayOf(
@@ -73,4 +63,33 @@ val genreList = arrayOf(
     "Tragédia" to "tragedia",
     "Vida Cotidiana" to "vida-cotidiana",
     "Volta no Tempo" to "volta-no-tempo",
+)
+
+val typeList = arrayOf(
+    "Todos os Tipos" to "",
+    "Manga" to "manga",
+    "Manhwa" to "manhwa",
+    "Manhua" to "manhua",
+    "Webtoon" to "webtoon",
+    "Comic" to "comic",
+    "HQ" to "hq",
+    "Pornhwa" to "pornhwa",
+)
+
+@kotlinx.serialization.Serializable
+class MangaListResponse(
+    val html: String = "",
+    val has_next: Boolean = false,
+)
+
+@kotlinx.serialization.Serializable
+class ChapterListResponse(
+    val chapters_html: String = "",
+    val has_next: Boolean = false,
+)
+
+@kotlinx.serialization.Serializable
+class PageData(
+    val page_number: Int = 0,
+    val image_url: String = "",
 )
