@@ -100,11 +100,23 @@ open class ImageInterceptor : Interceptor {
         fun isValidImage(data: ByteArray): Boolean {
             return when {
                 data.size >= 2 && data[0] == 0xFF.toByte() && data[1] == 0xD8.toByte() -> true
+                data.size >= 2 && data[0] == 0xFF.toByte() && data[1] == 0x0A.toByte() -> true
+                data.size >= 8 && data.copyOfRange(0, 8).contentEquals(
+                    byteArrayOf(
+                        0x89.toByte(),
+                        'P'.code.toByte(),
+                        'N'.code.toByte(),
+                        'G'.code.toByte(),
+                        0x0D,
+                        0x0A,
+                        0x1A,
+                        0x0A,
+                    ),
+                ) -> true
                 data.size >= 12 && data[0] == 'R'.code.toByte() && data[1] == 'I'.code.toByte() &&
                     data[2] == 'F'.code.toByte() && data[3] == 'F'.code.toByte() &&
                     data[8] == 'W'.code.toByte() && data[9] == 'E'.code.toByte() &&
                     data[10] == 'B'.code.toByte() && data[11] == 'P'.code.toByte() -> true
-                data.size >= 2 && data[0] == 0xFF.toByte() && data[1] == 0x0A.toByte() -> true
                 data.size >= 12 && data.copyOfRange(0, 12).contentEquals(
                     byteArrayOf(
                         0,
