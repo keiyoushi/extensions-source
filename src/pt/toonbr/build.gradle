@@ -1,0 +1,12 @@
+ext {
+    extName = 'ToonBr'
+    extClass = '.ToonBr'
+    extVersionCode = 1
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:cookieinterceptor'))
+}
