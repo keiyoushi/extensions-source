@@ -7,14 +7,12 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
 import kotlinx.serialization.decodeFromString
 import okhttp3.FormBody
-import okhttp3.Request
 import org.jsoup.nodes.Document
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -26,7 +24,7 @@ class MangaLivre :
         "Manga Livre",
         "https://mangalivre.tv",
         "pt-BR",
-        SimpleDateFormat("dd.MM.yyyy", Locale.ROOT)
+        SimpleDateFormat("dd.MM.yyyy", Locale.ROOT),
     ),
     ConfigurableSource {
 
@@ -68,7 +66,7 @@ class MangaLivre :
         val script = document.select("script")
             .asSequence()
             .map { it.data() }
-            .firstOrNull { it.contains("atob") || it.contains("\\x70\\x75\\x73\\x68") } 
+            .firstOrNull { it.contains("atob") || it.contains("\\x70\\x75\\x73\\x68") }
             ?: throw Exception("Script not found. Cloudflare might be blocking the content.")
 
         // 3. Extrai as partes em Base64
@@ -108,7 +106,7 @@ class MangaLivre :
 
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
-        
+
         // Compila as regex apenas uma vez para melhor performance
         private val ARRAY_PUSH_REGEX = Regex("""\w+\[\w+\]\(['"]([^'"]+)['"]\)""")
         private val LEGACY_REGEX = Regex("""\+=\s*['"]([^'"]*)['"]""")
