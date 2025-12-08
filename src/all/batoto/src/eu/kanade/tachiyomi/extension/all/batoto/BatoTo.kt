@@ -612,8 +612,63 @@ open class BatoTo(
                 it
             }
 
-            Page(i, imageUrl = url.replace("https://k", "https://n"))
+            Page(i, imageUrl = url)
         }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val original = page.imageUrl ?: throw IllegalArgumentException("Null imageUrl for page: ${'$'}{page.index}")
+
+        // Try the original URL first to avoid generating fallback candidates unnecessarily.
+        try {
+            val req = GET(original, headers)
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful && resp.body != null) return req
+            }
+        } catch (_: Exception) {
+            // fall through to probes
+        }
+
+        // Define an extendable list of host prefixes to try as fallbacks.
+        val prefixes = listOf("k", "n", "b", "d")
+        val tried = mutableSetOf<String>()
+
+        // Parse original URL to do safer host replacements when possible.
+        val originalUrl = runCatching { original.toHttpUrl() }.getOrNull()
+
+        // Build a safe list of candidate hosts to probe.
+        val allowedHosts = mutableSetOf<String>()
+        originalUrl?.host?.let { allowedHosts.add(it) }
+        runCatching { baseUrl.toHttpUrl().host }.getOrNull()?.let { allowedHosts.add(it) }
+        runCatching { getMirrorPref().toHttpUrl().host }.getOrNull()?.let { allowedHosts.add(it) }
+
+        // If original host matches a known prefix, allow swapping that prefix with other prefixes
+        val originalHost = originalUrl?.host
+        if (originalHost != null) {
+            for (from in prefixes) {
+                if (!originalHost.startsWith(from)) continue
+                for (to in prefixes) {
+                    if (from == to) continue
+                    allowedHosts.add(originalHost.replaceFirst(from, to))
+                }
+            }
+        }
+
+        // Probe allowed hosts by reconstructing the URL with the candidate host.
+        for (host in allowedHosts) {
+            val cand = originalUrl?.newBuilder()?.host(host)?.build()?.toString() ?: continue
+            if (!tried.add(cand)) continue
+            try {
+                val req = GET(cand, headers)
+                client.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful && resp.body != null) return req
+                }
+            } catch (_: Exception) {
+            }
+        }
+
+        // If nothing worked, fall back to original request.
+        return GET(original, headers)
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
