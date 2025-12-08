@@ -1,137 +1,160 @@
 package eu.kanade.tachiyomi.extension.pt.animexnovel
 
-import eu.kanade.tachiyomi.multisrc.zeistmanga.ZeistManga
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
-import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
+import rx.Observable
+import java.util.concurrent.TimeUnit
 
-class AnimeXNovel : ZeistManga(
-    "AnimeXNovel",
-    "https://www.animexnovel.com",
-    "pt-BR",
-) {
+class AnimeXNovel : HttpSource() {
 
-    // ============================== Popular ===============================
+    override val name = "AnimeXNovel"
 
-    override val popularMangaSelector = "#PopularPosts2 article"
-    override val popularMangaSelectorTitle = "h3 > a"
-    override val popularMangaSelectorUrl = popularMangaSelectorTitle
+    override val baseUrl: String = "https://www.animexnovel.com"
 
-    override fun popularMangaParse(response: Response): MangasPage {
-        return super.popularMangaParse(response).let(::filterMangaEntries)
+    override val lang: String = "pt-BR"
+
+    override val supportsLatest: Boolean = true
+
+    override val versionId: Int = 2
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .readTimeout(1, TimeUnit.MINUTES)
+        .callTimeout(1, TimeUnit.MINUTES)
+        .rateLimit(2)
+        .build()
+
+    // ========================== Popular ===================================
+
+    override fun popularMangaRequest(page: Int): Request = GET("$baseUrl/mangas")
+
+    override fun popularMangaParse(response: Response): MangasPage =
+        response.mangaParse(".eael-post-grid-container article")
+
+    // ========================== Latest ====================================
+
+    override fun latestUpdatesRequest(page: Int): Request = GET(baseUrl)
+
+    override fun latestUpdatesParse(response: Response): MangasPage =
+        response.mangaParse("div:contains(Últimos Mangás) + div .manga-card")
+
+    // ========================== Search ====================================
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val form = FormBody.Builder()
+            .add("action", "newscrunch_live_search")
+            .add("keyword", query)
+            .build()
+        return POST("$baseUrl/wp-admin/admin-ajax.php", headers, form)
     }
 
-    // ============================== Latest ===============================
-
-    override fun latestUpdatesParse(response: Response): MangasPage {
-        return super.latestUpdatesParse(response).let(::filterMangaEntries)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val mangas = response.asJsoup()
+            .select(".search-wrapper")
+            .map { element ->
+                mangaFromElement(element).apply {
+                    // Search returns manga and chapters, so this removes duplicate manga from the chapter list
+                    url = url.substringBeforeLast("capitulo")
+                    title = title.substringBeforeLast(DELIMITER_SEARCH_TITLE_REGEX)
+                }
+            }.distinctBy(SManga::url)
+        return MangasPage(mangas, hasNextPage = false)
     }
 
-    // ============================== Details ===============================
+    // ========================== Details ===================================
 
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val document = response.asJsoup()
-        title = document.selectFirst("h1")!!.text()
-        thumbnail_url = document.selectFirst(".thumb")?.absUrl("src")
-        description = document.selectFirst("#synopsis")?.text()
-        document.selectFirst("span[data-status]")?.let {
-            status = parseStatus(it.text().lowercase())
-        }
-        genre = document.select("dl:has(dt:contains(Gênero)) dd a")
-            .joinToString { it.text() }
-
-        setUrlWithoutDomain(document.location())
+        title = document.selectFirst("h2.spnc-entry-title")!!.text()
+        author = document.selectFirst("li:contains(Autor:)")?.text()?.substringAfter(":")?.trim()
+        artist = document.selectFirst("li:contains(Arte:)")?.text()?.substringAfter(":")?.trim()
+        genre = document.selectFirst("li:contains(Arte:)")?.text()?.substringAfter(":")?.trim()
+        description = document.selectFirst("meta[itemprop='description']")?.attr("content")
     }
 
-    // ============================== Chapters ===============================
+    // ========================== Chapters ==================================
 
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val document = response.asJsoup()
+    override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
+        return Observable.fromCallable {
+            val document = client.newCall(mangaDetailsRequest(manga))
+                .execute().asJsoup()
 
-        val label = document.select("script")
-            .map(Element::data)
-            .firstOrNull(MANGA_TITLE_REGEX::containsMatchIn)?.let {
-                MANGA_TITLE_REGEX.find(it)?.groups?.get(1)?.value
-            } ?: throw IOException("Manga title not found")
+            val category = document.selectFirst("#container-capitulos")!!
+                .attr("data-categoria")
 
-        val script = document.select("script")
-            .map(Element::data)
-            .firstOrNull(API_KEYS_REGEX::containsMatchIn)
-            ?: throw IOException("The API keys could not be found.")
+            val url = "$baseUrl/wp-json/wp/v2/posts".toHttpUrl().newBuilder()
+                .addQueryParameter("categories", category.toString())
+                .addQueryParameter("orderby", "date")
+                .addQueryParameter("order", "desc")
+                .addQueryParameter("per_page", "100")
 
-        val blogId = BLOG_ID_REGEX.find(script)?.groups?.get(1)?.value
-            ?: throw IOException("Failed to retrieve blog ID")
-
-        val apiKeys = getApiKeys(script)
-            ?: throw IOException("Failed to retrieve API keys")
-
-        lateinit var response: Response
-        for (apiKey in apiKeys) {
-            val url = "https://www.googleapis.com/blogger/v3/blogs/$blogId/posts".toHttpUrl().newBuilder()
-                .addQueryParameter("key", apiKey)
-                .addQueryParameter("labels", label)
-                .addQueryParameter("maxResults", "500")
-                .build()
-
-            response = client.newCall(GET(url, headers)).execute()
-            if (response.isSuccessful) {
-                break
-            }
-            response.close()
-        }
-
-        if (response.isSuccessful.not()) {
-            throw IOException("Chapters not found")
-        }
-
-        return response.parseAs<ChapterWrapperDto>().items.map {
-            SChapter.create().apply {
-                name = it.title
-                date_upload = dateFormat.tryParse(it.published)
-                setUrlWithoutDomain(it.url)
-            }
-        }
-    }
-
-    private fun getApiKeys(script: String): List<String>? =
-        API_KEYS_REGEX.find(script)?.groupValues?.get(1)?.let { content ->
-            API_KEY_REGEX.findAll(content).map { it.groupValues[1] }.toList()
-        }
-
-    // ============================== Pages ===============================
-
-    override val pageListSelector = "#reader .separator"
-
-    // ============================== Utils ===============================
-
-    private fun filterMangaEntries(mangasPage: MangasPage): MangasPage {
-        val prefix = "[Mangá]"
-        return mangasPage.copy(
-            mangasPage.mangas.filter {
-                it.title.contains(prefix)
-            }.map {
-                it.apply {
-                    title = title.substringAfter(prefix).trim()
+            val chapterList = mutableListOf<SChapter>()
+            var page = 1
+            while (true) {
+                url.setQueryParameter("page", page.toString())
+                val response = client.newCall(GET(url.build(), headers)).execute()
+                if (!response.isSuccessful) {
+                    break
                 }
-            },
-        )
+                chapterList += chapterListParse(response)
+                page++
+            }
+            chapterList
+        }
+    }
+
+    override fun chapterListParse(response: Response): List<SChapter> =
+        response.parseAs<List<ChapterDto>>().map(ChapterDto::toSChapter)
+            .filter { it.url.contains("capitulo") }
+
+    // ========================== Pages =====================================
+
+    private val pageContainerSelector = ".spice-block-img-gallery, .wp-block-gallery, .spnc-entry-content"
+
+    override fun pageListParse(response: Response): List<Page> {
+        val container = response.asJsoup().selectFirst(pageContainerSelector)!!
+        return container.select("img").mapIndexed { index, element ->
+            Page(index, imageUrl = element.absUrl("src"))
+        }
+    }
+
+    override fun imageUrlParse(response: Response): String = ""
+
+    // =========================== Utils ====================================
+
+    private fun String.substringBeforeLast(regex: Regex): String {
+        val substring = regex.find(this)?.groupValues?.last() ?: return this
+        return substringBeforeLast(substring)
+    }
+
+    private fun Response.mangaParse(cssSelector: String): MangasPage {
+        val mangas = asJsoup()
+            .select(cssSelector)
+            .map(::mangaFromElement)
+        return MangasPage(mangas, hasNextPage = false)
+    }
+
+    private fun mangaFromElement(element: Element): SManga = SManga.create().apply {
+        title = element.selectFirst("h2, h3, .search-content")!!.text()
+        thumbnail_url = element.selectFirst("img")?.absUrl("src")
+        setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
     }
 
     companion object {
-        private val API_KEY_REGEX = """"([^"]+)"""".toRegex()
-        private val API_KEYS_REGEX = """const\s+API_KEYS\s*=\s*\[\s*([\s\S]*?)\s*];""".toRegex()
-        private val BLOG_ID_REGEX = """(?:BLOG_ID(?:\s+)?=(?:\s+)?.)"([^(\\|")]+)""".toRegex()
-        private val MANGA_TITLE_REGEX = """iniciarCapituloLoader\("([^"]+)"\)""".toRegex()
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+        private val DELIMITER_SEARCH_TITLE_REGEX = """[-–]""".toRegex()
     }
 }
