@@ -4,7 +4,6 @@ import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -15,7 +14,6 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -28,15 +26,12 @@ class LycanToons : HttpSource() {
 
     override val baseUrl = "https://lycantoons.com"
 
-    private val cdnUrl = "https://cdn.lycantoons.com/file/lycantoons"
-
     override val lang = "pt-BR"
 
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
-        .rateLimitHost(cdnUrl.toHttpUrl(), 2)
         .build()
 
     private val pageHeaders by lazy {
