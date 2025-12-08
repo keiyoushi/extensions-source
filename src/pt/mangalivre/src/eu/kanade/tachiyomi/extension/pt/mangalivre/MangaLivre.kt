@@ -1,17 +1,18 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
-import android.util.Base64
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.multisrc.madara.Madara
+import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.getPreferences
-import kotlinx.serialization.decodeFromString
 import okhttp3.FormBody
+import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -41,17 +42,31 @@ class MangaLivre :
     override fun xhrChaptersRequest(mangaUrl: String) =
         POST("$mangaUrl/ajax/chapters/", xhrHeaders, FormBody.Builder().build())
 
-    override fun pageListParse(document: Document): List<Page> =
-        document.select("script")
-            .asSequence()
-            .map { BASE64_REGEX.findAll(it.data()).joinToString("") { m -> m.groupValues[1] } }
-            .firstNotNullOfOrNull { base64 ->
-                runCatching {
-                    val decoded = String(Base64.decode(base64, Base64.DEFAULT))
-                    json.decodeFromString<List<String>>(decoded)
-                        .mapIndexed { idx, url -> Page(idx, imageUrl = url.trim()) }
-                }.getOrNull()
-            } ?: throw Exception("Failed to load images. Please open the chapter in WebView first.")
+    override fun pageListRequest(chapter: SChapter): Request {
+        val fullUrl = if (chapter.url.startsWith("http")) {
+            chapter.url
+        } else {
+            "$baseUrl${chapter.url}"
+        }
+        return GET(fullUrl, headers)
+    }
+
+    override fun pageListParse(document: Document): List<Page> {
+        val urls = MangaLivreImageExtractor.extractImageUrls(document, json)
+            ?: throw Exception("Failed to load images. Please open the chapter in WebView first.")
+
+        return urls.mapIndexed { idx, url ->
+            Page(idx, document.location(), url)
+        }
+    }
+
+    override fun imageRequest(page: Page): Request {
+        val referer = if (page.url.isNotEmpty()) page.url else "$baseUrl/"
+        val requestHeaders = headers.newBuilder()
+            .set("Referer", referer)
+            .build()
+        return GET(page.imageUrl!!, requestHeaders)
+    }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
@@ -68,6 +83,5 @@ class MangaLivre :
 
     companion object {
         private const val BASE_URL_PREF = "overrideBaseUrl"
-        private val BASE64_REGEX = Regex("""\+=\s*['"]([^'"]*)['"]""")
     }
 }
