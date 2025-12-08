@@ -1,13 +1,16 @@
 package eu.kanade.tachiyomi.extension.pt.lycantoons
 
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.jsonInstance
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.encodeToString
@@ -15,7 +18,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 
 class LycanToons : HttpSource() {
 
@@ -27,7 +30,9 @@ class LycanToons : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(2)
+        .build()
 
     private val pageHeaders by lazy {
         headers.newBuilder()
@@ -72,6 +77,8 @@ class LycanToons : HttpSource() {
 
     // =====================Details=====================
 
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
     override fun mangaDetailsRequest(manga: SManga): Request = seriesRequest(manga.slug())
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -98,43 +105,30 @@ class LycanToons : HttpSource() {
     )
 
     override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
-        val (slug, chapterNumber) = response.extractSlugAndChapter()
+        val document = response.asJsoup()
+        val script = document.select("script:containsData(self.__next_f)")
+            .joinToString("\n", transform = Element::data)
 
-        val dto = extractScriptData(html)
-        val pageCount = dto.pageCount
+        val content = QuickJs.create().use {
+            it.evaluate(
+                """
+                globalThis.self = globalThis;
+                $script
+                self.__next_f.map(it => it[it.length - 1]).join('')
+                """.trimIndent(),
+            ) as String
+        }
 
-        val chapterPath = "$cdnUrl/$slug/$chapterNumber"
-        return List(pageCount) { index ->
-            val imageUrl = "$chapterPath/page-$index.jpg"
+        val images = PAGES_REGEX.find(content)!!.groupValues.last().parseAs<List<String>>()
+
+        return images.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }
-    }
-
-    private fun extractScriptData(html: String): PageListDto {
-        val document = Jsoup.parse(html)
-
-        val scriptData = document.select("script")
-            .map { it.data() }
-            .first { it.contains("chapterData") }
-
-        val rawJson = CHAPTER_DATA_REGEX.find(scriptData)!!.groupValues[1]
-
-        val cleanJson = "\"$rawJson\"".parseAs<String>()
-
-        return cleanJson.parseAs<PageListDto>()
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
 
     // =====================Utils=====================
-
-    private fun Response.extractSlugAndChapter(): Pair<String, String> {
-        val segments = request.url.pathSegments
-        val slug = segments[1]
-        val chapterNumber = segments[2]
-        return slug to chapterNumber
-    }
 
     private fun metricsRequest(path: String, page: Int): Request =
         GET("$baseUrl/api/metrics/$path?limit=$PAGE_LIMIT&page=$page", headers)
@@ -151,7 +145,6 @@ class LycanToons : HttpSource() {
     companion object {
         private const val PAGE_LIMIT = 13
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-        private const val cdnUrl = "https://cdn.lycantoons.com/file/lycantoons"
-        private val CHAPTER_DATA_REGEX = """\\?"chapterData\\?"\s*:\s*(\{.*?\})""".toRegex()
+        private val PAGES_REGEX = """"imageUrls":([^]]+])""".toRegex()
     }
 }
