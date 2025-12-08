@@ -144,6 +144,15 @@ class ToonBr : HttpSource(), ConfigurableSource {
         throw UnsupportedOperationException("Not used")
     }
 
+    // ====== Utils ======
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter): String {
+        val chapterId = chapter.url.substringAfterLast("/")
+        return "$baseUrl/read/$chapterId"
+    }
+
     // ===== Authentication =====
     private fun login(email: String, password: String): String {
         val payload = """{ "email": "$email", "password": "$password" }"""
