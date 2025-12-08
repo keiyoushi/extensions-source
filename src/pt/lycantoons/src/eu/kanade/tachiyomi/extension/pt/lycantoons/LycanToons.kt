@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.pt.lycantoons
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -27,7 +28,9 @@ class LycanToons : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient
+    override val client = network.cloudflareClient.newBuilder()
+        .rateLimit(2)
+        .build()
 
     private val pageHeaders by lazy {
         headers.newBuilder()
@@ -71,6 +74,8 @@ class LycanToons : HttpSource() {
     override fun getFilterList(): FilterList = LycanToonsFilters.get()
 
     // =====================Details=====================
+
+    override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun mangaDetailsRequest(manga: SManga): Request = seriesRequest(manga.slug())
 
