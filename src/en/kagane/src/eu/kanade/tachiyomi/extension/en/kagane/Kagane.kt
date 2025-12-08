@@ -16,10 +16,10 @@ import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.extension.en.kagane.ChapterDto.Companion.dateFormat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -31,6 +31,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
+import keiyoushi.utils.tryParse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
@@ -73,7 +74,6 @@ class Kagane : HttpSource(), ConfigurableSource {
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor(::refreshTokenInterceptor)
-        .rateLimit(2)
         // fix disk cache
         .apply {
             val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
@@ -96,7 +96,8 @@ class Kagane : HttpSource(), ConfigurableSource {
                 .url(url.newBuilder().setQueryParameter("token", accessToken).build())
                 .build(),
         )
-        if (response.code == 401) {
+
+        if (response.code == 401 || response.code == 507) {
             response.close()
             val challenge = try {
                 getChallengeResponse(seriesId, chapterId)
@@ -139,7 +140,7 @@ class Kagane : HttpSource(), ConfigurableSource {
             page,
             "",
             FilterList(
-                SortFilter(Filter.Sort.Selection(2, false)),
+                SortFilter(Filter.Sort.Selection(6, false)),
                 ContentRatingFilter(
                     preferences.contentRating.toSet(),
                 ),
@@ -197,7 +198,30 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<SearchDto>()
-        val mangas = dto.content.map { it.toSManga(apiUrl) }
+        val mangas = dto.content.filter {
+            if (!preferences.showDuplicates) {
+                val alternateSeries = client.newCall(GET("$apiUrl/api/v1/alternate_series/${it.id}", apiHeaders))
+                    .execute()
+                    .parseAs<List<AlternateSeries>>()
+
+                if (alternateSeries.isEmpty()) return@filter true
+
+                val date = dateFormat.tryParse(it.releaseDate)
+                for (alt in alternateSeries) {
+                    val altDate = dateFormat.tryParse(alt.releaseDate)
+
+                    when {
+                        it.booksCount < alt.booksCount -> return@filter false
+                        it.booksCount == alt.booksCount -> {
+                            if (date > altDate) return@filter false
+                        }
+                    }
+                }
+                true
+            } else {
+                true
+            }
+        }.map { it.toSManga(apiUrl, preferences.showSource) }
         return MangasPage(mangas, hasNextPage = dto.hasNextPage())
     }
 
@@ -281,8 +305,9 @@ class Kagane : HttpSource(), ConfigurableSource {
                 addPathSegment(seriesId)
                 addPathSegment("file")
                 addPathSegment(chapterId)
-                addPathSegment((page + 1).toString())
+                addPathSegment(challengeResp.pageMapping.getValue(page + 1))
                 addQueryParameter("token", accessToken)
+                addQueryParameter("index", (page + 1).toString())
             }.build().toString()
 
             Page(page, imageUrl = pageUrl)
@@ -291,7 +316,7 @@ class Kagane : HttpSource(), ConfigurableSource {
         return Observable.just(pages)
     }
 
-    private var cacheUrl = "https://kazana.$domain"
+    private var cacheUrl = "https://yukine.$domain"
     private var accessToken: String = ""
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -500,6 +525,12 @@ class Kagane : HttpSource(), ConfigurableSource {
     private val SharedPreferences.showScanlations: Boolean
         get() = this.getBoolean(SHOW_SCANLATIONS, SHOW_SCANLATIONS_DEFAULT)
 
+    private val SharedPreferences.showSource: Boolean
+        get() = this.getBoolean(SHOW_SOURCE, SHOW_SOURCE_DEFAULT)
+
+    private val SharedPreferences.showDuplicates: Boolean
+        get() = this.getBoolean(SHOW_DUPLICATES, SHOW_DUPLICATES_DEFAULT)
+
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
@@ -535,6 +566,20 @@ class Kagane : HttpSource(), ConfigurableSource {
         }.let(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_DUPLICATES
+            title = "Show duplicates"
+            summary = "Show duplicate entries.\nPicks the entry with most chapters if disabled\nThis switch isn't always accurate\nNOTE: Enabling this option will slow your search speed down"
+            setDefaultValue(SHOW_DUPLICATES_DEFAULT)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_SOURCE
+            title = "Show source name"
+            summary = "Show source name in title"
+            setDefaultValue(SHOW_SOURCE_DEFAULT)
+        }.let(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = DATA_SAVER
             title = "Data saver"
             setDefaultValue(false)
@@ -556,6 +601,12 @@ class Kagane : HttpSource(), ConfigurableSource {
         private const val GENRES_PREF = "pref_genres_exclude"
         private const val SHOW_SCANLATIONS = "pref_show_scanlations"
         private const val SHOW_SCANLATIONS_DEFAULT = true
+
+        private const val SHOW_SOURCE = "pref_show_source"
+        private const val SHOW_SOURCE_DEFAULT = false
+
+        private const val SHOW_DUPLICATES = "pref_show_duplicates"
+        private const val SHOW_DUPLICATES_DEFAULT = true
 
         private const val DATA_SAVER = "data_saver_default"
     }
@@ -584,13 +635,13 @@ class Kagane : HttpSource(), ConfigurableSource {
         )
 
         val response = metadataClient.newCall(
-            GET("$apiUrl/api/v1/metadata", headers, CacheControl.FORCE_CACHE),
+            GET("$apiUrl/api/v1/metadata", apiHeaders, CacheControl.FORCE_CACHE),
         ).await()
 
         // the cache only request fails if it was not cached already
         if (!response.isSuccessful) {
             metadataClient.newCall(
-                GET("$apiUrl/api/v1/metadata", headers, CacheControl.FORCE_NETWORK),
+                GET("$apiUrl/api/v1/metadata", apiHeaders, CacheControl.FORCE_NETWORK),
             ).enqueue(
                 object : Callback {
                     override fun onResponse(call: Call, response: Response) {
@@ -605,7 +656,7 @@ class Kagane : HttpSource(), ConfigurableSource {
             filters.addAll(
                 index = 0,
                 listOf(
-                    Filter.Header("Press 'reset' to load more filters"),
+                    Filter.Header("Press 'Reset' to load more filters"),
                     Filter.Separator(),
                 ),
             )
@@ -633,7 +684,7 @@ class Kagane : HttpSource(), ConfigurableSource {
             listOf(
                 GenresFilter(metadata.getGenresList()),
                 TagsFilter(metadata.getTagsList()),
-                SourcesFilter(metadata.getSourcesList()),
+                SourcesFilter(metadata.getSourcesList().filter { !(!preferences.showScanlations && !officialSources.contains(it.name.lowercase())) }),
             ),
         )
 

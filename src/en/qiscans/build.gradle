@@ -3,7 +3,7 @@ ext {
     extClass = '.QiScans'
     themePkg = 'iken'
     baseUrl = 'https://qiscans.org'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = false
 }
 

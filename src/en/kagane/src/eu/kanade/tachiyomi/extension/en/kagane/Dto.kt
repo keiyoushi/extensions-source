@@ -17,17 +17,30 @@ class SearchDto(
 
     @Serializable
     class Book(
-        val name: String,
         val id: String,
+        val name: String,
+        val source: String,
+        @SerialName("books_count")
+        val booksCount: Int,
+        @SerialName("release_date")
+        val releaseDate: String?,
     ) {
 
-        fun toSManga(domain: String): SManga = SManga.create().apply {
-            title = name
+        fun toSManga(domain: String, showSource: Boolean): SManga = SManga.create().apply {
+            title = if (showSource) "${name.trim()} [$source]" else name
             url = id
             thumbnail_url = "$domain/api/v1/series/$id/thumbnail"
         }
     }
 }
+
+@Serializable
+class AlternateSeries(
+    @SerialName("books_count")
+    val booksCount: Int,
+    @SerialName("release_date")
+    val releaseDate: String?,
+)
 
 @Serializable
 class DetailsDto(
@@ -98,7 +111,7 @@ class ChapterDto(
     }
 
     companion object {
-        private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
     }
 }
 
@@ -108,4 +121,6 @@ class ChallengeDto(
     val accessToken: String,
     @SerialName("cache_url")
     val cacheUrl: String,
+    @SerialName("page_mapping")
+    val pageMapping: Map<Int, String>,
 )

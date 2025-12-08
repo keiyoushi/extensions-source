@@ -1,0 +1,8 @@
+ext {
+    extName = 'MangaTaro'
+    extClass = '.MangaTaroFactory'
+    extVersionCode = 7
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

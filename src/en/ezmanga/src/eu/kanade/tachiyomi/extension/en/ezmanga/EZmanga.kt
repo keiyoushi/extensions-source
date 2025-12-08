@@ -8,8 +8,6 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
-import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -50,25 +48,6 @@ class EZmanga : Iken(
             addQueryParameter("orderBy", "updatedAt")
         }.build()
         return GET(url, headers)
-    }
-
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET(baseUrl + chapter.url, headersBuilder().add("rsc", "1").build())
-    }
-
-    override fun pageListParse(response: Response): List<Page> {
-        return response.body.string().lines()
-            .mapNotNull { line ->
-                val jsonStartIndex = line.indexOf('{').takeIf { it != -1 } ?: return@mapNotNull null
-                val jsonString = line.substring(jsonStartIndex)
-                try {
-                    jsonString.parseAs<PageDto>().takeIf { it.url.isNotEmpty() }
-                } catch (e: Exception) {
-                    null
-                }
-            }
-            .sortedBy { it.order }
-            .mapIndexed { i, p -> Page(i, imageUrl = p.url) }
     }
 
     private var genresList: List<Pair<String, String>> = emptyList()

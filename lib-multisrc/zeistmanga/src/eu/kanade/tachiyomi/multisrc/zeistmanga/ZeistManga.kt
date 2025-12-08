@@ -404,6 +404,7 @@ abstract class ZeistManga(
         "completed",
         "completo",
         "finalizado",
+        "مكتمل",
     )
 
     protected open val statusHiatusList = listOf(
