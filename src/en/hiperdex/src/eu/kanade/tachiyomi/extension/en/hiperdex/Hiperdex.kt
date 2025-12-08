@@ -47,6 +47,8 @@ class Hiperdex :
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never
 
+    override val pageListParseSelector = "div.page-break:not([style*='display:none'])"
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
