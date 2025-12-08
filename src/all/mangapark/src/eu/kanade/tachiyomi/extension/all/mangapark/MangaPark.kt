@@ -272,16 +272,15 @@ class MangaPark(
 
     private fun imageFallbackInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        var response = chain.proceed(request)
+        val response = chain.proceed(request)
 
         if (response.isSuccessful) return response
 
         val urlString = request.url.toString()
 
-        if (SERVER_PATTERN.containsMatchIn(urlString)) {
-            // Close the failed response to avoid leaks
-            response.close()
+        response.close()
 
+        if (SERVER_PATTERN.containsMatchIn(urlString)) {
             // Sorted list: Most reliable servers FIRST
             val servers = listOf("s01", "s03", "s04", "s00", "s05", "s06", "s07", "s08", "s09", "s10", "s02")
 
