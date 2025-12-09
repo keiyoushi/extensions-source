@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -71,10 +72,10 @@ abstract class Comicaso(
     override fun latestUpdatesSelector() = "div.ng-list div.ng-list-item"
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
-        val thumb = element.selectFirst("div.ng-list-thumb")
-        val link = thumb?.selectFirst("a")?.absUrl("href")!!
+        val thumb = element.selectFirst("div.ng-list-thumb")!!
+        val link = thumb.selectFirst("a")!!.absUrl("href")
         title = element.selectFirst("div.ng-list-info a h3")!!.text()
-        thumbnail_url = thumb?.selectFirst("img")?.let { img ->
+        thumbnail_url = thumb.selectFirst("img")?.let { img ->
             img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
         } ?: ""
         setUrlWithoutDomain(link)
