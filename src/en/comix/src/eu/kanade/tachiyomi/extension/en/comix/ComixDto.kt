@@ -220,6 +220,9 @@ class ChapterResponse(
     class Items(
         @SerialName("chapter_id")
         val chapterId: Int,
-        val images: List<String>,
-    )
+        val images: List<Image>,
+    ) {
+        @Serializable
+        class Image(val width: Int, val height: Int, val url: String)
+    }
 }
