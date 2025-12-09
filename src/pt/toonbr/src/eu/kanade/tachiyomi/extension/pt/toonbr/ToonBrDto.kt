@@ -39,9 +39,13 @@ internal data class ChapterDto(
 ) {
     fun toSChapter(dateFormat: SimpleDateFormat) = SChapter.create().apply {
         url = "/chapter/$id"
-        name = this@ChapterDto.title
+        name = chapterNumber?.let { "Capítulo ${it.formatNumber()}" } ?: this@ChapterDto.title
         chapter_number = this@ChapterDto.chapterNumber ?: 0f
         date_upload = createdAt?.let { dateFormat.tryParse(it) } ?: 0L
+    }
+
+    private fun Float.formatNumber(): String {
+        return if (this % 1 == 0f) this.toInt().toString() else this.toString()
     }
 }
 
