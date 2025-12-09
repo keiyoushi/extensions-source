@@ -3,6 +3,10 @@ package eu.kanade.tachiyomi.extension.pt.mangalivre
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
+import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
+import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
+import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -12,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import keiyoushi.utils.getPreferences
 import okhttp3.FormBody
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
@@ -24,18 +29,30 @@ class MangaLivre :
     override val id: Long = 2834885536325274328
     override val useLoadMoreRequest = LoadMoreStrategy.Always
     override val baseUrl by lazy { preferences.getString(BASE_URL_PREF, super.baseUrl)!! }
-    override val client = super.client.newBuilder()
+
+    private val preferences by lazy { getPreferences() }
+
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .setRandomUserAgent(
+            preferences.getPrefUAType(),
+            preferences.getPrefCustomUA(),
+        )
         .rateLimit(2)
         .build()
 
     override val useNewChapterEndpoint = true
     override val pageListParseSelector = ""
 
-    private val preferences by lazy { getPreferences() }
-
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", baseUrl)
         .set("Referer", "$baseUrl/")
+        .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+        .set("Accept-Language", "pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3")
+        .set("Sec-Fetch-Dest", "document")
+        .set("Sec-Fetch-Mode", "navigate")
+        .set("Sec-Fetch-Site", "same-origin")
+        .set("Upgrade-Insecure-Requests", "1")
+        .set("Connection", "keep-alive")
 
     override fun chapterListSelector() = "li.wp-manga-chapter, li.chapter-li"
 
@@ -69,6 +86,8 @@ class MangaLivre :
     }
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        addRandomUAPreferenceToScreen(screen)
+
         EditTextPreference(screen.context).apply {
             key = BASE_URL_PREF
             title = "Override Base URL"
