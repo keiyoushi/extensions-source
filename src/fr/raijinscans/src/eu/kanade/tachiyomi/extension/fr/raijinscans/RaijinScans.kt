@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.raijinscans
 
 import android.util.Base64
-import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
