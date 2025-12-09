@@ -9,13 +9,14 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONArray
-import org.json.JSONObject
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -32,17 +33,15 @@ abstract class Comicaso(
 
     override val client = network.cloudflareClient
 
+    private val json: Json by injectLazy()
+
     private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
 
     override fun popularMangaRequest(page: Int): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("wp-json")
-            .addPathSegment("neoglass")
-            .addPathSegment("v1")
-            .addPathSegment("mangas")
+        val url = "$baseUrl/wp-json/neoglass/v1/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("paged", page.toString())
             .addQueryParameter("per_page", pageSize.toString())
             .build()
@@ -51,9 +50,9 @@ abstract class Comicaso(
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val json = JSONObject(response.body.string())
-        val items = json.getJSONArray("items")
-        return MangasPage(parseMangaList(items), items.length() == pageSize)
+        val result = json.decodeFromString<MangaListResponse>(response.body.string())
+        val mangas = result.items.map { it.toSManga() }
+        return MangasPage(mangas, result.items.size == pageSize)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -73,8 +72,8 @@ abstract class Comicaso(
 
     override fun latestUpdatesFromElement(element: Element) = SManga.create().apply {
         val thumb = element.selectFirst("div.ng-list-thumb")
-        val link = thumb?.selectFirst("a")?.attr("href") ?: ""
-        title = element.selectFirst("div.ng-list-info a h3")!!.text().trim()
+        val link = thumb?.selectFirst("a")?.absUrl("href")!!
+        title = element.selectFirst("div.ng-list-info a h3")!!.text()
         thumbnail_url = thumb?.selectFirst("img")?.let { img ->
             img.attr("abs:src").ifEmpty { img.attr("abs:data-src") }
         } ?: ""
@@ -84,11 +83,7 @@ abstract class Comicaso(
     override fun latestUpdatesNextPageSelector() = "div.pagination a.next:not(.disabled)"
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegment("wp-json")
-            .addPathSegment("neoglass")
-            .addPathSegment("v1")
-            .addPathSegment("mangas")
+        val url = "$baseUrl/wp-json/neoglass/v1/mangas".toHttpUrl().newBuilder()
             .addQueryParameter("paged", page.toString())
             .addQueryParameter("per_page", pageSize.toString())
 
@@ -231,53 +226,27 @@ abstract class Comicaso(
         }
     }
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        val json = JSONObject(response.body.string())
-        val items = json.getJSONArray("items")
-        return MangasPage(parseMangaList(items), items.length() == pageSize)
-    }
-
-    private fun parseMangaList(json: JSONArray): List<SManga> {
-        val list = ArrayList<SManga>(json.length())
-        for (i in 0 until json.length()) {
-            val obj = json.getJSONObject(i)
-            val slug = obj.getString("slug")
-            val url = "/v2/manga/$slug/"
-            list.add(
-                SManga.create().apply {
-                    this.url = url
-                    title = obj.getString("title")
-                    thumbnail_url = obj.getString("thumb")
-                    status = when (obj.optString("status")) {
-                        "on-going" -> SManga.ONGOING
-                        "completed" -> SManga.COMPLETED
-                        else -> SManga.UNKNOWN
-                    }
-                },
-            )
-        }
-        return list
-    }
+    override fun searchMangaParse(response: Response): MangasPage =
+        popularMangaParse(response)
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1.ng-detail-title")!!.text().trim()
+        title = document.selectFirst("h1.ng-detail-title")!!.text()
 
-        description = document.selectFirst("p.ng-desc")?.text()?.trim()
+        description = buildString {
+            document.selectFirst("p.ng-desc")?.text()?.let { append(it) }
 
-        val altTitlesText = document.selectFirst(".ng-meta-info p:contains(Alternative:)")
-            ?.ownText()
-            ?.trim()
-
-        if (!altTitlesText.isNullOrEmpty()) {
-            description = when {
-                description.isNullOrEmpty() -> "Alternative: $altTitlesText"
-                else -> "$description\n\nAlternative: $altTitlesText"
-            }
+            document.selectFirst(".ng-meta-info p:contains(Alternative:)")
+                ?.ownText()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let {
+                    if (isNotEmpty()) append("\n\n")
+                    append("Alternative: ")
+                    append(it)
+                }
         }
 
         status = document.selectFirst(".ng-meta-info p:contains(Status:)")
             ?.ownText()
-            ?.trim()
             ?.let { statusText ->
                 when {
                     statusText.contains("On-going", ignoreCase = true) -> SManga.ONGOING
@@ -308,8 +277,8 @@ abstract class Comicaso(
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val link = element.selectFirst("a.ng-btn.ng-read-small")!!
         setUrlWithoutDomain(link.attr("href"))
-        name = element.selectFirst(".ng-chapter-title")?.text()?.trim() ?: "Chapter"
-        date_upload = element.selectFirst(".ng-chapter-date")?.text()?.trim()?.let { parseChapterDate(it) } ?: 0L
+        name = element.selectFirst(".ng-chapter-title")?.text() ?: "Chapter"
+        date_upload = element.selectFirst(".ng-chapter-date")?.text()?.let { parseChapterDate(it) } ?: 0L
     }
 
     private fun parseChapterDate(dateStr: String): Long {
@@ -333,13 +302,7 @@ abstract class Comicaso(
                 calendar.add(Calendar.MONTH, -months)
                 calendar.timeInMillis
             }
-            else -> {
-                try {
-                    dateFormat.parse(dateStr)?.time ?: 0L
-                } catch (e: Exception) {
-                    0L
-                }
-            }
+            else -> dateFormat.tryParse(dateStr)
         }
     }
 
