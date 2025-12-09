@@ -40,7 +40,7 @@ class TitleDetailView(
 ) {
     fun toSManga() = title.toSManga().apply {
         author = authors?.joinToString { it.name }
-        description = this@TitleDetailView.description ?: this.description
+        description = this@TitleDetailView.description
     }
 }
 
