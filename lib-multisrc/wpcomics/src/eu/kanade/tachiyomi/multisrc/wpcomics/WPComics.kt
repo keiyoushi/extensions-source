@@ -131,12 +131,14 @@ abstract class WPComics(
     }
 
     open fun String?.toStatus(): Int {
-        val ongoingWords = listOf("Ongoing", "Updating", "Đang tiến hành", "Đang cập nhật", "連載中")
-        val completedWords = listOf("Complete", "Completed", "Hoàn thành", "Đã hoàn thành", "完結済み")
+        val ongoingWords = listOf("Ongoing", "Updating", "Đang tiến hành", "Đang cập nhật", "Đang thực hiện", "Đang ra", "連載中")
+        val completedWords = listOf("Complete", "Completed", "Hoàn thành", "Đã hoàn thành", "Full", "Truyện Full", "完結済み")
+        val hiatusWords = listOf("Tạm Ngưng", "Tạm Hoãn")
         return when {
             this == null -> SManga.UNKNOWN
             ongoingWords.doesInclude(this) -> SManga.ONGOING
             completedWords.doesInclude(this) -> SManga.COMPLETED
+            hiatusWords.doesInclude(this) -> SManga.ON_HIATUS
             else -> SManga.UNKNOWN
         }
     }
