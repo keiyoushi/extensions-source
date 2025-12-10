@@ -1,9 +1,7 @@
 ext {
     extName = 'Corocoro Online'
     extClass = '.CorocoroOnline'
-    themePkg = 'gigaviewer'
-    baseUrl = 'https://corocoro.jp'
-    overrideVersionCode = 0
+    extVersionCode = 9
     isNsfw = false
 }
 
