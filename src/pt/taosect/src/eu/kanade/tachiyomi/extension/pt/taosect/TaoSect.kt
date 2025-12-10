@@ -180,7 +180,7 @@ class TaoSect : HttpSource() {
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     override fun getChapterUrl(chapter: SChapter): String {
-        return "$readerUrl/${chapter.url}"
+        return chapter.url
     }
 
     override fun getFilterList() = getFilters()
