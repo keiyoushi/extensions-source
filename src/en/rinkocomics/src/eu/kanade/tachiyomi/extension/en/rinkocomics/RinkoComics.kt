@@ -211,7 +211,7 @@ class RinkoComics : ParsedHttpSource() {
 
         return images.mapIndexed { index, img ->
             val url = (img.attr("abs:data-src").ifBlank { img.attr("abs:src") }).trim()
-            Page(index, "", url)
+            Page(index, imageUrl = url)
         }
     }
 
