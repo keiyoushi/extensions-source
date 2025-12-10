@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.tryParse
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -20,13 +21,13 @@ class Kairostoons : ParsedHttpSource() {
 
     override val name = "Kairostoons"
     override val baseUrl = "https://kairostoons.net"
-    override val lang = "pt-BR"
+    override val lang = "pt"
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
 
     // =========================================================================
-    //  Popular
+    //  Popular 
     // =========================================================================
 
     override fun popularMangaRequest(page: Int): Request {
@@ -41,14 +42,11 @@ class Kairostoons : ParsedHttpSource() {
     override fun popularMangaSelector() = "article.comic-card, div.bsx"
 
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
-        val anchor = element.selectFirst("a")
+        val anchor = element.selectFirst("a")!!
+        setUrlWithoutDomain(anchor.attr("href"))
 
-        if (anchor != null) {
-            setUrlWithoutDomain(anchor.attr("href"))
-
-            title = element.selectFirst("h3.comic-card-title, .tt")?.text()?.trim()
-                ?: anchor.attr("title")
-        }
+        title = element.selectFirst("h3.comic-card-title, .tt")?.text()?.trim()
+            ?: anchor.attr("title")
 
         thumbnail_url = element.selectFirst("img")?.attr("abs:src")
     }
@@ -75,6 +73,7 @@ class Kairostoons : ParsedHttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
+
     override fun fetchSearchManga(
         page: Int,
         query: String,
@@ -83,16 +82,17 @@ class Kairostoons : ParsedHttpSource() {
         return Observable.fromCallable {
             val response = client.newCall(popularMangaRequest(page)).execute()
             val details = popularMangaParse(response)
-            val filteredMangas = details.mangas.filter {
+            val mangas = details.mangas.filter {
                 it.title.contains(query, true)
             }
-
-            MangasPage(filteredMangas, details.hasNextPage)
+            MangasPage(mangas, details.hasNextPage)
         }
     }
 
     override fun searchMangaSelector() = "div.bsx, div.bs"
+
     override fun searchMangaFromElement(element: Element) = popularMangaFromElement(element)
+
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================================================================
@@ -136,11 +136,13 @@ class Kairostoons : ParsedHttpSource() {
 
             while (true) {
                 val pageUrl = if (page == 1) "$baseUrl${manga.url}" else "$baseUrl${manga.url}?page=$page"
+
                 val response = client.newCall(GET(pageUrl, headers)).execute()
                 val document = Jsoup.parse(response.body.string(), response.request.url.toString())
+
                 val pageChapters = document.select(chapterListSelector())
                     .map { chapterFromElement(it) }
-                    .filter { visitedUrls.add(it.url) }
+                    .filter { visitedUrls.add(it.url) } 
 
                 if (pageChapters.isEmpty()) break
 
@@ -160,7 +162,7 @@ class Kairostoons : ParsedHttpSource() {
         name = element.selectFirst("span.chapter-number, span.chapternum")?.text()?.trim() ?: anchor.text()
 
         val dateText = element.selectFirst("span.chapter-date, span.chapterdate")?.text()?.trim() ?: ""
-        date_upload = parseDate(dateText)
+        date_upload = dateFormat.tryParse(dateText)
     }
 
     // =========================================================================
@@ -169,6 +171,7 @@ class Kairostoons : ParsedHttpSource() {
 
     override fun pageListParse(document: Document): List<Page> {
         val canvasElements = document.select("canvas.chapter-image-canvas")
+
         if (canvasElements.isNotEmpty()) {
             return canvasElements.mapIndexed { index, element ->
                 Page(index, "", element.attr("abs:data-src-url"))
@@ -182,16 +185,4 @@ class Kairostoons : ParsedHttpSource() {
     }
 
     override fun imageUrlParse(document: Document) = throw UnsupportedOperationException()
-
-    // =========================================================================
-    //  Helpers
-    // =========================================================================
-
-    private fun parseDate(dateStr: String): Long {
-        return try {
-            dateFormat.parse(dateStr)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
-    }
 }
