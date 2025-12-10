@@ -1,12 +1,15 @@
 package eu.kanade.tachiyomi.extension.en.rinkocomics
 
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import keiyoushi.utils.tryParse
+import okhttp3.FormBody
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -27,7 +30,7 @@ class RinkoComics : ParsedHttpSource() {
     private val dateFormatShort = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
     // =========================================================================
-    //  Popular
+    //  Popular (Used for listing AND Search)
     // =========================================================================
 
     override fun popularMangaRequest(page: Int): Request {
@@ -61,7 +64,7 @@ class RinkoComics : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================================================================
-    //  Search
+    //  Search (Client-Side Filtering)
     // =========================================================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
@@ -111,74 +114,91 @@ class RinkoComics : ParsedHttpSource() {
     }
 
     // =========================================================================
-    //  Chapter List
+    //  Chapter List (AJAX Implementation)
     // =========================================================================
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return Observable.fromCallable {
             val chapters = mutableListOf<SChapter>()
+            val visitedUrls = mutableSetOf<String>()
 
+            // 1. Get initial page to find the ID and first batch of chapters
             val request = chapterListRequest(manga)
             val response = client.newCall(request).execute()
-            val document = response.asJsoup()
+            val html = response.body.string()
+            val document = Jsoup.parse(html, response.request.url.toString())
 
-            // Find max chapter number from visible list (using selector that excludes locked)
-            val latestChapterElement = document.selectFirst(chapterListSelector())
-            val latestChapterName = latestChapterElement?.selectFirst("span.chapter-number")?.text() ?: ""
-            val maxChapterNum = Regex("([0-9]+(\\.[0-9]+)?)").find(latestChapterName)?.value?.toFloatOrNull() ?: 0f
+            // 2. Parse visible chapters
+            val visibleChapters = document.select(chapterListSelector())
+                .map { chapterFromElement(it) }
+                .filter { visitedUrls.add(it.url) }
 
-            val visibleChapters = document.select(chapterListSelector()).map { chapterFromElement(it) }
             chapters.addAll(visibleChapters)
 
-            // Guess URLs for previous chapters
-            val mangaSlug = manga.url.trim('/').substringAfterLast('/')
-            val lowestVisible = visibleChapters.minOfOrNull { Regex("([0-9]+(\\.[0-9]+)?)").find(it.name)?.value?.toFloatOrNull() ?: 0f } ?: maxChapterNum
+            // 3. Handle "Load More" via AJAX
+            val loadMoreBtn = document.selectFirst("#loadMoreChaptersBtn")
+            val comicId = loadMoreBtn?.attr("data-comic-id")
+            
+            // Get offset, defaulting to 10
+            var offset = loadMoreBtn?.attr("data-offset")?.toIntOrNull() ?: 10
 
-            var currentNum = lowestVisible.toInt() - 0
-            var failCount = 0
+            // [CRITICAL] Headers that make WordPress accept the request
+            val ajaxHeaders = headers.newBuilder()
+                .add("X-Requested-With", "XMLHttpRequest")
+                .add("Referer", request.url.toString())
+                .add("Origin", baseUrl)
+                .build()
 
-            // Stop if 3 failures in a row
-            while (currentNum >= 1 && failCount < 3) {
-                val potentialUrl = "$baseUrl/chapter/$mangaSlug-chapter-$currentNum/"
+            if (comicId != null) {
+                while (true) {
+                    val formBody = FormBody.Builder()
+                        .add("action", "load_more_chapters")
+                        .add("comic_id", comicId)
+                        .add("offset", offset.toString())
+                        .build()
 
-                if (chapters.any { it.url.contains("chapter-$currentNum/") }) {
-                    currentNum--
-                    continue
-                }
+                    // Request to admin-ajax.php
+                    val ajaxRequest = POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, formBody)
+                    
+                    try {
+                        val ajaxResponse = client.newCall(ajaxRequest).execute()
+                        val ajaxHtml = ajaxResponse.body.string()
 
-                try {
-                    val chapRequest = GET(potentialUrl, headers)
-                    val chapResponse = client.newCall(chapRequest).execute()
-
-                    if (chapResponse.code == 200) {
-                        val sChapter = SChapter.create().apply {
-                            url = "/chapter/$mangaSlug-chapter-$currentNum/"
-                            name = "Chapter $currentNum"
-                            chapter_number = currentNum.toFloat()
-                            date_upload = 0L
+                        // Stop if empty or explicitly says "no more"
+                        if (ajaxHtml.isBlank() || ajaxHtml.contains("no more chapters", true)) {
+                            break
                         }
-                        chapters.add(sChapter)
-                        failCount = 0
-                    } else {
-                        failCount++
+
+                        // Parse the response (it returns raw <li> elements)
+                        val ajaxDoc = Jsoup.parseBodyFragment(ajaxHtml)
+                        val newChapters = ajaxDoc.select("li.chapter:not(.locked-chapter)")
+                            .map { chapterFromElement(it) }
+                            .filter { visitedUrls.add(it.url) }
+
+                        if (newChapters.isEmpty()) break
+
+                        chapters.addAll(newChapters)
+                        offset += 10
+
+                    } catch (e: Exception) {
+                        break
                     }
-                    chapResponse.close()
-                } catch (e: Exception) {
-                    failCount++
                 }
-                currentNum--
             }
 
-            chapters.sortedByDescending { Regex("([0-9]+(\\.[0-9]+)?)").find(it.name)?.value?.toFloatOrNull() ?: 0f }
+            chapters
         }
     }
 
+    // Exclude locked chapters from the selector
     override fun chapterListSelector() = "ul.chapters-list li.chapter:not(.locked-chapter)"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val anchor = element.selectFirst("a")!!
         setUrlWithoutDomain(anchor.attr("href"))
+        
         name = element.selectFirst("span.chapter-number")?.text()?.trim() ?: anchor.text()
+        
         val dateText = element.selectFirst("span.chapter-date")?.text()?.trim() ?: ""
         date_upload = parseDate(dateText)
     }
@@ -205,12 +225,8 @@ class RinkoComics : ParsedHttpSource() {
     private fun Response.asJsoup(): Document = Jsoup.parse(body.string(), request.url.toString())
 
     private fun parseDate(dateStr: String): Long {
-        return try {
-            dateFormatFull.parse(dateStr)?.time
-                ?: dateFormatShort.parse(dateStr)?.time
-                ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
+        return dateFormatFull.tryParse(dateStr)
+            ?: dateFormatShort.tryParse(dateStr)
+            ?: 0L
     }
 }
