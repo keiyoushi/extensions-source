@@ -14,7 +14,7 @@ import java.util.Locale
 
 class Luvyaa : ParsedHttpSource() {
 
-    override val name = "Luvyaa - Baca Komik Bahasa Indonesia"
+    override val name = "Luvyaa"
     override val baseUrl = "https://luvyaa.my.id"
     override val lang = "id"
     override val supportsLatest = true
