@@ -9,89 +9,52 @@ import org.jsoup.nodes.Document
 object MangaLivreImageExtractor {
 
     private val PLACEHOLDER_PATTERNS = listOf("hi.png", "placeholder", "loading")
-
-    private val INDEXED_ARRAY_REGEX = Regex("""(_[a-f0-9]+)\[(\d+)\]\s*=\s*['"]([A-Za-z0-9+/=]+)['"];""")
-
-    private val PUSH_VAR_REGEX = Regex("""_[a-f0-9]+\[_[a-f0-9]+\]\s*\(\s*['"]([A-Za-z0-9+/=]+)['"]\s*\)""")
+    private val XOR_DATA_REGEX = Regex("""_[a-f0-9]+\[idx\+\+\]\s*=\s*['"]([A-Za-z0-9+/=]+)['"];""")
+    private val XOR_KEY_REGEX = Regex("""var\s+_[a-f0-9]+\s*=\s*["']([a-f0-9]+)["'];""")
 
     fun extractImageUrls(document: Document, json: Json): List<String>? {
-        val scripts = document.select("script:not([src])")
-
-        for (script in scripts) {
+        for (script in document.select("script:not([src])")) {
             val data = script.data()
             if (data.length < 100) continue
 
-            if (containsObfuscationPattern(data)) {
-                val urls = extractFromReversedBase64(data, json)
-                if (urls != null && urls.isNotEmpty()) {
-                    return urls
-                }
+            if (data.contains("idx++") && data.contains("var _x = [")) {
+                extractFromXorEncryption(data, json)?.let { return it }
             }
         }
-
         return null
     }
 
-    private fun containsObfuscationPattern(scriptData: String): Boolean {
-        val hasPushHex = scriptData.contains("\\x70\\x75\\x73\\x68")
-        val hasArrayDecl = scriptData.contains("= []") || scriptData.contains("= [];")
-        val hasReverse = scriptData.contains(".reverse()") || scriptData.contains("chapter-images-render")
+    private fun extractFromXorEncryption(scriptData: String, json: Json): List<String>? {
+        val dataMatches = XOR_DATA_REGEX.findAll(scriptData).toList()
+        if (dataMatches.isEmpty()) return null
 
-        return hasPushHex && hasArrayDecl && hasReverse
-    }
+        val joinedBase64 = dataMatches.joinToString("") { it.groupValues[1] }
+        if (joinedBase64.isEmpty()) return null
 
-    private fun extractFromReversedBase64(scriptData: String, json: Json): List<String>? {
-        val indexedMatches = INDEXED_ARRAY_REGEX.findAll(scriptData).toList()
+        val xorKey = XOR_KEY_REGEX.findAll(scriptData)
+            .map { it.groupValues[1] }
+            .find { it.length == 8 }
+            ?: return null
 
-        if (indexedMatches.isNotEmpty()) {
-            val groupedByArray = indexedMatches.groupBy { it.groupValues[1] }
-
-            val largestArray = groupedByArray.maxByOrNull { it.value.size }?.value ?: return null
-
-            val sortedParts = largestArray
-                .sortedBy { it.groupValues[2].toIntOrNull() ?: 0 }
-                .map { it.groupValues[3] }
-
-            val joinedBase64 = sortedParts.joinToString("")
-
-            if (joinedBase64.isNotEmpty()) {
-                val reversedBase64 = joinedBase64.reversed()
-                val urls = decodeBase64ToUrls(reversedBase64, json)
-                if (urls != null && urls.isNotEmpty()) {
-                    return urls
-                }
-            }
-        }
-
-        val pushMatches = PUSH_VAR_REGEX.findAll(scriptData).toList()
-        if (pushMatches.isNotEmpty()) {
-            val joinedBase64 = pushMatches.joinToString("") { it.groupValues[1] }
-            if (joinedBase64.isNotEmpty()) {
-                return decodeBase64ToUrls(joinedBase64, json)
-            }
-        }
-
-        return null
-    }
-
-    private fun decodeBase64ToUrls(base64: String, json: Json): List<String>? {
         return try {
-            val decoded = String(Base64.decode(base64, Base64.DEFAULT))
-            val jsonArray = json.parseToJsonElement(decoded).jsonArray
-            val urls = jsonArray
-                .map { it.jsonPrimitive.content.trim() }
-                .filter { url -> isValidImageUrl(url) }
+            val decodedBytes = Base64.decode(joinedBase64, Base64.DEFAULT)
 
-            urls.ifEmpty { null }
-        } catch (e: Exception) {
+            val decrypted = buildString {
+                for (i in decodedBytes.indices) {
+                    append((decodedBytes[i].toInt() xor xorKey[i % xorKey.length].code).toChar())
+                }
+            }
+
+            json.parseToJsonElement(decrypted).jsonArray
+                .map { it.jsonPrimitive.content.trim() }
+                .filter { it.isNotBlank() && isValidImageUrl(it) }
+                .ifEmpty { null }
+        } catch (_: Exception) {
             null
         }
     }
 
     private fun isValidImageUrl(url: String): Boolean {
-        if (url.isBlank()) return false
-        return PLACEHOLDER_PATTERNS.none { placeholder ->
-            url.contains(placeholder, ignoreCase = true)
-        }
+        return PLACEHOLDER_PATTERNS.none { url.contains(it, ignoreCase = true) }
     }
 }
