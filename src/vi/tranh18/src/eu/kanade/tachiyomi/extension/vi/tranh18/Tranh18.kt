@@ -23,7 +23,7 @@ class Tranh18 : ParsedHttpSource() {
 
     override val name: String = "Tranh18"
 
-    override val baseUrl: String = "https://tranh18z.com"
+    override val baseUrl: String = "https://tranh18.com"
 
     override val supportsLatest: Boolean = true
 
