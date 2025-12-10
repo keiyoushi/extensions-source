@@ -9,7 +9,6 @@ apply from: "$rootDir/common.gradle"
 
 android {
     defaultConfig {
-        // [FIX] Use += to ADD these variables instead of overwriting the whole list
         manifestPlaceholders += [
             SOURCEHOST: "luvyaa.my.id",
             SOURCESCHEME: "https"
