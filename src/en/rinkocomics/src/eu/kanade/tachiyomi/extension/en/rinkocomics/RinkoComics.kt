@@ -87,8 +87,7 @@ class RinkoComics : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("div.comic-info-upper h1")?.text()
-            ?: document.selectFirst("h1.manga-title, h1.entry-title, h2.ac-title")?.text()
-            ?: "Unknown"
+            ?: document.selectFirst("h1.manga-title, h1.entry-title, h2.ac-title")!!.text()
 
         thumbnail_url = document.selectFirst("div.thumb img, div.ac-thumb img")?.attr("abs:src")
 
