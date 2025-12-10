@@ -8,7 +8,7 @@ import java.util.Locale
 
 class NetTruyenX : WPComics(
     "NetTruyenX (unoriginal)",
-    "https://nettruyenx.com",
+    "https://nettruyenx.net",
     "vi",
     dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault()),
     gmtOffset = null,

@@ -23,7 +23,7 @@ import java.util.TimeZone
 class DocTruyen3Q :
     WPComics(
         "DocTruyen3Q",
-        "https://doctruyen3qui17.com",
+        "https://doctruyen3qui19.com",
         "vi",
         dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.ROOT).apply {
             timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
@@ -80,9 +80,9 @@ class DocTruyen3Q :
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.title-manga")!!.text()
-        description = document.selectFirst("p.detail-summary")?.text()
+        description = document.select("p.detail-summary").joinToString { it.wholeText().trim() }
         status = document.selectFirst("li.status p.detail-info span")?.text().toStatus()
-        genre = document.select("li.category p.detail-info a")?.joinToString { it.text() }
+        genre = document.select("li.category p.detail-info a").joinToString { it.text() }
         thumbnail_url = imageOrNull(document.selectFirst("img.image-comic")!!)
     }
 
