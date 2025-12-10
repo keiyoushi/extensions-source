@@ -1,5 +1,5 @@
 ext {
-    extName = 'Luvyaa - Baca Komik Bahasa Indonesia'
+    extName = 'Luvyaa'
     extClass = '.Luvyaa'
     extVersionCode = 1
     isNsfw = true
