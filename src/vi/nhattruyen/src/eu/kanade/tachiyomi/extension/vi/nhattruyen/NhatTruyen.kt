@@ -11,6 +11,7 @@ import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -29,6 +30,19 @@ class NhatTruyen : WPComics(
      * NetTruyen/NhatTruyen redirect back to catalog page if searching query is not found.
      * That makes both sites always return un-relevant results when searching should return empty.
      */
+    override fun mangaDetailsParse(document: Document): SManga {
+        return SManga.create().apply {
+            document.select("article#item-detail").let { info ->
+                author = info.select("li.author p.col-xs-8").text()
+                status = info.select("li.status p.col-xs-8").text().toStatus()
+                genre = info.select("li.kind p.col-xs-8 a").joinToString { it.text() }
+                val otherName = info.select("h2.other-name").text()
+                description = info.select("div.detail-content div.shortened").flatMap { it.children() }.joinToString("\n\n") { it.wholeText().trim() } +
+                    if (otherName.isNotBlank()) "\n\n ${intl["OTHER_NAME"]}: $otherName" else ""
+                thumbnail_url = imageOrNull(info.select("div.col-image img").first()!!)
+            }
+        }
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val url = "$baseUrl/$searchPath".toHttpUrl().newBuilder()
