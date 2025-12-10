@@ -2,8 +2,8 @@ ext {
     extName = 'HentaiVN.plus'
     extClass = '.HentaiVNPlus'
     themePkg = 'madara'
-    baseUrl = 'https://hentaivn.party'
-    overrideVersionCode = 14
+    baseUrl = 'https://hentaivn.gold'
+    overrideVersionCode = 15
     isNsfw = true
 }
 
