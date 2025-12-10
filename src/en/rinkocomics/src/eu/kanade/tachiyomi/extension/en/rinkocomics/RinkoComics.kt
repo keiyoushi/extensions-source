@@ -43,7 +43,7 @@ class RinkoComics : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         val anchor = element.selectFirst("h2.ac-title a") ?: element.selectFirst("a.ac-thumb")!!
 
-        setUrlWithoutDomain(anchor.attr("href"))
+        setUrlWithoutDomain(anchor.absUrl("href"))
         title = anchor.text().trim()
         thumbnail_url = element.selectFirst("a.ac-thumb img")?.attr("abs:src")
         genre = element.select("div.ac-genres a").joinToString { it.text() }
