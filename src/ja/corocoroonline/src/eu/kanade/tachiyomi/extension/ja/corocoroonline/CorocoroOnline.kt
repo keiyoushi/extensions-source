@@ -42,8 +42,19 @@ class CorocoroOnline : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = parseRscRanking(response.body.string(), "総合")
-        return MangasPage(result, false)
+        val category = response.request.url.fragment ?: "総合"
+        val body = response.body.string()
+        val rankingLine = body.lines().firstOrNull { it.contains("\"rankingList\"") }
+        val jsonStart = rankingLine?.indexOf('[').takeIf { it != -1 }
+            ?: return MangasPage(emptyList(), false)
+        val jsonArray = rankingLine?.substring(jsonStart)?.parseAs<JsonArray>()
+        val container = jsonArray?.last().toString().parseAs<RscRankingContainer>()
+
+        val mangas = container.rankingList.firstOrNull { it.rankingTypeName == category }
+            ?.titles?.map { it.toSManga() }
+            ?: emptyList()
+
+        return MangasPage(mangas, false)
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -90,42 +101,26 @@ class CorocoroOnline : HttpSource() {
         val requestUrl = response.request.url
 
         return when {
-            requestUrl.pathSegments.contains("search") -> parseHtml(response)
-
-            requestUrl.pathSegments.contains("ranking") -> {
-                val category = response.request.url.fragment!!
-                val result = parseRscRanking(response.body.string(), category)
-                MangasPage(result, false)
+            requestUrl.pathSegments.contains("search") ||
+                requestUrl.pathSegments.contains("completed") ||
+                requestUrl.pathSegments.contains("one-shot") -> {
+                val document = response.asJsoup()
+                val mangas = document.select("div.grid > a[href^='/title/']").map {
+                    SManga.create().apply {
+                        setUrlWithoutDomain(it.absUrl("href"))
+                        title = it.selectFirst("p.text-black")?.text() ?: it.selectFirst("p")!!.text()
+                        thumbnail_url = it.selectFirst("img")?.absUrl("src")
+                    }
+                }
+                MangasPage(mangas, false)
             }
 
-            requestUrl.pathSegments.contains("completed") || requestUrl.pathSegments.contains("one-shot") -> parseHtml(response)
+            requestUrl.pathSegments.contains("ranking") -> popularMangaParse(response)
 
             requestUrl.pathSegments.contains("api") -> latestUpdatesParse(response)
+
             else -> MangasPage(emptyList(), false)
         }
-    }
-
-    private fun parseHtml(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select("div.grid > a[href^='/title/']").map {
-            SManga.create().apply {
-                setUrlWithoutDomain(it.absUrl("href"))
-                title = it.selectFirst("p")!!.text()
-                thumbnail_url = it.selectFirst("img")?.absUrl("src")
-            }
-        }
-        return MangasPage(mangas, false)
-    }
-
-    private fun parseRscRanking(body: String, category: String): List<SManga> {
-        val rankingLine = body.lines().firstOrNull { it.contains("\"rankingList\"") }
-        val jsonStart = rankingLine?.indexOf('[').takeIf { it != -1 } ?: return emptyList()
-        val jsonArray = rankingLine?.substring(jsonStart)?.parseAs<JsonArray>()
-        val container = jsonArray?.last().toString().parseAs<RscRankingContainer>()
-
-        return container.rankingList.firstOrNull { it.rankingTypeName == category }
-            ?.titles?.map { it.toSManga() }
-            ?: emptyList()
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
