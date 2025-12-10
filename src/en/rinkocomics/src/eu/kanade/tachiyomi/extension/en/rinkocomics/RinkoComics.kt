@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
 import okhttp3.Request
@@ -26,8 +27,8 @@ class RinkoComics : ParsedHttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
-    private val dateFormatFull = SimpleDateFormat("MMMM d, yyyy", Locale.US)
-    private val dateFormatShort = SimpleDateFormat("MMM d, yyyy", Locale.US)
+    // [FIX] Single pattern handles both "December" and "Dec"
+    private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
     // =========================================================================
     //  Popular (Used for listing AND Search)
@@ -64,7 +65,7 @@ class RinkoComics : ParsedHttpSource() {
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
 
     // =========================================================================
-    //  Search (Client-Side Filtering)
+    //  Search
     // =========================================================================
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
@@ -90,7 +91,8 @@ class RinkoComics : ParsedHttpSource() {
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("div.comic-info-upper h1")?.text()
-            ?: document.selectFirst("h1.manga-title, h1.entry-title, h2.ac-title")!!.text()
+            ?: document.selectFirst("h1.manga-title, h1.entry-title, h2.ac-title")?.text()
+            ?: "Unknown"
 
         thumbnail_url = document.selectFirst("div.thumb img, div.ac-thumb img")?.attr("abs:src")
 
@@ -121,11 +123,11 @@ class RinkoComics : ParsedHttpSource() {
             val chapters = mutableListOf<SChapter>()
             val visitedUrls = mutableSetOf<String>()
 
-            // 1. Get initial page to find the ID and first batch of chapters
+            // 1. Get initial page
             val request = chapterListRequest(manga)
             val response = client.newCall(request).execute()
-            val html = response.body.string()
-            val document = Jsoup.parse(html, response.request.url.toString())
+            // [FIX] Use util extension for cleaner code
+            val document = response.asJsoup()
 
             // 2. Parse visible chapters
             val visibleChapters = document.select(chapterListSelector())
@@ -138,10 +140,8 @@ class RinkoComics : ParsedHttpSource() {
             val loadMoreBtn = document.selectFirst("#loadMoreChaptersBtn")
             val comicId = loadMoreBtn?.attr("data-comic-id")
             
-            // Get offset, defaulting to 10
             var offset = loadMoreBtn?.attr("data-offset")?.toIntOrNull() ?: 10
 
-            // [CRITICAL] Headers that make WordPress accept the request
             val ajaxHeaders = headers.newBuilder()
                 .add("X-Requested-With", "XMLHttpRequest")
                 .add("Referer", request.url.toString())
@@ -156,20 +156,18 @@ class RinkoComics : ParsedHttpSource() {
                         .add("offset", offset.toString())
                         .build()
 
-                    // Request to admin-ajax.php
                     val ajaxRequest = POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, formBody)
                     
                     try {
                         val ajaxResponse = client.newCall(ajaxRequest).execute()
                         val ajaxHtml = ajaxResponse.body.string()
 
-                        // Stop if empty or explicitly says "no more"
                         if (ajaxHtml.isBlank() || ajaxHtml.contains("no more chapters", true)) {
                             break
                         }
 
-                        // Parse the response (it returns raw <li> elements)
-                        val ajaxDoc = Jsoup.parseBodyFragment(ajaxHtml)
+                        // [FIX] Added baseUrl to properly resolve relative links
+                        val ajaxDoc = Jsoup.parseBodyFragment(ajaxHtml, baseUrl)
                         val newChapters = ajaxDoc.select("li.chapter:not(.locked-chapter)")
                             .map { chapterFromElement(it) }
                             .filter { visitedUrls.add(it.url) }
@@ -189,7 +187,6 @@ class RinkoComics : ParsedHttpSource() {
         }
     }
 
-    // Exclude locked chapters from the selector
     override fun chapterListSelector() = "ul.chapters-list li.chapter:not(.locked-chapter)"
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
@@ -221,11 +218,10 @@ class RinkoComics : ParsedHttpSource() {
     //  Helpers
     // =========================================================================
 
-    private fun Response.asJsoup(): Document = Jsoup.parse(body.string(), request.url.toString())
+    // [FIX] Removed manual asJsoup helper in favor of import
 
     private fun parseDate(dateStr: String): Long {
-        return dateFormatFull.tryParse(dateStr)
-            ?: dateFormatShort.tryParse(dateStr)
-            ?: 0L
+        // [FIX] Simplified logic as single pattern handles both cases
+        return dateFormat.tryParse(dateStr) ?: 0L
     }
 }
