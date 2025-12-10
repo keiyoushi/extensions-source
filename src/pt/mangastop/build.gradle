@@ -3,7 +3,7 @@ ext {
     extClass = '.MangaStop'
     themePkg = 'mangathemesia'
     baseUrl = 'https://mangastop.net'
-    overrideVersionCode = 5
+    overrideVersionCode = 6
     isNsfw = false
 }
 
