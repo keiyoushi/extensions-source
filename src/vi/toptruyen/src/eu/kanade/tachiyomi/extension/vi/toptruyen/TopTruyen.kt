@@ -74,9 +74,9 @@ class TopTruyen :
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
         title = document.selectFirst("h1.title-manga")!!.text()
-        description = document.selectFirst("p.detail-summary")?.text()
+        description = document.select("p.detail-summary").joinToString { it.wholeText().trim() }
         status = document.selectFirst("li.status p.detail-info span")?.text().toStatus()
-        genre = document.select("li.category p.detail-info a")?.joinToString { it.text() }
+        genre = document.select("li.category p.detail-info a").joinToString { it.text() }
         thumbnail_url = imageOrNull(document.selectFirst("img.image-comic")!!)
     }
 
