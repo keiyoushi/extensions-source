@@ -194,7 +194,7 @@ class RinkoComics : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val anchor = element.selectFirst("a")!!
-        setUrlWithoutDomain(anchor.attr("href"))
+        setUrlWithoutDomain(anchor.absUrl("href"))
         
         name = element.selectFirst("span.chapter-number")?.text()?.trim() ?: anchor.text()
         
