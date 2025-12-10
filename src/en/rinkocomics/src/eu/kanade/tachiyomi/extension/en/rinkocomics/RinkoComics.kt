@@ -44,8 +44,8 @@ class RinkoComics : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element) = SManga.create().apply {
         val anchor = element.selectFirst("h2.ac-title a") ?: element.selectFirst("a.ac-thumb")!!
 
-        setUrlWithoutDomain(anchor.absUrl("href"))
-        title = anchor.text()
+        setUrlWithoutDomain(anchor.attr("href"))
+        title = anchor.text().trim()
         thumbnail_url = element.selectFirst("a.ac-thumb img")?.attr("abs:src")
         genre = element.select("div.ac-genres a").joinToString { it.text() }
     }
@@ -98,7 +98,7 @@ class RinkoComics : ParsedHttpSource() {
 
         genre = document.select("div.genres span.genre, div.ac-genres a").joinToString { it.text() }
 
-        description = document.selectFirst("div.comic-synopsis")?.text()
+        description = document.selectFirst("div.comic-synopsis")?.text()?.trim()
 
         author = document.selectFirst("div.comic-graph span")?.text()
             ?.replace("Unknown Author", "")
@@ -126,8 +126,8 @@ class RinkoComics : ParsedHttpSource() {
             // 1. Get initial page
             val request = chapterListRequest(manga)
             val response = client.newCall(request).execute()
-            val html = response.body.string()
-            val document = Jsoup.parse(html, response.request.url.toString())
+            // [FIX] Use util extension
+            val document = response.asJsoup()
 
             // 2. Parse visible chapters
             val visibleChapters = document.select(chapterListSelector())
@@ -191,7 +191,7 @@ class RinkoComics : ParsedHttpSource() {
 
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val anchor = element.selectFirst("a")!!
-        setUrlWithoutDomain(anchor.absUrl("href"))
+        setUrlWithoutDomain(anchor.attr("href"))
         
         name = element.selectFirst("span.chapter-number")?.text()?.trim() ?: anchor.text()
         
@@ -207,8 +207,8 @@ class RinkoComics : ParsedHttpSource() {
         val images = document.select("div.images-flow img.chapter-image")
 
         return images.mapIndexed { index, img ->
-            val url = (img.attr("abs:data-src")).trim()
-            Page(index, imageUrl = url)
+            val url = (img.attr("abs:data-src").ifBlank { img.attr("abs:src") }).trim()
+            Page(index, "", url)
         }
     }
 
@@ -217,8 +217,6 @@ class RinkoComics : ParsedHttpSource() {
     // =========================================================================
     //  Helpers
     // =========================================================================
-
-    // [FIX] Removed manual asJsoup helper in favor of import
 
     private fun parseDate(dateStr: String): Long {
         // [FIX] Simplified logic as single pattern handles both cases
