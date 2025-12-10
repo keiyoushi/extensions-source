@@ -1,345 +1,278 @@
 package eu.kanade.tachiyomi.extension.pt.manhastro
 
 import android.app.Application
-import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
-import android.util.Base64
-import android.util.Log
-import android.webkit.CookieManager
-import android.widget.Toast
-import androidx.preference.EditTextPreference
-import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
-import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
-import eu.kanade.tachiyomi.source.ConfigurableSource
+import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
-import eu.kanade.tachiyomi.util.asJsoup
-import keiyoushi.utils.getPreferences
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import okhttp3.Cache
 import okhttp3.CacheControl
-import okhttp3.FormBody
-import okhttp3.Interceptor
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
-import org.jsoup.nodes.Document
+import okhttp3.brotli.BrotliInterceptor
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import uy.kohesive.injekt.injectLazy
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
-class Manhastro :
-    Madara(
-        "Manhastro",
-        "https://manhastro.net",
-        "pt-BR",
-        SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")),
-    ),
-    ConfigurableSource {
+class Manhastro : HttpSource() {
 
-    override val mangaSubString = "lermanga"
+    override val name = "Manhastro"
 
-    private val preferences: SharedPreferences = getPreferences()
+    override val baseUrl = "https://manhastro.net"
 
-    private val application: Application by lazy { Injekt.get<Application>() }
+    private val apiUrl = "https://api2.manhastro.net"
 
-    private val cookieManager by lazy { CookieManager.getInstance() }
+    override val lang = "pt-BR"
 
-    private var showWarning: Boolean = true
+    override val supportsLatest = true
 
-    private val authCookie: Cookie by lazy {
-        cookieManager.removeAllCookies(null)
-        cookieManager.flush()
+    private val json: Json by injectLazy()
 
-        val cookieJson = preferences.getString(COOKIE_STORAGE_PREF, "") as String
-        if (cookieJson.isBlank()) {
-            return@lazy doAuth().also(::upsetCookie)
+    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+        .rateLimit(2)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .apply {
+            val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
+            if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
         }
-
-        val cookieSaved = cookieJson.parseAs<Cookie>()
-
-        return@lazy cookieSaved.takeIf { it.isExpired().not() }
-            ?: doAuth().also(::upsetCookie)
-    }
-
-    // Prevent multiple login when rateLimit is greater than 1
-    private var initializedCookie = AtomicBoolean(false)
-    private val cookieInterceptor: Interceptor by lazy {
-        return@lazy when {
-            authCookie.isEmpty() -> bypassInterceptor
-            else -> {
-                if (initializedCookie.compareAndSet(false, true).not()) {
-                    return@lazy bypassInterceptor
-                }
-                CookieInterceptor(baseUrl.substringAfterLast("/"), listOf(authCookie.value))
-            }
-        }
-    }
-
-    override val client: OkHttpClient by lazy {
-        super.client.newBuilder()
-            .rateLimit(1)
-            .readTimeout(1, TimeUnit.MINUTES)
-            .connectTimeout(1, TimeUnit.MINUTES)
-            .addInterceptor { chain ->
-                if (credentials.isEmpty && showWarning) {
-                    showWarning = false
-                    showToast("Configure suas credências em Extensões > $name > Configuração")
-                }
-                return@addInterceptor chain.proceed(chain.request())
-            }
-            .addNetworkInterceptorIf(credentials.isNotEmpty, cookieInterceptor)
-            .addInterceptor { chain ->
-                val response = chain.proceed(chain.request())
-                val mime = response.headers["Content-Type"]
-                if (response.isSuccessful) {
-                    if (mime != "application/octet-stream") {
-                        return@addInterceptor response
-                    }
-                    // Fix image content type
-                    val type = IMG_CONTENT_TYPE.toMediaType()
-                    val body = response.body.bytes().toResponseBody(type)
-                    return@addInterceptor response.newBuilder().body(body)
-                        .header("Content-Type", IMG_CONTENT_TYPE).build()
-                }
-                response
-            }
-            .build()
-    }
-
-    override val useNewChapterEndpoint = true
-
-    override val useLoadMoreRequest = LoadMoreStrategy.Always
-
-    override val mangaDetailsSelectorTitle = "div.summary_content h2"
-
-    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Status) + div.summary-content"
-
-    override fun popularMangaRequest(page: Int): Request {
-        resetToastMessage(page)
-        return super.popularMangaRequest(page)
-    }
-
-    override fun latestUpdatesRequest(page: Int): Request {
-        resetToastMessage(page)
-        return super.latestUpdatesRequest(page)
-    }
-
-    override fun pageListParse(document: Document): List<Page> {
-        return document.selectFirst("script:containsData(imageLinks)")?.data()
-            ?.let { imageLinksPattern.find(it)?.groups?.get(1)?.value }
-            ?.let { json.decodeFromString<List<String>>(it) }
-            ?.mapIndexed { i, imageUrlEncoded ->
-                val imageUrl = String(Base64.decode(imageUrlEncoded, Base64.DEFAULT))
-                Page(i, document.location(), imageUrl)
-            } ?: emptyList()
-    }
-
-    private val imageLinksPattern = """var\s+?imageLinks\s*?=\s*?(\[.*]);""".toRegex()
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        val warning = "⚠️ Os dados inseridos nessa seção serão usados somente para realizar o login na fonte"
-        val message = "Insira %s para prosseguir com o acesso aos recursos disponíveis na fonte"
-
-        val usernamePref = EditTextPreference(screen.context).apply {
-            title = "📧 Email"
-            key = USERNAME_PREF
-            summary = "Email de acesso"
-            dialogMessage = buildString {
-                appendLine(message.format("seu email"))
-                append("\n$warning")
-            }
-            setDefaultValue("")
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
-                true
-            }
-        }
-
-        val passwordPref = EditTextPreference(screen.context).apply {
-            title = "🔑 Senha"
-            key = PASSWORD_PREF
-            summary = "Senha de acesso"
-            dialogMessage = buildString {
-                appendLine(message.format("sua senha"))
-                append("\n$warning")
-            }
-            setDefaultValue("")
-
-            setOnPreferenceChangeListener { _, _ ->
-                Toast.makeText(screen.context, RESTART_APP_MESSAGE, Toast.LENGTH_LONG).show()
-                true
-            }
-        }
-
-        screen.addPreference(usernamePref)
-        screen.addPreference(passwordPref)
-    }
-
-    // ============================ Auth ====================================
-
-    private val credentials: Credential get() = Credential(
-        email = preferences.getString(USERNAME_PREF, "") as String,
-        password = preferences.getString(PASSWORD_PREF, "") as String,
-    )
-
-    private val defaultClient = network.cloudflareClient.newBuilder()
-        .rateLimit(1)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .connectTimeout(1, TimeUnit.MINUTES)
         .build()
 
-    private var _cache: Attempt? = null
-    val attempt: Attempt
-        get() {
-            if (_cache != null) {
-                return _cache!!
-            }
+    private val dataClient = client.newBuilder()
+        .cache(
+            Cache(
+                directory = File(Injekt.get<Application>().externalCacheDir, "network_cache_${name.lowercase()}"),
+                maxSize = 10L * 1024 * 1024, // 10 MiB
+            ),
+        )
+        .addNetworkInterceptor { chain ->
+            chain.proceed(chain.request()).newBuilder()
+                .removeHeader("Cache-Control")
+                .removeHeader("Expires")
+                .removeHeader("Pragma")
+                .build()
+        }
+        .build()
 
-            val stored = preferences.getString(COOKIE_ATTEMPT_REF, "")
-            if (stored.isNullOrBlank()) {
-                return Attempt().also {
-                    _cache = it
-                    preferences
-                        .edit()
-                        .putString(COOKIE_ATTEMPT_REF, json.encodeToString(it))
-                        .apply()
+    // ============================== Popular ==============================
+
+    override fun popularMangaRequest(page: Int) = GET("$apiUrl/rank/diario", headers)
+
+    override fun popularMangaParse(response: Response): MangasPage {
+        val result = response.parseAs<ApiResponse<List<RankingItemDto>>>(transform = ::cleanJsonResponse)
+        val mangaIds = result.data.map { it.mangaId }
+        val mangaMap = fetchMangasByIds(mangaIds)
+
+        val mangas = result.data.mapNotNull { mangaMap[it.mangaId]?.toSManga() }
+
+        return MangasPage(mangas, false)
+    }
+
+    // ============================== Latest ==============================
+
+    override fun latestUpdatesRequest(page: Int) = GET("$apiUrl/lancamentos", headers)
+
+    override fun latestUpdatesParse(response: Response): MangasPage {
+        val result = response.parseAs<ApiResponse<List<LatestItemDto>>>(transform = ::cleanJsonResponse)
+        val mangaIds = result.data.map { it.mangaId }.distinct()
+        val mangaMap = fetchMangasByIds(mangaIds)
+
+        val mangas = mangaIds.mapNotNull { mangaMap[it]?.toSManga() }
+
+        return MangasPage(mangas, false)
+    }
+
+    // ============================== Search ==============================
+
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) =
+        throw UnsupportedOperationException()
+
+    override fun searchMangaParse(response: Response) =
+        throw UnsupportedOperationException()
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList) =
+        rx.Observable.fromCallable {
+            var mangas = fetchAllMangas()
+
+            if (query.isNotBlank()) {
+                val q = query.lowercase().normalize()
+                mangas = mangas.filter { manga ->
+                    val titulo = manga.titulo.lowercase().normalize()
+                    val tituloBrasil = manga.tituloBrasil?.lowercase()?.normalize() ?: ""
+                    titulo.contains(q) || tituloBrasil.contains(q)
                 }
             }
-            return stored.parseAs<Attempt>().also { _cache = it }
-        }
 
-    private fun Attempt.save() {
-        preferences
-            .edit()
-            .putString(COOKIE_ATTEMPT_REF, json.encodeToString(this))
-            .apply()
-    }
+            val typeFilter = filters.filterIsInstance<TypeFilter>().firstOrNull()
+            val genreFilter = filters.filterIsInstance<GenreFilter>().firstOrNull()
+            val sortFilter = filters.filterIsInstance<SortFilter>().firstOrNull()
 
-    private fun doAuth(): Cookie {
-        if (credentials.isEmpty) {
-            return Cookie.empty()
-        }
-
-        val attemptCount = attempt.takeIfUnlocked() ?: return Cookie.empty().also {
-            showToast("Login permitido após ${Attempt.MIN_PERIOD}h de ${attempt.updateAt()}")
-        }
-
-        Log.i(Manhastro::class.simpleName, "trying: ${attemptCount}x")
-
-        attempt.save()
-
-        val document = defaultClient.newCall(GET(baseUrl, headers)).execute().asJsoup()
-        val nonce = document.selectFirst("script#wp-manga-login-ajax-js-extra")
-            ?.data()
-            ?.let {
-                NONCE_LOGIN_REGEX.find(it)?.groups?.get(1)?.value
+            val selectedTypes = typeFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
+            if (selectedTypes.isNotEmpty()) {
+                mangas = mangas.filter { manga ->
+                    val mangaGenres = parseGenres(manga.generos)
+                    selectedTypes.any { type ->
+                        mangaGenres.any { it.equals(type, ignoreCase = true) }
+                    }
+                }
             }
-            ?: return Cookie.empty()
 
-        val formHeaders = headers.newBuilder()
-            .set("Accept", "*/*")
-            .set("Accept-Encoding", "gzip, deflate, br")
-            .set("Accept-Language", "pt-BR,en-US;q=0.7,en;q=0.3")
-            .set("Connection", "keep-alive")
-            .set("Origin", baseUrl)
-            .set("Referer", "$baseUrl/")
-            .set("Sec-Fetch-Site", "same-origin")
-            .set("Sec-Fetch-Mode", "cors")
-            .set("Sec-Fetch-Dest", "empty")
-            .set("Priority", "u=0")
-            .set("TE", "trailers")
-            .set("X-Requested-With", "XMLHttpRequest")
-            .build()
+            val selectedGenres = genreFilter?.state?.filter { it.state }?.map { it.value } ?: emptyList()
+            if (selectedGenres.isNotEmpty()) {
+                mangas = mangas.filter { manga ->
+                    val mangaGenres = parseGenres(manga.generos)
+                    selectedGenres.all { genre ->
+                        mangaGenres.any { it.equals(genre, ignoreCase = true) }
+                    }
+                }
+            }
 
-        val form = FormBody.Builder()
-            .add("action", "wp_manga_signin")
-            .add("login", credentials.email)
-            .addEncoded("pass", credentials.password)
-            .add("rememberme", "forever")
-            .add("nonce", nonce)
-            .build()
+            val sortOption = sortFilter?.selected ?: "popular"
+            mangas = when (sortOption) {
+                "popular" -> mangas.sortedByDescending { it.popularity }
+                "recent" -> mangas.sortedByDescending { it.mangaId }
+                "alphabetical" -> mangas.sortedBy { it.displayTitle.lowercase() }
+                "chapters" -> mangas.sortedByDescending { it.qntCapitulo ?: 0 }
+                else -> mangas
+            }
 
-        val response = defaultClient.newCall(
-            POST(
-                "$baseUrl/wp-admin/admin-ajax.php",
-                formHeaders,
-                form,
-                CacheControl.FORCE_NETWORK,
-            ),
-        ).execute()
-        val message = """
-            Falha ao acessar recurso: Usuário ou senha incorreto.
-            Altere suas credências em Extensões > $name > Configuração.
-        """.trimIndent()
+            MangasPage(mangas.map { it.toSManga() }, false)
+        }!!
 
-        response.use {
-            if (it.isSuccessful.not()) {
-                showToast(message)
+    private fun parseGenres(generos: String?): List<String> {
+        if (generos.isNullOrBlank()) return emptyList()
+
+        return try {
+            json.decodeFromString<List<String>>(generos)
+        } catch (_: Exception) {
+            if (generos.contains(",")) {
+                generos.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            } else {
+                listOf(generos.trim()).filter { it.isNotEmpty() }
             }
         }
+    }
 
-        return response.headers("Set-Cookie")
-            .firstOrNull { it.contains("wordpress_logged_in_", ignoreCase = true) }
-            ?.let(::Cookie)
-            ?: Cookie.empty().also {
-                showToast(message)
+    private fun String.normalize(): String {
+        return java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
+            .replace(Regex("[\\p{InCombiningDiacriticalMarks}]"), "")
+    }
+
+    override fun getFilterList() = getFilters()
+
+    // ============================== Details ==============================
+
+    override fun mangaDetailsRequest(manga: SManga) =
+        throw UnsupportedOperationException()
+
+    override fun mangaDetailsParse(response: Response) =
+        throw UnsupportedOperationException()
+
+    override fun fetchMangaDetails(manga: SManga) = rx.Observable.fromCallable {
+        val mangaId = manga.url.substringAfterLast("/").toInt()
+        val allMangas = fetchAllMangas()
+        allMangas.find { it.mangaId == mangaId }?.toSManga()
+            ?: throw Exception("Manga not found")
+    }!!
+
+    // ============================== Chapters ==============================
+
+    override fun chapterListRequest(manga: SManga) =
+        GET("$apiUrl/dados/${manga.url.substringAfterLast("/")}", headers)
+
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val result = response.parseAs<ApiResponse<List<ChapterDto>>>(transform = ::cleanJsonResponse)
+
+        return result.data.map { chapter ->
+            SChapter.create().apply {
+                url = "/capitulo/${chapter.capituloId}"
+                name = chapter.capituloNome
+                chapter_number = extractChapterNumber(chapter.capituloNome)
+                date_upload = DATE_FORMAT.tryParse(chapter.capituloData)
             }
+        }.sortedByDescending { it.chapter_number }
     }
 
-    // ============================ Utilities ====================================
+    private fun extractChapterNumber(name: String): Float {
+        val regex = Regex("""(\d+(?:\.\d+)?)""")
+        val match = regex.find(name)
+        return match?.value?.toFloatOrNull() ?: -1f
+    }
 
-    private fun OkHttpClient.Builder.addNetworkInterceptorIf(
-        condition: Boolean,
-        interceptor: Interceptor,
-    ): OkHttpClient.Builder {
-        if (condition) {
-            addNetworkInterceptor(interceptor)
+    // ============================== Pages ==============================
+
+    override fun pageListRequest(chapter: SChapter) =
+        GET("$apiUrl/paginas/${chapter.url.substringAfterLast("/")}", headers)
+
+    override fun pageListParse(response: Response): List<Page> {
+        val result = response.parseAs<PagesResponse>(transform = ::cleanJsonResponse)
+        val chapter = result.data.chapter ?: return emptyList()
+
+        return chapter.data.mapIndexed { i, filename ->
+            Page(i, imageUrl = "${chapter.baseUrl}/${chapter.hash}/$filename")
         }
-        return this
     }
 
-    private val handler by lazy { Handler(Looper.getMainLooper()) }
+    override fun imageUrlParse(response: Response) = throw UnsupportedOperationException()
 
-    private fun showToast(message: String) {
-        handler.post {
-            Toast.makeText(application, message, Toast.LENGTH_LONG).show()
-        }
+    // ============================== URLs ==============================
+
+    override fun getMangaUrl(manga: SManga): String {
+        val mangaId = manga.url.substringAfterLast("/")
+        return "$baseUrl/manga/$mangaId"
     }
 
-    private fun resetToastMessage(page: Int) {
-        if (page != 1) return
-        showWarning = true
+    override fun getChapterUrl(chapter: SChapter): String {
+        val chapterId = chapter.url.substringAfterLast("/")
+        return "$baseUrl/capitulo/$chapterId"
     }
 
-    val bypassInterceptor = object : Interceptor {
-        override fun intercept(chain: Interceptor.Chain): Response = chain.proceed(chain.request())
+    // ============================== Helpers ==============================
+
+    private fun cleanJsonResponse(body: String): String =
+        body.removePrefix("\uFEFF")
+            .removePrefix(")]}'")
+            .removePrefix(",")
+            .removePrefix("_")
+            .trim()
+
+    private fun fetchAllMangas(): List<MangaDto> {
+        val request = GET(
+            "$apiUrl/dados",
+            headers,
+            CacheControl.Builder().maxStale(30, TimeUnit.MINUTES).build(),
+        )
+        val response = dataClient.newCall(request).execute()
+        return response.parseAs<ApiResponse<List<MangaDto>>>(transform = ::cleanJsonResponse).data
     }
 
-    private fun upsetCookie(cookie: Cookie) {
-        preferences.edit()
-            .putString(COOKIE_STORAGE_PREF, json.encodeToString(cookie))
-            .apply()
+    private fun fetchMangasByIds(ids: List<Int>): Map<Int, MangaDto> {
+        val allMangas = fetchAllMangas()
+        return allMangas.filter { it.mangaId in ids }.associateBy { it.mangaId }
+    }
+
+    private fun MangaDto.toSManga() = SManga.create().apply {
+        url = "/manga/$mangaId"
+        title = displayTitle
+        description = displayDescription
+        genre = parseGenres(generos).joinToString()
+        thumbnail_url = thumbnailUrl
+        status = SManga.UNKNOWN
     }
 
     companion object {
-        private const val RESTART_APP_MESSAGE = "Reinicie o aplicativo para aplicar as alterações"
-        private const val USERNAME_PREF = "MANHASTRO_USERNAME"
-        private const val PASSWORD_PREF = "MANHASTRO_PASSWORD"
-        private const val COOKIE_STORAGE_PREF = "MANHASTRO_COOKIE_STORAGE"
-        private const val COOKIE_ATTEMPT_REF = "MANHASTRO_COOKIE_ATTEMPT_REF"
-        private const val IMG_CONTENT_TYPE = "image/jpeg"
-        private val NONCE_LOGIN_REGEX = """"nonce":"([^"]+)""".toRegex()
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
     }
 }
