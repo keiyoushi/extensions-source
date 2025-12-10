@@ -6,3 +6,7 @@ ext {
 }
 
 apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib-multisrc:mangathemesia'))
+}
