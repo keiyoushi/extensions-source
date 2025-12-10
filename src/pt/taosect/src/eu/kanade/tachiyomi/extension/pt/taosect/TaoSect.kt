@@ -150,10 +150,6 @@ class TaoSect : HttpSource() {
         return extractMangaDetails(response).let { manga ->
             manga.chapters
                 ?.map { it.toSChapter(DATE_FORMAT) }
-                ?.sortedWith(
-                    compareBy<SChapter> { it.chapter_number }
-                        .thenByDescending { it.date_upload },
-                )
                 ?: emptyList()
         }
     }
@@ -278,7 +274,10 @@ class TaoSect : HttpSource() {
                     ?.replace("(", "")
                     ?.replace(")", ""),
             )
-        }
+        }.sortedWith(
+            compareByDescending<ChapterDto> { it.chapterNumber }
+                .thenByDescending { it.createdAt },
+        )
 
         return MangaDto(
             title = titleElement.text().trim(),

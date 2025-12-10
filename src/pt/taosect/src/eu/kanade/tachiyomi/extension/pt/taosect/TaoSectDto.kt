@@ -57,12 +57,12 @@ internal data class ChapterDto(
     val createdAt: String? = null,
     val pages: List<PageDto>? = null,
 ) {
-    fun toSChapter(dateFormat: SimpleDateFormat): SChapter {
-        val chapterNumber = CHAPTER_REGEX.find(title)
-            ?.groupValues
-            ?.get(1)
-            ?.toFloatOrNull()
+    val chapterNumber = CHAPTER_REGEX.find(title)
+        ?.groupValues
+        ?.get(1)
+        ?.toFloatOrNull()
 
+    fun toSChapter(dateFormat: SimpleDateFormat): SChapter {
         return SChapter.create().apply {
             this.url = this@ChapterDto.url
             name = this@ChapterDto.title
