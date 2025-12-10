@@ -142,7 +142,7 @@ class Kairostoons : ParsedHttpSource() {
 
                 val pageChapters = document.select(chapterListSelector())
                     .map { chapterFromElement(it) }
-                    .filter { visitedUrls.add(it.url) } 
+                    .filter { visitedUrls.add(it.url)  } 
 
                 if (pageChapters.isEmpty()) break
 
