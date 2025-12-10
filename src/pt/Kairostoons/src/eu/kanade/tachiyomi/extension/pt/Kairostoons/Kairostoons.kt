@@ -100,7 +100,7 @@ class Kairostoons : ParsedHttpSource() {
     // =========================================================================
 
     override fun mangaDetailsParse(document: Document) = SManga.create().apply {
-        title = document.selectFirst("h1.manga-title, h1.entry-title")?.text() ?: "Unknown"
+        title = document.selectFirst("h1.manga-title, h1.entry-title")!!.text()
         thumbnail_url = document.selectFirst("div.thumb img")?.attr("abs:src")
 
         description = document.selectFirst("div.manga-description, div.entry-content")?.text()
