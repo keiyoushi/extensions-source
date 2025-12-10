@@ -45,6 +45,7 @@ class MangaStop :
             preferences.getPrefUAType(),
             preferences.getPrefCustomUA(),
         )
+        .addInterceptor(ClientHintsInterceptor())
         .rateLimit(2)
         .build()
 
@@ -53,7 +54,8 @@ class MangaStop :
         .add("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
         .add("Sec-Fetch-Dest", "document")
         .add("Sec-Fetch-Mode", "navigate")
-        .add("Sec-Fetch-Site", "same-origin")
+        .add("Sec-Fetch-Site", "none")
+        .add("Sec-Fetch-User", "?1")
         .add("Upgrade-Insecure-Requests", "1")
 
     override fun pageListParse(document: Document): List<Page> {
