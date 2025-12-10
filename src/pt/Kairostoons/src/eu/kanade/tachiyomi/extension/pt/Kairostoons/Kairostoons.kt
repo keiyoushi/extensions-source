@@ -21,7 +21,7 @@ class Kairostoons : ParsedHttpSource() {
 
     override val name = "Kairostoons"
     override val baseUrl = "https://kairostoons.net"
-    override val lang = "pt"
+    override val lang = "pt-BR"
     override val supportsLatest = true
 
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
