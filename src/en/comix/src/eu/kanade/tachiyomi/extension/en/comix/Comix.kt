@@ -257,8 +257,8 @@ class Comix : HttpSource(), ConfigurableSource {
             throw Exception("No images found for chapter ${result.chapterId}")
         }
 
-        return result.images.mapIndexed { index, url ->
-            Page(index, imageUrl = url)
+        return result.images.mapIndexed { index, img ->
+            Page(index, imageUrl = img.url)
         }
     }
 
