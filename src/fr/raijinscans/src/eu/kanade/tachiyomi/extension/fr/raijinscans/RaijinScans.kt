@@ -192,10 +192,9 @@ class RaijinScans : HttpSource() {
     // ========================== Page List =============================
     override fun pageListParse(response: Response): List<Page> {
         return response.asJsoup().select("div.protected-image-data").mapIndexed { index, element ->
-            val encodedUrl = element.attr("data-v").reversed()
-            val xorKey = 93
-            val xored = String(Base64.decode(encodedUrl, Base64.DEFAULT))
-            val decoded = xored.map { (it.code xor xorKey).toChar() }.joinToString("")
+            val encodedUrl = element.attr("data-m").reversed()
+            val crypted = Base64.decode(encodedUrl, Base64.DEFAULT)
+            val decoded = crypted.map { ((it - 7 + 256) and 255 xor 173).toChar() }.joinToString("")
             val imageUrl = String(Base64.decode(decoded, Base64.DEFAULT))
             Page(index, imageUrl = imageUrl)
         }
