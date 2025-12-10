@@ -1,60 +1,107 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
 import android.util.Base64
+import eu.kanade.tachiyomi.source.model.Page
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import java.util.PriorityQueue
 
-object MangaLivreImageExtractor {
+class MangaLivreImageExtractor(private val json: Json) {
 
-    private val PLACEHOLDER_PATTERNS = listOf("hi.png", "placeholder", "loading")
-    private val XOR_DATA_REGEX = Regex("""_[a-f0-9]+\[idx\+\+\]\s*=\s*['"]([A-Za-z0-9+/=]+)['"];""")
-    private val XOR_KEY_REGEX = Regex("""var\s+_[a-f0-9]+\s*=\s*["']([a-f0-9]+)["'];""")
+    private val validDomains = listOf("mangalivre", "cdn", "r2d2storage", "aws", "amazon", "content")
 
-    fun extractImageUrls(document: Document, json: Json): List<String>? {
-        for (script in document.select("script:not([src])")) {
-            val data = script.data()
-            if (data.length < 100) continue
+    fun extractImageUrls(document: Document): List<Page> {
+        return findImagesInDom(document)
+            ?: throw Exception("Failed to load images. Please open in WebView.")
+    }
 
-            if (data.contains("idx++") && data.contains("var _x = [")) {
-                extractFromXorEncryption(data, json)?.let { return it }
+    private fun findImagesInDom(document: Document): List<Page>? {
+        val minHeap = PriorityQueue<Pair<Element, String>>(5) { a, b ->
+            a.second.length.compareTo(b.second.length)
+        }
+
+        for (element in document.allElements) {
+            if (element.attributesSize() == 0) continue
+
+            for (attr in element.attributes()) {
+                val value = attr.value
+
+                if (minHeap.size < 5) {
+                    minHeap.add(element to value)
+                } else if (value.length > minHeap.peek().second.length) {
+                    minHeap.poll()
+                    minHeap.add(element to value)
+                }
             }
         }
+
+        while (minHeap.isNotEmpty()) {
+            val (element, payload) = minHeap.poll()
+
+            val keyCandidates = element.attributes().asList()
+                .filter { it.value != payload }
+                .map { it.value }
+                .plus("")
+
+            for (key in keyCandidates) {
+                if (key.length > 100) continue
+
+                val result = extractFromXorEncryption(payload, key)
+                if (result != null) {
+                    return result
+                }
+            }
+        }
+
         return null
     }
 
-    private fun extractFromXorEncryption(scriptData: String, json: Json): List<String>? {
-        val dataMatches = XOR_DATA_REGEX.findAll(scriptData).toList()
-        if (dataMatches.isEmpty()) return null
-
-        val joinedBase64 = dataMatches.joinToString("") { it.groupValues[1] }
-        if (joinedBase64.isEmpty()) return null
-
-        val xorKey = XOR_KEY_REGEX.findAll(scriptData)
-            .map { it.groupValues[1] }
-            .find { it.length == 8 }
-            ?: return null
-
+    private fun extractFromXorEncryption(encryptedData: String, key: String): List<Page>? {
         return try {
-            val decodedBytes = Base64.decode(joinedBase64, Base64.DEFAULT)
+            val bytes = Base64.decode(encryptedData, Base64.DEFAULT)
 
-            val decrypted = buildString {
-                for (i in decodedBytes.indices) {
-                    append((decodedBytes[i].toInt() xor xorKey[i % xorKey.length].code).toChar())
-                }
+            val decryptedString = if (key.isNotEmpty()) {
+                bytes.xorWith(key)
+            } else {
+                String(bytes)
             }
 
-            json.parseToJsonElement(decrypted).jsonArray
-                .map { it.jsonPrimitive.content.trim() }
-                .filter { it.isNotBlank() && isValidImageUrl(it) }
-                .ifEmpty { null }
-        } catch (_: Exception) {
+            parseJson(decryptedString)
+        } catch (e: Exception) {
             null
         }
     }
 
+    private fun ByteArray.xorWith(key: String): String {
+        val keyBytes = key.toByteArray()
+        val keyLen = keyBytes.size
+        val output = CharArray(size)
+
+        for (i in indices) {
+            val b = this[i].toInt() and 0xFF
+            val k = keyBytes[i % keyLen].toInt() and 0xFF
+            output[i] = (b xor k).toChar()
+        }
+        return String(output)
+    }
+
+    private fun parseJson(text: String): List<Page>? {
+        if (!text.trim().startsWith("[")) return null
+
+        return runCatching {
+            json.decodeFromString<List<String>>(text)
+                .asSequence()
+                .filter { isValidImageUrl(it) }
+                .mapIndexed { i, url -> Page(i, imageUrl = url.trim()) }
+                .toList()
+                .takeIf { it.isNotEmpty() }
+        }.getOrNull()
+    }
+
     private fun isValidImageUrl(url: String): Boolean {
-        return PLACEHOLDER_PATTERNS.none { url.contains(it, ignoreCase = true) }
+        return url.contains("http", ignoreCase = true) &&
+            validDomains.any { domain -> url.contains(domain, ignoreCase = true) }
     }
 }
