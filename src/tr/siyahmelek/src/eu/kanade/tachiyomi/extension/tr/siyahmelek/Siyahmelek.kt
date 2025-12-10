@@ -5,8 +5,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class Siyahmelek : Madara(
-    "Gri Melek",
-    "https://siyahmelek.org",
+    "Siyah Melek",
+    "https://siyahmelek.pro",
     "tr",
     SimpleDateFormat("dd MMM yyyy", Locale("tr")),
 ) {
