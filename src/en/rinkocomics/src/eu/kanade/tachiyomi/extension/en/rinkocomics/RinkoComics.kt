@@ -96,7 +96,7 @@ class RinkoComics : ParsedHttpSource() {
 
         genre = document.select("div.genres span.genre, div.ac-genres a").joinToString { it.text() }
 
-        description = document.selectFirst("div.comic-synopsis")?.text()?.trim()
+        description = document.selectFirst("div.comic-synopsis")?.text()
 
         author = document.selectFirst("div.comic-graph span")?.text()
             ?.replace("Unknown Author", "")
