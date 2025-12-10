@@ -27,7 +27,6 @@ class RinkoComics : ParsedHttpSource() {
     override val lang = "en"
     override val supportsLatest = true
 
-    // [FIX] Single pattern handles both "December" and "Dec"
     private val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
 
     // =========================================================================
@@ -99,6 +98,8 @@ class RinkoComics : ParsedHttpSource() {
         genre = document.select("div.genres span.genre, div.ac-genres a").joinToString { it.text() }
 
         description = document.selectFirst("div.comic-synopsis")?.text()
+
+        // [FIX] Removed .trim() per review request
         author = document.selectFirst("div.comic-graph span")?.text()
             ?.replace("Unknown Author", "")
 
@@ -124,7 +125,7 @@ class RinkoComics : ParsedHttpSource() {
             // 1. Get initial page
             val request = chapterListRequest(manga)
             val response = client.newCall(request).execute()
-            // [FIX] Use util extension
+            // [FIX] Using library extension asJsoup()
             val document = response.asJsoup()
 
             // 2. Parse visible chapters
@@ -137,7 +138,7 @@ class RinkoComics : ParsedHttpSource() {
             // 3. Handle "Load More" via AJAX
             val loadMoreBtn = document.selectFirst("#loadMoreChaptersBtn")
             val comicId = loadMoreBtn?.attr("data-comic-id")
-            
+
             var offset = loadMoreBtn?.attr("data-offset")?.toIntOrNull() ?: 10
 
             val ajaxHeaders = headers.newBuilder()
@@ -155,7 +156,7 @@ class RinkoComics : ParsedHttpSource() {
                         .build()
 
                     val ajaxRequest = POST("$baseUrl/wp-admin/admin-ajax.php", ajaxHeaders, formBody)
-                    
+
                     try {
                         val ajaxResponse = client.newCall(ajaxRequest).execute()
                         val ajaxHtml = ajaxResponse.body.string()
@@ -164,17 +165,18 @@ class RinkoComics : ParsedHttpSource() {
                             break
                         }
 
-                        // [FIX] Added baseUrl to properly resolve relative links
+                        // [FIX] baseUrl included to resolve relative links
                         val ajaxDoc = Jsoup.parseBodyFragment(ajaxHtml, baseUrl)
                         val newChapters = ajaxDoc.select("li.chapter:not(.locked-chapter)")
                             .map { chapterFromElement(it) }
                             .filter { visitedUrls.add(it.url) }
 
-                        if (newChapters.isEmpty()) break
+                        if (newChapters.isEmpty()) {
+                            break
+                        }
 
                         chapters.addAll(newChapters)
                         offset += 10
-
                     } catch (e: Exception) {
                         break
                     }
@@ -190,9 +192,9 @@ class RinkoComics : ParsedHttpSource() {
     override fun chapterFromElement(element: Element) = SChapter.create().apply {
         val anchor = element.selectFirst("a")!!
         setUrlWithoutDomain(anchor.absUrl("href"))
-                
+
         name = element.selectFirst("span.chapter-number")?.text()?.trim() ?: anchor.text()
-        
+
         val dateText = element.selectFirst("span.chapter-date")?.text()?.trim() ?: ""
         date_upload = parseDate(dateText)
     }
@@ -217,7 +219,6 @@ class RinkoComics : ParsedHttpSource() {
     // =========================================================================
 
     private fun parseDate(dateStr: String): Long {
-        // [FIX] Simplified logic as single pattern handles both cases
         return dateFormat.tryParse(dateStr) ?: 0L
     }
 }
