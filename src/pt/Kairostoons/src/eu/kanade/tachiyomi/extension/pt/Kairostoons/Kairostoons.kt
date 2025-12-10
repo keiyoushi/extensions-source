@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.pt.Kairostoons
+package eu.kanade.tachiyomi.extension.pt.kairostoons
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -27,7 +27,7 @@ class Kairostoons : ParsedHttpSource() {
     private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
 
     // =========================================================================
-    //  Popular 
+    //  Popular
     // =========================================================================
 
     override fun popularMangaRequest(page: Int): Request {
@@ -142,7 +142,7 @@ class Kairostoons : ParsedHttpSource() {
 
                 val pageChapters = document.select(chapterListSelector())
                     .map { chapterFromElement(it) }
-                    .filter { visitedUrls.add(it.url)  } 
+                    .filter { visitedUrls.add(it.url) }
 
                 if (pageChapters.isEmpty()) break
 
