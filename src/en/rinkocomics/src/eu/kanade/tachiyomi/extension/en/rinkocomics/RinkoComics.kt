@@ -44,7 +44,7 @@ class RinkoComics : ParsedHttpSource() {
         val anchor = element.selectFirst("h2.ac-title a") ?: element.selectFirst("a.ac-thumb")!!
 
         setUrlWithoutDomain(anchor.absUrl("href"))
-        title = anchor.text().trim()
+        title = anchor.text()
         thumbnail_url = element.selectFirst("a.ac-thumb img")?.attr("abs:src")
         genre = element.select("div.ac-genres a").joinToString { it.text() }
     }
