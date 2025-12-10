@@ -125,7 +125,7 @@ class RinkoComics : ParsedHttpSource() {
             val request = chapterListRequest(manga)
             val response = client.newCall(request).execute()
             val html = response.body.string()
-            val document = Jsoup.parse(html, response.request.url.toString())
+            val document = response.asJsoup()
 
             // 2. Parse visible chapters
             val visibleChapters = document.select(chapterListSelector())
