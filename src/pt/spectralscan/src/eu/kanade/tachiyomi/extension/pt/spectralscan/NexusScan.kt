@@ -260,7 +260,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
         return document.select("a.chapter-item[href]").map { element ->
             SChapter.create().apply {
                 name = element.selectFirst(".chapter-number")?.text()
-                    ?: element.attr("data-chapter-number").takeIf { it.isNotEmpty() }?.let { "Capítulo $it" }
+                    ?: element.attr("data-chapter-number")?.let { "Capítulo $it" }
                     ?: "Capítulo"
                 setUrlWithoutDomain(element.absUrl("href"))
 
@@ -343,13 +343,25 @@ class NexusScan : HttpSource(), ConfigurableSource {
     private fun syncNSFW() {
         try {
             val baseHttpUrl = baseUrl.toHttpUrl()
-            val csrfToken = client.cookieJar
-                .loadForRequest(baseHttpUrl)
+            var cookies = client.cookieJar.loadForRequest(baseHttpUrl)
+
+            if (cookies.none { it.name == "csrftoken" }) {
+                client.newCall(GET(baseUrl, headers)).execute().close()
+                cookies = client.cookieJar.loadForRequest(baseHttpUrl)
+            }
+
+            val csrfToken = cookies
                 .firstOrNull { it.name == "csrftoken" }
                 ?.value
                 ?: return
 
+            val hasSession = cookies.any { it.name == "sessionid" }
             val isAdultActive = preferences.getBoolean(PREF_ADULT_KEY, PREF_ADULT_DEFAULT)
+
+            if (!hasSession && !isAdultActive) return
+
+            val lastState = preferences.getBoolean(PREF_ADULT_SYNCED_KEY, !isAdultActive)
+            if (hasSession && lastState == isAdultActive) return
 
             val body = """{"is_adult_active":$isAdultActive}"""
                 .toRequestBody("application/json".toMediaType())
@@ -364,7 +376,10 @@ class NexusScan : HttpSource(), ConfigurableSource {
                 body,
             )
 
-            client.newCall(request).execute().close()
+            val response = client.newCall(request).execute()
+            response.close()
+
+            preferences.edit().putBoolean(PREF_ADULT_SYNCED_KEY, isAdultActive).apply()
         } catch (_: Exception) {
         }
     }
@@ -372,5 +387,6 @@ class NexusScan : HttpSource(), ConfigurableSource {
     companion object {
         private const val PREF_ADULT_KEY = "pref_adult_content"
         private const val PREF_ADULT_DEFAULT = false
+        private const val PREF_ADULT_SYNCED_KEY = "pref_adult_synced"
     }
 }
