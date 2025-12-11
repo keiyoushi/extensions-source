@@ -261,11 +261,11 @@ class NexusScan : HttpSource() {
         val value = dateNumberRegex.find(dateStr)?.value?.toIntOrNull() ?: 1
         return when {
             "hoje" in dateStr -> Calendar.getInstance().timeInMillis
-            "ontem" in dateStr -> Calendar.getInstance().apply {add(Calendar.DAY_OF_MONTH, -1)}.timeInMillis
-            "hora" in dateStr -> Calendar.getInstance().apply {add(Calendar.HOUR_OF_DAY, -value)}.timeInMillis
-            "dia" in dateStr -> Calendar.getInstance().apply {add(Calendar.DAY_OF_MONTH, -value)}.timeInMillis
-            "semana" in dateStr -> Calendar.getInstance().apply {add(Calendar.WEEK_OF_YEAR, -value)}.timeInMillis
-            "mês" in dateStr || "mes" in dateStr -> Calendar.getInstance().apply {add(Calendar.MONTH, -value)}.timeInMillis
+            "ontem" in dateStr -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
+            "hora" in dateStr -> Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, -value) }.timeInMillis
+            "dia" in dateStr -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -value) }.timeInMillis
+            "semana" in dateStr -> Calendar.getInstance().apply { add(Calendar.WEEK_OF_YEAR, -value) }.timeInMillis
+            "mês" in dateStr || "mes" in dateStr -> Calendar.getInstance().apply { add(Calendar.MONTH, -value) }.timeInMillis
             else -> dateFormat.tryParse(dateStr)
         }
     }
