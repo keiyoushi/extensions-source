@@ -189,14 +189,75 @@ class RaijinScans : HttpSource() {
         }
     }
 
+    private fun protectedImageSrc(element: Element): String {
+        val encodedUrl = element.attr("data-src")
+        val imageUrl = String(Base64.decode(encodedUrl, Base64.DEFAULT))
+        return imageUrl
+    }
+
+    private fun protectedImageReverse(element: Element): String {
+        val encodedUrl = element.attr("data-r").reversed()
+        val imageUrl = String(Base64.decode(encodedUrl, Base64.DEFAULT))
+        return imageUrl
+    }
+
+    private fun protectedImageSimpleXor(element: Element): String {
+        val encodedUrl = element.attr("data-v").reversed()
+        val xorKey = 93
+        val xored = String(Base64.decode(encodedUrl, Base64.DEFAULT))
+        val decoded = xored.map { (it.code xor xorKey).toChar() }.joinToString("")
+        val imageUrl = String(Base64.decode(decoded, Base64.DEFAULT))
+        return imageUrl
+    }
+
+    private fun protectedImageM(element: Element): String {
+        val encodedUrl = element.attr("data-m").reversed()
+        val crypted = Base64.decode(encodedUrl, Base64.DEFAULT)
+        val decoded = crypted.map { ((it - 7 + 256) and 255 xor 173).toChar() }.joinToString("")
+        val imageUrl = String(Base64.decode(decoded, Base64.DEFAULT))
+        return imageUrl
+    }
+    private enum class ProtectedImageMethod {
+        UNKNOWN, SRC, REVERSE, SIMPLE_XOR, M
+    }
+
+    private fun findProtectionMethod(element: Element): Pair<ProtectedImageMethod, String> {
+        val functions = listOf(
+            ::protectedImageSrc to ProtectedImageMethod.SRC,
+            ::protectedImageReverse to ProtectedImageMethod.REVERSE,
+            ::protectedImageSimpleXor to ProtectedImageMethod.SIMPLE_XOR,
+            ::protectedImageReverse to ProtectedImageMethod.M,
+        )
+
+        for ((function, method) in functions) {
+            val result = function(element)
+            if (result.contains("$baseUrl/wp-content/uploads/WP-manga/data/manga_")) {
+                return Pair(method, result)
+            }
+        }
+        throw UnsupportedOperationException("Can't find a correct method to parse images.")
+    }
+
     // ========================== Page List =============================
     override fun pageListParse(response: Response): List<Page> {
+        var method = ProtectedImageMethod.UNKNOWN
         return response.asJsoup().select("div.protected-image-data").mapIndexed { index, element ->
-            val encodedUrl = element.attr("data-m").reversed()
-            val crypted = Base64.decode(encodedUrl, Base64.DEFAULT)
-            val decoded = crypted.map { ((it - 7 + 256) and 255 xor 173).toChar() }.joinToString("")
-            val imageUrl = String(Base64.decode(decoded, Base64.DEFAULT))
-            Page(index, imageUrl = imageUrl)
+            if (method != ProtectedImageMethod.UNKNOWN) {
+                val imageUrl = when (method) {
+                    ProtectedImageMethod.SRC -> protectedImageSrc(element)
+                    ProtectedImageMethod.REVERSE -> protectedImageReverse(element)
+                    ProtectedImageMethod.SIMPLE_XOR -> protectedImageSimpleXor(element)
+                    ProtectedImageMethod.M -> protectedImageM(element)
+                    else -> {
+                        throw UnsupportedOperationException("Can't find image !")
+                    }
+                }
+                Page(index, imageUrl = imageUrl)
+            } else {
+                val (returnedMethod, imageUrl) = findProtectionMethod(element)
+                method = returnedMethod
+                Page(index, imageUrl = imageUrl)
+            }
         }
     }
 
