@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.spectralscan
 
 import eu.kanade.tachiyomi.source.model.Filter
+import kotlinx.serialization.Serializable
 
 class SelectFilter(
     displayName: String = "",
@@ -76,19 +77,19 @@ val typeList = arrayOf(
     "Pornhwa" to "pornhwa",
 )
 
-@kotlinx.serialization.Serializable
+@Serializable
 class MangaListResponse(
     val html: String = "",
     val has_next: Boolean = false,
 )
 
-@kotlinx.serialization.Serializable
+@Serializable
 class ChapterListResponse(
     val chapters_html: String = "",
     val has_next: Boolean = false,
 )
 
-@kotlinx.serialization.Serializable
+@Serializable
 class PageData(
     val page_number: Int = 0,
     val image_url: String = "",
