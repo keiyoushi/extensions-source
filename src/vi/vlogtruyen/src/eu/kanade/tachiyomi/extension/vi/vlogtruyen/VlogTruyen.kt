@@ -105,13 +105,8 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
         val document = Jsoup.parseBodyFragment(json.data.chaptersHtml, response.request.url.toString())
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
         return document.select(chapterListSelector()).filterNot {
-            if (hidePaidChapters) {
-                it.select("li > b").isNotEmpty()
-            } else {
-                false
-            }
-        }
-            .map { element -> chapterFromElement(element) }
+            hidePaidChapters && it.select("li > b").isNotEmpty()
+        }.map { element -> chapterFromElement(element) }
     }
 
     override fun chapterListSelector() = "li"
