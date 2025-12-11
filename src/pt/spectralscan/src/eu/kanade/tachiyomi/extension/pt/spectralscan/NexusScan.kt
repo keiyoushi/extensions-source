@@ -1,8 +1,13 @@
 package eu.kanade.tachiyomi.extension.pt.spectralscan
 
+import android.content.SharedPreferences
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,10 +15,13 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
@@ -22,7 +30,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class NexusScan : HttpSource() {
+class NexusScan : HttpSource(), ConfigurableSource {
 
     // SpectralScan (pt-BR) -> Nexus Scan (pt-BR)
     override val id = 5304928452449566995L
@@ -35,16 +43,21 @@ class NexusScan : HttpSource() {
 
     override val supportsLatest = true
 
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
     override val client = super.client.newBuilder()
         .rateLimit(2)
         .addInterceptor { chain ->
-            chain.proceed(chain.request()).also {
-                val path = it.request.url.encodedPath
-                if (path.startsWith("/accounts/login") || path.startsWith("/login")) {
-                    it.close()
-                    throw IOException("Faça o login na WebView para acessar o conteúdo")
-                }
+            val request = chain.request()
+            val response = chain.proceed(request)
+            val path = response.request.url.encodedPath
+
+            if (path.startsWith("/accounts/login") || path.startsWith("/login")) {
+                response.close()
+                throw IOException("Faça o login na WebView para acessar o conteúdo")
             }
+
+            response
         }
         .build()
 
@@ -78,6 +91,11 @@ class NexusScan : HttpSource() {
 
     // ==================== Popular ==========================
 
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        syncNSFW()
+        return super.fetchPopularManga(page)
+    }
+
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/ajax/load-mangas/".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
@@ -96,6 +114,11 @@ class NexusScan : HttpSource() {
 
     // ==================== Latest ==========================
 
+    override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
+        syncNSFW()
+        return super.fetchLatestUpdates(page)
+    }
+
     override fun latestUpdatesRequest(page: Int): Request {
         val url = "$baseUrl/ajax/load-mangas/".toHttpUrl().newBuilder()
             .addQueryParameter("page", page.toString())
@@ -113,6 +136,11 @@ class NexusScan : HttpSource() {
     }
 
     // ==================== Search ==========================
+
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        syncNSFW()
+        return super.fetchSearchManga(page, query, filters)
+    }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         var sortValue = "popular"
@@ -232,7 +260,7 @@ class NexusScan : HttpSource() {
         return document.select("a.chapter-item[href]").map { element ->
             SChapter.create().apply {
                 name = element.selectFirst(".chapter-number")?.text()
-                    ?: element.attr("data-chapter-number")?.let { "Capítulo $it" }
+                    ?: element.attr("data-chapter-number").takeIf { it.isNotEmpty() }?.let { "Capítulo $it" }
                     ?: "Capítulo"
                 setUrlWithoutDomain(element.absUrl("href"))
 
@@ -300,4 +328,49 @@ class NexusScan : HttpSource() {
         SelectFilter("Gênero", "genre", genreList),
         SelectFilter("Tipo", "type", typeList),
     )
+
+    // ==================== Settings ==========================
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_ADULT_KEY
+            title = "Exibir conteúdo adulto (+18)"
+            summary = "Habilita a visualização de conteúdo adulto nas listas."
+            setDefaultValue(PREF_ADULT_DEFAULT)
+        }.also(screen::addPreference)
+    }
+
+    private fun syncNSFW() {
+        try {
+            val baseHttpUrl = baseUrl.toHttpUrl()
+            val csrfToken = client.cookieJar
+                .loadForRequest(baseHttpUrl)
+                .firstOrNull { it.name == "csrftoken" }
+                ?.value
+                ?: return
+
+            val isAdultActive = preferences.getBoolean(PREF_ADULT_KEY, PREF_ADULT_DEFAULT)
+
+            val body = """{"is_adult_active":$isAdultActive}"""
+                .toRequestBody("application/json".toMediaType())
+
+            val request = POST(
+                "$baseUrl/ajax/toggle-adult-content/",
+                headers.newBuilder()
+                    .set("X-CSRFToken", csrfToken)
+                    .set("Referer", "$baseUrl/")
+                    .set("X-Requested-With", "XMLHttpRequest")
+                    .build(),
+                body,
+            )
+
+            client.newCall(request).execute().close()
+        } catch (_: Exception) {
+        }
+    }
+
+    companion object {
+        private const val PREF_ADULT_KEY = "pref_adult_content"
+        private const val PREF_ADULT_DEFAULT = false
+    }
 }
