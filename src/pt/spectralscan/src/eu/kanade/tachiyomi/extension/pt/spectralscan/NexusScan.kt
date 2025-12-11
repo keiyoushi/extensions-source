@@ -24,7 +24,7 @@ import java.util.Locale
 
 class NexusScan : HttpSource() {
 
-    // Mantém o ID original para manter a compatibilidade com a extensão anterior (SpectralScan)
+    // SpectralScan (pt-BR) -> Nexus Scan (pt-BR)
     override val id = 5304928452449566995L
 
     override val lang = "pt-BR"
