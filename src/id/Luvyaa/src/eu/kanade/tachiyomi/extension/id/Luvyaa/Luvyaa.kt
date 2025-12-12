@@ -9,6 +9,4 @@ class Luvyaa : MangaThemesia(
     "https://luvyaa.my.id",
     "id",
     dateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
-) {
-    override val name = "Luvyaa"
-}
+)
