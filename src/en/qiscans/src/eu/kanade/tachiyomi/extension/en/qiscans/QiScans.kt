@@ -8,7 +8,10 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
+import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.Serializable
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
@@ -47,6 +50,24 @@ class QiScans : Iken(
             addQueryParameter("orderBy", "updatedAt")
         }.build()
         return GET(url, headers)
+    }
+
+    @Serializable
+    class PageParseDto(
+        val url: String,
+        val order: Int,
+    )
+
+    override fun pageListParse(response: Response): List<Page> {
+        val document = response.asJsoup()
+
+        if (document.selectFirst("svg.lucide-lock") != null) {
+            throw Exception("Unlock chapter in webview")
+        }
+
+        return document.getNextJson("images").parseAs<List<PageParseDto>>().sortedBy { it.order }.mapIndexed { idx, p ->
+            Page(idx, imageUrl = p.url)
+        }
     }
 
     private var genresList: List<Pair<String, String>> = emptyList()
