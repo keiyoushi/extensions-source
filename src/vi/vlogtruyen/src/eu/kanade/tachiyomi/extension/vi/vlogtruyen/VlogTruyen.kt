@@ -38,7 +38,7 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
 
     override val id: Long = 6425642624422299254
 
-    private val defaultBaseUrl = "https://vlogtruyen57.com"
+    private val defaultBaseUrl = "https://vlogtruyen59.com"
 
     override val baseUrl by lazy { getPrefBaseUrl() }
 
@@ -105,20 +105,15 @@ class VlogTruyen : ParsedHttpSource(), ConfigurableSource {
         val document = Jsoup.parseBodyFragment(json.data.chaptersHtml, response.request.url.toString())
         val hidePaidChapters = preferences.getBoolean(KEY_HIDE_PAID_CHAPTERS, false)
         return document.select(chapterListSelector()).filterNot {
-            if (hidePaidChapters) {
-                it.select("li > b").isNotEmpty()
-            } else {
-                false
-            }
-        }
-            .map { element -> chapterFromElement(element) }
+            hidePaidChapters && it.select("li > b").isNotEmpty()
+        }.map { element -> chapterFromElement(element) }
     }
 
     override fun chapterListSelector() = "li"
 
     override fun chapterFromElement(element: Element): SChapter = SChapter.create().apply {
         setUrlWithoutDomain(element.selectFirst("a")!!.absUrl("href"))
-        name = element.select("h3").first()!!.text()
+        name = element.select("h3").text()
         if (element.select("li > b").text().isNotBlank()) {
             name += " " + element.select("li > b").text() +
                 when (element.select("li > b > i").attr("class")) {
