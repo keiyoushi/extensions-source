@@ -15,3 +15,13 @@ class LatestUpdatesDataDto(
     @SerialName("current_page") val currentPage: Int,
     @SerialName("total_pages") val totalPages: Int,
 )
+
+@Serializable
+class ImageResponseDto(
+    val data: ImageResponseDataDto,
+)
+
+@Serializable
+class ImageResponseDataDto(
+    val u: List<String>,
+)
