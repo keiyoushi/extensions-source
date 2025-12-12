@@ -1,21 +1,10 @@
 ext {
     extName = 'Luvyaa'
     extClass = '.Luvyaa'
-    extVersionCode = 1
+    themePkg = 'mangathemesia'
+    baseUrl = 'https://luvyaa.my.id'
+    overrideVersionCode = 0
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
-
-android {
-    defaultConfig {
-        manifestPlaceholders += [
-            SOURCEHOST: "luvyaa.my.id",
-            SOURCESCHEME: "https"
-        ]
-    }
-}
-
-dependencies {
-    implementation(project(':lib-multisrc:mangathemesia'))
-}
