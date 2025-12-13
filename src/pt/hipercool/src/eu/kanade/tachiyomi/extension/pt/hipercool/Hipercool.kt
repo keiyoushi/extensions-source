@@ -10,6 +10,8 @@ class Hipercool : Madara("HipercooL", "https://hiper.cool", "pt-BR") {
     // Migrated from a custom CMS to Madara.
     override val versionId = 2
 
+    override val chapterUrlSuffix = ""
+
     override val client: OkHttpClient = super.client.newBuilder()
         .rateLimit(1, 2, TimeUnit.SECONDS)
         .build()
