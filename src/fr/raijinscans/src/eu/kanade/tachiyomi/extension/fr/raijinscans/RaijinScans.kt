@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.raijinscans
 
-import android.util.Base64
+import android.webkit.CookieManager
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -35,6 +35,9 @@ class RaijinScans : HttpSource() {
     private val nonceRegex = """"nonce"\s*:\s*"([^"]+)"""".toRegex()
     private val numberRegex = """(\d+)""".toRegex()
     private val descriptionScriptRegex = """content\.innerHTML = `([\s\S]+?)`;""".toRegex()
+    private val rmtRegex = """window\._rmt\s*=\s*["']([^"']+)["']""".toRegex()
+
+    private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
@@ -190,14 +193,36 @@ class RaijinScans : HttpSource() {
     }
 
     // ========================== Page List =============================
-    override fun pageListParse(response: Response): List<Page> {
-        return response.asJsoup().select("div.protected-image-data").mapIndexed { index, element ->
-            val encodedUrl = element.attr("data-m").reversed()
-            val crypted = Base64.decode(encodedUrl, Base64.DEFAULT)
-            val decoded = crypted.map { ((it - 7 + 256) and 255 xor 173).toChar() }.joinToString("")
-            val imageUrl = String(Base64.decode(decoded, Base64.DEFAULT))
-            Page(index, imageUrl = imageUrl)
+    private fun getImages(t: String): List<Page> {
+        val requestBody = FormBody.Builder()
+            .add("t", t)
+            .add("action", "rm_get_images")
+            .build()
+
+        val request = Request.Builder()
+            .url("$baseUrl/wp-admin/admin-ajax.php")
+            .post(requestBody)
+            .headers(headers)
+            .addHeader("Cookie", webViewCookieManager.getCookie(baseUrl) ?: "")
+            .build()
+        for (i in 1..10) {
+            val adminRes = client.newCall(request).execute()
+            if (adminRes.isSuccessful) {
+                val responseJson = adminRes.parseAs<ImageResponseDto>()
+                val images = responseJson.data.u
+                return images.mapIndexed { index, imageUrl ->
+                    Page(index, imageUrl = imageUrl)
+                }
+            }
         }
+        throw UnsupportedOperationException("Can't fetch images. Please try again.")
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val matchResult = rmtRegex.find(response.body.string())
+        val t = matchResult?.groups?.get(1)?.value ?: ""
+        if (t.isBlank()) throw UnsupportedOperationException("Can't find window._rmt")
+        return getImages(t)
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
