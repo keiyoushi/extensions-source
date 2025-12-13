@@ -1,0 +1,3522 @@
+{
+	"data": [
+		{
+			"manga_id": 1007,
+			"manga_title": "Cara Doce",
+			"manga_cover": "/uploads/covers/159db229226ac1483162ad95fef7c4a9.jpg",
+			"manga_genres": [
+				"Romance",
+				"Supernatural",
+				"Comédia",
+				"Hentai",
+				"Harém"
+			],
+			"chapters": [
+				{
+					"id": 202543,
+					"number": "65.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:34:09.301Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202542,
+					"number": "47.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:33:50.728Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202541,
+					"number": "45.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:33:22.364Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202540,
+					"number": "43.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:32:55.695Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202539,
+					"number": "40.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:32:36.962Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202538,
+					"number": "39.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:32:24.860Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202537,
+					"number": "36.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:32:06.662Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202536,
+					"number": "30.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:31:44.174Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202535,
+					"number": "27.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:30:54.987Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202534,
+					"number": "25.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:30:26.317Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202533,
+					"number": "23.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:29:53.534Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202532,
+					"number": "2.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:29:29.153Z",
+					"uploader": "Keyz"
+				}
+			]
+		},
+		{
+			"manga_id": 1050,
+			"manga_title": "O Neto Genial do Rei dos Agiotas",
+			"manga_cover": "/covers/98c9249fd67a4e388501b81b329ef7f1.png",
+			"manga_genres": [
+				"Drama",
+				"Seinen",
+				"Reencarnação"
+			],
+			"chapters": [
+				{
+					"id": 202531,
+					"number": "72.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:09:32.779Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 202530,
+					"number": "71.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:09:06.469Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 202529,
+					"number": "70.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:08:38.130Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 202528,
+					"number": "69.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:08:15.684Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 202527,
+					"number": "68.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:07:42.619Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 193363,
+					"number": "67.00",
+					"title": "",
+					"upload_date": "2025-12-01T20:59:48.999Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 193362,
+					"number": "65.00",
+					"title": "",
+					"upload_date": "2025-12-01T20:59:30.098Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 193361,
+					"number": "66.00",
+					"title": "",
+					"upload_date": "2025-12-01T20:59:21.811Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 193360,
+					"number": "64.00",
+					"title": "",
+					"upload_date": "2025-12-01T20:58:49.933Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 193359,
+					"number": "63.00",
+					"title": "",
+					"upload_date": "2025-12-01T20:58:49.857Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 193358,
+					"number": "62.00",
+					"title": "",
+					"upload_date": "2025-12-01T20:58:13.577Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 193357,
+					"number": "61.00",
+					"title": "",
+					"upload_date": "2025-12-01T20:58:06.861Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 180622,
+					"number": "60.00",
+					"title": "",
+					"upload_date": "2025-11-18T07:00:17.348Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 180617,
+					"number": "59.00",
+					"title": "",
+					"upload_date": "2025-11-18T06:59:29.966Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 180615,
+					"number": "58.00",
+					"title": "",
+					"upload_date": "2025-11-18T06:59:16.407Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 180614,
+					"number": "57.00",
+					"title": "",
+					"upload_date": "2025-11-18T06:58:21.500Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 180613,
+					"number": "56.00",
+					"title": "",
+					"upload_date": "2025-11-18T06:58:11.622Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 180612,
+					"number": "55.00",
+					"title": "",
+					"upload_date": "2025-11-18T06:57:11.665Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 180611,
+					"number": "54.00",
+					"title": "",
+					"upload_date": "2025-11-18T06:56:57.899Z",
+					"uploader": "Mizer"
+				}
+			]
+		},
+		{
+			"manga_id": 1841,
+			"manga_title": "Medaka Kuroiwa é Imune aos Meus Encantos",
+			"manga_cover": "/covers/a2ba0e6c8ce8b8a89b04ebd851295d21.jpg",
+			"manga_genres": [
+				"Comédia",
+				"Romance",
+				"Slice of Life"
+			],
+			"chapters": [
+				{
+					"id": 202526,
+					"number": "169.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:03:25.200Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202525,
+					"number": "168.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:03:13.141Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202524,
+					"number": "167.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:03:10.998Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202523,
+					"number": "166.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:02:58.900Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202522,
+					"number": "165.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:02:54.688Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202521,
+					"number": "163.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:02:42.639Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202520,
+					"number": "164.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:02:42.469Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202519,
+					"number": "161.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:02:27.792Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202518,
+					"number": "160.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:02:27.071Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202517,
+					"number": "159.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:02:12.220Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202516,
+					"number": "158.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:02:12.215Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202515,
+					"number": "108.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:01:57.551Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 202514,
+					"number": "157.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:01:57.157Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 201020,
+					"number": "156.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:34:06.727Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 201015,
+					"number": "155.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:33:28.966Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 201010,
+					"number": "152.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:59.896Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 201009,
+					"number": "41.50",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:48.823Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 201008,
+					"number": "154.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:47.391Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 201006,
+					"number": "153.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:38.652Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 201004,
+					"number": "151.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:35.638Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 201003,
+					"number": "149.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:35.502Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 201002,
+					"number": "148.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:35.482Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 201000,
+					"number": "150.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:26.458Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200998,
+					"number": "146.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:25.119Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200994,
+					"number": "147.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:07.944Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200993,
+					"number": "145.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:32:02.747Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200990,
+					"number": "143.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:31:55.273Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200989,
+					"number": "141.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:31:55.140Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200988,
+					"number": "144.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:31:47.269Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200985,
+					"number": "142.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:31:39.672Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200982,
+					"number": "140.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:31:11.960Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200980,
+					"number": "135.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:31:11.319Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200978,
+					"number": "138.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:30:59.924Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200977,
+					"number": "139.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:30:55.192Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200974,
+					"number": "134.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:30:45.143Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200973,
+					"number": "137.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:30:38.600Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200967,
+					"number": "136.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:30:20.450Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200964,
+					"number": "133.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:30:07.756Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200962,
+					"number": "131.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:30:01.972Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200960,
+					"number": "124.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:29:55.590Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200959,
+					"number": "132.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:29:55.585Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200956,
+					"number": "129.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:29:48.223Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200954,
+					"number": "130.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:29:38.882Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200952,
+					"number": "128.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:29:32.703Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200947,
+					"number": "121.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:29:15.175Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200946,
+					"number": "127.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:29:15.158Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200945,
+					"number": "122.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:29:09.437Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200944,
+					"number": "126.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:29:09.190Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200941,
+					"number": "125.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:28:41.820Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200939,
+					"number": "123.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:28:39.573Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200937,
+					"number": "120.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:28:22.390Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200934,
+					"number": "114.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:28:18.981Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200933,
+					"number": "118.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:28:12.558Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200932,
+					"number": "117.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:28:07.948Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200931,
+					"number": "115.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:28:05.371Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200930,
+					"number": "119.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:28:02.657Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200927,
+					"number": "116.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:27:47.545Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200923,
+					"number": "113.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:27:25.478Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200916,
+					"number": "112.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:27:08.931Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200914,
+					"number": "111.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:27:01.868Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200912,
+					"number": "109.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:26:57.826Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200909,
+					"number": "110.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:26:46.494Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200901,
+					"number": "105.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:25:37.120Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200900,
+					"number": "107.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:25:36.937Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200896,
+					"number": "104.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:25:19.555Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200891,
+					"number": "102.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:24:57.120Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200890,
+					"number": "106.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:24:57.120Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200887,
+					"number": "101.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:24:38.968Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200884,
+					"number": "103.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:24:11.588Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200882,
+					"number": "100.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:24:05.358Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200877,
+					"number": "95.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:23:28.245Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200876,
+					"number": "99.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:23:25.646Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200875,
+					"number": "96.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:23:22.947Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200872,
+					"number": "98.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:23:18.164Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200871,
+					"number": "97.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:23:10.046Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200867,
+					"number": "94.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:22:42.305Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200865,
+					"number": "93.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:22:31.294Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200864,
+					"number": "92.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:22:27.069Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200862,
+					"number": "90.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:22:22.657Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200860,
+					"number": "89.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:22:11.758Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200858,
+					"number": "91.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:22:05.278Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200856,
+					"number": "88.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:21:53.588Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200853,
+					"number": "86.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:21:43.496Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200850,
+					"number": "87.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:21:38.618Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200849,
+					"number": "83.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:21:34.067Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200847,
+					"number": "80.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:21:23.085Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200845,
+					"number": "84.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:21:18.442Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200844,
+					"number": "85.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:21:14.768Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200843,
+					"number": "81.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:21:08.414Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200842,
+					"number": "82.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:20:51.947Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200841,
+					"number": "77.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:20:17.119Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200840,
+					"number": "78.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:20:00.514Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200839,
+					"number": "79.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:19:53.147Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200838,
+					"number": "76.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:19:46.699Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200837,
+					"number": "74.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:19:38.452Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200836,
+					"number": "75.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:19:24.243Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200835,
+					"number": "65.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:19:03.760Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200834,
+					"number": "71.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:19:03.638Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200833,
+					"number": "72.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:19:00.530Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200832,
+					"number": "73.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:19:00.464Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200831,
+					"number": "66.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:18:32.593Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200830,
+					"number": "70.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:18:30.514Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200829,
+					"number": "67.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:18:22.330Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200828,
+					"number": "69.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:18:18.150Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200827,
+					"number": "68.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:18:11.948Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200826,
+					"number": "63.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:17:49.298Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200825,
+					"number": "64.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:17:46.915Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200824,
+					"number": "61.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:17:46.775Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200823,
+					"number": "60.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:17:46.183Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200822,
+					"number": "59.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:17:43.024Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200821,
+					"number": "62.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:17:32.162Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200820,
+					"number": "56.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:17:13.560Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200819,
+					"number": "58.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:17:11.374Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200818,
+					"number": "57.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:17:08.220Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200817,
+					"number": "53.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:16:53.885Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200816,
+					"number": "52.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:16:51.812Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200815,
+					"number": "55.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:16:45.536Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200814,
+					"number": "54.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:16:39.244Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200813,
+					"number": "51.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:16:37.194Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200812,
+					"number": "50.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:16:20.669Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200811,
+					"number": "47.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:16:10.429Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200810,
+					"number": "49.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:16:07.968Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200809,
+					"number": "45.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:16:05.440Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200808,
+					"number": "44.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:15:57.828Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200807,
+					"number": "48.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:15:57.523Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200806,
+					"number": "46.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:15:32.171Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200805,
+					"number": "42.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:15:09.069Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200804,
+					"number": "39.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:15:08.925Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200803,
+					"number": "43.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:14:51.760Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200802,
+					"number": "41.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:14:47.681Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200801,
+					"number": "38.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:14:33.422Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200800,
+					"number": "40.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:14:23.065Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200799,
+					"number": "37.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:14:04.596Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200798,
+					"number": "35.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:13:57.009Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200797,
+					"number": "36.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:13:52.633Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200796,
+					"number": "29.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:13:42.380Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200795,
+					"number": "34.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:13:13.890Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200794,
+					"number": "32.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:13:05.511Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200793,
+					"number": "31.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:12:42.981Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200792,
+					"number": "33.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:12:40.647Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200791,
+					"number": "25.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:12:12.033Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200790,
+					"number": "30.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:12:09.391Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200789,
+					"number": "27.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:11:49.022Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200788,
+					"number": "26.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:11:40.366Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200787,
+					"number": "28.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:11:38.187Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200786,
+					"number": "20.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:11:23.421Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200785,
+					"number": "24.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:11:18.999Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200784,
+					"number": "23.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:11:10.382Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200783,
+					"number": "21.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:11:02.001Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200782,
+					"number": "19.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:10:57.807Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200781,
+					"number": "22.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:10:49.548Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200780,
+					"number": "17.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:10:35.004Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200779,
+					"number": "18.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:10:26.714Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200778,
+					"number": "16.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:10:24.009Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200777,
+					"number": "14.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:10:01.221Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200776,
+					"number": "11.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:09:56.917Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200775,
+					"number": "15.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:09:56.894Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200774,
+					"number": "12.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:09:49.441Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200773,
+					"number": "10.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:09:35.010Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200772,
+					"number": "13.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:09:24.369Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200771,
+					"number": "9.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:08:57.542Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200770,
+					"number": "8.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:08:38.748Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200769,
+					"number": "7.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:08:36.159Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200768,
+					"number": "5.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:08:23.746Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200767,
+					"number": "2.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:08:12.849Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200766,
+					"number": "6.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:08:03.847Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200764,
+					"number": "3.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:07:44.349Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200763,
+					"number": "4.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:07:37.305Z",
+					"uploader": "guichin1"
+				},
+				{
+					"id": 200762,
+					"number": "1.00",
+					"title": "",
+					"upload_date": "2025-12-09T19:07:18.634Z",
+					"uploader": "guichin1"
+				}
+			]
+		},
+		{
+			"manga_id": 1008,
+			"manga_title": "Assuntos Domésticos",
+			"manga_cover": "/uploads/covers/2ed4c5d918d7d5169c8f7f18adb5521a.jpg",
+			"manga_genres": [
+				"Ação",
+				"Drama",
+				"Romance",
+				"Slice of Life",
+				"Hentai"
+			],
+			"chapters": [
+				{
+					"id": 202513,
+					"number": "79.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:01:34.347Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202511,
+					"number": "78.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:01:14.795Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202510,
+					"number": "69.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:00:18.184Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202509,
+					"number": "65.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:59:44.898Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202508,
+					"number": "64.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:59:05.854Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202507,
+					"number": "47.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:58:10.664Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202506,
+					"number": "37.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:57:34.843Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202505,
+					"number": "20.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:57:10.145Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202504,
+					"number": "13.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:56:41.470Z",
+					"uploader": "Keyz"
+				}
+			]
+		},
+		{
+			"manga_id": 737,
+			"manga_title": "Eu Irei Destruir esse País",
+			"manga_cover": "/uploads/covers/1987540da544c2b8e1cebc9760ae2e57.jpg",
+			"manga_genres": [
+				"Ação",
+				"Aventura",
+				"Comédia",
+				"Fantasia",
+				"Magia",
+				"Reencarnação"
+			],
+			"chapters": [
+				{
+					"id": 202512,
+					"number": "65.00",
+					"title": "",
+					"upload_date": "2025-12-12T21:01:23.909Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 199508,
+					"number": "64.00",
+					"title": "",
+					"upload_date": "2025-12-07T21:40:06.721Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 190745,
+					"number": "1.00",
+					"title": "",
+					"upload_date": "2025-11-29T04:28:19.016Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 190744,
+					"number": "63.00",
+					"title": "",
+					"upload_date": "2025-11-29T04:26:56.172Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 190743,
+					"number": "34.00",
+					"title": "",
+					"upload_date": "2025-11-29T04:26:51.692Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 190742,
+					"number": "52.00",
+					"title": "",
+					"upload_date": "2025-11-29T04:26:51.275Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 190741,
+					"number": "32.00",
+					"title": "",
+					"upload_date": "2025-11-29T04:26:45.084Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 190740,
+					"number": "26.00",
+					"title": "",
+					"upload_date": "2025-11-29T04:26:44.585Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 182029,
+					"number": "62.00",
+					"title": "",
+					"upload_date": "2025-11-23T00:58:25.376Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 177265,
+					"number": "61.00",
+					"title": "",
+					"upload_date": "2025-11-14T23:20:35.926Z",
+					"uploader": "Kuro_Uploader"
+				}
+			]
+		},
+		{
+			"manga_id": 759,
+			"manga_title": "O Filho mais Novo dos Chaebol",
+			"manga_cover": "/uploads/covers/d86485531ae37379f9fea6ca14e38fbe.png",
+			"manga_genres": [
+				"Drama",
+				"Shounen",
+				"Reencarnação"
+			],
+			"chapters": [
+				{
+					"id": 202503,
+					"number": "83.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:49:40.099Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 202502,
+					"number": "82.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:49:13.602Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 202490,
+					"number": "126.00",
+					"title": "",
+					"upload_date": "2025-12-12T19:08:02.446Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 202489,
+					"number": "125.00",
+					"title": "",
+					"upload_date": "2025-12-12T19:07:41.387Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 202488,
+					"number": "124.00",
+					"title": "",
+					"upload_date": "2025-12-12T19:07:20.221Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 202487,
+					"number": "123.00",
+					"title": "",
+					"upload_date": "2025-12-12T19:06:50.675Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 201320,
+					"number": "122.00",
+					"title": "",
+					"upload_date": "2025-12-09T23:22:04.605Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 201319,
+					"number": "121.00",
+					"title": "",
+					"upload_date": "2025-12-09T23:21:14.428Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 201318,
+					"number": "120.00",
+					"title": "",
+					"upload_date": "2025-12-09T23:20:22.357Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 201317,
+					"number": "119.00",
+					"title": "",
+					"upload_date": "2025-12-09T23:19:37.494Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 201316,
+					"number": "118.00",
+					"title": "",
+					"upload_date": "2025-12-09T23:19:10.755Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 201313,
+					"number": "117.00",
+					"title": "",
+					"upload_date": "2025-12-09T23:18:30.544Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 201310,
+					"number": "116.00",
+					"title": "",
+					"upload_date": "2025-12-09T23:18:00.977Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 201305,
+					"number": "115.00",
+					"title": "",
+					"upload_date": "2025-12-09T23:17:15.145Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 201304,
+					"number": "114.00",
+					"title": "",
+					"upload_date": "2025-12-09T23:16:17.501Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 191765,
+					"number": "105.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:12:10.182Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 191764,
+					"number": "101.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:12:09.410Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 191763,
+					"number": "75.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:12:06.784Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 191760,
+					"number": "79.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:12:05.894Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 191759,
+					"number": "23.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:11:59.078Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 191758,
+					"number": "13.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:11:58.876Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 191757,
+					"number": "52.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:11:58.687Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 191756,
+					"number": "11.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:11:53.510Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 191755,
+					"number": "9.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:11:53.387Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 191754,
+					"number": "4.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:11:48.065Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 191753,
+					"number": "8.00",
+					"title": "",
+					"upload_date": "2025-11-30T00:11:48.023Z",
+					"uploader": "Yang"
+				}
+			]
+		},
+		{
+			"manga_id": 1009,
+			"manga_title": "Ligado ou Desligado",
+			"manga_cover": "/uploads/covers/e23b0b6445c4461c19a461e546dcaa39.jpg",
+			"manga_genres": [
+				"Slice of Life",
+				"Hentai",
+				"Yaoi",
+				"Romance",
+				"Comédia"
+			],
+			"chapters": [
+				{
+					"id": 202501,
+					"number": "29.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:28:44.540Z",
+					"uploader": "Keyz"
+				}
+			]
+		},
+		{
+			"manga_id": 1010,
+			"manga_title": "Campus H",
+			"manga_cover": "/uploads/covers/7b401ba967652721db9245dd5162b516.jpg",
+			"manga_genres": [
+				"Comédia",
+				"Harém",
+				"Hentai",
+				"Drama",
+				"Ecchi",
+				"Slice of Life"
+			],
+			"chapters": [
+				{
+					"id": 202500,
+					"number": "67.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:24:22.396Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202498,
+					"number": "52.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:17:44.463Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202497,
+					"number": "40.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:17:36.092Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202496,
+					"number": "16.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:16:58.381Z",
+					"uploader": "Keyz"
+				},
+				{
+					"id": 202495,
+					"number": "7.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:16:29.311Z",
+					"uploader": "Keyz"
+				}
+			]
+		},
+		{
+			"manga_id": 1859,
+			"manga_title": "Kagetora Não Pode Voltar",
+			"manga_cover": "/covers/e5d73b187488ed4dfe9ca34d90b216d2.png",
+			"manga_genres": [
+				"Comédia",
+				"Vida Escolar",
+				"Seinen",
+				"Alienígenas",
+				"Troca de Gênero"
+			],
+			"chapters": [
+				{
+					"id": 202499,
+					"number": "2.00",
+					"title": "",
+					"upload_date": "2025-12-12T20:19:08.188Z",
+					"uploader": "Luiz"
+				}
+			]
+		},
+		{
+			"manga_id": 583,
+			"manga_title": "Mais Que Bela Colheita, Rei Demônio",
+			"manga_cover": "/uploads/covers/be158011a6d626d50c4d5c597acc3359.png",
+			"manga_genres": [
+				"Ação",
+				"Aventura",
+				"Fantasia",
+				"Comédia",
+				"Isekai"
+			],
+			"chapters": [
+				{
+					"id": 202494,
+					"number": "45.00",
+					"title": "",
+					"upload_date": "2025-12-12T19:33:12.140Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 197103,
+					"number": "44.00",
+					"title": "",
+					"upload_date": "2025-12-05T02:42:15.288Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 190015,
+					"number": "43.00",
+					"title": "",
+					"upload_date": "2025-11-27T02:02:51.395Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 187767,
+					"number": "32.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:41:19.292Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187763,
+					"number": "7.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:41:02.198Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187761,
+					"number": "11.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:41:01.108Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187752,
+					"number": "1.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:40:09.652Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187751,
+					"number": "3.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:39:56.633Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181618,
+					"number": "42.00",
+					"title": "",
+					"upload_date": "2025-11-20T18:26:48.711Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 172447,
+					"number": "41.00",
+					"title": "",
+					"upload_date": "2025-11-13T02:07:18.327Z",
+					"uploader": "Kuro_Uploader"
+				}
+			]
+		},
+		{
+			"manga_id": 176,
+			"manga_title": "O Soldado Esqueleto Não Pôde Proteger a Masmorra",
+			"manga_cover": "/uploads/covers/86d29cb700874b81dee67ee14fd6bdf6.jpg",
+			"manga_genres": [
+				"Ação",
+				"Aventura",
+				"Fantasia",
+				"Monstros",
+				"Reencarnação",
+				"Viagem no Tempo"
+			],
+			"chapters": [
+				{
+					"id": 202493,
+					"number": "360.00",
+					"title": "",
+					"upload_date": "2025-12-12T19:32:45.289Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 195880,
+					"number": "359.00",
+					"title": "",
+					"upload_date": "2025-12-04T18:05:14.984Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 190749,
+					"number": "358.00",
+					"title": "",
+					"upload_date": "2025-11-29T04:34:53.167Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186584,
+					"number": "114.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:44:41.963Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186538,
+					"number": "337.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:37:40.323Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186535,
+					"number": "338.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:37:35.383Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186529,
+					"number": "326.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:37:05.529Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186528,
+					"number": "304.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:37:04.784Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186526,
+					"number": "324.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:37:04.457Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186522,
+					"number": "251.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:37:02.739Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186521,
+					"number": "272.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:37:02.225Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186520,
+					"number": "216.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:37:01.696Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186519,
+					"number": "245.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:37:00.544Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186517,
+					"number": "247.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:36:59.936Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186511,
+					"number": "194.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:35:46.355Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186510,
+					"number": "197.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:35:45.144Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186509,
+					"number": "196.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:35:44.320Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186506,
+					"number": "193.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:35:05.896Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186505,
+					"number": "188.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:35:05.292Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186503,
+					"number": "183.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:35:04.166Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186502,
+					"number": "181.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:35:03.677Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186498,
+					"number": "173.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:34:10.485Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186496,
+					"number": "148.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:33:52.220Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186495,
+					"number": "162.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:33:45.720Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186494,
+					"number": "135.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:33:41.731Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186493,
+					"number": "142.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:33:36.820Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186491,
+					"number": "104.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:33:31.915Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186489,
+					"number": "77.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:33:12.073Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186488,
+					"number": "86.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:33:08.720Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186485,
+					"number": "74.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:31:29.690Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186484,
+					"number": "65.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:31:27.512Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186483,
+					"number": "40.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:31:09.522Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186481,
+					"number": "43.00",
+					"title": "",
+					"upload_date": "2025-11-24T20:31:04.795Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 182025,
+					"number": "357.00",
+					"title": "",
+					"upload_date": "2025-11-23T00:55:59.174Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 176197,
+					"number": "356.00",
+					"title": "",
+					"upload_date": "2025-11-14T19:03:27.936Z",
+					"uploader": "Kuro_Uploader"
+				}
+			]
+		},
+		{
+			"manga_id": 279,
+			"manga_title": "O Tutorial é Muito Difícil",
+			"manga_cover": "/uploads/covers/d266c49b3d607dc13b5f0d4d38423f10.png",
+			"manga_genres": [
+				"Ação",
+				"Aventura",
+				"Fantasia",
+				"Artes Marciais",
+				"Torre"
+			],
+			"chapters": [
+				{
+					"id": 202492,
+					"number": "247.00",
+					"title": "",
+					"upload_date": "2025-12-12T19:32:14.631Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 193978,
+					"number": "246.00",
+					"title": "",
+					"upload_date": "2025-12-03T01:29:53.033Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 190882,
+					"number": "245.00",
+					"title": "",
+					"upload_date": "2025-11-29T05:44:26.418Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 188030,
+					"number": "240.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:59:12.812Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188023,
+					"number": "194.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:58:32.458Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188011,
+					"number": "191.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:58:01.747Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188009,
+					"number": "180.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:57:38.669Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187999,
+					"number": "177.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:57:17.089Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187992,
+					"number": "166.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:56:51.320Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187984,
+					"number": "151.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:56:16.570Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187971,
+					"number": "135.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:55:43.381Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187969,
+					"number": "136.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:55:43.071Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187955,
+					"number": "129.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:55:02.744Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187946,
+					"number": "128.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:54:04.191Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187942,
+					"number": "122.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:53:34.467Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187934,
+					"number": "111.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:52:31.360Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187930,
+					"number": "101.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:52:11.988Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187918,
+					"number": "98.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:51:49.106Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187909,
+					"number": "91.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:51:24.062Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187905,
+					"number": "82.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:50:59.787Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187897,
+					"number": "43.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:50:46.525Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187887,
+					"number": "37.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:50:25.675Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187885,
+					"number": "10.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:50:24.785Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 180857,
+					"number": "244.00",
+					"title": "",
+					"upload_date": "2025-11-19T20:37:11.147Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 172987,
+					"number": "243.00",
+					"title": "",
+					"upload_date": "2025-11-13T19:53:28.174Z",
+					"uploader": "Kuro_Uploader"
+				}
+			]
+		},
+		{
+			"manga_id": 242,
+			"manga_title": "O Vilão De Cabelos Amarelos No Romance Da Personagem Principal Feminina Quer Felicidade",
+			"manga_cover": "/uploads/covers/330f9f64f3166ffb8d8a0f435b434846.jpg",
+			"manga_genres": [
+				"Ação",
+				"Comédia",
+				"Fantasia",
+				"Harem",
+				"Reencarnação",
+				"Romance",
+				"Seinen"
+			],
+			"chapters": [
+				{
+					"id": 202491,
+					"number": "48.00",
+					"title": "",
+					"upload_date": "2025-12-12T19:30:31.748Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 197399,
+					"number": "47.00",
+					"title": "",
+					"upload_date": "2025-12-05T19:08:19.542Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 190700,
+					"number": "46.00",
+					"title": "",
+					"upload_date": "2025-11-28T22:14:54.737Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 187988,
+					"number": "25.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:56:20.814Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187987,
+					"number": "20.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:56:18.302Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187985,
+					"number": "23.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:56:17.604Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187983,
+					"number": "30.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:56:15.658Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187978,
+					"number": "19.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:55:49.688Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187977,
+					"number": "16.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:55:49.317Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187975,
+					"number": "14.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:55:45.901Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187965,
+					"number": "8.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:55:11.087Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 187963,
+					"number": "13.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:55:06.165Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181863,
+					"number": "45.00",
+					"title": "",
+					"upload_date": "2025-11-21T18:20:01.756Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 177044,
+					"number": "44.00",
+					"title": "",
+					"upload_date": "2025-11-14T21:50:23.389Z",
+					"uploader": "Kuro_Uploader"
+				}
+			]
+		},
+		{
+			"manga_id": 101,
+			"manga_title": "O Cavaleiro em Eterna Regressão",
+			"manga_cover": "/covers/e09343ec5ece6b2bc79f127c4bf775b9.png",
+			"manga_genres": [
+				"Ação",
+				"Aventura",
+				"Artes Marciais",
+				"Regressão"
+			],
+			"chapters": [
+				{
+					"id": 202486,
+					"number": "88.00",
+					"title": "",
+					"upload_date": "2025-12-12T19:02:15.288Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 197405,
+					"number": "87.00",
+					"title": "",
+					"upload_date": "2025-12-05T19:09:07.059Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 191238,
+					"number": "86.00",
+					"title": "",
+					"upload_date": "2025-11-29T18:50:00.708Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 182358,
+					"number": "60.00",
+					"title": "",
+					"upload_date": "2025-11-23T20:49:58.547Z",
+					"uploader": "teste"
+				},
+				{
+					"id": 182356,
+					"number": "67.00",
+					"title": "",
+					"upload_date": "2025-11-23T20:49:57.611Z",
+					"uploader": "teste"
+				},
+				{
+					"id": 182351,
+					"number": "61.00",
+					"title": "",
+					"upload_date": "2025-11-23T20:49:55.150Z",
+					"uploader": "teste"
+				},
+				{
+					"id": 182349,
+					"number": "53.00",
+					"title": "",
+					"upload_date": "2025-11-23T20:49:08.233Z",
+					"uploader": "teste"
+				},
+				{
+					"id": 182348,
+					"number": "52.00",
+					"title": "",
+					"upload_date": "2025-11-23T20:49:03.399Z",
+					"uploader": "teste"
+				},
+				{
+					"id": 181874,
+					"number": "85.00",
+					"title": "",
+					"upload_date": "2025-11-21T19:52:42.728Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 176201,
+					"number": "84.00",
+					"title": "",
+					"upload_date": "2025-11-14T19:06:07.237Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 172362,
+					"number": "40.00",
+					"title": "",
+					"upload_date": "2025-11-12T23:42:11.927Z",
+					"uploader": "Mizer"
+				}
+			]
+		},
+		{
+			"manga_id": 893,
+			"manga_title": "Regressando com o Poder do Monarca",
+			"manga_cover": "/uploads/covers/71a039d9dff96ea3f8a6f692eab79683.jpg",
+			"manga_genres": [
+				"Ação",
+				"Aventura",
+				"Shounen",
+				"Fantasia"
+			],
+			"chapters": [
+				{
+					"id": 202485,
+					"number": "120.00",
+					"title": "",
+					"upload_date": "2025-12-12T19:01:27.413Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 192001,
+					"number": "119.00",
+					"title": "",
+					"upload_date": "2025-11-30T16:59:10.252Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 188183,
+					"number": "110.00",
+					"title": "",
+					"upload_date": "2025-11-24T23:24:53.084Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188181,
+					"number": "94.00",
+					"title": "",
+					"upload_date": "2025-11-24T23:24:41.618Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188180,
+					"number": "104.00",
+					"title": "",
+					"upload_date": "2025-11-24T23:24:18.249Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188179,
+					"number": "101.00",
+					"title": "",
+					"upload_date": "2025-11-24T23:24:03.356Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181950,
+					"number": "91.00",
+					"title": "",
+					"upload_date": "2025-11-22T18:21:27.456Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181935,
+					"number": "89.00",
+					"title": "",
+					"upload_date": "2025-11-22T06:03:47.076Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181920,
+					"number": "76.00",
+					"title": "",
+					"upload_date": "2025-11-22T02:55:07.362Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181919,
+					"number": "68.00",
+					"title": "",
+					"upload_date": "2025-11-22T02:34:35.057Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181917,
+					"number": "66.00",
+					"title": "",
+					"upload_date": "2025-11-22T02:21:45.380Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181915,
+					"number": "65.00",
+					"title": "",
+					"upload_date": "2025-11-22T02:13:19.741Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181912,
+					"number": "62.00",
+					"title": "",
+					"upload_date": "2025-11-22T02:01:59.559Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181910,
+					"number": "42.00",
+					"title": "",
+					"upload_date": "2025-11-22T01:08:08.003Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181908,
+					"number": "40.00",
+					"title": "",
+					"upload_date": "2025-11-22T00:58:21.602Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181907,
+					"number": "38.00",
+					"title": "",
+					"upload_date": "2025-11-22T00:50:04.043Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181904,
+					"number": "33.00",
+					"title": "",
+					"upload_date": "2025-11-22T00:28:25.533Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181901,
+					"number": "24.00",
+					"title": "",
+					"upload_date": "2025-11-22T00:00:04.180Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181899,
+					"number": "21.00",
+					"title": "",
+					"upload_date": "2025-11-21T23:38:30.173Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181898,
+					"number": "17.00",
+					"title": "",
+					"upload_date": "2025-11-21T23:36:43.355Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181871,
+					"number": "118.00",
+					"title": "",
+					"upload_date": "2025-11-21T19:51:16.780Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 176199,
+					"number": "117.00",
+					"title": "",
+					"upload_date": "2025-11-14T19:04:55.079Z",
+					"uploader": "Kuro_Uploader"
+				}
+			]
+		},
+		{
+			"manga_id": 1038,
+			"manga_title": "Os Dez Grandes Imperadores do Início São Todos Meus Aprendizes",
+			"manga_cover": "/covers/b0eb38512dea37998ccb72bf46160752.jpg",
+			"manga_genres": [
+				"Ação",
+				"Artes Marciais",
+				"Fantasia",
+				"Histórico",
+				"Reencarnação",
+				"Shounen"
+			],
+			"chapters": [
+				{
+					"id": 202484,
+					"number": "108.00",
+					"title": "",
+					"upload_date": "2025-12-12T18:30:46.101Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 180737,
+					"number": "107.00",
+					"title": "",
+					"upload_date": "2025-11-19T02:14:16.090Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 180345,
+					"number": "106.00",
+					"title": "",
+					"upload_date": "2025-11-18T00:58:41.948Z",
+					"uploader": "Kuro_Uploader"
+				}
+			]
+		},
+		{
+			"manga_id": 172,
+			"manga_title": "O Último Aventureiro",
+			"manga_cover": "/uploads/covers/33b23913381ca11f7fec161d14095aa4.png",
+			"manga_genres": [
+				"Ação",
+				"Aventura",
+				"Fantasia",
+				"Magia",
+				"Regressão"
+			],
+			"chapters": [
+				{
+					"id": 202483,
+					"number": "100.00",
+					"title": "",
+					"upload_date": "2025-12-12T18:11:23.017Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 198627,
+					"number": "99.00",
+					"title": "",
+					"upload_date": "2025-12-06T22:51:26.485Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 189231,
+					"number": "98.00",
+					"title": "",
+					"upload_date": "2025-11-25T18:11:23.906Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 186094,
+					"number": "68.00",
+					"title": "",
+					"upload_date": "2025-11-24T17:34:34.432Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186093,
+					"number": "61.00",
+					"title": "",
+					"upload_date": "2025-11-24T17:34:06.593Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186092,
+					"number": "44.00",
+					"title": "",
+					"upload_date": "2025-11-24T17:34:03.918Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186091,
+					"number": "24.00",
+					"title": "",
+					"upload_date": "2025-11-24T17:33:39.883Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186090,
+					"number": "11.00",
+					"title": "",
+					"upload_date": "2025-11-24T17:33:32.337Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 186089,
+					"number": "20.00",
+					"title": "",
+					"upload_date": "2025-11-24T17:33:02.807Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 180732,
+					"number": "97.00",
+					"title": "",
+					"upload_date": "2025-11-19T02:08:07.518Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 176128,
+					"number": "96.00",
+					"title": "",
+					"upload_date": "2025-11-14T09:30:09.021Z",
+					"uploader": "Kuro_Uploader"
+				}
+			]
+		},
+		{
+			"manga_id": 1174,
+			"manga_title": "Eu Realmente não Quero ser o Primeiro",
+			"manga_cover": "/covers/513f21231a1bf0793040d998a785f4e1.png",
+			"manga_genres": [
+				"Ação",
+				"Aventura",
+				"Fantasia",
+				"Isekai",
+				"Comédia",
+				"Artes Marciais",
+				"Reencarnação"
+			],
+			"chapters": [
+				{
+					"id": 202482,
+					"number": "71.00",
+					"title": "",
+					"upload_date": "2025-12-12T16:35:42.085Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 202481,
+					"number": "70.00",
+					"title": "",
+					"upload_date": "2025-12-12T16:35:29.060Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 193974,
+					"number": "69.00",
+					"title": "",
+					"upload_date": "2025-12-03T01:23:59.675Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 193717,
+					"number": "68.00",
+					"title": "",
+					"upload_date": "2025-12-02T15:48:36.416Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 193490,
+					"number": "67.00",
+					"title": "",
+					"upload_date": "2025-12-02T01:18:53.786Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 193489,
+					"number": "66.00",
+					"title": "",
+					"upload_date": "2025-12-02T01:18:40.347Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 187397,
+					"number": "26.00",
+					"title": "",
+					"upload_date": "2025-11-24T22:15:00.827Z",
+					"uploader": "Mizer"
+				}
+			]
+		},
+		{
+			"manga_id": 505,
+			"manga_title": "Reencarnação do Antigo Ranker do Clã Murim",
+			"manga_cover": "/covers/edc4efec6f614b277eb0e7bd2f2a29b6.png",
+			"manga_genres": [
+				"Ação",
+				"Aventura",
+				"Shounen",
+				"Sobrenatural",
+				"Reencarnação",
+				"Murim",
+				"Artes Marciais"
+			],
+			"chapters": [
+				{
+					"id": 202480,
+					"number": "189.00",
+					"title": "",
+					"upload_date": "2025-12-12T16:05:36.930Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 196965,
+					"number": "188.00",
+					"title": "",
+					"upload_date": "2025-12-05T01:54:44.468Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 188590,
+					"number": "173.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:24:17.516Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188589,
+					"number": "181.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:24:17.295Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188588,
+					"number": "162.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:23:49.969Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188587,
+					"number": "161.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:23:44.577Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188586,
+					"number": "160.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:23:25.621Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188585,
+					"number": "159.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:23:20.778Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188584,
+					"number": "158.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:23:06.450Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188583,
+					"number": "150.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:23:01.098Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188582,
+					"number": "145.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:22:40.846Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188581,
+					"number": "140.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:22:29.403Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188580,
+					"number": "125.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:22:20.804Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188579,
+					"number": "120.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:21:58.872Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188577,
+					"number": "110.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:21:46.044Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188576,
+					"number": "102.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:21:37.075Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188575,
+					"number": "54.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:21:36.515Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188574,
+					"number": "39.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:21:11.574Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 188573,
+					"number": "15.00",
+					"title": "",
+					"upload_date": "2025-11-25T02:21:07.626Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 181834,
+					"number": "187.00",
+					"title": "",
+					"upload_date": "2025-11-21T11:23:15.882Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 180351,
+					"number": "186.00",
+					"title": "",
+					"upload_date": "2025-11-18T01:00:52.176Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 180350,
+					"number": "185.00",
+					"title": "",
+					"upload_date": "2025-11-18T01:00:27.838Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 180349,
+					"number": "184.00",
+					"title": "",
+					"upload_date": "2025-11-18T01:00:10.188Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 180348,
+					"number": "183.00",
+					"title": "",
+					"upload_date": "2025-11-18T00:59:54.674Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 180347,
+					"number": "182.00",
+					"title": "",
+					"upload_date": "2025-11-18T00:59:36.552Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 179653,
+					"number": "180.00",
+					"title": "",
+					"upload_date": "2025-11-15T22:28:57.447Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 179652,
+					"number": "179.00",
+					"title": "",
+					"upload_date": "2025-11-15T22:28:38.104Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 179651,
+					"number": "178.00",
+					"title": "",
+					"upload_date": "2025-11-15T22:28:19.029Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 179650,
+					"number": "177.00",
+					"title": "",
+					"upload_date": "2025-11-15T22:28:00.000Z",
+					"uploader": "Kuro_Uploader"
+				}
+			]
+		},
+		{
+			"manga_id": 142,
+			"manga_title": "As Aventuras de Greed",
+			"manga_cover": "/covers/49971acfa3da08076505884c4b32358f.png",
+			"manga_genres": [
+				"Ação",
+				"Aventura",
+				"Jogo",
+				"Artes Marciais",
+				"Shounen",
+				"Sci-Fi"
+			],
+			"chapters": [
+				{
+					"id": 202479,
+					"number": "305.00",
+					"title": "",
+					"upload_date": "2025-12-12T16:03:19.135Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 197434,
+					"number": "304.00",
+					"title": "",
+					"upload_date": "2025-12-05T19:24:02.829Z",
+					"uploader": "Mizer"
+				},
+				{
+					"id": 190736,
+					"number": "303.00",
+					"title": "",
+					"upload_date": "2025-11-29T04:12:31.362Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184466,
+					"number": "295.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:06:51.456Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184462,
+					"number": "275.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:06:37.240Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184455,
+					"number": "271.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:06:20.517Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184443,
+					"number": "261.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:05:55.900Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184442,
+					"number": "263.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:05:55.892Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184439,
+					"number": "257.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:05:35.468Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184430,
+					"number": "248.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:05:34.278Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184422,
+					"number": "244.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:05:11.118Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184409,
+					"number": "237.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:04:46.589Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184400,
+					"number": "227.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:04:43.735Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184386,
+					"number": "225.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:04:13.039Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184385,
+					"number": "226.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:04:12.882Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184373,
+					"number": "213.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:03:47.115Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184369,
+					"number": "205.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:03:24.913Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184356,
+					"number": "203.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:03:03.591Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184351,
+					"number": "201.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:03:02.583Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184329,
+					"number": "186.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:02:25.305Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184325,
+					"number": "198.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:02:23.502Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184321,
+					"number": "183.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:02:22.578Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184311,
+					"number": "179.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:02:01.010Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184305,
+					"number": "168.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:01:59.912Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184301,
+					"number": "161.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:01:28.390Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184299,
+					"number": "160.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:01:27.916Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184289,
+					"number": "153.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:01:05.795Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184283,
+					"number": "144.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:01:04.634Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184270,
+					"number": "140.00",
+					"title": "",
+					"upload_date": "2025-11-24T00:00:32.389Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184258,
+					"number": "139.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:59:56.241Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184249,
+					"number": "138.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:59:31.881Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184244,
+					"number": "130.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:59:07.139Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184237,
+					"number": "128.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:58:51.132Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184236,
+					"number": "112.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:58:51.056Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184232,
+					"number": "94.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:58:27.564Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184230,
+					"number": "85.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:58:26.787Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184215,
+					"number": "82.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:57:52.225Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184213,
+					"number": "81.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:57:51.418Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184207,
+					"number": "41.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:57:23.233Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 184193,
+					"number": "34.00",
+					"title": "",
+					"upload_date": "2025-11-23T23:56:58.993Z",
+					"uploader": "Yang"
+				},
+				{
+					"id": 181876,
+					"number": "302.00",
+					"title": "",
+					"upload_date": "2025-11-21T19:56:14.176Z",
+					"uploader": "Kuro_Uploader"
+				},
+				{
+					"id": 176205,
+					"number": "301.00",
+					"title": "",
+					"upload_date": "2025-11-14T19:10:19.381Z",
+					"uploader": "Kuro_Uploader"
+				}
+			]
+		}
+	],
+	"pagination": {
+		"page": 1,
+		"limit": 20,
+		"totalPages": 49,
+		"totalItems": 968,
+		"hasNext": true,
+		"hasPrev": false
+	}
+}

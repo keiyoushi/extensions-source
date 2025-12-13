@@ -1,0 +1,60 @@
+{
+	"manga": {
+		"id": 1859,
+		"title": "Kagetora Não Pode Voltar",
+		"alternative_titles": [
+			"Kagetora-kun wa Modorenai",
+			"Kagetora-kun Can't Return"
+		],
+		"description": "Fujiwara Kagetora é um estudante do ensino médio que nunca perdeu uma luta e se orgulha de ser o cara mais durão da escola. No entanto, um dia, ele se envolve em um infeliz acidente de trânsito.  \r\n\r\nQuando Kagetora acorda após o acidente, ele foi transformado em uma garota!  \r\nE, para piorar, um visitante inesperado chega!?!?",
+		"cover_image": "/covers/e5d73b187488ed4dfe9ca34d90b216d2.png",
+		"author": "Yukimoto Shuuji",
+		"artist": "Yukimoto Shuuji",
+		"genres": [
+			"Comédia",
+			"Vida Escolar",
+			"Seinen",
+			"Alienígenas",
+			"Troca de Gênero"
+		],
+		"status": "ongoing",
+		"type": "manga",
+		"uploader_id": 1599,
+		"created_at": "2025-12-12T19:34:46.030Z",
+		"updated_at": "2025-12-12T22:11:17.698Z",
+		"view_count": 5,
+		"is_featured": false,
+		"is_published": true,
+		"approved_at": null,
+		"approved_by": null,
+		"average_rating": "0",
+		"rating_count": "0",
+		"chapter_count": "1",
+		"uploader_name": "Keyz"
+	},
+	"chapters": [
+		{
+			"id": 202499,
+			"chapter_number": "2.00",
+			"title": "",
+			"upload_date": "2025-12-12T20:19:08.188Z",
+			"view_count": 4,
+			"uploader_name": "Luiz"
+		}
+	],
+	"userLibraryStatus": {
+		"status": "reading",
+		"current_chapter": "2.00",
+		"is_favorite": false
+	},
+	"scans": [
+		{
+			"id": 31,
+			"nome": "Rentaro Scan",
+			"slug": "rentaro-scan",
+			"capa": "scan-covers/42dcf6dbac4f3f7fbc1b2276bf2d1d56.jpg",
+			"site": "",
+			"discord": "https://discord.gg/f8aKuaVy8T"
+		}
+	]
+}
