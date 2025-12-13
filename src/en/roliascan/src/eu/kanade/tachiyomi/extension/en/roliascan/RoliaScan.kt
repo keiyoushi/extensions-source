@@ -22,6 +22,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import rx.Observable
 import uy.kohesive.injekt.injectLazy
+import java.util.Locale.getDefault
 
 // Theme: AnimaCEWP
 class RoliaScan : ParsedHttpSource() {
@@ -54,7 +55,7 @@ class RoliaScan : ParsedHttpSource() {
     override fun popularMangaFromElement(element: Element) = searchMangaFromElement(element)
 
     override fun popularMangaParse(response: Response): MangasPage {
-        if (genreList.isEmpty()) {
+        if (optionList.isEmpty()) {
             getFilters(response)
         }
         return super.popularMangaParse(response)
@@ -91,17 +92,6 @@ class RoliaScan : ParsedHttpSource() {
                         return@forEach
                     }
                     url.addQueryParameter(selected.query, selected.value)
-                }
-                is GenreList -> {
-                    val genres = filter.state
-                        .filter { it.state }
-                        .joinToString(",") { it.id }
-
-                    if (genres.isBlank()) {
-                        return@forEach
-                    }
-
-                    url.addQueryParameter("_genres", genres)
                 }
                 else -> {}
             }
@@ -149,6 +139,7 @@ class RoliaScan : ParsedHttpSource() {
         document.selectFirst("tr:has(th:contains(Status)) > td")?.text()?.let {
             status = when {
                 it.contains("publishing", true) -> SManga.ONGOING
+                it.contains("hiatus", true) -> SManga.ON_HIATUS
                 it.contains("completed", true) -> SManga.COMPLETED
                 else -> SManga.UNKNOWN
             }
@@ -216,8 +207,6 @@ class RoliaScan : ParsedHttpSource() {
 
     // ======================== Filters ======================================
 
-    private var genreList = emptyList<Genre>()
-
     private val ratingList = listOf(
         Option("Any"),
         Option("★★★★★ (5)", "5"),
@@ -234,18 +223,12 @@ class RoliaScan : ParsedHttpSource() {
             SelectionList("Rating", ratingList),
         )
 
-        filters += optionList.flatMap {
-            listOf(
-                Filter.Separator(),
-                SelectionList(it.first, it.second),
-            )
-        }
-
-        filters += if (genreList.isNotEmpty()) {
-            listOf(
-                Filter.Separator(),
-                GenreList(title = "Genres", genres = genreList),
-            )
+        filters += if (optionList.isNotEmpty()) {
+            optionList.flatMap {
+                listOf(
+                    SelectionList(it.first, it.second),
+                )
+            }
         } else {
             listOf(
                 Filter.Separator(),
@@ -261,19 +244,13 @@ class RoliaScan : ParsedHttpSource() {
         val script = document.selectFirst("script:containsData(FWP_JSON)")?.data()
             ?: return
 
-        script.getDocumentFragmentFilter(buildRegex("genres"))?.let {
-            genreList = it.select(".facetwp-checkbox").map { element ->
-                Genre(
-                    name = element.selectFirst(".facetwp-display-value")!!.text(),
-                    id = element.attr("data-value"),
-                )
-            }
-        }
-
         val queries = listOf(
+            "Type" to "mtype",
+            "Genres" to "genres",
+            "Status" to "status",
             "Sort" to "sort_posts",
             "Year" to "movies_series_year",
-            "Author" to "movies_series_staff",
+            "Publisher" to "movies_series_year",
         )
 
         optionList = queries.map {
@@ -287,7 +264,8 @@ class RoliaScan : ParsedHttpSource() {
             ?.select(cssQuery)
             ?.map { element ->
                 Option(
-                    name = element.text(),
+                    name = element.text().replace(SUFFIX_REGEX, "")
+                        .replaceFirstChar { if (it.isLowerCase()) it.titlecase(getDefault()) else it.toString() },
                     value = element.attr("value"),
                     query = "_$query",
                 )
@@ -310,14 +288,8 @@ class RoliaScan : ParsedHttpSource() {
         fun selected() = vals[state]
     }
 
-    private class GenreList(title: String, genres: List<Genre>) :
-        Filter.Group<GenreCheckBox>(title, genres.map { GenreCheckBox(it.name, it.id) })
-
-    class GenreCheckBox(name: String, val id: String = name) : Filter.CheckBox(name)
-
-    class Genre(val name: String, val id: String = name.lowercase().replace(" ", "-"))
-
     companion object {
+        private val SUFFIX_REGEX = """\(\d+\)""".toRegex()
         const val PREFIX_SEARCH = "id:"
     }
 }
