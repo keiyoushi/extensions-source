@@ -3,7 +3,7 @@ ext {
     extClass = '.Hipercool'
     themePkg = 'madara'
     baseUrl = 'https://hiper.cool'
-    overrideVersionCode = 1
+    overrideVersionCode = 2
     isNsfw = true
 }
 
