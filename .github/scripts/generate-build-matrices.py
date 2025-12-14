@@ -25,11 +25,11 @@ def run_command(command: str) -> str:
 def get_module_list(ref: str) -> tuple[list[str], list[str]]:
     diff_output = run_command(f"git diff --name-status {ref}").splitlines()
     
-    changed_files = []
-    for line in diff_output:
-        _, primary, *secondary = line.split('\t', maxsplit=2)
-        changed_files.append(primary)
-        changed_files.extend(secondary)
+    changed_files = [
+        file
+        for line in diff_output
+        for file in line.split("\t", 2)[1:]
+    ]
         
     modules = set()
     libs = set()
