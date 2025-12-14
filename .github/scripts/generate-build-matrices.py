@@ -23,7 +23,19 @@ def run_command(command: str) -> str:
     return result.stdout.strip()
 
 def get_module_list(ref: str) -> tuple[list[str], list[str]]:
-    changed_files = run_command(f"git diff --name-only {ref}").splitlines()
+    diff_output = run_command(f"git diff --name-status {ref}").splitlines()
+    
+    changed_files = []
+    for line in diff_output:
+        parts = line.split('\t')
+        status = parts[0]
+        if status.startswith('R'):  # Renamed/moved file
+            # parts[1] is old path, parts[2] is new path
+            changed_files.append(parts[1])  # Add old path
+            changed_files.append(parts[2])  # Add new path
+        else:
+            # For other statuses (A, M, D, etc.), just add the file path
+            changed_files.append(parts[1])
 
     modules = set()
     libs = set()
