@@ -1,5 +1,11 @@
 package eu.kanade.tachiyomi.extension.all.mangaup
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -15,6 +21,10 @@ import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class MangaUp(override val lang: String) : HttpSource() {
     override val name = "Manga UP!"
@@ -25,8 +35,37 @@ class MangaUp(override val lang: String) : HttpSource() {
     private val apiUrl = "https://global-api.$domain/api"
     private val imgUrl = "https://global-img.$domain"
 
-    // TODO("handle login secret")
-    private val secret = "bruh"
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun fetchSecret(): String? {
+        val latch = CountDownLatch(1)
+        var secret: String? = null
+
+        Handler(Looper.getMainLooper()).post {
+            val webView = WebView(Injekt.get<Application>())
+            with(webView.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+            }
+            webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String?) {
+                    view.evaluateJavascript("window.localStorage.getItem('secret')") { value ->
+                        secret = value?.trim('"')
+                        if (secret == "null" || secret.isNullOrBlank()) secret = null
+
+                        latch.countDown()
+                        view.stopLoading()
+                        view.destroy()
+                    }
+                }
+            }
+            webView.loadDataWithBaseURL("$baseUrl/", " ", "text/html", "utf-8", null)
+        }
+
+        latch.await(10, TimeUnit.SECONDS)
+
+        return secret
+    }
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
@@ -35,7 +74,9 @@ class MangaUp(override val lang: String) : HttpSource() {
     override fun popularMangaRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("search")
-            // .addQueryParameter("secret", secret)
+            .apply {
+                fetchSecret()?.let { addQueryParameter("secret", it) }
+            }
             .addQueryParameter("app_ver", "0")
             .addQueryParameter("os_ver", "0")
             .addQueryParameter("lang", lang)
@@ -52,7 +93,9 @@ class MangaUp(override val lang: String) : HttpSource() {
     override fun latestUpdatesRequest(page: Int): Request {
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("home_v2")
-            // .addQueryParameter("secret", secret)
+            .apply {
+                fetchSecret()?.let { addQueryParameter("secret", it) }
+            }
             .addQueryParameter("app_ver", "0")
             .addQueryParameter("os_ver", "0")
             .addQueryParameter("lang", lang)
@@ -77,7 +120,9 @@ class MangaUp(override val lang: String) : HttpSource() {
         }
 
         val url = apiUrl.toHttpUrl().newBuilder()
-            // .addQueryParameter("secret", secret)
+            .apply {
+                fetchSecret()?.let { addQueryParameter("secret", it) }
+            }
             .addQueryParameter("app_ver", "0")
             .addQueryParameter("os_ver", "0")
             .addQueryParameter("lang", lang)
@@ -114,7 +159,9 @@ class MangaUp(override val lang: String) : HttpSource() {
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("manga")
             .addPathSegment("detail_v2")
-            // .addQueryParameter("secret", secret)
+            .apply {
+                fetchSecret()?.let { addQueryParameter("secret", it) }
+            }
             .addQueryParameter("app_ver", "0")
             .addQueryParameter("os_ver", "0")
             .addQueryParameter("title_id", titleId)
@@ -153,7 +200,9 @@ class MangaUp(override val lang: String) : HttpSource() {
         val url = apiUrl.toHttpUrl().newBuilder()
             .addPathSegment("manga")
             .addPathSegment("viewer_v2")
-            // .addQueryParameter("secret", secret)
+            .apply {
+                fetchSecret()?.let { addQueryParameter("secret", it) }
+            }
             .addQueryParameter("app_ver", "0")
             .addQueryParameter("os_ver", "0")
             .addQueryParameter("chapter_id", chapterId)
@@ -168,6 +217,10 @@ class MangaUp(override val lang: String) : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAsProto<ViewerResponse>()
         val pages = result.pageBlocks.flatMap { it.pages }
+        if (pages.isEmpty()) {
+            throw Exception("Log in via WebView and purchase this chapter")
+        }
+
         return pages.mapIndexed { i, page ->
             val img = imgUrl + page.url + "#key=${page.key}#iv=${page.iv}"
             Page(i, imageUrl = img)
