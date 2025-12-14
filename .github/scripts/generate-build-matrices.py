@@ -12,7 +12,7 @@ MULTISRC_LIB_REGEX = re.compile(r"^lib-multisrc/(?P<multisrc>\w+)")
 LIB_REGEX = re.compile(r"^lib/(?P<lib>\w+)")
 MODULE_REGEX = re.compile(r"^:src:(?P<lang>\w+):(?P<extension>\w+)$")
 CORE_FILES_REGEX = re.compile(
-    r"^(buildSrc/|core/|gradle/|build\.gradle\.kts|common\.gradle|gradle\.properties|settings\.gradle\.kts|.github/scripts)"
+    r"^(buildSrc/|core/|gradle/|build\.gradle\.kts|common\.gradle|gradle\.properties|settings\.gradle\.kts)"
 )
 
 def run_command(command: str) -> str:
@@ -27,16 +27,10 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
     
     changed_files = []
     for line in diff_output:
-        parts = line.split('\t')
-        status = parts[0]
-        if status.startswith('R'):  # Renamed/moved file
-            # parts[1] is old path, parts[2] is new path
-            changed_files.append(parts[1])  # Add old path
-            changed_files.append(parts[2])  # Add new path
-        else:
-            # For other statuses (A, M, D, etc.), just add the file path
-            changed_files.append(parts[1])
-
+        _, primary, *secondary = line.split('\t', maxsplit=2)
+        changed_files.append(primary)
+        changed_files.extend(secondary)
+        
     modules = set()
     libs = set()
     deleted = set()
