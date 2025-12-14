@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.extension.pt.mediocretoons
 
+import android.app.Application
+import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,30 +16,161 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONObject
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.text.Normalizer
 
-class MediocreToons : HttpSource() {
+class MediocreToons : HttpSource(), ConfigurableSource {
 
     override val name = "Mediocre Toons"
-
-    override val baseUrl = "https://mediocretoons.site"
-
+    override val baseUrl = "https://mediocrescan.com"
     override val lang = "pt-BR"
-
     override val supportsLatest = true
-
     private val apiUrl = "https://api.mediocretoons.site"
 
-    private val scanId: Long = 2
+    private val preferences: SharedPreferences by lazy {
+        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
+    }
+
+    private var cachedToken: String? = null
+    private var tokenExpiryTime: Long = 0L
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
+        .addInterceptor(::authIntercept)
         .build()
 
+    private fun authIntercept(chain: Interceptor.Chain): Response {
+        val originalRequest = chain.request()
+
+        if (originalRequest.header("Authorization") != null) {
+            return chain.proceed(originalRequest)
+        }
+
+        val token = getValidToken()
+
+        if (token.isNullOrEmpty()) {
+            return chain.proceed(originalRequest)
+        }
+
+        val authenticatedRequest = originalRequest.newBuilder()
+            .header("Authorization", "Bearer $token")
+            .build()
+
+        val response = chain.proceed(authenticatedRequest)
+
+        if (response.code == 401) {
+            response.close()
+            cachedToken = null
+            tokenExpiryTime = 0L
+
+            val newToken = getValidToken()
+            if (!newToken.isNullOrEmpty()) {
+                val retryRequest = originalRequest.newBuilder()
+                    .header("Authorization", "Bearer $newToken")
+                    .build()
+                return chain.proceed(retryRequest)
+            }
+        }
+
+        return response
+    }
+
+    private fun getValidToken(): String? {
+        val now = System.currentTimeMillis()
+
+        if (cachedToken != null && now < tokenExpiryTime) {
+            return cachedToken
+        }
+
+        return fetchNewToken()
+    }
+
+    private fun fetchNewToken(): String? {
+        return try {
+            val authToken = preferences.getString(AUTH_TOKEN_PREF, null)
+
+            if (authToken.isNullOrEmpty()) {
+
+                val email = preferences.getString(EMAIL_PREF, "")
+                val password = preferences.getString(PASSWORD_PREF, "")
+
+                if (email.isNullOrEmpty() || password.isNullOrEmpty()) {
+                    return null
+                }
+
+                loginAndGetToken(email, password)
+            } else {
+                cachedToken = authToken
+                tokenExpiryTime = System.currentTimeMillis() + (3600 * 1000)
+                authToken
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun loginAndGetToken(email: String, password: String): String? {
+        return try {
+
+            val json = JSONObject()
+                .put("email", email.trim())
+                .put("senha", password)
+                .toString()
+
+            val body = json.toRequestBody("application/json".toMediaType())
+
+            val request = Request.Builder()
+                .url("$apiUrl/usuarios/login")
+                .post(body)
+                .header("x-app-key", "toons-mediocre-app")
+                .header("Accept", "application/json")
+                .build()
+
+            val response = network.cloudflareClient.newCall(request).execute()
+
+            if (response.isSuccessful) {
+                val responseBody = response.body.string()
+
+                val jsonResponse = JSONObject(responseBody)
+
+                val token = when {
+                    jsonResponse.has("token") -> jsonResponse.getString("token")
+                    jsonResponse.has("access_token") -> jsonResponse.getString("access_token")
+                    else -> null
+                }
+
+                if (!token.isNullOrEmpty()) {
+                    val expiresIn = jsonResponse.optLong("expiresIn", 3600) * 1000
+
+                    cachedToken = token
+                    tokenExpiryTime = System.currentTimeMillis() + expiresIn
+
+                    preferences.edit()
+                        .putString(AUTH_TOKEN_PREF, token)
+                        .apply()
+
+                    return token
+                } else {
+                    return null
+                }
+            } else {
+                val errorBody = response.body?.string() ?: "Sem corpo de resposta"
+                null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     override fun headersBuilder() = super.headersBuilder()
-        .set("scan-id", scanId.toString())
         .set("x-app-key", "toons-mediocre-app")
 
     // ============================== Popular ================================
@@ -264,8 +400,35 @@ class MediocreToons : HttpSource() {
         return GET(page.url, imageHeaders)
     }
 
+    // ============================== Settings ===============================
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = EMAIL_PREF
+            title = "Email"
+            summary = "Email para login automático"
+            setDefaultValue("")
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = PASSWORD_PREF
+            title = "Senha"
+            summary = "Senha para login automático"
+            setDefaultValue("")
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = AUTH_TOKEN_PREF
+            title = "Token Manual (Opcional)"
+            summary = "Cole o Bearer token manualmente se preferir. Deixe em branco para usar login automático."
+            setDefaultValue("")
+        }.also(screen::addPreference)
+    }
+
     companion object {
         const val CDN_URL = "https://cdn.mediocretoons.site"
+        private const val EMAIL_PREF = "email"
+        private const val PASSWORD_PREF = "password"
+        private const val AUTH_TOKEN_PREF = "auth_token"
     }
 }
 
