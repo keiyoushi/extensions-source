@@ -97,7 +97,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
             val authToken = preferences.getString(AUTH_TOKEN_PREF, null)
 
             if (authToken.isNullOrEmpty()) {
-
                 val email = preferences.getString(EMAIL_PREF, "")
                 val password = preferences.getString(PASSWORD_PREF, "")
 
@@ -118,7 +117,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
 
     private fun loginAndGetToken(email: String, password: String): String? {
         return try {
-
             val json = JSONObject()
                 .put("email", email.trim())
                 .put("senha", password)
@@ -137,7 +135,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
 
             if (response.isSuccessful) {
                 val responseBody = response.body.string()
-
                 val jsonResponse = JSONObject(responseBody)
 
                 val token = when {
@@ -148,7 +145,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
 
                 if (!token.isNullOrEmpty()) {
                     val expiresIn = jsonResponse.optLong("expiresIn", 3600) * 1000
-
                     cachedToken = token
                     tokenExpiryTime = System.currentTimeMillis() + expiresIn
 
@@ -161,7 +157,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
                     return null
                 }
             } else {
-                val errorBody = response.body?.string() ?: "Sem corpo de resposta"
                 null
             }
         } catch (e: Exception) {
@@ -344,7 +339,9 @@ class MediocreToons : HttpSource(), ConfigurableSource {
             Pair("A-Z", "nome"),
         ),
         defaultValue = 0,
-    ) private class TagCheckBox(name: String, val value: String) : Filter.CheckBox(name)
+    )
+
+    private class TagCheckBox(name: String, val value: String) : Filter.CheckBox(name)
 
     private open class UriSelectFilter(
         displayName: String,
