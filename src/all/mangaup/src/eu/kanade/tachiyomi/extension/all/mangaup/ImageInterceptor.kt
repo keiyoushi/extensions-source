@@ -31,24 +31,22 @@ class ImageInterceptor : Interceptor {
 
         if (!response.isSuccessful) return response
 
-        val secretKey = SecretKeySpec(hexStringToByteArray(key), "AES")
-        val ivSpec = IvParameterSpec(hexStringToByteArray(iv))
+        val secretKey = SecretKeySpec(key.decodeHex(), "AES")
+        val ivSpec = IvParameterSpec(iv.decodeHex())
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
         cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
+        val body = response.body.source().cipherSource(cipher).buffer().asResponseBody(response.body.contentType())
 
         return response.newBuilder()
-            .body(response.body.source().cipherSource(cipher).buffer().asResponseBody(response.body.contentType()))
+            .body(body)
             .build()
     }
 
-    private fun hexStringToByteArray(s: String): ByteArray {
-        val len = s.length
-        val data = ByteArray(len / 2)
-        var i = 0
-        while (i < len) {
-            data[i / 2] = ((Character.digit(s[i], 16) shl 4) + Character.digit(s[i + 1], 16)).toByte()
-            i += 2
-        }
-        return data
+    private fun String.decodeHex(): ByteArray {
+        check(length % 2 == 0) { "Must have an even length" }
+
+        return chunked(2)
+            .map { it.toInt(16).toByte() }
+            .toByteArray()
     }
 }
