@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 @Serializable
 class PopularResponse(
@@ -23,6 +24,11 @@ class HomeResponse(
     @ProtoNumber(6) val type: String,
     @ProtoNumber(7) val updates: List<MangaTitle>?,
     @ProtoNumber(11) val newSeries: List<MangaTitle>?,
+)
+
+@Serializable
+class MyPageResponse(
+    @ProtoNumber(1) val favorites: List<MangaTitle>?,
 )
 
 @Serializable
@@ -67,7 +73,7 @@ class MangaChapter(
     @ProtoNumber(1) private val id: Int,
     @ProtoNumber(2) private val name: String,
     @ProtoNumber(3) private val subtitle: String?,
-    @ProtoNumber(6) private val price: Int?,
+    @ProtoNumber(6) val price: Int?,
     @ProtoNumber(9) private val dateStr: String?,
 ) {
     fun toSChapter(mangaId: String) = SChapter.create().apply {
@@ -78,7 +84,9 @@ class MangaChapter(
     }
 }
 
-private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US)
+private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US).apply {
+    timeZone = TimeZone.getTimeZone("Asia/Tokyo")
+}
 
 @Serializable
 class ViewerResponse(

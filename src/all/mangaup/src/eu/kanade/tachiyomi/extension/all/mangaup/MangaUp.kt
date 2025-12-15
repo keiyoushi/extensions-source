@@ -2,12 +2,16 @@ package eu.kanade.tachiyomi.extension.all.mangaup
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -23,10 +28,11 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class MangaUp(override val lang: String) : HttpSource() {
+class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
     override val name = "Manga UP!"
     private val domain = "manga-up.com"
     override val baseUrl = "https://global.$domain"
@@ -34,6 +40,7 @@ class MangaUp(override val lang: String) : HttpSource() {
 
     private val apiUrl = "https://global-api.$domain/api"
     private val imgUrl = "https://global-img.$domain"
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private var secret: String? = null
 
@@ -80,7 +87,9 @@ class MangaUp(override val lang: String) : HttpSource() {
             val request = chain.request()
             val response = chain.proceed(request)
 
-            if (response.code == 410) {
+            // 410: expired secret -> device got removed OR more than 3 secrets/devices active, oldest one expires
+            // 401: invalid secret -> login was aborted; UA mismatch from previous login
+            if (response.code == 410 || response.code == 401) {
                 response.close()
 
                 val failedSecret = request.url.queryParameter("secret")
@@ -92,9 +101,16 @@ class MangaUp(override val lang: String) : HttpSource() {
                 }
 
                 val newSecret = fetchSecret()
+                val isMyPage = request.url.pathSegments.lastOrNull() == "my_page"
+                val isSecretValid = !newSecret.isNullOrEmpty() && newSecret != failedSecret
+
+                if (!isSecretValid && isMyPage) {
+                    throw IOException("Log in via WebView to access your favorites")
+                }
+
                 val newUrl = request.url.newBuilder()
 
-                if (!newSecret.isNullOrEmpty() && newSecret != failedSecret) {
+                if (isSecretValid) {
                     newUrl.setQueryParameter("secret", newSecret)
                 } else {
                     newUrl.removeAllQueryParameters("secret")
@@ -176,8 +192,16 @@ class MangaUp(override val lang: String) : HttpSource() {
             url.addPathSegments("manga/search")
             url.addQueryParameter("word", query)
         } else if (genreFilter.selectedValue.isNotEmpty()) {
-            url.addPathSegments("manga/tag")
-            url.addQueryParameter("tag_id", genreFilter.selectedValue)
+            if (genreFilter.selectedValue == "favorites") {
+                if (secret == null) {
+                    throw Exception("Log in via WebView to access your favorites")
+                }
+                url.addPathSegment("my_page")
+                url.fragment(genreFilter.selectedValue)
+            } else {
+                url.addPathSegments("manga/tag")
+                url.addQueryParameter("tag_id", genreFilter.selectedValue)
+            }
         } else {
             return popularMangaRequest(page)
         }
@@ -190,6 +214,13 @@ class MangaUp(override val lang: String) : HttpSource() {
             val result = response.parseAsProto<MangaDetailResponse>()
             val mangaId = response.request.url.queryParameter("title_id")!!
             return MangasPage(listOf(result.toSManga(mangaId, imgUrl)), false)
+        }
+
+        val fragment = response.request.url.fragment
+        if (fragment == "favorites") {
+            val result = response.parseAsProto<MyPageResponse>()
+            val mangas = result.favorites?.map { it.toSManga(imgUrl) } ?: emptyList()
+            return MangasPage(mangas, false)
         }
 
         val result = response.parseAsProto<SearchResponse>()
@@ -229,7 +260,10 @@ class MangaUp(override val lang: String) : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAsProto<MangaDetailResponse>()
         val mangaId = response.request.url.queryParameter("title_id")!!
-        return result.chapters.map { it.toSChapter(mangaId) }
+        val hidePaid = preferences.getBoolean(HIDE_PAID_PREF, false)
+        return result.chapters
+            .filter { !hidePaid || it.price == null }
+            .map { it.toSChapter(mangaId) }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -273,33 +307,58 @@ class MangaUp(override val lang: String) : HttpSource() {
         return ProtoBuf.decodeFromByteArray(body.bytes())
     }
 
-    override fun getFilterList() = FilterList(
-        SelectFilter(
-            "Genres",
-            arrayOf(
-                Pair("All", ""),
-                Pair("Action", "13"),
-                Pair("Adventure", "14"),
-                Pair("Comedy", "15"),
-                Pair("School Life", "16"),
-                Pair("Dark Fantasy", "17"),
-                Pair("Suspense", "18"),
-                Pair("Historical", "19"),
-                Pair("Game", "20"),
-                Pair("Media Tie-ins", "21"),
-                Pair("LGBTQ+", "253"),
-                Pair("Completed", "256"),
-            ),
-        ),
-    )
+    override fun getFilterList(): FilterList {
+        val showFavorites = preferences.getBoolean(SHOW_FAVORITES_PREF, false)
+        val genres = mutableListOf(
+            Pair("All", ""),
+            Pair("Action", "13"),
+            Pair("Adventure", "14"),
+            Pair("Comedy", "15"),
+            Pair("School Life", "16"),
+            Pair("Dark Fantasy", "17"),
+            Pair("Suspense", "18"),
+            Pair("Historical", "19"),
+            Pair("Game", "20"),
+            Pair("Media Tie-ins", "21"),
+            Pair("LGBTQ+", "253"),
+            Pair("Completed", "256"),
+        )
+
+        if (showFavorites) {
+            genres.add(Pair("Favorites", "favorites"))
+        }
+
+        return FilterList(
+            SelectFilter("Genres", genres.toTypedArray()),
+        )
+    }
 
     private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
         val selectedValue: String get() = vals[state].second
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_PAID_PREF
+            title = "Hide paid chapters"
+            summary = "Hide chapters that require points to unlock."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_FAVORITES_PREF
+            title = "Show \"Favorites\" in Filter"
+            summary = "Adds a \"Favorites\" option for entries marked as favorites on the website (Requires log in via WebView).\n" +
+                "Press \"Reset\" in filters or restart the app to apply changes."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
+
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
         private val ID_SEARCH_PATTERN = "^id:(\\d+)$".toRegex()
+        private const val HIDE_PAID_PREF = "hide_paid_chapters"
+        private const val SHOW_FAVORITES_PREF = "show_favorites_pref"
     }
 }
