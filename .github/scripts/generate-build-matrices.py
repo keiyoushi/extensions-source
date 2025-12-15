@@ -23,8 +23,14 @@ def run_command(command: str) -> str:
     return result.stdout.strip()
 
 def get_module_list(ref: str) -> tuple[list[str], list[str]]:
-    changed_files = run_command(f"git diff --name-only {ref}").splitlines()
-
+    diff_output = run_command(f"git diff --name-status {ref}").splitlines()
+    
+    changed_files = [
+        file
+        for line in diff_output
+        for file in line.split("\t", 2)[1:]
+    ]
+        
     modules = set()
     libs = set()
     deleted = set()
@@ -33,6 +39,7 @@ def get_module_list(ref: str) -> tuple[list[str], list[str]]:
     for file in map(lambda x: Path(x).as_posix(), changed_files):
         if CORE_FILES_REGEX.search(file):
             core_files_changed = True
+            break
         elif match := EXTENSION_REGEX.search(file):
             lang = match.group("lang")
             extension = match.group("extension")
