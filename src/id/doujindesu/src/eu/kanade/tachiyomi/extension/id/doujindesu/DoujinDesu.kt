@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
 import android.content.SharedPreferences
-import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -97,157 +96,157 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     )
 
     private fun genreList() = listOf(
-        Genre("Age Progression"),
-        Genre("Age Regression"),
-        Genre("Ahegao"),
-        Genre("All The Way Through"),
-        Genre("Amputee"),
-        Genre("Anal"),
-        Genre("Anorexia"),
-        Genre("Apron"),
-        Genre("Artist CG"),
-        Genre("Aunt"),
-        Genre("Bald"),
-        Genre("Bestiality"),
-        Genre("Big Ass"),
-        Genre("Big Breast"),
-        Genre("Big Penis"),
-        Genre("Bike Shorts"),
-        Genre("Bikini"),
-        Genre("Birth"),
-        Genre("Bisexual"),
-        Genre("Blackmail"),
-        Genre("Blindfold"),
-        Genre("Bloomers"),
-        Genre("Blowjob"),
-        Genre("Body Swap"),
-        Genre("Bodysuit"),
-        Genre("Bondage"),
-        Genre("Bowjob"),
-        Genre("Business Suit"),
-        Genre("Cheating"),
-        Genre("Collar"),
-        Genre("Collor"),
-        Genre("Condom"),
-        Genre("Cousin"),
-        Genre("Crossdressing"),
-        Genre("Cunnilingus"),
-        Genre("Dark Skin"),
-        Genre("Daughter"),
-        Genre("Defloration"),
-        Genre("Demon"),
-        Genre("Demon Girl"),
-        Genre("Dick Growth"),
-        Genre("DILF"),
-        Genre("Double Penetration"),
-        Genre("Drugs"),
-        Genre("Drunk"),
-        Genre("Elf"),
-        Genre("Emotionless Sex"),
-        Genre("Exhibitionism"),
-        Genre("Eyepatch"),
-        Genre("Females Only"),
-        Genre("Femdom"),
-        Genre("Filming"),
-        Genre("Fingering"),
-        Genre("Footjob"),
-        Genre("Full Color"),
-        Genre("Furry"),
-        Genre("Futanari"),
-        Genre("Garter Belt"),
-        Genre("Gender Bender"),
-        Genre("Ghost"),
-        Genre("Glasses"),
-        Genre("Gore"),
-        Genre("Group"),
-        Genre("Guro"),
-        Genre("Gyaru"),
-        Genre("Hairy"),
-        Genre("Handjob"),
-        Genre("Harem"),
-        Genre("Horns"),
-        Genre("Huge Breast"),
-        Genre("Huge Penis"),
-        Genre("Humiliation"),
-        Genre("Impregnation"),
-        Genre("Incest"),
-        Genre("Inflation"),
-        Genre("Insect"),
-        Genre("Inseki"),
-        Genre("Inverted Nipples"),
-        Genre("Invisible"),
-        Genre("Kemomimi"),
-        Genre("Kimono"),
-        Genre("Lactation"),
-        Genre("Leotard"),
-        Genre("Lingerie"),
-        Genre("Loli"),
-        Genre("Lolipai"),
-        Genre("Maid"),
-        Genre("Males"),
-        Genre("Males Only"),
-        Genre("Masturbation"),
-        Genre("Miko"),
-        Genre("MILF"),
-        Genre("Mind Break"),
-        Genre("Mind Control"),
-        Genre("Minigirl"),
-        Genre("Miniguy"),
-        Genre("Monster"),
-        Genre("Monster Girl"),
-        Genre("Mother"),
-        Genre("Multi-work Series"),
-        Genre("Muscle"),
-        Genre("Nakadashi"),
-        Genre("Necrophilia"),
-        Genre("Netorare"),
-        Genre("Niece"),
-        Genre("Nipple Fuck"),
-        Genre("Nurse"),
-        Genre("Old Man"),
-        Genre("Only"),
-        Genre("Oyakodon"),
-        Genre("Paizuri"),
-        Genre("Pantyhose"),
-        Genre("Possession"),
-        Genre("Pregnant"),
-        Genre("Prostitution"),
-        Genre("Rape"),
-        Genre("Rimjob"),
-        Genre("Scat"),
-        Genre("School Uniform"),
-        Genre("Sex Toys"),
-        Genre("Shemale"),
-        Genre("Shota"),
-        Genre("Sister"),
-        Genre("Sleeping"),
-        Genre("Slime"),
-        Genre("Small Breast"),
-        Genre("Snuff"),
-        Genre("Sole Female"),
-        Genre("Sole Male"),
-        Genre("Stocking"),
-        Genre("Story Arc"),
-        Genre("Sumata"),
-        Genre("Sweating"),
-        Genre("Swimsuit"),
-        Genre("Tanlines"),
-        Genre("Teacher"),
-        Genre("Tentacles"),
-        Genre("Tomboy"),
-        Genre("Tomgirl"),
-        Genre("Torture"),
-        Genre("Twins"),
-        Genre("Twintails"),
-        Genre("Uncensored"),
-        Genre("Unusual Pupils"),
-        Genre("Virginity"),
-        Genre("Webtoon"),
-        Genre("Widow"),
-        Genre("X-Ray"),
-        Genre("Yandere"),
-        Genre("Yaoi"),
-        Genre("Yuri"),
+        Genre("Age Progression", "age-progression"),
+        Genre("Age Regression", "age-regression"),
+        Genre("Ahegao", "ahegao"),
+        Genre("All The Way Through", "all-the-way-through"),
+        Genre("Amputee", "amputee"),
+        Genre("Anal", "anal"),
+        Genre("Anorexia", "anorexia"),
+        Genre("Apron", "apron"),
+        Genre("Artist CG", "artist-cg"),
+        Genre("Aunt", "aunt"),
+        Genre("Bald", "bald"),
+        Genre("Bestiality", "bestiality"),
+        Genre("Big Ass", "big-ass"),
+        Genre("Big Breast", "big-breast"),
+        Genre("Big Penis", "big-penis"),
+        Genre("Bike Shorts", "bike-shorts"),
+        Genre("Bikini", "bikini"),
+        Genre("Birth", "birth"),
+        Genre("Bisexual", "bisexual"),
+        Genre("Blackmail", "blackmail"),
+        Genre("Blindfold", "blindfold"),
+        Genre("Bloomers", "bloomers"),
+        Genre("Blowjob", "blowjob"),
+        Genre("Body Swap", "body-swap"),
+        Genre("Bodysuit", "bodysuit"),
+        Genre("Bondage", "bondage"),
+        Genre("Bowjob", "bowjob"),
+        Genre("Business Suit", "business-suit"),
+        Genre("Cheating", "cheating"),
+        Genre("Collar", "collar"),
+        Genre("Collor", "collor"),
+        Genre("Condom", "condom"),
+        Genre("Cousin", "cousin"),
+        Genre("Crossdressing", "crossdressing"),
+        Genre("Cunnilingus", "cunnilingus"),
+        Genre("Dark Skin", "dark-skin"),
+        Genre("Daughter", "daughter"),
+        Genre("Defloration", "defloration"),
+        Genre("Demon", "demon"),
+        Genre("Demon Girl", "demon-girl"),
+        Genre("Dick Growth", "dick-growth"),
+        Genre("DILF", "dilf"),
+        Genre("Double Penetration", "double-penetration"),
+        Genre("Drugs", "drugs"),
+        Genre("Drunk", "drunk"),
+        Genre("Elf", "elf"),
+        Genre("Emotionless Sex", "emotionless-sex"),
+        Genre("Exhibitionism", "exhibitionism"),
+        Genre("Eyepatch", "eyepatch"),
+        Genre("Females Only", "females-only"),
+        Genre("Femdom", "femdom"),
+        Genre("Filming", "filming"),
+        Genre("Fingering", "fingering"),
+        Genre("Footjob", "footjob"),
+        Genre("Full Color", "full-color"),
+        Genre("Furry", "furry"),
+        Genre("Futanari", "futanari"),
+        Genre("Garter Belt", "garter-belt"),
+        Genre("Gender Bender", "gender-bender"),
+        Genre("Ghost", "ghost"),
+        Genre("Glasses", "glasses"),
+        Genre("Gore", "gore"),
+        Genre("Group", "group"),
+        Genre("Guro", "guro"),
+        Genre("Gyaru", "gyaru"),
+        Genre("Hairy", "hairy"),
+        Genre("Handjob", "handjob"),
+        Genre("Harem", "harem"),
+        Genre("Horns", "horns"),
+        Genre("Huge Breast", "huge-breast"),
+        Genre("Huge Penis", "huge-penis"),
+        Genre("Humiliation", "humiliation"),
+        Genre("Impregnation", "impregnation"),
+        Genre("Incest", "incest"),
+        Genre("Inflation", "inflation"),
+        Genre("Insect", "insect"),
+        Genre("Inseki", "inseki"),
+        Genre("Inverted Nipples", "inverted-nipples"),
+        Genre("Invisible", "invisible"),
+        Genre("Kemomimi", "kemomimi"),
+        Genre("Kimono", "kimono"),
+        Genre("Lactation", "lactation"),
+        Genre("Leotard", "leotard"),
+        Genre("Lingerie", "lingerie"),
+        Genre("Loli", "loli"),
+        Genre("Lolipai", "lolipai"),
+        Genre("Maid", "maid"),
+        Genre("Males", "males"),
+        Genre("Males Only", "males-only"),
+        Genre("Masturbation", "masturbation"),
+        Genre("Miko", "miko"),
+        Genre("MILF", "milf"),
+        Genre("Mind Break", "mind-break"),
+        Genre("Mind Control", "mind-control"),
+        Genre("Minigirl", "minigirl"),
+        Genre("Miniguy", "miniguy"),
+        Genre("Monster", "monster"),
+        Genre("Monster Girl", "monster-girl"),
+        Genre("Mother", "mother"),
+        Genre("Multi-work Series", "multi-work-series"),
+        Genre("Muscle", "muscle"),
+        Genre("Nakadashi", "nakadashi"),
+        Genre("Necrophilia", "necrophilia"),
+        Genre("Netorare", "netorare"),
+        Genre("Niece", "niece"),
+        Genre("Nipple Fuck", "nipple-fuck"),
+        Genre("Nurse", "nurse"),
+        Genre("Old Man", "old-man"),
+        Genre("Only", "only"),
+        Genre("Oyakodon", "oyakodon"),
+        Genre("Paizuri", "paizuri"),
+        Genre("Pantyhose", "pantyhose"),
+        Genre("Possession", "possession"),
+        Genre("Pregnant", "pregnant"),
+        Genre("Prostitution", "prostitution"),
+        Genre("Rape", "rape"),
+        Genre("Rimjob", "rimjob"),
+        Genre("Scat", "scat"),
+        Genre("School Uniform", "school-uniform"),
+        Genre("Sex Toys", "sex-toys"),
+        Genre("Shemale", "shemale"),
+        Genre("Shota", "shota"),
+        Genre("Sister", "sister"),
+        Genre("Sleeping", "sleeping"),
+        Genre("Slime", "slime"),
+        Genre("Small Breast", "small-breast"),
+        Genre("Snuff", "snuff"),
+        Genre("Sole Female", "sole-female"),
+        Genre("Sole Male", "sole-male"),
+        Genre("Stocking", "stocking"),
+        Genre("Story Arc", "story-arc"),
+        Genre("Sumata", "sumata"),
+        Genre("Sweating", "sweating"),
+        Genre("Swimsuit", "swimsuit"),
+        Genre("Tanlines", "tanlines"),
+        Genre("Teacher", "teacher"),
+        Genre("Tentacles", "tentacles"),
+        Genre("Tomboy", "tomboy"),
+        Genre("Tomgirl", "tomgirl"),
+        Genre("Torture", "torture"),
+        Genre("Twins", "twins"),
+        Genre("Twintails", "twintails"),
+        Genre("Uncensored", "uncensored"),
+        Genre("Unusual Pupils", "unusual-pupils"),
+        Genre("Virginity", "virginity"),
+        Genre("Webtoon", "webtoon"),
+        Genre("Widow", "widow"),
+        Genre("X-Ray", "x-ray"),
+        Genre("Yandere", "yandere"),
+        Genre("Yaoi", "yaoi"),
+        Genre("Yuri", "yuri"),
     )
 
     private class AuthorGroupSeriesOption(val display: String, val key: String) {
@@ -271,23 +270,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     private val typePrefixRegex = Regex("^(Doujinshi|Manga|Manhwa)\\s+", RegexOption.IGNORE_CASE)
     private val chapterInfoRegex = Regex("\\s*Ch\\s*\\d+.*$")
-    /*
-    private fun basicInformationFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        element.select("div.p-6.py-1.px-1 a").let {
-            val fullTitle = element.selectFirst("div.p-6.py-1.px-1 div.font-semibold")?.text()?.trim() ?: ""
-            var cleanTitle = fullTitle.replace(chapterInfoRegex, "").trim()
-            cleanTitle = cleanTitle.replace(typePrefixRegex, "")
-            manga.title = cleanTitle
-            manga.setUrlWithoutDomain(it.attr("href"))
-        }
-        element.select("div > div > a > div > div:nth-child(1) > div > img").first()?.let {
-            manga.thumbnail_url = imageFromElement(it)
-        }
-
-        return manga
-    }
-     */
 
     private fun basicInformationFromElement(element: Element): SManga {
         val manga = SManga.create()
@@ -343,29 +325,9 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     // Element Selectors
 
-    /*
-    override fun popularMangaSelector(): String = "div.animate-fade-in-up"
+    override fun popularMangaSelector(): String = "div.border.bg-card"
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun searchMangaSelector() = popularMangaSelector()
-     */
-
-    override fun popularMangaSelector(): String {
-        val selector = "div.border.bg-card"
-        Log.d("DouDesuLOG", "Selected source selector (popular): $selector")
-        return selector
-    }
-
-    override fun latestUpdatesSelector(): String {
-        val selector = popularMangaSelector()
-        Log.d("DouDesuLOG", "Selected source selector (latest): $selector")
-        return selector
-    }
-
-    override fun searchMangaSelector(): String {
-        val selector = popularMangaSelector()
-        Log.d("DouDesuLOG", "Selected source selector (search): $selector")
-        return selector
-    }
 
     override fun popularMangaNextPageSelector(): String = "nav > ul > li > a[aria-label='Go to next page']"
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
@@ -618,7 +580,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             genres.add(genre)
         }
         manga.author = authorParser
-        manga.genre = titleElement.select("div.my-4 > a").joinToString { it.text() }
+        manga.genre = genres.joinToString()
         manga.status = parseStatus(
             infoElement.selectFirst("td:contains(Status) ~ td")!!.text(),
         )
