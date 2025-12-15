@@ -31,6 +31,7 @@ import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import okhttp3.brotli.BrotliInterceptor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
@@ -146,6 +147,11 @@ class Manhuarm(
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(2, TimeUnit.MINUTES)
             .rateLimit(2, 1)
+            // Fix disk cache / decompression issues
+            .apply {
+                val index = networkInterceptors().indexOfFirst { it is BrotliInterceptor }
+                if (index >= 0) interceptors().add(networkInterceptors().removeAt(index))
+            }
             .addInterceptor(warmupInterceptor)
             .addInterceptorIf(
                 !disableTranslator && language.lang != language.origin,
@@ -189,16 +195,29 @@ class Manhuarm(
     override fun pageListParse(document: Document): List<Page> {
         val pages = super.pageListParse(document)
         val chapterId = document.selectFirst("#wp-manga-current-chap")!!.attr("data-id")
+        val chapterUrl = document.location()
 
-        val headers = headersBuilder()
-            .set("Sec-Fetch-Site", "same-origin")
-            .set("Sec-Fetch-Mode", "cors")
-            .set("Sec-Fetch-Dest", "empty")
+        // Use minimal headers for JSON request - Cloudflare may be blocking complex requests
+        val jsonHeaders = Headers.Builder()
+            .add("Referer", chapterUrl)
+            .add("Accept", "application/json")
             .build()
 
-        val dialog = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data/$chapterId.json", headers))
-            .execute()
-            .parseAs<List<PageDto>>()
+        val dialog = try {
+            val response = client.newCall(GET("$baseUrl/wp-content/uploads/ocr-data/$chapterId.json", jsonHeaders))
+                .execute()
+
+            // If server returns error (403, etc), skip translations
+            if (!response.isSuccessful) {
+                response.close()
+                emptyList()
+            } else {
+                response.parseAs<List<PageDto>>()
+            }
+        } catch (e: Exception) {
+            // If JSON parsing fails, skip translations
+            emptyList()
+        }
 
         if (dialog.isEmpty()) {
             return pages
