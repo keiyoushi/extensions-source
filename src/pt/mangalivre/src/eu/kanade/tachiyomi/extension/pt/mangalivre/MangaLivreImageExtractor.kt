@@ -10,7 +10,6 @@ object MangaLivreImageExtractor {
 
     private val PLACEHOLDER_PATTERNS = listOf("hi.png", "placeholder", "loading")
     private val SCRIPT_XOR_KEY_REGEX = Regex(""""([a-f0-9]{8})"\s*,\s*"([a-f0-9]{8})"""")
-    
     private const val DEFAULT_KEY1 = "2e88429b"
     private const val DEFAULT_KEY2 = "29d076b6"
 
