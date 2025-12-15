@@ -2,8 +2,8 @@ ext {
     extName = 'Ainz Scans ID'
     extClass = '.AinzScansID'
     themePkg = 'mangathemesia'
-    baseUrl = 'https://ainzscans.net'
-    overrideVersionCode = 1
+    baseUrl = 'https://ainzscans01.com'
+    overrideVersionCode = 2
     isNsfw = false
 }
 
