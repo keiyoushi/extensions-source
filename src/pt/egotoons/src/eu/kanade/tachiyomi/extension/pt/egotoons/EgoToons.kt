@@ -34,6 +34,7 @@ class EgoToons : HttpSource(), ConfigurableSource {
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
+        .addInterceptor(ImageDecryptor())
         .build()
 
     private val preferences: SharedPreferences by getPreferencesLazy()
