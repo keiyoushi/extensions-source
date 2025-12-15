@@ -1,9 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
 import android.util.Base64
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
 import org.jsoup.nodes.Document
 
 object MangaLivreImageExtractor {
@@ -13,7 +11,7 @@ object MangaLivreImageExtractor {
     private const val DEFAULT_KEY1 = "2e88429b"
     private const val DEFAULT_KEY2 = "29d076b6"
 
-    fun extractImageUrls(document: Document, json: Json): List<String>? {
+    fun extractImageUrls(document: Document): List<String>? {
         val dataXSpans = document.select("span[data-x]")
         if (dataXSpans.isEmpty()) return null
 
@@ -26,7 +24,7 @@ object MangaLivreImageExtractor {
         if (allEncodedData.isBlank()) return null
 
         val jsonArray = decodeDataXToJson(allEncodedData, key1, key2)
-        return parseUrlsFromJson(jsonArray, json)
+        return parseUrlsFromJson(jsonArray)
     }
 
     private fun decodeDataXToJson(encodedData: String, key1: String, key2: String): String {
@@ -51,11 +49,11 @@ object MangaLivreImageExtractor {
             .replace("\\/", "/")
     }
 
-    private fun parseUrlsFromJson(jsonStr: String, json: Json): List<String>? {
+    private fun parseUrlsFromJson(jsonStr: String): List<String>? {
         return try {
-            json.parseToJsonElement(jsonStr).jsonArray
-                .map { it.jsonPrimitive.content.trim() }
-                .filter { it.isNotBlank() && isValidImageUrl(it) }
+            jsonStr.parseAs<List<String>>()
+                .map { it.trim() }
+                .filter { isValidImageUrl(it) }
                 .ifEmpty { null }
         } catch (_: Exception) {
             null
