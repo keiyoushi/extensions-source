@@ -1,6 +1,6 @@
 package eu.kanade.tachiyomi.extension.fr.raijinscans
 
-import android.webkit.CookieManager
+import android.util.Base64
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -20,6 +20,8 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.Calendar
 import java.util.Locale
+import kotlin.collections.mapIndexed
+import kotlin.experimental.xor
 
 class RaijinScans : HttpSource() {
 
@@ -35,9 +37,8 @@ class RaijinScans : HttpSource() {
     private val nonceRegex = """"nonce"\s*:\s*"([^"]+)"""".toRegex()
     private val numberRegex = """(\d+)""".toRegex()
     private val descriptionScriptRegex = """content\.innerHTML = `([\s\S]+?)`;""".toRegex()
-    private val rmtRegex = """window\._rmt\s*=\s*["']([^"']+)["']""".toRegex()
-
-    private val webViewCookieManager: CookieManager by lazy { CookieManager.getInstance() }
+    private val rmdRegex = """window\._rmd\s*=\s*["']([^"']+)["']""".toRegex()
+    private val rmkRegex = """window\._rmk\s*=\s*["']([^"']+)["']""".toRegex()
 
     override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/")
 
@@ -193,36 +194,45 @@ class RaijinScans : HttpSource() {
     }
 
     // ========================== Page List =============================
-    private fun getImages(t: String): List<Page> {
-        val requestBody = FormBody.Builder()
-            .add("t", t)
-            .add("action", "rm_get_images")
-            .build()
+    private fun String.extractGroup(regex: Regex): String =
+        regex.find(this)?.groupValues?.getOrNull(1).orEmpty()
 
-        val request = Request.Builder()
-            .url("$baseUrl/wp-admin/admin-ajax.php")
-            .post(requestBody)
-            .headers(headers)
-            .addHeader("Cookie", webViewCookieManager.getCookie(baseUrl) ?: "")
-            .build()
-        for (i in 1..10) {
-            val adminRes = client.newCall(request).execute()
-            if (adminRes.isSuccessful) {
-                val responseJson = adminRes.parseAs<ImageResponseDto>()
-                val images = responseJson.data.u
-                return images.mapIndexed { index, imageUrl ->
-                    Page(index, imageUrl = imageUrl)
-                }
-            }
+    private fun decodeKey(rmk: String): IntArray {
+        val decoded = Base64.decode(rmk, Base64.DEFAULT)
+        val keySeed = intArrayOf(90, 60, 126, 29, 159, 178, 78, 106)
+
+        return IntArray(8) { index ->
+            (decoded[index].toInt() and 0xFF) xor keySeed[index]
         }
-        throw UnsupportedOperationException("Can't fetch images. Please try again.")
+    }
+
+    private fun decryptRmd(rmd: String, key: IntArray): List<String> {
+        val normalized = rmd.replace('-', '+').replace('_', '/')
+        val decoded = Base64.decode(normalized, Base64.DEFAULT)
+
+        val decrypted = decoded.mapIndexed { index, byte ->
+            ((byte.toInt() and 0xFF) xor key[index % key.size]).toChar()
+        }.joinToString("")
+
+        return decrypted.parseAs()
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val matchResult = rmtRegex.find(response.body.string())
-        val t = matchResult?.groups?.get(1)?.value ?: ""
-        if (t.isBlank()) throw UnsupportedOperationException("Can't find window._rmt")
-        return getImages(t)
+        val body = response.body.string()
+
+        val rmd = body.extractGroup(rmdRegex)
+        val rmk = body.extractGroup(rmkRegex)
+
+        require(rmd.isNotBlank() && rmk.isNotBlank()) {
+            "Can't find window._rmd or window._rmk"
+        }
+
+        val key = decodeKey(rmk)
+        val imageUrls = decryptRmd(rmd, key)
+
+        return imageUrls.mapIndexed { index, url ->
+            Page(index, imageUrl = url)
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException("Not used.")
