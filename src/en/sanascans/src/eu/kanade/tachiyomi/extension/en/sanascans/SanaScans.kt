@@ -50,11 +50,34 @@ class SanaScans : Iken(
 
         val pages = document.getNextJson("images")
             .parseAs<List<SanaPageDto>>()
-            .sortedBy { it.order ?: Int.MAX_VALUE }
+            .let { pageDtos ->
+                // Sana sometimes assigns sequential `order` values to the wrong image URLs,
+                // pushing some pages (eg "04 …") to the end. The filename itself usually
+                // starts with the actual page number, so prefer that when present.
+                val hasPageNumbers = pageDtos.count { it.url.extractLeadingPageNumber() != null }
+                val useFilenameOrdering = hasPageNumbers >= (pageDtos.size / 2)
+
+                if (useFilenameOrdering) {
+                    pageDtos.sortedWith(
+                        compareBy<SanaPageDto> { it.url.extractLeadingPageNumber() ?: Int.MAX_VALUE }
+                            .thenBy { it.order ?: Int.MAX_VALUE },
+                    )
+                } else {
+                    pageDtos.sortedBy { it.order ?: Int.MAX_VALUE }
+                }
+            }
 
         return pages.mapIndexed { idx, p ->
-            Page(idx, imageUrl = p.url)
+            Page(idx, imageUrl = p.url.encodeSpaces())
         }
+    }
+
+    private fun String.encodeSpaces(): String = replace(" ", "%20")
+
+    private fun String.extractLeadingPageNumber(): Int? {
+        val fileName = substringAfterLast('/')
+        val match = leadingPageNumberRegex.find(fileName) ?: return null
+        return match.groupValues[1].toIntOrNull()
     }
 
     private fun String?.normalizeForSearch(): String {
@@ -73,6 +96,7 @@ class SanaScans : Iken(
         private val diacriticsRegex = Regex("\\p{M}+")
         private val nonAlphanumericRegex = Regex("[^a-z0-9]+")
         private val multiSpaceRegex = Regex("\\s+")
+        private val leadingPageNumberRegex = Regex("^0*(\\d{1,5})")
     }
 
     @Serializable
