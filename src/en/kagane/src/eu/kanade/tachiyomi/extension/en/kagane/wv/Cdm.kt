@@ -22,20 +22,17 @@ enum class DeviceTypes(val value: Int) {
     }
 }
 
-@Suppress("ArrayInDataClass")
 @Serializable
-data class V2(
-    val signature: ByteArray,
+class V2(
     val version: UByte = 2u,
     val type: DeviceTypes,
-    val securityLevel: UByte,
-    val flags: UByte?,
     val privateKey: ByteArray,
     val clientId: ByteArray,
 ) {
     companion object {
         private const val MAGIC = "WVD".length
 
+        @Suppress("UNUSED_VARIABLE", "unused")
         fun parseStream(stream: ByteArray): V2 {
             val buffer = ByteBuffer.wrap(stream).order(ByteOrder.BIG_ENDIAN)
 
@@ -50,7 +47,6 @@ data class V2(
                 ?: throw IllegalArgumentException("Invalid device type: $typeValue")
 
             val securityLevel = buffer.get().toUByte()
-
             val flags = buffer.get().toUByte().takeIf { it != 0u.toUByte() }
 
             val privateKeyLen = buffer.short.toInt()
@@ -61,19 +57,16 @@ data class V2(
             val clientId = ByteArray(clientIdLen)
             buffer.get(clientId)
 
-            return V2(signature, version, type, securityLevel, flags, privateKey, clientId)
+            return V2(version, type, privateKey, clientId)
         }
     }
 }
 
-data class Cdm(
+class Cdm(
     val deviceType: DeviceTypes,
-    val systemId: UInt,
-    val securityLevel: Int,
     val clientId: ClientIdentification,
     val rsaKey: RSAPrivateKey,
 ) {
-    @OptIn(ExperimentalStdlibApi::class)
     fun getLicenseChallenge(
         pssh: ProtectionSystemHeaderBox,
         licenseType: LicenseType = LicenseType.STREAMING,
@@ -129,19 +122,9 @@ data class Cdm(
             val parsed = V2.parseStream(wvdData.decodeBase64())
 
             val clientData = ProtoBuf.decodeFromByteArray<ClientIdentification>(parsed.clientId)
-            val signedCertificate = clientData.token?.let {
-                ProtoBuf.decodeFromByteArray<SignedDrmCertificate>(it)
-            } ?: throw Exception("Failed to parse signed drm certificate")
-            val certificate = signedCertificate.drmCertificate?.let {
-                ProtoBuf.decodeFromByteArray<DrmCertificate>(it)
-            } ?: throw Exception("Failed to parse drm certificate")
-            val systemId = certificate.systemId
-                ?: throw Exception("Failed to get system id")
 
             return Cdm(
                 deviceType = parsed.type,
-                systemId = systemId,
-                securityLevel = parsed.securityLevel.toInt(),
                 clientId = clientData,
                 rsaKey = getKey(parsed.privateKey),
             )

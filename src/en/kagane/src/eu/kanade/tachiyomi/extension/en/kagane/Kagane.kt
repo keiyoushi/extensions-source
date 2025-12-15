@@ -349,7 +349,8 @@ class Kagane : HttpSource(), ConfigurableSource {
 
     private fun getChallengeWvd(f: ByteArray): String {
         val cdm = Cdm.fromData(preferences.wvd)
-        val pssh = parsePssh(getPssh(f)).content as ProtectionSystemHeaderBox
+        val pssh = parsePssh(getPssh(f)).content as? ProtectionSystemHeaderBox
+            ?: throw Exception("Failed to parse pssh")
         return cdm.getLicenseChallenge(pssh)
     }
 
