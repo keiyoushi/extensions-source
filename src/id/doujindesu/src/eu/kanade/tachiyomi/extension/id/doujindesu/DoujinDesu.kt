@@ -7,7 +7,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.AppInfo
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -15,10 +14,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
-import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -263,10 +260,10 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private class AuthorGroupSeriesFilter(options: Array<AuthorGroupSeriesOption>) : Filter.Select<AuthorGroupSeriesOption>("Filter by Author/Group/Series", options, 0)
     private class AuthorGroupSeriesValueFilter : Filter.Text("Nama Author/Group/Series")
     private class CharacterFilter : Filter.Text("Karakter")
-    private class CategoryNames(categories: Array<Category>) : Filter.Select<Category>("Kategori", categories, 0)
-    private class OrderBy(orders: Array<Order>) : Filter.Select<Order>("Urutkan", orders, 0)
-    private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
-    private class StatusList(statuses: Array<Status>) : Filter.Select<Status>("Status", statuses, 0)
+    private class CategoryNames(type: Array<Category>) : Filter.Select<Category>("Kategori", type, 0)
+    private class OrderBy(order: Array<Order>) : Filter.Select<Order>("Urutkan", order, 0)
+    private class GenreList(genre: List<Genre>) : Filter.Group<Genre>("Genre", genre)
+    private class StatusList(status: Array<Status>) : Filter.Select<Status>("Status", status, 0)
 
     private val typePrefixRegex = Regex("^(Doujinshi|Manga|Manhwa)\\s+", RegexOption.IGNORE_CASE)
     private val chapterInfoRegex = Regex("\\s*Ch\\s*\\d+.*$")
@@ -426,40 +423,54 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private val chapterPrefixRegex = Regex("""^\d+(-\d+)?\.\s*.*""")
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val titleElement = document.selectFirst("section.flex > div.flex-1")!!
-        val infoElement = document.selectFirst("section.flex > div.flex-1 > table > tbody > tr")!!
-        val authorName = if (infoElement.select("td:contains(Author) ~ td").isEmpty()) {
+        val titleElement = document.selectFirst("section.flex div.flex-1")!!
+        val infoElement = document.selectFirst("section.flex div.flex-1 tbody")!!
+        val authorName = if (infoElement.select("td:contains(Author) ~ td a").isEmpty()) {
             null
         } else {
-            infoElement.select("td:contains(Author) ~ td").joinToString { it.text() }
+            infoElement
+                .select("td:contains(Author) ~ td a")
+                .joinToString(", ") { it.text().trim() }
         }
-        val groupName = if (infoElement.select("td:contains(Group) ~ td").isEmpty()) {
+
+        val groupName = if (infoElement.select("td:contains(Group) ~ td a").isEmpty()) {
             "Tidak Diketahui"
         } else {
-            infoElement.select("td:contains(Group) ~ td").joinToString { it.text() }
+            val text = infoElement
+                .select("td:contains(Group) ~ td a")
+                .joinToString(", ") { it.text().trim() }
+            if (text == "N/A") "Tidak Diketahui" else text
         }
+
         val authorParser = if (authorName.isNullOrEmpty()) {
-            groupName?.takeIf { !it.isNullOrEmpty() && it != "Tidak Diketahui" }
+            groupName.takeIf { it.isNotEmpty() && it != "Tidak Diketahui" }
         } else {
             authorName
         }
-        val characterName = if (infoElement.select("td:contains(Character) ~ td").isEmpty()) {
+
+        val characterName = if (infoElement.select("td:contains(Character) ~ td a").isEmpty()) {
             "Tidak Diketahui"
         } else {
-            infoElement.select("td:contains(Character) ~ td").joinToString { it.text() }
+            infoElement
+                .select("td:contains(Character) ~ td a")
+                .joinToString(", ") { it.text().trim() }
         }
-        val seriesParser = if (infoElement.select("td:contains(Series) ~ td").text() == "Manhwa") {
-            infoElement.select("td:contains(Serialization) ~ td").text()
-        } else {
-            infoElement.select("td:contains(Series) ~ td").text()
-        }
-        val alternativeTitle = if (titleElement.select("h2").isEmpty()) {
-            "Tidak Diketahui"
-        } else {
-            titleElement.select("h2").joinToString { it.text() }
-        }
+
+        val seriesParser = infoElement
+            .select("td:contains(Series) ~ td a")
+            .text()
+            .trim()
+            .ifEmpty { "Tidak Diketahui" }
+
+        val alternativeTitle = document
+            .selectFirst("section.flex div.flex-1 h2")
+            ?.text()
+            ?.trim()
+            .takeIf { it?.isNotEmpty() == true }
+            ?: "Tidak Diketahui"
+
         val manga = SManga.create()
-        manga.description = if (titleElement.select("div.leading-6 > p").isEmpty()) {
+        manga.description = if (titleElement.select("div.leading-6 > p:nth-child(1)").isEmpty()) {
             """
             Tidak ada deskripsi yang tersedia bosque
 
@@ -575,12 +586,14 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             """.trimMargin().replace(Regex(" +"), " ")
         }
         val genres = mutableListOf<String>()
-        titleElement.select("div.my-4 > a").forEach { element ->
-            val genre = element.text()
-            genres.add(genre)
+        titleElement.select("div.my-4 a button").forEach { element ->
+            val genre = element.text().trim()
+            if (genre.isNotEmpty()) {
+                genres.add(genre)
+            }
         }
         manga.author = authorParser
-        manga.genre = genres.joinToString()
+        manga.genre = genres.joinToString(", ")
         manga.status = parseStatus(
             infoElement.selectFirst("td:contains(Status) ~ td")!!.text(),
         )
@@ -593,11 +606,32 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-        val eps = element.selectFirst("td.pl-0 > a > span")?.text()
-        chapter.chapter_number = getNumberFromString(eps)
-        chapter.date_upload = reconstructDate(element.select("td.pl-0 > p").text())
-        chapter.name = "Chapter $eps"
-        chapter.setUrlWithoutDomain(element.select("td.pl-0 > a").attr("href"))
+
+        val numberText = element
+            .selectFirst("td:first-child div")
+            ?.text()
+            ?.trim()
+            ?: "0"
+
+        chapter.chapter_number = getNumberFromString(numberText)
+
+        chapter.name = element
+            .selectFirst("td:nth-child(2) a span")
+            ?.text()
+            ?.trim()
+            ?: "Chapter $numberText"
+
+        val dateText = element
+            .selectFirst("td:nth-child(2) p")
+            ?.text()
+            ?.trim()
+            ?: ""
+
+        chapter.date_upload = reconstructDate(dateText)
+
+        chapter.setUrlWithoutDomain(
+            element.selectFirst("td:nth-child(2) a")!!.attr("href"),
+        )
 
         return chapter
     }
@@ -616,20 +650,17 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun chapterListSelector(): String = "#chapter-list tbody > tr"
+    override fun chapterListSelector(): String = "#chapter-list table tbody tr"
 
     // More parser stuff
     override fun imageUrlParse(document: Document): String =
         throw UnsupportedOperationException()
 
     override fun pageListParse(document: Document): List<Page> {
-        val id = document.select("#reader").attr("data-id")
-        val body = FormBody.Builder()
-            .add("id", id)
-            .build()
-        return client.newCall(POST("$baseUrl/themes/ajax/ch.php", headers, body)).execute()
-            .asJsoup().select("img").mapIndexed { i, element ->
-                Page(i, "", element.attr("src"))
+        return document.select("img[alt='Manga page']")
+            .mapIndexed { index, img ->
+                val url = img.attr("abs:src")
+                Page(index, imageUrl = url)
             }
     }
 
