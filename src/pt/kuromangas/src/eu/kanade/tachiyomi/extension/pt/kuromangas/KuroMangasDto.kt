@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import java.text.SimpleDateFormat
 
 /**
@@ -24,14 +25,13 @@ data class MangaListResponse(
 )
 
 @Serializable
-data class PaginationDto(
+class PaginationDto(
     val page: Int,
     val limit: Int,
-    @SerialName("total_pages") val totalPagesSnake: Int? = null,
-    val totalPages: Int? = null,
+    @JsonNames("total_pages") val totalPages: Int? = null,
     val hasNext: Boolean? = null,
 ) {
-    fun hasNextPage(): Boolean = hasNext ?: (page < (totalPages ?: totalPagesSnake ?: 1))
+    fun hasNextPage(): Boolean = hasNext ?: (page < (totalPages ?: 1))
 }
 
 @Serializable
@@ -54,7 +54,7 @@ data class MangaDto(
             this@MangaDto.description?.let { append(it) }
             this@MangaDto.alternativeTitles?.takeIf { it.isNotEmpty() }?.let {
                 if (isNotEmpty()) append("\n\n")
-                append("Títulos alternativos: ${it.joinToString(", ")}")
+                append("Títulos alternativos: ${it.joinToString()}")
             }
         }.takeIf { it.isNotBlank() }
         author = this@MangaDto.author
@@ -86,7 +86,7 @@ data class ChapterDto(
     fun toSChapter(mangaId: Int, dateFormat: SimpleDateFormat) = SChapter.create().apply {
         url = "/chapter/$mangaId/$id"
         name = buildString {
-            chapterNumber?.toFloatOrNull()?.let { append("Capítulo ${it.formatNumber()}") }
+            chapterNumber?.toFloatOrNull()?.let { append("Capítulo ${it.toString().removeSuffix(".0")}") }
             this@ChapterDto.title?.takeIf { it.isNotBlank() }?.let {
                 if (isNotEmpty()) append(" - ")
                 append(it)
@@ -94,10 +94,6 @@ data class ChapterDto(
         }.ifBlank { "Capítulo ${this@ChapterDto.id}" }
         chapter_number = this@ChapterDto.chapterNumber?.toFloatOrNull() ?: 0f
         date_upload = uploadDate?.let { dateFormat.tryParse(it) } ?: 0L
-    }
-
-    private fun Float.formatNumber(): String {
-        return if (this % 1 == 0f) this.toInt().toString() else this.toString()
     }
 }
 

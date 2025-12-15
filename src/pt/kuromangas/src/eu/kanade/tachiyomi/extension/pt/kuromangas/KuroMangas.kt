@@ -15,6 +15,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -23,6 +25,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 
 class KuroMangas : HttpSource(), ConfigurableSource {
 
@@ -64,7 +67,9 @@ class KuroMangas : HttpSource(), ConfigurableSource {
         .add("Referer", baseUrl)
 
     private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT)
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
     }
 
     private fun getToken(): String {
@@ -201,7 +206,7 @@ class KuroMangas : HttpSource(), ConfigurableSource {
 
     override fun imageRequest(page: Page): Request {
         val newHeaders = headersBuilder()
-            .set("Referer", baseUrl)
+            .set("Referer", "$baseUrl/")
             .build()
         return GET(page.imageUrl!!, newHeaders)
     }
@@ -224,7 +229,10 @@ class KuroMangas : HttpSource(), ConfigurableSource {
     // ============================= Auth ===================================
 
     private fun login(email: String, password: String): String {
-        val payload = """{"email":"$email","password":"$password"}"""
+        val payload = buildJsonObject {
+            put("email", email)
+            put("password", password)
+        }.toString()
         val requestBody = payload.toRequestBody(JSON_MEDIA_TYPE)
         val request = POST("$apiUrl/auth/login", headers, requestBody)
         val response = network.client.newCall(request).execute()
