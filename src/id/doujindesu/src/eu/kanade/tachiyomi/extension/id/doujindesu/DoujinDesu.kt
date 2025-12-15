@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.id.doujindesu
 
 import android.content.SharedPreferences
+import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -84,15 +85,15 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     private val statusList = arrayOf(
         Status("Semua", ""),
-        Status("Berlanjut", "Publishing"),
-        Status("Selesai", "Finished"),
+        Status("Berlanjut", "publishing"),
+        Status("Selesai", "finished"),
     )
 
     private val categoryNames = arrayOf(
         Category("Semua", ""),
-        Category("Doujinshi", "Doujinshi"),
-        Category("Manga", "Manga"),
-        Category("Manhwa", "Manhwa"),
+        Category("Doujinshi", "doujinshi"),
+        Category("Manga", "manga"),
+        Category("Manhwa", "manhwa"),
     )
 
     private fun genreList() = listOf(
@@ -268,13 +269,36 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private class GenreList(genres: List<Genre>) : Filter.Group<Genre>("Genre", genres)
     private class StatusList(statuses: Array<Status>) : Filter.Select<Status>("Status", statuses, 0)
 
+    private val typePrefixRegex = Regex("^(Doujinshi|Manga|Manhwa)\\s+", RegexOption.IGNORE_CASE)
+    private val chapterInfoRegex = Regex("\\s*Ch\\s*\\d+.*$")
+    /*
     private fun basicInformationFromElement(element: Element): SManga {
         val manga = SManga.create()
-        element.select("a").let {
-            manga.title = element.selectFirst("h3.title")!!.text()
+        element.select("div.p-6.py-1.px-1 a").let {
+            val fullTitle = element.selectFirst("div.p-6.py-1.px-1 div.font-semibold")?.text()?.trim() ?: ""
+            var cleanTitle = fullTitle.replace(chapterInfoRegex, "").trim()
+            cleanTitle = cleanTitle.replace(typePrefixRegex, "")
+            manga.title = cleanTitle
             manga.setUrlWithoutDomain(it.attr("href"))
         }
-        element.select("a > figure.thumbnail > img").first()?.let {
+        element.select("div > div > a > div > div:nth-child(1) > div > img").first()?.let {
+            manga.thumbnail_url = imageFromElement(it)
+        }
+
+        return manga
+    }
+     */
+
+    private fun basicInformationFromElement(element: Element): SManga {
+        val manga = SManga.create()
+        element.select("div.p-6.py-1.px-1 > a").let {
+            val fullTitle = element.selectFirst("div.p-6.py-1.px-1 > a > div.font-semibold")?.text()?.trim() ?: ""
+            var cleanTitle = fullTitle.replace(chapterInfoRegex, "").trim()
+            cleanTitle = cleanTitle.replace(typePrefixRegex, "")
+            manga.title = cleanTitle
+            manga.setUrlWithoutDomain(it.attr("href"))
+        }
+        element.select("div > div > a > div > div:nth-child(1) > div > img").first()?.let {
             manga.thumbnail_url = imageFromElement(it)
         }
 
@@ -305,8 +329,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         basicInformationFromElement(element)
 
     override fun popularMangaRequest(page: Int): Request {
-        // Original url $baseUrl/manga/page/$page/?title=&author=&character=&statusx=&typex=&order=popular
-        return GET("$baseUrl/manhwa/page/$page/", headers)
+        return GET("$baseUrl/manga?order=popular&page=$page", headers)
     }
 
     // Latest
@@ -315,17 +338,36 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         basicInformationFromElement(element)
 
     override fun latestUpdatesRequest(page: Int): Request {
-        // Original url $baseUrl/manga/page/$page/?title=&author=&character=&statusx=&typex=&order=update
-        return GET("$baseUrl/doujin/page/$page/", headers)
+        return GET("$baseUrl/manga?order=updated&page=$page", headers)
     }
 
     // Element Selectors
 
-    override fun popularMangaSelector(): String = "#archives > div.entries > article"
+    /*
+    override fun popularMangaSelector(): String = "div.animate-fade-in-up"
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun searchMangaSelector() = popularMangaSelector()
+     */
 
-    override fun popularMangaNextPageSelector(): String = "nav.pagination > ul > li.last > a"
+    override fun popularMangaSelector(): String {
+        val selector = "div.border.bg-card"
+        Log.d("DouDesuLOG", "Selected source selector (popular): $selector")
+        return selector
+    }
+
+    override fun latestUpdatesSelector(): String {
+        val selector = popularMangaSelector()
+        Log.d("DouDesuLOG", "Selected source selector (latest): $selector")
+        return selector
+    }
+
+    override fun searchMangaSelector(): String {
+        val selector = popularMangaSelector()
+        Log.d("DouDesuLOG", "Selected source selector (search): $selector")
+        return selector
+    }
+
+    override fun popularMangaNextPageSelector(): String = "nav > ul > li > a[aria-label='Go to next page']"
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
 
@@ -342,7 +384,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             when (filter) {
                 is CategoryNames -> {
                     val category = filter.values[filter.state]
-                    url.addQueryParameter("typex", category.key)
+                    url.addQueryParameter("type", category.key)
                 }
                 is OrderBy -> {
                     val order = filter.values[filter.state]
@@ -360,7 +402,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 }
                 is StatusList -> {
                     val status = filter.values[filter.state]
-                    url.addQueryParameter("statusx", status.key)
+                    url.addQueryParameter("status", status.key)
                 }
                 else -> {}
             }
@@ -422,7 +464,8 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private val chapterPrefixRegex = Regex("""^\d+(-\d+)?\.\s*.*""")
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.selectFirst("section.metadata")!!
+        val titleElement = document.selectFirst("section.flex > div.flex-1")!!
+        val infoElement = document.selectFirst("section.flex > div.flex-1 > table > tbody > tr")!!
         val authorName = if (infoElement.select("td:contains(Author) ~ td").isEmpty()) {
             null
         } else {
@@ -448,13 +491,13 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         } else {
             infoElement.select("td:contains(Series) ~ td").text()
         }
-        val alternativeTitle = if (infoElement.select("h1.title > span.alter").isEmpty()) {
+        val alternativeTitle = if (titleElement.select("h2").isEmpty()) {
             "Tidak Diketahui"
         } else {
-            infoElement.select("h1.title > span.alter").joinToString { it.text() }
+            titleElement.select("h2").joinToString { it.text() }
         }
         val manga = SManga.create()
-        manga.description = if (infoElement.select("div.pb-2 > p:nth-child(1)").isEmpty()) {
+        manga.description = if (titleElement.select("div.leading-6 > p").isEmpty()) {
             """
             Tidak ada deskripsi yang tersedia bosque
 
@@ -464,7 +507,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             Seri             : $seriesParser
             """.trimIndent()
         } else {
-            val pb2Element = infoElement.selectFirst("div.pb-2")
+            val pb2Element = titleElement.selectFirst("div.leading-6")
 
             val showDescription = pb2Element?.let { element ->
                 val paragraphs = element.select("p")
@@ -570,16 +613,16 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             """.trimMargin().replace(Regex(" +"), " ")
         }
         val genres = mutableListOf<String>()
-        infoElement.select("div.tags > a").forEach { element ->
+        titleElement.select("div.my-4 > a").forEach { element ->
             val genre = element.text()
             genres.add(genre)
         }
         manga.author = authorParser
-        manga.genre = infoElement.select("div.tags > a").joinToString { it.text() }
+        manga.genre = titleElement.select("div.my-4 > a").joinToString { it.text() }
         manga.status = parseStatus(
             infoElement.selectFirst("td:contains(Status) ~ td")!!.text(),
         )
-        manga.thumbnail_url = document.selectFirst("figure.thumbnail img")?.attr("src")
+        manga.thumbnail_url = document.selectFirst("section.flex > div.mx-auto img")?.attr("src")
 
         return manga
     }
@@ -588,11 +631,11 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
     override fun chapterFromElement(element: Element): SChapter {
         val chapter = SChapter.create()
-        val eps = element.selectFirst("div.epsright chapter")?.text()
+        val eps = element.selectFirst("td.pl-0 > a > span")?.text()
         chapter.chapter_number = getNumberFromString(eps)
-        chapter.date_upload = reconstructDate(element.select("div.epsleft > span.date").text())
+        chapter.date_upload = reconstructDate(element.select("td.pl-0 > p").text())
         chapter.name = "Chapter $eps"
-        chapter.setUrlWithoutDomain(element.select("div.epsleft > span.lchx > a").attr("href"))
+        chapter.setUrlWithoutDomain(element.select("td.pl-0 > a").attr("href"))
 
         return chapter
     }
@@ -611,7 +654,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun chapterListSelector(): String = "#chapter_list li"
+    override fun chapterListSelector(): String = "#chapter-list tbody > tr"
 
     // More parser stuff
     override fun imageUrlParse(document: Document): String =
