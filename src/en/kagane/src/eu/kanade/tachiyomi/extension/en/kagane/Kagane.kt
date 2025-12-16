@@ -12,11 +12,15 @@ import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.MultiSelectListPreference
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.en.kagane.ChapterDto.Companion.dateFormat
+import eu.kanade.tachiyomi.extension.en.kagane.wv.Cdm
+import eu.kanade.tachiyomi.extension.en.kagane.wv.ProtectionSystemHeaderBox
+import eu.kanade.tachiyomi.extension.en.kagane.wv.parsePssh
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.await
@@ -323,6 +327,34 @@ class Kagane : HttpSource(), ConfigurableSource {
     private fun getChallengeResponse(seriesId: String, chapterId: String): ChallengeDto {
         val f = "$seriesId:$chapterId".sha256().sliceArray(0 until 16)
 
+        val challenge = if (preferences.wvd.isNotBlank()) {
+            getChallengeWvd(f)
+        } else {
+            getChallengeWebview(f, chapterId)
+        }
+
+        val challengeUrl =
+            "$apiUrl/api/v1/books/$seriesId/file/$chapterId".toHttpUrl().newBuilder().apply {
+                if (preferences.dataSaver) {
+                    addQueryParameter("datasaver", true.toString())
+                }
+            }.build()
+        val challengeBody = buildJsonObject {
+            put("challenge", challenge)
+        }.toJsonString().toRequestBody("application/json".toMediaType())
+
+        return client.newCall(POST(challengeUrl.toString(), apiHeaders, challengeBody)).execute()
+            .parseAs<ChallengeDto>()
+    }
+
+    private fun getChallengeWvd(f: ByteArray): String {
+        val cdm = Cdm.fromData(preferences.wvd)
+        val pssh = parsePssh(getPssh(f)).content as? ProtectionSystemHeaderBox
+            ?: throw Exception("Failed to parse pssh")
+        return cdm.getLicenseChallenge(pssh)
+    }
+
+    private fun getChallengeWebview(f: ByteArray, chapterId: String): String {
         val interfaceName = "jsInterface"
         val html = """
             <!DOCTYPE html>
@@ -455,18 +487,7 @@ class Kagane : HttpSource(), ConfigurableSource {
             throw Exception("Failed to get drm challenge")
         }
 
-        val challengeUrl =
-            "$apiUrl/api/v1/books/$seriesId/file/$chapterId".toHttpUrl().newBuilder().apply {
-                if (preferences.dataSaver) {
-                    addQueryParameter("datasaver", true.toString())
-                }
-            }.build()
-        val challengeBody = buildJsonObject {
-            put("challenge", jsInterface.challenge)
-        }.toJsonString().toRequestBody("application/json".toMediaType())
-
-        return client.newCall(POST(challengeUrl.toString(), apiHeaders, challengeBody)).execute()
-            .parseAs<ChallengeDto>()
+        return jsInterface.challenge
     }
 
     private fun concat(vararg arrays: ByteArray): ByteArray =
@@ -534,6 +555,9 @@ class Kagane : HttpSource(), ConfigurableSource {
     private val SharedPreferences.dataSaver
         get() = this.getBoolean(DATA_SAVER, false)
 
+    private val SharedPreferences.wvd
+        get() = this.getString(WVD_KEY, WVD_DEFAULT)!!
+
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         ListPreference(screen.context).apply {
             key = CONTENT_RATING
@@ -584,6 +608,13 @@ class Kagane : HttpSource(), ConfigurableSource {
             title = "Data saver"
             setDefaultValue(false)
         }.let(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = WVD_KEY
+            title = "WVD file"
+            summary = "Enter contents as base64 string"
+            setDefaultValue(WVD_DEFAULT)
+        }.let(screen::addPreference)
     }
 
     // ============================= Utilities ==============================
@@ -609,6 +640,9 @@ class Kagane : HttpSource(), ConfigurableSource {
         private const val SHOW_DUPLICATES_DEFAULT = true
 
         private const val DATA_SAVER = "data_saver_default"
+
+        private const val WVD_KEY = "wvd_key"
+        private const val WVD_DEFAULT = ""
     }
 
     // ============================= Filters ==============================
