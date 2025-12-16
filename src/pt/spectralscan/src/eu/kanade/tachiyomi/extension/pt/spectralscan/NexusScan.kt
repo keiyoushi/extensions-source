@@ -302,7 +302,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
 
     override fun pageListParse(response: Response): List<Page> {
         val pageData = response.asJsoup()
-            .selectFirst("script#page-data")?.data()
+            .selectFirst("script#raw-payload-stream")?.data()
             ?: return emptyList()
 
         return pageData.parseAs<List<PageData>>().mapIndexed { index, page ->
