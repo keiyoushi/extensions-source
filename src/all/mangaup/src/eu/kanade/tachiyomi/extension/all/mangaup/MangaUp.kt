@@ -325,6 +325,8 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAsProto<ViewerResponse>()
         val pages = result.pageBlocks.flatMap { it.pages }
+            .filter { !it.url.contains("tutorial") }
+
         if (pages.isEmpty()) {
             throw Exception("Log in via WebView and purchase this chapter")
         }
