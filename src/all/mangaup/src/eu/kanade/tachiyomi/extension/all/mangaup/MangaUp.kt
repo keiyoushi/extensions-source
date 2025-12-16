@@ -47,6 +47,9 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
     @SuppressLint("SetJavaScriptEnabled")
     @Synchronized
     private fun fetchSecret(): String? {
+        val useSession = preferences.getBoolean(LOGGED_IN_SESSION_PREF, true)
+        if (!useSession) return null
+
         if (secret != null) return secret
 
         val latch = CountDownLatch(1)
@@ -81,6 +84,29 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
         return secret
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun flushSecret(target: String) {
+        Handler(Looper.getMainLooper()).post {
+            val webView = WebView(Injekt.get<Application>())
+            with(webView.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                blockNetworkImage = true
+            }
+            webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String?) {
+                    val script = "if(window.localStorage.getItem('secret')==='$target'){window.localStorage.removeItem('secret');}"
+                    view.evaluateJavascript(script) {
+                        view.stopLoading()
+                        view.destroy()
+                    }
+                }
+            }
+            webView.loadDataWithBaseURL("$baseUrl/", " ", "text/html", "utf-8", null)
+        }
+    }
+
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor { chain ->
@@ -94,9 +120,13 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
 
                 val failedSecret = request.url.queryParameter("secret")
 
-                synchronized(this) {
-                    if (secret == failedSecret) {
-                        secret = null
+                if (failedSecret != null) {
+                    flushSecret(failedSecret)
+
+                    synchronized(this) {
+                        if (secret == failedSecret) {
+                            secret = null
+                        }
                     }
                 }
 
@@ -178,9 +208,10 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
             return mangaDetailsRequest(SManga.create().apply { url = "/manga/${query.removePrefix(PREFIX_ID_SEARCH)}" })
         }
 
+        val currentSecret = fetchSecret()
         val url = apiUrl.toHttpUrl().newBuilder()
             .apply {
-                fetchSecret()?.let { addQueryParameter("secret", it) }
+                currentSecret?.let { addQueryParameter("secret", it) }
             }
             .addQueryParameter("app_ver", "0")
             .addQueryParameter("os_ver", "0")
@@ -193,7 +224,7 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
             url.addQueryParameter("word", query)
         } else if (genreFilter.selectedValue.isNotEmpty()) {
             if (genreFilter.selectedValue == "favorites") {
-                if (secret == null) {
+                if (currentSecret == null) {
                     throw Exception("Log in via WebView to access your favorites")
                 }
                 url.addPathSegment("my_page")
@@ -223,9 +254,13 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
             return MangasPage(mangas, false)
         }
 
-        val result = response.parseAsProto<SearchResponse>()
-        val mangas = result.titles?.map { it.toSManga(imgUrl) } ?: emptyList()
-        return MangasPage(mangas, false)
+        if (response.request.url.pathSegments.contains("manga") && response.request.url.pathSegments.last() != "detail_v2") {
+            val result = response.parseAsProto<SearchResponse>()
+            val mangas = result.titles?.map { it.toSManga(imgUrl) } ?: emptyList()
+            return MangasPage(mangas, false)
+        }
+
+        return popularMangaParse(response)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -353,6 +388,13 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
                 "Press \"Reset\" in filters or restart the app to apply changes."
             setDefaultValue(false)
         }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = LOGGED_IN_SESSION_PREF
+            title = "Logged-in Session"
+            summary = "If enabled, uses the session from the WebView to access your content.\nDisable to browse as a guest."
+            setDefaultValue(true)
+        }.also(screen::addPreference)
     }
 
     companion object {
@@ -360,5 +402,6 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
         private val ID_SEARCH_PATTERN = "^id:(\\d+)$".toRegex()
         private const val HIDE_PAID_PREF = "hide_paid_chapters"
         private const val SHOW_FAVORITES_PREF = "show_favorites_pref"
+        private const val LOGGED_IN_SESSION_PREF = "logged_in_session"
     }
 }
