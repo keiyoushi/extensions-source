@@ -69,7 +69,7 @@ class MangaLivre :
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        val urls = MangaLivreImageExtractor.extractImageUrls(document, json)
+        val urls = MangaLivreImageExtractor.extractImageUrls(document)
             ?: throw Exception("Failed to load images. Please open the chapter in WebView first.")
 
         return urls.mapIndexed { idx, url ->
