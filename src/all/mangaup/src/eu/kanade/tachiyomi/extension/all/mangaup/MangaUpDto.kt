@@ -91,7 +91,7 @@ class MangaChapter(
         url = "/manga/$mangaId/$id"
         var title = this@MangaChapter.name + (if (subtitle != null) " - $subtitle" else "")
         if (status == 1) {
-            title += " [Finale]"
+            title += " [Final]"
         }
         name = if (price != null) "🔒 $title" else title
         date_upload = dateFormat.tryParse(dateStr)
