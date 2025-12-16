@@ -135,7 +135,8 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
                 val isSecretValid = !newSecret.isNullOrEmpty() && newSecret != failedSecret
 
                 if (!isSecretValid && isMyPage) {
-                    throw IOException("Log in via WebView to access your favorites")
+                    val target = request.url.fragment
+                    throw IOException("Log in via WebView to access your $target")
                 }
 
                 val newUrl = request.url.newBuilder()
@@ -223,9 +224,9 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
             url.addPathSegments("manga/search")
             url.addQueryParameter("word", query)
         } else if (genreFilter.selectedValue.isNotEmpty()) {
-            if (genreFilter.selectedValue == "favorites") {
+            if (genreFilter.selectedValue == "favorites" || genreFilter.selectedValue == "history") {
                 if (currentSecret == null) {
-                    throw Exception("Log in via WebView to access your favorites")
+                    throw Exception("Log in via WebView to access your ${genreFilter.selectedValue}")
                 }
                 url.addPathSegment("my_page")
                 url.fragment(genreFilter.selectedValue)
@@ -248,9 +249,10 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
         }
 
         val fragment = response.request.url.fragment
-        if (fragment == "favorites") {
+        if (fragment == "favorites" || fragment == "history") {
             val result = response.parseAsProto<MyPageResponse>()
-            val mangas = result.favorites?.map { it.toSManga(imgUrl) } ?: emptyList()
+            val list = if (fragment == "favorites") result.favorites else result.history
+            val mangas = list?.map { it.toSManga(imgUrl) } ?: emptyList()
             return MangasPage(mangas, false)
         }
 
@@ -345,6 +347,7 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
     }
 
     override fun getFilterList(): FilterList {
+        val showHistory = preferences.getBoolean(SHOW_HISTORY_PREF, false)
         val showFavorites = preferences.getBoolean(SHOW_FAVORITES_PREF, false)
         val genres = mutableListOf(
             Pair("All", ""),
@@ -360,6 +363,10 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
             Pair("LGBTQ+", "253"),
             Pair("Completed", "256"),
         )
+
+        if (showHistory) {
+            genres.add(Pair("History", "history"))
+        }
 
         if (showFavorites) {
             genres.add(Pair("Favorites", "favorites"))
@@ -384,9 +391,17 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
         }.also(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
+            key = SHOW_HISTORY_PREF
+            title = "Show \"History\" in Filter"
+            summary = "Adds a \"History\" option that displays your reading history from the website (Requires log in via WebView).\n" +
+                "Press \"Reset\" in filters or restart the app to apply changes."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
             key = SHOW_FAVORITES_PREF
             title = "Show \"Favorites\" in Filter"
-            summary = "Adds a \"Favorites\" option for entries marked as favorites on the website (Requires log in via WebView).\n" +
+            summary = "Adds a \"Favorites\" option for entries you’ve marked as favorites on the website (Requires log in via WebView).\n" +
                 "Press \"Reset\" in filters or restart the app to apply changes."
             setDefaultValue(false)
         }.also(screen::addPreference)
@@ -403,6 +418,7 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
         const val PREFIX_ID_SEARCH = "id:"
         private val ID_SEARCH_PATTERN = "^id:(\\d+)$".toRegex()
         private const val HIDE_PAID_PREF = "hide_paid_chapters"
+        private const val SHOW_HISTORY_PREF = "show_history_pref"
         private const val SHOW_FAVORITES_PREF = "show_favorites_pref"
         private const val LOGGED_IN_SESSION_PREF = "logged_in_session"
     }

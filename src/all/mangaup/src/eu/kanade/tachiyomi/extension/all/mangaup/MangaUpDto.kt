@@ -29,6 +29,7 @@ class HomeResponse(
 @Serializable
 class MyPageResponse(
     @ProtoNumber(1) val favorites: List<MangaTitle>?,
+    @ProtoNumber(2) val history: List<MangaTitle>?,
 )
 
 @Serializable
