@@ -23,7 +23,7 @@ class HuntersScans : Madara(
         .readTimeout(1, TimeUnit.MINUTES)
         .addInterceptor { chain ->
             val response = chain.proceed(chain.request())
-            if (response.request.url.pathSegments.contains("registrar")) {
+            if (response.request.url.pathSegments.any { segment -> listOf("logar", "registrar").any { it.equals(segment, true) } }) {
                 response.close()
                 throw IOException("Faça o login na WebView")
             }
