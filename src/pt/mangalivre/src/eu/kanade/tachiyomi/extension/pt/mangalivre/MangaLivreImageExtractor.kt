@@ -1,60 +1,80 @@
 package eu.kanade.tachiyomi.extension.pt.mangalivre
 
 import android.util.Base64
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
+import keiyoushi.utils.parseAs
 import org.jsoup.nodes.Document
 
 object MangaLivreImageExtractor {
 
     private val PLACEHOLDER_PATTERNS = listOf("hi.png", "placeholder", "loading")
-    private val XOR_DATA_REGEX = Regex("""_[a-f0-9]+\[idx\+\+\]\s*=\s*['"]([A-Za-z0-9+/=]+)['"];""")
-    private val XOR_KEY_REGEX = Regex("""var\s+_[a-f0-9]+\s*=\s*["']([a-f0-9]+)["'];""")
+    private val SCRIPT_XOR_KEY_REGEX = Regex(""""([a-f0-9]{8})"\s*,\s*"([a-f0-9]{8})"""")
+    private const val DEFAULT_KEY1 = "2e88429b"
+    private const val DEFAULT_KEY2 = "29d076b6"
 
-    fun extractImageUrls(document: Document, json: Json): List<String>? {
-        for (script in document.select("script:not([src])")) {
-            val data = script.data()
-            if (data.length < 100) continue
+    fun extractImageUrls(document: Document): List<String>? {
+        val dataXSpans = document.select("span[data-x]")
+        if (dataXSpans.isEmpty()) return null
 
-            if (data.contains("idx++") && data.contains("var _x = [")) {
-                extractFromXorEncryption(data, json)?.let { return it }
-            }
-        }
-        return null
+        val (key1, key2) = findXorKeysFromScript(document) ?: Pair(DEFAULT_KEY1, DEFAULT_KEY2)
+
+        val allEncodedData = dataXSpans.mapNotNull { span ->
+            span.attr("data-x").takeIf { it.isNotBlank() }
+        }.joinToString("")
+
+        if (allEncodedData.isBlank()) return null
+
+        val jsonArray = decodeDataXToJson(allEncodedData, key1, key2)
+        return parseUrlsFromJson(jsonArray)
     }
 
-    private fun extractFromXorEncryption(scriptData: String, json: Json): List<String>? {
-        val dataMatches = XOR_DATA_REGEX.findAll(scriptData).toList()
-        if (dataMatches.isEmpty()) return null
+    private fun decodeDataXToJson(encodedData: String, key1: String, key2: String): String {
+        val decodedBytes = Base64.decode(encodedData, Base64.DEFAULT)
 
-        val joinedBase64 = dataMatches.joinToString("") { it.groupValues[1] }
-        if (joinedBase64.isEmpty()) return null
-
-        val xorKey = XOR_KEY_REGEX.findAll(scriptData)
-            .map { it.groupValues[1] }
-            .find { it.length == 8 }
-            ?: return null
-
-        return try {
-            val decodedBytes = Base64.decode(joinedBase64, Base64.DEFAULT)
-
-            val decrypted = buildString {
-                for (i in decodedBytes.indices) {
-                    append((decodedBytes[i].toInt() xor xorKey[i % xorKey.length].code).toChar())
-                }
+        val result = buildString {
+            for (i in decodedBytes.indices) {
+                val block = i / 8
+                val key = if (block % 2 == 0) key1 else key2
+                val c = decodedBytes[i].toInt() and 0xFF xor key[i % 8].code
+                append(c.toChar())
             }
+        }
 
-            json.parseToJsonElement(decrypted).jsonArray
-                .map { it.jsonPrimitive.content.trim() }
-                .filter { it.isNotBlank() && isValidImageUrl(it) }
+        val startIdx = result.indexOf('[')
+        val endIdx = result.lastIndexOf(']')
+        if (startIdx == -1 || endIdx == -1 || endIdx <= startIdx) {
+            return result
+        }
+
+        return result.substring(startIdx, endIdx + 1)
+            .replace("\\/", "/")
+    }
+
+    private fun parseUrlsFromJson(jsonStr: String): List<String>? {
+        return try {
+            jsonStr.parseAs<List<String>>()
+                .map { it.trim() }
+                .filter { isValidImageUrl(it) }
                 .ifEmpty { null }
         } catch (_: Exception) {
             null
         }
     }
 
+    private fun findXorKeysFromScript(document: Document): Pair<String, String>? {
+        for (script in document.select("script:not([src])")) {
+            val data = script.data()
+            if (data.length < 100) continue
+
+            val match = SCRIPT_XOR_KEY_REGEX.find(data)
+            if (match != null) {
+                return Pair(match.groupValues[1], match.groupValues[2])
+            }
+        }
+        return null
+    }
+
     private fun isValidImageUrl(url: String): Boolean {
-        return PLACEHOLDER_PATTERNS.none { url.contains(it, ignoreCase = true) }
+        return PLACEHOLDER_PATTERNS.none { url.contains(it, ignoreCase = true) } &&
+            (url.startsWith("http") || url.startsWith("/"))
     }
 }
