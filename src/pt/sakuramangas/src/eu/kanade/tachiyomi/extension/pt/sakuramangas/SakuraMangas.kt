@@ -1,12 +1,13 @@
 package eu.kanade.tachiyomi.extension.pt.sakuramangas
 
-import android.util.Base64
 import androidx.preference.PreferenceScreen
+import eu.kanade.tachiyomi.extension.pt.sakuramangas.security.SecurityConfig
+import eu.kanade.tachiyomi.extension.pt.sakuramangas.security.SecurityHeaders
+import eu.kanade.tachiyomi.extension.pt.sakuramangas.security.YggdrasilCipher
 import eu.kanade.tachiyomi.lib.randomua.addRandomUAPreferenceToScreen
 import eu.kanade.tachiyomi.lib.randomua.getPrefCustomUA
 import eu.kanade.tachiyomi.lib.randomua.getPrefUAType
 import eu.kanade.tachiyomi.lib.randomua.setRandomUserAgent
-import eu.kanade.tachiyomi.lib.synchrony.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -25,9 +26,7 @@ import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import okio.IOException
 import org.jsoup.nodes.Element
-import java.security.MessageDigest
 import kotlin.concurrent.thread
 
 class SakuraMangas : HttpSource(), ConfigurableSource {
@@ -60,13 +59,13 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
         "Lidos" to "3",
     )
 
-    private val CLIENT_SIGNATURE = "FTY9K-SY6WY-96LKPM"
-
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
         .set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+        .set("Sec-CH-UA", "\"Chromium\";v=\"141\", \"Google Chrome\";v=\"141\", \"Not_A Brand\";v=\"99\"")
         .set("Sec-CH-UA-Mobile", "?1")
+        .set("Sec-CH-UA-Platform", "\"Android\"")
         .set("Sec-Fetch-Dest", "document")
         .set("Sec-Fetch-Mode", "navigate")
         .set("Sec-Fetch-Site", "none")
@@ -74,7 +73,7 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
         .set("Upgrade-Insecure-Requests", "1")
 
     private fun ajaxHeadersBuilder() = headersBuilder()
-        .set("Accept", "text/html, */*; q=0.01")
+        .set("Accept", "application/json, text/javascript, */*; q=0.01")
         .set("Origin", baseUrl)
         .set("X-Requested-With", "XMLHttpRequest")
         .set("Sec-Fetch-Dest", "empty")
@@ -166,7 +165,7 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     private fun mangaDetailsApiRequest(mangaId: String, challenge: String, token: String, securityKey: Long): Request {
-        val proof = generateHeaderProof(challenge, securityKey)
+        val proof = SecurityHeaders.generateHeaderProof(challenge, securityKey, headers["User-Agent"])
             ?: throw Error("Failed to generate header proof")
 
         val form = FormBody.Builder()
@@ -175,12 +174,7 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
             .add("challenge", challenge)
             .add("proof", proof)
 
-        val detailsHeaders = ajaxHeadersBuilder()
-            .add("X-Verification-Key-1", keys.xVerificationKey1)
-            .add("X-Verification-Key-2", keys.xVerificationKey2)
-            .add("X-Client-Signature", CLIENT_SIGNATURE)
-            .add("X-CSRF-Token", token)
-            .build()
+        val detailsHeaders = SecurityHeaders.buildSecuredAjaxHeaders(ajaxHeadersBuilder(), keys, token)
 
         return POST("$baseUrl/dist/sakura/models/manga/.__obf__manga_info.php", detailsHeaders, form.build())
     }
@@ -191,48 +185,23 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
         val challenge = document.selectFirst("meta[name=header-challenge]")!!.attr("content")
         val token = document.selectFirst("meta[name=csrf-token]")!!.attr("content")
 
-        val securityKeyName = document.selectFirst("meta[name=security-key-name]")?.attr("content") ?: "manga_info"
-        val securityKey = if (securityKeyName == "chapter_read") keys.chapterRead else keys.mangaInfo
+        val securityKeyName = document.selectFirst("meta[name=security-key-name]")?.attr("content")
+        val securityKey = SecurityConfig.getSecurityKeyForContext(securityKeyName, keys)
 
         return client.newCall(mangaDetailsApiRequest(mangaId, challenge, token, securityKey)).execute()
+            .also { response ->
+            }
             .parseAs<SakuraMangaInfoDto>().toSManga(document.baseUri())
     }
 
-    private val keys: Keys by lazy {
-        val key1Regex = """key_01:\s*'([^']+)'""".toRegex()
-        val key2Regex = """key_02:\s*'([^']+)'""".toRegex()
-        val mangaInfoRegex = """manga_info:\s*(\d+)""".toRegex()
-        val chapterReadRegex = """chapter_read:\s*(\d+)""".toRegex()
-
-        val script = client.newCall(GET("$baseUrl/dist/sakura/global/security.tcp.js", headers))
-            .execute().body.string()
-
-        val deobfuscated = Deobfuscator.deobfuscateScript(script)
-            ?: throw Error("Failed to deobfuscate security.tcp.js")
-
-        Keys(
-            mangaInfo = mangaInfoRegex.find(deobfuscated)?.groupValues?.get(1)?.toLongOrNull()
-                ?: throw Error("Failed to extract manga_info key"),
-            chapterRead = chapterReadRegex.find(deobfuscated)?.groupValues?.get(1)?.toLongOrNull()
-                ?: throw Error("Failed to extract chapter_read key"),
-            xVerificationKey1 = key1Regex.find(deobfuscated)?.groupValues?.get(1)
-                ?: throw Error("Failed to extract verification key 1"),
-            xVerificationKey2 = key2Regex.find(deobfuscated)?.groupValues?.get(1)
-                ?: throw Error("Failed to extract verification key 2"),
-        )
+    private val keys: SecurityConfig.Keys by lazy {
+        SecurityConfig.extractKeys(baseUrl, client, headers)
     }
-
-    class Keys(
-        val mangaInfo: Long,
-        val chapterRead: Long,
-        val xVerificationKey1: String,
-        val xVerificationKey2: String,
-    )
 
     // ================================ Chapters =======================================
 
     private fun chapterListApiRequest(mangaId: String, challenge: String, token: String, securityKey: Long, page: Int): Request {
-        val proof = generateHeaderProof(challenge, securityKey)
+        val proof = SecurityHeaders.generateHeaderProof(challenge, securityKey, headers["User-Agent"])
             ?: throw Error("Failed to generate header proof")
 
         val form = FormBody.Builder()
@@ -243,12 +212,7 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
             .add("challenge", challenge)
             .add("proof", proof)
 
-        val chapterHeaders = ajaxHeadersBuilder()
-            .add("X-Verification-Key-1", keys.xVerificationKey1)
-            .add("X-Verification-Key-2", keys.xVerificationKey2)
-            .add("X-Client-Signature", CLIENT_SIGNATURE)
-            .add("X-CSRF-Token", token)
-            .build()
+        val chapterHeaders = SecurityHeaders.buildSecuredAjaxHeaders(ajaxHeadersBuilder(), keys, token)
 
         return POST("$baseUrl/dist/sakura/models/manga/.__obf__manga_capitulos.php", chapterHeaders, form.build())
     }
@@ -259,13 +223,15 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
         val challenge = document.selectFirst("meta[name=header-challenge]")!!.attr("content")
         val token = document.selectFirst("meta[name=csrf-token]")!!.attr("content")
 
-        val securityKeyName = document.selectFirst("meta[name=security-key-name]")?.attr("content") ?: "manga_info"
-        val securityKey = if (securityKeyName == "chapter_read") keys.chapterRead else keys.mangaInfo
+        val securityKeyName = document.selectFirst("meta[name=security-key-name]")?.attr("content")
+        val securityKey = SecurityConfig.getSecurityKeyForContext(securityKeyName, keys)
 
         var page = 1
         val chapters = mutableListOf<SChapter>()
         do {
             val apiResponse = client.newCall(chapterListApiRequest(mangaId, challenge, token, securityKey, page++)).execute()
+                .also { resp ->
+                }
                 .parseAs<SakuraChapterListResponseDto>()
 
             val chapterGroup = apiResponse.data.flatMap { it.toSChapterList() }.also {
@@ -287,19 +253,16 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
         challenge: String,
         csrf: String,
     ): Request {
-        val proof = generateHeaderProof(challenge, securityKey)!!
+        val proof = SecurityHeaders.generateHeaderProof(challenge, securityKey, headers["User-Agent"])
+            ?: throw Error("Failed to generate header proof")
+
         val form = FormBody.Builder()
             .add("chapter_id", chapterId)
             .add("token", token)
             .add("challenge", challenge)
             .add("proof", proof)
 
-        val pageHeaders = ajaxHeadersBuilder()
-            .add("X-Verification-Key-1", keys.xVerificationKey1)
-            .add("X-Verification-Key-2", keys.xVerificationKey2)
-            .add("X-Client-Signature", CLIENT_SIGNATURE)
-            .add("X-CSRF-Token", csrf)
-            .build()
+        val pageHeaders = SecurityHeaders.buildSecuredAjaxHeaders(ajaxHeadersBuilder(), keys, csrf)
 
         return POST(
             "$baseUrl/dist/sakura/models/capitulo/__obf__capitulos__read.php",
@@ -317,8 +280,8 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
         val challenge = document.selectFirst("meta[name=header-challenge]")!!.attr("content")
         val csrf = document.selectFirst("meta[name=csrf-token]")!!.attr("content")
 
-        val securityKeyName = document.selectFirst("meta[name=security-key-name]")?.attr("content") ?: "chapter_read"
-        val securityKey = if (securityKeyName == "chapter_read") keys.chapterRead else keys.mangaInfo
+        val securityKeyName = document.selectFirst("meta[name=security-key-name]")?.attr("content")
+        val securityKey = SecurityConfig.getSecurityKeyForContext(securityKeyName, keys)
 
         val apiResponse = client.newCall(pageListApiRequest(chapterId, token, securityKey, challenge, csrf)).execute()
             .parseAs<SakuraMangaChapterReadResponseDto>()
@@ -341,25 +304,13 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
             ?: throw Error("Missing encrypted URLs")
 
         val cipher = encryptedKey.cipher.uppercase()
-        if (cipher != "FENRIR") {
-            throw Error("Unsupported cipher: $cipher")
-        }
-        val ephemeralKey = FenrirCipher.decrypt(encryptedKey.payload, subtoken)
 
-        val imageKey = xorDecrypt(encryptedImageKey, ephemeralKey)
+        val ephemeralKey = YggdrasilCipher.decipher(cipher, encryptedKey.payload, subtoken)
+            ?: throw Error("Unsupported cipher: $cipher. Supported: ${YggdrasilCipher.supportedCiphers.joinToString()}")
 
-        return xorDecrypt(encryptedUrls, imageKey).parseAs()
-    }
+        val imageKey = SecurityHeaders.xorDecrypt(encryptedImageKey, ephemeralKey)
 
-    private fun xorDecrypt(encrypted: String, key: String): String {
-        val decoded = android.util.Base64.decode(encrypted, android.util.Base64.DEFAULT)
-        val result = StringBuilder()
-        for (i in decoded.indices) {
-            val dataByte = decoded[i].toInt() and 0xFF
-            val keyByte = key[i % key.length].code and 0xFF
-            result.append((dataByte xor keyByte).toChar())
-        }
-        return result.toString()
+        return SecurityHeaders.xorDecrypt(encryptedUrls, imageKey).parseAs()
     }
 
     override fun imageUrlParse(response: Response): String = ""
@@ -427,41 +378,6 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
             }
             if (orderOptions.isNotEmpty()) orderByOptions = orderOptions
         } catch (_: Exception) {
-        }
-    }
-
-    // Function extracted from https://sakuramangas.org/dist/sakura/global/security.tcp.js
-    private fun generateHeaderProof(base64: String?, key: Long?): String? {
-        val userAgent = headers["User-Agent"]
-
-        if (base64 == null || key == null || userAgent == null) {
-            return null
-        }
-
-        return try {
-            val decoded = String(Base64.decode(base64, Base64.DEFAULT), Charsets.UTF_8)
-            val parts = decoded.split('/')
-
-            if (parts.size != 3) {
-                return null
-            }
-
-            val part1 = parts[0]
-            val part3 = parts[2]
-
-            var result = part1 + userAgent + key + part3
-            val digest = MessageDigest.getInstance("SHA-256")
-            repeat(23) {
-                val data = result.toByteArray(Charsets.UTF_8)
-                val hashBytes = digest.digest(data)
-                digest.reset()
-                result = hashBytes.joinToString("") { byte ->
-                    String.format("%02x", byte)
-                }
-            }
-            result
-        } catch (e: Exception) {
-            throw IOException("Failed to generate header proof: ${e.message}")
         }
     }
 
