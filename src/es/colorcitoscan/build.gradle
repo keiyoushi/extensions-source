@@ -1,8 +1,8 @@
 ext {
-    extName = 'Spicy Scan'
-    extClass = '.SpicyScan'
+    extName = 'Colorcito Scan'
+    extClass = '.ColorcitoScan'
     themePkg = 'spicytheme'
-    baseUrl = 'https://spicyseries.com'
+    baseUrl = 'https://colorcitoscan.com'
     overrideVersionCode = 0
     isNsfw = true
 }
