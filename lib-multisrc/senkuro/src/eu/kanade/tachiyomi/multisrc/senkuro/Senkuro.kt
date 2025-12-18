@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.multisrc.senkuro
 
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -11,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -29,7 +34,7 @@ import java.util.Locale
 
 abstract class Senkuro(
     override val name: String,
-    override val baseUrl: String,
+    _baseUrl: String,
     final override val lang: String,
 ) : ConfigurableSource, HttpSource() {
 
@@ -39,6 +44,9 @@ abstract class Senkuro(
         .add("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
         .add("Content-Type", "application/json")
 
+    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val API_URL: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString() + "/graphql"
+    override val baseUrl = if (!API_URL.contains(API_DOMAIN_DEFAULT)) _baseUrl else "https://senkuro.me"
     override val client: OkHttpClient =
         network.cloudflareClient.newBuilder()
             .rateLimit(3)
@@ -429,9 +437,28 @@ abstract class Senkuro(
         FilterersTri("Short", "SHORT"),
     )
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = API_DOMAIN_PREF
+            title = API_DOMAIN_TITLE
+            entries = arrayOf("Россия (senkuro.me)", "Публичный (senkuro.com)")
+            entryValues = arrayOf("$API_DOMAIN_DEFAULT", "https://api.senkuro.com")
+            summary = "%s"
+            setDefaultValue(API_DOMAIN_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+
     companion object {
         private const val offsetCount = 20
-        private const val API_URL = "https://api.senkuro.me/graphql"
+
+        private const val API_DOMAIN_PREF = "MangaApiDomain"
+        private const val API_DOMAIN_TITLE = "Домен"
+        private const val API_DOMAIN_DEFAULT = "https://api.senkuro.me"
         private val senkuroExcludeGenres = listOf("hentai", "yaoi", "yuri", "shoujo_ai", "shounen_ai")
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
     }
