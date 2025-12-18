@@ -1,9 +1,9 @@
 ext {
-    extName = 'No Index Scan'
-    extClass = '.NoIndexScan'
+    extName = 'Hanami Heaven'
+    extClass = '.HanamiHeaven'
     themePkg = 'madara'
-    baseUrl = 'https://noindexscan.com'
-    overrideVersionCode = 1
+    baseUrl = 'https://hanamiheaven.org'
+    overrideVersionCode = 2
     isNsfw = true
 }
 

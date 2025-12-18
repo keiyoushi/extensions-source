@@ -7,14 +7,17 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-class NoIndexScan : Madara(
-    "No Index Scan",
-    "https://noindexscan.com",
+class HanamiHeaven : Madara(
+    "Hanami Heaven",
+    "https://hanamiheaven.org",
     "pt-BR",
     SimpleDateFormat("dd/MM/yyyy", Locale.ROOT),
 ) {
+    // NoIndexScan (pt-BR) -> HanamiHeaven (pt-BR)
+    override val id = 987786689720213769L
+
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(1, 1, TimeUnit.SECONDS)
         .build()
 
     override val useNewChapterEndpoint = true
