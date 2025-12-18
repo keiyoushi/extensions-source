@@ -29,8 +29,6 @@ abstract class SpicyTheme(
 
     override val supportsLatest = true
 
-    private val json: Json by injectLazy()
-
     override val client = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
@@ -138,7 +136,7 @@ abstract class SpicyTheme(
 
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAs<PagesResponseDto>()
-        val pages = json.decodeFromString<List<String>>(result.pages.rawImages)
+        val pages = result.pages.rawImages.parseAs<List<String>>()
 
         return pages.mapIndexed { index, url ->
             Page(index, imageUrl = url)
