@@ -85,6 +85,7 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
+    @Synchronized
     private fun flushSecret(target: String) {
         Handler(Looper.getMainLooper()).post {
             val webView = WebView(Injekt.get<Application>())
@@ -346,36 +347,27 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
         return ProtoBuf.decodeFromByteArray(body.bytes())
     }
 
-    override fun getFilterList(): FilterList {
-        val showHistory = preferences.getBoolean(SHOW_HISTORY_PREF, false)
-        val showFavorites = preferences.getBoolean(SHOW_FAVORITES_PREF, false)
-        val genres = mutableListOf(
-            Pair("All", ""),
-            Pair("Action", "13"),
-            Pair("Adventure", "14"),
-            Pair("Comedy", "15"),
-            Pair("School Life", "16"),
-            Pair("Dark Fantasy", "17"),
-            Pair("Suspense", "18"),
-            Pair("Historical", "19"),
-            Pair("Game", "20"),
-            Pair("Media Tie-ins", "21"),
-            Pair("LGBTQ+", "253"),
-            Pair("Completed", "256"),
-        )
-
-        if (showHistory) {
-            genres.add(Pair("History", "history"))
-        }
-
-        if (showFavorites) {
-            genres.add(Pair("Favorites", "favorites"))
-        }
-
-        return FilterList(
-            SelectFilter("Genres", genres.toTypedArray()),
-        )
-    }
+    override fun getFilterList() = FilterList(
+        SelectFilter(
+            "Genres",
+            arrayOf(
+                Pair("All", ""),
+                Pair("Action", "13"),
+                Pair("Adventure", "14"),
+                Pair("Comedy", "15"),
+                Pair("School Life", "16"),
+                Pair("Dark Fantasy", "17"),
+                Pair("Suspense", "18"),
+                Pair("Historical", "19"),
+                Pair("Game", "20"),
+                Pair("Media Tie-ins", "21"),
+                Pair("LGBTQ+", "253"),
+                Pair("Completed", "256"),
+                Pair("History", "history"),
+                Pair("Favorites", "favorites"),
+            ),
+        ),
+    )
 
     private open class SelectFilter(displayName: String, private val vals: Array<Pair<String, String>>) :
         Filter.Select<String>(displayName, vals.map { it.first }.toTypedArray()) {
@@ -391,22 +383,6 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
         }.also(screen::addPreference)
 
         SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_HISTORY_PREF
-            title = "Show \"History\" in Filter"
-            summary = "Adds a \"History\" option that displays your reading history from the website (Requires log in via WebView).\n" +
-                "Press \"Reset\" in filters or restart the app to apply changes."
-            setDefaultValue(false)
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
-            key = SHOW_FAVORITES_PREF
-            title = "Show \"Favorites\" in Filter"
-            summary = "Adds a \"Favorites\" option for entries you’ve marked as favorites on the website (Requires log in via WebView).\n" +
-                "Press \"Reset\" in filters or restart the app to apply changes."
-            setDefaultValue(false)
-        }.also(screen::addPreference)
-
-        SwitchPreferenceCompat(screen.context).apply {
             key = LOGGED_IN_SESSION_PREF
             title = "Logged-in Session"
             summary = "If enabled, uses the session from the WebView to access your content.\nDisable to browse as a guest."
@@ -418,8 +394,6 @@ class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
         const val PREFIX_ID_SEARCH = "id:"
         private val ID_SEARCH_PATTERN = "^id:(\\d+)$".toRegex()
         private const val HIDE_PAID_PREF = "hide_paid_chapters"
-        private const val SHOW_HISTORY_PREF = "show_history_pref"
-        private const val SHOW_FAVORITES_PREF = "show_favorites_pref"
         private const val LOGGED_IN_SESSION_PREF = "logged_in_session"
     }
 }
