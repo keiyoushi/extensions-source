@@ -39,19 +39,16 @@ abstract class DbMultiverse(override val lang: String, private val internalLang:
     }
 
     override fun pageListParse(document: Document): List<Page> {
-        return document.select("#balloonsimg")
-            .let { e ->
-                listOf(
-                    if (e.hasAttr("src")) {
-                        Page(1, "", e.attr("abs:src"))
-                    } else {
-                        e.attr("style")
-                            .substringAfter("(")
-                            .substringBefore(")")
-                            .let { Page(1, "", baseUrl + it) }
-                    },
-                )
+        return document.select("#balloonsimg img")  // Sélect <img> inside div
+        .firstOrNull()  // Take first <img> if exist
+        ?.let { img ->
+            // if src attribute exist, create URL, else return null
+            if (img.hasAttr("src")) {
+                listOf(Page(1, "", img.attr("abs:src")))
+            } else {
+                emptyList()
             }
+        } ?: emptyList()  // if no <img>, return empty list
     }
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
