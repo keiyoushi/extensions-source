@@ -19,14 +19,14 @@ class ChapterListDto(
 
 @Serializable
 class SearchDto(
-    val title: String,
-    val slug: String,
+    private val title: String,
+    private val slug: String,
     @SerialName("cover_image")
-    val thumbnail: String,
+    private val thumbnail: String,
 ) {
     fun toSManga(baseUrl: String) = SManga.create().apply {
         title = this@SearchDto.title
-        thumbnail_url = "$baseUrl/$thumbnail"
+        thumbnail_url = "$baseUrl/storage/$thumbnail"
         url = "/comics/$slug"
     }
 }
