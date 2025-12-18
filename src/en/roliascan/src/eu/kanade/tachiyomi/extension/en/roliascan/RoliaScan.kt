@@ -157,8 +157,10 @@ class RoliaScan : ParsedHttpSource() {
             .asJsoup()
 
         val postId = document
-            .select("input[name=current_page_id]")
-            .attr("value")
+            .select("[class*=\"postid-\"]")
+            .attr("class")
+            .substringAfter("postid-")
+            .substringBefore(" ")
 
         chapters += document.select(chapterListSelector()).map(::chapterFromElement)
         val step = 20
