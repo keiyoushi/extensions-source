@@ -32,6 +32,8 @@ class Astratoons : ParsedHttpSource() {
         .rateLimit(2)
         .build()
 
+    override val versionId: Int = 2
+
     // ======================== Popular ==========================
 
     override fun popularMangaRequest(page: Int) = GET(baseUrl, headers)
