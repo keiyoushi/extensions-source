@@ -117,15 +117,11 @@ class Astratoons : HttpSource() {
     // ======================== Pages ===========================
 
     override fun imageRequest(page: Page): Request {
-        val slices = page.imageUrl!!.split("#")
-        val imageUrl = slices.first()
-        val chapterUrl = slices.last()
-
         val imageHeaders = headers.newBuilder()
-            .set("Referer", chapterUrl)
+            .set("Referer", page.url!!)
             .build()
-
-        return GET(imageUrl, imageHeaders)
+            
+        return GET(page.imageUrl!!, imageHeaders)
     }
 
     override fun pageListParse(response: Response): List<Page> {
