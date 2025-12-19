@@ -3,8 +3,6 @@ package eu.kanade.tachiyomi.extension.pt.sakuramangas.security
 import android.util.Base64
 import okhttp3.Headers
 import okio.IOException
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * Security headers and proof generation for SakuraMangas API requests.
@@ -12,8 +10,8 @@ import kotlin.math.sin
 object SecurityHeaders {
 
     /**
-     * Generates proof hash using FNV-1a based algorithm with 23 sin/cos iterations.
-     * Replicates the JavaScript security.ksr.js algorithm exactly.
+     * Generates proof hash using FNV-1a + MurmurHash2 hybrid algorithm.
+     * Replicates the obfuscated JavaScript algorithm.
      */
     fun generateHeaderProof(challenge: String?, securityKey: Long?, userAgent: String?): String? {
         if (challenge == null || securityKey == null || userAgent == null) {
@@ -30,39 +28,52 @@ object SecurityHeaders {
 
             android.util.Log.d("SakuraMangas", "Proof input string (len=${input.length}): $input")
 
+            // FNV-1a hash
             var hash = 2166136261L
             for (char in input) {
                 hash = hash xor char.code.toLong()
-                hash = ((hash * 16777619L) and 0xFFFFFFFFL)
-                if (hash >= 0x80000000L) hash -= 0x100000000L
+                hash = (hash * 16777619L) and 0xFFFFFFFFL
             }
 
-            var v1 = hash
-            var v2 = hash xor 1431655765L
-            var v3 = hash xor -1431655766L
-            var v4 = hash xor 858993459L
+            // Initialize with magic constants
+            var v1 = hash xor 0xCAFEBABEL
+            var v2 = hash xor 0xDEADBEEFL
+            var v3 = hash xor 0xBADDCAF1L
+            var v4 = hash xor 0xDEADBFFEL
 
-            repeat(23) { i ->
-                val sin1 = sin((v1 + i).toDouble()) * 1337.5
-                val cos1 = cos((v2 + i).toDouble()) * 1337.5
+            // MurmurHash2-style mixing
+            val m = 0x5BD1E995L
+            val r = 24
 
-                val t1 = sin1.toLong() xor v3
-                val t2 = cos1.toLong() xor v4
+            repeat(20) {
+                v1 = ((v1 * m) and 0xFFFFFFFFL)
+                v1 = v1 xor (v1 ushr r)
+                v1 = ((v1 * m) and 0xFFFFFFFFL)
 
-                val t1u = t1 and 0xFFFFFFFFL
-                val t2u = t2 and 0xFFFFFFFFL
+                v2 = ((v2 * m) and 0xFFFFFFFFL)
+                v2 = v2 xor (v2 ushr r)
+                v2 = ((v2 * m) and 0xFFFFFFFFL)
 
-                v1 = ((t1u shl 13) or (t1u ushr 19)) and 0xFFFFFFFFL
-                v2 = ((t2u ushr 7) or (t2u shl 25)) and 0xFFFFFFFFL
-
-                if (v1 >= 0x80000000L) v1 -= 0x100000000L
-                if (v2 >= 0x80000000L) v2 -= 0x100000000L
-
-                v3 = (v3 + v1) and 0xFFFFFFFFL
-                v4 = (v4 + v2) and 0xFFFFFFFFL
-                if (v3 >= 0x80000000L) v3 -= 0x100000000L
-                if (v4 >= 0x80000000L) v4 -= 0x100000000L
+                v3 = ((v3 xor v1) * m) and 0xFFFFFFFFL
+                v4 = ((v4 xor v2) * m) and 0xFFFFFFFFL
             }
+
+            // Final mix
+            v1 = v1 xor (v1 ushr 13)
+            v1 = ((v1 * m) and 0xFFFFFFFFL)
+            v1 = v1 xor (v1 ushr 15)
+
+            v2 = v2 xor (v2 ushr 13)
+            v2 = ((v2 * m) and 0xFFFFFFFFL)
+            v2 = v2 xor (v2 ushr 15)
+
+            v3 = v3 xor (v3 ushr 13)
+            v3 = ((v3 * m) and 0xFFFFFFFFL)
+            v3 = v3 xor (v3 ushr 15)
+
+            v4 = v4 xor (v4 ushr 13)
+            v4 = ((v4 * m) and 0xFFFFFFFFL)
+            v4 = v4 xor (v4 ushr 15)
 
             "%08x%08x%08x%08x".format(
                 v1 and 0xFFFFFFFFL,

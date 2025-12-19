@@ -310,9 +310,28 @@ object YggdrasilCipher {
         return result.toString().replace(Regex("\u0000+$"), "")
     }
 
+    // GJALLARHORN - SHA-512 XOR + running sum accumulator feedback
+    private fun decryptGjallarhorn(encrypted: ByteArray, subtoken: String): String {
+        val sha512Hex = CryptoUtils.sha512(subtoken)
+        val keyBytes = CryptoUtils.hexToBytes(sha512Hex)
+        val keyLength = keyBytes.size
+
+        var accumulator = 0
+        val result = CharArray(encrypted.size)
+
+        for (i in encrypted.indices) {
+            val keyByte = keyBytes[i % keyLength].toInt() and 0xFF
+            val encryptedByte = encrypted[i].toInt() and 0xFF
+            val decryptedByte = (encryptedByte xor keyByte xor accumulator) and 0xFF
+            result[i] = decryptedByte.toChar()
+            accumulator = (accumulator + encryptedByte) and 0xFF
+        }
+        return String(result)
+    }
+
     val supportedCiphers = setOf(
-        "BIFROST", "FENRIR", "FREYA", "HEIMDALL", "JORMUNGANDR",
-        "LOKI", "NIDHOGG", "ODIN", "SLEIPNIR", "THOR",
+        "BIFROST", "FENRIR", "FREYA", "GJALLARHORN", "HEIMDALL",
+        "JORMUNGANDR", "LOKI", "NIDHOGG", "ODIN", "SLEIPNIR", "THOR",
     )
 
     // Deciphers encrypted ephemeral key using specified cipher
@@ -324,6 +343,7 @@ object YggdrasilCipher {
             "BIFROST" -> decryptBifrost(payloadBytes, subtoken)
             "FENRIR" -> decryptFenrir(payloadBytes, subtoken)
             "FREYA" -> decryptFreya(payloadBytes, subtoken)
+            "GJALLARHORN" -> decryptGjallarhorn(payloadBytes, subtoken)
             "HEIMDALL" -> decryptHeimdall(payloadBytes, subtoken)
             "JORMUNGANDR" -> decryptJormungandr(payloadBytes, subtoken)
             "LOKI" -> decryptLoki(payloadBytes, subtoken)
@@ -346,6 +366,7 @@ object YggdrasilCipher {
             "BIFROST" -> decryptBifrost(payloadBytes, subtoken)
             "FENRIR" -> decryptFenrir(payloadBytes, subtoken)
             "FREYA" -> decryptFreya(payloadBytes, subtoken)
+            "GJALLARHORN" -> decryptGjallarhorn(payloadBytes, subtoken)
             "HEIMDALL" -> decryptHeimdall(payloadBytes, subtoken)
             "JORMUNGANDR" -> decryptJormungandr(payloadBytes, subtoken)
             "LOKI" -> decryptLoki(payloadBytes, subtoken)

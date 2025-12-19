@@ -63,7 +63,6 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
         .set("Referer", "$baseUrl/")
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
         .set("Accept-Language", "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
-        .set("Sec-CH-UA", "\"Chromium\";v=\"141\", \"Google Chrome\";v=\"141\", \"Not_A Brand\";v=\"99\"")
         .set("Sec-CH-UA-Mobile", "?1")
         .set("Sec-CH-UA-Platform", "\"Android\"")
         .set("Sec-Fetch-Dest", "document")
@@ -165,7 +164,7 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
     override fun getMangaUrl(manga: SManga): String = "$baseUrl${manga.url}"
 
     private fun mangaDetailsApiRequest(mangaId: String, challenge: String, token: String, securityKey: Long): Request {
-        val proof = SecurityHeaders.generateHeaderProof(challenge, securityKey, headers["User-Agent"])
+        val proof = SecurityHeaders.generateHeaderProof(challenge, securityKey, headers["User-Agent"], keys.securityScript)
             ?: throw Error("Failed to generate header proof")
 
         val form = FormBody.Builder()
@@ -201,7 +200,7 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
     // ================================ Chapters =======================================
 
     private fun chapterListApiRequest(mangaId: String, challenge: String, token: String, securityKey: Long, page: Int): Request {
-        val proof = SecurityHeaders.generateHeaderProof(challenge, securityKey, headers["User-Agent"])
+        val proof = SecurityHeaders.generateHeaderProof(challenge, securityKey, headers["User-Agent"], keys.securityScript)
             ?: throw Error("Failed to generate header proof")
 
         val form = FormBody.Builder()
@@ -253,7 +252,7 @@ class SakuraMangas : HttpSource(), ConfigurableSource {
         challenge: String,
         csrf: String,
     ): Request {
-        val proof = SecurityHeaders.generateHeaderProof(challenge, securityKey, headers["User-Agent"])
+        val proof = SecurityHeaders.generateHeaderProof(challenge, securityKey, headers["User-Agent"], keys.securityScript)
             ?: throw Error("Failed to generate header proof")
 
         val form = FormBody.Builder()
