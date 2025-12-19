@@ -45,16 +45,21 @@ class KuroMangas : HttpSource(), ConfigurableSource {
 
     override val client by lazy {
         val token = getToken()
+        val cdnHost = cdnUrl.toHttpUrl().host
         network.cloudflareClient.newBuilder()
             .rateLimit(2)
             .apply {
                 if (token.isNotEmpty()) {
                     addInterceptor(CookieInterceptor(API_HOST, "token" to token))
                     addInterceptor { chain ->
-                        val request = chain.request().newBuilder()
+                        val request = chain.request()
+                        if (request.url.host == cdnHost) {
+                            return@addInterceptor chain.proceed(request)
+                        }
+                        val newRequest = request.newBuilder()
                             .header("Authorization", "Bearer $token")
                             .build()
-                        chain.proceed(request)
+                        chain.proceed(newRequest)
                     }
                 }
             }
