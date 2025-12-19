@@ -5,11 +5,10 @@ import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 class FlowerMangaDotNet : Madara(
     "FlowerManga.net",
-    "https://flowermanga.net",
+    "https://flowermangas.net",
     "pt-BR",
     SimpleDateFormat("d 'de' MMMMM 'de' yyyy", Locale("pt", "BR")),
 ) {
@@ -17,7 +16,7 @@ class FlowerMangaDotNet : Madara(
     override val id = 2421010180391442293
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2, TimeUnit.SECONDS)
+        .rateLimit(2)
         .build()
 
     override val useLoadMoreRequest = LoadMoreStrategy.Never

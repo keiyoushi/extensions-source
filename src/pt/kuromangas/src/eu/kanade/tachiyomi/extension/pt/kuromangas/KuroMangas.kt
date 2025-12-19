@@ -195,7 +195,8 @@ class KuroMangas : HttpSource(), ConfigurableSource {
     override fun pageListParse(response: Response): List<Page> {
         val chapterResponse = response.parseAs<ChapterPagesResponse>()
         return chapterResponse.pages.mapIndexed { index, pageUrl ->
-            val imageUrl = if (pageUrl.startsWith("http")) pageUrl else "$cdnUrl$pageUrl"
+            val fixedUrl = pageUrl.replaceFirst("^/uploads/".toRegex(), "/")
+            val imageUrl = if (fixedUrl.startsWith("http")) fixedUrl else "$cdnUrl$fixedUrl"
             Page(index, imageUrl = imageUrl)
         }
     }
