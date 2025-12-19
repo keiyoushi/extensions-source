@@ -118,9 +118,9 @@ class Astratoons : HttpSource() {
 
     override fun imageRequest(page: Page): Request {
         val imageHeaders = headers.newBuilder()
-            .set("Referer", page.url!!)
+            .set("Referer", page.url)
             .build()
-            
+
         return GET(page.imageUrl!!, imageHeaders)
     }
 
