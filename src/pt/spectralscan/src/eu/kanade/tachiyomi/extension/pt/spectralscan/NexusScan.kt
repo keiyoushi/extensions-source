@@ -46,7 +46,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = super.client.newBuilder()
-        .rateLimit(2)
+        .rateLimit(3, 5)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -303,11 +303,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        val pageData = document.select("script[type=application/json]")
-            .firstOrNull { script ->
-                val data = script.data().trim()
-                data.startsWith("[") && data.contains("image_url") && data.contains("page_number")
-            }?.data()
+        val pageData = document.selectFirst("textarea[id^=dt-]")?.text()
             ?: return emptyList()
 
         return pageData.parseAs<List<PageData>>().mapIndexed { index, page ->
