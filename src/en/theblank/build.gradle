@@ -1,14 +1,12 @@
 ext {
-    extName = 'The Blank Scanlation'
+    extName = 'The Blank'
     extClass = '.TheBlank'
-    themePkg = 'madara'
-    baseUrl = 'https://theblank.net'
-    overrideVersionCode = 4
+    extVersionCode = 50
     isNsfw = true
 }
 
 apply from: "$rootDir/common.gradle"
 
 dependencies {
-    implementation project(':lib:randomua')
+    implementation "org.bouncycastle:bcprov-jdk18on:1.83"
 }
