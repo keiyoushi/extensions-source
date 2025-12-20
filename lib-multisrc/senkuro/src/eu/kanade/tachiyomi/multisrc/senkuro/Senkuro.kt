@@ -62,7 +62,7 @@ abstract class Senkuro(
             SEARCH_QUERY,
             SearchVariables(
                 offset = offsetCount * (page - 1),
-                genre = SearchVariables.FiltersDto(
+                label = SearchVariables.FiltersDto(
                     // Senkuro eternal built-in exclude 18+ filter
                     exclude = if (name == "Senkuro") { senkuroExcludeGenres } else { listOf() },
                 ),
@@ -93,8 +93,6 @@ abstract class Senkuro(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val includeGenres = mutableListOf<String>()
         val excludeGenres = mutableListOf<String>()
-        val includeTags = mutableListOf<String>()
-        val excludeTags = mutableListOf<String>()
         val includeTypes = mutableListOf<String>()
         val excludeTypes = mutableListOf<String>()
         val includeFormats = mutableListOf<String>()
@@ -108,14 +106,9 @@ abstract class Senkuro(
 
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
-                is GenreList -> filter.state.forEach { genre ->
-                    if (genre.state != Filter.TriState.STATE_IGNORE) {
-                        if (genre.isIncluded()) includeGenres.add(genre.slug) else excludeGenres.add(genre.slug)
-                    }
-                }
-                is TagList -> filter.state.forEach { tag ->
-                    if (tag.state != Filter.TriState.STATE_IGNORE) {
-                        if (tag.isIncluded()) includeTags.add(tag.slug) else excludeTags.add(tag.slug)
+                is GenreList -> filter.state.forEach { label ->
+                    if (label.state != Filter.TriState.STATE_IGNORE) {
+                        if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
                     }
                 }
                 is TypeList -> filter.state.forEach { type ->
@@ -155,14 +148,11 @@ abstract class Senkuro(
         val requestBody = GraphQL(
             SEARCH_QUERY,
             SearchVariables(
-                query = query, offset = offsetCount * (page - 1),
-                genre = SearchVariables.FiltersDto(
+                query = query,
+                offset = offsetCount * (page - 1),
+                label = SearchVariables.FiltersDto(
                     includeGenres,
                     excludeGenres,
-                ),
-                tag = SearchVariables.FiltersDto(
-                    includeTags,
-                    excludeTags,
                 ),
                 type = SearchVariables.FiltersDto(
                     includeTypes,
@@ -228,8 +218,7 @@ abstract class Senkuro(
                 getTypeList().find { it.slug == type }?.name + ", " +
                     getAgeList().find { it.slug == rating }?.name + ", " +
                     getFormatList().filter { formats.orEmpty().contains(it.slug) }.joinToString { it.name } + ", " +
-                    genres?.joinToString { git -> git.titles.find { it.lang == "RU" }!!.content } + ", " +
-                    tags?.joinToString { tit -> tit.titles.find { it.lang == "RU" }!!.content }
+                    labels?.joinToString { git -> git.titles.find { it.lang == "RU" }!!.content }
                 ).split(", ").filter { it.isNotEmpty() }.joinToString { it.trim().capitalize() }
         }
     }
@@ -345,25 +334,18 @@ abstract class Senkuro(
                 json.decodeFromString<PageWrapperDto<MangaTachiyomiSearchFilters>>(responseBody).data.mangaTachiyomiSearchFilters
 
             genresList =
-                filterDto.genres.filterNot { name == "Senkuro" && senkuroExcludeGenres.contains(it.slug) }
-                    .map { genre ->
+                filterDto.labels.filterNot { name == "Senkuro" && senkuroExcludeGenres.contains(it.slug) }
+                    .map { label ->
                         FilterersTri(
-                            genre.titles.find { it.lang == "RU" }!!.content.capitalize(),
-                            genre.slug,
+                            label.titles.find { it.lang == "RU" }!!.content.capitalize(),
+                            label.slug,
                         )
                     }
-
-            tagsList = filterDto.tags.map { tag ->
-                FilterersTri(
-                    tag.titles.find { it.lang == "RU" }!!.content.capitalize(),
-                    tag.slug,
-                )
-            }
         }
     }
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>()
-        filters += if (genresList.isEmpty() or tagsList.isEmpty()) {
+        filters += if (genresList.isEmpty()) {
             listOf(
                 Filter.Separator(),
                 Filter.Header("Нажмите «Сбросить», чтобы загрузить все фильтры"),
@@ -372,7 +354,6 @@ abstract class Senkuro(
         } else {
             listOf(
                 GenreList(genresList),
-                TagList(tagsList),
             )
         }
         filters += listOf(
@@ -386,8 +367,7 @@ abstract class Senkuro(
     }
 
     private class FilterersTri(name: String, val slug: String) : Filter.TriState(name)
-    private class GenreList(genres: List<FilterersTri>) : Filter.Group<FilterersTri>("Жанры", genres)
-    private class TagList(tags: List<FilterersTri>) : Filter.Group<FilterersTri>("Тэги", tags)
+    private class GenreList(labels: List<FilterersTri>) : Filter.Group<FilterersTri>("Жанры", labels)
     private class TypeList(types: List<FilterersTri>) : Filter.Group<FilterersTri>("Тип", types)
     private class FormatList(formats: List<FilterersTri>) : Filter.Group<FilterersTri>("Формат", formats)
     private class StatList(status: List<FilterersTri>) : Filter.Group<FilterersTri>("Статус", status)
@@ -395,7 +375,6 @@ abstract class Senkuro(
     private class AgeList(ages: List<FilterersTri>) : Filter.Group<FilterersTri>("Возрастное ограничение", ages)
 
     private var genresList: List<FilterersTri> = listOf()
-    private var tagsList: List<FilterersTri> = listOf()
 
     private fun getTypeList() = listOf(
         FilterersTri("Манга", "MANGA"),
