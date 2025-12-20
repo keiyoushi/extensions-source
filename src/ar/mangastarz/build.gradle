@@ -2,8 +2,8 @@ ext {
     extName = 'Manga Starz'
     extClass = '.MangaStarz'
     themePkg = 'madara'
-    baseUrl = 'https://manga-starz.com'
-    overrideVersionCode = 7
+    baseUrl = 'https://manga-starz.net'
+    overrideVersionCode = 8
     isNsfw = false
 }
 

@@ -10,7 +10,7 @@ import java.util.Locale
 
 class DoujinsHell : Madara(
     "DoujinsHell",
-    "https://www.doujinshell.com",
+    "https://doujinshell.net",
     "es",
     dateFormat = SimpleDateFormat("d MMMM, yyyy", Locale("es")),
 ) {
@@ -24,7 +24,7 @@ class DoujinsHell : Madara(
     override val filterNonMangaItems = false
 
     // .aligncenter: Next / Prev / PDF buttons
-    override val pageListParseSelector = ".reading-content noscript img:not(.aligncenter)"
+    override val pageListParseSelector = ".reading-content img:not(.aligncenter)"
 
     override fun chapterListSelector() = "div.listing-chapters_wrap li.wp-manga-chapter"
 

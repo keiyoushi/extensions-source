@@ -2,8 +2,8 @@ ext {
     extName = 'DoujinsHell'
     extClass = '.DoujinsHell'
     themePkg = 'madara'
-    baseUrl = 'https://www.doujinshell.com'
-    overrideVersionCode = 0
+    baseUrl = 'https://doujinshell.net'
+    overrideVersionCode = 1
     isNsfw = true
 }
 

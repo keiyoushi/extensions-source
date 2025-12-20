@@ -1,7 +1,7 @@
 ext {
     extName = 'Shinigami'
     extClass = '.Shinigami'
-    extVersionCode = 73
+    extVersionCode = 74
 }
 
 apply from: "$rootDir/common.gradle"

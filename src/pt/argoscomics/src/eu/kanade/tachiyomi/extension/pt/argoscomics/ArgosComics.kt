@@ -24,7 +24,7 @@ class ArgosComics : HttpSource() {
 
     override val name: String = "Argos Comics"
 
-    override val baseUrl: String = "https://argoscomic.com"
+    override val baseUrl: String = "https://aniargos.com"
 
     override val lang: String = "pt-BR"
 
