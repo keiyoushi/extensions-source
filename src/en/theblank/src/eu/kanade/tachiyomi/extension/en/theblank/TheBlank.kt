@@ -1,6 +1,14 @@
 package eu.kanade.tachiyomi.extension.en.theblank
 
+import android.app.Application
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Base64
+import com.goterl.lazysodium.LazySodiumAndroid
+import com.goterl.lazysodium.SodiumAndroid
+import com.goterl.lazysodium.interfaces.SecretStream
+import dalvik.system.PathClassLoader
+import eu.kanade.tachiyomi.extension.BuildConfig
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -26,9 +34,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.bouncycastle.crypto.modes.ChaCha20Poly1305
-import org.bouncycastle.crypto.params.KeyParameter
-import org.bouncycastle.crypto.params.ParametersWithIV
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.nio.charset.StandardCharsets
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
@@ -343,7 +350,24 @@ class TheBlank : HttpSource() {
     }
 
     private fun cookSID(sid: String): ByteArray {
-        return Base64.decode(sid, Base64.URL_SAFE)
+// 1. let L0 = sid.replace(/-/g, '+').replace(/_/g, '/');
+        var l0 = sid.replace('-', '+').replace('_', '/')
+
+        // 2. for (; L0.length % 4;) L0 += '=';
+        while (l0.length % 4 != 0) {
+            l0 += "="
+        }
+
+        // 3. const x0 = atob(l0)
+        // In Android, Base64.decode(l0, Base64.DEFAULT) is the equivalent of atob()
+        // 4. Manual byte array mapping (Uint8Array part)
+        val decodedBytes = Base64.decode(l0, Base64.DEFAULT)
+
+        // In Kotlin, the decodedBytes IS already a ByteArray (Uint8Array equivalent)
+        // so the manual loop for (let j0 = 0; j0 < x0.length; j0++) vA[j0] = x0.charCodeAt(j0);
+        // is performed internally by the Base64 decoder.
+
+        return decodedBytes
     }
 
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
@@ -356,7 +380,7 @@ class TheBlank : HttpSource() {
 
         val imageKey = request.url.fragment!!
 
-        val nonce = Base64.decode(response.header("x-stream-header")!!, Base64.DEFAULT)
+        val nonce = cookSID(response.header("x-stream-header")!!)
 
         val encryptedData = response.body.bytes()
 
@@ -374,58 +398,74 @@ class TheBlank : HttpSource() {
         }
     }
 
-    private fun decryptSecretStream(input: ByteArray, key: ByteArray, header: ByteArray): ByteArray {
-        // LibSodium SecretStream uses the header to derive the subkey and initial nonce
-        // This part is critical: we must replicate the 'init_pull' logic.
-        // In LibSodium, the header is essentially the nonce for the XChaCha20 derivation.
+    private val classLoader by lazy {
+        val context = Injekt.get<Application>()
 
-        val cipher = ChaCha20Poly1305()
-        val out = mutableListOf<ByteArray>()
+        @Suppress("DEPRECATION")
+        val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or
+            PackageManager.GET_META_DATA or
+            PackageManager.GET_SIGNATURES or
+            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else 0)
 
-        var pos = 0
-        val chunkSize = 8192 + 17 // ABYTES (1 tag + 16 MAC)
+        val appInfo = context.packageManager.getPackageInfo(BuildConfig.APPLICATION_ID, PACKAGE_FLAGS).applicationInfo!!
 
-        // Note: Full SecretStream state management (re-keying/nonce incrementing)
-        // is complex. For standard one-shot image decryption where tags aren't
-        // rotated, a simpler XChaCha20-Poly1305 block approach is often used.
-
-        // However, if the server uses full 'crypto_secretstream',
-        // you MUST track the nonce increment for every chunk.
-
-        val currentNonce = header.copyOf()
-
-        while (pos < input.size) {
-            val currentChunkSize = minOf(chunkSize, input.size - pos)
-            val chunk = input.copyOfRange(pos, pos + currentChunkSize)
-
-            val params = ParametersWithIV(KeyParameter(key), currentNonce)
-            cipher.init(false, params)
-
-            val decryptedChunk = ByteArray(cipher.getOutputSize(chunk.size))
-            val len = cipher.processBytes(chunk, 0, chunk.size, decryptedChunk, 0)
-            cipher.doFinal(decryptedChunk, len)
-
-            // The first byte of the decrypted message in SecretStream is actually
-            // the 'Tag', followed by the message.
-            val message = decryptedChunk.copyOfRange(0, decryptedChunk.size - 1)
-            val tag = decryptedChunk.last()
-
-            out.add(message)
-
-            if (tag.toInt() == 3) break // TAG_FINAL in LibSodium is 3
-
-            incrementNonce(currentNonce) // Crucial for multi-chunk streams
-            pos += currentChunkSize
-        }
-
-        return out.flatMap { it.asIterable() }.toByteArray()
+        PathClassLoader(appInfo.sourceDir, appInfo.nativeLibraryDir, context.classLoader)
     }
 
-    private fun incrementNonce(nonce: ByteArray) {
-        // LibSodium increments the nonce starting from the 8th byte for secretstream
-        for (i in 7 until nonce.size) {
-            if (++nonce[i] != 0.toByte()) break
+    private val sodium by lazy {
+        val sodiumAndroid = Class.forName("com.goterl.lazysodium.SodiumAndroid", false, classLoader)
+            .getDeclaredConstructor().newInstance() as SodiumAndroid
+
+        LazySodiumAndroid(sodiumAndroid)
+    }
+    // private val sodium = LazySodiumAndroid(SodiumAndroid())
+
+    private fun decryptSecretStream(input: ByteArray, key: ByteArray, header: ByteArray): ByteArray {
+        // val state = SecretStream.State()
+        val state = Class.forName("com.goterl.lazysodium.interfaces.SecretStream${"$"}State", false, classLoader)
+            .getDeclaredConstructor().newInstance() as SecretStream.State
+
+        // crypto_secretstream_xchacha20poly1305_init_pull
+        // This handles the 24-byte nonce (header) and 32-byte key
+        val initSuccess = sodium.cryptoSecretStreamInitPull(state, header, key)
+        if (!initSuccess) throw Exception("Sodium: Init pull failed (Invalid header/key)")
+
+        val output = mutableListOf<ByteArray>()
+        var position = 0
+
+        // chunksize = 8192 + 17 (SecretStream.ABYTES)
+        val chunkSize = 8192 + SecretStream.ABYTES
+
+        while (position < input.size) {
+            val remaining = input.size - position
+            val currentChunkSize = minOf(chunkSize, remaining)
+            val chunk = input.copyOfRange(position, position + currentChunkSize)
+
+            // Message is chunk size minus the 17 bytes of overhead
+            val decryptedChunk = ByteArray(currentChunkSize - SecretStream.ABYTES)
+            val tag = ByteArray(1)
+
+            // crypto_secretstream_xchacha20poly1305_pull
+            val pullSuccess = sodium.cryptoSecretStreamPull(
+                state,
+                decryptedChunk,
+                tag,
+                chunk,
+                chunk.size.toLong(),
+            )
+
+            if (!pullSuccess) throw Exception("Sodium: Decryption failed - corrupted data")
+
+            output.add(decryptedChunk)
+
+            // TAG_FINAL check
+            if (tag[0] == SecretStream.TAG_FINAL) break
+
+            position += currentChunkSize
         }
+
+        // Combine chunks (equivalent to H.reduce in TS)
+        return output.flatMap { it.asIterable() }.toByteArray()
     }
 
     override fun imageUrlParse(response: Response): String {
