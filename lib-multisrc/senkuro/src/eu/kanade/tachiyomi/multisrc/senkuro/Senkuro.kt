@@ -111,6 +111,26 @@ abstract class Senkuro(
                         if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
                     }
                 }
+                is WorldsList -> filter.state.forEach { label ->
+                    if (label.state != Filter.TriState.STATE_IGNORE) {
+                        if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
+                    }
+                }
+                is ElementsList -> filter.state.forEach { label ->
+                    if (label.state != Filter.TriState.STATE_IGNORE) {
+                        if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
+                    }
+                }
+                is ChartsList -> filter.state.forEach { label ->
+                    if (label.state != Filter.TriState.STATE_IGNORE) {
+                        if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
+                    }
+                }
+                is AgeDemoList -> filter.state.forEach { label ->
+                    if (label.state != Filter.TriState.STATE_IGNORE) {
+                        if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
+                    }
+                }
                 is TypeList -> filter.state.forEach { type ->
                     if (type.state != Filter.TriState.STATE_IGNORE) {
                         if (type.isIncluded()) includeTypes.add(type.slug) else excludeTypes.add(type.slug)
@@ -447,7 +467,7 @@ abstract class Senkuro(
         private const val API_DOMAIN_PREF = "MangaApiDomain"
         private const val API_DOMAIN_TITLE = "Домен"
         private const val API_DOMAIN_DEFAULT = "https://api.senkuro.me"
-        private val senkuroExcludeGenres = listOf("hentai", "yaoi", "yuri", "shoujo_ai", "shounen_ai")
+        private val senkuroExcludeGenres = listOf("hentai", "yaoi", "yuri", "shoujo_ai", "shounen_ai", "lgbt")
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
     }
 
