@@ -1,6 +1,6 @@
 ext {
-    extName = 'Turkce Manga Oku'
-    extClass = '.TurkceMangaOku'
+    extName = 'Turkce Manga Oku TR'
+    extClass = '.TurkceMangaOkuTr'
     themePkg = 'madara'
     baseUrl = 'https://turkcemangaoku.com.tr'
     overrideVersionCode = 0

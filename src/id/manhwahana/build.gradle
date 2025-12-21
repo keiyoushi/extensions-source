@@ -1,8 +1,8 @@
 ext {
-    extName = 'Turkce Manga Oku'
-    extClass = '.TurkceMangaOku'
+    extName = 'Manhwahana'
+    extClass = '.Manhwahana'
     themePkg = 'madara'
-    baseUrl = 'https://turkcemangaoku.com.tr'
+    baseUrl = 'https://manhwahana.com'
     overrideVersionCode = 0
     isNsfw = true
 }
