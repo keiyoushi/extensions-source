@@ -333,19 +333,20 @@ abstract class Senkuro(
             val filterDto =
                 json.decodeFromString<PageWrapperDto<MangaTachiyomiSearchFilters>>(responseBody).data.mangaTachiyomiSearchFilters
 
-            genresList =
+            labelsList =
                 filterDto.labels.filterNot { name == "Senkuro" && senkuroExcludeGenres.contains(it.slug) }
                     .map { label ->
-                        FilterersTri(
+                        FilterersTriRoot(
                             label.titles.find { it.lang == "RU" }!!.content.capitalize(),
                             label.slug,
+                            label.rootId,
                         )
                     }
         }
     }
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>()
-        filters += if (genresList.isEmpty()) {
+        filters += if (labelsList.isEmpty()) {
             listOf(
                 Filter.Separator(),
                 Filter.Header("Нажмите «Сбросить», чтобы загрузить все фильтры"),
@@ -353,7 +354,11 @@ abstract class Senkuro(
             )
         } else {
             listOf(
-                GenreList(genresList),
+                GenreList(labelsList.filter { it.rootId == "TEFCRUw6NQ" }), // Темы
+                WorldsList(labelsList.filter { it.rootId == "TEFCRUw6NA" }), // Сеттинг
+                ElementsList(labelsList.filter { it.rootId == "TEFCRUw6Ng" }), // Элементы
+                ChartsList(labelsList.filter { it.rootId == "TEFCRUw6Mw" }), // Черты
+                AgeDemoList(labelsList.filter { it.rootId == "TEFCRUw6Nw" }), // Демография
             )
         }
         filters += listOf(
@@ -366,16 +371,20 @@ abstract class Senkuro(
         return FilterList(filters)
     }
 
+    private class FilterersTriRoot(name: String, val slug: String, val rootId: String) : Filter.TriState(name)
+    private class GenreList(labels: List<FilterersTriRoot>) : Filter.Group<FilterersTriRoot>("Темы", labels)
+    private class WorldsList(labels: List<FilterersTriRoot>) : Filter.Group<FilterersTriRoot>("Сеттинг", labels)
+    private class ElementsList(labels: List<FilterersTriRoot>) : Filter.Group<FilterersTriRoot>("Элементы", labels)
+    private class ChartsList(labels: List<FilterersTriRoot>) : Filter.Group<FilterersTriRoot>("Черты", labels)
+    private class AgeDemoList(labels: List<FilterersTriRoot>) : Filter.Group<FilterersTriRoot>("Демография", labels)
     private class FilterersTri(name: String, val slug: String) : Filter.TriState(name)
-    private class GenreList(labels: List<FilterersTri>) : Filter.Group<FilterersTri>("Жанры", labels)
     private class TypeList(types: List<FilterersTri>) : Filter.Group<FilterersTri>("Тип", types)
     private class FormatList(formats: List<FilterersTri>) : Filter.Group<FilterersTri>("Формат", formats)
     private class StatList(status: List<FilterersTri>) : Filter.Group<FilterersTri>("Статус", status)
     private class StatTranslateList(tstatus: List<FilterersTri>) : Filter.Group<FilterersTri>("Статус перевода", tstatus)
     private class AgeList(ages: List<FilterersTri>) : Filter.Group<FilterersTri>("Возрастное ограничение", ages)
 
-    private var genresList: List<FilterersTri> = listOf()
-
+    private var labelsList: List<FilterersTriRoot> = listOf()
     private fun getTypeList() = listOf(
         FilterersTri("Манга", "MANGA"),
         FilterersTri("Манхва", "MANHWA"),
