@@ -5,11 +5,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class TurkceMangaOku : Madara(
-    "Turkce Manga Oku",
-    "https://turkcemangaoku.com.tr",
+    "Türkçe Manga Oku",
+    "https://trmangaoku.com",
     "tr",
-    dateFormat = SimpleDateFormat("dd MMM yyyy", Locale("tr")),
+    dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("tr")),
 ) {
-    override val useLoadMoreRequest = LoadMoreStrategy.Never
+    override val mangaDetailsSelectorStatus = "div.summary-heading:contains(Durumu) + div.summary-content"
+
+    override val useLoadMoreRequest = LoadMoreStrategy.Always
+
     override val useNewChapterEndpoint = true
 }
