@@ -1,0 +1,10 @@
+ext {
+    extName = 'Sword Of Oblivion'
+    extClass = '.SwordOfOblivion'
+    themePkg = 'madara'
+    baseUrl = 'https://swordofoblivion.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

@@ -112,6 +112,8 @@ val DETAILS_QUERY: String = buildQuery {
                 status
                 formats
                 labels {
+                    id
+                    rootId
                     slug
                     titles {
                         lang
@@ -195,6 +197,8 @@ data class MangaTachiyomiSearchFilters(
     ) {
         @Serializable
         data class FilterDataDto(
+            val id: String,
+            val rootId: String,
             val slug: String,
             val titles: List<TitleDto>,
         ) {
@@ -213,6 +217,7 @@ val FILTERS_QUERY: String = buildQuery {
             mangaTachiyomiSearchFilters {
                 labels {
                     id
+                    rootId
                     slug
                     titles {
                         lang
