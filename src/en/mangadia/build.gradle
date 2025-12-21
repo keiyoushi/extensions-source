@@ -1,0 +1,10 @@
+ext {
+    extName = 'MangaDia'
+    extClass = '.MangaDia'
+    themePkg = 'madara'
+    baseUrl = 'https://mangadia.com'
+    overrideVersionCode = 0
+    isNsfw = false
+}
+
+apply from: "$rootDir/common.gradle"

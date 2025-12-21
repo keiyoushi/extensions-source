@@ -1,0 +1,10 @@
+ext {
+    extName = 'House Of Otakus'
+    extClass = '.HouseOfOtakus'
+    themePkg = 'madara'
+    baseUrl = 'https://houseofotakusv2.xyz'
+    overrideVersionCode = 0
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
