@@ -11,13 +11,14 @@ class ResultDto<T>(
 
 @Serializable
 class ChapterDto(
+    private val comicId: String,
     private val numberChapter: String,
     private val updateTime: Long,
 ) {
     fun toSChapter(slug: String): SChapter = SChapter.create().apply {
         name = numberChapter
         date_upload = updateTime
-        url = "/truyen/$slug/chuong-$numberChapter"
+        url = "/truyen/$slug/chuong-$numberChapter#$comicId"
     }
 }
 
@@ -60,11 +61,6 @@ class MangaDto(
 }
 
 @Serializable
-class ImageListWrapper(
-    val body: ResultDto<ImageListDto>,
-)
-
-@Serializable
 class ImageListDto(
-    val data: List<String>,
+    val data: List<String>? = null,
 )
