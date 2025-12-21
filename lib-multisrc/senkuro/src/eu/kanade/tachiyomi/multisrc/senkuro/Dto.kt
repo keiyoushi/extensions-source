@@ -50,6 +50,8 @@ data class MangaTachiyomiInfoDto(
 
     @Serializable
     data class TagsDto(
+        val id: String,
+        val rootId: String,
         val slug: String,
         val titles: List<TitleDto>,
     )
