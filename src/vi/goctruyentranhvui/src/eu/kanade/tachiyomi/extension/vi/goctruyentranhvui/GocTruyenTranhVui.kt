@@ -115,33 +115,30 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
         else -> SManga.UNKNOWN
     }
 
-    override fun pageListParse(response: Response): List<Page> {
-        val html = response.body.string()
-        val pattern = Regex("chapterJson:\\s*`(.*?)`")
-        val match = pattern.find(html) ?: throw Exception("Không tìm thấy Json") // find json
-        val jsonPage = match.groups[1]!!.value
+    override fun pageListRequest(chapter: SChapter): Request {
+        val url = chapter.url
+        val slug = url.substringAfter("/truyen/").substringBefore("/chuong-")
+        val numberChapter = url.substringAfter("/chuong-").substringBefore("#")
+        val comicId = url.substringAfter("#")
 
-        val imageUrls = if (jsonPage.isEmpty()) {
-            val regexMangaId = Regex("""comic\s*=\s*\{\s*id:\s*"(\d{10})"""")
-            val matchId = regexMangaId.find(html) ?: throw Exception("Không tìm thấy mangaId") // find mangaId
-            val mangaId = matchId.groups[1]!!.value
-            val nameEn = response.request.url.toString().substringAfter("/truyen/").substringBefore("/")
-            val chapterNumber = response.request.url.toString().substringAfterLast("chuong-")
-            val body = FormBody.Builder()
-                .add("comicId", mangaId)
-                .add("chapterNumber", chapterNumber)
-                .add("nameEn", nameEn)
-                .build()
-            val request = POST("$baseUrl/api/chapter/auth", pageHeaders, body)
-            client.newCall(request).execute().parseAs<ResultDto<ImageListDto>>().result.data
-        } else {
-            jsonPage.parseAs<ImageListWrapper>().body.result.data
-        }
-        return imageUrls.mapIndexed { i, url ->
+        val body = FormBody.Builder()
+            .add("comicId", comicId)
+            .add("chapterNumber", numberChapter)
+            .add("nameEn", slug)
+            .build()
+
+        return POST("$baseUrl/api/chapter/loadAll", pageHeaders, body)
+    }
+
+    override fun pageListParse(response: Response): List<Page> {
+        val jsonPage = response.parseAs<ResultDto<ImageListDto>>().result.data ?: throw Exception("Chưa đăng nhập trong WebView. Hoặc không có ảnh!")
+
+        return jsonPage.mapIndexed { i, url ->
             val finalUrl = if (url.startsWith("/image/")) { baseUrl + url } else { url }
             Page(i, imageUrl = finalUrl)
         }
     }
+
     private val pageHeaders by lazy {
         getToken()?.let {
             headersBuilder()
@@ -149,7 +146,7 @@ class GocTruyenTranhVui : HttpSource(), ConfigurableSource {
                 .set("Origin", baseUrl)
                 .set("Authorization", it)
                 .build()
-        } ?: throw Exception("Vui lòng đăng nhập trong WebView")
+        } ?: xhrHeaders
     }
     private var _token: String? = null
 
