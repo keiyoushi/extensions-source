@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.extension.pt.mediocretoons
 
-import android.app.Application
 import android.content.SharedPreferences
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -14,6 +13,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -22,7 +22,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONObject
-import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.text.Normalizer
 
@@ -34,9 +33,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     override val supportsLatest = true
     private val apiUrl = "https://api.mediocretoons.site"
 
-    private val preferences: SharedPreferences by lazy {
-        Injekt.get<Application>().getSharedPreferences("source_$id", 0x0000)
-    }
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private var cachedToken: String? = null
     private var tokenExpiryTime: Long = 0L
@@ -66,16 +63,19 @@ class MediocreToons : HttpSource(), ConfigurableSource {
         val response = chain.proceed(authenticatedRequest)
 
         if (response.code == 401) {
-            response.close()
-            cachedToken = null
-            tokenExpiryTime = 0L
+            response.use {
+                cachedToken = null
+                tokenExpiryTime = 0L
 
-            val newToken = getValidToken()
-            if (!newToken.isNullOrEmpty()) {
-                val retryRequest = originalRequest.newBuilder()
-                    .header("Authorization", "Bearer $newToken")
-                    .build()
-                return chain.proceed(retryRequest)
+                val newToken = getValidToken()
+                if (!newToken.isNullOrEmpty()) {
+                    val retryRequest = originalRequest.newBuilder()
+                        .header("Authorization", "Bearer $newToken")
+                        .build()
+                    return chain.proceed(retryRequest)
+                } else {
+                    return chain.proceed(originalRequest)
+                }
             }
         }
 
@@ -94,22 +94,14 @@ class MediocreToons : HttpSource(), ConfigurableSource {
 
     private fun fetchNewToken(): String? {
         return try {
-            val authToken = preferences.getString(AUTH_TOKEN_PREF, null)
+            val email = preferences.getString(EMAIL_PREF, "")
+            val password = preferences.getString(PASSWORD_PREF, "")
 
-            if (authToken.isNullOrEmpty()) {
-                val email = preferences.getString(EMAIL_PREF, "")
-                val password = preferences.getString(PASSWORD_PREF, "")
-
-                if (email.isNullOrEmpty() || password.isNullOrEmpty()) {
-                    return null
-                }
-
-                loginAndGetToken(email, password)
-            } else {
-                cachedToken = authToken
-                tokenExpiryTime = System.currentTimeMillis() + (3600 * 1000)
-                authToken
+            if (email.isNullOrEmpty() || password.isNullOrEmpty()) {
+                return null
             }
+
+            return loginAndGetToken(email, password)
         } catch (e: Exception) {
             null
         }
@@ -148,15 +140,12 @@ class MediocreToons : HttpSource(), ConfigurableSource {
                     cachedToken = token
                     tokenExpiryTime = System.currentTimeMillis() + expiresIn
 
-                    preferences.edit()
-                        .putString(AUTH_TOKEN_PREF, token)
-                        .apply()
-
                     return token
                 } else {
                     return null
                 }
             } else {
+                val errorBody = response.body.string()
                 null
             }
         } catch (e: Exception) {
@@ -178,8 +167,26 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<List<MediocreMangaDto>>()
-        val mangas = result.map { it.toSManga() }
+        val responseBody = response.peekBody(Long.MAX_VALUE).string()
+
+        val rankingList = response.parseAs<List<MediocreRankingDto>>()
+
+        val mangas = rankingList.map { rankingDto ->
+            SManga.create().apply {
+                title = rankingDto.name
+                thumbnail_url = rankingDto.image?.let { img ->
+                    when {
+                        img.startsWith("http") -> img
+                        else -> "${MediocreToons.CDN_URL}/obras/${rankingDto.id}/$img"
+                    }
+                }
+                url = "/obra/${rankingDto.id}"
+                description = ""
+                status = SManga.UNKNOWN
+                initialized = false
+            }
+        }
+
         return MangasPage(mangas, hasNextPage = false)
     }
 
@@ -194,9 +201,13 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
+        val responseBody = response.peekBody(Long.MAX_VALUE).string()
+
         val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
+
         val mangas = dto.data.map { it.toSManga() }
         val hasNext = dto.pagination?.hasNextPage ?: false
+
         return MangasPage(mangas, hasNextPage = hasNext)
     }
 
@@ -205,7 +216,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
         val url = "$apiUrl/obras".toHttpUrl().newBuilder()
             .addQueryParameter("limite", "20")
             .addQueryParameter("pagina", page.toString())
-            .addQueryParameter("temCapitulo", "true")
 
         if (query.isNotEmpty()) {
             url.addQueryParameter("string", query)
@@ -230,13 +240,18 @@ class MediocreToons : HttpSource(), ConfigurableSource {
             }
         }
 
-        return GET(url.build(), headers)
+        val finalUrl = url.build()
+        return GET(finalUrl, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
+        val responseBody = response.peekBody(Long.MAX_VALUE).string()
+
         val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
+
         val mangas = dto.data.map { it.toSManga() }
         val hasNext = dto.pagination?.hasNextPage ?: false
+
         return MangasPage(mangas, hasNextPage = hasNext)
     }
 
@@ -359,34 +374,63 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     override fun getMangaUrl(manga: SManga): String {
         val id = manga.url.substringAfter("/obra/").substringBefore('/')
         val slug = manga.title.toSlug()
-        return "$baseUrl/obra/$id/$slug"
+        val finalUrl = "$baseUrl/obra/$id/$slug"
+        return finalUrl
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val pathSegment = manga.url.replace("/obra/", "/obras/")
-        return GET("$apiUrl$pathSegment", headers)
+        val id = manga.url.substringAfter("/obra/")
+        val url = "$apiUrl/obras/$id"
+        return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        response.parseAs<MediocreMangaDto>().toSManga(isDetails = true)
+    override fun mangaDetailsParse(response: Response): SManga {
+        val responseBody = response.peekBody(Long.MAX_VALUE).string()
+
+        val dto = response.parseAs<MediocreMangaDto>()
+
+        return dto.toSManga(isDetails = true)
+    }
 
     // ============================== Chapters ===============================
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String {
+        val finalUrl = "$baseUrl${chapter.url}"
+        return finalUrl
+    }
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga): Request {
+        return mangaDetailsRequest(manga)
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<MediocreMangaDto>().chapters.map { it.toSChapter() }
-            .distinctBy(SChapter::url)
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val responseBody = response.peekBody(Long.MAX_VALUE).string()
+
+        val manga = response.parseAs<MediocreMangaDto>()
+
+        val chapters = manga.chapters
+            .map { it.toSChapter() }
+            .distinctBy { it.url }
+            .sortedByDescending { it.chapter_number }
+
+        return chapters
+    }
 
     // =============================== Pages =================================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/")
-        return GET("$apiUrl/capitulos/$chapterId", headers)
+        val url = "$apiUrl/capitulos/$chapterId"
+        return GET(url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.parseAs<MediocreChapterDetailDto>().toPageList()
+    override fun pageListParse(response: Response): List<Page> {
+        val responseBody = response.peekBody(Long.MAX_VALUE).string()
+
+        val dto = response.parseAs<MediocreChapterDetailDto>()
+
+        val pages = dto.toPageList()
+
+        return pages
+    }
 
     override fun imageUrlParse(response: Response): String = ""
 
@@ -412,20 +456,12 @@ class MediocreToons : HttpSource(), ConfigurableSource {
             summary = "Senha para login automático"
             setDefaultValue("")
         }.also(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
-            key = AUTH_TOKEN_PREF
-            title = "Token Manual (Opcional)"
-            summary = "Cole o Bearer token manualmente se preferir. Deixe em branco para usar login automático."
-            setDefaultValue("")
-        }.also(screen::addPreference)
     }
 
     companion object {
         const val CDN_URL = "https://cdn.mediocretoons.site"
         private const val EMAIL_PREF = "email"
         private const val PASSWORD_PREF = "password"
-        private const val AUTH_TOKEN_PREF = "auth_token"
     }
 }
 
