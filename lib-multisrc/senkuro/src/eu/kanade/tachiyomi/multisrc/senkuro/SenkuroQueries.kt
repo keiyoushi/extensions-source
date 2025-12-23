@@ -20,8 +20,7 @@ data class SearchVariables(
     val type: FiltersDto? = null,
     val status: FiltersDto? = null,
     val translationStatus: FiltersDto? = null,
-    val genre: FiltersDto? = null,
-    val tag: FiltersDto? = null,
+    val label: FiltersDto? = null,
     val format: FiltersDto? = null,
     val rating: FiltersDto? = null,
     val offset: Int? = null,
@@ -40,8 +39,7 @@ val SEARCH_QUERY: String = buildQuery {
             %type: MangaTachiyomiSearchTypeFilter,
             %status: MangaTachiyomiSearchStatusFilter,
             %translationStatus: MangaTachiyomiSearchTranslationStatusFilter,
-            %genre: MangaTachiyomiSearchGenreFilter,
-            %tag: MangaTachiyomiSearchTagFilter,
+            %label: MangaTachiyomiSearchGenreFilter,
             %format: MangaTachiyomiSearchGenreFilter,
             %rating: MangaTachiyomiSearchTagFilter,
             %offset: Int,
@@ -51,8 +49,7 @@ val SEARCH_QUERY: String = buildQuery {
                 type: %type,
                 status: %status,
                 translationStatus: %translationStatus,
-                genre: %genre,
-                tag: %tag,
+                label: %label,
                 format: %format,
                 rating: %rating,
                 offset: %offset,
@@ -114,14 +111,9 @@ val DETAILS_QUERY: String = buildQuery {
                 rating
                 status
                 formats
-                genres {
-                    slug
-                    titles {
-                        lang
-                        content
-                    }
-                }
-                tags {
+                labels {
+                    id
+                    rootId
                     slug
                     titles {
                         lang
@@ -201,11 +193,12 @@ data class MangaTachiyomiSearchFilters(
 ) {
     @Serializable
     data class FilterDto(
-        val genres: List<FilterDataDto>,
-        val tags: List<FilterDataDto>,
+        val labels: List<FilterDataDto>,
     ) {
         @Serializable
         data class FilterDataDto(
+            val id: String,
+            val rootId: String,
             val slug: String,
             val titles: List<TitleDto>,
         ) {
@@ -222,16 +215,9 @@ val FILTERS_QUERY: String = buildQuery {
     """
         query fetchTachiyomiSearchFilters {
             mangaTachiyomiSearchFilters {
-                genres {
+                labels {
                     id
-                    slug
-                    titles {
-                        lang
-                        content
-                    }
-                }
-                tags {
-                    id
+                    rootId
                     slug
                     titles {
                         lang

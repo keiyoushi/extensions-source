@@ -32,8 +32,7 @@ data class MangaTachiyomiInfoDto(
     val type: String? = null,
     val rating: String? = null,
     val formats: List<String>? = null,
-    val genres: List<TagsDto>? = null,
-    val tags: List<TagsDto>? = null,
+    val labels: List<TagsDto>? = null,
     val titles: List<TitleDto>,
     val alternativeNames: List<TitleDto>? = null,
     val localizations: List<LocalizationsDto>? = null,
@@ -51,6 +50,8 @@ data class MangaTachiyomiInfoDto(
 
     @Serializable
     data class TagsDto(
+        val id: String,
+        val rootId: String,
         val slug: String,
         val titles: List<TitleDto>,
     )

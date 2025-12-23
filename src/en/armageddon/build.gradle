@@ -3,7 +3,7 @@ ext {
     extClass = '.Armageddon'
     themePkg = 'mangathemesia'
     baseUrl = 'https://www.silentquill.net'
-    overrideVersionCode = 0
+    overrideVersionCode = 1
     isNsfw = true
 }
 
