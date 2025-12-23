@@ -1,0 +1,9 @@
+ext {
+    extName = 'Escaneo de Leyendas'
+    extClass = '.EscaneoDeLeyendas'
+    themePkg = 'madara'
+    baseUrl = 'https://escaneodeleyendas.com'
+    overrideVersionCode = 0
+}
+
+apply from: "$rootDir/common.gradle"
