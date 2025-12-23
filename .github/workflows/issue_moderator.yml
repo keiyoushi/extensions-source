@@ -1,4 +1,4 @@
-name: Issue moderator
+name: Moderador de Issues
 
 on:
   issues:
@@ -14,63 +14,69 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Moderate issues
+      - name: Moderar issues
         uses: keiyoushi/issue-moderator-action@c1bae1cf6fd33c272b88505c8bfa0a97b7761eb3
         with:
           repo-token: ${{ github.token }}
           member-token: ${{ secrets.MEMBER_TOKEN }}
-          duplicate-label: Duplicate
+          duplicate-label: Duplicado
 
           blurbs: |
             [
               {
                 "keywords": ["cf", "cloudflare"],
-                "message": "Refer to the **Solving Cloudflare issues** section at https://keiyoushi.github.io/docs/guides/troubleshooting#cloudflare. If it doesn't work, migrate to other sources or wait until they lower their protection."
+                "message": "Consulte a seção **Resolvendo problemas com Cloudflare** em https://keiyoushi.github.io/docs/guides/troubleshooting#cloudflare. Se não funcionar, migre para outras fontes ou aguarde até que baixem a proteção."
               },
               {
                 "keywords": ["uninstall"],
-                "message": "Uninstall the extension before updating. If that does not work, uninstall it from your device's settings by navigating to your device's Settings -> Apps and uninstall it from there by looking for `Tachiyomi: <extension name>`.\n\nThis is usually caused your previous extension having a different signature from the updated extension, making Android refuse to update it."
+                "message": "Desinstale a extensão antes de atualizar. Se isso não funcionar, desinstale-a das configurações do seu dispositivo navegando para Configurações do dispositivo -> Apps e desinstale-a procurando por `Tachiyomi: <nome da extensão>`.\n\nIsso geralmente é causado pela extensão anterior ter uma assinatura diferente da extensão atualizada, fazendo com que o Android recuse a atualização."
               }
             ]
 
           duplicate-check-enabled: true
           duplicate-check-labels: |
-            ["Source request", "Domain changed"]
+            ["Solicitar Fonte", "Dominio Alterado", "Bug"]
 
           existing-check-enabled: true
           existing-check-labels: |
-            ["Source request", "Domain changed"]
-          existing-check-repo-url: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json
+            ["Solicitar Fonte", "Dominio Alterado", "Bug"]
+          existing-check-repo-url: https://raw.githubusercontent.com/FelipeGFA/extensoes/repo/index.min.json
 
           auto-close-rules: |
             [
               {
                 "type": "both",
-                "regex": ".*(?:fail(?:ed|ure|s)?|can\\s*(?:no|')?t|(?:not|un).*able|(?<!n[o']?t )blocked by|error) (?:to )?(?:get past|by ?pass|penetrate)?.*cl[oa]ud ?fl?[ai]re.*",
+                "regex": ".*(?:fail(?:ed|ure|s)?|can\\s*(?:no|')?t|(?:not|un).*able|(?<!n[o']?t )blocked by|error|falha|erro|não (?:consegue|funciona|pode|consigo)|bloqueado por|impossível acessar) (?:to )?(?:get past|by ?pass|penetrate|contornar|burlar|passar por)?.*cl[oa]ud ?fl?[ai]re.*",
                 "ignoreCase": true,
-                "labels": ["Cloudflare protected"],
-                "message": "Refer to the **Solving Cloudflare issues** section at https://keiyoushi.github.io/docs/guides/troubleshooting#cloudflare. If it doesn't work, migrate to other sources or wait until they lower their protection."
+                "labels": ["Proteção Cloudflare"],
+                "message": "Consulte a seção **Resolvendo problemas com Cloudflare** em https://keiyoushi.github.io/docs/guides/troubleshooting#cloudflare. Se não funcionar, migre para outras fontes ou aguarde até que baixem a proteção."
               },
               {
                 "type": "both",
                 "regex": "remanga\\.org",
                 "ignoreCase": true,
-                "labels": ["invalid"],
-                "message": "ReManga (Russian) will not be added back as it has been removed [due to legal reasons](https://github.com/github/dmca)."
+                "labels": ["Invalido"],
+                "message": "ReManga (Russo) não será adicionado de volta, pois foi removido [por razões legais](https://github.com/github/dmca)."
               },
               {
                 "type": "both",
                 "regex": "(kumanga\\.com)",
                 "ignoreCase": true,
-                "labels": ["invalid"],
-                "message": "{match} will not be added back as it is too difficult to maintain."
+                "labels": ["Invalido"],
+                "message": "{match} não será adicionado de volta, pois é muito difícil de manter."
               },
               {
                 "type": "both",
                 "regex": "(centralnovel\\.com)",
                 "ignoreCase": true,
-                "labels": ["invalid"],
-                "message": "Novels aren't supported"
+                "labels": ["Invalido"],
+                "message": "Novels não são suportados."              },
+              {
+                "type": "both",
+                "regex": ".*(?:novel|romance|livro).*",
+                "ignoreCase": true,
+                "labels": ["Invalido"],
+                "message": "Solicitações para novels ou romances não são aceitas, pois não são suportados pelo projeto."
               }
             ]
-          auto-close-ignore-label: do-not-autoclose
+          auto-close-ignore-label: nao-fechar-auto
