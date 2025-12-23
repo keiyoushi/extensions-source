@@ -6,7 +6,7 @@ import java.util.Locale
 
 class Pizzariascan : Madara(
     "Pizzaria Scan",
-    "https://pizzariascan.site",
+    "https://pizzariacomics.com",
     "pt-BR",
     SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("pt")),
 ) {
