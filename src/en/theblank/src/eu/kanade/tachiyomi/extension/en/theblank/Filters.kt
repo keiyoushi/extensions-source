@@ -4,12 +4,12 @@ import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import kotlin.collections.filter
 
-class TriStateFilter<T>(name: String, val value: T) : Filter.TriState(name)
+class TriStateFilter(name: String, val value: String) : Filter.TriState(name)
 
 abstract class TriStateGroupFilter(
     name: String,
     options: List<Pair<String, String>>,
-) : Filter.Group<TriStateFilter<String>>(
+) : Filter.Group<TriStateFilter>(
     name,
     options.map { TriStateFilter(it.first, it.second) },
 ) {
