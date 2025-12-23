@@ -1,3 +1,9 @@
+/*
+ * Portions of this software are derived from libsodium.
+ * Source: https://github.com/jedisct1/libsodium
+ * * Copyright (c) 2013-2024 Frank Denis <j at pureftpd dot org>
+ */
+
 package eu.kanade.tachiyomi.extension.en.theblank.decryption;
 
 import java.util.Arrays;
