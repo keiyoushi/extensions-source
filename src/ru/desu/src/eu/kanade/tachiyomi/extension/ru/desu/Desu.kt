@@ -260,7 +260,7 @@ class Desu : ConfigurableSource, HttpSource() {
 
         return obj["pages"]!!.jsonObject["list"]!!.jsonArray
             .mapIndexed { i, jsonEl ->
-                Page(i, "", jsonEl.jsonObject["img"]!!.jsonPrimitive.content)
+                Page(i, "", jsonEl.jsonObject["img"]!!.jsonPrimitive.content.replace(Regex("(?<=\\.)desu\\..+(?=/manga/)"), baseUrl.substringAfter("://")))
             }
     }
 
@@ -412,6 +412,6 @@ class Desu : ConfigurableSource, HttpSource() {
 
         private val URL_REGEX = Regex("^https?://.+")
 
-        private const val DOMAIN_DEFAULT = "https://desu.city"
+        private const val DOMAIN_DEFAULT = "https://desu.uno"
     }
 }
