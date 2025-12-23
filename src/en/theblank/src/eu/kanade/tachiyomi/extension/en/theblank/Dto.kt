@@ -77,10 +77,8 @@ class MangaResponse(
         class Chapter(
             val slug: String,
             val title: String,
-            val chapterNumber: Float,
             val createdAt: String,
             val isPremium: Boolean,
-            val type: String,
         )
 
         @Serializable

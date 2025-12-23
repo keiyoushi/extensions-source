@@ -1,11 +1,14 @@
 package eu.kanade.tachiyomi.extension.en.theblank
 
 import android.util.Base64
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.extension.en.theblank.decryption.SecretStream
 import eu.kanade.tachiyomi.extension.en.theblank.decryption.State
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,6 +19,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.firstInstanceOrNull
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
 import keiyoushi.utils.tryParse
@@ -46,12 +50,14 @@ import javax.crypto.Cipher
 import javax.crypto.spec.OAEPParameterSpec
 import javax.crypto.spec.PSource
 
-class TheBlank : HttpSource() {
+class TheBlank : HttpSource(), ConfigurableSource {
     override val name = "The Blank"
     override val lang = "en"
     override val baseUrl = "https://beta.theblank.net"
     private val baseHttpUrl = baseUrl.toHttpUrl()
     override val supportsLatest = true
+
+    private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
@@ -286,23 +292,38 @@ class TheBlank : HttpSource() {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val data = response.parseAs<MangaResponse>().props.serie
+        val hidePremium = preferences.getBoolean(HIDE_PREMIUM_PREF, false)
 
-        return data.chapters.map {
-            SChapter.create().apply {
-                url = baseUrl.toHttpUrl().newBuilder().apply {
-                    addPathSegment("serie")
-                    addPathSegment(data.slug)
-                    addPathSegment("chapter")
-                    addPathSegment(it.slug)
-                }.build().encodedPath
-                name = it.title
-                chapter_number = it.chapterNumber
-                date_upload = dateFormat.tryParse(it.createdAt)
-            }
-        }.asReversed()
+        return data.chapters
+            .filter { !(it.isPremium && hidePremium) }
+            .map {
+                SChapter.create().apply {
+                    url = baseUrl.toHttpUrl().newBuilder().apply {
+                        addPathSegment("serie")
+                        addPathSegment(data.slug)
+                        addPathSegment("chapter")
+                        addPathSegment(it.slug)
+                    }.build().encodedPath
+                    name = buildString {
+                        if (it.isPremium) {
+                            append("\uD83D\uDD12 ") // lock emoji
+                        }
+                        append(it.title)
+                    }
+                    date_upload = dateFormat.tryParse(it.createdAt)
+                }
+            }.asReversed()
     }
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ENGLISH)
+
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_PREMIUM_PREF
+            title = "Hide Premium Chapters"
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+    }
 
     override fun pageListRequest(chapter: SChapter): Request {
         val url = "$baseUrl${chapter.url}".toHttpUrl()
@@ -463,4 +484,5 @@ class TheBlank : HttpSource() {
 }
 
 private const val THUMBNAIL_FRAGMENT = "thumbnail"
+private const val HIDE_PREMIUM_PREF = "pref_hide_premium_chapters"
 private const val CHUNK_SIZE = 8192 + 17 // Data size + ABYTES
