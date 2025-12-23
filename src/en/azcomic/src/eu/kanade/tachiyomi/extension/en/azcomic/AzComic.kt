@@ -8,14 +8,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.injectLazy
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -29,18 +28,12 @@ class AzComic : HttpSource() {
 
     override val supportsLatest = true
 
-    private val json by injectLazy<Json>()
-
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
     }
 
     @Volatile
-    private var cachedComics: List<ComicEntry>? = null
-
-    @Volatile
     private var cachedSeries: List<SeriesEntry>? = null
-
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val series = getSeries().sortedByDescending { it.updatedAt }
@@ -127,13 +120,7 @@ class AzComic : HttpSource() {
 
     private fun getSeries(): List<SeriesEntry> {
         return cachedSeries ?: synchronized(this) {
-            cachedSeries ?: buildSeries(getComics()).also { cachedSeries = it }
-        }
-    }
-
-    private fun getComics(): List<ComicEntry> {
-        return cachedComics ?: synchronized(this) {
-            cachedComics ?: fetchComics().also { cachedComics = it }
+            cachedSeries ?: buildSeries(fetchComics()).also { cachedSeries = it }
         }
     }
 
@@ -234,7 +221,7 @@ class AzComic : HttpSource() {
 
     private fun ComicEntry.updatedAtMillis(): Long {
         val raw = updatedAt ?: return 0L
-        return runCatching { dateFormat.parse(raw)?.time }.getOrNull() ?: 0L
+        return dateFormat.tryParse(raw)
     }
 
     private fun String.seriesTitle(): String {
@@ -287,10 +274,6 @@ class AzComic : HttpSource() {
         return lowercase(Locale.ROOT)
             .replace(Regex("[^a-z0-9]+"), "-")
             .trim('-')
-    }
-
-    private inline fun <reified T> Response.parseAs(): T = use { response ->
-        response.body.string().let(json::decodeFromString)
     }
 
     @Serializable
