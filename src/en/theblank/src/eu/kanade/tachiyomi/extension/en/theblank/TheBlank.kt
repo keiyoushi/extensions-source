@@ -1,14 +1,8 @@
 package eu.kanade.tachiyomi.extension.en.theblank
 
-import android.app.Application
-import android.content.pm.PackageManager
-import android.os.Build
 import android.util.Base64
-import com.goterl.lazysodium.LazySodiumAndroid
-import com.goterl.lazysodium.SodiumAndroid
-import com.goterl.lazysodium.interfaces.SecretStream
-import dalvik.system.PathClassLoader
-import eu.kanade.tachiyomi.extension.BuildConfig
+import eu.kanade.tachiyomi.extension.en.theblank.decryption.SecretStream
+import eu.kanade.tachiyomi.extension.en.theblank.decryption.State
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.source.model.Filter
@@ -34,8 +28,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.nio.charset.StandardCharsets
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
@@ -333,7 +325,7 @@ class TheBlank : HttpSource() {
     }
 
     private fun rsaDecrypt(privateKey: PrivateKey, encryptedData: ByteArray): String {
-        val cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding").apply {
+        val cipher = Cipher.getInstance("RSA/ECB/OAEPPadding").apply {
             val oaepSpec = OAEPParameterSpec(
                 "SHA-256",
                 "MGF1",
@@ -388,7 +380,7 @@ class TheBlank : HttpSource() {
             .digest(imageKey.toByteArray(Charsets.UTF_8))
 
         return try {
-            val decrypted = decryptSecretStream(encryptedData, streamKey, nonce)
+            val decrypted = decryptResponse(encryptedData, streamKey, nonce)
             response.newBuilder()
                 .body(decrypted.toResponseBody("image/jpg".toMediaType()))
                 .build()
@@ -398,77 +390,57 @@ class TheBlank : HttpSource() {
         }
     }
 
-    private val classLoader by lazy {
-        val context = Injekt.get<Application>()
+    private fun decryptResponse(
+        buffer: ByteArray,
+        streamKey: ByteArray,
+        nonce: ByteArray,
+    ): ByteArray {
+        val secretStream = SecretStream()
+        val state = State()
 
-        @Suppress("DEPRECATION")
-        val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or
-            PackageManager.GET_META_DATA or
-            PackageManager.GET_SIGNATURES or
-            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else 0)
+        // Initialize the pull state
+        secretStream.initPull(state, nonce, streamKey)
 
-        val appInfo = context.packageManager.getPackageInfo(BuildConfig.APPLICATION_ID, PACKAGE_FLAGS).applicationInfo!!
-
-        PathClassLoader(appInfo.sourceDir, appInfo.nativeLibraryDir, context.classLoader)
-    }
-
-    private val sodium by lazy {
-        val sodiumAndroid = Class.forName("com.goterl.lazysodium.SodiumAndroid", false, classLoader)
-            .getDeclaredConstructor().newInstance() as SodiumAndroid
-
-        LazySodiumAndroid(sodiumAndroid)
-    }
-    // private val sodium = LazySodiumAndroid(SodiumAndroid())
-
-    private fun decryptSecretStream(input: ByteArray, key: ByteArray, header: ByteArray): ByteArray {
-        // val state = SecretStream.State()
-        val state = Class.forName("com.goterl.lazysodium.interfaces.SecretStream${"$"}State", false, classLoader)
-            .getDeclaredConstructor().newInstance() as SecretStream.State
-
-        // crypto_secretstream_xchacha20poly1305_init_pull
-        // This handles the 24-byte nonce (header) and 32-byte key
-        val initSuccess = sodium.cryptoSecretStreamInitPull(state, header, key)
-        if (!initSuccess) throw Exception("Sodium: Init pull failed (Invalid header/key)")
-
-        val output = mutableListOf<ByteArray>()
+        val decryptedChunks = mutableListOf<ByteArray>()
         var position = 0
 
-        // chunksize = 8192 + 17 (SecretStream.ABYTES)
-        val chunkSize = 8192 + SecretStream.ABYTES
+        while (position < buffer.size) {
+            val remaining = buffer.size - position
+            val chunkSize = minOf(remaining, CHUNK_SIZE)
 
-        while (position < input.size) {
-            val remaining = input.size - position
-            val currentChunkSize = minOf(chunkSize, remaining)
-            val chunk = input.copyOfRange(position, position + currentChunkSize)
+            val chunk = ByteArray(chunkSize)
+            System.arraycopy(buffer, position, chunk, 0, chunkSize)
 
-            // Message is chunk size minus the 17 bytes of overhead
-            val decryptedChunk = ByteArray(currentChunkSize - SecretStream.ABYTES)
-            val tag = ByteArray(1)
+            // Decrypt chunk
+            val result = secretStream.pull(state, chunk, chunkSize)
+                ?: throw Exception("Decryption failed - invalid or corrupted data at position $position")
 
-            // crypto_secretstream_xchacha20poly1305_pull
-            val pullSuccess = sodium.cryptoSecretStreamPull(
-                state,
-                decryptedChunk,
-                tag,
-                chunk,
-                chunk.size.toLong(),
-            )
+            decryptedChunks.add(result.message)
 
-            if (!pullSuccess) throw Exception("Sodium: Decryption failed - corrupted data")
+            // Check if this is the final chunk
+            if (result.tag.toInt() == SecretStream.TAG_FINAL) {
+                break
+            }
 
-            output.add(decryptedChunk)
-
-            // TAG_FINAL check
-            if (tag[0] == SecretStream.TAG_FINAL) break
-
-            position += currentChunkSize
+            position += chunkSize
         }
 
-        // Combine chunks (equivalent to H.reduce in TS)
-        return output.flatMap { it.asIterable() }.toByteArray()
+        // Combine all decrypted chunks
+        val totalSize = decryptedChunks.sumOf { it.size }
+        val finalArray = ByteArray(totalSize)
+
+        var offset = 0
+        for (chunk in decryptedChunks) {
+            System.arraycopy(chunk, 0, finalArray, offset, chunk.size)
+            offset += chunk.size
+        }
+
+        return finalArray
     }
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException()
     }
 }
+
+private const val CHUNK_SIZE = 8192 + 17 // Data size + ABYTES
