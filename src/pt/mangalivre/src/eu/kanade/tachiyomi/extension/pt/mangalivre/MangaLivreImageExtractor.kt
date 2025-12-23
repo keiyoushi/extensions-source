@@ -9,15 +9,13 @@ object MangaLivreImageExtractor {
 
     private const val PADDING_SIZE = 16
 
-    private val KEY_STRING_REGEX = Regex("""var\s+\w+\s*=\s*["'](-?\d+[^"']+)["']""")
+    private val ATTR_STRING_REGEX = Regex("""(?:var|let|const)\s+a\s*=\s*["'](data-[\w-]+)["']""")
 
-    private val XOR_OP_REGEX = Regex("""calcVal\s*=\s*rawVal\s*\^\s*(\d+)""")
+    private val KS_REGEX = Regex("""(?:var|let|const)\s+ks\s*=\s*["']([^"']+)["']""")
 
-    private val ADD_OP_REGEX = Regex("""calcVal\s*=\s*rawVal\s*\+\s*(\d+)""")
+    private val MODE_REGEX = Regex("""(?:var|let|const)\s+mode\s*=\s*(\d+)""")
 
-    private val SUB_OP_REGEX = Regex("""calcVal\s*=\s*rawVal\s*-\s*(\d+)""")
-
-    private val DATA_ATTR_REGEX = Regex("""querySelectorAll\s*\(\s*['"]div\[data-(\w+)\]['"]""")
+    private val SALT_REGEX = Regex("""(?:var|let|const)\s+salt\s*=\s*(\d+)""")
 
     private enum class Operation { XOR, ADD, SUB }
 
@@ -25,7 +23,7 @@ object MangaLivreImageExtractor {
         val keyParts: List<Int>,
         val operand: Int,
         val operation: Operation,
-        val dataAttrName: String,
+        val dataAttr: String,
     )
 
     fun extractImageUrls(document: Document): List<String>? {
@@ -40,68 +38,78 @@ object MangaLivreImageExtractor {
     }
 
     private fun collectEncodedData(readingContent: Element, params: DecryptionParams): String {
+        val attr = params.dataAttr
         return buildString {
-            for (el in readingContent.select("div.sec-part-real[data-${params.dataAttrName}]")) {
-                append(el.attr("data-${params.dataAttrName}"))
+            for (el in readingContent.select("[$attr]")) {
+                append(el.attr(attr))
             }
         }
     }
 
     private fun findDecryptionParams(document: Document): DecryptionParams? {
-        var keyString: String? = null
-        var operand: Int? = null
-        var operation: Operation? = null
-        var dataAttrName: String? = null
+        var dataAttr: String? = null
+
+        var newKs: String? = null
+        var newMode: Int? = null
+        var newSalt: Int? = null
 
         for (script in document.select("script:not([src])")) {
             val data = script.data()
             if (data.length < 50) continue
 
-            if (dataAttrName == null) {
-                DATA_ATTR_REGEX.find(data)?.let { match ->
-                    dataAttrName = match.groupValues[1]
+            if (dataAttr == null) {
+                ATTR_STRING_REGEX.find(data)?.let { match ->
+                    dataAttr = match.groupValues[1]
                 }
             }
 
-            if (keyString == null) {
-                KEY_STRING_REGEX.find(data)?.let { match ->
-                    val value = match.groupValues[1]
-                    if (value.contains(Regex("""-?\d+[^0-9\-]+-?\d+"""))) {
-                        keyString = value
-                    }
+            if (newKs == null) {
+                KS_REGEX.find(data)?.let { match ->
+                    newKs = match.groupValues[1]
                 }
             }
 
-            if (operation == null) {
-                XOR_OP_REGEX.find(data)?.let { match ->
-                    operand = match.groupValues[1].toIntOrNull()
-                    operation = Operation.XOR
-                }
-                if (operation == null) {
-                    ADD_OP_REGEX.find(data)?.let { match ->
-                        operand = match.groupValues[1].toIntOrNull()
-                        operation = Operation.ADD
-                    }
-                }
-                if (operation == null) {
-                    SUB_OP_REGEX.find(data)?.let { match ->
-                        operand = match.groupValues[1].toIntOrNull()
-                        operation = Operation.SUB
-                    }
+            if (newMode == null) {
+                MODE_REGEX.find(data)?.let { match ->
+                    newMode = match.groupValues[1].toIntOrNull()
                 }
             }
 
-            if (keyString != null && operand != null && operation != null && dataAttrName != null) break
+            if (newSalt == null) {
+                SALT_REGEX.find(data)?.let { match ->
+                    newSalt = match.groupValues[1].toIntOrNull()
+                }
+            }
+
+            if (dataAttr != null && newKs != null && newMode != null && newSalt != null) {
+                val separator = detectSeparator(newKs!!)
+                val keyParts = newKs!!.split(separator).mapNotNull { it.toIntOrNull() }
+                if (keyParts.isEmpty()) return null
+
+                val (op, opnd) = when (newMode) {
+                    0 -> Operation.SUB to newSalt!!
+                    1 -> Operation.ADD to newSalt!!
+                    else -> Operation.XOR to newSalt!!
+                }
+
+                return DecryptionParams(
+                    keyParts = keyParts,
+                    operand = opnd,
+                    operation = op,
+                    dataAttr = dataAttr!!,
+                )
+            }
         }
 
-        if (keyString == null || operand == null || operation == null || dataAttrName == null) return null
+        return null
+    }
 
-        val separator = keyString!!.firstOrNull { !it.isDigit() && it != '-' }?.toString() ?: ":"
-        val keyParts = keyString!!.split(separator).mapNotNull { it.toIntOrNull() }
-
-        if (keyParts.isEmpty()) return null
-
-        return DecryptionParams(keyParts, operand!!, operation!!, dataAttrName!!)
+    private fun detectSeparator(ks: String): String {
+        return when {
+            '|' in ks -> "|"
+            '_' in ks -> "_"
+            else -> "."
+        }
     }
 
     private fun decodeData(encodedData: String, params: DecryptionParams): String {
@@ -134,7 +142,6 @@ object MangaLivreImageExtractor {
     private fun parseUrls(jsonStr: String): List<String>? {
         return runCatching {
             jsonStr.parseAs<List<String>>()
-                .map { it.trim() }
                 .ifEmpty { null }
         }.getOrNull()
     }

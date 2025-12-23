@@ -21,7 +21,6 @@ import org.jsoup.nodes.Element
 import java.util.Calendar
 import java.util.Locale
 import kotlin.collections.mapIndexed
-import kotlin.experimental.xor
 
 class RaijinScans : HttpSource() {
 
@@ -194,44 +193,12 @@ class RaijinScans : HttpSource() {
     }
 
     // ========================== Page List =============================
-    private fun String.extractGroup(regex: Regex): String =
-        regex.find(this)?.groupValues?.getOrNull(1).orEmpty()
-
-    private fun decodeKey(rmk: String): IntArray {
-        val decoded = Base64.decode(rmk, Base64.DEFAULT)
-        val keySeed = intArrayOf(90, 60, 126, 29, 159, 178, 78, 106)
-
-        return IntArray(8) { index ->
-            (decoded[index].toInt() and 0xFF) xor keySeed[index]
-        }
-    }
-
-    private fun decryptRmd(rmd: String, key: IntArray): List<String> {
-        val normalized = rmd.replace('-', '+').replace('_', '/')
-        val decoded = Base64.decode(normalized, Base64.DEFAULT)
-
-        val decrypted = decoded.mapIndexed { index, byte ->
-            ((byte.toInt() and 0xFF) xor key[index % key.size]).toChar()
-        }.joinToString("")
-
-        return decrypted.parseAs()
-    }
 
     override fun pageListParse(response: Response): List<Page> {
-        val body = response.body.string()
-
-        val rmd = body.extractGroup(rmdRegex)
-        val rmk = body.extractGroup(rmkRegex)
-
-        require(rmd.isNotBlank() && rmk.isNotBlank()) {
-            "Can't find window._rmd or window._rmk"
-        }
-
-        val key = decodeKey(rmk)
-        val imageUrls = decryptRmd(rmd, key)
-
-        return imageUrls.mapIndexed { index, url ->
-            Page(index, imageUrl = url)
+        return response.asJsoup().select("div.protected-image-data").mapIndexed { index, element ->
+            val encodedUrl = element.attr("data-src")
+            val imageUrl = String(Base64.decode(encodedUrl, Base64.DEFAULT))
+            Page(index, imageUrl = imageUrl)
         }
     }
 
