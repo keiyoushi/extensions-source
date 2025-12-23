@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
-            android:name=".BatoV4UrlActivity"
+            android:name=".all.batotov4.BatoV4UrlActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay">

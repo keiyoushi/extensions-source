@@ -9,6 +9,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -25,6 +26,7 @@ import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.nodes.Document
+import rx.Observable
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -149,6 +151,19 @@ class Bato(
     override fun searchMangaParse(response: Response): MangasPage =
         parseMangaList(response.asJsoup(), pageFromResponse(response))
 
+    override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
+        if (query.startsWith(ID_PREFIX)) {
+            val id = query.substringAfter(ID_PREFIX).trim()
+            if (id.isBlank()) {
+                return Observable.just(MangasPage(emptyList(), false))
+            }
+            val url = withLang("$baseUrl/title/$id")
+            return client.newCall(GET(url, headers)).asObservableSuccess()
+                .map { queryIdParse(it) }
+        }
+        return super.fetchSearchManga(page, query, filters)
+    }
+
     override fun latestUpdatesRequest(page: Int): Request =
         GET(withLang("$baseUrl/v4x-latest?page=$page"), headers)
 
@@ -222,6 +237,12 @@ class Bato(
             else -> deduped.isNotEmpty()
         }
         return MangasPage(deduped, hasNextPage)
+    }
+
+    private fun queryIdParse(response: Response): MangasPage {
+        val manga = parseMangaDetails(response.asJsoup())
+        manga.url = response.request.url.encodedPath
+        return MangasPage(listOf(manga), false)
     }
 
     private fun parseMangaDetails(document: Document): SManga {
@@ -693,6 +714,7 @@ class Bato(
             )
 
         private val SERIES_ID_REGEX = Regex("/title/(\\d+)")
+        private const val ID_PREFIX = "ID:"
 
         val ORIGINAL_STATUS_VALUES = arrayOf(
             "",
