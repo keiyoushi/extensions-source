@@ -1190,6 +1190,8 @@ open class BatoTo(
             "bato.day",
             "bato.red",
             "bato.run",
+            "bato.si",
+            "bato.ing",
             "batoto.in",
             "batoto.tv",
             "batotoo.com",
