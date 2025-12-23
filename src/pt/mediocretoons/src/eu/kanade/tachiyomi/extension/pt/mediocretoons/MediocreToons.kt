@@ -43,44 +43,41 @@ class MediocreToons : HttpSource(), ConfigurableSource {
         .addInterceptor(::authIntercept)
         .build()
 
-	private fun authIntercept(chain: Interceptor.Chain): Response {
-	    val originalRequest = chain.request()
+    private fun authIntercept(chain: Interceptor.Chain): Response {
+        val originalRequest = chain.request()
 
-	    if (originalRequest.header("Authorization") != null) {
-	        return chain.proceed(originalRequest)
-	    }
+        if (originalRequest.header("Authorization") != null) {
+            return chain.proceed(originalRequest)
+        }
 
-	    val token = getValidToken()
-	    if (token.isNullOrEmpty()) {
-	        return chain.proceed(originalRequest)
-	    }
+        val token = getValidToken()
+        if (token.isNullOrEmpty()) {
+            return chain.proceed(originalRequest)
+        }
 
-	    val authenticatedRequest = originalRequest.newBuilder()
-	        .header("Authorization", "Bearer $token")
-	        .build()
+        val authenticatedRequest = originalRequest.newBuilder()
+            .header("Authorization", "Bearer $token")
+            .build()
 
-	    val response = chain.proceed(authenticatedRequest)
+        val response = chain.proceed(authenticatedRequest)
 
-	    if (response.code == 401) {
-	        response.body?.close()
+        if (response.code == 401) {
+            response.body?.close()
+            cachedToken = null
+            tokenExpiryTime = 0L
+            val newToken = getValidToken()
 
-	        cachedToken = null
-	        tokenExpiryTime = 0L
-
-	        val newToken = getValidToken()
-
-	        return if (!newToken.isNullOrEmpty()) {
-	            val retryRequest = originalRequest.newBuilder()
-	                .header("Authorization", "Bearer $newToken")
-	                .build()
-	            chain.proceed(retryRequest)
-	        } else {
-	            chain.proceed(originalRequest)
-	        }
-	    }
-
-	    return response
-	}
+            return if (!newToken.isNullOrEmpty()) {
+                val retryRequest = originalRequest.newBuilder()
+                    .header("Authorization", "Bearer $newToken")
+                    .build()
+                chain.proceed(retryRequest)
+            } else {
+                chain.proceed(originalRequest)
+            }
+        }
+        return response
+    }
 
     private fun getValidToken(): String? {
         val now = System.currentTimeMillis()
