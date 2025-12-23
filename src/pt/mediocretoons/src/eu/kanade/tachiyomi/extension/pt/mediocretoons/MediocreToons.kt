@@ -43,44 +43,44 @@ class MediocreToons : HttpSource(), ConfigurableSource {
         .addInterceptor(::authIntercept)
         .build()
 
-    private fun authIntercept(chain: Interceptor.Chain): Response {
-        val originalRequest = chain.request()
+	private fun authIntercept(chain: Interceptor.Chain): Response {
+	    val originalRequest = chain.request()
 
-        if (originalRequest.header("Authorization") != null) {
-            return chain.proceed(originalRequest)
-        }
+	    if (originalRequest.header("Authorization") != null) {
+	        return chain.proceed(originalRequest)
+	    }
 
-        val token = getValidToken()
+	    val token = getValidToken()
+	    if (token.isNullOrEmpty()) {
+	        return chain.proceed(originalRequest)
+	    }
 
-        if (token.isNullOrEmpty()) {
-            return chain.proceed(originalRequest)
-        }
+	    val authenticatedRequest = originalRequest.newBuilder()
+	        .header("Authorization", "Bearer $token")
+	        .build()
 
-        val authenticatedRequest = originalRequest.newBuilder()
-            .header("Authorization", "Bearer $token")
-            .build()
+	    val response = chain.proceed(authenticatedRequest)
 
-        val response = chain.proceed(authenticatedRequest)
+	    if (response.code == 401) {
+	        response.body?.close()
 
-        if (response.code == 401) {
-            response.use {
-                cachedToken = null
-                tokenExpiryTime = 0L
+	        cachedToken = null
+	        tokenExpiryTime = 0L
 
-                val newToken = getValidToken()
-                if (!newToken.isNullOrEmpty()) {
-                    val retryRequest = originalRequest.newBuilder()
-                        .header("Authorization", "Bearer $newToken")
-                        .build()
-                    return chain.proceed(retryRequest)
-                } else {
-                    return chain.proceed(originalRequest)
-                }
-            }
-        }
+	        val newToken = getValidToken()
 
-        return response
-    }
+	        return if (!newToken.isNullOrEmpty()) {
+	            val retryRequest = originalRequest.newBuilder()
+	                .header("Authorization", "Bearer $newToken")
+	                .build()
+	            chain.proceed(retryRequest)
+	        } else {
+	            chain.proceed(originalRequest)
+	        }
+	    }
+
+	    return response
+	}
 
     private fun getValidToken(): String? {
         val now = System.currentTimeMillis()
@@ -167,8 +167,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val responseBody = response.peekBody(Long.MAX_VALUE).string()
-
         val rankingList = response.parseAs<List<MediocreRankingDto>>()
 
         val mangas = rankingList.map { rankingDto ->
@@ -201,8 +199,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     }
 
     override fun latestUpdatesParse(response: Response): MangasPage {
-        val responseBody = response.peekBody(Long.MAX_VALUE).string()
-
         val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
 
         val mangas = dto.data.map { it.toSManga() }
@@ -245,8 +241,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val responseBody = response.peekBody(Long.MAX_VALUE).string()
-
         val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
 
         val mangas = dto.data.map { it.toSManga() }
@@ -385,10 +379,7 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     }
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val responseBody = response.peekBody(Long.MAX_VALUE).string()
-
         val dto = response.parseAs<MediocreMangaDto>()
-
         return dto.toSManga(isDetails = true)
     }
 
@@ -403,8 +394,6 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val responseBody = response.peekBody(Long.MAX_VALUE).string()
-
         val manga = response.parseAs<MediocreMangaDto>()
 
         val chapters = manga.chapters
@@ -423,12 +412,8 @@ class MediocreToons : HttpSource(), ConfigurableSource {
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val responseBody = response.peekBody(Long.MAX_VALUE).string()
-
         val dto = response.parseAs<MediocreChapterDetailDto>()
-
         val pages = dto.toPageList()
-
         return pages
     }
 
