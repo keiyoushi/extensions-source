@@ -47,7 +47,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = super.client.newBuilder()
-        .rateLimit(1)
+        .rateLimit(1, 2)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
