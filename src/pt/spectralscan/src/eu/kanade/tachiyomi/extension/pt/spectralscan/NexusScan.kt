@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.extension.pt.spectralscan
 
 import android.content.SharedPreferences
+import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -46,7 +47,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = super.client.newBuilder()
-        .rateLimit(2)
+        .rateLimit(3, 5)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -255,14 +256,29 @@ class NexusScan : HttpSource(), ConfigurableSource {
             }
     }
 
+    private val base64UrlRegex = Regex("""window\.atob\(['"]([A-Za-z0-9+/=]+)['"]\)""")
+
     private fun parseChaptersFromHtml(html: String): List<SChapter> {
         val document = Jsoup.parse(html, baseUrl)
-        return document.select("a.chapter-item[href]").map { element ->
+        return document.select("a.chapter-item[href]").mapNotNull { element ->
+            val href = element.attr("href")
+            val chapterUrl = if (href.contains("window.atob")) {
+                base64UrlRegex.find(href)?.groupValues?.get(1)?.let { encoded ->
+                    try {
+                        String(Base64.decode(encoded, Base64.DEFAULT))
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+            } else {
+                element.absUrl("href").takeIf { it.isNotEmpty() }
+            } ?: return@mapNotNull null
+
             SChapter.create().apply {
                 name = element.selectFirst(".chapter-number")?.text()
                     ?: element.attr("data-chapter-number")?.let { "Capítulo $it" }
                     ?: "Capítulo"
-                setUrlWithoutDomain(element.absUrl("href"))
+                setUrlWithoutDomain(chapterUrl)
 
                 element.selectFirst(".chapter-date")?.text()?.let { dateStr ->
                     date_upload = parseChapterDate(dateStr)
@@ -303,11 +319,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
 
-        val pageData = document.select("script[type=application/json]")
-            .firstOrNull { script ->
-                val data = script.data().trim()
-                data.startsWith("[") && data.contains("image_url") && data.contains("page_number")
-            }?.data()
+        val pageData = document.selectFirst("script[id^=raw-d-][type=application/json]")?.data()
             ?: return emptyList()
 
         return pageData.parseAs<List<PageData>>().mapIndexed { index, page ->
