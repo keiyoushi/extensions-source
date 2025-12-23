@@ -14,16 +14,17 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
+import keiyoushi.utils.tryParse
+import kotlinx.serialization.Serializable
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -94,8 +95,11 @@ class RinkoComics : HttpSource(), ConfigurableSource {
         parseMangaDetails(response.asJsoup())
 
     private fun parseMangaDetails(document: Document): SManga = SManga.create().apply {
-        title = document.selectFirst(".comic-info-upper h1")?.text()
-            ?: document.selectFirst("h1")?.text().orEmpty()
+        title = requireField(
+            document.selectFirst(".comic-info-upper h1")?.text()
+                ?: document.selectFirst("h1")?.text(),
+            "title",
+        )
 
         thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
 
@@ -220,9 +224,9 @@ class RinkoComics : HttpSource(), ConfigurableSource {
         }
 
         val entries = document.select("article.ac-card").mapNotNull { card ->
-            val url = card.selectFirst(".ac-title a")?.attr("abs:href").orEmpty()
-            val title = card.selectFirst(".ac-title a")?.text().orEmpty()
-            if (url.isBlank() || title.isBlank()) return@mapNotNull null
+            val url = card.selectFirst(".ac-title a")?.attr("abs:href")?.trim().orEmpty()
+            if (url.isBlank()) return@mapNotNull null
+            val title = requireField(card.selectFirst(".ac-title a")?.text(), "title")
 
             SManga.create().apply {
                 setUrlWithoutDomain(url)
@@ -300,13 +304,10 @@ class RinkoComics : HttpSource(), ConfigurableSource {
             .add("X-Requested-With", "XMLHttpRequest")
             .build()
         val request = POST("$baseUrl/wp-admin/admin-ajax.php", xhrHeaders, formBody)
-        val response = client.newCall(request).execute()
-        val body = response.use { it.body.string() }
+        val result = client.newCall(request).execute().parseAs<AjaxResponse>()
+        if (!result.success) return emptyList()
 
-        val json = JSONObject(body)
-        if (!json.optBoolean("success")) return emptyList()
-
-        val html = json.optJSONObject("data")?.optString("html").orEmpty()
+        val html = result.data?.html.orEmpty()
         if (html.isBlank()) return emptyList()
 
         val doc = Jsoup.parseBodyFragment(html)
@@ -331,11 +332,7 @@ class RinkoComics : HttpSource(), ConfigurableSource {
     private fun parseDate(date: String?): Long {
         date ?: return 0L
         return dateFormats.firstNotNullOfOrNull { formatter ->
-            try {
-                formatter.parse(date)?.time
-            } catch (_: ParseException) {
-                null
-            }
+            formatter.tryParse(date).takeIf { it != 0L }
         } ?: 0L
     }
 
@@ -346,6 +343,14 @@ class RinkoComics : HttpSource(), ConfigurableSource {
             else -> element.attr("abs:src")
         }
         return imageUrl.trim().ifEmpty { null }
+    }
+
+    private fun requireField(value: String?, label: String): String {
+        val trimmed = value?.trim()
+        if (trimmed.isNullOrBlank()) {
+            throw Exception("Missing $label")
+        }
+        return trimmed
     }
 
     class Genre(name: String, val slug: String) : Filter.CheckBox(name)
@@ -368,6 +373,17 @@ class RinkoComics : HttpSource(), ConfigurableSource {
     private val dateFormats = listOf(
         SimpleDateFormat("MMM d, yyyy", Locale.ENGLISH),
         SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH),
+    )
+
+    @Serializable
+    private data class AjaxResponse(
+        val success: Boolean = false,
+        val data: AjaxData? = null,
+    )
+
+    @Serializable
+    private data class AjaxData(
+        val html: String? = null,
     )
 
     companion object {
