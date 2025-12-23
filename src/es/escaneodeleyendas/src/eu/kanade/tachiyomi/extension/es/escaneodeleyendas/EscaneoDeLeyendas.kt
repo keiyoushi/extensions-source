@@ -10,6 +10,8 @@ class EscaneoDeLeyendas : Madara(
     "es",
     SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")),
 ) {
+    override val useNewChapterEndpoint = true
+
     override fun imageFromElement(element: org.jsoup.nodes.Element): String? {
         return super.imageFromElement(element)?.trim()
     }
