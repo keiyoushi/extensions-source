@@ -56,13 +56,13 @@ class TheBlank : HttpSource(), ConfigurableSource {
     override val baseUrl = "https://beta.theblank.net"
     private val baseHttpUrl = baseUrl.toHttpUrl()
     override val supportsLatest = true
-
+    override val versionId = 2
     private val preferences by getPreferencesLazy()
 
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
-            if (request.url.fragment == THUMBNAIL_FRAGMENT) {
+            return@addInterceptor if (request.url.fragment == THUMBNAIL_FRAGMENT) {
                 thumbnailClient.newCall(request).execute()
             } else {
                 chain.proceed(request)
@@ -315,7 +315,7 @@ class TheBlank : HttpSource(), ConfigurableSource {
             }.asReversed()
     }
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ENGLISH)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ROOT)
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         SwitchPreferenceCompat(screen.context).apply {
