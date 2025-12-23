@@ -1,35 +1,32 @@
-# Keiyoushi Extensions
+# Extensões FelipeGFA
 
-### Please give the repo a :star:
+### Por favor, dê uma estrela ao repositório :star:
 
-| Build                                                                                                                                                                               | Need Help?                                                                                                                                              |
+| Build                                                                                                                                                                               | Precisa de Ajuda? (Discord Keyoushi)                                                                                                                                             |
 |-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [![CI](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml/badge.svg)](https://github.com/keiyoushi/extensions-source/actions/workflows/build_push.yml) | [![Discord](https://img.shields.io/discord/1193460528052453448.svg?label=discord&labelColor=7289da&color=2c2f33&style=flat)](https://discord.gg/3FbCpdKbdY) |
+| [![CI](https://github.com/FelipeGFA/fonte-extensoes/actions/workflows/build_push.yml/badge.svg)](https://github.com/FelipeGFA/fonte-extensoes/actions/workflows/build_push.yml) | [![Discord](https://img.shields.io/discord/1193460528052453448.svg?label=discord&labelColor=7289da&color=2c2f33&style=flat)](https://discord.gg/3FbCpdKbdY) |
 
-## Usage
-**If you are new to repository/extensions, please read the [Keiyoushi Getting Started guide](https://keiyoushi.github.io/docs/guides/getting-started#adding-the-extension-repo) first.**
+## Uso
+**Se você é novo no repositório/extensões, leia primeiro o [guia de introdução do Keiyoushi](https://keiyoushi.github.io/docs/guides/getting-started#adding-the-extension-repo).**
 
-* You can add our repo by visiting the [Keiyoushi Website](https://keiyoushi.github.io/add-repo)
-* Otherwise, copy & paste the following URL: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json
+* Você pode adicionar o  repositório oficial do Keiyoushi visitando o [Site do Keiyoushi](https://keiyoushi.github.io/add-repo)
+* Caso queira utilizar esse repositório, você pode adicionar manualmente no Mihon, clicando em Configurações > Fontes > Adicionar repositório, copie e cole a seguinte URL: https://raw.githubusercontent.com/FelipeGFA/extensoes/repo/index.min.json
 
-## Requests
+## Solicitações
 
-To request a new source or bug fix, [create an issue](https://github.com/keiyoushi/extensions-source/issues/new/choose).
+Para solicitar uma nova fonte ou correção de bug, [crie uma issue](https://github.com/FelipeGFA/fonte-extensoes/issues/new/choose).
 
-Please note that creating an issue does not mean that the source will be added or fixed in a timely
-fashion, because the work is volunteer-based. Some sources may also be impossible to do or prohibitively
-difficult to maintain.
+Observe que criar uma issue não significa que a fonte será adicionada ou corrigida rapidamente, pois o trabalho é voluntário. Algumas fontes podem ser impossíveis de implementar ou proibitivamente difíceis de manter.
 
-If you would like to see a request fulfilled and have the necessary skills to do so, consider contributing!
-Issues are up-for-grabs for any developer if there is no assigned user already.
+Se você gostaria de ver uma solicitação atendida e tem as habilidades necessárias, considere contribuir! As issues estão disponíveis para qualquer desenvolvedor se não houver um usuário atribuído.
 
-## Contributing
+## Contribuições
 
-Contributions are welcome!
+Contribuições são bem-vindas!
 
-Check out the repo's [issue backlog](https://github.com/keiyoushi/extensions-source/issues) for source requests and bug reports.
+Confira o [backlog de issues](https://github.com/FelipeGFA/fonte-extensoes/issues) do repositório para solicitações de fontes e relatórios de bugs.
 
-## License
+## Licença
 
     Copyright 2015 Javier Tomás
 
@@ -45,9 +42,8 @@ Check out the repo's [issue backlog](https://github.com/keiyoushi/extensions-sou
     See the License for the specific language governing permissions and
     limitations under the License.
 
-## Disclaimer
+## Aviso Legal
 
-This project does not have any affiliation with the content providers available.
+Este projeto não tem nenhuma afiliação com os provedores de conteúdo disponíveis.
 
-This project is not affiliated with Mihon/Tachiyomi. Don't ask for help about these extensions at the
-official support means of Mihon/Tachiyomi. All credits to the codebase goes to the original contributors.
+Este projeto não é afiliado ao Mihon/Tachiyomi. Não peça ajuda sobre essas extensões nos meios de suporte oficiais do Mihon/Tachiyomi. Todos os créditos pelo código vão para os contribuidores originais.
