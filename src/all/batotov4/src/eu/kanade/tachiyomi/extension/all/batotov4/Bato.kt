@@ -350,7 +350,7 @@ class Bato(
         val pages = mutableListOf<Page>()
         for (i in 0 until urlList.length()) {
             val url = urlList.optString(i).takeIf { it.isNotBlank() } ?: continue
-            pages.add(Page(i, "", normalizeImageUrl(url)))
+            pages.add(Page(i, imageUrl = normalizeImageUrl(url)))
         }
         return pages
     }
@@ -662,14 +662,14 @@ class Bato(
         if (text.isNullOrBlank()) return 0L
         parseRelativeDate(text)?.let { return it }
         for (pattern in HTML_DATE_PATTERNS) {
-            val parsed = SimpleDateFormat(pattern, Locale.US).tryParse(text)
+            val parsed = SimpleDateFormat(pattern, Locale.ROOT).tryParse(text)
             if (parsed != 0L) return parsed
         }
         return 0L
     }
 
     private fun parseRelativeDate(text: String): Long? {
-        val match = RELATIVE_DATE_REGEX.find(text.lowercase(Locale.US)) ?: return null
+        val match = RELATIVE_DATE_REGEX.find(text.lowercase(Locale.ROOT)) ?: return null
         val value = match.groupValues.getOrNull(1)?.toIntOrNull() ?: return null
         val unit = match.groupValues.getOrNull(2).orEmpty()
         val calendar = Calendar.getInstance()
@@ -702,7 +702,7 @@ class Bato(
     }
 
     private fun parseStatus(status: String?): Int {
-        return when (status?.lowercase()) {
+        return when (status?.lowercase(Locale.ROOT)) {
             "ongoing" -> SManga.ONGOING
             "completed" -> SManga.COMPLETED
             "hiatus" -> SManga.ON_HIATUS
@@ -876,13 +876,13 @@ class Bato(
 
         private val TITLE_REGEX: Regex =
             Regex(
-                "\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official",
+                """\([^()]*\)|\{[^{}]*\}|\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|𖤍.+?𖤍|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official""",
                 RegexOption.IGNORE_CASE,
             )
 
-        private val SERIES_ID_REGEX = Regex("/title/(\\d+)")
-        private val CHAPTER_ID_REGEX = Regex("/title/\\d+[^/]*/(\\d+)")
-        private val CHAPTER_URL_REGEX = Regex("^/?title/\\d+[^/]*/\\d+[^/]*$")
+        private val SERIES_ID_REGEX = Regex("""/title/(\d+)""")
+        private val CHAPTER_ID_REGEX = Regex("""/title/\d+[^/]*/(\d+)""")
+        private val CHAPTER_URL_REGEX = Regex("""^/?title/\d+[^/]*/\d+[^/]*$""")
         private val CHAPTER_NUMBER_REGEX = Regex(
             """(?:ch(?:apter)?)[\\s._-]*([0-9]+(?:\\.[0-9]+)?)""",
             RegexOption.IGNORE_CASE,
