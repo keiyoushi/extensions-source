@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.extension.en.theblank.decryption;
 public class ChaCha20 {
     private static final int ROUNDS = 20;
     
-    // ChaCha20 block function
     private static void chachaBlock(int[] output, int[] input) {
         int x0  = input[0];
         int x1  = input[1];
@@ -23,7 +22,6 @@ public class ChaCha20 {
         int x15 = input[15];
         
         for (int i = 0; i < ROUNDS; i += 2) {
-            // Column rounds
             x0  += x4;  x12 = rotl32(x12 ^ x0,  16);
             x8  += x12; x4  = rotl32(x4  ^ x8,  12);
             x0  += x4;  x12 = rotl32(x12 ^ x0,  8);
@@ -44,7 +42,6 @@ public class ChaCha20 {
             x3  += x7;  x15 = rotl32(x15 ^ x3,  8);
             x11 += x15; x7  = rotl32(x7  ^ x11, 7);
             
-            // Diagonal rounds
             x0  += x5;  x15 = rotl32(x15 ^ x0,  16);
             x10 += x15; x5  = rotl32(x5  ^ x10, 12);
             x0  += x5;  x15 = rotl32(x15 ^ x0,  8);

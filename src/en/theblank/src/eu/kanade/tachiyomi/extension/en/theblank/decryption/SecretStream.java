@@ -24,16 +24,10 @@ public class SecretStream {
     
     // crypto_secretstream_xchacha20poly1305_init_pull
     public int initPull(State state, byte[] header, byte[] key) {
-        // crypto_core_hchacha20(state->k, in, k, NULL);
         Core.HCaCha20(state.k, header, key, null);
-        
-        // _crypto_secretstream_xchacha20poly1305_counter_reset(state);
         counterReset(state);
-        
-        // Copy INONCEBYTES (8 bytes) from header[16..23] to state.nonce[4..11]
         System.arraycopy(header, 16, state.nonce, 4, 8);
         
-        // Zero out padding
         for (int i = 0; i < state._pad.length; i++) {
             state._pad[i] = 0;
         }
@@ -48,7 +42,7 @@ public class SecretStream {
     
     public PullResult pull(State state, byte[] in, int inlen, byte[] ad, int adlen) {
         if (inlen < ABYTES) {
-            return null; // Error: message too short
+            return null; // message too short
         }
         
         long mlen = inlen - ABYTES;
@@ -81,7 +75,6 @@ public class SecretStream {
         // Update Poly1305 with ciphertext
         byte[] c = Arrays.copyOfRange(in, 1, in.length);
         Poly1305.update(poly1305State, c, 0, (int) mlen);
-        // NOTE: libsodium uses (0x10 - block + mlen) not (0x10 - (block + mlen))
         int padLen = (int) ((0x10 - 64 + mlen) & 0xf);
         Poly1305.update(poly1305State, PAD0, 0, padLen);
         
@@ -125,7 +118,6 @@ public class SecretStream {
     
     // _crypto_secretstream_xchacha20poly1305_counter_reset
     private void counterReset(State state) {
-        // Zero out counter bytes (4 bytes starting at nonce[0])
         for (int i = 0; i < 4; i++) {
             state.nonce[i] = 0;
         }
