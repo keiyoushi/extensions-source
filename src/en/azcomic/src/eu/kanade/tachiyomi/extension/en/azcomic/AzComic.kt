@@ -12,6 +12,7 @@ import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
@@ -29,11 +30,13 @@ class AzComic : HttpSource() {
     override val supportsLatest = true
 
     private val dateFormat by lazy {
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ENGLISH)
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT)
     }
 
     @Volatile
     private var cachedSeries: List<SeriesEntry>? = null
+
+    override val client = network.cloudflareClient
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
         val series = getSeries().sortedByDescending { it.updatedAt }
@@ -97,15 +100,24 @@ class AzComic : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> = throw UnsupportedOperationException()
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val urlParam = chapter.url.trimStart('/')
-        val apiUrl = "$baseUrl/get_image.php?url=$urlParam"
+        val fullUrl = (baseUrl + chapter.url).toHttpUrl()
+        val urlParam = buildString {
+            append(fullUrl.encodedPath.trimStart('/'))
+            fullUrl.encodedQuery?.let { query ->
+                append('?')
+                append(query)
+            }
+        }
+        val apiUrl = "$baseUrl/get_image.php".toHttpUrl().newBuilder()
+            .addQueryParameter("url", urlParam)
+            .build()
         return GET(apiUrl, headers)
     }
 
     override fun pageListParse(response: Response): List<Page> {
         val payload = response.parseAs<ImagePayload>()
         return payload.images.orEmpty().mapIndexed { index, url ->
-            Page(index, "", url)
+            Page(index, imageUrl = url)
         }
     }
 
@@ -272,7 +284,7 @@ class AzComic : HttpSource() {
 
     private fun String.toSlug(): String {
         return lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9]+"), "-")
+            .replace(SLUG_CLEANUP_REGEX, "-")
             .trim('-')
     }
 
@@ -326,12 +338,13 @@ class AzComic : HttpSource() {
 
     private companion object {
         private const val PAGE_SIZE = 36
-        private val COVER_SLUG_REGEX = Regex("/uploads/manga/([^/]+)/")
-        private val COVER_CHAPTER_REGEX = Regex("/chapters/([^/]+)/")
-        private val SERIES_TITLE_REGEX = Regex("\\s+(Chapter|Issue)\\b.*$", RegexOption.IGNORE_CASE)
-        private val CHAPTER_NAME_REGEX = Regex("\\b(Chapter|Issue)\\b.*$", RegexOption.IGNORE_CASE)
-        private val CHAPTER_NUMBER_REGEX = Regex("\\b(?:Chapter|Issue)\\s+([0-9]+(?:\\.[0-9]+)?)", RegexOption.IGNORE_CASE)
-        private val URL_CHAPTER_REGEX = Regex("-(?:chapter|issue)-([0-9]+(?:\\.[0-9]+)?)", RegexOption.IGNORE_CASE)
+        private val COVER_SLUG_REGEX = Regex("""/uploads/manga/([^/]+)/""")
+        private val COVER_CHAPTER_REGEX = Regex("""/chapters/([^/]+)/""")
+        private val SERIES_TITLE_REGEX = Regex("""\s+(Chapter|Issue)\b.*$""", RegexOption.IGNORE_CASE)
+        private val CHAPTER_NAME_REGEX = Regex("""\b(Chapter|Issue)\b.*$""", RegexOption.IGNORE_CASE)
+        private val CHAPTER_NUMBER_REGEX = Regex("""\b(?:Chapter|Issue)\s+([0-9]+(?:\.[0-9]+)?)""", RegexOption.IGNORE_CASE)
+        private val URL_CHAPTER_REGEX = Regex("""-(?:chapter|issue)-([0-9]+(?:\.[0-9]+)?)""", RegexOption.IGNORE_CASE)
+        private val SLUG_CLEANUP_REGEX = Regex("""[^a-z0-9]+""")
         private val LETTER_OPTIONS = buildList {
             add("All")
             add("#")
