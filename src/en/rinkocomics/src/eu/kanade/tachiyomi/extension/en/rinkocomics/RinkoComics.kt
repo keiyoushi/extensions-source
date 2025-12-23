@@ -104,7 +104,7 @@ class RinkoComics : HttpSource(), ConfigurableSource {
         thumbnail_url = document.selectFirst("meta[property=og:image]")?.attr("content")
 
         val authors = document.select(".comic-graph > span")
-            .map { it.text().trim() }
+            .map { it.text() }
             .filter { it.isNotBlank() && it != "•" }
             .distinct()
 
@@ -116,7 +116,7 @@ class RinkoComics : HttpSource(), ConfigurableSource {
         )
 
         genre = document.select(".comic-genres .genres .genre")
-            .joinToString(", ") { it.text().trim() }
+            .joinToString { it.text() }
 
         description = document.selectFirst(".comic-synopsis")?.text()?.trim()
 
@@ -165,7 +165,7 @@ class RinkoComics : HttpSource(), ConfigurableSource {
         val pages = document.select("img.chapter-image").mapIndexedNotNull { index, element ->
             val imageUrl = element.attr("abs:data-src").ifBlank { element.attr("abs:src") }.trim()
             if (imageUrl.isBlank()) return@mapIndexedNotNull null
-            Page(index, document.location(), imageUrl)
+            Page(index, imageUrl = imageUrl)
         }
 
         if (pages.isEmpty()) {
