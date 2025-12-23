@@ -5,6 +5,7 @@ import eu.kanade.tachiyomi.extension.en.theblank.decryption.SecretStream
 import eu.kanade.tachiyomi.extension.en.theblank.decryption.State
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -53,8 +54,19 @@ class TheBlank : HttpSource() {
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
+        .addInterceptor { chain ->
+            val request = chain.request()
+            if (request.url.fragment == THUMBNAIL_FRAGMENT) {
+                thumbnailClient.newCall(request).execute()
+            } else {
+                chain.proceed(request)
+            }
+        }
         .addInterceptor(::imageInterceptor)
+        .rateLimit(1)
         .build()
+
+    private val thumbnailClient = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Origin", "https://${baseHttpUrl.host}")
@@ -83,7 +95,7 @@ class TheBlank : HttpSource() {
                 .also {
                     if (!it.isSuccessful) {
                         it.close()
-                        throw Exception("HTTP ${it.code}")
+                        throw Exception("HTTP Error ${it.code}")
                     }
                 }
                 .asJsoup()
@@ -202,14 +214,14 @@ class TheBlank : HttpSource() {
             val data = response.parseAs<List<BrowseManga>>()
 
             return MangasPage(
-                mangas = data.map { it.toSManga(baseUrl) },
+                mangas = data.map { it.toSManga(::createThumbnailUrl) },
                 hasNextPage = false,
             )
         } else {
             val data = response.parseAs<LibraryResponse>().series
 
             return MangasPage(
-                mangas = data.data.map { it.toSManga(baseUrl) },
+                mangas = data.data.map { it.toSManga(::createThumbnailUrl) },
                 hasNextPage = data.meta.current < data.meta.last,
             )
         }
@@ -260,6 +272,13 @@ class TheBlank : HttpSource() {
                 else -> SManga.UNKNOWN
             }
         }
+    }
+
+    private fun createThumbnailUrl(imagePath: String?): String? {
+        return baseHttpUrl.newBuilder()
+            .encodedPath(imagePath ?: return null)
+            .fragment(THUMBNAIL_FRAGMENT)
+            .toString()
     }
 
     override fun chapterListRequest(manga: SManga) =
@@ -380,6 +399,7 @@ class TheBlank : HttpSource() {
         val response = chain.proceed(request)
 
         val fragment = request.url.fragment
+            ?.takeIf { it != THUMBNAIL_FRAGMENT }
             ?: return response
         val headerNonce = response.header("x-stream-header")
             ?: return response
@@ -433,7 +453,7 @@ class TheBlank : HttpSource() {
         }.buffer()
 
         return response.newBuilder()
-            .body(decryptedSource.asResponseBody("image/jpg".toMediaType(), -1))
+            .body(decryptedSource.asResponseBody("image/jpg".toMediaType()))
             .build()
     }
 
@@ -442,4 +462,5 @@ class TheBlank : HttpSource() {
     }
 }
 
+private const val THUMBNAIL_FRAGMENT = "thumbnail"
 private const val CHUNK_SIZE = 8192 + 17 // Data size + ABYTES

@@ -38,10 +38,10 @@ class BrowseManga(
     @JsonNames("cover_image")
     val image: String? = null,
 ) {
-    fun toSManga(baseUrl: String) = SManga.create().apply {
+    fun toSManga(createThumbnailUrl: (String?) -> String?) = SManga.create().apply {
         url = slug
         title = this@BrowseManga.title
-        thumbnail_url = image?.let { baseUrl + it }
+        thumbnail_url = createThumbnailUrl(image)
     }
 }
 
