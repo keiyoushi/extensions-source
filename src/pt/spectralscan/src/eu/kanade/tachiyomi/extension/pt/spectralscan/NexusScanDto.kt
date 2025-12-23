@@ -210,13 +210,50 @@ class MangaListResponse(
 )
 
 @Serializable
-class ChapterListResponse(
-    val chapters_html: String = "",
-    val has_next: Boolean = false,
-)
-
-@Serializable
 class PageData(
     val page_number: Int = 0,
     val image_url: String = "",
+)
+
+@Serializable
+data class MangaDetailsResponse(
+    val success: Boolean,
+    val manga: MangaDetails,
+)
+
+@Serializable
+data class MangaDetails(
+    val title: String,
+    val description: String,
+    val cover_url: String,
+    val author: String? = null,
+    val artist: String? = null,
+    val status: String,
+    val categories: List<Category>,
+)
+
+@Serializable
+data class Category(
+    val name: String,
+)
+
+@Serializable
+data class ChapterListApiResponse(
+    val success: Boolean,
+    val chapters: List<ChapterApi>,
+    val pagination: Pagination,
+)
+
+@Serializable
+data class ChapterApi(
+    val number: String,
+    val title: String,
+    val url: String,
+    val published_at: String,
+)
+
+@Serializable
+data class Pagination(
+    val has_next: Boolean,
+    val next_page: Int? = null,
 )
