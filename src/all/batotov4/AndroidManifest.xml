@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<application>
+    <activity
+        android:name=".all.batotov4.BatoToV4UrlActivity"
+        android:excludeFromRecents="true"
+        android:exported="true"
+        android:theme="@android:style/Theme.NoDisplay">
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+
+            <data android:host="*.bato.si" />
+            <data android:host="bato.si" />
+            <data android:host="*.bato.ing" />
+            <data android:host="bato.ing" />
+
+            <data
+                android:pathPattern="/series/..*"
+                android:scheme="https" />
+            <data
+                android:pathPattern="/subject-overview/..*"
+                android:scheme="https" />
+            <data
+                android:pathPattern="/title/..*"
+                android:scheme="https" />
+        </intent-filter>
+    </activity>
+</application>
+</manifest>

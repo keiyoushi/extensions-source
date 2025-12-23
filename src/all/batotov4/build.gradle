@@ -1,0 +1,12 @@
+ext {
+    extName = 'Bato.to V4'
+    extClass = '.BatoToV4Factory'
+    extVersionCode = 1
+    isNsfw = true
+}
+
+apply from: "$rootDir/common.gradle"
+
+dependencies {
+    implementation(project(':lib:cryptoaes'))
+}
