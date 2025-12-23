@@ -25,9 +25,14 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.ResponseBody.Companion.asResponseBody
+import okio.Buffer
+import okio.Timeout
+import okio.buffer
+import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
@@ -44,6 +49,7 @@ class TheBlank : HttpSource() {
     override val name = "The Blank"
     override val lang = "en"
     override val baseUrl = "https://beta.theblank.net"
+    private val baseHttpUrl = baseUrl.toHttpUrl()
     override val supportsLatest = true
 
     override val client = network.cloudflareClient.newBuilder()
@@ -51,40 +57,68 @@ class TheBlank : HttpSource() {
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
+        .set("Origin", "https://${baseHttpUrl.host}")
         .set("Referer", "$baseUrl/")
 
     private var version: String? = null
+    private var csrfToken: String? = null
 
     @Synchronized
     private fun apiRequest(
         url: HttpUrl,
+        body: RequestBody? = null,
+        includeXSRFToken: Boolean,
+        includeCSRFToken: Boolean,
         includeVersion: Boolean,
     ): Request {
-        var token = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+        var xsrfToken = client.cookieJar.loadForRequest(baseHttpUrl)
             .firstOrNull { it.name == "XSRF-TOKEN" }?.value
 
-        if (token == null || (includeVersion && version == null)) {
-            val document = client.newCall(GET(baseUrl, headers)).execute().asJsoup()
+        if (
+            (includeXSRFToken && xsrfToken == null) ||
+            (includeCSRFToken && csrfToken == null) ||
+            (includeVersion && version == null)
+        ) {
+            val document = client.newCall(GET(baseHttpUrl, headers)).execute()
+                .also {
+                    if (!it.isSuccessful) {
+                        it.close()
+                        throw Exception("HTTP ${it.code}")
+                    }
+                }
+                .asJsoup()
 
             version = document.selectFirst("#app")!!
                 .attr("data-page")
                 .parseAs<Version>().version
 
-            token = client.cookieJar.loadForRequest(baseUrl.toHttpUrl())
+            csrfToken = document.selectFirst("meta[name=csrf-token]")!!
+                .attr("content")
+
+            xsrfToken = client.cookieJar.loadForRequest(baseHttpUrl)
                 .first { it.name == "XSRF-TOKEN" }.value
         }
 
         val headers = headersBuilder().apply {
             set("Accept", "application/json")
+            set("X-Requested-With", "XMLHttpRequest")
             if (includeVersion) {
                 set("X-Inertia", "true")
                 set("X-Inertia-Version", version!!)
             }
-            set("X-Requested-With", "XMLHttpRequest")
-            set("X-XSRF-TOKEN", token)
+            if (includeXSRFToken) {
+                set("X-XSRF-TOKEN", xsrfToken!!)
+            }
+            if (includeCSRFToken) {
+                set("X-CSRF-TOKEN", csrfToken!!)
+            }
         }.build()
 
-        return GET(url, headers)
+        return if (body != null) {
+            POST(url.toString(), headers, body)
+        } else {
+            GET(url, headers)
+        }
     }
 
     override fun popularMangaRequest(page: Int) =
@@ -101,15 +135,15 @@ class TheBlank : HttpSource() {
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         if (query.isNotEmpty()) {
-            val url = baseUrl.toHttpUrl().newBuilder().apply {
+            val url = baseHttpUrl.newBuilder().apply {
                 addPathSegments("api/v1/search/series")
                 addQueryParameter("q", query)
             }.build()
 
-            return apiRequest(url, includeVersion = false)
+            return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
         }
 
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
+        val url = baseHttpUrl.newBuilder().apply {
             addPathSegment("library")
             if (page > 1) {
                 addQueryParameter("page", page.toString())
@@ -151,7 +185,7 @@ class TheBlank : HttpSource() {
             }
         }.build()
 
-        return apiRequest(url, includeVersion = false)
+        return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = false)
     }
 
     override fun getFilterList() = FilterList(
@@ -187,7 +221,7 @@ class TheBlank : HttpSource() {
             .addPathSegment(manga.url)
             .build()
 
-        return apiRequest(url, includeVersion = true)
+        return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true)
     }
 
     override fun getMangaUrl(manga: SManga): String {
@@ -252,17 +286,19 @@ class TheBlank : HttpSource() {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'", Locale.ENGLISH)
 
     override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$baseUrl${chapter.url}", headers)
+        val url = "$baseUrl${chapter.url}".toHttpUrl()
+
+        return apiRequest(url, includeXSRFToken = true, includeCSRFToken = false, includeVersion = true)
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val chapterUrl = response.request.url
-        val csrfToken = response.asJsoup().selectFirst("meta[name=csrf-token]")!!.attr("content")
+        val signedUrls = response.parseAs<PageListResponse>().props.signedUrls
 
-        val signedUrls = client.newCall(apiRequest(chapterUrl, includeVersion = true))
-            .execute().parseAs<PageListResponse>().props.signedUrls
-
-        val key = generateImageKey(csrfToken, chapterUrl.toString())
+        val keyPair = generateKeyPair()
+        val sid = decodeUrlSafeBase64(
+            fetchSessionId(keyPair.publicKeyBase64),
+        )
+        val key = rsaDecrypt(keyPair.keyPair.private, sid)
 
         return signedUrls.mapIndexed { idx, img ->
             Page(
@@ -275,27 +311,16 @@ class TheBlank : HttpSource() {
         }
     }
 
-    private fun generateImageKey(csrfToken: String, referer: String): String {
-        val keyPairResult = generateKeyPair()
-        val sid = fetchSession(csrfToken, referer, keyPairResult.publicKeyBase64)
-        val encryptedBuffer = cookSID(sid)
-
-        return rsaDecrypt(keyPairResult.keyPair.private, encryptedBuffer)
-    }
-
-    private fun fetchSession(csrfToken: String, referer: String, publicKeyBase64: String): String {
-        val url = "$baseUrl/api/v1/session"
-        val headers = headersBuilder().apply {
-            set("X-CSRF-TOKEN", csrfToken)
-            set("Origin", "https://${referer.toHttpUrl().host}")
-            set("Referer", referer)
-        }.build()
+    private fun fetchSessionId(publicKeyBase64: String): String {
+        val url = "$baseUrl/api/v1/session".toHttpUrl()
         val body = buildJsonObject {
             put("clientPublicKey", publicKeyBase64)
             put("nonce", generateNonce())
         }.toJsonString().toRequestBody("application/json".toMediaType())
 
-        return client.newCall(POST(url, headers, body)).execute()
+        val request = apiRequest(url, body, includeXSRFToken = false, includeCSRFToken = true, includeVersion = false)
+
+        return client.newCall(request).execute()
             .parseAs<SessionResponse>().sid
     }
 
@@ -341,101 +366,75 @@ class TheBlank : HttpSource() {
         return String(decryptedBytes, StandardCharsets.UTF_8)
     }
 
-    private fun cookSID(sid: String): ByteArray {
-// 1. let L0 = sid.replace(/-/g, '+').replace(/_/g, '/');
-        var l0 = sid.replace('-', '+').replace('_', '/')
+    private fun decodeUrlSafeBase64(data: String): ByteArray {
+        val normalized = data
+            .replace('-', '+')
+            .replace('_', '/')
+            .let { it + "=".repeat((4 - it.length % 4) % 4) }
 
-        // 2. for (; L0.length % 4;) L0 += '=';
-        while (l0.length % 4 != 0) {
-            l0 += "="
-        }
-
-        // 3. const x0 = atob(l0)
-        // In Android, Base64.decode(l0, Base64.DEFAULT) is the equivalent of atob()
-        // 4. Manual byte array mapping (Uint8Array part)
-        val decodedBytes = Base64.decode(l0, Base64.DEFAULT)
-
-        // In Kotlin, the decodedBytes IS already a ByteArray (Uint8Array equivalent)
-        // so the manual loop for (let j0 = 0; j0 < x0.length; j0++) vA[j0] = x0.charCodeAt(j0);
-        // is performed internally by the Base64 decoder.
-
-        return decodedBytes
+        return Base64.decode(normalized, Base64.DEFAULT)
     }
 
     private fun imageInterceptor(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
 
-        if (request.url.fragment == null) {
-            return response
-        }
+        val fragment = request.url.fragment
+            ?: return response
+        val headerNonce = response.header("x-stream-header")
+            ?: return response
 
-        val imageKey = request.url.fragment!!
+        val nonce = decodeUrlSafeBase64(headerNonce)
+        val key = MessageDigest.getInstance("SHA-256")
+            .digest(fragment.toByteArray(Charsets.UTF_8))
 
-        val nonce = cookSID(response.header("x-stream-header")!!)
+        val networkSource = response.body.source()
+        val decryptedSource = object : okio.Source {
+            private val secretStream = SecretStream()
+            private val state = State().apply {
+                secretStream.initPull(this, nonce, key)
+            }
+            private val decryptedBuffer = Buffer()
+            private var isFinished = false
 
-        val encryptedData = response.body.bytes()
+            override fun read(sink: Buffer, byteCount: Long): Long {
+                if (decryptedBuffer.size == 0L) {
+                    if (isFinished) return -1
 
-        val streamKey = MessageDigest.getInstance("SHA-256")
-            .digest(imageKey.toByteArray(Charsets.UTF_8))
+                    networkSource.request(CHUNK_SIZE.toLong())
 
-        return try {
-            val decrypted = decryptResponse(encryptedData, streamKey, nonce)
-            response.newBuilder()
-                .body(decrypted.toResponseBody("image/jpg".toMediaType()))
-                .build()
-        } catch (e: Exception) {
-            response.close()
-            throw e
-        }
-    }
+                    val chunkSize = minOf(CHUNK_SIZE.toLong(), networkSource.buffer.size)
 
-    private fun decryptResponse(
-        buffer: ByteArray,
-        streamKey: ByteArray,
-        nonce: ByteArray,
-    ): ByteArray {
-        val secretStream = SecretStream()
-        val state = State()
+                    if (chunkSize == 0L) {
+                        isFinished = true
+                        return -1
+                    }
 
-        // Initialize the pull state
-        secretStream.initPull(state, nonce, streamKey)
+                    val encryptedData = Buffer().apply {
+                        networkSource.read(this, chunkSize)
+                    }.readByteArray()
 
-        val decryptedChunks = mutableListOf<ByteArray>()
-        var position = 0
+                    val result = secretStream.pull(state, encryptedData, encryptedData.size)
+                        ?: throw IOException("Decryption failed")
 
-        while (position < buffer.size) {
-            val remaining = buffer.size - position
-            val chunkSize = minOf(remaining, CHUNK_SIZE)
+                    decryptedBuffer.write(result.message)
 
-            val chunk = ByteArray(chunkSize)
-            System.arraycopy(buffer, position, chunk, 0, chunkSize)
+                    if (result.tag.toInt() == SecretStream.TAG_FINAL) {
+                        isFinished = true
+                    }
+                }
 
-            // Decrypt chunk
-            val result = secretStream.pull(state, chunk, chunkSize)
-                ?: throw Exception("Decryption failed - invalid or corrupted data at position $position")
-
-            decryptedChunks.add(result.message)
-
-            // Check if this is the final chunk
-            if (result.tag.toInt() == SecretStream.TAG_FINAL) {
-                break
+                return decryptedBuffer.read(sink, byteCount)
             }
 
-            position += chunkSize
-        }
+            override fun timeout(): Timeout = networkSource.timeout()
 
-        // Combine all decrypted chunks
-        val totalSize = decryptedChunks.sumOf { it.size }
-        val finalArray = ByteArray(totalSize)
+            override fun close() = networkSource.close()
+        }.buffer()
 
-        var offset = 0
-        for (chunk in decryptedChunks) {
-            System.arraycopy(chunk, 0, finalArray, offset, chunk.size)
-            offset += chunk.size
-        }
-
-        return finalArray
+        return response.newBuilder()
+            .body(decryptedSource.asResponseBody("image/jpg".toMediaType(), -1))
+            .build()
     }
 
     override fun imageUrlParse(response: Response): String {
