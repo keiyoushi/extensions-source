@@ -1,7 +1,7 @@
 package eu.kanade.tachiyomi.extension.en.theblank.decryption;
 
 public class Core {
-    public static int HCaCha20(
+    public static void HCaCha20(
         byte[] out,
         byte[] in,
         byte[] k,
@@ -73,7 +73,6 @@ public class Core {
         store32_le(out, 24, x14);
         store32_le(out, 28, x15);
 
-        return 0;
     }
 
     private static int load32_le(byte[] src, int offset) {
