@@ -1,67 +1,67 @@
-name: 🌐 Source request
-description: Suggest a new source for Keiyoushi
+name: 🌐 Solicitação de fonte
+description: Sugerir uma nova fonte
 labels: [Source request]
 body:
 
   - type: input
     id: name
     attributes:
-      label: Source name
+      label: Nome da fonte
       placeholder: |
-        Example: "Not Real Scans"
+        Exemplo: "Not Real Scans"
     validations:
       required: true
 
   - type: input
     id: link
     attributes:
-      label: Source link
+      label: Link da fonte
       placeholder: |
-        Example: "https://notrealscans.org"
+        Exemplo: "https://notrealscans.org"
     validations:
       required: true
 
   - type: input
     id: language
     attributes:
-      label: Source language
+      label: Idioma da fonte
       placeholder: |
-        Example: "English"
+        Exemplo: "Português"
     validations:
       required: true
 
   - type: textarea
     id: other-details
     attributes:
-      label: Other details
+      label: Outros detalhes
       placeholder: |
-        Additional details and attachments.
-            Example:
-                "18+/NSFW = yes"
+        Detalhes adicionais e anexos.
+            Exemplo:
+                "18+/NSFW = sim"
 
   - type: checkboxes
     id: acknowledgements
     attributes:
-      label: Acknowledgements
-      description: Your issue will be closed if you haven't done these steps.
+      label: Reconhecimentos
+      description: Seu problema será fechado se você não tiver feito essas etapas.
       options:
-        - label: I have checked that the extension does not already exist by searching the [extension listing](https://keiyoushi.github.io/extensions/) and verified it does not appear there.
+        - label: Eu verifiquei que a extensão não existe ainda pesquisando a [lista de extensões](https://keiyoushi.github.io/extensions/) e confirmei que ela não aparece lá.
           required: true
-        - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
+        - label: Eu pesquisei os problemas existentes e este é um novo ticket, **NÃO** um duplicado ou relacionado a outro problema aberto ou fechado.
           required: true
-        - label: I have written a meaningful title with the source name.
+        - label: Eu escrevi um título significativo com o nome da fonte.
           required: true
-        - label: I will fill out all of the requested information in this form.
+        - label: Eu preencherei todas as informações solicitadas neste formulário.
           required: true
 
   - type: textarea
     attributes:
       label: <!-- footer -->
-      description: Do **not** modify. This is a reminder for other users to vote.
+      description: Não modifique. Este é um lembrete para outros usuários votarem.
       value: |
         ---
 
-        Add a :+1: [reaction] to [issues you find important].
+        Adicione uma reação :+1: aos [problemas que você acha importantes].
 
-        [reaction]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
-        [issues you find important]: https://github.com/keiyoushi/extensions-source/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc
+        [reação]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
+        [problemas que você acha importantes]: https://github.com/FelipeGFA/fonte-extensoes/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc

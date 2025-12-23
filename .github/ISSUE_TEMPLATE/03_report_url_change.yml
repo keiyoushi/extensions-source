@@ -1,69 +1,69 @@
-name: 🔗 URL change report
-description: Report URL change of an existing source
+name: 🔗 Relatório de mudança de URL
+description: Relatar mudança de URL de uma fonte existente
 labels: [Bug,Domain changed]
 body:
 
   - type: input
     id: source
     attributes:
-      label: Source information
+      label: Informações da fonte
       description: |
-        You can find the extension name and version in **Browse → Extensions**.
+        Você pode encontrar o nome da extensão e versão em **Navegar → Extensões**.
       placeholder: |
-        Example: "NotRealScans 1.4.1"
+        Exemplo: "NotRealScans 1.4.1"
     validations:
       required: true
 
   - type: input
     id: language
     attributes:
-      label: Source language
+      label: Idioma da fonte
       placeholder: |
-        Example: "English"
+        Exemplo: "Português"
     validations:
       required: true
 
   - type: input
     id: link
     attributes:
-      label: Source new URL
+      label: Nova URL da fonte
       placeholder: |
-        Example: "https://notrealscans.org"
+        Exemplo: "https://notrealscans.org"
     validations:
       required: true
 
   - type: textarea
     id: other-details
     attributes:
-      label: Other details
+      label: Outros detalhes
       placeholder: |
-        Additional details and attachments.
+        Detalhes adicionais e anexos.
 
   - type: checkboxes
     id: acknowledgements
     attributes:
-      label: Acknowledgements
-      description: Your issue will be closed if you haven't done these steps.
+      label: Reconhecimentos
+      description: Seu problema será fechado se você não tiver feito essas etapas.
       options:
-        - label: I have updated all installed extensions.
+        - label: Eu atualizei todas as extensões instaladas.
           required: true
-        - label: I have opened WebView and checked that the source URL has not changed yet.
+        - label: Eu abri o WebView e verifiquei que a URL da fonte ainda não mudou.
           required: true
-        - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
+        - label: Eu pesquisei os problemas existentes e este é um novo ticket, **NÃO** um duplicado ou relacionado a outro problema aberto ou fechado.
           required: true
-        - label: I have written a short but informative title.
+        - label: Eu escrevi um título curto, mas informativo.
           required: true
-        - label: I will fill out all of the requested information in this form.
+        - label: Eu preencherei todas as informações solicitadas neste formulário.
           required: true
 
   - type: textarea
     attributes:
       label: <!-- footer -->
-      description: Do **not** modify. This is a reminder for other users to vote.
+      description: Não modifique. Este é um lembrete para outros usuários votarem.
       value: |
         ---
 
-        Add a :+1: [reaction] to [issues you find important].
+        Adicione uma reação :+1: aos [problemas que você acha importantes].
 
-        [reaction]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
-        [issues you find important]: https://github.com/keiyoushi/extensions-source/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc
+        [reação]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
+        [problemas que você acha importantes]: https://github.com/FelipeGFA/fonte-extensoes/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc

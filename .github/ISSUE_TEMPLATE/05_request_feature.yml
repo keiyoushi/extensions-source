@@ -1,71 +1,71 @@
-name: ⭐ Feature request
-description: Suggest a feature to improve an existing source
+name: ⭐ Solicitação de recurso
+description: Sugerir um recurso para melhorar uma fonte existente
 labels: [Feature request]
 body:
 
   - type: input
     id: source
     attributes:
-      label: Source name
+      label: Nome da fonte
       description: |
-        You can find the extension name in **Browse → Extensions**.
+        Você pode encontrar o nome da extensão em **Navegar → Extensões**.
       placeholder: |
-        Example: "Not Real Scans"
+        Exemplo: "Not Real Scans"
     validations:
       required: true
 
   - type: input
     id: language
     attributes:
-      label: Source language
+      label: Idioma da fonte
       placeholder: |
-        Example: "English"
+        Exemplo: "Português"
     validations:
       required: true
 
   - type: textarea
     id: feature-description
     attributes:
-      label: Describe your suggested feature
-      description: How can an existing extension be improved?
+      label: Descreva seu recurso sugerido
+      description: Como uma extensão existente pode ser melhorada?
       placeholder: |
-        Example:
-          "It should work like this..."
+        Exemplo:
+          "Deve funcionar assim..."
     validations:
       required: true
 
   - type: textarea
     id: other-details
     attributes:
-      label: Other details
+      label: Outros detalhes
       placeholder: |
-        Additional details and attachments.
+        Detalhes adicionais e anexos.
 
   - type: checkboxes
     id: acknowledgements
     attributes:
-      label: Acknowledgements
-      description: Your issue will be closed if you haven't done these steps.
+      label: Reconhecimentos
+      description: Seu problema será fechado se você não tiver feito essas etapas.
       options:
-        - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
+        - label: Eu pesquisei os problemas existentes e este é um novo ticket, **NÃO** um duplicado ou relacionado a outro problema aberto ou fechado.
           required: true
-        - label: I have written a short but informative title.
+        - label: Eu escrevi um título curto, mas informativo.
           required: true
-        - label: If this is an issue with the app itself, I should be opening an issue in the [app repository](https://github.com/mihonapp/mihon/issues/new/choose).
+        - label: Se este é um problema com o próprio aplicativo, eu deveria estar abrindo um problema no [repositório do aplicativo](https://github.com/mihonapp/mihon/issues/new/choose).
           required: true
-        - label: I have updated the app to version **[0.15.3](https://github.com/mihonapp/mihon/releases/latest)**.
+        - label: Eu atualizei o aplicativo para a versão **[0.15.3](https://github.com/mihonapp/mihon/releases/latest)**.
           required: true
-        - label: I will fill out all of the requested information in this form.
+        - label: Eu preencherei todas as informações solicitadas neste formulário.
           required: true
 
   - type: textarea
     attributes:
       label: <!-- footer -->
-      description: Do **not** modify. This is a reminder for other users to vote.
+      description: Não modifique. Este é um lembrete para outros usuários votarem.
       value: |
         ---
 
-        Add a :+1: [reaction] to [issues you find important].
+        Adicione uma reação :+1: aos [problemas que você acha importantes].
 
-        [reaction]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
-        [issues you find important]: https://github.com/keiyoushi/extensions-source/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc
+        [reação]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
+        [problemas que você acha importantes]: https://github.com/FelipeGFA/fonte-extensoes/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc

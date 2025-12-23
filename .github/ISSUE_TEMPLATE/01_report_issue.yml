@@ -1,119 +1,119 @@
-name: 🐞 Issue report
-description: Report a source issue in Keiyoushi
+name: 🐞 Relatório de problema
+description: Relatar um problema de fonte
 labels: [Bug]
 body:
 
   - type: input
     id: source
     attributes:
-      label: Source information
+      label: Informações da fonte
       description: |
-        You can find the extension name and version in **Browse → Extensions**.
+        Você pode encontrar o nome da extensão e versão em **Navegar → Extensões**.
       placeholder: |
-        Example: "Not Real Scans 1.4.1"
+        Exemplo: "Not Real Scans 1.4.1"
     validations:
       required: true
 
   - type: input
     id: language
     attributes:
-      label: Source language
+      label: Idioma da fonte
       placeholder: |
-        Example: "English"
+        Exemplo: "Português"
     validations:
       required: true
 
   - type: textarea
     id: reproduce-steps
     attributes:
-      label: Steps to reproduce
-      description: Provide an example of the issue.
+      label: Passos para reproduzir
+      description: Forneça um exemplo do problema.
       placeholder: |
-        Example:
-          1. First step
-          2. Second step
-          3. Issue here
+        Exemplo:
+          1. Primeiro passo
+          2. Segundo passo
+          3. Problema aqui
     validations:
       required: true
 
   - type: textarea
     id: expected-behavior
     attributes:
-      label: Expected behavior
+      label: Comportamento esperado
       placeholder: |
-        Example:
-          "This should happen..."
+        Exemplo:
+          "Isso deveria acontecer..."
     validations:
       required: true
 
   - type: textarea
     id: actual-behavior
     attributes:
-      label: Actual behavior
+      label: Comportamento atual
       placeholder: |
-        Example:
-          "This happened instead..."
+        Exemplo:
+          "Isso aconteceu em vez disso..."
     validations:
       required: true
 
   - type: input
     id: tachiyomi-version
     attributes:
-      label: Mihon/Tachiyomi version
+      label: Versão do Mihon/Tachiyomi
       description: |
-        You can find your Mihon/Tachiyomi version in **More → About**.
+        Você pode encontrar sua versão do Mihon/Tachiyomi em **Mais → Sobre**.
       placeholder: |
-        Example: "0.18.0"
+        Exemplo: "0.18.0"
     validations:
       required: true
 
   - type: input
     id: android-version
     attributes:
-      label: Android version
+      label: Versão do Android
       description: |
-        You can find this somewhere in your Android settings.
+        Você pode encontrar isso em algum lugar nas configurações do Android.
       placeholder: |
-        Example: "Android 11"
+        Exemplo: "Android 11"
     validations:
       required: true
 
   - type: textarea
     id: other-details
     attributes:
-      label: Other details
+      label: Outros detalhes
       placeholder: |
-        Additional details and attachments.
+        Detalhes adicionais e anexos.
 
   - type: checkboxes
     id: acknowledgements
     attributes:
-      label: Acknowledgements
-      description: Your issue will be closed if you haven't done these steps.
+      label: Reconhecimentos
+      description: Seu problema será fechado se você não tiver feito essas etapas.
       options:
-        - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
+        - label: Eu pesquisei os problemas existentes e este é um novo ticket, **NÃO** um duplicado ou relacionado a outro problema aberto ou fechado.
           required: true
-        - label: I have written a short but informative title.
+        - label: Eu escrevi um título curto, mas informativo.
           required: true
-        - label: I have updated the app to version **[0.15.3](https://github.com/mihonapp/mihon/releases/latest)**.
+        - label: Eu atualizei o aplicativo para a versão **[0.15.3](https://github.com/mihonapp/mihon/releases/latest)**.
           required: true
-        - label: I have updated all installed extensions.
+        - label: Eu atualizei todas as extensões instaladas.
           required: true
-        - label: I have tried the [troubleshooting guide](https://mihon.app/docs/guides/troubleshooting/).
+        - label: Eu tentei o [guia de solução de problemas](https://mihon.app/docs/guides/troubleshooting/).
           required: true
-        - label: If this is an issue with the app itself, I should be opening an issue in the app repository.
+        - label: Se este é um problema com o próprio aplicativo, eu deveria estar abrindo um problema no repositório do aplicativo.
           required: true
-        - label: I will fill out all of the requested information in this form.
+        - label: Eu preencherei todas as informações solicitadas neste formulário.
           required: true
 
   - type: textarea
     attributes:
       label: <!-- footer -->
-      description: Do **not** modify. This is a reminder for other users to vote.
+      description: Não modifique. Este é um lembrete para outros usuários votarem.
       value: |
         ---
 
-        Add a :+1: [reaction] to [issues you find important].
+        Adicione uma reação :+1: aos [problemas que você acha importantes].
 
-        [reaction]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
-        [issues you find important]: https://github.com/keiyoushi/extensions-source/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc
+        [reação]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
+        [problemas que você acha importantes]: https://github.com/FelipeGFA/fonte-extensoes/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc

@@ -58,6 +58,9 @@ for apk in REPO_APK_DIR.iterdir():
         ):
             language = source_language
 
+    if language not in ["pt", "pt-BR", "all"]:
+        continue
+
     common_data = {
         "name": APPLICATION_LABEL_REGEX.search(badging).group(1),
         "pkg": package_name,

@@ -1,75 +1,75 @@
-name: ❌ Dead source report
-description: Source is down and website is closed
+name: ❌ Relatório de fonte morta
+description: A fonte está fora do ar e o site está fechado
 labels: [Source is down]
 body:
 
   - type: markdown
     attributes:
       value: |
-        ### Notice
-        If you have a lot of dead sources to report, please go back and submit a single meta request.
+        ### Aviso
+        Se você tiver muitas fontes mortas para relatar, volte e envie uma única solicitação meta.
 
   - type: input
     id: source
     attributes:
-      label: Source name
+      label: Nome da fonte
       description: |
-        You can find the extension name in **Browse → Extensions**.
+        Você pode encontrar o nome da extensão em **Navegar → Extensões**.
       placeholder: |
-        Example: "Not Real Scans"
+        Exemplo: "Not Real Scans"
     validations:
       required: true
 
   - type: input
     id: language
     attributes:
-      label: Source language
+      label: Idioma da fonte
       placeholder: |
-        Example: "English"
+        Exemplo: "Português"
     validations:
       required: true
 
   - type: input
     id: link
     attributes:
-      label: Source link
+      label: Link da fonte
       placeholder: |
-        Example: "https://notrealscans.org"
+        Exemplo: "https://notrealscans.org"
     validations:
       required: true
 
   - type: textarea
     id: other-details
     attributes:
-      label: Other details
+      label: Outros detalhes
       placeholder: |
-        Additional details and attachments.
+        Detalhes adicionais e anexos.
 
   - type: checkboxes
     id: acknowledgements
     attributes:
-      label: Acknowledgements
-      description: Your issue will be closed if you haven't done these steps.
+      label: Reconhecimentos
+      description: Seu problema será fechado se você não tiver feito essas etapas.
       options:
-        - label: I have updated all installed extensions.
+        - label: Eu atualizei todas as extensões instaladas.
           required: true
-        - label: I have opened WebView and checked that the source website is down.
+        - label: Eu abri o WebView e verifiquei que o site da fonte está fora do ar.
           required: true
-        - label: I have searched the existing issues and this is a new ticket, **NOT** a duplicate or related to another open or closed issue.
+        - label: Eu pesquisei os problemas existentes e este é um novo ticket, **NÃO** um duplicado ou relacionado a outro problema aberto ou fechado.
           required: true
-        - label: I have written a meaningful title with the source name.
+        - label: Eu escrevi um título significativo com o nome da fonte.
           required: true
-        - label: I will fill out all of the requested information in this form.
+        - label: Eu preencherei todas as informações solicitadas neste formulário.
           required: true
 
   - type: textarea
     attributes:
       label: <!-- footer -->
-      description: Do **not** modify. This is a reminder for other users to vote.
+      description: Não modifique. Este é um lembrete para outros usuários votarem.
       value: |
         ---
 
-        Add a :+1: [reaction] to [issues you find important].
+        Adicione uma reação :+1: aos [problemas que você acha importantes].
 
-        [reaction]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
-        [issues you find important]: https://github.com/keiyoushi/extensions-source/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc
+        [reação]: https://github.blog/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/
+        [problemas que você acha importantes]: https://github.com/FelipeGFA/fonte-extensoes/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc

@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: ⚠️ Application issue
+  - name: ⚠️ Problema da aplicação
     url: https://github.com/mihonapp/mihon/issues/new/choose
-    about: Issues and requests about the app itself should be opened in Mihon's repository instead
-  - name: 📦 Extension list
-    url: https://keiyoushi.github.io/extensions
-    about: List of all available extensions with download links
-  - name: 🖥️ Mihon website
+    about: Problemas e solicitações sobre o próprio aplicativo devem ser abertos no repositório do Mihon
+  - name: 📦 Lista de extensões
+    url: https://raw.githubusercontent.com/FelipeGFA/extensoes/repo/index.min.json
+    about: Lista de todas as extensões disponíveis com links de download
+  - name: 🖥️ Site do Mihon
     url: https://mihon.app/docs/guides/troubleshooting/
-    about: Guides, troubleshooting, and answers to common questions
+    about: Guias, solução de problemas e respostas para perguntas comuns
