@@ -252,7 +252,7 @@ class TheBlank : HttpSource(), ConfigurableSource {
         return SManga.create().apply {
             url = data.slug
             title = data.title
-            thumbnail_url = data.image?.let { baseUrl + it }
+            thumbnail_url = createThumbnailUrl(data.image)
             author = data.author
             artist = data.artist
             description = buildString {
