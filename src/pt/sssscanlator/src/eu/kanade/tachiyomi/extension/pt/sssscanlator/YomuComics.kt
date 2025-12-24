@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.pt.sssscanlator
 
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
-import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
@@ -19,12 +18,16 @@ import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import uy.kohesive.injekt.injectLazy
 import java.io.IOException
@@ -70,7 +73,6 @@ class YomuComics : HttpSource(), ConfigurableSource {
         val client = network.cloudflareClient
 
         try {
-            // Step 1: Get CSRF Token
             val csrfRequest = GET("$baseUrl/api/auth/csrf", headers)
             val csrfResponse = client.newCall(csrfRequest).execute()
             if (!csrfResponse.isSuccessful) {
@@ -79,7 +81,6 @@ class YomuComics : HttpSource(), ConfigurableSource {
             }
             val csrfToken = csrfResponse.parseAs<CsrfDto>().csrfToken
 
-            // Step 2: Authenticate
             val loginBody = FormBody.Builder()
                 .add("email", email)
                 .add("password", password)
@@ -119,7 +120,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun popularMangaParse(response: Response): MangasPage {
         val homeDto = response.parseAs<HomeDto>()
-        val mangas = homeDto.featuredManga.map { it.toSManga(baseUrl) }
+        val mangas = homeDto.featuredManga.map { it.toSManga() }
         return MangasPage(mangas, false)
     }
 
@@ -130,7 +131,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val updatesDto = response.parseAs<UpdatesDto>()
-        val mangas = updatesDto.updates.map { it.toSManga(baseUrl) }
+        val mangas = updatesDto.updates.map { it.toSManga() }
         return MangasPage(mangas, mangas.isNotEmpty())
     }
 
@@ -200,7 +201,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun searchMangaParse(response: Response): MangasPage {
         val result = response.parseAs<SearchResponseDto>()
-        val mangas = result.results.map { it.toSManga(baseUrl) }
+        val mangas = result.results.map { it.toSManga() }
         val hasNextPage = result.pagination?.let { it.page < it.pages } ?: false
         return MangasPage(mangas, hasNextPage)
     }
@@ -208,54 +209,42 @@ class YomuComics : HttpSource(), ConfigurableSource {
     // =============================== Details ==============================
     override fun mangaDetailsParse(response: Response): SManga {
         val document = response.asJsoup()
-        val script = document.select("script:containsData(self.__next_f)")
-            .joinToString("\n", transform = Element::data)
-
-        val content = QuickJs.create().use {
-            it.evaluate(
-                """
-                globalThis.self = globalThis;
-                $script
-                self.__next_f.map(it => it[it.length - 1]).join('')
-                """.trimIndent(),
-            ) as String
-        }
-
-        val match = Regex(""""obraData":(\{.*?"chapters":\[.*?\]\})""").find(content)
-            ?.groupValues?.get(1)
-            ?: throw IOException("JSON da obra não encontrado")
-
-        val obraData = json.decodeFromString<ObraDataDto>(match)
+        val obraData = extractObraData(document)
         return obraData.toSManga()
     }
 
     // =============================== Chapters =============================
     override fun chapterListParse(response: Response): List<SChapter> {
         val document = response.asJsoup()
-        val script = document.select("script:containsData(self.__next_f)")
-            .joinToString("\n", transform = Element::data)
-
-        val content = QuickJs.create().use {
-            it.evaluate(
-                """
-                globalThis.self = globalThis;
-                $script
-                self.__next_f.map(it => it[it.length - 1]).join('')
-                """.trimIndent(),
-            ) as String
-        }
-
-        val match = Regex(""""obraData":(\{.*?"chapters":\[.*?\]\})""").find(content)
-            ?.groupValues?.get(1)
-            ?: throw IOException("JSON da obra não encontrado")
-
-        val obraData = json.decodeFromString<ObraDataDto>(match)
-        return obraData.chapters.map { it.toSChapter(obraData.id) }
+        val obraData = extractObraData(document)
+        return obraData.chapters.map { it.toSChapter(obraData.slug) }
     }
 
     // ================================ Pages ===============================
+    override fun pageListRequest(chapter: SChapter): Request {
+        return GET(baseUrl + chapter.url, headers)
+    }
+
     override fun pageListParse(response: Response): List<Page> {
-        val pagesDto = response.parseAs<ChapterPagesDto>()
+        val pathSegments = response.request.url.pathSegments
+        val slug = pathSegments[1]
+        val chapterNumber = pathSegments.last().removePrefix("capitulo-").replace("-", ".")
+
+        val seriesRequest = GET("$baseUrl/api/public/series/$slug", headers)
+        val seriesResponse = client.newCall(seriesRequest).execute()
+        if (!seriesResponse.isSuccessful) {
+            seriesResponse.close()
+            throw IOException("Falha ao obter ID da obra (API: ${seriesResponse.code})")
+        }
+        val mangaId = seriesResponse.parseAs<SeriesDto>().id
+
+        val apiUrl = "$baseUrl/api/public/chapters/$mangaId/$chapterNumber"
+        val apiResponse = client.newCall(GET(apiUrl, headers)).execute()
+        if (!apiResponse.isSuccessful) {
+            apiResponse.close()
+            throw IOException("Falha ao buscar páginas do capítulo (API: ${apiResponse.code})")
+        }
+        val pagesDto = apiResponse.parseAs<ChapterPagesDto>()
 
         return pagesDto.pages.mapIndexed { index, pageDto ->
             Page(index, "", baseUrl + pageDto.url)
@@ -264,6 +253,34 @@ class YomuComics : HttpSource(), ConfigurableSource {
 
     override fun imageUrlParse(response: Response): String {
         throw UnsupportedOperationException("Not implemented")
+    }
+
+    // ============================= Helpers ============================
+    private fun extractObraData(document: Document): ObraDataDto {
+        val script = document.select("script:containsData(self.__next_f)")
+            .joinToString("\n", transform = Element::data)
+
+        return NEXT_DATA_REGEX.findAll(script)
+            .mapNotNull { matchResult ->
+                try {
+                    val str = matchResult.groupValues[1]
+                    val unescaped = json.decodeFromString<String>("\"$str\"")
+                    val jsonStr = unescaped.substringAfter(':')
+                    val element = json.parseToJsonElement(jsonStr)
+
+                    if (element is JsonArray) {
+                        element.forEach { item ->
+                            if (item is JsonObject && item.containsKey("obraData")) {
+                                return@mapNotNull json.decodeFromJsonElement<ObraDataDto>(item["obraData"]!!)
+                            }
+                        }
+                    }
+                    null
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            .firstOrNull() ?: throw IOException("Dados da obra não encontrados")
     }
 
     // ============================== Settings ==============================
@@ -301,5 +318,7 @@ class YomuComics : HttpSource(), ConfigurableSource {
         private const val PREF_PASSWORD = "password"
         private const val LOGIN_REQUIRED_MESSAGE = "Faça login nas configurações da extensão para utilizar."
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+
+        private val NEXT_DATA_REGEX = """self\.__next_f\.push\(\[\d+,\s*"(.*?)"\]\)""".toRegex()
     }
 }

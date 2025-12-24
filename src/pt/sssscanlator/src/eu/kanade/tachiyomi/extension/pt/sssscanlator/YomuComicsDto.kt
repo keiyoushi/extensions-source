@@ -17,7 +17,7 @@ data class MangaDto(
     val slug: String,
     val cover: String? = null,
 ) {
-    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(): SManga = SManga.create().apply {
         title = this@MangaDto.title
         thumbnail_url = cover
         url = "/obra/$slug"
@@ -35,7 +35,7 @@ data class UpdateMangaDto(
     val slug: String,
     val cover: String? = null,
 ) {
-    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(): SManga = SManga.create().apply {
         title = this@UpdateMangaDto.title
         thumbnail_url = cover
         url = "/obra/$slug"
@@ -55,7 +55,7 @@ data class SearchMangaDto(
     val slug: String? = null,
     val coverImage: String? = null,
 ) {
-    fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+    fun toSManga(): SManga = SManga.create().apply {
         title = this@SearchMangaDto.name
         thumbnail_url = coverImage
         url = if (slug != null) "/obra/$slug" else "/series/$id"
@@ -113,15 +113,15 @@ data class ChapterDto(
     val date: String? = null,
     val createdAt: String? = null,
 ) {
-    fun toSChapter(mangaId: Int): SChapter = SChapter.create().apply {
+    fun toSChapter(mangaSlug: String): SChapter = SChapter.create().apply {
+        val numberStr = if (number % 1 == 0.0) number.toInt().toString() else number.toString().replace(".", "-")
         name = title
         chapter_number = number.toFloat()
-        // Using API URL for page list fetching
-        url = "/api/public/chapters/$mangaId/$number"
-        date_upload = parseDate(date, createdAt)
+        url = "/ler/$mangaSlug/capitulo-$numberStr"
+        date_upload = parseDate(createdAt)
     }
 
-    private fun parseDate(date: String?, createdAt: String?): Long {
+    private fun parseDate(createdAt: String?): Long {
         if (createdAt != null && createdAt.startsWith("\$D")) {
             try {
                 // Remove $D prefix and parse ISO date
@@ -154,3 +154,6 @@ data class SessionDto(val user: UserDto)
 
 @Serializable
 data class UserDto(val id: String)
+
+@Serializable
+data class SeriesDto(val id: Int)
