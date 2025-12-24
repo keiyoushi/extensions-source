@@ -30,7 +30,7 @@ class AnimeSama : ParsedHttpSource() {
 
     override val name = "AnimeSama"
 
-    override val baseUrl = "https://anime-sama.eu"
+    override val baseUrl = "https://anime-sama.si"
 
     private val cdn = "$baseUrl/s2/scans/"
 
