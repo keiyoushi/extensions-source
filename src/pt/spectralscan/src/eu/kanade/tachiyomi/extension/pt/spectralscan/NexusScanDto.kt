@@ -10,7 +10,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 private val dateFormat by lazy {
-    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 }
@@ -222,12 +222,6 @@ class MangaListResponse(
 )
 
 @Serializable
-class ChapterListResponse(
-    val chapters_html: String = "",
-    val has_next: Boolean = false,
-)
-
-@Serializable
 class PageData(
     val page_number: Int = 0,
     val image_url: String = "",
@@ -295,7 +289,9 @@ fun ChapterApi.toSChapter() = SChapter.create().apply {
     }
     name = title
     url = this@toSChapter.url
-    date_upload = dateFormat.tryParse(published_at)
+
+    val cleanDate = published_at.substringBefore(".")
+    date_upload = dateFormat.tryParse(cleanDate)
 }
 
 private fun String?.parseStatus() = when {

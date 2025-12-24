@@ -60,10 +60,6 @@ class NexusScan : HttpSource(), ConfigurableSource {
         }
         .build()
 
-    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
-
-    private val dateNumberRegex = Regex("""\d+""")
-
     private val ajaxHeaders by lazy {
         headers.newBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
@@ -91,12 +87,6 @@ class NexusScan : HttpSource(), ConfigurableSource {
     }
 
     // ==================== Popular ==========================
-
-    private fun fetchWithSync(page: Int, request: Request): Observable<MangasPage> {
-        syncNSFW()
-        return client.newCall(request).asObservableSuccess()
-            .map { parseMangaListResponse(it) }
-    }
 
     override fun popularMangaRequest(page: Int): Request {
         val url = "$baseUrl/ajax/load-mangas/".toHttpUrl().newBuilder()
@@ -234,7 +224,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
                 client.newCall(GET("$finalApiUrl?page=1&sort=desc&q=", headers)).asObservableSuccess()
                     .map { it.parseAs<ChapterListApiResponse>() }
                     .flatMap { firstPage ->
-                        val chapters = firstPage.chapters.map { parseChapter(it) }
+                        val chapters = firstPage.chapters.map { it.toSChapter() }
 
                         if (!firstPage.pagination.has_next) {
                             Observable.just(chapters)
@@ -256,7 +246,8 @@ class NexusScan : HttpSource(), ConfigurableSource {
         return client.newCall(GET(url, headers)).asObservableSuccess()
             .map { it.parseAs<ChapterListApiResponse>() }
             .flatMap { page ->
-                val allChapters = accumulatedChapters + parseChaptersFromHtml(page.chapters_html)
+                val newChapters = page.chapters.map { it.toSChapter() }
+                val allChapters = accumulatedChapters + newChapters
 
                 if (page.pagination.has_next) {
                     fetchRemainingChaptersApi(allChapters, page.pagination.next_page!!, chaptersApiUrl, headers)
@@ -266,35 +257,12 @@ class NexusScan : HttpSource(), ConfigurableSource {
             }
     }
 
-    private fun parseChapter(chapter: ChapterApi): SChapter {
-        return chapter.toSChapter()
-    }
-
     override fun chapterListRequest(manga: SManga): Request {
-        val slug = getMangaSlug(manga.url)
-        val url = "$baseUrl/ajax/load-chapters/".toHttpUrl().newBuilder()
-            .addQueryParameter("item_slug", slug)
-            .addQueryParameter("page", "1")
-            .addQueryParameter("sort", "desc")
-            .addQueryParameter("q", "")
-            .build()
-        return GET(url, ajaxHeaders)
+        throw UnsupportedOperationException("Not used")
     }
 
-    override fun chapterListParse(response: Response) =
-        parseChaptersFromHtml(response.parseAs<ChapterListResponse>().chapters_html)
-
-    private fun parseChapterDate(dateStr: String): Long {
-        val value = dateNumberRegex.find(dateStr)?.value?.toIntOrNull() ?: 1
-        return when {
-            "hoje" in dateStr -> Calendar.getInstance().timeInMillis
-            "ontem" in dateStr -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
-            "hora" in dateStr -> Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, -value) }.timeInMillis
-            "dia" in dateStr -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -value) }.timeInMillis
-            "semana" in dateStr -> Calendar.getInstance().apply { add(Calendar.WEEK_OF_YEAR, -value) }.timeInMillis
-            "mês" in dateStr || "mes" in dateStr -> Calendar.getInstance().apply { add(Calendar.MONTH, -value) }.timeInMillis
-            else -> dateFormat.tryParse(dateStr)
-        }
+    override fun chapterListParse(response: Response): List<SChapter> {
+        throw UnsupportedOperationException("Not used")
     }
 
     // ==================== Page ==========================
