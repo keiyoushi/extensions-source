@@ -1,7 +1,11 @@
 package eu.kanade.tachiyomi.extension.pt.mediocretoons
 
+import android.content.SharedPreferences
+import androidx.preference.EditTextPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,32 +13,145 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.json.JSONObject
+import uy.kohesive.injekt.api.get
 import java.text.Normalizer
 
-class MediocreToons : HttpSource() {
+class MediocreToons : HttpSource(), ConfigurableSource {
 
     override val name = "Mediocre Toons"
-
-    override val baseUrl = "https://mediocretoons.site"
-
+    override val baseUrl = "https://mediocrescan.com"
     override val lang = "pt-BR"
-
     override val supportsLatest = true
-
     private val apiUrl = "https://api.mediocretoons.site"
 
-    private val scanId: Long = 2
+    private val preferences: SharedPreferences by getPreferencesLazy()
+
+    private var cachedToken: String? = null
+    private var tokenExpiryTime: Long = 0L
 
     override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
+        .addInterceptor(::authIntercept)
         .build()
 
+    private fun authIntercept(chain: Interceptor.Chain): Response {
+        val originalRequest = chain.request()
+
+        if (originalRequest.header("Authorization") != null) {
+            return chain.proceed(originalRequest)
+        }
+
+        val token = getValidToken()
+        if (token.isNullOrEmpty()) {
+            return chain.proceed(originalRequest)
+        }
+
+        val authenticatedRequest = originalRequest.newBuilder()
+            .header("Authorization", "Bearer $token")
+            .build()
+
+        val response = chain.proceed(authenticatedRequest)
+
+        if (response.code == 401) {
+            response.body?.close()
+            cachedToken = null
+            tokenExpiryTime = 0L
+            val newToken = getValidToken()
+
+            return if (!newToken.isNullOrEmpty()) {
+                val retryRequest = originalRequest.newBuilder()
+                    .header("Authorization", "Bearer $newToken")
+                    .build()
+                chain.proceed(retryRequest)
+            } else {
+                chain.proceed(originalRequest)
+            }
+        }
+        return response
+    }
+
+    private fun getValidToken(): String? {
+        val now = System.currentTimeMillis()
+
+        if (cachedToken != null && now < tokenExpiryTime) {
+            return cachedToken
+        }
+
+        return fetchNewToken()
+    }
+
+    private fun fetchNewToken(): String? {
+        return try {
+            val email = preferences.getString(EMAIL_PREF, "")
+            val password = preferences.getString(PASSWORD_PREF, "")
+
+            if (email.isNullOrEmpty() || password.isNullOrEmpty()) {
+                return null
+            }
+
+            return loginAndGetToken(email, password)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun loginAndGetToken(email: String, password: String): String? {
+        return try {
+            val json = JSONObject()
+                .put("email", email.trim())
+                .put("senha", password)
+                .toString()
+
+            val body = json.toRequestBody("application/json".toMediaType())
+
+            val request = Request.Builder()
+                .url("$apiUrl/usuarios/login")
+                .post(body)
+                .header("x-app-key", "toons-mediocre-app")
+                .header("Accept", "application/json")
+                .build()
+
+            val response = network.cloudflareClient.newCall(request).execute()
+
+            if (response.isSuccessful) {
+                val responseBody = response.body.string()
+                val jsonResponse = JSONObject(responseBody)
+
+                val token = when {
+                    jsonResponse.has("token") -> jsonResponse.getString("token")
+                    jsonResponse.has("access_token") -> jsonResponse.getString("access_token")
+                    else -> null
+                }
+
+                if (!token.isNullOrEmpty()) {
+                    val expiresIn = jsonResponse.optLong("expiresIn", 3600) * 1000
+                    cachedToken = token
+                    tokenExpiryTime = System.currentTimeMillis() + expiresIn
+
+                    return token
+                } else {
+                    return null
+                }
+            } else {
+                val errorBody = response.body.string()
+                null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     override fun headersBuilder() = super.headersBuilder()
-        .set("scan-id", scanId.toString())
         .set("x-app-key", "toons-mediocre-app")
 
     // ============================== Popular ================================
@@ -47,8 +164,24 @@ class MediocreToons : HttpSource() {
     }
 
     override fun popularMangaParse(response: Response): MangasPage {
-        val result = response.parseAs<List<MediocreMangaDto>>()
-        val mangas = result.map { it.toSManga() }
+        val rankingList = response.parseAs<List<MediocreRankingDto>>()
+
+        val mangas = rankingList.map { rankingDto ->
+            SManga.create().apply {
+                title = rankingDto.name
+                thumbnail_url = rankingDto.image?.let { img ->
+                    when {
+                        img.startsWith("http") -> img
+                        else -> "${MediocreToons.CDN_URL}/obras/${rankingDto.id}/$img"
+                    }
+                }
+                url = "/obra/${rankingDto.id}"
+                description = ""
+                status = SManga.UNKNOWN
+                initialized = false
+            }
+        }
+
         return MangasPage(mangas, hasNextPage = false)
     }
 
@@ -64,8 +197,10 @@ class MediocreToons : HttpSource() {
 
     override fun latestUpdatesParse(response: Response): MangasPage {
         val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
+
         val mangas = dto.data.map { it.toSManga() }
         val hasNext = dto.pagination?.hasNextPage ?: false
+
         return MangasPage(mangas, hasNextPage = hasNext)
     }
 
@@ -74,7 +209,6 @@ class MediocreToons : HttpSource() {
         val url = "$apiUrl/obras".toHttpUrl().newBuilder()
             .addQueryParameter("limite", "20")
             .addQueryParameter("pagina", page.toString())
-            .addQueryParameter("temCapitulo", "true")
 
         if (query.isNotEmpty()) {
             url.addQueryParameter("string", query)
@@ -99,13 +233,16 @@ class MediocreToons : HttpSource() {
             }
         }
 
-        return GET(url.build(), headers)
+        val finalUrl = url.build()
+        return GET(finalUrl, headers)
     }
 
     override fun searchMangaParse(response: Response): MangasPage {
         val dto = response.parseAs<MediocreListDto<List<MediocreMangaDto>>>()
+
         val mangas = dto.data.map { it.toSManga() }
         val hasNext = dto.pagination?.hasNextPage ?: false
+
         return MangasPage(mangas, hasNextPage = hasNext)
     }
 
@@ -208,7 +345,9 @@ class MediocreToons : HttpSource() {
             Pair("A-Z", "nome"),
         ),
         defaultValue = 0,
-    ) private class TagCheckBox(name: String, val value: String) : Filter.CheckBox(name)
+    )
+
+    private class TagCheckBox(name: String, val value: String) : Filter.CheckBox(name)
 
     private open class UriSelectFilter(
         displayName: String,
@@ -226,34 +365,54 @@ class MediocreToons : HttpSource() {
     override fun getMangaUrl(manga: SManga): String {
         val id = manga.url.substringAfter("/obra/").substringBefore('/')
         val slug = manga.title.toSlug()
-        return "$baseUrl/obra/$id/$slug"
+        val finalUrl = "$baseUrl/obra/$id/$slug"
+        return finalUrl
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val pathSegment = manga.url.replace("/obra/", "/obras/")
-        return GET("$apiUrl$pathSegment", headers)
+        val id = manga.url.substringAfter("/obra/")
+        val url = "$apiUrl/obras/$id"
+        return GET(url, headers)
     }
 
-    override fun mangaDetailsParse(response: Response) =
-        response.parseAs<MediocreMangaDto>().toSManga(isDetails = true)
+    override fun mangaDetailsParse(response: Response): SManga {
+        val dto = response.parseAs<MediocreMangaDto>()
+        return dto.toSManga(isDetails = true)
+    }
 
     // ============================== Chapters ===============================
-    override fun getChapterUrl(chapter: SChapter) = "$baseUrl${chapter.url}"
+    override fun getChapterUrl(chapter: SChapter): String {
+        val finalUrl = "$baseUrl${chapter.url}"
+        return finalUrl
+    }
 
-    override fun chapterListRequest(manga: SManga) = mangaDetailsRequest(manga)
+    override fun chapterListRequest(manga: SManga): Request {
+        return mangaDetailsRequest(manga)
+    }
 
-    override fun chapterListParse(response: Response): List<SChapter> =
-        response.parseAs<MediocreMangaDto>().chapters.map { it.toSChapter() }
-            .distinctBy(SChapter::url)
+    override fun chapterListParse(response: Response): List<SChapter> {
+        val manga = response.parseAs<MediocreMangaDto>()
+
+        val chapters = manga.chapters
+            .map { it.toSChapter() }
+            .distinctBy { it.url }
+            .sortedByDescending { it.chapter_number }
+
+        return chapters
+    }
 
     // =============================== Pages =================================
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.substringAfterLast("/")
-        return GET("$apiUrl/capitulos/$chapterId", headers)
+        val url = "$apiUrl/capitulos/$chapterId"
+        return GET(url, headers)
     }
 
-    override fun pageListParse(response: Response): List<Page> =
-        response.parseAs<MediocreChapterDetailDto>().toPageList()
+    override fun pageListParse(response: Response): List<Page> {
+        val dto = response.parseAs<MediocreChapterDetailDto>()
+        val pages = dto.toPageList()
+        return pages
+    }
 
     override fun imageUrlParse(response: Response): String = ""
 
@@ -264,8 +423,27 @@ class MediocreToons : HttpSource() {
         return GET(page.url, imageHeaders)
     }
 
+    // ============================== Settings ===============================
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        EditTextPreference(screen.context).apply {
+            key = EMAIL_PREF
+            title = "Email"
+            summary = "Email para login automático"
+            setDefaultValue("")
+        }.also(screen::addPreference)
+
+        EditTextPreference(screen.context).apply {
+            key = PASSWORD_PREF
+            title = "Senha"
+            summary = "Senha para login automático"
+            setDefaultValue("")
+        }.also(screen::addPreference)
+    }
+
     companion object {
         const val CDN_URL = "https://cdn.mediocretoons.site"
+        private const val EMAIL_PREF = "email"
+        private const val PASSWORD_PREF = "password"
     }
 }
 
