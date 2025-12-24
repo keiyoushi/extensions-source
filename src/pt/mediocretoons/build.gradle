@@ -1,8 +1,8 @@
 ext {
     extName = 'Mediocre Toons'
     extClass = '.MediocreToons'
-    baseUrl = 'https://mediocretoons.site'
-    extVersionCode = 9
+    baseUrl = 'https://mediocrescan.com'
+    extVersionCode = 10
     isNsfw = true
 }
 

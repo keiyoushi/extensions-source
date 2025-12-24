@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.extension.es.spicyscan
+package eu.kanade.tachiyomi.multisrc.spicytheme
 
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.SChapter

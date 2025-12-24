@@ -1,5 +1,9 @@
 package eu.kanade.tachiyomi.multisrc.senkuro
 
+import android.content.SharedPreferences
+import android.widget.Toast
+import androidx.preference.ListPreference
+import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -11,6 +15,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -29,7 +34,7 @@ import java.util.Locale
 
 abstract class Senkuro(
     override val name: String,
-    override val baseUrl: String,
+    _baseUrl: String,
     final override val lang: String,
 ) : ConfigurableSource, HttpSource() {
 
@@ -39,6 +44,9 @@ abstract class Senkuro(
         .add("User-Agent", "Tachiyomi (+https://github.com/keiyoushi/extensions-source)")
         .add("Content-Type", "application/json")
 
+    private val preferences: SharedPreferences by getPreferencesLazy()
+    private val API_URL: String = preferences.getString(API_DOMAIN_PREF, API_DOMAIN_DEFAULT).toString() + "/graphql"
+    override val baseUrl = if (!API_URL.contains(API_DOMAIN_DEFAULT)) _baseUrl else "https://senkuro.me"
     override val client: OkHttpClient =
         network.cloudflareClient.newBuilder()
             .rateLimit(3)
@@ -54,7 +62,7 @@ abstract class Senkuro(
             SEARCH_QUERY,
             SearchVariables(
                 offset = offsetCount * (page - 1),
-                genre = SearchVariables.FiltersDto(
+                label = SearchVariables.FiltersDto(
                     // Senkuro eternal built-in exclude 18+ filter
                     exclude = if (name == "Senkuro") { senkuroExcludeGenres } else { listOf() },
                 ),
@@ -85,8 +93,6 @@ abstract class Senkuro(
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
         val includeGenres = mutableListOf<String>()
         val excludeGenres = mutableListOf<String>()
-        val includeTags = mutableListOf<String>()
-        val excludeTags = mutableListOf<String>()
         val includeTypes = mutableListOf<String>()
         val excludeTypes = mutableListOf<String>()
         val includeFormats = mutableListOf<String>()
@@ -100,14 +106,29 @@ abstract class Senkuro(
 
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
-                is GenreList -> filter.state.forEach { genre ->
-                    if (genre.state != Filter.TriState.STATE_IGNORE) {
-                        if (genre.isIncluded()) includeGenres.add(genre.slug) else excludeGenres.add(genre.slug)
+                is GenreList -> filter.state.forEach { label ->
+                    if (label.state != Filter.TriState.STATE_IGNORE) {
+                        if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
                     }
                 }
-                is TagList -> filter.state.forEach { tag ->
-                    if (tag.state != Filter.TriState.STATE_IGNORE) {
-                        if (tag.isIncluded()) includeTags.add(tag.slug) else excludeTags.add(tag.slug)
+                is WorldsList -> filter.state.forEach { label ->
+                    if (label.state != Filter.TriState.STATE_IGNORE) {
+                        if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
+                    }
+                }
+                is ElementsList -> filter.state.forEach { label ->
+                    if (label.state != Filter.TriState.STATE_IGNORE) {
+                        if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
+                    }
+                }
+                is ChartsList -> filter.state.forEach { label ->
+                    if (label.state != Filter.TriState.STATE_IGNORE) {
+                        if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
+                    }
+                }
+                is AgeDemoList -> filter.state.forEach { label ->
+                    if (label.state != Filter.TriState.STATE_IGNORE) {
+                        if (label.isIncluded()) includeGenres.add(label.slug) else excludeGenres.add(label.slug)
                     }
                 }
                 is TypeList -> filter.state.forEach { type ->
@@ -147,14 +168,11 @@ abstract class Senkuro(
         val requestBody = GraphQL(
             SEARCH_QUERY,
             SearchVariables(
-                query = query, offset = offsetCount * (page - 1),
-                genre = SearchVariables.FiltersDto(
+                query = query,
+                offset = offsetCount * (page - 1),
+                label = SearchVariables.FiltersDto(
                     includeGenres,
                     excludeGenres,
-                ),
-                tag = SearchVariables.FiltersDto(
-                    includeTags,
-                    excludeTags,
                 ),
                 type = SearchVariables.FiltersDto(
                     includeTypes,
@@ -220,8 +238,7 @@ abstract class Senkuro(
                 getTypeList().find { it.slug == type }?.name + ", " +
                     getAgeList().find { it.slug == rating }?.name + ", " +
                     getFormatList().filter { formats.orEmpty().contains(it.slug) }.joinToString { it.name } + ", " +
-                    genres?.joinToString { git -> git.titles.find { it.lang == "RU" }!!.content } + ", " +
-                    tags?.joinToString { tit -> tit.titles.find { it.lang == "RU" }!!.content }
+                    labels?.joinToString { git -> git.titles.find { it.lang == "RU" }!!.content }
                 ).split(", ").filter { it.isNotEmpty() }.joinToString { it.trim().capitalize() }
         }
     }
@@ -336,26 +353,20 @@ abstract class Senkuro(
             val filterDto =
                 json.decodeFromString<PageWrapperDto<MangaTachiyomiSearchFilters>>(responseBody).data.mangaTachiyomiSearchFilters
 
-            genresList =
-                filterDto.genres.filterNot { name == "Senkuro" && senkuroExcludeGenres.contains(it.slug) }
-                    .map { genre ->
-                        FilterersTri(
-                            genre.titles.find { it.lang == "RU" }!!.content.capitalize(),
-                            genre.slug,
+            labelsList =
+                filterDto.labels.filterNot { name == "Senkuro" && senkuroExcludeGenres.contains(it.slug) }
+                    .map { label ->
+                        FilterersTriRoot(
+                            label.titles.find { it.lang == "RU" }!!.content.capitalize(),
+                            label.slug,
+                            label.rootId,
                         )
                     }
-
-            tagsList = filterDto.tags.map { tag ->
-                FilterersTri(
-                    tag.titles.find { it.lang == "RU" }!!.content.capitalize(),
-                    tag.slug,
-                )
-            }
         }
     }
     override fun getFilterList(): FilterList {
         val filters = mutableListOf<Filter<*>>()
-        filters += if (genresList.isEmpty() or tagsList.isEmpty()) {
+        filters += if (labelsList.isEmpty()) {
             listOf(
                 Filter.Separator(),
                 Filter.Header("Нажмите «Сбросить», чтобы загрузить все фильтры"),
@@ -363,8 +374,11 @@ abstract class Senkuro(
             )
         } else {
             listOf(
-                GenreList(genresList),
-                TagList(tagsList),
+                GenreList(labelsList.filter { it.rootId == "TEFCRUw6NQ" }), // Темы
+                WorldsList(labelsList.filter { it.rootId == "TEFCRUw6NA" }), // Сеттинг
+                ElementsList(labelsList.filter { it.rootId == "TEFCRUw6Ng" }), // Элементы
+                ChartsList(labelsList.filter { it.rootId == "TEFCRUw6Mw" }), // Черты
+                AgeDemoList(labelsList.filter { it.rootId == "TEFCRUw6Nw" }), // Демография
             )
         }
         filters += listOf(
@@ -377,18 +391,20 @@ abstract class Senkuro(
         return FilterList(filters)
     }
 
+    private class FilterersTriRoot(name: String, val slug: String, val rootId: String) : Filter.TriState(name)
+    private class GenreList(labels: List<FilterersTriRoot>) : Filter.Group<FilterersTriRoot>("Темы", labels)
+    private class WorldsList(labels: List<FilterersTriRoot>) : Filter.Group<FilterersTriRoot>("Сеттинг", labels)
+    private class ElementsList(labels: List<FilterersTriRoot>) : Filter.Group<FilterersTriRoot>("Элементы", labels)
+    private class ChartsList(labels: List<FilterersTriRoot>) : Filter.Group<FilterersTriRoot>("Черты", labels)
+    private class AgeDemoList(labels: List<FilterersTriRoot>) : Filter.Group<FilterersTriRoot>("Демография", labels)
     private class FilterersTri(name: String, val slug: String) : Filter.TriState(name)
-    private class GenreList(genres: List<FilterersTri>) : Filter.Group<FilterersTri>("Жанры", genres)
-    private class TagList(tags: List<FilterersTri>) : Filter.Group<FilterersTri>("Тэги", tags)
     private class TypeList(types: List<FilterersTri>) : Filter.Group<FilterersTri>("Тип", types)
     private class FormatList(formats: List<FilterersTri>) : Filter.Group<FilterersTri>("Формат", formats)
     private class StatList(status: List<FilterersTri>) : Filter.Group<FilterersTri>("Статус", status)
     private class StatTranslateList(tstatus: List<FilterersTri>) : Filter.Group<FilterersTri>("Статус перевода", tstatus)
     private class AgeList(ages: List<FilterersTri>) : Filter.Group<FilterersTri>("Возрастное ограничение", ages)
 
-    private var genresList: List<FilterersTri> = listOf()
-    private var tagsList: List<FilterersTri> = listOf()
-
+    private var labelsList: List<FilterersTriRoot> = listOf()
     private fun getTypeList() = listOf(
         FilterersTri("Манга", "MANGA"),
         FilterersTri("Манхва", "MANHWA"),
@@ -429,10 +445,29 @@ abstract class Senkuro(
         FilterersTri("Short", "SHORT"),
     )
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        ListPreference(screen.context).apply {
+            key = API_DOMAIN_PREF
+            title = API_DOMAIN_TITLE
+            entries = arrayOf("Россия (senkuro.me)", "Публичный (senkuro.com)")
+            entryValues = arrayOf("$API_DOMAIN_DEFAULT", "https://api.senkuro.com")
+            summary = "%s"
+            setDefaultValue(API_DOMAIN_DEFAULT)
+            setOnPreferenceChangeListener { _, newValue ->
+                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
+                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
+                true
+            }
+        }.let(screen::addPreference)
+    }
+
     companion object {
         private const val offsetCount = 20
-        private const val API_URL = "https://api.senkuro.me/graphql"
-        private val senkuroExcludeGenres = listOf("hentai", "yaoi", "yuri", "shoujo_ai", "shounen_ai")
+
+        private const val API_DOMAIN_PREF = "MangaApiDomain"
+        private const val API_DOMAIN_TITLE = "Домен"
+        private const val API_DOMAIN_DEFAULT = "https://api.senkuro.me"
+        private val senkuroExcludeGenres = listOf("hentai", "yaoi", "yuri", "shoujo_ai", "shounen_ai", "lgbt")
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
     }
 

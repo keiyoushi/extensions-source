@@ -1,7 +1,9 @@
 ext {
     extName = 'Spicy Scan'
     extClass = '.SpicyScan'
-    extVersionCode = 1
+    themePkg = 'spicytheme'
+    baseUrl = 'https://spicyseries.com'
+    overrideVersionCode = 0
     isNsfw = true
 }
 

@@ -2,12 +2,16 @@ package eu.kanade.tachiyomi.extension.all.mangaup
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.preference.PreferenceScreen
+import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
+import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import keiyoushi.utils.firstInstance
+import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.protobuf.ProtoBuf
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -23,10 +28,11 @@ import okhttp3.Request
 import okhttp3.Response
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class MangaUp(override val lang: String) : HttpSource() {
+class MangaUp(override val lang: String) : HttpSource(), ConfigurableSource {
     override val name = "Manga UP!"
     private val domain = "manga-up.com"
     override val baseUrl = "https://global.$domain"
@@ -34,12 +40,16 @@ class MangaUp(override val lang: String) : HttpSource() {
 
     private val apiUrl = "https://global-api.$domain/api"
     private val imgUrl = "https://global-img.$domain"
+    private val preferences: SharedPreferences by getPreferencesLazy()
 
     private var secret: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     @Synchronized
     private fun fetchSecret(): String? {
+        val useSession = preferences.getBoolean(LOGGED_IN_SESSION_PREF, true)
+        if (!useSession) return null
+
         if (secret != null) return secret
 
         val latch = CountDownLatch(1)
@@ -74,27 +84,65 @@ class MangaUp(override val lang: String) : HttpSource() {
         return secret
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
+    @Synchronized
+    private fun flushSecret(target: String) {
+        Handler(Looper.getMainLooper()).post {
+            val webView = WebView(Injekt.get<Application>())
+            with(webView.settings) {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                blockNetworkImage = true
+            }
+            webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String?) {
+                    val script = "if(window.localStorage.getItem('secret')==='$target'){window.localStorage.removeItem('secret');}"
+                    view.evaluateJavascript(script) {
+                        view.stopLoading()
+                        view.destroy()
+                    }
+                }
+            }
+            webView.loadDataWithBaseURL("$baseUrl/", " ", "text/html", "utf-8", null)
+        }
+    }
+
     override val client = network.cloudflareClient.newBuilder()
         .addInterceptor(ImageInterceptor())
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
 
-            if (response.code == 410) {
+            // 410: expired secret -> device got removed OR more than 3 secrets/devices active, oldest one expires
+            // 401: invalid secret -> login was aborted; UA mismatch from previous login
+            if (response.code == 410 || response.code == 401) {
                 response.close()
 
                 val failedSecret = request.url.queryParameter("secret")
 
-                synchronized(this) {
-                    if (secret == failedSecret) {
-                        secret = null
+                if (failedSecret != null) {
+                    flushSecret(failedSecret)
+
+                    synchronized(this) {
+                        if (secret == failedSecret) {
+                            secret = null
+                        }
                     }
                 }
 
                 val newSecret = fetchSecret()
+                val isMyPage = request.url.pathSegments.lastOrNull() == "my_page"
+                val isSecretValid = !newSecret.isNullOrEmpty() && newSecret != failedSecret
+
+                if (!isSecretValid && isMyPage) {
+                    val target = request.url.fragment
+                    throw IOException("Log in via WebView to access your $target")
+                }
+
                 val newUrl = request.url.newBuilder()
 
-                if (!newSecret.isNullOrEmpty() && newSecret != failedSecret) {
+                if (isSecretValid) {
                     newUrl.setQueryParameter("secret", newSecret)
                 } else {
                     newUrl.removeAllQueryParameters("secret")
@@ -162,9 +210,10 @@ class MangaUp(override val lang: String) : HttpSource() {
             return mangaDetailsRequest(SManga.create().apply { url = "/manga/${query.removePrefix(PREFIX_ID_SEARCH)}" })
         }
 
+        val currentSecret = fetchSecret()
         val url = apiUrl.toHttpUrl().newBuilder()
             .apply {
-                fetchSecret()?.let { addQueryParameter("secret", it) }
+                currentSecret?.let { addQueryParameter("secret", it) }
             }
             .addQueryParameter("app_ver", "0")
             .addQueryParameter("os_ver", "0")
@@ -176,8 +225,16 @@ class MangaUp(override val lang: String) : HttpSource() {
             url.addPathSegments("manga/search")
             url.addQueryParameter("word", query)
         } else if (genreFilter.selectedValue.isNotEmpty()) {
-            url.addPathSegments("manga/tag")
-            url.addQueryParameter("tag_id", genreFilter.selectedValue)
+            if (genreFilter.selectedValue == "favorites" || genreFilter.selectedValue == "history") {
+                if (currentSecret == null) {
+                    throw Exception("Log in via WebView to access your ${genreFilter.selectedValue}")
+                }
+                url.addPathSegment("my_page")
+                url.fragment(genreFilter.selectedValue)
+            } else {
+                url.addPathSegments("manga/tag")
+                url.addQueryParameter("tag_id", genreFilter.selectedValue)
+            }
         } else {
             return popularMangaRequest(page)
         }
@@ -192,9 +249,21 @@ class MangaUp(override val lang: String) : HttpSource() {
             return MangasPage(listOf(result.toSManga(mangaId, imgUrl)), false)
         }
 
-        val result = response.parseAsProto<SearchResponse>()
-        val mangas = result.titles?.map { it.toSManga(imgUrl) } ?: emptyList()
-        return MangasPage(mangas, false)
+        val fragment = response.request.url.fragment
+        if (fragment == "favorites" || fragment == "history") {
+            val result = response.parseAsProto<MyPageResponse>()
+            val list = if (fragment == "favorites") result.favorites else result.history
+            val mangas = list?.map { it.toSManga(imgUrl) } ?: emptyList()
+            return MangasPage(mangas, false)
+        }
+
+        if (response.request.url.pathSegments.contains("manga") && response.request.url.pathSegments.last() != "detail_v2") {
+            val result = response.parseAsProto<SearchResponse>()
+            val mangas = result.titles?.map { it.toSManga(imgUrl) } ?: emptyList()
+            return MangasPage(mangas, false)
+        }
+
+        return popularMangaParse(response)
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
@@ -229,7 +298,10 @@ class MangaUp(override val lang: String) : HttpSource() {
     override fun chapterListParse(response: Response): List<SChapter> {
         val result = response.parseAsProto<MangaDetailResponse>()
         val mangaId = response.request.url.queryParameter("title_id")!!
-        return result.chapters.map { it.toSChapter(mangaId) }
+        val hidePaid = preferences.getBoolean(HIDE_PAID_PREF, false)
+        return result.chapters
+            .filter { !hidePaid || it.price == null }
+            .map { it.toSChapter(mangaId) }
     }
 
     override fun getChapterUrl(chapter: SChapter): String {
@@ -256,6 +328,8 @@ class MangaUp(override val lang: String) : HttpSource() {
     override fun pageListParse(response: Response): List<Page> {
         val result = response.parseAsProto<ViewerResponse>()
         val pages = result.pageBlocks.flatMap { it.pages }
+            .filter { !it.url.contains("tutorial") }
+
         if (pages.isEmpty()) {
             throw Exception("Log in via WebView and purchase this chapter")
         }
@@ -289,6 +363,8 @@ class MangaUp(override val lang: String) : HttpSource() {
                 Pair("Media Tie-ins", "21"),
                 Pair("LGBTQ+", "253"),
                 Pair("Completed", "256"),
+                Pair("History", "history"),
+                Pair("Favorites", "favorites"),
             ),
         ),
     )
@@ -298,8 +374,26 @@ class MangaUp(override val lang: String) : HttpSource() {
         val selectedValue: String get() = vals[state].second
     }
 
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = HIDE_PAID_PREF
+            title = "Hide paid chapters"
+            summary = "Hide chapters that require points to unlock."
+            setDefaultValue(false)
+        }.also(screen::addPreference)
+
+        SwitchPreferenceCompat(screen.context).apply {
+            key = LOGGED_IN_SESSION_PREF
+            title = "Logged-in Session"
+            summary = "If enabled, uses the session from the WebView to access your content.\nDisable to browse as a guest."
+            setDefaultValue(true)
+        }.also(screen::addPreference)
+    }
+
     companion object {
         const val PREFIX_ID_SEARCH = "id:"
         private val ID_SEARCH_PATTERN = "^id:(\\d+)$".toRegex()
+        private const val HIDE_PAID_PREF = "hide_paid_chapters"
+        private const val LOGGED_IN_SESSION_PREF = "logged_in_session"
     }
 }
