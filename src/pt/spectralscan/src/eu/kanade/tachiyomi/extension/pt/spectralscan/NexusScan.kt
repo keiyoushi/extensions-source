@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.spectralscan
 
 import android.content.SharedPreferences
-import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
@@ -28,7 +27,6 @@ import org.jsoup.Jsoup
 import rx.Observable
 import java.io.IOException
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 
 class NexusScan : HttpSource(), ConfigurableSource {
@@ -47,7 +45,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     override val client = super.client.newBuilder()
-        .rateLimit(1, 2)
+        .rateLimit(2)
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -62,16 +60,14 @@ class NexusScan : HttpSource(), ConfigurableSource {
         }
         .build()
 
-    private val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
-
-    private val dateNumberRegex = Regex("""\d+""")
-
     private val ajaxHeaders by lazy {
         headers.newBuilder()
             .add("X-Requested-With", "XMLHttpRequest")
             .add("Referer", "$baseUrl/biblioteca/")
             .build()
     }
+
+    private val isoDateTimeFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT)
 
     // ==================== AJAX Manga List ==========================
 
@@ -92,9 +88,14 @@ class NexusScan : HttpSource(), ConfigurableSource {
 
     // ==================== Popular ==========================
 
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+    private fun fetchWithSync(page: Int, request: Request): Observable<MangasPage> {
         syncNSFW()
-        return super.fetchPopularManga(page)
+        return client.newCall(request).asObservableSuccess()
+            .map { parseMangaListResponse(it) }
+    }
+
+    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
+        return fetchWithSync(page, popularMangaRequest(page))
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -116,8 +117,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
     // ==================== Latest ==========================
 
     override fun fetchLatestUpdates(page: Int): Observable<MangasPage> {
-        syncNSFW()
-        return super.fetchLatestUpdates(page)
+        return fetchWithSync(page, latestUpdatesRequest(page))
     }
 
     override fun latestUpdatesRequest(page: Int): Request {
@@ -139,8 +139,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
     // ==================== Search ==========================
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
-        syncNSFW()
-        return super.fetchSearchManga(page, query, filters)
+        return fetchWithSync(page, searchMangaRequest(page, query, filters))
     }
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
@@ -183,25 +182,22 @@ class NexusScan : HttpSource(), ConfigurableSource {
     // ==================== Details =======================
 
     override fun mangaDetailsParse(response: Response): SManga {
-        val document = response.asJsoup()
+        val details = response.parseAs<MangaDetailsResponse>().manga
 
         return SManga.create().apply {
-            title = document.selectFirst("h1.item-title, h1")!!.text()
-            thumbnail_url = document.selectFirst("img.item-cover-image")?.absUrl("src")
-            description = document.select(".item-description p, .item-description").text()
-
-            genre = document.select(".genre-tag, .hero-genres .genre-tag").joinToString { it.text() }
-
-            document.select(".detail-item").forEach { item ->
-                val label = item.selectFirst(".detail-label")?.text()?.lowercase() ?: ""
-                val value = item.selectFirst(".detail-value")?.text()
-                when {
-                    listOf("autor", "author").any { label.contains(it) } -> author = value
-                    listOf("artista", "artist").any { label.contains(it) } -> artist = value
-                    label.contains("status") -> status = value.parseStatus()
-                }
-            }
+            title = details.title
+            thumbnail_url = details.cover_url
+            description = details.description
+            author = details.author
+            artist = details.artist
+            status = details.status.parseStatus()
+            genre = details.categories.joinToString { it.name }
         }
+    }
+
+    override fun mangaDetailsRequest(manga: SManga): Request {
+        val slug = getMangaSlug(manga.url)
+        return GET("$baseUrl/api/manga/$slug/details/")
     }
 
     private fun String?.parseStatus() = when {
@@ -219,107 +215,66 @@ class NexusScan : HttpSource(), ConfigurableSource {
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
         return client.newCall(chapterListRequest(manga)).asObservableSuccess()
-            .map { it.parseAs<ChapterListResponse>() }
+            .map { it.parseAs<ChapterListApiResponse>() }
             .flatMap { firstPage ->
-                val chapters = parseChaptersFromHtml(firstPage.chapters_html)
+                val chapters = firstPage.chapters.map { parseChapter(it) }
 
-                if (!firstPage.has_next) {
+                if (!firstPage.pagination.has_next) {
                     Observable.just(chapters)
                 } else {
-                    fetchRemainingChapters(getMangaSlug(manga.url), chapters, 2)
+                    fetchRemainingChaptersApi(getMangaSlug(manga.url), chapters, firstPage.pagination.next_page!!)
                 }
             }
     }
 
-    private fun fetchRemainingChapters(
+    private fun fetchRemainingChaptersApi(
         slug: String,
         accumulatedChapters: List<SChapter>,
         currentPage: Int,
     ): Observable<List<SChapter>> {
-        val url = "$baseUrl/ajax/load-chapters/".toHttpUrl().newBuilder()
-            .addQueryParameter("item_slug", slug)
-            .addQueryParameter("page", currentPage.toString())
-            .addQueryParameter("sort", "desc")
-            .addQueryParameter("q", "")
-            .build()
+        val url = "$baseUrl/api/manga/$slug/chapters/?page=$currentPage&sort=desc&q="
 
-        return client.newCall(GET(url, ajaxHeaders)).asObservableSuccess()
-            .map { it.parseAs<ChapterListResponse>() }
+        return client.newCall(GET(url)).asObservableSuccess()
+            .map { it.parseAs<ChapterListApiResponse>() }
             .flatMap { page ->
-                val allChapters = accumulatedChapters + parseChaptersFromHtml(page.chapters_html)
+                val allChapters = accumulatedChapters + page.chapters.map { parseChapter(it) }
 
-                if (page.has_next) {
-                    fetchRemainingChapters(slug, allChapters, currentPage + 1)
+                if (page.pagination.has_next) {
+                    fetchRemainingChaptersApi(slug, allChapters, page.pagination.next_page!!)
                 } else {
                     Observable.just(allChapters)
                 }
             }
     }
 
-    private val base64UrlRegex = Regex("""window\.atob\(['"]([A-Za-z0-9+/=]+)['"]\)""")
-
-    private fun parseChaptersFromHtml(html: String): List<SChapter> {
-        val document = Jsoup.parse(html, baseUrl)
-        return document.select("a.chapter-item[href]").mapNotNull { element ->
-            val href = element.attr("href")
-            val chapterUrl = if (href.contains("window.atob")) {
-                base64UrlRegex.find(href)?.groupValues?.get(1)?.let { encoded ->
-                    try {
-                        String(Base64.decode(encoded, Base64.DEFAULT))
-                    } catch (_: Exception) {
-                        null
-                    }
-                }
+    private fun parseChapter(chapter: ChapterApi): SChapter {
+        return SChapter.create().apply {
+            val title = if (chapter.title.isNotEmpty()) {
+                "${chapter.title} ${chapter.number}"
             } else {
-                element.absUrl("href").takeIf { it.isNotEmpty() }
-            } ?: return@mapNotNull null
-
-            SChapter.create().apply {
-                name = element.selectFirst(".chapter-number")?.text()
-                    ?: element.attr("data-chapter-number")?.let { "Capítulo $it" }
-                    ?: "Capítulo"
-                setUrlWithoutDomain(chapterUrl)
-
-                element.selectFirst(".chapter-date")?.text()?.let { dateStr ->
-                    date_upload = parseChapterDate(dateStr)
-                }
+                "Capítulo ${chapter.number}"
             }
+            name = title
+            setUrlWithoutDomain(chapter.url)
+            val published = chapter.published_at
+            date_upload = isoDateTimeFormat.tryParse(published)
         }
     }
 
     override fun chapterListRequest(manga: SManga): Request {
         val slug = getMangaSlug(manga.url)
-        val url = "$baseUrl/ajax/load-chapters/".toHttpUrl().newBuilder()
-            .addQueryParameter("item_slug", slug)
-            .addQueryParameter("page", "1")
-            .addQueryParameter("sort", "desc")
-            .addQueryParameter("q", "")
-            .build()
-        return GET(url, ajaxHeaders)
+        return GET("$baseUrl/api/manga/$slug/chapters/?page=1&sort=desc&q=")
     }
 
-    override fun chapterListParse(response: Response) =
-        parseChaptersFromHtml(response.parseAs<ChapterListResponse>().chapters_html)
-
-    private fun parseChapterDate(dateStr: String): Long {
-        val value = dateNumberRegex.find(dateStr)?.value?.toIntOrNull() ?: 1
-        return when {
-            "hoje" in dateStr -> Calendar.getInstance().timeInMillis
-            "ontem" in dateStr -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -1) }.timeInMillis
-            "hora" in dateStr -> Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, -value) }.timeInMillis
-            "dia" in dateStr -> Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -value) }.timeInMillis
-            "semana" in dateStr -> Calendar.getInstance().apply { add(Calendar.WEEK_OF_YEAR, -value) }.timeInMillis
-            "mês" in dateStr || "mes" in dateStr -> Calendar.getInstance().apply { add(Calendar.MONTH, -value) }.timeInMillis
-            else -> dateFormat.tryParse(dateStr)
-        }
+    override fun chapterListParse(response: Response): List<SChapter> {
+        return emptyList()
     }
 
     // ==================== Page ==========================
 
     override fun pageListParse(response: Response): List<Page> {
-        val document = response.asJsoup()
-
-        val pageData = document.selectFirst("script[id^=d-][type='application/json']")?.data()
+        val pageData = response.asJsoup()
+            .selectFirst("script[id^=d-][type='application/json']")?.data()
             ?: return emptyList()
 
         return pageData.parseAs<List<PageData>>().mapIndexed { index, page ->
