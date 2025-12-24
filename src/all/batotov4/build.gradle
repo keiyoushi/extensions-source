@@ -1,5 +1,5 @@
 ext {
-    extName = 'Bato.to V4'
+    extName = 'Bato.to (V4)'
     extClass = '.BatoToV4Factory'
     extVersionCode = 1
     isNsfw = true

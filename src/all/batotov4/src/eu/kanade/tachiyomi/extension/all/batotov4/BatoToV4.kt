@@ -58,7 +58,7 @@ open class BatoToV4(
 
     private val preferences by getPreferencesLazy { migrateMirrorPref() }
 
-    override val name: String = "Bato.to V4"
+    override val name: String = "Bato.to (V4)"
 
     override val baseUrl: String get() = getMirrorPref()
 
@@ -191,7 +191,7 @@ open class BatoToV4(
     // searchMangaRequest is not used, see fetchSearchManga instead
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
     override fun searchMangaSelector(): String {
-        return "div[q:key=\"Fc_9\"]"
+        return "main > div.grid > div"
     }
     override fun searchMangaFromElement(element: Element): SManga {
         val manga = SManga.create()
