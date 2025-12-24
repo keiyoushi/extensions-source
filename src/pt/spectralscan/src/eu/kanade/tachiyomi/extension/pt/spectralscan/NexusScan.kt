@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.spectralscan
 
 import android.content.SharedPreferences
-import android.util.Base64
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
