@@ -12,8 +12,6 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.extension.BuildConfig
-import eu.kanade.tachiyomi.lib.cryptoaes.CryptoAES
-import eu.kanade.tachiyomi.lib.cryptoaes.Deobfuscator
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -31,7 +29,6 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
@@ -50,10 +47,7 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
-import java.text.ParseException
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Locale
 import kotlin.random.Random
 import kotlin.text.Regex
 
@@ -76,12 +70,6 @@ open class BatoToV4(
             entryValues = MIRROR_PREF_ENTRY_VALUES
             setDefaultValue(MIRROR_PREF_DEFAULT_VALUE)
             summary = "%s"
-        }
-        val altChapterListPref = CheckBoxPreference(screen.context).apply {
-            key = "${ALT_CHAPTER_LIST_PREF_KEY}_$lang"
-            title = ALT_CHAPTER_LIST_PREF_TITLE
-            summary = ALT_CHAPTER_LIST_PREF_SUMMARY
-            setDefaultValue(ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
         }
         val removeOfficialPref = CheckBoxPreference(screen.context).apply {
             key = "${REMOVE_TITLE_VERSION_PREF}_$lang"
@@ -132,7 +120,6 @@ open class BatoToV4(
             }
         }
         screen.addPreference(mirrorPref)
-        screen.addPreference(altChapterListPref)
         screen.addPreference(removeOfficialPref)
         screen.addPreference(removeCustomPref)
     }
@@ -161,7 +148,6 @@ open class BatoToV4(
             }
     }
 
-    private fun getAltChapterListPref(): Boolean = preferences.getBoolean("${ALT_CHAPTER_LIST_PREF_KEY}_$lang", ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE)
     private fun isRemoveTitleVersion(): Boolean {
         return preferences.getBoolean("${REMOVE_TITLE_VERSION_PREF}_$lang", false)
     }
@@ -183,6 +169,7 @@ open class BatoToV4(
         addInterceptor(::imageFallbackInterceptor)
     }.build()
 
+    // ************ Search ************ //
     override fun latestUpdatesRequest(page: Int) = throw UnsupportedOperationException()
     override fun latestUpdatesSelector() = throw UnsupportedOperationException()
     override fun latestUpdatesFromElement(element: Element) = throw UnsupportedOperationException()
@@ -272,13 +259,10 @@ open class BatoToV4(
         )
     }
 
-    /**
-     * Use the site's GraphQL pager (get_comic_browse_pager) to determine if there is a next page.
-     */
     fun checkNextPage(select: SearchPayload): Boolean {
         val payload = GraphQL(
             SearchVariables(select),
-            BROWSE_PAGER_QUERY,
+            COMIC_BROWSE_PAGER_QUERY,
         )
 
         val body = json.encodeToString(payload)
@@ -293,8 +277,8 @@ open class BatoToV4(
             }
 
             val bodyString = response.body.string()
-            val parsed = json.decodeFromString<PagerResponse>(bodyString)
-            return parsed.data.pager.next != 0
+            val parsed = json.decodeFromString<ComicBrowsePagerResponse>(bodyString)
+            return parsed.data.paging.next != 0
         }
     }
 
@@ -307,7 +291,7 @@ open class BatoToV4(
         manga.setUrlWithoutDomain(stripSeriesUrl(link.attr("href")))
         manga.title = link.text().removeEntities()
             .cleanTitleIfNeeded()
-        manga.thumbnail_url = imgurl
+        manga.thumbnail_url = baseUrl + imgurl
         return MangasPage(listOf(manga), false)
     }
 
@@ -420,6 +404,7 @@ open class BatoToV4(
         }
     }
 
+    // ************ Legacy v2 code ************ //
     private fun queryUtilsParse(response: Response): MangasPage {
         val document = response.asJsoup()
         val mangas = document.select("tbody > tr")
@@ -462,6 +447,7 @@ open class BatoToV4(
         add("prevPos", "null")
     }
 
+    // ************ Manga Details ************ //
     override fun mangaDetailsRequest(manga: SManga): Request {
         if (manga.url.startsWith("http")) {
             // Check if trying to use a deprecated mirror, force current mirror
@@ -476,38 +462,51 @@ open class BatoToV4(
     }
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.selectFirst("div#mainer div.container-fluid")!!
+        val infoElement = document.selectFirst("main > div.flex.flex-col.md\\:flex-row")!!
+        val titleCardElement = infoElement.selectFirst("> div.grid > div:first-child")!!
+        val propertyCardElement = infoElement.selectFirst("> div.grid > div:nth-child(2)")!!
+        val descriptionCardElement = infoElement.selectFirst("> div.grid > div:last-child > div > div:first-child")!!
         val manga = SManga.create()
-        val workStatus = infoElement.selectFirst("div.attr-item:contains(original work) span")?.text()
-        val uploadStatus = infoElement.selectFirst("div.attr-item:contains(upload status) span")?.text()
-        val originalTitle = infoElement.select("h3").text().removeEntities()
+        val workStatus = propertyCardElement.selectFirst("> div:nth-child(3) > span:nth-child(3)")?.text()
+        val uploadStatus = propertyCardElement.selectFirst("> div:nth-child(4) > span:nth-child(3)")?.text()
+        val originalTitle = titleCardElement.select("> h3 > a").text().removeEntities()
         val description = buildString {
-            append(infoElement.select("div.limit-html").text())
+            append(descriptionCardElement.selectFirst("> div:first-child > react-island")?.text())
             infoElement.selectFirst(".episode-list > .alert-warning")?.also {
                 append("\n\n${it.text()}")
             }
-            infoElement.selectFirst("h5:containsOwn(Extra Info:) + div")?.also {
-                append("\n\nExtra Info:\n${it.wholeText()}")
+            descriptionCardElement.selectFirst("> div:nth-child(2) > div:first-child > b")?.takeIf { bTag -> bTag.text() == "Extra info" }?.also { _ ->
+                descriptionCardElement.selectFirst("> div:nth-child(2) > div:nth-child(2) > react-island")?.also { reactIsland ->
+                    append("\n\nExtra Info:\n${reactIsland.wholeText()}")
+                }
             }
-            document.selectFirst("div.pb-2.alias-set.line-b-f")?.takeIf { it.hasText() }?.also {
+            titleCardElement.select("> div:nth-child(2) > span").filter { span -> span.text() != "/" }.takeIf { spans -> spans.isNotEmpty() }?.also { spans ->
                 append("\n\nAlternative Titles:\n")
-                append(it.text().split('/').joinToString("\n") { "• ${it.trim()}" })
+                append(spans.joinToString("\n") { span -> "• ${span.text().trim()}" })
             }
         }.trim()
         val cleanedTitle = originalTitle.cleanTitleIfNeeded()
+        val imgurl = infoElement.selectFirst("img")?.attr("src")
 
         manga.title = cleanedTitle
-        manga.author = infoElement.select("div.attr-item:contains(author) span").text()
-        manga.artist = infoElement.select("div.attr-item:contains(artist) span").text()
+        val authorArtistLinks = titleCardElement.select("> :nth-child(3) > a")
+        val authors = authorArtistLinks.filter { link -> !link.text().endsWith("(Art)") }.map { it.text() }
+        val artists = authorArtistLinks.filter { link -> link.text().endsWith("(Art)") }.map { it.text().removeSuffix("(Art)").trim() }
+        manga.author = authors.joinToString(", ")
+        manga.artist = artists.joinToString(", ")
         manga.status = parseStatus(workStatus, uploadStatus)
-        manga.genre = infoElement.select(".attr-item b:contains(genres) + span ").joinToString { it.text() }
+        manga.genre = propertyCardElement.select("b:contains(Genres) ~ span > span:first-child").joinToString { it.text() }
         manga.description = if (originalTitle.trim() != cleanedTitle) {
             listOf(originalTitle, description)
                 .joinToString("\n\n")
         } else {
             description
         }
-        manga.thumbnail_url = document.select("div.attr-cover img").attr("abs:src")
+        manga.thumbnail_url = if (imgurl?.startsWith("http") == false) {
+            "$baseUrl${if (imgurl.startsWith("/")) "" else "/"}$imgurl"
+        } else {
+            imgurl
+        }
         return manga
     }
     private fun parseStatus(workStatus: String?, uploadStatus: String?): Int {
@@ -525,83 +524,50 @@ open class BatoToV4(
         }
     }
 
-    private fun altChapterParse(response: Response): List<SChapter> {
-        return Jsoup.parse(response.body.string(), response.request.url.toString(), Parser.xmlParser())
-            .select("channel > item").map { item ->
-                SChapter.create().apply {
-                    setUrlWithoutDomain(item.selectFirst("guid")!!.text())
-                    name = item.selectFirst("title")!!.text()
-                    date_upload = parseAltChapterDate(item.selectFirst("pubDate")!!.text())
-                }
-            }
-    }
-
-    private val altDateFormat = SimpleDateFormat("E, dd MMM yyyy H:m:s Z", Locale.US)
-    private fun parseAltChapterDate(date: String): Long {
-        return try {
-            altDateFormat.parse(date)!!.time
-        } catch (_: ParseException) {
-            0L
-        }
-    }
-
-    private fun checkChapterLists(document: Document): Boolean {
-        return document.select(".episode-list > .alert-warning").text().contains("This comic has been marked as deleted and the chapter list is not available.")
-    }
-
+    // ************ Chapter List ************ //
     override fun chapterListRequest(manga: SManga): Request {
-        val id = seriesIdRegex.find(manga.url)
-            ?.groups?.get(1)?.value?.trim()
-        return if (getAltChapterListPref() && !id.isNullOrBlank()) {
-            GET("$baseUrl/rss/series/$id.xml", headers)
-        } else if (manga.url.startsWith("http")) {
-            // Check if trying to use a deprecated mirror, force current mirror
+        // Check if trying to use a deprecated mirror, force current mirror
+        val mangaUrl = if (manga.url.startsWith("http")) {
             val httpUrl = manga.url.toHttpUrl()
             if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
                 val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
-                return GET(newHttpUrl.build(), headers)
+                newHttpUrl.build().toString()
+            } else {
+                manga.url
             }
-            GET(manga.url, headers)
         } else {
-            super.chapterListRequest(manga)
+            "$baseUrl${manga.url}"
         }
+
+        // Extract comic ID from URL (format: /title/{id}/... or /title/{id}-{title}/...)
+        val id = titleIdRegex.find(mangaUrl)?.groupValues?.get(1)
+            ?: throw Exception("Could not extract title ID from URL: $mangaUrl")
+
+        val payload = GraphQL(
+            ChapterListVariables(comicId = id, start = -1),
+            CHAPTER_LIST_QUERY,
+        )
+
+        val body = json.encodeToString(payload)
+            .toRequestBody(JSON_MEDIA_TYPE)
+
+        Log.d("BatoToV4", "Chapter list request: ${json.encodeToString(payload)}")
+
+        return POST("$baseUrl/ap2/", headers, body)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        if (getAltChapterListPref()) {
-            return altChapterParse(response)
-        }
+        val chapterListResponse = json.decodeFromString<ChapterListResponse>(response.body.string())
 
-        val document = response.asJsoup()
+        Log.d("BatoToV4", "Chapter list count: ${chapterListResponse.data.chapters.size}")
 
-        if (checkChapterLists(document)) {
-            throw Exception("Deleted from site")
-        }
-
-        return document.select(chapterListSelector())
-            .map(::chapterFromElement)
+        return chapterListResponse.data.chapters
+            .map { it.data.toSChapter() }
+            .reversed()
     }
 
-    override fun chapterListSelector() = "div.main div.p-2"
-
-    override fun chapterFromElement(element: Element): SChapter {
-        val chapter = SChapter.create()
-        val urlElement = element.select("a.chapt")
-        val group = element.select("div.extra > a:not(.ps-3)").text()
-        val user = element.select("div.extra > a.ps-3").text()
-        val time = element.select("div.extra > i.ps-3").text()
-        chapter.setUrlWithoutDomain(urlElement.attr("href"))
-        chapter.name = urlElement.text()
-        chapter.scanlator = when {
-            group.isNotBlank() -> group
-            user.isNotBlank() -> user
-            else -> "Unknown"
-        }
-        if (time != "") {
-            chapter.date_upload = parseChapterDate(time)
-        }
-        return chapter
-    }
+    override fun chapterListSelector() = throw UnsupportedOperationException()
+    override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
 
     private fun parseChapterDate(date: String): Long {
         val value = date.split(' ')[0].toInt()
@@ -655,42 +621,52 @@ open class BatoToV4(
         }
     }
 
+    // ************ Page List ************ //
     override fun pageListRequest(chapter: SChapter): Request {
-        if (chapter.url.startsWith("http")) {
-            // Check if trying to use a deprecated mirror, force current mirror
+        // Force current mirror if on a deprecated mirror
+        val chapterUrl = if (chapter.url.startsWith("http")) {
             val httpUrl = chapter.url.toHttpUrl()
             if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
                 val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
-                return GET(newHttpUrl.build(), headers)
+                newHttpUrl.build().toString()
+            } else {
+                chapter.url
             }
-            return GET(chapter.url, headers)
+        } else {
+            "$baseUrl${chapter.url}"
         }
-        return super.pageListRequest(chapter)
+
+        // Extract chapter ID from URL (format: /title/{titleId}-{title}/{chapterId}-{ch_chapterNumber})
+        val id = chapterIdRegex.find(chapterUrl)?.groupValues?.get(1)
+            ?: throw Exception("Could not extract chapter ID from URL: $chapterUrl")
+
+        val payload = GraphQL(
+            ChapterNodeVariables(id = id),
+            CHAPTER_NODE_QUERY,
+        )
+
+        val body = json.encodeToString(payload)
+            .toRequestBody(JSON_MEDIA_TYPE)
+
+        Log.d("BatoToV4", "Page list request: ${json.encodeToString(payload)}")
+
+        Log.d("BatoToV4", "Chapter URL: $chapterUrl")
+
+        return POST("$baseUrl/ap2/", headers, body)
     }
 
-    override fun pageListParse(document: Document): List<Page> {
-        val script = document.selectFirst("script:containsData(imgHttps):containsData(batoWord):containsData(batoPass)")?.html()
-            ?: throw RuntimeException("Couldn't find script with image data.")
+    override fun pageListParse(document: Document) = throw UnsupportedOperationException()
+    override fun pageListParse(response: Response): List<Page> {
+        val chapterNodeResponse = json.decodeFromString<ChapterNodeResponse>(response.body.string())
 
-        val imgHttpsString = script.substringAfter("const imgHttps =").substringBefore(";").trim()
-        val imageUrls = json.parseToJsonElement(imgHttpsString).jsonArray.map { it.jsonPrimitive.content }
-        val batoWord = script.substringAfter("const batoWord =").substringBefore(";").trim()
-        val batoPass = script.substringAfter("const batoPass =").substringBefore(";").trim()
-
-        val evaluatedPass: String = Deobfuscator.deobfuscateJsPassword(batoPass)
-        val imgAccListString = CryptoAES.decrypt(batoWord.removeSurrounding("\""), evaluatedPass)
-        val imgAccList = json.parseToJsonElement(imgAccListString).jsonArray.map { it.jsonPrimitive.content }
-
-        return imageUrls.mapIndexed { i, it ->
-            val acc = imgAccList.getOrNull(i)
-            val url = if (acc != null) {
-                "$it?$acc"
-            } else {
-                it
+        return chapterNodeResponse.data.chapterNode.data.imageFile.urlList
+            .mapIndexed { index, url ->
+                Page(index, "", url)
             }
+    }
 
-            Page(i, imageUrl = url)
-        }
+    override fun getChapterUrl(chapter: SChapter): String {
+        return "$baseUrl${chapter.url}"
     }
 
     override fun imageUrlParse(document: Document): String = throw UnsupportedOperationException()
@@ -783,9 +759,11 @@ open class BatoToV4(
     }
 
     companion object {
+        val whitespace by lazy { Regex("\\s+") }
         private val SERVER_PATTERN = Regex("https://[a-zA-Z]\\d{2}")
         private val seriesUrlRegex = Regex("""(.*/series/\d+)/.*""")
-        private val seriesIdRegex = Regex("""series/(\d+)""")
+        private val titleIdRegex = Regex("""title/(\d+)""")
+        private val chapterIdRegex = Regex("""title/[^/]+/(\d+)""")
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
@@ -801,31 +779,8 @@ open class BatoToV4(
 
         private val DEPRECATED_MIRRORS = listOf<String>()
 
-        private const val ALT_CHAPTER_LIST_PREF_KEY = "ALT_CHAPTER_LIST"
-        private const val ALT_CHAPTER_LIST_PREF_TITLE = "Alternative Chapter List"
-        private const val ALT_CHAPTER_LIST_PREF_SUMMARY = "If checked, uses an alternate chapter list"
-        private const val ALT_CHAPTER_LIST_PREF_DEFAULT_VALUE = false
-
         private const val BROWSE_PAGE_SIZE = 36
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaTypeOrNull()
-
-        private val BROWSE_PAGER_QUERY = """
-            query get_comic_browse_pager(${"$"}select: Comic_Browse_Select) {
-                get_comic_browse_pager(
-                    select: ${"$"}select
-                ) {
-                    total
-                    pages
-                    page
-                    init
-                    size
-                    skip
-                    limit
-                    prev
-                    next
-                }
-            }
-        """.trimIndent()
 
         private val titleRegex: Regex =
             Regex("\\([^()]*\\)|\\{[^{}]*\\}|\\[(?:(?!]).)*]|«[^»]*»|〘[^〙]*〙|「[^」]*」|『[^』]*』|≪[^≫]*≫|﹛[^﹜]*﹜|〖[^〖〗]*〗|\uD81A\uDD0D.+?\uD81A\uDD0D|《[^》]*》|⌜.+?⌝|⟨[^⟩]*⟩|/Official|/ Official", RegexOption.IGNORE_CASE)
