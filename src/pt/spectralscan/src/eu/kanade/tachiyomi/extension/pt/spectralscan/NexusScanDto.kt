@@ -1,7 +1,19 @@
 package eu.kanade.tachiyomi.extension.pt.spectralscan
 
 import eu.kanade.tachiyomi.source.model.Filter
+import eu.kanade.tachiyomi.source.model.SChapter
+import eu.kanade.tachiyomi.source.model.SManga
+import keiyoushi.utils.tryParse
 import kotlinx.serialization.Serializable
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+
+private val dateFormat by lazy {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
+}
 
 class SelectFilter(
     displayName: String = "",
@@ -257,3 +269,34 @@ data class Pagination(
     val has_next: Boolean,
     val next_page: Int? = null,
 )
+
+fun MangaDetails.toSManga(slug: String) = SManga.create().apply {
+    url = "/manga/$slug/"
+    title = this@toSManga.title
+    thumbnail_url = cover_url
+    description = this@toSManga.description
+    author = this@toSManga.author
+    artist = this@toSManga.artist
+    status = this@toSManga.status.parseStatus()
+    genre = categories.joinToString { it.name }
+}
+
+fun ChapterApi.toSChapter() = SChapter.create().apply {
+    val title = if (this@toSChapter.title.isNotEmpty()) {
+        "${this@toSChapter.title} $number"
+    } else {
+        "Capítulo $number"
+    }
+    name = title
+    url = this@toSChapter.url
+    date_upload = dateFormat.tryParse(published_at)
+}
+
+private fun String?.parseStatus() = when {
+    this == null -> SManga.UNKNOWN
+    listOf("em andamento", "ongoing", "ativo", "lançando").any { contains(it, ignoreCase = true) } -> SManga.ONGOING
+    listOf("completo", "completed", "finalizado").any { contains(it, ignoreCase = true) } -> SManga.COMPLETED
+    listOf("pausado", "hiato", "on hiatus").any { contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
+    listOf("cancelado", "cancelled", "dropped").any { contains(it, ignoreCase = true) } -> SManga.CANCELLED
+    else -> SManga.UNKNOWN
+}

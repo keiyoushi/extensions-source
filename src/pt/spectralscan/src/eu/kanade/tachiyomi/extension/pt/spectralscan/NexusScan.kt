@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.pt.spectralscan
 import android.content.SharedPreferences
 import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
+import eu.kanade.tachiyomi.lib.cookieinterceptor.CookieInterceptor
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
@@ -17,7 +18,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
-import keiyoushi.utils.tryParse
+import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -26,8 +27,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
 import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 class NexusScan : HttpSource(), ConfigurableSource {
 
@@ -44,8 +43,9 @@ class NexusScan : HttpSource(), ConfigurableSource {
 
     private val preferences: SharedPreferences by getPreferencesLazy()
 
-    override val client = super.client.newBuilder()
+    override val client = network.cloudflareClient.newBuilder()
         .rateLimit(2)
+        .addNetworkInterceptor(CookieInterceptor("nexustoons.site", emptyList()))
         .addInterceptor { chain ->
             val request = chain.request()
             val response = chain.proceed(request)
@@ -67,7 +67,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
             .build()
     }
 
-    private val isoDateTimeFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.ROOT)
+    private var currentMangaSlug: String? = null
 
     // ==================== AJAX Manga List ==========================
 
@@ -92,10 +92,6 @@ class NexusScan : HttpSource(), ConfigurableSource {
         syncNSFW()
         return client.newCall(request).asObservableSuccess()
             .map { parseMangaListResponse(it) }
-    }
-
-    override fun fetchPopularManga(page: Int): Observable<MangasPage> {
-        return fetchWithSync(page, popularMangaRequest(page))
     }
 
     override fun popularMangaRequest(page: Int): Request {
@@ -181,32 +177,33 @@ class NexusScan : HttpSource(), ConfigurableSource {
 
     // ==================== Details =======================
 
-    override fun mangaDetailsParse(response: Response): SManga {
-        val details = response.parseAs<MangaDetailsResponse>().manga
+    override fun fetchMangaDetails(manga: SManga): Observable<SManga> {
+        currentMangaSlug = getMangaSlug(manga.url)
+        return client.newCall(GET("$baseUrl${manga.url}", headers)).asObservableSuccess()
+            .map { response ->
+                val document = response.asJsoup()
+                val script = document.selectFirst("script[id=page-api-urls]")?.data()
+                val urls = script?.parseAs<Map<String, String>>() ?: emptyMap()
 
-        return SManga.create().apply {
-            title = details.title
-            thumbnail_url = details.cover_url
-            description = details.description
-            author = details.author
-            artist = details.artist
-            status = details.status.parseStatus()
-            genre = details.categories.joinToString { it.name }
-        }
+                val apiUrl = urls["mangaDetails"]!!
+                val finalApiUrl = if (apiUrl.startsWith("http")) apiUrl else "$baseUrl$apiUrl"
+
+                val headers = headersBuilder()
+                    .set("Referer", "$baseUrl${manga.url}")
+                    .build()
+
+                client.newCall(GET(finalApiUrl, headers)).execute()
+                    .parseAs<MangaDetailsResponse>()
+                    .manga.toSManga(currentMangaSlug!!)
+            }
     }
 
     override fun mangaDetailsRequest(manga: SManga): Request {
-        val slug = getMangaSlug(manga.url)
-        return GET("$baseUrl/api/manga/$slug/details/")
+        return GET("$baseUrl${manga.url}", headers)
     }
 
-    private fun String?.parseStatus() = when {
-        this == null -> SManga.UNKNOWN
-        listOf("em andamento", "ongoing", "ativo", "lançando").any { contains(it, ignoreCase = true) } -> SManga.ONGOING
-        listOf("completo", "completed", "finalizado").any { contains(it, ignoreCase = true) } -> SManga.COMPLETED
-        listOf("pausado", "hiato", "on hiatus").any { contains(it, ignoreCase = true) } -> SManga.ON_HIATUS
-        listOf("cancelado", "cancelled", "dropped").any { contains(it, ignoreCase = true) } -> SManga.CANCELLED
-        else -> SManga.UNKNOWN
+    override fun mangaDetailsParse(response: Response): SManga {
+        throw UnsupportedOperationException("Not used")
     }
 
     // ==================== Chapter =======================
@@ -214,33 +211,49 @@ class NexusScan : HttpSource(), ConfigurableSource {
     private fun getMangaSlug(url: String) = url.substringAfter("/manga/").trimEnd('/')
 
     override fun fetchChapterList(manga: SManga): Observable<List<SChapter>> {
-        return client.newCall(chapterListRequest(manga)).asObservableSuccess()
-            .map { it.parseAs<ChapterListApiResponse>() }
-            .flatMap { firstPage ->
-                val chapters = firstPage.chapters.map { parseChapter(it) }
+        return client.newCall(GET("$baseUrl${manga.url}", headers)).asObservableSuccess()
+            .flatMap { response ->
+                val document = response.asJsoup()
+                val script = document.selectFirst("script[id=page-api-urls]")?.data()
+                val urls = script?.parseAs<Map<String, String>>() ?: emptyMap()
 
-                if (!firstPage.pagination.has_next) {
-                    Observable.just(chapters)
-                } else {
-                    fetchRemainingChaptersApi(getMangaSlug(manga.url), chapters, firstPage.pagination.next_page!!)
-                }
+                val chaptersApiUrl = urls["chaptersApi"]!!
+                val finalApiUrl = if (chaptersApiUrl.startsWith("http")) chaptersApiUrl else "$baseUrl$chaptersApiUrl"
+
+                val referer = "$baseUrl${manga.url}"
+                val headers = headersBuilder()
+                    .set("Referer", referer)
+                    .build()
+
+                client.newCall(GET("$finalApiUrl?page=1&sort=desc&q=", headers)).asObservableSuccess()
+                    .map { it.parseAs<ChapterListApiResponse>() }
+                    .flatMap { firstPage ->
+                        val chapters = firstPage.chapters.map { parseChapter(it) }
+
+                        if (!firstPage.pagination.has_next) {
+                            Observable.just(chapters)
+                        } else {
+                            fetchRemainingChaptersApi(chapters, firstPage.pagination.next_page!!, finalApiUrl, headers)
+                        }
+                    }
             }
     }
 
     private fun fetchRemainingChaptersApi(
-        slug: String,
         accumulatedChapters: List<SChapter>,
-        currentPage: Int,
+        nextPage: Int,
+        chaptersApiUrl: String,
+        headers: Headers,
     ): Observable<List<SChapter>> {
-        val url = "$baseUrl/api/manga/$slug/chapters/?page=$currentPage&sort=desc&q="
+        val url = "$chaptersApiUrl?page=$nextPage&sort=desc&q="
 
-        return client.newCall(GET(url)).asObservableSuccess()
+        return client.newCall(GET(url, headers)).asObservableSuccess()
             .map { it.parseAs<ChapterListApiResponse>() }
             .flatMap { page ->
                 val allChapters = accumulatedChapters + page.chapters.map { parseChapter(it) }
 
                 if (page.pagination.has_next) {
-                    fetchRemainingChaptersApi(slug, allChapters, page.pagination.next_page!!)
+                    fetchRemainingChaptersApi(allChapters, page.pagination.next_page!!, chaptersApiUrl, headers)
                 } else {
                     Observable.just(allChapters)
                 }
@@ -248,17 +261,7 @@ class NexusScan : HttpSource(), ConfigurableSource {
     }
 
     private fun parseChapter(chapter: ChapterApi): SChapter {
-        return SChapter.create().apply {
-            val title = if (chapter.title.isNotEmpty()) {
-                "${chapter.title} ${chapter.number}"
-            } else {
-                "Capítulo ${chapter.number}"
-            }
-            name = title
-            setUrlWithoutDomain(chapter.url)
-            val published = chapter.published_at
-            date_upload = isoDateTimeFormat.tryParse(published)
-        }
+        return chapter.toSChapter()
     }
 
     override fun chapterListRequest(manga: SManga): Request {
