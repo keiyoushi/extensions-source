@@ -281,7 +281,9 @@ class Bato(
             )
             details.thumbnail_url = absoluteUrlOrNull(cover)
             details.description = node.optString("summary")
-            val genres = extractStringList(node.opt("genres")).joinToString()
+            val genres = extractStringList(node.opt("genres"))
+                .map { normalizeTag(it) }
+                .joinToString()
             if (genres.isNotBlank()) details.genre = genres
             val authors = extractStringList(node.opt("authors")).joinToString()
             if (authors.isNotBlank()) details.author = authors
@@ -295,15 +297,20 @@ class Bato(
 
     private fun fetchChapterListGraphql(manga: SManga): List<SChapter> {
         val id = mangaIdFromUrl(manga.url).takeIf { it.isNotBlank() } ?: return emptyList()
-        val totalChapters = fetchChapterCount(id)
-        val starts = buildChapterStarts(totalChapters)
         val chapters = mutableListOf<SChapter>()
+        val seen = mutableSetOf<String>()
+        var start = 0
 
-        for (start in starts) {
+        while (true) {
             val request = graphQlRequest(CHAPTERS_QUERY, buildChapterListVariables(id, start))
-            client.newCall(request).execute().use { response ->
-                chapters.addAll(parseChapterListResponse(response))
+            val parsed = client.newCall(request).execute().use { response ->
+                parseChapterListResponse(response)
             }
+            if (parsed.isEmpty()) break
+            val newItems = parsed.filter { seen.add(it.url) }
+            if (newItems.isEmpty()) break
+            chapters.addAll(newItems)
+            start += parsed.size
         }
 
         return sortChapters(chapters.distinctBy { it.url })
@@ -547,29 +554,6 @@ class Bato(
             is String -> value
             else -> null
         }
-    }
-
-    private fun fetchChapterCount(id: String): Int {
-        val request = graphQlRequest(DETAILS_QUERY, buildIdVariables(id))
-        return client.newCall(request).execute().use { response ->
-            val data = response.parseGraphQlData()
-            val node = data.optJSONObject("get_comicNode")?.optJSONObject("data")
-            asLong(node?.opt("chaps_normal"))?.toInt() ?: 0
-        }
-    }
-
-    private fun buildChapterStarts(totalChapters: Int): List<Int> {
-        if (totalChapters <= CHAPTER_PAGE_SIZE) {
-            return listOf(0)
-        }
-        val starts = mutableListOf(0)
-        val maxStart = ((totalChapters - 1) / CHAPTER_PAGE_SIZE) * CHAPTER_PAGE_SIZE
-        var start = CHAPTER_PAGE_SIZE
-        while (start <= maxStart) {
-            starts.add(start)
-            start += CHAPTER_PAGE_SIZE
-        }
-        return starts
     }
 
     private fun hasNextPage(paging: JSONObject?, itemCount: Int): Boolean {
@@ -846,7 +830,6 @@ class Bato(
 
     private companion object {
         private const val DEFAULT_PAGE_SIZE = 36
-        private const val CHAPTER_PAGE_SIZE = 100
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         private const val MIRROR_PREF_KEY = "MIRROR"
@@ -897,7 +880,6 @@ class Bato(
             "yyyy-MM-dd'T'HH:mm:ssX",
             "yyyy-MM-dd HH:mm:ss",
         )
-
         private val BROWSE_QUERY = buildQuery(
             """
             query(%select: Comic_Browse_Select) {
@@ -1010,6 +992,35 @@ class Bato(
     }
 }
 
+private fun normalizeTag(tag: String): String {
+    val key = tag.trim().lowercase(Locale.ROOT).replace(' ', '_')
+    TAG_OVERRIDES[key]?.let { return it }
+
+    val words = tag.replace('_', ' ').replace('-', ' ')
+        .split(' ')
+        .filter { it.isNotBlank() }
+    return words.joinToString(" ") { word ->
+        if (word.any { it.isUpperCase() }) {
+            word
+        } else {
+            word.lowercase(Locale.ROOT).replaceFirstChar { it.titlecase(Locale.ROOT) }
+        }
+    }
+}
+
+private val TAG_OVERRIDES = mapOf(
+    "4_koma" to "4-Koma",
+    "cheating_infidelity" to "Cheating/Infidelity",
+    "chilhood_friends" to "Childhood Friends",
+    "emperor_daughte" to "Emperor's Daughter",
+    "fan_colored" to "Fan-Colored",
+    "netorare" to "Netorare/NTR",
+    "old_people" to "Silver & Golden",
+    "post_apocalyptic" to "Post-Apocalyptic",
+    "sci_fi" to "Sci-Fi",
+    "sm_bdsm" to "SM/BDSM/SUB-DOM",
+)
+
 private enum class ChapterListSource(val pref: String) {
     GRAPHQL("graphql"),
     QWIK("qwik"),
@@ -1083,7 +1094,7 @@ private class IgnoreLanguageFilter : Filter.CheckBox(FILTER_IGNORE_LANGUAGE_TITL
 
 private class IgnoreGenreFilter : Filter.CheckBox(FILTER_IGNORE_GENRE_TITLE)
 
-private class GenreFilter(val value: String, name: String) : Filter.TriState(name)
+private class GenreFilter(val value: String, name: String) : Filter.TriState(normalizeTag(name))
 
 private class GenreGroupFilter : Filter.Group<GenreFilter>(
     FILTER_GENRES_TITLE,
