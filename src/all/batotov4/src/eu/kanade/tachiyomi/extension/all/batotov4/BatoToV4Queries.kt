@@ -70,6 +70,8 @@ val CHAPTER_LIST_QUERY: String = buildQuery {
                     dname
                     title
                     urlPath
+                    dateCreate
+                    dateModify
                 }
             }
         }
