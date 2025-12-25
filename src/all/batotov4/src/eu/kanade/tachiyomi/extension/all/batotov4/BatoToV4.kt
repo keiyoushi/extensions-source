@@ -214,6 +214,7 @@ open class BatoToV4(
                 var incOLangs = emptyList<String>()
                 var incTLangs = if (siteLang.isEmpty()) emptyList() else listOf(siteLang) // default to site lang
                 var origStatus = ""
+                var uploadStatus = ""
                 var chapCount = ""
 
                 filters.forEach { filter ->
@@ -257,6 +258,9 @@ open class BatoToV4(
                         is OriginalStatusFilter -> {
                             origStatus = filter.selected
                         }
+                        is UploadStatusFilter -> {
+                            uploadStatus = filter.selected
+                        }
                         is SortFilter -> {
                             if (filter.state != null) {
                                 sortby = filter.selected
@@ -280,6 +284,7 @@ open class BatoToV4(
                     incOLangs = incOLangs,
                     incTLangs = incTLangs,
                     origStatus = origStatus,
+                    siteStatus = uploadStatus,
                     chapCount = chapCount,
                 )
                 val graphQLQuery = COMIC_SEARCH_QUERY
@@ -475,6 +480,10 @@ open class BatoToV4(
             }
     }
 
+    override fun getMangaUrl(manga: SManga): String {
+        return "$baseUrl${manga.url}"
+    }
+
     override fun getChapterUrl(chapter: SChapter): String {
         return "$baseUrl${chapter.url}"
     }
@@ -549,6 +558,7 @@ open class BatoToV4(
     override fun getFilterList() = FilterList(
         SortFilter(SortFilter.POPULAR_INDEX),
         OriginalStatusFilter(),
+        UploadStatusFilter(),
         GenreGroupFilter(),
         OriginalLanguageFilter(),
         TranslationLanguageFilter(siteLang),

@@ -139,6 +139,19 @@ class OriginalStatusFilter : SelectFilter("Original Work Status", options) {
     }
 }
 
+class UploadStatusFilter : SelectFilter("Bato Upload Status", options) {
+    companion object {
+        private val options = listOf(
+            SelectFilterOption("All", ""),
+            SelectFilterOption("Pending", "pending"),
+            SelectFilterOption("Ongoing", "ongoing"),
+            SelectFilterOption("Completed", "completed"),
+            SelectFilterOption("Hiatus", "hiatus"),
+            SelectFilterOption("Cancelled", "cancelled"),
+        )
+    }
+}
+
 class ChapterCountFilter : SelectFilter("Chapter Count", options) {
     companion object {
         private val options = listOf(
