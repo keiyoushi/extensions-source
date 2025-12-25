@@ -38,7 +38,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     override val client: OkHttpClient = network.cloudflareClient
 
     // Private stuff
-
     private val preferences: SharedPreferences by getPreferencesLazy()
 
     private fun parseStatus(status: String?) = when {
@@ -308,7 +307,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Latest
-
     override fun latestUpdatesFromElement(element: Element): SManga =
         popularMangaFromElement(element)
 
@@ -317,11 +315,11 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Element Selectors
-
     override fun popularMangaSelector(): String = ".animate-fade-in-up > div a[data-state=closed]"
     override fun latestUpdatesSelector() = popularMangaSelector()
     override fun searchMangaSelector() = popularMangaSelector()
 
+    // Next Page
     override fun popularMangaNextPageSelector(): String = "nav > ul > li > a[aria-label='Go to next page']"
     override fun latestUpdatesNextPageSelector() = popularMangaNextPageSelector()
     override fun searchMangaNextPageSelector() = popularMangaNextPageSelector()
@@ -342,7 +340,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             urlBuilder.addQueryParameter("title", query)
         }
 
-        /* Filter handling */
+        // Filter handling
         (if (filters.isEmpty()) getFilterList() else filters).forEach { filter ->
             when (filter) {
                 is CategoryNames -> {
@@ -382,6 +380,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         val selectedOption = agsFilter?.values?.getOrNull(agsFilter.state)
         val filterValue = agsValueFilter?.state?.trim() ?: ""
 
+        // Author Group Series handling
         if (query.isBlank() && selectedOption != null && selectedOption.key.isNotBlank()) {
             val typePath = selectedOption.key
             val requestUrl =
@@ -414,21 +413,21 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     )
 
     // Detail Parse
-
     private val chapterListRegex = Regex("""\d+[-–]?\d*\..+<br>""", RegexOption.IGNORE_CASE)
     private val htmlTagRegex = Regex("<[^>]*>")
     private val chapterPrefixRegex = Regex("""^\d+(-\d+)?\.\s*.*""")
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.selectFirst("section.flex")!!
+        val titleElement = document.selectFirst("section.flex div.flex-1")!!
+        val infoElement = document.selectFirst("section.flex div.flex-1 tbody")!!
         val groupName = infoElement.selectFirst("td:contains(Group) ~ td")?.wholeText()?.trim() ?: "Tidak Diketahui"
         val characterName = infoElement.selectFirst("td:contains(Character) ~ td")?.wholeText()?.trim() ?: "Tidak Diketahui"
         val seriesParser = infoElement.selectFirst("td:contains(Series) ~ td")?.wholeText()?.trim() ?: "Tidak Diketahui"
-        val alternativeTitle = infoElement.selectFirst("h2.mb-3")?.wholeText()?.trim() ?: "Tidak Diketahui"
+        val alternativeTitle = titleElement.selectFirst("h2")?.wholeText()?.trim() ?: "Tidak Diketahui"
         val authorName = infoElement.selectFirst("td:contains(Author) ~ td")?.text() ?: groupName
 
         val manga = SManga.create()
-        manga.description = if (infoElement.select(".leading-6 > p:nth-child(1)").isEmpty()) {
+        manga.description = if (titleElement.select(".leading-6 > p:nth-child(1)").isEmpty()) {
             """
             Tidak ada deskripsi yang tersedia bosque
 
@@ -438,7 +437,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             Seri             : $seriesParser
             """.trimIndent()
         } else {
-            val pb2Element = infoElement.selectFirst(".leading-6")
+            val pb2Element = titleElement.selectFirst(".leading-6")
 
             val showDescription = pb2Element?.let { element ->
                 val paragraphs = element.select("p")
@@ -544,17 +543,16 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             """.trimMargin().replace(Regex(" +"), " ")
         }
         manga.author = authorName
-        manga.genre = infoElement.select(".my-4 a").joinToString { it.text() }
+        manga.genre = titleElement.select(".my-4 a").joinToString { it.text() }
         manga.status = parseStatus(
             infoElement.selectFirst("td:contains(Status) ~ td")?.text(),
         )
-        manga.thumbnail_url = document.selectFirst(".mb-3 img")?.attr("src")
+        manga.thumbnail_url = document.selectFirst("section.flex > div.mx-auto img")?.attr("src")
 
         return manga
     }
 
     // Chapter Stuff
-
     override fun chapterListRequest(manga: SManga): Request {
         val slug = manga.url.substringAfterLast("/")
         return GET("$baseUrl/api/manga/$slug/chapters?page=1", headers)
@@ -606,7 +604,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Page Stuff
-
     private fun decodeImage(encoded: String): String {
         val decodedBytes = Base64.decode(encoded, Base64.DEFAULT)
         val decoded = decodedBytes.map { (it.toInt() xor 0x12).toByte() }.toByteArray()
@@ -627,9 +624,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         return GET(page.imageUrl!!, newHeaders)
     }
 
-    override fun imageUrlParse(document: Document): String =
-        throw UnsupportedOperationException()
-
     override fun pageListRequest(chapter: SChapter): Request {
         val slug = chapter.url.substringAfterLast("/")
         val url = "https://cdn.doujindesu.dev/api/ch.php?slug=$slug"
@@ -647,6 +641,20 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
+    // Unsuported
+    override fun chapterListSelector(): String =
+        throw UnsupportedOperationException()
+
+    override fun chapterFromElement(element: Element): SChapter =
+        throw UnsupportedOperationException()
+
+    override fun pageListParse(document: Document): List<Page> =
+        throw UnsupportedOperationException()
+
+    override fun imageUrlParse(document: Document): String =
+        throw UnsupportedOperationException()
+
+    // Change domain toast
     companion object {
         private val PREF_DOMAIN_KEY = "preferred_domain_name_v${AppInfo.getVersionName()}"
         private const val PREF_DOMAIN_TITLE = "Mengganti BaseUrl"
