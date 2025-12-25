@@ -418,16 +418,15 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private val chapterPrefixRegex = Regex("""^\d+(-\d+)?\.\s*.*""")
 
     override fun mangaDetailsParse(document: Document): SManga {
-        val titleElement = document.selectFirst("section.flex div.flex-1")!!
         val infoElement = document.selectFirst("section.flex div.flex-1 tbody")!!
         val groupName = infoElement.selectFirst("td:contains(Group) ~ td")?.wholeText()?.trim() ?: "Tidak Diketahui"
         val characterName = infoElement.selectFirst("td:contains(Character) ~ td")?.wholeText()?.trim() ?: "Tidak Diketahui"
         val seriesParser = infoElement.selectFirst("td:contains(Series) ~ td")?.wholeText()?.trim() ?: "Tidak Diketahui"
-        val alternativeTitle = titleElement.selectFirst("h2")?.wholeText()?.trim() ?: "Tidak Diketahui"
+        val alternativeTitle = document.selectFirst("section.flex div.flex-1 > h2.text-slate-500")?.wholeText()?.trim() ?: "Tidak Diketahui"
         val authorName = infoElement.selectFirst("td:contains(Author) ~ td")?.text() ?: groupName
 
         val manga = SManga.create()
-        manga.description = if (titleElement.select(".leading-6 > p:nth-child(1)").isEmpty()) {
+        manga.description = if (document.select("section.flex div.flex-1 #manga-summary > p:nth-child(1)").isEmpty()) {
             """
             Tidak ada deskripsi yang tersedia bosque
 
@@ -437,7 +436,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             Seri             : $seriesParser
             """.trimIndent()
         } else {
-            val pb2Element = titleElement.selectFirst(".leading-6")
+            val pb2Element = document.selectFirst("section.flex div.flex-1 #manga-summary")
 
             val showDescription = pb2Element?.let { element ->
                 val paragraphs = element.select("p")
@@ -543,11 +542,16 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             """.trimMargin().replace(Regex(" +"), " ")
         }
         manga.author = authorName
-        manga.genre = titleElement.select(".my-4 a").joinToString { it.text() }
+        manga.genre = document.select("section.flex div.flex-1 .my-4 a button").joinToString { it.text() }
         manga.status = parseStatus(
             infoElement.selectFirst("td:contains(Status) ~ td")?.text(),
         )
-        manga.thumbnail_url = document.selectFirst("section.flex > div.mx-auto img")?.attr("src")
+        manga.thumbnail_url = document.selectFirst("section.flex > div.mx-auto img")
+            ?.let { img ->
+                val src = img.attr("abs:src")
+                val real = Regex("url=([^&]+)").find(src)?.groupValues?.get(1)
+                real?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: src
+            }
 
         return manga
     }
