@@ -689,7 +689,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             }
 
             return url
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             ""
         }
     }
