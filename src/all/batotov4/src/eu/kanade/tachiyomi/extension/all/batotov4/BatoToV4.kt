@@ -117,9 +117,36 @@ open class BatoToV4(
                 isValid
             }
         }
+        val userIdPref = EditTextPreference(screen.context).apply {
+            key = "${USER_ID_PREF}_$lang"
+            title = "User ID (Default Auto-Detect)"
+            summary = if (getUserIdPref().isNotEmpty()) {
+                "Manually Provided ID: ${getUserIdPref()}"
+            } else {
+                "Auto-detect from logged-in user"
+            }
+            setDefaultValue("")
+
+            setOnPreferenceChangeListener { _, newValue ->
+                val newId = newValue as String
+                summary = if (newId.isNotEmpty()) {
+                    // Validate it's numeric
+                    if (newId.matches(Regex("\\d+"))) {
+                        "Manually Provided ID: $newId"
+                    } else {
+                        Toast.makeText(screen.context, "User ID must be numeric", Toast.LENGTH_SHORT).show()
+                        return@setOnPreferenceChangeListener false
+                    }
+                } else {
+                    "Auto-detect from logged-in user"
+                }
+                true
+            }
+        }
         screen.addPreference(mirrorPref)
         screen.addPreference(removeOfficialPref)
         screen.addPreference(removeCustomPref)
+        screen.addPreference(userIdPref)
     }
 
     private fun getMirrorPref(): String {
@@ -151,6 +178,9 @@ open class BatoToV4(
     }
     private fun customRemoveTitle(): String =
         preferences.getString("${REMOVE_TITLE_CUSTOM_PREF}_$lang", "")!!
+
+    private fun getUserIdPref(): String =
+        preferences.getString("${USER_ID_PREF}_$lang", "")!!
 
     private fun SharedPreferences.migrateMirrorPref() {
         val selectedMirror = getString("${MIRROR_PREF_KEY}_$lang", MIRROR_PREF_DEFAULT_VALUE)!!
@@ -219,23 +249,35 @@ open class BatoToV4(
 
                 filters.forEach { filter ->
                     when (filter) {
-                        // Special Filters (Probably don't work, still v2)
+                        // Special Filters (Require auth)
                         is UtilsFilter -> {
                             if (filter.state != 0) {
-                                val filterUrl = "$baseUrl/_utils/comic-list?type=${filter.selected}"
-                                return client.newCall(GET(filterUrl, headers)).asObservableSuccess()
-                                    .map { response ->
-                                        queryUtilsParse(response)
-                                    }
+                                return userComicListSearch(page, filter.selected)
                             }
                         }
-                        is HistoryFilter -> {
+                        is PersonalListFilter -> {
                             if (filter.state != 0) {
-                                val filterUrl = "$baseUrl/ajax.my.${filter.selected}.paging"
-                                return client.newCall(POST(filterUrl, headers, formBuilder().build())).asObservableSuccess()
-                                    .map { response ->
-                                        queryHistoryParse(response)
+                                return when (filter.selected) {
+                                    "updates" -> {
+                                        val apiVariables = ApiMyUpdatesVariables(
+                                            page = page,
+                                            size = BROWSE_PAGE_SIZE,
+                                        )
+                                        client.newCall(sendGraphQLRequest(apiVariables, SSER_MY_UPDATES_QUERY))
+                                            .asObservableSuccess()
+                                            .map { response ->
+                                                myUpdatesParse(response)
+                                            }
                                     }
+                                    "history" -> {
+                                        client.newCall(sendMyHistoryRequest(page))
+                                            .asObservableSuccess()
+                                            .map { response ->
+                                                myHistoryParse(response)
+                                            }
+                                    }
+                                    else -> Observable.empty() // Should never happen
+                                }
                             }
                         }
 
@@ -350,6 +392,134 @@ open class BatoToV4(
         add("first", "0")
         add("limit", "0")
         add("prevPos", "null")
+    }
+
+    // ************ Personal: My Updates ************ //
+    private fun myUpdatesParse(response: Response): MangasPage {
+        val myUpdatesResponse = response.parseAs<ApiMyUpdatesResponse>().data.response
+
+        val mangas = myUpdatesResponse.items.map { item ->
+            item.data.toSManga(baseUrl).apply {
+                title = title.cleanTitleIfNeeded()
+            }
+        }
+        val hasNextPage = myUpdatesResponse.paging.next != 0
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    // ************ Personal: My History ************ //
+    private var myHistoryCursor: String? = null
+
+    private fun sendMyHistoryRequest(page: Int): Request {
+        // Reset cursor on first page
+        if (page == 1) {
+            myHistoryCursor = null
+        }
+
+        val apiVariables = ApiMyHistoryVariables(
+            start = myHistoryCursor,
+            limit = BROWSE_PAGE_SIZE,
+        )
+
+        return sendGraphQLRequest(apiVariables, SSER_MY_HISTORY_QUERY)
+    }
+
+    private fun myHistoryParse(response: Response): MangasPage {
+        val myHistoryResponse = response.parseAs<ApiMyHistoryResponse>().data.response
+
+        // Update cursor for next page
+        myHistoryCursor = myHistoryResponse.newStart
+
+        val mangas = myHistoryResponse.items.map { item ->
+            item.comicNode.data.toSManga(baseUrl).apply {
+                title = title.cleanTitleIfNeeded()
+            }
+        }
+
+        val hasNextPage = mangas.isNotEmpty() // If mangas is empty, then current page does not exist.
+
+        return MangasPage(mangas, hasNextPage)
+    }
+
+    // ************ Personal: User's Publish Comic List ************ //
+    private fun userComicListSearch(page: Int, filterParams: String): Observable<MangasPage> {
+        return getUserId().flatMap { userId ->
+            val params = parseUtilsFilterParams(filterParams)
+
+            val apiVariables = ApiUserComicListVariables(
+                userId = userId,
+                page = page,
+                size = BROWSE_PAGE_SIZE,
+                editor = params["editor"],
+                siteStatus = params["siteStatus"],
+                dbStatus = params["dbStatus"],
+                mod_lock = params["mod_lock"],
+                mod_hide = params["mod_hide"],
+                notUpdatedDays = params["notUpdatedDays"]?.toIntOrNull(),
+                scope = params["scope"],
+            )
+
+            client.newCall(sendGraphQLRequest(apiVariables, USER_COMIC_LIST_QUERY))
+                .asObservableSuccess()
+                .map { response ->
+                    userComicListParse(response)
+                }
+        }
+    }
+
+    private fun getUserIdLoggedIn(): Observable<String> {
+        return client.newCall(GET(baseUrl, headers))
+            .asObservableSuccess()
+            .map { response ->
+                val document = response.asJsoup()
+                val href = document.select("header div.avatar a[href*=/u/]").firstOrNull()?.attr("href") ?: ""
+
+                userIdRegex.find(href)?.groupValues?.get(1)
+                    ?: throw Exception("Could not auto-detect user ID. Please log in to the mirror or set User ID manually in extension settings. Explicitly setting the mirror may also help.")
+            }
+    }
+
+    private fun getUserId(): Observable<String> {
+        // Check if user has manually set a user ID in preferences
+        val prefUserId = getUserIdPref()
+        if (prefUserId.isNotEmpty()) {
+            return Observable.just(prefUserId)
+        }
+
+        // Auto-detect user ID from homepage
+        return getUserIdLoggedIn()
+    }
+
+    private fun parseUtilsFilterParams(filterParams: String): Map<String, String> {
+        if (filterParams.isEmpty()) {
+            return emptyMap()
+        }
+
+        // Parse URL query string format: "key1=value1&key2=value2"
+        return filterParams.split("&")
+            .mapNotNull { param ->
+                val parts = param.split("=")
+                if (parts.size == 2) {
+                    parts[0] to parts[1]
+                } else {
+                    null
+                }
+            }
+            .toMap()
+    }
+
+    private fun userComicListParse(response: Response): MangasPage {
+        val userComicListResponse = response.parseAs<ApiUserComicListResponse>().data.response
+
+        val mangas = userComicListResponse.items.map { item ->
+            item.data.toSManga(baseUrl).apply {
+                title = title.cleanTitleIfNeeded()
+            }
+        }
+        val hasNextPage = userComicListResponse.paging.next != 0
+
+        return MangasPage(mangas, hasNextPage)
     }
 
     // ************ Manga Details ************ //
@@ -567,10 +737,10 @@ open class BatoToV4(
         LetterFilter(),
         Filter.Separator(),
         Filter.Header("NOTE: Filters below are incompatible with any other filters!"),
-        Filter.Header("NOTE: Login Required!"),
         Filter.Separator(),
+        Filter.Header("NOTE: Login required! (Utils list also accept a user id in settings)"),
+        PersonalListFilter(),
         UtilsFilter(),
-        HistoryFilter(),
     )
 
     private fun stripSeriesUrl(url: String): String {
@@ -596,10 +766,12 @@ open class BatoToV4(
         private val seriesUrlRegex = Regex("""(.*/series/\d+)/.*""")
         private val titleIdRegex = Regex("""title/(\d+)""")
         private val chapterIdRegex = Regex("""title/[^/]+/(\d+)""")
+        private val userIdRegex = Regex("""/u/(\d+)""")
         private const val MIRROR_PREF_KEY = "MIRROR"
         private const val MIRROR_PREF_TITLE = "Mirror"
         private const val REMOVE_TITLE_VERSION_PREF = "REMOVE_TITLE_VERSION"
         private const val REMOVE_TITLE_CUSTOM_PREF = "REMOVE_TITLE_CUSTOM"
+        private const val USER_ID_PREF = "USER_ID"
         private val MIRROR_PREF_ENTRIES = arrayOf(
             "Auto",
             // https://batotomirrors.pages.dev/
