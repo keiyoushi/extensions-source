@@ -1218,8 +1218,8 @@ open class BatoTo(
             "okok.to",
             "ruru.to",
             "xdxd.to",
-            // "bato.si", // (v4)
-            // "bato.ing", // (v4)
+            "bato.si", // (v4)
+            "bato.ing", // (v4)
         )
         private val MIRROR_PREF_ENTRY_VALUES = MIRROR_PREF_ENTRIES.map { "https://$it" }.toTypedArray()
         private val MIRROR_PREF_DEFAULT_VALUE = MIRROR_PREF_ENTRY_VALUES[0]
