@@ -36,6 +36,9 @@ class AzComic : HttpSource() {
     @Volatile
     private var cachedSeries: List<SeriesEntry>? = null
 
+    @Volatile
+    private var isPrefetchingSeries = false
+
     override val client = network.cloudflareClient
 
     override fun fetchPopularManga(page: Int): Observable<MangasPage> {
@@ -71,11 +74,12 @@ class AzComic : HttpSource() {
     override fun searchMangaParse(response: Response): MangasPage = throw UnsupportedOperationException()
 
     override fun getFilterList(): FilterList {
-        val categories = runCatching {
-            getSeries().mapNotNull { it.category }
-                .distinct()
-                .sorted()
-        }.getOrDefault(emptyList())
+        prefetchSeriesIfNeeded()
+        val categories = cachedSeries
+            ?.mapNotNull { it.category }
+            ?.distinct()
+            ?.sorted()
+            .orEmpty()
 
         return FilterList(
             CategoryFilter(categories),
@@ -134,6 +138,26 @@ class AzComic : HttpSource() {
         return cachedSeries ?: synchronized(this) {
             cachedSeries ?: buildSeries(fetchComics()).also { cachedSeries = it }
         }
+    }
+
+    private fun prefetchSeriesIfNeeded() {
+        if (cachedSeries != null || isPrefetchingSeries) return
+        val shouldFetch = synchronized(this) {
+            if (cachedSeries != null || isPrefetchingSeries) {
+                false
+            } else {
+                isPrefetchingSeries = true
+                true
+            }
+        }
+        if (!shouldFetch) return
+        Thread {
+            try {
+                cachedSeries = buildSeries(fetchComics())
+            } finally {
+                isPrefetchingSeries = false
+            }
+        }.start()
     }
 
     private fun fetchComics(): List<ComicEntry> {
