@@ -25,6 +25,7 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.getPreferencesLazy
+import keiyoushi.utils.parseAs
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -32,7 +33,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -47,7 +47,6 @@ import rx.Observable
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import uy.kohesive.injekt.injectLazy
-import java.util.Calendar
 import kotlin.random.Random
 import kotlin.text.Regex
 
@@ -190,96 +189,21 @@ open class BatoToV4(
 
     // searchMangaRequest is not used, see fetchSearchManga instead
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
-    override fun searchMangaSelector(): String {
-        return "main > div.grid > div"
-    }
-    override fun searchMangaFromElement(element: Element): SManga {
-        val manga = SManga.create()
-        val item = element.select("> div:nth-child(1)")
-        val imgurl = item.select("> div > a > img").attr("src")
-        val link = item.select("> div > a")
-        manga.setUrlWithoutDomain(stripSeriesUrl(link.attr("href")))
-        manga.title = element.select("> div:nth-child(2) > h3 > a > span").text().removeEntities()
-            .cleanTitleIfNeeded()
-        manga.thumbnail_url = baseUrl + imgurl
-        return manga
-    }
+    override fun searchMangaSelector() = throw UnsupportedOperationException()
+    override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
     override fun searchMangaParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val mangas = document.select(searchMangaSelector())
-            .map { element -> searchMangaFromElement(element) }
-        val select = buildSearchPayloadFromUrl(response.request.url)
+        Log.d("BatoToV4", "searchMangaParse: Attempting parse")
+        val browseResponse = response.parseAs<ApiComicSearchResponse>().data.response
+        Log.d("BatoToV4", "searchMangaParse: Successfully parsed")
 
-        val nextPage = runCatching { checkNextPage(select) }
-            .onFailure { Log.d("BatoToV4", "checkNextPage GraphQL request failed: ${it.message}") }
-            .getOrDefault(false)
-        return MangasPage(mangas, nextPage)
-    }
-
-    private fun buildSearchPayloadFromUrl(url: HttpUrl): SearchPayload {
-        val page = url.queryParameter("page")?.toIntOrNull() ?: 1
-        val size = url.queryParameter("size")?.toIntOrNull() ?: BROWSE_PAGE_SIZE
-        val word = url.queryParameter("word")?.takeIf { it.isNotBlank() }
-        val sortby = url.queryParameter("sortby")
-        val siteStatus = url.queryParameter("status")
-        val chapCount = url.queryParameter("chapters")
-
-        val langParam = url.queryParameter("lang")
-        val incTLangs = (langParam?.split(",")?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() })
-            ?: listOf(siteLang)
-
-        val origParam = url.queryParameter("orig")
-        val incOLangs = origParam?.split(",")?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
-
-        val genresParam = url.queryParameter("genres")
-        val (incGenres, excGenres) = when {
-            genresParam == null -> null to null
-            genresParam.contains("|") -> {
-                val parts = genresParam.split("|", limit = 2)
-                val included = parts.getOrNull(0)?.split(",")?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
-                val excluded = parts.getOrNull(1)?.split(",")?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
-                included to excluded
-            }
-            else -> genresParam.split(",").filter { it.isNotBlank() }.takeIf { it.isNotEmpty() } to null
+        val mangas = browseResponse.items.map { item ->
+            item.data.toSManga(baseUrl)
         }
+        val hasNextPage = browseResponse.paging.next != 0
 
-        return SearchPayload(
-            query = word,
-            incGenres = incGenres,
-            excGenres = excGenres,
-            incTLangs = incTLangs,
-            incOLangs = incOLangs,
-            sortby = sortby,
-            chapCount = chapCount,
-            siteStatus = siteStatus,
-            page = page,
-            size = size,
-        )
-    }
-
-    fun checkNextPage(select: SearchPayload): Boolean {
-        val payload = GraphQL(
-            SearchVariables(select),
-            COMIC_BROWSE_PAGER_QUERY,
-        )
-
-        val body = json.encodeToString(payload)
-            .toRequestBody(JSON_MEDIA_TYPE)
-
-        val request = POST("$baseUrl/ap2/", headers, body)
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                Log.d("BatoToV4", "checkNextPage HTTP ${response.code}")
-                return false
-            }
-
-            val bodyString = response.body.string()
-            val parsed = json.decodeFromString<ComicBrowsePagerResponse>(bodyString)
-            return parsed.data.paging.next != 0
-        }
+        return MangasPage(mangas, hasNextPage)
     }
 
     fun searchMangaIdParse(response: Response): MangasPage {
@@ -305,19 +229,15 @@ open class BatoToV4(
                     }
             }
             else -> {
-                val url = "$baseUrl/comics".toHttpUrl().newBuilder()
-                    .addQueryParameter("page", page.toString())
-
-                if (query.isNotBlank()) {
-                    url.addQueryParameter("word", query)
-                }
-
-                // Ignore local cookie settings
-                url.addQueryParameter("igplangs", "1") // Ignore general language preferences
-                // url.addQueryParameter("iggenres", "1") // Ignore general genre blocking (this ignores the default nsfw filter)
-
-                // Set the default site language (will be overriden later)
-                url.addQueryParameter("lang", siteLang)
+                // Build filter parameters
+                var sortby: String? = null
+                var letterMode = false
+                var incGenres = emptyList<String>()
+                var excGenres = emptyList<String>()
+                var incOLangs = emptyList<String>()
+                var incTLangs = if (siteLang.isEmpty()) emptyList() else listOf(siteLang) // default to site lang
+                var origStatus = ""
+                var chapCount = ""
 
                 filters.forEach { filter ->
                     when (filter) {
@@ -343,60 +263,51 @@ open class BatoToV4(
 
                         // Normal Filters
                         is LetterFilter -> {
-                            if (filter.state == 1) {
-                                url.addQueryParameter("mode", "letter")
-                            }
+                            letterMode = (filter.state == 1)
                         }
                         is GenreGroupFilter -> {
-                            if (filter.included.isNotEmpty() || filter.excluded.isNotEmpty()) {
-                                val included = filter.included.joinToString(",")
-                                val excluded = filter.excluded.joinToString(",")
-                                val genresValue = if (filter.excluded.isNotEmpty()) {
-                                    "$included|$excluded"
-                                } else {
-                                    included
-                                }
-                                url.addQueryParameter("genres", genresValue)
-                            }
+                            incGenres = filter.included
+                            excGenres = filter.excluded
                         }
                         is OriginalLanguageFilter -> {
-                            if (filter.selected.isNotEmpty()) {
-                                url.addQueryParameter("orig", filter.selected.joinToString(","))
-                            }
+                            incOLangs = filter.selected
                         }
                         is TranslationLanguageFilter -> {
                             if (filter.selected.isNotEmpty()) { // Override site lang if present
-                                url.setQueryParameter("lang", filter.selected.joinToString(","))
+                                incTLangs = filter.selected
                             }
                         }
                         is OriginalStatusFilter -> {
-                            if (filter.selected.isNotEmpty()) {
-                                url.addQueryParameter("status", filter.selected)
-                            }
+                            origStatus = filter.selected
                         }
                         is SortFilter -> {
                             if (filter.state != null) {
-                                val sort = filter.selected
-                                val value = when (filter.state!!.ascending) {
-                                    true -> "az"
-                                    false -> "za"
-                                }
-                                // Bato.to does not seem to have ascending/descending sort. Code is kept for future use.
-                                url.addQueryParameter("sortby", sort)
+                                sortby = filter.selected
                             }
                         }
                         is ChapterCountFilter -> {
-                            if (filter.selected.isNotEmpty()) {
-                                url.addQueryParameter("chapters", filter.selected)
-                            }
+                            chapCount = filter.selected
                         }
                         else -> { /* Do Nothing */ }
                     }
                 }
 
-                Log.d("BatoToV4", "Search URL: ${url.build()}")
+                val apiVariables = ApiComicSearchVariables(
+                    pageNumber = page,
+                    size = BROWSE_PAGE_SIZE,
+                    sortby = sortby,
+                    query = query,
+                    where = if (letterMode) "letter" else "browse",
+                    incGenres = incGenres,
+                    excGenres = excGenres,
+                    incOLangs = incOLangs,
+                    incTLangs = incTLangs,
+                    origStatus = origStatus,
+                    chapCount = chapCount,
+                )
+                val graphQLQuery = COMIC_SEARCH_QUERY
 
-                client.newCall(GET(url.build(), headers)).asObservableSuccess()
+                client.newCall(sendGraphQLRequest(apiVariables, graphQLQuery)).asObservableSuccess()
                     .map { response ->
                         searchMangaParse(response)
                     }
@@ -543,83 +454,25 @@ open class BatoToV4(
         val id = titleIdRegex.find(mangaUrl)?.groupValues?.get(1)
             ?: throw Exception("Could not extract title ID from URL: $mangaUrl")
 
-        val payload = GraphQL(
-            ChapterListVariables(comicId = id, start = -1),
-            CHAPTER_LIST_QUERY,
+        val apiVariables = ApiChapterListVariables(
+            comicId = id,
+            start = -1,
         )
+        val query = CHAPTER_LIST_QUERY
 
-        val body = json.encodeToString(payload)
-            .toRequestBody(JSON_MEDIA_TYPE)
-
-        Log.d("BatoToV4", "Chapter list request: ${json.encodeToString(payload)}")
-
-        return POST("$baseUrl/ap2/", headers, body)
+        return sendGraphQLRequest(apiVariables, query)
     }
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapterListResponse = json.decodeFromString<ChapterListResponse>(response.body.string())
+        val chapterListResponse = response.parseAs<ApiChapterListResponse>().data.response
 
-        Log.d("BatoToV4", "Chapter list count: ${chapterListResponse.data.chapters.size}")
-
-        return chapterListResponse.data.chapters
+        return chapterListResponse
             .map { it.data.toSChapter() }
             .reversed()
     }
 
     override fun chapterListSelector() = throw UnsupportedOperationException()
     override fun chapterFromElement(element: Element) = throw UnsupportedOperationException()
-
-    private fun parseChapterDate(date: String): Long {
-        val value = date.split(' ')[0].toInt()
-
-        return when {
-            "secs" in date -> Calendar.getInstance().apply {
-                add(Calendar.SECOND, -value)
-            }.timeInMillis
-            "mins" in date -> Calendar.getInstance().apply {
-                add(Calendar.MINUTE, -value)
-            }.timeInMillis
-            "hours" in date -> Calendar.getInstance().apply {
-                add(Calendar.HOUR_OF_DAY, -value)
-            }.timeInMillis
-            "days" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, -value)
-            }.timeInMillis
-            "weeks" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, -value * 7)
-            }.timeInMillis
-            "months" in date -> Calendar.getInstance().apply {
-                add(Calendar.MONTH, -value)
-            }.timeInMillis
-            "years" in date -> Calendar.getInstance().apply {
-                add(Calendar.YEAR, -value)
-            }.timeInMillis
-            "sec" in date -> Calendar.getInstance().apply {
-                add(Calendar.SECOND, -value)
-            }.timeInMillis
-            "min" in date -> Calendar.getInstance().apply {
-                add(Calendar.MINUTE, -value)
-            }.timeInMillis
-            "hour" in date -> Calendar.getInstance().apply {
-                add(Calendar.HOUR_OF_DAY, -value)
-            }.timeInMillis
-            "day" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, -value)
-            }.timeInMillis
-            "week" in date -> Calendar.getInstance().apply {
-                add(Calendar.DATE, -value * 7)
-            }.timeInMillis
-            "month" in date -> Calendar.getInstance().apply {
-                add(Calendar.MONTH, -value)
-            }.timeInMillis
-            "year" in date -> Calendar.getInstance().apply {
-                add(Calendar.YEAR, -value)
-            }.timeInMillis
-            else -> {
-                return 0
-            }
-        }
-    }
 
     // ************ Page List ************ //
     override fun pageListRequest(chapter: SChapter): Request {
@@ -640,26 +493,17 @@ open class BatoToV4(
         val id = chapterIdRegex.find(chapterUrl)?.groupValues?.get(1)
             ?: throw Exception("Could not extract chapter ID from URL: $chapterUrl")
 
-        val payload = GraphQL(
-            ChapterNodeVariables(id = id),
-            CHAPTER_NODE_QUERY,
-        )
+        val apiVariables = ApiChapterNodeVariables(id = id)
+        val query = CHAPTER_NODE_QUERY
 
-        val body = json.encodeToString(payload)
-            .toRequestBody(JSON_MEDIA_TYPE)
-
-        Log.d("BatoToV4", "Page list request: ${json.encodeToString(payload)}")
-
-        Log.d("BatoToV4", "Chapter URL: $chapterUrl")
-
-        return POST("$baseUrl/ap2/", headers, body)
+        return sendGraphQLRequest(apiVariables, query)
     }
 
     override fun pageListParse(document: Document) = throw UnsupportedOperationException()
     override fun pageListParse(response: Response): List<Page> {
-        val chapterNodeResponse = json.decodeFromString<ChapterNodeResponse>(response.body.string())
+        val chapterNodeResponse = response.parseAs<ApiChapterNodeResponse>().data.response
 
-        return chapterNodeResponse.data.chapterNode.data.imageFile.urlList
+        return chapterNodeResponse.data.imageFile.urlList
             .mapIndexed { index, url ->
                 Page(index, "", url)
             }
@@ -756,6 +600,20 @@ open class BatoToV4(
     private fun stripSeriesUrl(url: String): String {
         val matchResult = seriesUrlRegex.find(url)
         return matchResult?.groups?.get(1)?.value ?: url
+    }
+
+    private inline fun <reified T> sendGraphQLRequest(variables: T, query: String): Request {
+        val payload = json.encodeToString(GraphQLPayload(variables, query))
+            .toRequestBody(JSON_MEDIA_TYPE)
+
+        Log.d("BatoToV4", "GraphQL Payload: ${json.encodeToString(GraphQLPayload(variables, query))}")
+
+        val apiHeaders = headersBuilder()
+            .add("Content-Length", payload.contentLength().toString())
+            .add("Content-Type", payload.contentType().toString())
+            .build()
+
+        return POST("$baseUrl/ap2/", apiHeaders, payload)
     }
 
     companion object {

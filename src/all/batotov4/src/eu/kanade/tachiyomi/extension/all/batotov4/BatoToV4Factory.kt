@@ -9,6 +9,7 @@ class BatoToV4Factory : SourceFactory {
 
 class LanguageOption(val lang: String, val siteLang: String = lang)
 private val languages = listOf(
+    LanguageOption("all", ""),
     LanguageOption("en"),
     LanguageOption("ar"),
     LanguageOption("bg"),
