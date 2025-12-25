@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.extension.all.batotov4
 
 import android.text.Editable
+import android.text.InputType
 import android.text.TextWatcher
+import android.util.Log
 import android.widget.Button
 import android.widget.Toast
 import androidx.preference.CheckBoxPreference
@@ -49,6 +51,8 @@ class Bato(
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()
+    private val historyStartByPage = mutableMapOf<Int, Any?>()
+    private var historyRequestPage = 1
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -115,10 +119,39 @@ class Bato(
                 isValid
             }
         }
+        val libraryUserIdPref = EditTextPreference(screen.context).apply {
+            key = prefKey(LIBRARY_USER_ID_PREF_KEY)
+            title = LIBRARY_USER_ID_PREF_TITLE
+            summary = LIBRARY_USER_ID_PREF_SUMMARY
+            setDefaultValue("")
+            setOnBindEditTextListener { editText ->
+                editText.inputType = InputType.TYPE_CLASS_NUMBER
+            }
+            setOnPreferenceChangeListener { _, newValue ->
+                val value = (newValue as? String).orEmpty().trim()
+                summary = if (value.isBlank()) {
+                    LIBRARY_USER_ID_PREF_SUMMARY
+                } else {
+                    "Using user ID: $value"
+                }
+                true
+            }
+        }
         screen.addPreference(mirrorPref)
         screen.addPreference(chapterListPref)
         screen.addPreference(removeOfficialPref)
         screen.addPreference(removeCustomPref)
+        screen.addPreference(libraryUserIdPref)
+        val lastError = preferences.getString(prefKey(LIBRARY_ERROR_PREF_KEY), "").orEmpty()
+            .ifBlank { LIBRARY_ERROR_PREF_EMPTY }
+        screen.addPreference(
+            EditTextPreference(screen.context).apply {
+                key = prefKey(LIBRARY_ERROR_PREF_KEY)
+                title = LIBRARY_ERROR_PREF_TITLE
+                summary = lastError
+                setDefaultValue(lastError)
+            },
+        )
     }
 
     override fun getFilterList(): FilterList = FilterList(
@@ -135,6 +168,17 @@ class Bato(
         UploadStatusFilter(),
         Filter.Separator(),
         ChapterCountFilter(),
+        Filter.Separator(),
+        Filter.Header(FILTER_PERSONAL_LIST_HEADER),
+        Filter.Header(FILTER_LOGIN_REQUIRED_HEADER),
+        Filter.Separator(),
+        PersonalListFilter(),
+        Filter.Separator(),
+        Filter.Header(FILTER_LIBRARY_FILTERS_HEADER),
+        Filter.Header(FILTER_LIBRARY_FILTERS_NOTE),
+        LibraryStatusFilter(),
+        LibraryScoresFilter(),
+        LibraryNotesFilter(),
     )
 
     override fun popularMangaRequest(page: Int): Request =
@@ -144,12 +188,33 @@ class Bato(
         parseComicList(response, "get_comic_browse", null)
 
     override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request {
+        val personalList = filters.filterIsInstance<PersonalListFilter>()
+            .firstOrNull()
+            ?.selectedValue()
+            .orEmpty()
+        when (personalList) {
+            PERSONAL_LIST_HISTORY -> return myHistoryRequest(page)
+            PERSONAL_LIST_UPDATES -> return myUpdatesRequest(page)
+            PERSONAL_LIST_LIBRARY -> {
+                val request = myLibraryRequest(page, filters)
+                return request.newBuilder()
+                    .tag(FilterList::class.java, filters)
+                    .build()
+            }
+        }
         val trimmedQuery = query.trim()
         return graphQlRequest(BROWSE_QUERY, buildBrowseVariables(page, trimmedQuery, filters))
     }
 
-    override fun searchMangaParse(response: Response): MangasPage =
-        parseComicList(response, "get_comic_browse", null)
+    override fun searchMangaParse(response: Response): MangasPage {
+        val data = response.parseGraphQlData()
+        return when {
+            data.has("get_sser_myHistory") -> parseMyHistory(data)
+            data.has("get_sser_myUpdates") -> parseMyUpdates(data)
+            data.has("get_user_libraryList") -> parseMyLibrary(data, response.request)
+            else -> parseComicList(data, "get_comic_browse", null)
+        }
+    }
 
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         if (query.startsWith(ID_PREFIX)) {
@@ -160,6 +225,18 @@ class Bato(
             val request = graphQlRequest(DETAILS_QUERY, buildIdVariables(id))
             return client.newCall(request).asObservableSuccess()
                 .map { queryIdParse(it) }
+        }
+        val personalList = filters.filterIsInstance<PersonalListFilter>()
+            .firstOrNull()
+            ?.selectedValue()
+            .orEmpty()
+        if (personalList.isNotBlank()) {
+            return Observable.fromCallable {
+                val request = searchMangaRequest(page, query, filters)
+                client.newCall(request).execute().use { response ->
+                    searchMangaParse(response)
+                }
+            }
         }
         return super.fetchSearchManga(page, query, filters)
     }
@@ -231,39 +308,7 @@ class Bato(
     }
 
     private fun parseComicList(response: Response, rootKey: String, requiredLang: String?): MangasPage {
-        val data = response.parseGraphQlData()
-        val root = data.optJSONObject(rootKey) ?: return MangasPage(emptyList(), false)
-        val items = root.optJSONArray("items") ?: JSONArray()
-
-        val mangaList = buildList {
-            for (i in 0 until items.length()) {
-                val item = items.optJSONObject(i) ?: continue
-                val dataObj = item.optJSONObject("data") ?: continue
-                val name = requireField(dataObj.optString("name"), "title")
-                val urlPath = requireField(dataObj.optString("urlPath"), "url")
-                if (requiredLang != null) {
-                    val tranLang = dataObj.optString("tranLang")
-                    if (tranLang != requiredLang) continue
-                }
-                val cover = firstNonBlank(
-                    dataObj.optString("urlCover600"),
-                    dataObj.optString("urlCover300"),
-                    dataObj.optString("urlCoverOri"),
-                )
-                add(
-                    SManga.create().apply {
-                        title = name.cleanTitleIfNeeded()
-                        url = urlPath
-                        thumbnail_url = absoluteUrlOrNull(cover)
-                    },
-                )
-            }
-        }.distinctBy { it.url }
-
-        val paging = root.optJSONObject("paging")
-        val hasNextPage = hasNextPage(paging, mangaList.size)
-
-        return MangasPage(mangaList, hasNextPage)
+        return parseComicList(response.parseGraphQlData(), rootKey, requiredLang)
     }
 
     private fun parseMangaDetails(response: Response): SManga {
@@ -458,6 +503,50 @@ class Bato(
         return JSONObject().put("select", select)
     }
 
+    private fun buildHistoryVariables(page: Int): JSONObject {
+        if (page == 1) {
+            historyStartByPage.clear()
+        }
+        historyRequestPage = page
+        val start = historyStartByPage[page]
+        val select = JSONObject()
+            .put("limit", HISTORY_PAGE_SIZE)
+            .put("start", start ?: JSONObject.NULL)
+        return JSONObject().put("select", select)
+    }
+
+    private fun buildUpdatesVariables(page: Int): JSONObject {
+        val select = JSONObject()
+            .put("init", UPDATES_INIT_SIZE)
+            .put("size", UPDATES_PAGE_SIZE)
+            .put("page", page)
+        return JSONObject().put("select", select)
+    }
+
+    private fun buildLibraryVariables(page: Int, userId: String, filters: LibraryFilterState): JSONObject {
+        val select = JSONObject()
+            .put("init", LIBRARY_INIT_SIZE)
+            .put("size", LIBRARY_PAGE_SIZE)
+            .put("page", page)
+            .put("userId", userId)
+        when {
+            filters.status.isNotBlank() -> {
+                select.put("type", LIBRARY_TYPE_STATUS)
+                select.put("status", filters.status)
+            }
+            filters.score.isNotBlank() -> {
+                select.put("type", LIBRARY_TYPE_SCORE)
+                val scoreValue = if (filters.score == LIBRARY_SCORE_UNRATED) "0" else filters.score
+                select.put("score", scoreValue.toIntOrNull() ?: 0)
+            }
+            else -> {
+                select.put("type", LIBRARY_TYPE_FOLLOW)
+                select.put("folder", JSONObject.NULL)
+            }
+        }
+        return JSONObject().put("select", select)
+    }
+
     private fun buildIdVariables(id: String): JSONObject =
         JSONObject().put("id", id)
 
@@ -475,12 +564,66 @@ class Bato(
         return POST("$baseUrl/ap2/", headers, payload)
     }
 
-    private fun Response.parseGraphQlData(): JSONObject {
-        if (!isSuccessful) {
-            throw Exception("HTTP $code ${message.ifBlank { "error" }}")
+    private fun graphQlRequest(query: String, variables: JSONObject, referer: String): Request {
+        val payload = JSONObject()
+            .put("query", query)
+            .put("variables", variables)
+            .toString()
+            .toRequestBody(JSON_MEDIA_TYPE)
+        val requestHeaders = headersBuilder()
+            .set("Referer", referer)
+            .set("Origin", baseUrl)
+            .build()
+        return POST("$baseUrl/ap2/", requestHeaders, payload)
+    }
+
+    private fun myHistoryRequest(page: Int): Request =
+        graphQlRequest(MY_HISTORY_QUERY, buildHistoryVariables(page))
+
+    private fun myUpdatesRequest(page: Int): Request =
+        graphQlRequest(MY_UPDATES_QUERY, buildUpdatesVariables(page))
+
+    private fun myLibraryRequest(page: Int, filters: FilterList): Request {
+        val userId = getUserId()
+            ?: throw Exception("Unable to determine user id. Open WebView and visit My Library once.")
+        val libraryFilters = parseLibraryFilters(filters)
+        val variables = buildLibraryVariables(page, userId, libraryFilters)
+        val referer = when {
+            libraryFilters.status.isNotBlank() -> "$baseUrl/my/status?status=${libraryFilters.status}"
+            libraryFilters.score.isNotBlank() -> {
+                val scoreValue = if (libraryFilters.score == LIBRARY_SCORE_UNRATED) "0" else libraryFilters.score
+                "$baseUrl/my/scores?score=$scoreValue"
+            }
+            else -> "$baseUrl/my/follows"
         }
-        val body = body.string()
-        val json = runCatching { JSONObject(body) }.getOrNull() ?: return JSONObject()
+        return graphQlRequest(MY_LIBRARY_QUERY, variables, referer)
+    }
+
+    private fun Response.parseGraphQlData(): JSONObject {
+        val bodyString = body.string()
+        if (!isSuccessful) {
+            Log.e(LOG_TAG, "HTTP $code ${message.ifBlank { "error" }} body=${bodyString.take(1024)}")
+            val requestReferer = request.header("Referer").orEmpty()
+            val errorMessage = runCatching { JSONObject(bodyString) }.getOrNull()
+                ?.optJSONArray("errors")
+                ?.optJSONObject(0)
+                ?.optString("message")
+                .orEmpty()
+            val isMyLibraryRequest = requestReferer.contains("/my/")
+            val errorDetails = when {
+                errorMessage.isNotBlank() -> ": $errorMessage"
+                bodyString.isNotBlank() -> ": ${bodyString.take(240).replace(Regex("\\s+"), " ")}"
+                isMyLibraryRequest -> ": My Library request failed. Check your User ID in extension settings."
+                else -> ""
+            }
+            if (isMyLibraryRequest) {
+                preferences.edit()
+                    .putString(prefKey(LIBRARY_ERROR_PREF_KEY), "HTTP $code ${message.ifBlank { "error" }}$errorDetails")
+                    .apply()
+            }
+            throw Exception("HTTP $code ${message.ifBlank { "error" }}$errorDetails")
+        }
+        val json = runCatching { JSONObject(bodyString) }.getOrNull() ?: return JSONObject()
         val errors = json.optJSONArray("errors")
         if (errors != null && errors.length() > 0) {
             val message = errors.optJSONObject(0)?.optString("message")
@@ -491,6 +634,231 @@ class Bato(
         return json.optJSONObject("data") ?: JSONObject()
     }
 
+    private fun parseMyHistory(data: JSONObject): MangasPage {
+        val root = data.optJSONObject("get_sser_myHistory") ?: return MangasPage(emptyList(), false)
+        val items = root.optJSONArray("items") ?: return MangasPage(emptyList(), false)
+        val mangaList = mutableListOf<SManga>()
+
+        for (i in 0 until items.length()) {
+            val item = items.optJSONObject(i) ?: continue
+            val dataObj = item.optJSONObject("comicNode")?.optJSONObject("data") ?: continue
+            mangaList.add(buildMangaFromNode(dataObj))
+        }
+
+        val newStart = root.opt("newStart")
+        val hasNextPage = newStart != null && newStart != JSONObject.NULL && mangaList.isNotEmpty()
+        if (hasNextPage) {
+            historyStartByPage[historyRequestPage + 1] = newStart
+        }
+        return MangasPage(mangaList, hasNextPage)
+    }
+
+    private fun parseMyUpdates(data: JSONObject): MangasPage {
+        val root = data.optJSONObject("get_sser_myUpdates") ?: return MangasPage(emptyList(), false)
+        val items = root.optJSONArray("items") ?: return MangasPage(emptyList(), false)
+        val mangaList = mutableListOf<SManga>()
+
+        for (i in 0 until items.length()) {
+            val item = items.optJSONObject(i) ?: continue
+            val dataObj = item.optJSONObject("data") ?: continue
+            mangaList.add(buildMangaFromNode(dataObj))
+        }
+
+        val paging = root.optJSONObject("paging")
+        val hasNextPage = hasNextPage(paging, mangaList.size)
+        return MangasPage(mangaList, hasNextPage)
+    }
+
+    private fun parseMyLibrary(data: JSONObject, request: Request): MangasPage {
+        val root = data.optJSONObject("get_user_libraryList") ?: return MangasPage(emptyList(), false)
+        val items = root.optJSONArray("items") ?: return MangasPage(emptyList(), false)
+        val filters = request.tag(FilterList::class.java)
+        val libraryFilters = parseLibraryFilters(filters)
+        val mangaList = mutableListOf<SManga>()
+
+        for (i in 0 until items.length()) {
+            val item = items.optJSONObject(i) ?: continue
+            if (!matchesLibraryFilters(item, libraryFilters)) continue
+            val dataObj = item.optJSONObject("comicNode")?.optJSONObject("data") ?: continue
+            mangaList.add(buildMangaFromNode(dataObj))
+        }
+
+        val paging = root.optJSONObject("paging")
+        val hasNextPage = hasNextPage(paging, mangaList.size)
+        return MangasPage(mangaList, hasNextPage)
+    }
+
+    private fun parseComicList(data: JSONObject, listKey: String, requiredLang: String?): MangasPage {
+        val list = data.optJSONObject(listKey)
+        val items = list?.optJSONArray("items") ?: return MangasPage(emptyList(), false)
+        val mangaList = buildMangaList(items, requiredLang).distinctBy { it.url }
+        val paging = list.optJSONObject("paging")
+        val hasNextPage = hasNextPage(paging, mangaList.size)
+        return MangasPage(mangaList, hasNextPage)
+    }
+
+    private fun buildMangaList(items: JSONArray, requiredLang: String?): List<SManga> {
+        val mangaList = mutableListOf<SManga>()
+        for (i in 0 until items.length()) {
+            val item = items.optJSONObject(i) ?: continue
+            val dataObj = item.optJSONObject("data") ?: continue
+            if (requiredLang != null) {
+                val tranLang = dataObj.optString("tranLang")
+                if (tranLang != requiredLang) continue
+            }
+            mangaList.add(buildMangaFromNode(dataObj))
+        }
+        return mangaList
+    }
+
+    private fun buildMangaFromNode(dataObj: JSONObject): SManga {
+        val name = requireField(dataObj.optString("name"), "title")
+        val urlPath = requireField(dataObj.optString("urlPath"), "url")
+        val cover = firstNonBlank(
+            dataObj.optString("urlCover600"),
+            dataObj.optString("urlCover300"),
+            dataObj.optString("urlCoverOri"),
+        )
+        return SManga.create().apply {
+            title = name.cleanTitleIfNeeded()
+            url = urlPath
+            thumbnail_url = absoluteUrlOrNull(cover)
+        }
+    }
+
+    private fun parseLibraryFilters(filters: FilterList?): LibraryFilterState {
+        if (filters == null) return LibraryFilterState()
+        var statusFilter: LibraryStatusFilter? = null
+        var scoreFilter: LibraryScoresFilter? = null
+        var notesFilter: LibraryNotesFilter? = null
+        filters.forEach { filter ->
+            when (filter) {
+                is LibraryStatusFilter -> statusFilter = filter
+                is LibraryScoresFilter -> scoreFilter = filter
+                is LibraryNotesFilter -> notesFilter = filter
+                else -> Unit
+            }
+        }
+        val statusValue = statusFilter?.selectedValue().orEmpty()
+        val followsValue = LibraryPresence.ANY
+        val scoreValue = scoreFilter?.selectedValue().orEmpty()
+        val notesValue = notesFilter?.selectedPresence() ?: LibraryPresence.ANY
+
+        val lastStatus = preferences.getString(prefKey(LIBRARY_STATUS_LAST_PREF_KEY), statusValue) ?: statusValue
+        val lastScore = preferences.getString(prefKey(LIBRARY_SCORE_LAST_PREF_KEY), scoreValue) ?: scoreValue
+        val lastNotes = preferences.getString(prefKey(LIBRARY_NOTES_LAST_PREF_KEY), notesValue.name) ?: notesValue.name
+
+        val statusChanged = statusValue != lastStatus
+        val scoreChanged = scoreValue != lastScore
+        val notesChanged = notesValue.name != lastNotes
+
+        val activeFilter = when {
+            scoreChanged && scoreValue.isNotBlank() -> ActiveLibraryFilter.SCORE
+            statusChanged && statusValue.isNotBlank() -> ActiveLibraryFilter.STATUS
+            notesChanged && notesValue != LibraryPresence.ANY -> ActiveLibraryFilter.NOTES
+            scoreValue.isNotBlank() -> ActiveLibraryFilter.SCORE
+            statusValue.isNotBlank() -> ActiveLibraryFilter.STATUS
+            notesValue != LibraryPresence.ANY -> ActiveLibraryFilter.NOTES
+            else -> null
+        }
+
+        if (activeFilter != null) {
+            if (activeFilter != ActiveLibraryFilter.STATUS) statusFilter?.state = 0
+            if (activeFilter != ActiveLibraryFilter.SCORE) scoreFilter?.state = 0
+            if (activeFilter != ActiveLibraryFilter.NOTES) notesFilter?.state = 0
+        }
+
+        val finalStatus = statusFilter?.selectedValue().orEmpty()
+        val finalFollows = LibraryPresence.ANY
+        val finalScore = scoreFilter?.selectedValue().orEmpty()
+        val finalNotes = notesFilter?.selectedPresence() ?: LibraryPresence.ANY
+        if (finalStatus.isNotBlank() || finalScore.isNotBlank()) {
+            Unit
+        }
+
+        preferences.edit()
+            .putString(prefKey(LIBRARY_STATUS_LAST_PREF_KEY), finalStatus)
+            .putString(prefKey(LIBRARY_SCORE_LAST_PREF_KEY), finalScore)
+            .putString(prefKey(LIBRARY_NOTES_LAST_PREF_KEY), finalNotes.name)
+            .apply()
+
+        return LibraryFilterState(finalStatus, finalFollows, finalScore, finalNotes)
+    }
+
+    private fun matchesLibraryFilters(item: JSONObject, filters: LibraryFilterState): Boolean {
+        val hasStatusField = item.has("sser_status")
+        val statusValue = item.opt("sser_status")
+        val followValue = item.opt("sser_follow")
+        val hasScoreField = item.has("sser_score")
+        val scoreValue = item.opt("sser_score")
+        val noteText = (item.opt("note") as? String).orEmpty()
+        val noteValue = if (noteText.isNotBlank() && noteText != "null") noteText else item.opt("sser_note")
+
+        val followMissing = followValue == null || followValue == JSONObject.NULL
+        val followsMatch = if (followMissing) {
+            when (filters.follows) {
+                LibraryPresence.ANY -> true
+                LibraryPresence.HAS -> true
+                LibraryPresence.NONE -> false
+            }
+        } else {
+            matchesPresence(filters.follows, followValue)
+        }
+
+        val statusMatches = if (hasStatusField) {
+            matchesStatus(filters.status, statusValue)
+        } else {
+            true
+        }
+
+        val scoreMatches = if (hasScoreField) {
+            matchesScore(filters.score, scoreValue)
+        } else {
+            true
+        }
+
+        return statusMatches &&
+            followsMatch &&
+            scoreMatches &&
+            matchesPresence(filters.notes, noteValue)
+    }
+
+    private fun matchesStatus(filterValue: String, statusValue: Any?): Boolean {
+        if (filterValue.isBlank()) return true
+        val status = statusValue as? String
+        return status == filterValue
+    }
+
+    private fun matchesScore(filterValue: String, scoreValue: Any?): Boolean {
+        if (filterValue.isBlank()) return true
+        val score = when (scoreValue) {
+            null, JSONObject.NULL -> null
+            is Number -> scoreValue.toInt()
+            is String -> scoreValue.toIntOrNull()
+            else -> null
+        }
+        return when (filterValue) {
+            LIBRARY_SCORE_UNRATED -> score == null || score == 0
+            else -> score == filterValue.toIntOrNull()
+        }
+    }
+
+    private fun matchesPresence(filter: LibraryPresence, value: Any?): Boolean {
+        if (filter == LibraryPresence.ANY) return true
+        val hasValue = when (value) {
+            null, JSONObject.NULL -> false
+            is Boolean -> value
+            is Number -> value.toInt() != 0
+            is String -> value.isNotBlank() && value != "null"
+            else -> true
+        }
+        return when (filter) {
+            LibraryPresence.HAS -> hasValue
+            LibraryPresence.NONE -> !hasValue
+            LibraryPresence.ANY -> true
+        }
+    }
+
     private fun parseQwikObjs(document: Document): JSONArray? {
         val scripts = document.select("script[type=qwik/json]")
         for (script in scripts) {
@@ -499,6 +867,34 @@ class Bato(
             val root = runCatching { JSONObject(jsonText) }.getOrNull() ?: continue
             val objs = root.optJSONArray("objs")
             if (objs != null) return objs
+        }
+        return null
+    }
+
+    private fun getUserId(): String? {
+        val manualKey = prefKey(LIBRARY_USER_ID_PREF_KEY)
+        val manual = preferences.getString(manualKey, null)?.trim()
+        if (!manual.isNullOrBlank()) return manual
+
+        val key = prefKey(USER_ID_PREF_KEY)
+        val cached = preferences.getString(key, null)?.trim()
+        if (!cached.isNullOrBlank()) return cached
+
+        val request = GET("$baseUrl/my/follows", headers)
+        val body = client.newCall(request).execute().use { it.body?.string().orEmpty() }
+        val userId = extractUserId(body)
+        if (userId != null) {
+            preferences.edit().putString(key, userId).apply()
+        }
+        return userId
+    }
+
+    private fun extractUserId(body: String): String? {
+        for (regex in USER_ID_PATTERNS) {
+            val match = regex.find(body)
+            if (match != null) {
+                return match.groupValues.getOrNull(1)
+            }
         }
         return null
     }
@@ -830,6 +1226,20 @@ class Bato(
 
     private companion object {
         private const val DEFAULT_PAGE_SIZE = 36
+        private const val HISTORY_PAGE_SIZE = 6
+        private const val UPDATES_INIT_SIZE = 6
+        private const val UPDATES_PAGE_SIZE = 12
+        private const val LIBRARY_INIT_SIZE = 0
+        private const val LIBRARY_PAGE_SIZE = 36
+        private const val LIBRARY_TYPE_FOLLOW = "follow"
+        private const val LIBRARY_TYPE_STATUS = "status"
+        private const val LIBRARY_TYPE_SCORE = "score"
+        private const val USER_ID_PREF_KEY = "USER_ID"
+        private const val LIBRARY_USER_ID_PREF_KEY = "LIBRARY_USER_ID"
+        private const val LIBRARY_ERROR_PREF_KEY = "LIBRARY_ERROR"
+        private const val LIBRARY_STATUS_LAST_PREF_KEY = "LIBRARY_LAST_STATUS"
+        private const val LIBRARY_SCORE_LAST_PREF_KEY = "LIBRARY_LAST_SCORE"
+        private const val LIBRARY_NOTES_LAST_PREF_KEY = "LIBRARY_LAST_NOTES"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         private const val MIRROR_PREF_KEY = "MIRROR"
@@ -880,6 +1290,15 @@ class Bato(
             "yyyy-MM-dd'T'HH:mm:ssX",
             "yyyy-MM-dd HH:mm:ss",
         )
+        private val USER_ID_PATTERNS = listOf(
+            Regex("""userId["']?\s*:\s*"?(\d{4,})"?"""),
+            Regex("""userId\\":\\"(\d{4,})\\""""),
+            Regex("""/u/(\d{4,})"""),
+        )
+        private const val LIBRARY_USER_ID_PREF_TITLE = "My Library user ID (optional)"
+        private const val LIBRARY_USER_ID_PREF_SUMMARY = "Leave blank to auto-detect from /my/follows. Use your numeric user ID."
+        private const val LIBRARY_ERROR_PREF_TITLE = "Last My Library error"
+        private const val LIBRARY_ERROR_PREF_EMPTY = "No error recorded yet."
         private val BROWSE_QUERY = buildQuery(
             """
             query(%select: Comic_Browse_Select) {
@@ -928,6 +1347,80 @@ class Bato(
                             urlCover300
                             urlCoverOri
                         }
+                    }
+                }
+            }
+            """,
+        )
+
+        private val MY_HISTORY_QUERY = buildQuery(
+            """
+            query(%select: Sser_MyHistory_Select) {
+                get_sser_myHistory(select: %select) {
+                    reqLimit
+                    newStart
+                    items {
+                        comicNode {
+                            data {
+                                id
+                                name
+                                urlPath
+                                urlCover600
+                                urlCover300
+                                urlCoverOri
+                            }
+                        }
+                    }
+                }
+            }
+            """,
+        )
+
+        private val MY_UPDATES_QUERY = buildQuery(
+            """
+            query(%select: Sser_MyUpdates_Select) {
+                get_sser_myUpdates(select: %select) {
+                    paging {
+                        page
+                        pages
+                        next
+                    }
+                    items {
+                        data {
+                            id
+                            name
+                            urlPath
+                            urlCover600
+                            urlCover300
+                            urlCoverOri
+                        }
+                    }
+                }
+            }
+            """,
+        )
+
+        private val MY_LIBRARY_QUERY = buildQuery(
+            """
+            query get_user_libraryList(%select: User_LibraryList_Select) {
+                get_user_libraryList(select: %select) {
+                    paging {
+                        page
+                        pages
+                        next
+                    }
+                    items {
+                        comicNode {
+                            data {
+                                id
+                                name
+                                urlPath
+                                urlCover600
+                                urlCover300
+                                urlCoverOri
+                            }
+                        }
+                        note
                     }
                 }
             }
@@ -1042,6 +1535,15 @@ private const val FILTER_TRANSLATED_LANGUAGE_TITLE = "Translated Language"
 private const val FILTER_ORIGINAL_STATUS_TITLE = "Original Work Status"
 private const val FILTER_UPLOAD_STATUS_TITLE = "Bato Upload Status"
 private const val FILTER_CHAPTER_COUNT_TITLE = "Number of chapters"
+private const val FILTER_PERSONAL_LIST_HEADER = "NOTE: Filters below are incompatible with any other filters!"
+private const val FILTER_LOGIN_REQUIRED_HEADER = "NOTE: Login required!"
+private const val FILTER_PERSONAL_LIST_TITLE = "Personal list"
+private const val FILTER_LIBRARY_FILTERS_HEADER = "My library filters (only applies when Personal list = My Library)"
+private const val FILTER_LIBRARY_FILTERS_NOTE = "Only one My Library filter can be active at a time."
+private const val PERSONAL_LIST_HISTORY = "history"
+private const val PERSONAL_LIST_UPDATES = "updates"
+private const val PERSONAL_LIST_LIBRARY = "library"
+private const val LOG_TAG = "BatoV4"
 
 private val ORIGINAL_STATUS_OPTIONS = arrayOf(
     "Any" to "",
@@ -1090,6 +1592,66 @@ private val CHAPTER_COUNT_OPTIONS = arrayOf(
 private val CHAPTER_COUNT_LABELS = CHAPTER_COUNT_OPTIONS.map { it.first }.toTypedArray()
 private val CHAPTER_COUNT_VALUES = CHAPTER_COUNT_OPTIONS.map { it.second }.toTypedArray()
 
+private val PERSONAL_LIST_OPTIONS = arrayOf(
+    "None" to "",
+    "My History" to PERSONAL_LIST_HISTORY,
+    "My Updates" to PERSONAL_LIST_UPDATES,
+    "My Library" to PERSONAL_LIST_LIBRARY,
+)
+
+private val PERSONAL_LIST_LABELS = PERSONAL_LIST_OPTIONS.map { it.first }.toTypedArray()
+private val PERSONAL_LIST_VALUES = PERSONAL_LIST_OPTIONS.map { it.second }.toTypedArray()
+
+private enum class LibraryPresence { ANY, HAS, NONE }
+
+private val LIBRARY_PRESENCE_OPTIONS = arrayOf(
+    "Any" to LibraryPresence.ANY,
+    "Has" to LibraryPresence.HAS,
+    "None" to LibraryPresence.NONE,
+)
+
+private val LIBRARY_PRESENCE_LABELS = LIBRARY_PRESENCE_OPTIONS.map { it.first }.toTypedArray()
+private val LIBRARY_PRESENCE_VALUES = LIBRARY_PRESENCE_OPTIONS.map { it.second }.toTypedArray()
+
+private val LIBRARY_STATUS_OPTIONS = arrayOf(
+    "Any" to "",
+    "Wish" to "wish",
+    "Reading" to "doing",
+    "Completed" to "completed",
+    "On hold" to "on_hold",
+    "Dropped" to "dropped",
+    "Re-reading" to "repeat",
+)
+
+private val LIBRARY_STATUS_LABELS = LIBRARY_STATUS_OPTIONS.map { it.first }.toTypedArray()
+private val LIBRARY_STATUS_VALUES = LIBRARY_STATUS_OPTIONS.map { it.second }.toTypedArray()
+
+private const val LIBRARY_SCORE_UNRATED = "unrated"
+
+private val LIBRARY_SCORE_OPTIONS = arrayOf(
+    "All Scores" to "",
+    "(10) Masterpiece" to "10",
+    "(9) Great" to "9",
+    "(8) Very Good" to "8",
+    "(7) Good" to "7",
+    "(6) Fine" to "6",
+    "(5) Average" to "5",
+    "(4) Bad" to "4",
+    "(3) Very Bad" to "3",
+    "(2) Horrible" to "2",
+    "(1) Appalling" to "1",
+)
+
+private val LIBRARY_SCORE_LABELS = LIBRARY_SCORE_OPTIONS.map { it.first }.toTypedArray()
+private val LIBRARY_SCORE_VALUES = LIBRARY_SCORE_OPTIONS.map { it.second }.toTypedArray()
+
+private data class LibraryFilterState(
+    val status: String = "",
+    val follows: LibraryPresence = LibraryPresence.ANY,
+    val score: String = "",
+    val notes: LibraryPresence = LibraryPresence.ANY,
+)
+
 private class IgnoreLanguageFilter : Filter.CheckBox(FILTER_IGNORE_LANGUAGE_TITLE)
 
 private class IgnoreGenreFilter : Filter.CheckBox(FILTER_IGNORE_GENRE_TITLE)
@@ -1127,6 +1689,41 @@ private class ChapterCountFilter : Filter.Select<String>(
     FILTER_CHAPTER_COUNT_TITLE,
     CHAPTER_COUNT_LABELS,
 )
+
+private class PersonalListFilter : Filter.Select<String>(
+    FILTER_PERSONAL_LIST_TITLE,
+    PERSONAL_LIST_LABELS,
+) {
+    fun selectedValue(): String = PERSONAL_LIST_VALUES[state]
+}
+
+private open class LibraryPresenceFilter(
+    title: String,
+) : Filter.Select<String>(title, LIBRARY_PRESENCE_LABELS) {
+    fun selectedPresence(): LibraryPresence = LIBRARY_PRESENCE_VALUES[state]
+}
+
+private class LibraryStatusFilter : Filter.Select<String>(
+    "Status",
+    LIBRARY_STATUS_LABELS,
+) {
+    fun selectedValue(): String = LIBRARY_STATUS_VALUES[state]
+}
+
+private class LibraryScoresFilter : Filter.Select<String>(
+    "Scores",
+    LIBRARY_SCORE_LABELS,
+) {
+    fun selectedValue(): String = LIBRARY_SCORE_VALUES[state]
+}
+
+private class LibraryNotesFilter : LibraryPresenceFilter("Notes")
+
+private enum class ActiveLibraryFilter {
+    STATUS,
+    SCORE,
+    NOTES,
+}
 
 private fun getOriginalLanguageList() = listOf(
     LanguageFilterOption("zh", "Chinese"),
