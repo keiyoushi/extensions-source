@@ -9,50 +9,24 @@ private fun buildQuery(queryAction: () -> String): String {
         .replace(whitespace, " ")
 }
 
-// Search query for comics
-val SEARCH_COMIC_QUERY: String = buildQuery {
+val COMIC_SEARCH_QUERY: String = buildQuery {
     """
-        query get_search_comic(%select: Search_Comic_Select) {
-            get_search_comic(select: %select) {
-                req_page req_size req_word
-                new_page
+        query (%select: Comic_Browse_Select) {
+            get_comic_browse(select: %select) {
                 paging {
-                    total pages page init size skip limit prev next
+                    pages
+                    page
+                    next
                 }
                 items {
-                    id data {
-                        id dbStatus isPublic name
-                        origLang tranLang
-                        urlPath urlCover600 urlCoverOri
-                        genres altNames authors artists
-                        is_hot is_new sfw_result
-                        score_val follows reviews comments_total
-                        chapterNode_up_to {
-                            id data {
-                                id dateCreate
-                                dbStatus isFinal sfw_result
-                                dname urlPath is_new
-                                userId userNode {
-                                    id data {
-                                        id name uniq avatarUrl urlPath
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    sser_follow
-                    sser_lastReadChap {
-                        date chapterNode {
-                            id data {
-                                id dbStatus isFinal sfw_result
-                                dname urlPath is_new
-                                userId userNode {
-                                    id data {
-                                        id name uniq avatarUrl urlPath
-                                    }
-                                }
-                            }
-                        }
+                    data {
+                        id
+                        name
+                        urlPath
+                        urlCover300
+                        urlCover600
+                        urlCover900
+                        urlCoverOri
                     }
                 }
             }
@@ -65,7 +39,7 @@ val CHAPTER_LIST_QUERY: String = buildQuery {
     """
         query get_comic_chapterList(%comicId: ID!, %start: Int) {
             get_comic_chapterList(comicId: %comicId, start: %start) {
-                id data {
+                data {
                     id
                     dname
                     title
