@@ -56,7 +56,7 @@ open class BatoToV4(
 
     private val preferences by getPreferencesLazy { migrateMirrorPref() }
 
-    override val name: String = "Bato.to (V4)"
+    override val name: String = "Bato.to V4"
 
     override val baseUrl: String get() = getMirrorPref()
 
