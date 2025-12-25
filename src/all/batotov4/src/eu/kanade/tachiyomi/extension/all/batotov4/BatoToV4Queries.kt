@@ -9,6 +9,7 @@ private fun buildQuery(queryAction: () -> String): String {
         .replace(whitespace, " ")
 }
 
+// Query for comic search
 val COMIC_SEARCH_QUERY: String = buildQuery {
     """
         query (%select: Comic_Browse_Select) {
@@ -34,7 +35,34 @@ val COMIC_SEARCH_QUERY: String = buildQuery {
     """
 }
 
-// Chapter list query
+// Query for manga details
+val COMIC_NODE_QUERY: String = buildQuery {
+    """
+        query get_comicNode(%id: ID!) {
+            get_comicNode(id: %id) {
+                data {
+                    id
+                    name
+                    altNames
+                    authors
+                    artists
+                    originalStatus
+                    uploadStatus
+                    genres
+                    summary
+                    extraInfo
+                    urlPath
+                    urlCover300
+                    urlCover600
+                    urlCover900
+                    urlCoverOri
+                }
+            }
+        }
+    """
+}
+
+// Query for chapter list
 val CHAPTER_LIST_QUERY: String = buildQuery {
     """
         query get_comic_chapterList(%comicId: ID!, %start: Int) {
@@ -52,7 +80,7 @@ val CHAPTER_LIST_QUERY: String = buildQuery {
     """
 }
 
-// Chapter node query (for page images)
+// Query for chapter images
 val CHAPTER_NODE_QUERY: String = buildQuery {
     """
         query get_chapterNode(%id: ID!) {
@@ -62,17 +90,6 @@ val CHAPTER_NODE_QUERY: String = buildQuery {
                         urlList
                     }
                 }
-            }
-        }
-    """
-}
-
-// Comic browse pager query (for pagination info)
-val COMIC_BROWSE_PAGER_QUERY: String = buildQuery {
-    """
-        query get_comic_browse_pager(%select: Comic_Browse_Select) {
-            get_comic_browse_pager(select: %select) {
-                total pages page init size skip limit prev next
             }
         }
     """

@@ -405,7 +405,7 @@ class TranslationLanguageFilter(siteLang: String) : CheckboxGroupFilter(
 
 class GenreGroupFilter : TriStateGroupFilter("Genres", options) {
     companion object {
-        private val options = listOf(
+        val options = listOf(
             TriStateFilterOption("artbook", "Artbook"),
             TriStateFilterOption("cartoon", "Cartoon"),
             TriStateFilterOption("comic", "Comic"),
