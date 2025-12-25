@@ -153,6 +153,8 @@ class MediocreToons : HttpSource(), ConfigurableSource {
 
     override fun headersBuilder() = super.headersBuilder()
         .set("x-app-key", "toons-mediocre-app")
+        .set("Referer", "$baseUrl/")
+        .set("Origin", baseUrl)
 
     // ============================== Popular ================================
     override fun popularMangaRequest(page: Int): Request {
