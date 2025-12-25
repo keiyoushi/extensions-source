@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.id.doujindesu
 
 import android.content.SharedPreferences
 import android.util.Base64
-import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -668,7 +667,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Page Stuff
-    private val TAG = "DouDesuLOG"
     private val xorKey = "youdoZFFxQusvsva1iHsbccZbpUAjoqB6niUyntkn5mocg2DZ0fCw1Zoow"
 
     private fun decodeImage(encoded: String, index: Int = 0): String {
@@ -686,15 +684,12 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
             var url = String(bytes).trim()
 
-            // ❗Fallback decrypt layer kedua (OLD DD)
             if (!url.startsWith("http")) {
-                Log.w(TAG, "[WARN] fallback decrypt used @ index=$index")
-                url = tryFallback(encoded) // 👇 kita buat fungsi ini
+                url = tryFallback(encoded)
             }
 
             return url
         } catch (e: Exception) {
-            Log.e(TAG, "[ERROR] decode failed idx=$index: ${e.message}")
             ""
         }
     }
@@ -740,17 +735,12 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
 
         val apiUrl = "https://cdn.doujindesu.dev/api/ch.php?slug=$slug"
 
-        Log.i(TAG, "[INFO] Fetching Page List for: $rawSlug")
-        Log.d(TAG, "[DEBUG] Full API URL: $apiUrl")
-
         return GET(apiUrl, cdnHeaders(rawSlug, chapter.url))
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        Log.i(TAG, "[DEBUG] Response Code: ${response.code}")
 
         if (response.code == 404) {
-            Log.e(TAG, "[ERROR] CDN returned 404 Not Found. Slug atau endpoint API mungkin salah.")
             throw Exception("Halaman tidak ditemukan (404). Coba buka di WebView.")
         }
 
@@ -759,11 +749,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         val success = json.optBoolean("success", true)
         val items = json.optJSONArray("images") ?: throw Exception("JSON 'images' tidak ditemukan")
 
-        Log.i(TAG, "[INFO] Raw images array = $items")
-        Log.i(TAG, "[INFO] CDN API Success: $success, found ${items.length()} images.")
-
         if (!success) {
-            Log.e(TAG, "[ERROR] DoujinDesu CDN blocked (success: false)")
             throw Exception("Akses CDN ditolak. Buka WebView untuk melewati proteksi.")
         }
 
@@ -776,7 +762,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             }
         }.filterNotNull()
 
-        Log.i(TAG, "[SUCCESS] Chapter loaded, ready to read!")
         return pages
     }
 
