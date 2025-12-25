@@ -17,6 +17,9 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.ParsedHttpSource
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -557,6 +560,28 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Chapter Stuff
+    @Serializable
+    data class ChapterResponse(
+        val page: Int,
+        val limit: Int,
+        val total: Int,
+        val total_pages: Int,
+        val items: List<ChapterItem>,
+    )
+
+    @Serializable
+    data class ChapterItem(
+        val id: Int,
+        val chapter_number: Double,
+        val slug: String,
+        val title: String,
+        val created_at: String,
+    )
+
+    private val jsonDecoder = Json {
+        ignoreUnknownKeys = true
+    }
+
     override fun chapterListRequest(manga: SManga): Request {
         val slug = manga.url.substringAfterLast("/")
         return GET("$baseUrl/api/manga/$slug/chapters?page=1", headers)
@@ -565,10 +590,11 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private val chapterNameRegex = Regex("(Chapter\\s*\\d+(?:\\.\\d+)?)", RegexOption.IGNORE_CASE)
 
     override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = mutableListOf<SChapter>()
         val slug = response.request.url.toString()
             .substringAfter("/api/manga/")
             .substringBefore("/chapters")
+
+        val chapters = mutableListOf<SChapter>()
 
         var page = 1
         var totalPages: Int
@@ -577,28 +603,24 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             val url = "$baseUrl/api/manga/$slug/chapters?page=$page"
             val res = client.newCall(GET(url, headers)).execute()
 
-            val json = JSONObject(res.body!!.string())
-            totalPages = json.getInt("total_pages")
-            val data = json.getJSONArray("data")
+            val body = res.body!!.string()
+            val parsed = jsonDecoder.decodeFromString<ChapterResponse>(body)
 
-            for (i in 0 until data.length()) {
-                val obj = data.getJSONObject(i)
+            totalPages = parsed.total_pages
 
-                val rawTitle = obj.optString("title")
-
+            for (obj in parsed.items) {
                 val chapterName = chapterNameRegex
-                    .find(rawTitle)
+                    .find(obj.title)
                     ?.value
-                    ?: "Chapter ${obj.optInt("chapter_number")}"
+                    ?: "Chapter ${obj.chapter_number.toInt()}"
 
                 val chapter = SChapter.create().apply {
-                    chapter_number = obj.optDouble("chapter_number", 0.0).toFloat()
+                    chapter_number = obj.chapter_number.toFloat()
                     name = chapterName
-                    date_upload = parseApiDate(obj.optString("created_at"))
-                    setUrlWithoutDomain("/read/${obj.optString("slug")}")
+                    date_upload = parseApiDate(obj.created_at)
+                    setUrlWithoutDomain("/read/${obj.slug}")
                 }
-
-                chapters.add(chapter)
+                chapters += chapter
             }
 
             page++
