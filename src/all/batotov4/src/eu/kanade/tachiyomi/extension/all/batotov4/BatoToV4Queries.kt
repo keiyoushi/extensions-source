@@ -94,3 +94,80 @@ val CHAPTER_NODE_QUERY: String = buildQuery {
         }
     """
 }
+
+// Query for my updates
+val SSER_MY_UPDATES_QUERY: String = buildQuery {
+    """
+        query (%select: Sser_MyUpdates_Select) {
+            get_sser_myUpdates(select: %select) {
+                paging {
+                    pages
+                    page
+                    next
+                }
+                items {
+                    data {
+                        id
+                        name
+                        urlPath
+                        urlCover300
+                        urlCover600
+                        urlCover900
+                        urlCoverOri
+                    }
+                }
+            }
+        }
+    """
+}
+
+// Query for my history
+val SSER_MY_HISTORY_QUERY: String = buildQuery {
+    """
+        query (%select: Sser_MyHistory_Select) {
+            get_sser_myHistory(select: %select) {
+                reqLimit
+                newStart
+                items {
+                    comicNode {
+                        data {
+                            id
+                            name
+                            urlPath
+                            urlCover300
+                            urlCover600
+                            urlCover900
+                            urlCoverOri
+                        }
+                    }
+                }
+            }
+        }
+    """
+}
+
+// Query for user's publish comic list
+val USER_COMIC_LIST_QUERY: String = buildQuery {
+    """
+        query (%select: User_ComicList_Select) {
+            get_user_comicList(select: %select) {
+                paging {
+                    pages
+                    page
+                    next
+                }
+                items {
+                    data {
+                        id
+                        name
+                        urlPath
+                        urlCover300
+                        urlCover600
+                        urlCover900
+                        urlCoverOri
+                    }
+                }
+            }
+        }
+    """
+}

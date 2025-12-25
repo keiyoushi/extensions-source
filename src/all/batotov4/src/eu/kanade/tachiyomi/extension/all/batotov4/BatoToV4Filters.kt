@@ -96,7 +96,7 @@ class SortFilter(
     }
 }
 
-class HistoryFilter : SelectFilter("Personal list", options) {
+class PersonalListFilter : SelectFilter("Personal list", options) {
     companion object {
         private val options = listOf(
             SelectFilterOption("None", ""),
@@ -110,18 +110,22 @@ class UtilsFilter : SelectFilter("Utils comic list", options) {
     companion object {
         private val options = listOf(
             SelectFilterOption("None", ""),
-            SelectFilterOption("Comics: I Created", "i-created"),
-            SelectFilterOption("Comics: I Modified", "i-modified"),
-            SelectFilterOption("Comics: I Uploaded", "i-uploaded"),
-            SelectFilterOption("Comics: Authorized to me", "i-authorized"),
-            SelectFilterOption("Comics: Draft Status", "status-draft"),
-            SelectFilterOption("Comics: Hidden Status", "status-hidden"),
-            SelectFilterOption("Ongoing and Not updated in 30-60 days", "not-updated-30-60"),
-            SelectFilterOption("Ongoing and Not updated in 60-90 days", "not-updated-60-90"),
-            SelectFilterOption("Ongoing and Not updated in 90-180 days", "not-updated-90-180"),
-            SelectFilterOption("Ongoing and Not updated in 180-360 days", "not-updated-180-360"),
-            SelectFilterOption("Ongoing and Not updated in 360-1000 days", "not-updated-360-1000"),
-            SelectFilterOption("Ongoing and Not updated more than 1000 days", "not-updated-1000"),
+            SelectFilterOption("Comics: I Uploaded", "editor=upload"),
+            SelectFilterOption("Comics: I Created", "editor=create"),
+            SelectFilterOption("Comics: I Modified", "editor=modify"),
+            SelectFilterOption("Comics: Whitelisted me", "editor=whitelist"),
+            SelectFilterOption("Comics: Blacklisted me", "editor=blacklist"),
+            SelectFilterOption("Comics: Any I participated", ""),
+            SelectFilterOption("Comics: Draft Status", "dbStatus=draft"),
+            SelectFilterOption("Comics: Hidden Status", "dbStatus=hidden"),
+            // Below are for "I uploaded + Ongoing + Normal + Not updated in X days" shortcuts
+            SelectFilterOption("Uploaded+Ongoing: Not updated in 7+ days", "editor=upload&siteStatus=ongoing&dbStatus=normal&mod_lock=n&mod_hide=n&notUpdatedDays=7"),
+            SelectFilterOption("Uploaded+Ongoing: Not updated in 30+ days", "editor=upload&siteStatus=ongoing&dbStatus=normal&mod_lock=n&mod_hide=n&notUpdatedDays=30"),
+            SelectFilterOption("Uploaded+Ongoing: Not updated in 60+ days", "editor=upload&siteStatus=ongoing&dbStatus=normal&mod_lock=n&mod_hide=n&notUpdatedDays=60"),
+            SelectFilterOption("Uploaded+Ongoing: Not updated in 90+ days", "editor=upload&siteStatus=ongoing&dbStatus=normal&mod_lock=n&mod_hide=n&notUpdatedDays=90"),
+            SelectFilterOption("Uploaded+Ongoing: Not updated in 180+ days", "editor=upload&siteStatus=ongoing&dbStatus=normal&mod_lock=n&mod_hide=n&notUpdatedDays=180"),
+            SelectFilterOption("Uploaded+Ongoing: Not updated in 360+ days", "editor=upload&siteStatus=ongoing&dbStatus=normal&mod_lock=n&mod_hide=n&notUpdatedDays=360"),
+            SelectFilterOption("Uploaded+Ongoing: Not updated in 1000+ days", "editor=upload&siteStatus=ongoing&dbStatus=normal&mod_lock=n&mod_hide=n&notUpdatedDays=1000"),
         )
     }
 }
