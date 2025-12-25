@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.extension.id.doujindesu
 
 import android.content.SharedPreferences
 import android.util.Base64
+import android.util.Log
 import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.PreferenceScreen
@@ -29,6 +30,7 @@ import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -276,21 +278,41 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         }
     }
 
+    private val qualityRegex = Regex("q=\\d+")
+    private val widthRegex = Regex("w=(\\d+)")
+
     private fun imageFromElement(element: Element): String {
-        return when {
-            element.hasAttr("data-src") -> element.attr("abs:data-src")
-            element.hasAttr("data-lazy-src") -> element.attr("abs:data-lazy-src")
-            element.hasAttr("srcset") -> element.attr("abs:srcset").substringBefore(" ")
-            else -> element.attr("abs:src")
+        val srcset = element.attr("srcset")
+        val src = element.attr("src")
+
+        var selectedUrl = if (srcset.isNotEmpty()) {
+            srcset.split(",")
+                .map { it.trim() }
+                .maxByOrNull {
+                    widthRegex.find(it)?.groupValues?.get(1)?.toInt() ?: 0
+                }
+                ?.substringBefore(" ") ?: src
+        } else {
+            src
         }
+
+        if (selectedUrl.startsWith("/")) {
+            selectedUrl = baseUrl.trimEnd('/') + selectedUrl
+        }
+
+        return selectedUrl
+            .replace(qualityRegex, "q=100")
+            .replace("&amp;", "&")
     }
+
+    private val datePrefixRegex = Regex("([+-]\\d{2}):(\\d{2})$")
 
     private fun parseApiDate(date: String?): Long {
         if (date.isNullOrBlank()) return 0L
 
         return try {
             val fixedDate = date.replace(
-                Regex("([+-]\\d{2}):(\\d{2})$"),
+                datePrefixRegex,
                 "$1$2",
             )
 
@@ -419,6 +441,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     private val chapterListRegex = Regex("""\d+[-–]?\d*\..+<br>""", RegexOption.IGNORE_CASE)
     private val htmlTagRegex = Regex("<[^>]*>")
     private val chapterPrefixRegex = Regex("""^\d+(-\d+)?\.\s*.*""")
+    private val widthThumbnailRegex = Regex("url=([^&]+)")
 
     override fun mangaDetailsParse(document: Document): SManga {
         val infoElement = document.selectFirst("section.flex div.flex-1 tbody")!!
@@ -552,8 +575,23 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
         manga.thumbnail_url = document.selectFirst("section.flex > div.mx-auto img")
             ?.let { img ->
                 val src = img.attr("abs:src")
-                val real = Regex("url=([^&]+)").find(src)?.groupValues?.get(1)
-                real?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: src
+                val srcset = img.attr("srcset")
+                val best = srcset.split(",")
+                    .maxByOrNull { it.trim().substringAfterLast(" ").removeSuffix("x").toIntOrNull() ?: 1 }
+                    ?.substringBefore(" ")
+                    ?.trim()
+
+                val pick = best ?: img.attr("abs:src")
+                val real = widthThumbnailRegex.find(pick)?.groupValues?.get(1)
+                real?.let { java.net.URLDecoder.decode(it, "UTF-8") } ?: pick
+
+                val hdProxy = if (real != null) {
+                    "$baseUrl/_next/image?url=${java.net.URLEncoder.encode(real, "UTF-8")}&w=1080&q=100"
+                } else {
+                    null
+                }
+
+                real ?: hdProxy ?: src
             }
 
         return manga
@@ -630,41 +668,116 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     }
 
     // Page Stuff
-    private fun decodeImage(encoded: String): String {
-        val decodedBytes = Base64.decode(encoded, Base64.DEFAULT)
-        val decoded = decodedBytes.map { (it.toInt() xor 0x12).toByte() }.toByteArray()
-        return String(decoded)
+    private val TAG = "DouDesuLOG"
+    private val xorKey = "youdoZFFxQusvsva1iHsbccZbpUAjoqB6niUyntkn5mocg2DZ0fCw1Zoow"
+
+    private fun decodeImage(encoded: String, index: Int = 0): String {
+        return try {
+            val padding = (4 - encoded.length % 4) % 4
+            val padded = (encoded + "=".repeat(padding))
+                .replace('-', '+')
+                .replace('_', '/')
+
+            val decoded = Base64.decode(padded, Base64.DEFAULT)
+            val bytes = decoded.mapIndexed { i, b ->
+                val keyChar = xorKey[i % xorKey.length].code.toByte()
+                (b.toInt() xor keyChar.toInt()).toByte()
+            }.toByteArray()
+
+            var url = String(bytes).trim()
+
+            // ❗Fallback decrypt layer kedua (OLD DD)
+            if (!url.startsWith("http")) {
+                Log.w(TAG, "[WARN] fallback decrypt used @ index=$index")
+                url = tryFallback(encoded) // 👇 kita buat fungsi ini
+            }
+
+            return url
+        } catch (e: Exception) {
+            Log.e(TAG, "[ERROR] decode failed idx=$index: ${e.message}")
+            ""
+        }
     }
 
-    override fun headersBuilder(): Headers.Builder =
-        super.headersBuilder()
-            .add("Referer", "$baseUrl/")
-            .add("X-Requested-With", "XMLHttpRequest")
+    private fun tryFallback(encoded: String): String {
+        return try {
+            val decoded = Base64.decode(encoded, Base64.DEFAULT)
+            val shifted = decoded.map { (it + 3).toByte() }.toByteArray()
+            val url = String(shifted)
+
+            if (url.startsWith("http")) url else ""
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun cdnHeaders(slug: String, chapterUrl: String): Headers {
+        val host = baseUrl.trimEnd('/')
+        val refererUrl = if (chapterUrl.startsWith("http")) chapterUrl else "$host$chapterUrl"
+
+        return Headers.Builder()
+            .set("Accept", "application/json, text/plain, */*")
+            .set("Origin", host)
+            .set("Referer", refererUrl)
+            .set("X-Requested-With", "XMLHttpRequest")
+            .build()
+    }
 
     override fun imageRequest(page: Page): Request {
-        val newHeaders = headersBuilder()
+        val headers = Headers.Builder()
             .set("Accept", "image/avif,image/webp,*/*")
-            .set("Referer", baseUrl)
+            .set("Origin", "https://doujindesu.tv")
+            .set("Referer", "https://doujindesu.tv/")
+            .set("X-Requested-With", "XMLHttpRequest")
             .build()
 
-        return GET(page.imageUrl!!, newHeaders)
+        return GET(page.imageUrl!!, headers)
     }
 
     override fun pageListRequest(chapter: SChapter): Request {
-        val slug = chapter.url.substringAfterLast("/")
-        val url = "https://cdn.doujindesu.dev/api/ch.php?slug=$slug"
-        return GET(url, headers)
+        val rawSlug = chapter.url.substringAfter("/read/").trim('/')
+        val slug = URLEncoder.encode(rawSlug, "UTF-8")
+
+        val apiUrl = "https://cdn.doujindesu.dev/api/ch.php?slug=$slug"
+
+        Log.i(TAG, "[INFO] Fetching Page List for: $rawSlug")
+        Log.d(TAG, "[DEBUG] Full API URL: $apiUrl")
+
+        return GET(apiUrl, cdnHeaders(rawSlug, chapter.url))
     }
 
     override fun pageListParse(response: Response): List<Page> {
-        val json = JSONObject(response.body!!.string())
-        val images = json.getJSONArray("images")
+        Log.i(TAG, "[DEBUG] Response Code: ${response.code}")
 
-        return List(images.length()) { i ->
-            val encoded = images.getString(i)
-            val decodedUrl = decodeImage(encoded)
-            Page(i, imageUrl = decodedUrl)
+        if (response.code == 404) {
+            Log.e(TAG, "[ERROR] CDN returned 404 Not Found. Slug atau endpoint API mungkin salah.")
+            throw Exception("Halaman tidak ditemukan (404). Coba buka di WebView.")
         }
+
+        val responseBody = response.body.string()
+        val json = JSONObject(responseBody)
+        val success = json.optBoolean("success", true)
+        val items = json.optJSONArray("images") ?: throw Exception("JSON 'images' tidak ditemukan")
+
+        Log.i(TAG, "[INFO] Raw images array = $items")
+        Log.i(TAG, "[INFO] CDN API Success: $success, found ${items.length()} images.")
+
+        if (!success) {
+            Log.e(TAG, "[ERROR] DoujinDesu CDN blocked (success: false)")
+            throw Exception("Akses CDN ditolak. Buka WebView untuk melewati proteksi.")
+        }
+
+        val pages = List(items.length()) { index ->
+            val decoded = decodeImage(items.getString(index), index)
+            if (decoded.isBlank()) {
+                null
+            } else {
+                Page(index, imageUrl = decoded)
+            }
+        }.filterNotNull()
+
+        Log.i(TAG, "[SUCCESS] Chapter loaded, ready to read!")
+        return pages
     }
 
     // Unsuported
