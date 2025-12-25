@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.SharedPreferences
 import android.text.Editable
 import android.text.TextWatcher
-import android.util.Log
 import android.widget.Button
 import android.widget.Toast
 import androidx.preference.CheckBoxPreference
@@ -188,44 +187,22 @@ open class BatoToV4(
     }
 
     // searchMangaRequest is not used, see fetchSearchManga instead
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = throw UnsupportedOperationException()
+    override fun searchMangaRequest(page: Int, query: String, filters: FilterList) = throw UnsupportedOperationException()
     override fun searchMangaSelector() = throw UnsupportedOperationException()
     override fun searchMangaFromElement(element: Element) = throw UnsupportedOperationException()
     override fun searchMangaNextPageSelector() = throw UnsupportedOperationException()
 
-    override fun searchMangaParse(response: Response): MangasPage {
-        Log.d("BatoToV4", "searchMangaParse: Attempting parse")
-        val browseResponse = response.parseAs<ApiComicSearchResponse>().data.response
-        Log.d("BatoToV4", "searchMangaParse: Successfully parsed")
-
-        val mangas = browseResponse.items.map { item ->
-            item.data.toSManga(baseUrl)
-        }
-        val hasNextPage = browseResponse.paging.next != 0
-
-        return MangasPage(mangas, hasNextPage)
-    }
-
-    fun searchMangaIdParse(response: Response): MangasPage {
-        val document = response.asJsoup()
-        val manga = SManga.create()
-        val infoElement = document.select("div[q:key=\"fU_13\"]")
-        val imgurl = infoElement.select("img").attr("src")
-        val link = infoElement.select("a")
-        manga.setUrlWithoutDomain(stripSeriesUrl(link.attr("href")))
-        manga.title = link.text().removeEntities()
-            .cleanTitleIfNeeded()
-        manga.thumbnail_url = baseUrl + imgurl
-        return MangasPage(listOf(manga), false)
-    }
-
     override fun fetchSearchManga(page: Int, query: String, filters: FilterList): Observable<MangasPage> {
         return when {
             query.startsWith("ID:") -> {
-                val id = query.substringAfter("ID:")
-                client.newCall(GET("$baseUrl/title/$id", headers)).asObservableSuccess()
+                val apiVariables = ApiComicNodeVariables(
+                    id = query.substringAfter("ID:"),
+                )
+                val graphQLQuery = COMIC_NODE_QUERY
+
+                client.newCall(sendGraphQLRequest(apiVariables, graphQLQuery)).asObservableSuccess()
                     .map { response ->
-                        searchMangaIdParse(response)
+                        MangasPage(listOf(mangaDetailsParse(response)), false)
                     }
             }
             else -> {
@@ -314,6 +291,18 @@ open class BatoToV4(
             }
         }
     }
+    override fun searchMangaParse(response: Response): MangasPage {
+        val browseResponse = response.parseAs<ApiComicSearchResponse>().data.response
+
+        val mangas = browseResponse.items.map { item ->
+            item.data.toSManga(baseUrl).apply {
+                title = title.cleanTitleIfNeeded()
+            }
+        }
+        val hasNextPage = browseResponse.paging.next != 0
+
+        return MangasPage(mangas, hasNextPage)
+    }
 
     // ************ Legacy v2 code ************ //
     private fun queryUtilsParse(response: Response): MangasPage {
@@ -360,66 +349,43 @@ open class BatoToV4(
 
     // ************ Manga Details ************ //
     override fun mangaDetailsRequest(manga: SManga): Request {
-        if (manga.url.startsWith("http")) {
-            // Check if trying to use a deprecated mirror, force current mirror
+        // Check if trying to use a deprecated mirror, force current mirror
+        val mangaUrl = if (manga.url.startsWith("http")) {
             val httpUrl = manga.url.toHttpUrl()
             if ("https://${httpUrl.host}" in DEPRECATED_MIRRORS) {
                 val newHttpUrl = httpUrl.newBuilder().host(getMirrorPref().toHttpUrl().host)
-                return GET(newHttpUrl.build(), headers)
+                newHttpUrl.build().toString()
+            } else {
+                manga.url
             }
-            return GET(manga.url, headers)
+        } else {
+            "$baseUrl${manga.url}"
         }
-        return super.mangaDetailsRequest(manga)
+
+        // Extract comic ID from URL (format: /title/{id}/... or /title/{id}-{title}/...)
+        val id = titleIdRegex.find(mangaUrl)?.groupValues?.get(1)
+            ?: throw Exception("Could not extract title ID from URL: $mangaUrl")
+
+        val apiVariables = ApiComicNodeVariables(id = id)
+        val query = COMIC_NODE_QUERY
+
+        return sendGraphQLRequest(apiVariables, query)
     }
 
-    override fun mangaDetailsParse(document: Document): SManga {
-        val infoElement = document.selectFirst("main > div.flex.flex-col.md\\:flex-row")!!
-        val titleCardElement = infoElement.selectFirst("> div.grid > div:first-child")!!
-        val propertyCardElement = infoElement.selectFirst("> div.grid > div:nth-child(2)")!!
-        val descriptionCardElement = infoElement.selectFirst("> div.grid > div:last-child > div > div:first-child")!!
-        val manga = SManga.create()
-        val workStatus = propertyCardElement.selectFirst("> div:nth-child(3) > span:nth-child(3)")?.text()
-        val uploadStatus = propertyCardElement.selectFirst("> div:nth-child(4) > span:nth-child(3)")?.text()
-        val originalTitle = titleCardElement.select("> h3 > a").text().removeEntities()
-        val description = buildString {
-            append(descriptionCardElement.selectFirst("> div:first-child > react-island")?.text())
-            infoElement.selectFirst(".episode-list > .alert-warning")?.also {
-                append("\n\n${it.text()}")
-            }
-            descriptionCardElement.selectFirst("> div:nth-child(2) > div:first-child > b")?.takeIf { bTag -> bTag.text() == "Extra info" }?.also { _ ->
-                descriptionCardElement.selectFirst("> div:nth-child(2) > div:nth-child(2) > react-island")?.also { reactIsland ->
-                    append("\n\nExtra Info:\n${reactIsland.wholeText()}")
-                }
-            }
-            titleCardElement.select("> div:nth-child(2) > span").filter { span -> span.text() != "/" }.takeIf { spans -> spans.isNotEmpty() }?.also { spans ->
-                append("\n\nAlternative Titles:\n")
-                append(spans.joinToString("\n") { span -> "• ${span.text().trim()}" })
-            }
-        }.trim()
-        val cleanedTitle = originalTitle.cleanTitleIfNeeded()
-        val imgurl = infoElement.selectFirst("img")?.attr("src")
+    override fun mangaDetailsParse(response: Response): SManga {
+        val result = response.parseAs<ApiComicNodeResponse>()
+        val comicData = result.data.response.data
+        val manga = comicData.toSManga(baseUrl)
 
-        manga.title = cleanedTitle
-        val authorArtistLinks = titleCardElement.select("> :nth-child(3) > a")
-        val authors = authorArtistLinks.filter { link -> !link.text().endsWith("(Art)") }.map { it.text() }
-        val artists = authorArtistLinks.filter { link -> link.text().endsWith("(Art)") }.map { it.text().removeSuffix("(Art)").trim() }
-        manga.author = authors.joinToString(", ")
-        manga.artist = artists.joinToString(", ")
-        manga.status = parseStatus(workStatus, uploadStatus)
-        manga.genre = propertyCardElement.select("b:contains(Genres) ~ span > span:first-child").joinToString { it.text() }
-        manga.description = if (originalTitle.trim() != cleanedTitle) {
-            listOf(originalTitle, description)
-                .joinToString("\n\n")
-        } else {
-            description
-        }
-        manga.thumbnail_url = if (imgurl?.startsWith("http") == false) {
-            "$baseUrl${if (imgurl.startsWith("/")) "" else "/"}$imgurl"
-        } else {
-            imgurl
-        }
+        // Apply status parsing and title cleaning
+        manga.status = parseStatus(comicData.originalStatus, comicData.uploadStatus)
+        manga.title = manga.title.cleanTitleIfNeeded()
+
         return manga
     }
+
+    override fun mangaDetailsParse(document: Document): SManga = throw UnsupportedOperationException()
+
     private fun parseStatus(workStatus: String?, uploadStatus: String?): Int {
         val status = workStatus ?: uploadStatus
         return when {
@@ -605,8 +571,6 @@ open class BatoToV4(
     private inline fun <reified T> sendGraphQLRequest(variables: T, query: String): Request {
         val payload = json.encodeToString(GraphQLPayload(variables, query))
             .toRequestBody(JSON_MEDIA_TYPE)
-
-        Log.d("BatoToV4", "GraphQL Payload: ${json.encodeToString(GraphQLPayload(variables, query))}")
 
         val apiHeaders = headersBuilder()
             .add("Content-Length", payload.contentLength().toString())

@@ -69,10 +69,10 @@ data class ApiComicSearchResponse(
 ) {
     @Serializable
     data class SearchData(
-        @SerialName("get_comic_browse") val response: ComicBrowseResponse,
+        @SerialName("get_comic_browse") val response: Comic_Browse_Result,
     ) {
         @Serializable
-        data class ComicBrowseResponse(
+        data class Comic_Browse_Result(
             val paging: Paging,
             val items: List<ComicNode>,
         ) {
@@ -101,6 +101,72 @@ data class ApiComicSearchResponse(
                         url = urlPath
                         title = name
                         thumbnail_url = "$baseUrl${urlCoverOri ?: urlCover600 ?: urlCover900 ?: urlCover300}"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ************ Manga Details ************ //
+@Serializable
+data class ApiComicNodeVariables(
+    val id: String,
+)
+
+@Serializable
+data class ApiComicNodeResponse(
+    val data: ComicNodeData,
+) {
+    @Serializable
+    data class ComicNodeData(
+        @SerialName("get_comicNode") val response: ComicNode,
+    ) {
+        @Serializable
+        data class ComicNode(
+            val data: ComicData,
+        ) {
+            @Serializable
+            data class ComicData(
+                val id: String,
+                val name: String,
+                val altNames: List<String>? = null,
+                val authors: List<String>? = null,
+                val artists: List<String>? = null,
+                val originalStatus: String? = null,
+                val uploadStatus: String? = null,
+                val genres: List<String>? = null,
+                val summary: String? = null,
+                val extraInfo: String? = null,
+                val urlPath: String,
+                val urlCover300: String? = null,
+                val urlCover600: String? = null,
+                val urlCover900: String? = null,
+                val urlCoverOri: String? = null,
+            ) {
+                fun toSManga(baseUrl: String): SManga = SManga.create().apply {
+                    url = urlPath
+                    title = name
+                    author = authors?.joinToString()
+                    artist = artists?.joinToString()
+                    genre = genres?.joinToString { genre -> // Map to the canonical name
+                        GenreGroupFilter.options.find { it.value == genre }?.name ?: genre
+                    }
+                    status = 0 // Status needs to be parsed separately
+                    thumbnail_url = "$baseUrl${urlCoverOri ?: urlCover600 ?: urlCover900 ?: urlCover300}"
+                    description = buildString {
+                        if (!summary.isNullOrEmpty()) {
+                            append(summary)
+                        }
+                        if (!extraInfo.isNullOrEmpty()) {
+                            if (isNotEmpty()) append("\n\nExtra Info:\n")
+                            append(extraInfo)
+                        }
+                        if (!altNames.isNullOrEmpty()) {
+                            if (isNotEmpty()) append("\n\n")
+                            append("Alternative Titles:\n")
+                            append(altNames.joinToString("\n") { "• $it" })
+                        }
                     }
                 }
             }
