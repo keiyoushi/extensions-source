@@ -161,6 +161,8 @@ data class ChapterListResponse(
         val dname: String? = null,
         val title: String? = null,
         val urlPath: String,
+        val dateCreate: Long? = null,
+        val dateModify: Long? = null,
     ) {
         fun toSChapter(): SChapter = SChapter.create().apply {
             url = urlPath
@@ -173,7 +175,7 @@ data class ChapterListResponse(
                     append(title)
                 }
             }.ifEmpty { "Chapter $id" }
-            date_upload
+            date_upload = dateModify ?: dateCreate ?: 0L
         }
     }
 }
