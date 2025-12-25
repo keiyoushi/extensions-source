@@ -2,11 +2,7 @@ ext {
     extName = 'Yomu Comics'
     extClass = '.YomuComics'
     baseUrl = 'https://yomu.com.br'
-    extVersionCode = 38
+    extVersionCode = 39
 }
 
 apply from: "$rootDir/common.gradle"
-
-dependencies {
-    implementation project(':lib:cookieinterceptor')
-}
