@@ -688,7 +688,7 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
                 url = tryFallback(encoded)
             }
 
-            return url
+            url
         } catch (_: Exception) {
             ""
         }
@@ -699,7 +699,6 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
             val decoded = Base64.decode(encoded, Base64.DEFAULT)
             val shifted = decoded.map { (it + 3).toByte() }.toByteArray()
             val url = String(shifted)
-
             if (url.startsWith("http")) url else ""
         } catch (_: Exception) {
             ""
@@ -732,37 +731,25 @@ class DoujinDesu : ParsedHttpSource(), ConfigurableSource {
     override fun pageListRequest(chapter: SChapter): Request {
         val rawSlug = chapter.url.substringAfter("/read/").trim('/')
         val slug = URLEncoder.encode(rawSlug, "UTF-8")
-
         val apiUrl = "https://cdn.doujindesu.dev/api/ch.php?slug=$slug"
 
         return GET(apiUrl, cdnHeaders(rawSlug, chapter.url))
     }
 
     override fun pageListParse(response: Response): List<Page> {
+        if (response.code == 404) throw Exception("Halaman tidak ditemukan (404).")
 
-        if (response.code == 404) {
-            throw Exception("Halaman tidak ditemukan (404). Coba buka di WebView.")
-        }
-
-        val responseBody = response.body.string()
-        val json = JSONObject(responseBody)
+        val body = response.body.string()
+        val json = JSONObject(body)
         val success = json.optBoolean("success", true)
         val items = json.optJSONArray("images") ?: throw Exception("JSON 'images' tidak ditemukan")
 
-        if (!success) {
-            throw Exception("Akses CDN ditolak. Buka WebView untuk melewati proteksi.")
-        }
+        if (!success) throw Exception("Akses CDN ditolak.")
 
-        val pages = List(items.length()) { index ->
+        return List(items.length()) { index ->
             val decoded = decodeImage(items.getString(index), index)
-            if (decoded.isBlank()) {
-                null
-            } else {
-                Page(index, imageUrl = decoded)
-            }
+            if (decoded.isBlank()) null else Page(index, imageUrl = decoded)
         }.filterNotNull()
-
-        return pages
     }
 
     // Unsuported
